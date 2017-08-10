@@ -1,0 +1,212 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Bundle Plugin"
+---
+
+<p>
+Build bundles using maven and the <em>bundle-plugin</em> -
+used to build and package components for the <a href="jdisc/container-components.html">Vespa Container</a>.
+Prerequisites: Do the <a href="vespa-quick-start.html">quick-start</a> -
+then <a href="build-vespa.html">build Vespa</a> to build the artifacts used below.
+Start from <a href="https://github.com/vespa-engine/vespa/blob/master/sample-apps/basic-search-java/pom.xml">
+vespa/sample-apps/basic-search-java/pom.xml</a> - below is the minimal:
+<pre>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+  &lt;groupId&gt;com.yahoo.example&lt;/groupId&gt;
+  &lt;artifactId&gt;basic-application&lt;/artifactId&gt;
+  &lt;packaging&gt;container-plugin&lt;/packaging&gt; <span style="background-color: yellow;">&lt;!-- Use Vespa packaging --&gt;</span>
+  &lt;version&gt;1.0.1&lt;/version&gt;
+
+  &lt;build&gt;
+    &lt;plugins&gt;
+      &lt;plugin&gt; <span style="background-color: yellow;">&lt;!-- Build the bundles --&gt;</span>
+        &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+        &lt;artifactId&gt;bundle-plugin&lt;/artifactId&gt;
+        &lt;version&gt;6-SNAPSHOT&lt;/version&gt;
+        &lt;extensions&gt;true&lt;/extensions&gt;
+      &lt;/plugin&gt;
+      &lt;plugin&gt; <span style="background-color: yellow;">&lt;!-- Zip the application package --&gt;</span>
+        &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+        &lt;artifactId&gt;vespa-application-maven-plugin&lt;/artifactId&gt;
+        &lt;version&gt;6-SNAPSHOT&lt;/version&gt;
+        &lt;executions&gt;
+          &lt;execution&gt;
+            &lt;goals&gt;
+              &lt;goal&gt;packageApplication&lt;/goal&gt;
+            &lt;/goals&gt;
+          &lt;/execution&gt;
+        &lt;/executions&gt;
+      &lt;/plugin&gt;
+    &lt;/plugins&gt;
+  &lt;/build&gt;
+
+  &lt;dependencies&gt;
+    &lt;dependency&gt; <span style="background-color: yellow;">&lt;!-- Vespa dependencies --&gt;</span>
+      &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+      &lt;artifactId&gt;container&lt;/artifactId&gt;
+      &lt;version&gt;6-SNAPSHOT&lt;/version&gt;
+      &lt;scope&gt;provided&lt;/scope&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/project&gt;
+</pre>
+Create a deployable
+<a href="cloudconfig/application-packages.html">application package</a>:
+<pre>
+$ mvn install package
+</pre>
+</p><p>
+The bundle plugin automates generation of configuration classes by invoking the maven step
+<em>generate-resources</em> - read more in <a href="configuring-components.html">
+configuring-components.html</a>
+</p>
+
+
+<h2 id="including-third-party-libraries">Including third-party libraries</h2>
+<p>
+Include external dependencies into the bundle by specifying them as dependencies:
+<pre>
+&lt;dependency&gt;
+  &lt;groupId&gt;org.json&lt;/groupId&gt;
+  &lt;artifactId&gt;json&lt;/artifactId&gt;
+  &lt;version&gt;20090211&lt;/version&gt;
+&lt;/dependency&gt;
+</pre>
+All packages in the library will then be available for use.
+If the external dependency is an OSGi bundle, one can deploy it
+instead of including it into the bundle by setting the scope to
+provided:
+</p>
+<pre>
+&lt;dependency&gt;
+  &lt;groupId&gt;org.json&lt;/groupId&gt;
+  &lt;artifactId&gt;json&lt;/artifactId&gt;
+  &lt;version&gt;20090211&lt;/version&gt;
+  <strong>&lt;scope&gt;provided&lt;/scope&gt;</strong>
+&lt;/dependency&gt;
+</pre>
+<p>
+Then deploy the external dependency along with the bundle.
+Only packages exported by the author of the library will then be
+available for use (see the section below).
+</p>
+
+
+
+<h2 id="exporting-importing-and-including-packages-from-bundles">
+Exporting, Importing and Including Packages from Bundles</h2>
+<p>
+OSGi features information hiding &mdash; by default all the classes
+used inside a bundle are invisible from the outside.  Also, the bundle
+will by default only see (all) the packages in the Java and Container
++ Vespa APIs. If any other package is needed by the bundle, then it
+must happen in one of three ways:
+<ul>
+  <li>Some additional packages are exported by the container and may
+      be <em>imported</em> explicitly by a bundle</li>
+  <li>In addition, any deployed bundle may export packages on its own,
+      which may then be imported by another bundle</li>
+  <li>Finally, the bundle may include its own JAR libraries</li>
+</ul>
+One can export packages from a bundle by annotating the package.
+E.g. to export <em>com.mydomain.mypackage</em>, create <em>package-info.java</em>
+in the package directory with:
+<pre>
+@ExportPackage(version = @Version(major=1, minor=0, micro=0))
+package com.mydomain.mypackage;
+
+import com.yahoo.osgi.annotation.ExportPackage;
+import com.yahoo.osgi.annotation.Version;
+</pre>
+The Maven plugin will place such information in the manifest of the
+plugin JAR built to be picked up by the Container.
+</p><p>
+Note that this may also be used with bundles that do not contain any
+searchers but libraries used by other searchers - a bundle may
+just exist to export some libraries and never have any searchers
+instantiated.
+</p><p>
+Bundles may <em>import</em> packages (exported by some other bundle or
+by the container). The maven plugin will automatically import any
+package used from bundles it compiles against(i.e. maven dependencies
+with scope provided).
+</p><p>
+As mentioned above, each exported package has a version associated
+with it. Similary, an import of a package has a version range
+associated with it. The version range determines which exported
+packages can be used. The range used by the maven plugin is the
+current version(i.e. the version of the package available at compile
+time) up to the next major version (not including).
+</p><p>
+To learn more about OSGi manifests and bundle packaging (e.g how to
+include Java libraries and native code), please refer to the OSGi spec
+at <a href="http://osgi.org">the OSGi home page</a>.
+</p><p>
+More details in <a href="#troubleshooting">troubleshooting</a>.
+</p>
+
+
+
+<h2 id="configuring-the-bundle-plugin">Configuring the Bundle-Plugin</h2>
+<p>
+The bundle plugin can be configured to tailor the resulting
+bundle to specific needs.
+<pre>
+&lt;build&gt;
+  &lt;plugins&gt;
+    &lt;plugin&gt;
+      &lt;groupId&gt;com.yahoo.vesp&lt;/groupId&gt;
+        &lt;artifactId&gt;bundle-plugin&lt;/artifactId&gt;
+        &lt;version&gt;vespa-version&lt;/version&gt;
+        &lt;extensions&gt;true&lt;/extensions&gt;
+        &lt;configuration&gt;
+          &lt;discApplicationClass&gt;&hellip;&lt;/discApplicationClass&gt;
+          &lt;discPreInstallBundle&gt;&hellip;&lt;/discPreInstallBundle&gt;
+          &lt;bundleVersion&gt;&hellip;&lt;/bundleVersion&gt;
+          &lt;bundleSymbolicName&gt;&hellip;&lt;/bundleSymbolicName&gt;
+          &lt;bundleActivator&gt;&hellip;&lt;/bundleActivator&gt;
+          &lt;configGenVersion&gt;&hellip;&lt;/configGenVersion&gt;
+          &lt;configModels&gt;&hellip;&lt;/configModels&gt;
+        &lt;/configuration&gt;
+    &lt;/plugin&gt;
+</pre>
+<ul>
+  <li><strong>discApplicationClass:</strong> The fully qualified class
+      name of the Application to be started by JDisc.</li>
+  <li><strong>discPreInstallBundle:</strong> The name of the bundles
+      that jDISC must pre-install.</li>
+  <li><strong>bundleVersion:</strong> The version of this
+      bundle. Defaults to the Maven project version.</li>
+  <li><strong>bundleSymbolicName:</strong> The symbolic name of this
+      bundle. Defaults to the Maven artifact ID.</li>
+  <li><strong>bundleActivator:</strong> The fully qualified class name
+      of the bundle activator.</li>
+  <li><strong>configGenVersion:</strong> The version of
+  <em>com.yahoo.vespa.configlib.config-class-plugin</em> that will be used to
+  generate config classes.</li>
+  <li><strong>configModels:</strong> List of config models.</li>
+</ul>
+</p>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>
+A package <em>p</em> is imported if all of the following holds:
+<ol>
+  <li>Using a class in <em>p</em> directly (i.e. not with reflection) in the
+bundle</li>
+  <li>There's no classes in the bundle that is in <em>p</em></li>
+  <li>There's a bundle that exports <em>p</em>, and compiling against this bundle</li>
+</ol>
+To debug, run
+<pre>
+$ mvn -X package
+</pre>
+and look at Defined packages (=packages in the bundle), Exported packages of
+dependencies, Referenced packages(= packages used).
+A package is imported if it is in Exported packages and Referenced packages but
+not in Defined packages.
+</p>

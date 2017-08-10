@@ -1,0 +1,220 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Developing applications"
+---
+
+<p>
+Prerequisite: Install and configure maven.
+</p><p>
+The example project <a href="https://github.com/vespa-engine/vespa/tree/master/sample-apps/basic-search-java">
+basic-search-java</a> contains a <a href="processing.html">request /
+response processor</a> that responds "Hello, World!" to requests.
+This is hence a stateless Vespa application with no data,
+to demonstrate how to build plugins for the Vespa JDisc container.
+Note that the <code>Processor</code> is only one of several available
+<a href="how-does-jdisc-work.html">component types</a> that can be deployed. To build, run:
+<pre>
+$ mvn clean install
+</pre>
+from the project root. Refer to the <a href="../bundle-plugin.html">bundle plugin</a> for build details.
+</p><p>
+In Vespa, configuration is accessed through generated config classes -
+read more in the <a href="../cloudconfig/config-introduction.html">
+Cloud Configuration System</a>.
+The Maven target <em>generate-sources</em> generates the <code>ExampleProcessorConfig</code>
+class from <code>src/main/resources/example-processor.def</code>.
+This is invoked by <em>mvn install</em>.
+</p><p>
+As config classes are generated above, open the project in an IDE -
+<a href="http://www.jetbrains.com/idea/download/">IntelliJ IDEA</a>
+supports opening <code>pom.xml</code> directly.
+If running IntelliJ on a Linux,
+<a href="#running-on-linux">configure the test environment</a>.
+</p>
+
+
+
+<h2 id="run">Run</h2>
+<p>
+Run the application package:
+<pre>
+$ mvn test -Dtest=ApplicationMain
+</pre>
+Invoke the <code>Processor</code>:
+<pre>
+$ curl http://localhost:8080/processing/
+{"datalist":[{"data":"Hello, services!"}]}
+</pre>
+The JDisc Container has a built-in handler at <code>http://localhost:8080/ApplicationStatus</code>.
+It returns information about the deployed application and its components,
+e.g. server ports and URI bindings for request handlers.
+</p>
+
+
+
+<h2 id="unit-test">Unit test</h2>
+<p>
+Part of the generated application package is the integration test in
+<code>src/test/java/com/yahoo/example/ApplicationTest.java</code>.
+This test demonstrates how
+<code><a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/application/Application.html">
+com.yahoo.application.Application</a></code> can be used to run the JDisc
+Container in a JVM. Not only is this useful for testing, the same approach can be used
+in production on single-vm environments (e.g. grid jobs).
+</p><p>
+Notice the <code>com.yahoo.application.container.JDisc</code> class that is accessed by
+the test through <code>app.getJDisc(clusterName)</code>. That class has methods for
+exercising all common <a href="how-does-jdisc-work.html">JDisc component types</a>.
+</p><p>
+Notice how the the test disables the network layer in the call to the
+<code>Application</code> factory method. Unit tests should disable
+the network to allow tests to be run in parallel. However, to have the JDisc
+Container bind to the appropriate network sockets, the network needs to be enabled.
+</p><p>
+Read more on <a href="testing-configurable-components.html">
+unit testing configurable components</a>.
+</p>
+
+
+
+<h2 id="deploy">Deploy</h2>
+<p>
+The above built Java code and ran it on a developer host.
+To deploy the application to a docker instance like in the
+<a href="../vespa-quick-start.html">quick start</a>, build a deployable package:
+<pre>
+$ mvn install package
+</pre>
+This builds the <a href="../cloudconfig/application-packages.html">
+application package</a> <code>target/application.zip</code>.
+
+To deploy the application, read about
+<a href="../cloudconfig/application-packages.html">application packages</a>,
+then log into the docker container and deploy:
+<pre>
+$ cd vespa/docker
+
+$ ./run-vespa.sh 6.69.170                                            ## replace with built vespa version
+
+$ docker exec -it e78c6acedb3b bash                                  ## replace with docker container id
+
+# cd /vespa/sample-apps/basic-search-java/                           ## /vespa is mounted in run-vespa.sh
+
+# vespa-deploy prepare target/application.zip &amp;&amp; vespa-deploy activate
+
+# curl http://localhost:8080/processing/                             ## test query
+</pre>
+</p>
+
+
+
+<h2 id="next-steps">Next steps</h2>
+<p>
+Learn more about the APIs in the <a href="index.html">Vespa JDisc Container</a>.
+</p>
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<dl>
+<dt id="generated-sources">Cannot find <em>*Config</em> classes</dt>
+<dd><p>
+Several projects depend on generated configuration classes.
+These are created by the <em>generate-sources</em> Maven target.
+The easiest way to avoid the problem is building the project with Maven from the shell,
+<em>then</em> importing in Eclipse/IntelliJ.
+If the project is already imported,
+first run the <em>generate-sources</em> target either from the IDE or the shell,
+then mark the pertinent <em>target/generated-sources/vespa-configgen-plugin</em>
+directories as source directories.
+</p></dd>
+
+<dt id="troubleshooting-maven">Maven</dt>
+<dd><p>
+On error:
+<pre>
+  at org.codehaus.plexus.archiver.AbstractArchiver$1.hasNext(AbstractArchiver.java:482)
+  at org.codehaus.plexus.archiver.AbstractArchiver$1.hasNext(AbstractArchiver.java:482)
+  at org.codehaus.plexus.archiver.AbstractArchiver$1.hasNext(AbstractArchiver.java:482)
+  at org.codehaus.plexus.archiver.AbstractArchiver$1.hasNext(AbstractArchiver.java:482)
+</pre>
+increase the maven thread stack size by <em>export MAVEN_OPTS=-Xss2m</em>
+</p></dd>
+
+<dt id="running-on-linux">Running on Linux</dt>
+<dd><p>
+IntelliJ does not pick up custom test profiles from <code>pom.xml</code>.
+If running IntelliJ on a Linux, configure its test environment with a reference to the
+library path (i.e. <code>$VESPA_ROOT/lib64</code>).
+The simplest way to do this is to edit the default configuration for JUnit.
+</p></dd>
+
+<dt id="ignored-provider">Ignored provider</dt>
+<dd><p>
+This it is usually a packaging problem:
+<pre>
+A provider [the class] registered in SERVER runtime does not implement any provider interfaces applicable in the SERVER runtime. Due to constraint configuration problems the provider [the class] will be ignored.
+</pre>
+The JAX-RS classes, like the @GET annotation, have been bundled inside the
+plug-in bundle, causing the container not to recognize them as valid annotations.
+The fix is using <em>mvn dependency:tree</em> to figure out what
+dependency has caused JAX-RS to be included,
+and then add the proper exclusion clause to pom.xml.
+</p></dd>
+
+<dt id="WebApplicationException">No result returned when throwing WebApplicationException</dt>
+<dd><p>
+The container has no special handling of javax.ws.rs.WebApplicationException and its subclasses.
+All Jersey plug-ins must either be exception safe,
+or supply the proper implementations of javax.ws.rs.ext.ExceptionMapper
+for all exceptions which are expected to be thrown from the plug-in
+(and annotate these with @Provider).
+</p></dd>
+
+</dl>
+
+
+
+
+<h2>Basic testing</h2>
+<p>
+Above is a test that instantiates the Container
+and lets you run requests using a browser or HTTP client,
+by enabling the network interface:
+<pre>
+public class ApplicationMain {
+
+  @Test
+  public static void main(String[] args) throws Exception {
+    try (com.yahoo.application.Application app = com.yahoo.application.Application.fromApplicationPackage(
+        FileSystems.getDefault().getPath("src/main/application"),
+        Networking.enable)) {
+      app.getClass(); // throws NullPointerException
+      Thread.sleep(Long.MAX_VALUE);
+    }
+  }
+}
+</pre>
+Run/debug this, and it will invoke the plugins as configured.
+Most often, you will write tests like:
+<pre>
+import java.io.File;
+import org.junit.Test;
+import com.yahoo.application.Application;
+import com.yahoo.search.Query;
+  
+public class ApplicationTest {
+  
+  @Test
+  public void testContainerApplicationWithReferencedContentCluster() throws Exception {
+    try (Application application =
+        Application.fromApplicationPackage(new File("myapplication/"),
+        Networking.disable) ) {
+      byte[] response = application.getJDisc("foo").search().processAndRender(chainId, rendererId,
+      new Query("?query=foo"));
+      ...
+    }
+  }
+}
+</pre>
+By disabling the network interface, you eliminate port conflicts, and you can run tests in parallel.
+</p>

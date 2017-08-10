@@ -1,0 +1,319 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Buckets"
+---
+
+<p>
+The content layer splits the document space into chunks called <em>buckets</em>.
+This document is about how documents map to buckets
+and how buckets are distributed and managed.
+Learn more about the <a href="idealstate.html">distribution algorithm</a>.
+</p><p>
+The various operations done through and within the content layer need some
+unit of data to operate on. This could be documents directly, but then the
+number of units existing can not be controlled by the content layer. Mapping
+documents to buckets, the number of units existing can be controlled.
+</p><p>
+Advantages of many units:
+<ul>
+  <li>Easy to create an even distribution</li>
+  <li>Issues detected are more specific,
+    relating to a smaller part of the document corpus</li>
+  <li>Operations on small units finish quickly</li>
+</ul>
+Advantages of few units:
+<ul>
+  <li>Per unit metadata takes up less space,
+    simplifying caching and metadata transfers.</li>
+  <li>Iterating metadata for all units is faster.</li>
+</ul>
+To strike a balance, documents are mapped to a set of buckets,
+where the number of buckets can be configured.
+As clusters grow or shrink, or document sizes in the cluster change,
+one may want to have a different amount of buckets in the cluster.
+This is achieved by bucket splitting and joining.
+</p><p>
+Documents have string identifiers that maps to a 58 bit numeric location.
+A bucket is defined as all the documents that shares a given amount
+of least significant bits within the location.
+The amount of bits used controls how many buckets will exist.
+For instance, if a bucket contains all documents whose 8 LSB bits is 0x01,
+the bucket can be split in two by using the 9th bit in the location to split them.
+Similarly buckets can be joined by requiring one less bit in common.
+</p>
+
+
+<h2 id="distribution">Distribution</h2>
+<p>
+Distribution happens in several layers.
+<ul>
+  <li>Documents map to 58 bit numeric locations.</li>
+  <li>Locations map to buckets</li>
+  <li>Buckets map to distributors responsible for handling requests related to
+      those buckets.</li>
+  <li>Buckets map to content nodes responsible for storing replicas of
+      buckets.</li>
+  <li>Buckets within a content node are mapped to partitions within. Partitions generally map 1-1 to disks.
+      This only applies to providers that support storing data across multiple partitions.</li>
+</ul>
+</p>
+
+
+<h3 id="documents-to-location-distribution">Document to location distribution</h3>
+<p>
+Document identifiers may use document identifier schemes to control how documents map to locations.
+This way it is possible to colocate data within buckets
+by enforcing some documents to have common LSB bits.
+</p><p>
+See <a href="../documents.html">document identifier schemes</a>
+for how the document identifiers can be user to override location bits.
+Specifying a group or numeric value with the n and g options
+overrides the 32 LSB bits of the location.
+This is useful for <a href="../streaming-search.html">streaming search</a>.
+Unless co-localization is required, it is recommended <em>not</em>
+to override the location bits, to generate a more even distribution.
+</p>
+
+
+<h3 id="location-to-bucket-distribution">Location to bucket distribution</h3>
+<p>
+When clients talk to the content layer, they typically have a document where
+a location can be calculated. But in order to know what distributor to talk
+to, they need to know the correct bucket to use.
+</p><p>
+Currently this is solved by enforcing a given number of location bits to be used.
+The cluster state contains a distribution bit count,
+which is the amount of location bits to use to generate buckets which can be mapped to distributors.
+</p><p>
+The cluster state may change the number of distribution bits to adjust the
+number of buckets distributed at this level.
+When adding more nodes to the cluster,
+the number of buckets increases in order for the distribution to remain uniform.
+</p><p>
+Altering the distribution bit count causes a full redistribution of all buckets
+in the system.
+</p><p>
+If locations have been overridden to co-localize documents into few units,
+the distribution of documents into these buckets may be skewed.
+</p>
+
+
+<h3 id="bucket-to-distributor-distribution">Bucket to distributor distribution</h3>
+<p>
+Clients need to reach the entire cluster.
+Keeping a single registry of where to find all buckets would require memory to scale with cluster size.
+Requiring this registry to fit in memory limits amount of buckets used and
+complicates creating an even distribution. Keeping a dynamic, large memory structure
+synchronized across many nodes would also add significant complexity.
+</p><p>
+An external registry service could be used, but if the registry is large
+enough to require multiple nodes, then it becomes another stateful service of
+its own, and client requests would need to do extra network hops to talk to the registry server.
+</p><p>
+To avoid the problems above, the content layer maps buckets to nodes using an
+algorithm calculating distributor targets based on bucket and knowledge about
+what distributors exist, and what their capacities are.
+</p>
+
+
+<h3 id="bucket-to-content-node-distribution">Bucket to content node distribution</h3>
+<p>
+Buckets are mapped to content nodes for storage.
+As the content nodes store persistent data,
+moving ownership of buckets take a lot more time at the content node level than on the distributor level.
+But as each distributor only handles a controllable amount of buckets,
+they can keep per bucket metadata in memory without creating a scaling issue.
+Distributors route requests on to content nodes based on an in-memory bucket database,
+telling it which nodes have replicas of which buckets.
+</p><p>
+The same algorithm that is used to calculate distributor ownership is used to
+calculate wanted content node ownership. This implies that there is usually a
+replica of a bucket on the same content node as the distributor owning the bucket.
+</p><p>
+The distributor uses this algorithm to calculate where bucket replicas are supposed to be,
+and move buckets that are currently in the wrong position in the background.
+</p><p>
+The distributors typically use little system resources, and should not be a bottleneck.
+It is thus not critical if the distribution to distributors are not as even
+as distribution of buckets to content nodes.
+The distributors may split the buckets further than the distribution bit count indicates,
+allowing more units to be distributed among the content nodes to create a more even distribution,
+while not affecting routing from client to distributors.
+</p>
+
+
+<h3 id="bucket-to-partition-distribution">Bucket to partition distribution</h3>
+<p>
+A content node may contain multiple partitions (e.g. disks),
+enabling it to fail only parts of the node,
+or easily split requests between multiple resources.
+</p><p>
+Buckets map to partitions within a content node using the same algorithm that is used to map to nodes.
+Just that in this case, the distribution keys used are the partition indexes.
+The seed used includes the distribution key of the node,
+to ensure the bucket will map to different partitions on other nodes.
+This is an important property to ensure that when a partition goes down,
+all partitions on all other nodes will divide the extra load between them.
+</p><p>
+To avoid a two level distribution with non-ideal movement on state changes,
+the distributors are aware of the partition states and partition selection algorithm.
+When mapping buckets to content nodes,
+it will not map buckets to nodes where the correct partition is not available.
+By doing this, there is still minimal transfer of buckets on partition state changes,
+and the node capacities do not need to be altered.
+The cost is that the remaining partitions on the node
+will not take over any load from the disk that went down.
+However, in clusters with many nodes, this should be a small percentage of the partitions.
+</p>
+
+
+<h2 id="maintenance-operations">Maintenance operations</h2>
+<p>
+The content layer defines a set of maintenance operations to keep the cluster balanced.
+Distributors schedule maintenance operations and issue them to content nodes.
+Maintenance operations are typically not high priority requests -
+see <a href="../reference/services.html#load-types">priority levels</a>.
+Scheduling a maintenance operation does not block any external operations.
+<table class="table">
+<thead></thead><tbody>
+<tr>
+  <th>Split bucket</th><td>
+    Split a bucket in two, by enforcing the documents within the new buckets
+    to have more location bits in common.
+    Buckets are split either because they have grown too big (priority between LOW_2 and LOW3),
+    or because the cluster wants to use more distribution bits (priority LOWEST).</td>
+</tr><tr>
+  <th>Join bucket</th><td>
+    Join two buckets into one (priority between NORMAL_6 and LOW_).
+    If a bucket has been previously split due to being large,
+    but documents have now been deleted, the bucket can be joined again.</td>
+</tr><tr>
+  <th>Merge bucket</th><td>
+    If there are multiple replicas of a bucket, but they do not store the same
+    information, merge is used to synchronize the replicas.
+    A special case of a merge is a one-way merge, which may be done if
+    some of the replicas are to be deleted right after the merge. Merging is used
+    not only to fix inconsistent bucket replicas (priority NORMAL_2 - NORMAL_3),
+    but also to move buckets between nodes (priority between LOW_1 and LOW_2).
+    To move a bucket, an empty replica is created on the target node,
+    a merge is executed, and the source bucket is deleted.
+    Likewise for copy, minus the bucket delete -
+    buckets are merged with priority NORMAL_3 for redundancy levels.</td>
+</tr><tr>
+  <th>Create bucket</th><td>
+    This operation exist merely for the distributor to notify a content node
+    that it is now to store documents for this bucket too. This allows content
+    nodes to refuse operations towards buckets it does not own. The ability to
+    refuse traffic is a safeguard to avoid inconsistencies. If a client talks
+    to a distributor that is no longer working correctly, we rather want its
+    requests to fail than to alter the content cluster in strange ways.</td>
+</tr><tr>
+  <th>Delete bucket</th><td>
+    Drop stored state for a bucket and reject further requests for it (priority NORMAL_1)</td>
+</tr><tr>
+  <th style="white-space: nowrap">(De)activate bucket</th><td>
+    Activate bucket for search results (priority NORMAL_1) -
+    refer to <a href="../elastic-vespa.html#bucket-management">bucket management</a></td>
+</tr><tr>
+  <th>Expire documents</th><td>
+    Documents are <a href="../search-definitions.html#document-expiry">expired</a>
+    with priority LOWEST</td>
+</tr>
+</tbody>
+</table>
+</p>
+
+
+<h3 id="bucket-split-size">Bucket split size</h3>
+<p><!-- ToDo rewrite this section -->
+The distributors may split existing buckets further to keep bucket sizes at manageable levels,
+or to ensure more units to split among the backends and their partitions.
+</p><p>
+Using small buckets, the distribution will be more uniform and bucket operations will be smaller.
+Using large buckets, less memory is needed for metadata operations
+and bucket splitting and joining is less frequent.
+</p><p>
+The size limits may be altered by configuring <a href="../reference/services-content.html#bucket-splitting">bucket splitting</a>.
+</p>
+
+
+
+<h2 id="document-to-bucket-distribution">Document to bucket distribution</h2>
+<p>
+Each document has a document identifier following a document identifier
+<a href="../documents.html">uri scheme</a>.
+From this scheme a 58 bit numeric <em>location</em> is generated.
+Typically, all the bits are created from an MD5 checksum of the whole identifier.
+</p><p>
+MD5 checksums maps document identifiers to random locations.
+This creates a uniform bucket distribution, and is default.
+For some use cases, it is better to co-locate documents,
+optimizing grouped access - an example is personal documents.
+By enforcing some documents to map to similar locations,
+these documents are likely to end up in the same actual buckets.
+There are several use cases for where this may be useful:
+<ul>
+  <li>When migrating documents for some entity between clusters, this may be
+    implemented more efficient if the entity is contained in just a few
+    buckets rather than having documents scattered around all the existing
+    buckets.</li>
+  <li>If you want to search through a small document set, this can be done using
+    streaming search.</li>
+  <li>If operations to the cluster is clustered somehow, clustering
+    the documents equally in the backend may make better use of caches. For
+    instance, if a service stores data for users, and traffic is typically
+    created for users at short intervals while the users are actively using
+    the service, clustering user data may allow a lot of the user traffic
+    to be easily cached by generic bucket caches.</li>
+</ul>
+If the <code>n=</code> option is specified, the 32 LSB bits of the given
+number overrides the 32 LSB bits of the location.
+If the <code>g=</code> option is specified, a hash is created of the group name,
+the hash value is then used as if it were specified with <code>n=</code>.
+When the location is calculated, it is mapped to a bucket.
+Clients map locations to buckets using
+<a href="#location-to-bucket-distribution">distribution bits</a>.
+</p><p>
+Distributors map locations to buckets by searching their bucket database,
+which is sorted in inverse location order.
+The common case is that there is one.
+If there are several, there is currently inconsistent bucket splitting.
+If there are none, the distributor will create a new bucket for
+the request if it is a request that may create new data.
+Typically new buckets are generated split according to the distribution bit count.
+</p><p>
+Content nodes should rarely need to map documents to buckets, as distributors
+specify bucket targets for all requests. However, as external operations are
+not queued during bucket splits and joins, the content nodes remap operations
+to avoid having to fail them due to a bucket having recently been split or joined.
+</p>
+
+
+<h3 id="limitations">Limitations</h3>
+<p>
+One basic limitation to the document to location mapping is that it may never change.
+If it changes, then documents will suddenly be in the wrong buckets in the cluster.
+This would violate a core invariant in the system, and is not supported.
+</p><p>
+To allow new functionality,
+document identifier schemes may be extended or created that
+maps to location in new ways, but the already existing ones must map
+the same way as they have always done.
+</p><p>
+Current document identifier schemes typically allow the 32 least significant
+bits to be overridden for co-localization, while the remaining 26 bits are
+reserved for bits created from the MD5 checksum.
+</p>
+
+
+<h3 id="splitting">Splitting</h3>
+<p>
+When there are enough documents co-localized to the same bucket,
+causing the bucket to be split, it will typically need to split past the 32 LSB.
+At this split level and beyond, there is no longer a 1-1 relationship between the
+node owning the bucket and the nodes its replica data will be stored on.
+</p><p>
+The effect of this is that documents sharing a location will be spread across
+nodes in the entire cluster once they reach a certain size. This enables efficient
+parallel processing.
+</p>

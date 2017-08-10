@@ -1,0 +1,241 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Search API"
+---
+
+<p>
+Search with Vespa using HTTP GET requests. HTTP keepalive is supported.
+Refer to the <a href="reference/search-api-reference.html">search API</a>.
+The general form of a search request is:
+<pre>
+http://&lt;qrs-host&gt;:&lt;qrs-port&gt;/search/?&lt;param1=value1&gt;&amp;&lt;param2=value2&gt;&hellip;
+</pre>
+QRS (Query Result Server) is the service accepting Vespa search requests.
+The only mandatory parameter is <code>query</code> or <code>yql</code> - examples:
+<pre>
+http://host:port/search/?query=rose
+http://host:port/search/?query=kanoo%20bathing&amp;hits=10
+</pre>
+The last query has a query string consisting of multiple words. In
+cases where the parameter values contains non-alphanumeric characters,
+the values must be encoded according to standard URL encoding
+rules. Thus, space is encoded as %20, + as %2b and so on -
+see <a href="http://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>.
+</p>
+
+
+
+<h2 id="query-strings">Query Strings</h2>
+<p>
+The most important piece of the query request is the query string.
+The query string contains the specification of which results the search should return,
+typically some words which should be present in matching documents.
+The Vespa Query Language comes in two flavors:
+<ul>
+<li>The <strong>simple</strong> query language is intended to be usable directly
+    by end users. It has four
+    <a href="reference/simple-query-language-syntax.html#simple">subtypes</a>,
+    where <em>all</em> is the default.  Its main purpose
+    is <em>robustness</em> - it makes the most out of any strange piece
+    of text which may be given to a search engine by an end user.
+    This is the default in Vespa.</li>
+<li>The <strong>advanced</strong> query syntax is intended for programmatic
+    use. Queries are formulated in <a href="query-language.html">YQL</a>
+    which should be used when building applications.</li>
+</ul>
+See the <a href="reference/simple-query-language-syntax.html">simple query language reference</a>.
+</p><p>
+If Vespa cannot determine a valid search expression from the query string,
+it will issue the error message <em>Null query</em>.
+To troubleshoot, add <a href="reference/search-api-reference.html#tracelevel">&amp;tracelevel=2</a>
+to the GET request. A missing query/yql parameter will also lead to this error message.
+</p>
+
+
+<h3 id="simple-query-syntax">Simple Query Syntax</h3>
+<p>
+The <em>simple</em> query language syntax accepts any input string and
+makes the most of it. A basic query consists of words separated by
+spaces (encoded as %20). In addition,
+<ul>
+<li>A phrase can be searched by enclosing it in quotes, like
+    <code>"match exactly this"</code></li>
+<li>Phrases and words may be preceded by -, meaning documents <em>must
+    not</em> contain this</li>
+<li>Phrases and words may be preceded by +, meaning documents
+    <em>must</em> contain this, currently only in use for
+    subtype <code>any</code></li>
+<li>Groups of words and phrases may be grouped using parenthesis, like
+    <code>-(do not match if all of these words matches)</code></li>
+<li>Each word or phrase may be preceded by an index or attribute name
+    and a colon, like <code>indexname:word</code>, to match in that
+    index. If the index name is omitted the index
+    named <em>default</em> is searched.</li>
+</ul>
+Any <em>noise</em> (characters not in indexes or attributes,
+and with no query language meaning) is ignored, all query strings are valid.
+The exception is queries which have no meaningful interpretation.
+An example is <code>-a</code>, which one would expect to return
+all documents <em>not</em> containing <em>a</em>.
+Vespa, however, will return the error message <em>Null query</em>.
+All the following examples are of type <em>all</em>.
+</p><p>
+Get all documents with the word <em>word</em>,
+having <em>microsoft</em> but not <em>bug</em> in the title:
+<pre>word title:microsoft -title:bug</pre>
+Search for all documents having the phrase "<em>to be or not not be</em>",
+but excluding those having <em>shakespeare</em> in the title:
+<pre>"to be or not to be" -title:shakespeare</pre>
+Get all documents with the word <em>Christmas</em> in the title that
+were last modified Christmas Day 2009:
+<pre>title:Christmas date:20091225</pre>
+Get documents on US Foreign politics, excluding those matching both
+rival presidential candidates:
+<pre>"us foreign politics" -(clinton trump)</pre>
+Get documents on US Foreign politics, including only those matching at
+least one of the rival presidential candidates:
+<pre>"us foreign politics" (clinton trump)</pre>
+</p>
+
+
+
+<h2 id="other-query-params">Other Query Parameters</h2>
+<p>
+In addition to the query string itself, Vespa accepts a number of
+parameters which describes how to match documents, order results,
+present results and how to provide additional information about the
+hits. The following lists the most important parameters, a full
+listing is found in the
+<a href="reference/search-api-reference.html">search API reference</a>,
+including information on search chains and query profiles.
+It is also possible to use locations for <a href="geo-search.html">Geo search</a>.
+<table class="table">
+<thead>
+<tr>
+  <th>Parameter</th><th>Description</th>
+  </tr>
+</thead>
+<tbody>
+<tr><td><code>query</code></td>
+  <td>the query, described above</td></tr>
+<tr><td><code>type</code></td>
+  <td>the query type (all, web, any, phrase, adv), described
+      above</td></tr>
+<tr><td><code>offset</code></td>
+  <td>the (0-base) offset into the results, used for paging through a
+      set of hits</td></tr>
+<tr><td><code>hits</code></td>
+  <td>the (max) number of hits to return</td></tr>
+<tr><td><code>filter</code></td>
+  <td>an additional <em>any</em> type query string used to limit or
+      modify the query. This is typically used to add machine
+      generated query terms or preset preferences to a user query,
+      without having to do any string combination in the front
+      end</td></tr>
+<tr><td><code>tracelevel</code></td>
+  <td>set to a positive integer to see tracing information in the
+      query result. Higher numbers produce more tracing
+      output.</td></tr>
+<tr><td><code>sorting</code></td>
+  <td>specifies result sorting, if sort by relevancy is not
+      desired. See <a href="reference/sorting.html">sorting
+      reference</a>.</td></tr>
+<tr><td><code>timeout</code></td>
+  <td>A floating point number giving number of seconds to wait for
+      this query to finish. This overrides any default values set in query profiles,
+      and any provider(backend) timeouts.</td></tr>
+<tr><td><code>select</code></td>
+  <td>specifies a grouping expression to do over the result set, see
+      the <a href="reference/grouping-syntax.html">grouping
+      reference</a>.</td></tr>
+</tbody>
+</table>
+</p>
+
+
+<h2 id="default-result-format">Default Result Format</h2>
+<p>
+The default output format is JSON as defined in the
+<a href="./reference/default-result-format.html#default-json">reference</a>.
+The basic structure is:
+<pre>
+{
+    "root": {
+        "children": [
+            objects with same structure as root itself...
+        ],
+        "fields": {
+            "document field name": "document field contents",
+            …
+        }
+    }
+}
+</pre>
+As for a complete example of the structure:
+<pre>
+{
+    "root": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "fields": {
+                            "c": "d",
+                            "uri": "http://localhost/1"
+                        },
+                        "id": "http://localhost/1",
+                        "relevance": 0.9,
+                        "types": [
+                            "summary"
+                        ]
+                    }
+                ],
+                "id": "usual",
+                "relevance": 1.0
+            },
+            {
+                "fields": {
+                    "e": "f"
+                },
+                "id": "type grouphit",
+                "relevance": 1.0,
+                "types": [
+                    "grouphit"
+                ]
+            },
+            {
+                "fields": {
+                    "description": "foo",
+                    "uri": "http://localhost/"
+                },
+                "id": "http://localhost/",
+                "relevance": 0.95,
+                "types": [
+                    "summary"
+                ]
+            }
+        ],
+        "coverage": {
+            "coverage": 100,
+            "documents": 500,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "errors": [
+            {
+                "code": 18,
+                "message": "boom",
+                "summary": "Internal server error."
+            }
+        ],
+        "fields": {
+            "totalCount": 130
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+</pre>
+</p>

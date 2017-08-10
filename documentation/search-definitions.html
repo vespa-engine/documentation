@@ -1,0 +1,765 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Search Definitions"
+---
+
+<p>
+Data in Vespa is modeled as <a href="documents.html">Documents</a>.
+<em>Search Definitions</em> configure the document types
+and how they should be stored, indexed, ranked, searched and presented.
+A vague analogy is a <em>schema</em>.
+Documents adhere strictly to a configured <em>document type</em>.
+A Vespa system can have multiple document types and each document type
+is defined in a <em>search definition</em>.
+The values in each field have an associated data type like string, long,
+array - see the <a href="reference/search-definitions-reference.html#field_types">
+search definitions reference</a> for a complete list.
+</p><p>
+Some commonly used field properties are described in this document -
+there are other properties that provide finer control over ranking,
+linguistics and other advanced features.
+Read more in the <a href="reference/search-definitions-reference.html">
+search definition reference</a>.
+</p><p>
+Search definition files have suffix <em>.sd</em>,
+and the prefix must be the same as the search name described inside.
+Vespa applications must have at least one search definition in the
+<a href="cloudconfig/application-packages.html">application package</a> -
+the search definition is a required file.
+</p><p>
+A document has a unique <em>Document Id</em>.
+Documents can have relations - read more about <a href="#document-references">document references</a>.
+</p><p>
+Search definitions can be <a href="#modify-search-definitions">modified without restarts</a>.
+</p><p>
+Example
+<a href="https://github.com/vespa-engine/vespa/blob/master/sample-apps/basic-search/src/main/application/searchdefinitions/music.sd">
+music.sd</a>:
+<pre>
+search music {
+    document music {
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field artistId type string {
+            indexing: summary | attribute
+        }
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field album type string {
+            indexing: index
+        }
+
+        field duration type int {
+            indexing: summary
+        }
+
+        field year type int {
+            indexing: summary | attribute
+        }
+
+        field popularity type int {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: artist, title, album
+    }
+
+    rank-profile song inherits default {
+        first-phase {
+            expression:nativeRank(artist,title,album) + if(isNan(attribute(popularity)) == 1, 0,attribute(popularity))
+        }
+    }
+}
+</pre>
+</p>
+
+
+
+<h2 id="indexing">indexing</h2>
+<p>
+<code>indexing</code> configures how to process data of a field during indexing -
+the most important ones are:
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <td><code>index</code></td><td>
+        Make this field's content part of a searchable index.
+        <a href="reference/search-definitions-reference.html#indexing">Reference</a></td>
+    </tr><tr>
+      <td><code>attribute</code></td><td>
+        Create an in-memory attribute to enable sorting or grouping.
+        Note some <a href="reference/search-definitions-reference.html#match">
+        match methods</a> are not available for attributes.
+        <a href="reference/search-definitions-reference.html#attribute">Reference</a> /
+        <a href="attributes.html">attribute details</a></td>
+    </tr><tr>
+      <td><code>summary</code></td><td>
+        Include this field in the document summary in search result sets.
+        <a href="reference/search-definitions-reference.html#summary">Reference</a></td>
+    </tr>
+  </tbody>
+</table>
+Indexing instructions have pipeline semantics similar to unix shell
+commands, with data flowing from left to right.
+They can perform complex transformations on field values,
+or just send the field value unchanged to the next sections of the index structure - example:
+<pre>
+indexing: summary | attribute | index
+</pre>
+The data is first added to the document summary, then added as an
+in-memory attribute and finally indexed.
+The indexing language offers more functionality than this,
+like filter field values, combine field values, select on different values.
+Learn more in the <a href="reference/advanced-indexing-language.html">
+indexing language</a> reference.
+</p>
+
+
+
+<h2 id="fieldset">fieldset</h2>
+<p>
+A <code>fieldset</code> groups fields together for searching - example:
+<pre>
+search/?query=title:sometitle default:someword
+</pre>
+This query returns documents having <em>sometitle</em> in the field <em>title</em>,
+and <em>someword</em> in one or more of the fields in the fieldset <em>default</em>.
+If no field/field set name is given for a search term, the fieldset named <em>default</em> is searched.
+Find details in the <a href="reference/search-definitions-reference.html#fieldset">fieldset reference</a>.
+</p>
+
+
+
+<h2 id="rank-profile">rank-profile</h2>
+<p>
+Vespa has built-in rank profiles, and/or such profiles can be configured,
+by hand or using machine learning.
+Read more in the <a href="ranking.html">ranking</a> documentation.
+</p>
+
+
+
+<h2 id="document-references">Document references</h2>
+<p>
+Documents can refer to other documents using
+<a href="reference/search-definitions-reference.html#type:reference">references</a>
+to <a href="content/data-placement.html#global-documents">global documents</a>.
+Using a reference, fields can be
+<a href="reference/search-definitions-reference.html#import-field">imported</a>
+from parent types into the child's search definition and used for matching and ranking.
+</p>
+
+<p>
+<strong>Note:</strong> This feature is ready for beta testing for applications
+with a data distribution where all documents are on each node.
+<!-- ToDo: remove this when supporting distributed... -->
+</p>
+
+<p>
+Example:
+<pre>
+search campaign {
+    document campaign {
+        field budget type int { indexing : attribute }
+    }
+}
+</pre>
+<pre>
+[
+  { "put": "id:test:campaign::thebest", "fields": { "budget": 20 } },
+  { "put": "id:test:campaign::nextbest", "fields": { "budget": 10 } }
+]
+</pre>
+<pre>
+search salesperson {
+    document salesperson {
+        field name type string { indexing: attribute }
+    }
+}
+</pre>
+<pre>
+[
+  { "put": "id:test:salesperson::johndoe", "fields": { "name": "John Doe" } }
+]
+</pre>
+<pre>
+search ad {
+    document ad {
+        field campaign_ref type <span style="background-color: yellow;">reference&lt;campaign&gt;</span> {
+            indexing: attribute
+        }
+        field other_campaign_ref type reference&lt;campaign&gt; {
+            indexing: attribute
+        }
+        field salesperson_ref type reference&lt;salesperson&gt; {
+            indexing: attribute
+        }
+    }
+        
+    <span style="background-color: yellow;">import field campaign_ref.budget as budget</span> {}
+    import field salesperson_ref.name as salesperson_name {}
+}
+</pre>
+<pre>
+[
+  { "put": "id:test:ad::1", "fields": {
+      "campaign_ref": "id:test:campaign::thebest",
+      "other_campaign_ref": "id:test:campaign::nextbest",
+      "salesperson_ref": "id:test:salesperson::johndoe" }
+  }
+]
+</pre>
+Document type <em>ad</em> has two references to <em>campaign</em> (via <em>campaign_ref</em>
+and <em>other_campaign_ref</em>) and one reference to <em>salesperson</em> (via <em>salesperson_ref</em>).
+The <em>budget</em> field from <em>campaign</em> is imported into the <em>ad</em> search definition
+(via <em>campaign_ref</em>) and given the name <em>budget</em>. Similarly, the <em>name</em> of
+<em>salesperson</em> is imported as <em>salesperson_name</em>.
+</p>
+<p>
+Using the parent-child relationship, data does not have to be normalized,
+as fields from parents are imported into children.
+Use this to update parent fields to limit number of updates if a field's value
+is shared beween many documents.
+This also limits the resources (memory / disk) required to store and handle documents on content nodes.
+</p>
+</p>
+As global documents are distributed to all nodes, node capacity will limit
+the number of such documents. Global documents are hence called parents -
+there are usually less parents than children. Note that parents can have parents.
+</p>
+<p>
+The following type of references are not supported:
+<ul>
+  <li>
+    Self-reference.
+  </li>
+  <li>
+    Transitive reference.
+    A document type <em>child</em> cannot import fields from it's <em>grandparent</em>
+    via a reference to <em>parent</em> (and its reference to <em>grandparent</em>).
+    In this case <em>child</em> needs an explicit reference to <em>grandparent</em>.
+  </li>
+  <li>
+    Cyclic reference.
+    If document type <em>foo</em> has a reference to <em>bar</em>,
+    then <em>bar</em> cannot have a reference to <em>foo</em>.
+  </li>
+</ul>
+</p>
+
+
+<h2 id="document-expiry">Document expiry</h2>
+<p>
+To auto-expire documents, use a <a href="reference/services-content.html#documents.selection">
+selection</a> with <a href="reference/advanced-indexing-language.html#now">now</a>.
+Example, keep <em>music</em>-documents for a day:
+<pre>
+&lt;documents garbage-collection="true"&gt;
+  &lt;document type="music" selection="music.timestamp > now() - 86400" &gt;
+&lt;/documents&gt;
+</pre>
+The <em>timestamp</em>-field must have values in seconds since EPOCH:
+<pre>
+field timestamp type long {
+    indexing: attribute
+    attribute {
+        fast-access
+    }
+}
+</pre>
+Notes:
+<ul>
+  <li>
+    Using a <em>selection</em> with <em>now</em> can have side effects
+    when re-feeding or re-processing documents, as timestamps can be stale.
+    A common problem is feeding with too old timestamps,
+    resulting in no documents being indexed.
+  </li><li>
+    Deploying a configuration where the selection string selects no documents
+    will cause all documents to be garbage collected.
+    Use <a href="content/visiting.html">visit</a> to test the selection string.
+    Garbage collected documents are not to be expected to be recoverable.
+  </li><li>
+    When using this feature, <a href="reference/services-content.html#searchable-copies">
+    searchable copies</a> in a content cluster should be the same as
+    the <a href="reference/services-content.html#redundancy">redundancy</a> and the
+    selection expression should only reference fields that are attribute vectors.
+    Otherwise, the document selection maintenance will be slow and have a major
+    performance impact on the system.
+  </li>
+</ul>
+</p><p>
+To batch remove, set a selection that matches no documents, like <em>"!music"</em>
+</p>
+
+
+
+<h2 id="multiple-dearch-definitions">Multiple Search Definitions</h2>
+<p>
+Some applications need to search more than one kind of data,
+each described by its own search definition.
+There are two ways to do this:
+<ol>
+<li>Deploy multiple search definitions to one indexed content cluster</li>
+<li>Deploy each search definition in a separate indexed content cluster</li>
+</ol>
+In both solutions, the QRS will be used to blend results for searches that query multiple search definitions -
+below is pros and cons of each approach, as well as how to configure.
+</p><p>
+It is possible to combine the two methods,
+having some clusters serving one large search definition each,
+in combination with other clusters serving many small search definitions.
+</p>
+
+
+<h3 id="multiple-search-definitions-in-one-indexed-content-cluster">Multiple Search Definitions in one indexed content cluster</h3>
+<p><!-- ToDo check this - maybe supported for streaming, then simplify -->
+Vespa is able to serve multiple search definitions (document types) from the same
+indexed content cluster (this is not supported for streaming indexing mode).
+This is done inside the Vespa search core, but it still behaves in
+most ways as a collection of clusters each serving one document type;
+so a search that queries multiple search definitions will still be
+split before it is sent from the QRS, even if the same search core
+process will handle several types.
+<ul>
+<li>You need to manage only one instance of the set of search
+    processes regardless of the number of search definitions.</li>
+<li>You can no longer start, stop, or otherwise manage the serving for
+    the different search definitions independently, since they are
+    running in the same process.</li>
+<li>Even if you want different physical clusters at runtime it may be
+    convenient to use this feature during development as it makes it
+    easier to develop and test on a single node.</li>
+</ul>
+To enable, add the .sd-file and configure the document type (example below) - then deploy:
+<pre>
+&lt;documents&gt;
+  &lt;document mode="index" type="book" /&gt;
+  &lt;document mode="index" type="pc" /&gt;
+  &lt;document mode="index" type="sock" /&gt;
+&lt;/documents&gt;
+</pre>
+</p>
+
+
+<h3 id="multiple-indexed-content-clusters">Multiple indexed content clusters</h3>
+<p>
+Vespa can query multiple indexed content clusters for each search
+and do customizable blending of the results at the QRS level.
+Each indexed content cluster can be configured with its own search definition (document type).
+The consequences of this, compared to the method above, are as follows:
+<ul>
+<li>You will need to manage one instance of the entire set of search
+    processes for each kind of search definition.</li>
+<li>You can separate different types of loads on different machines
+    (say one search definitions has big documents and needs lots of
+    disk space, another has many small documents with attributes that
+    just need memory).</li>
+<li>You can manage the processes separately (so you can stop serving
+    one document type and delete the indexes for it without impacting
+    the other types).</li>
+</ul>
+To use this feature, configure multiple indexed content clusters,
+each having one search definition and selecting one kind of document.
+Below is an example of a Vespa setup configuration using three nodes
+to set up three indexed content clusters:
+<pre>
+&lt;content version="1.0" id="book"&gt;
+  &lt;redundancy&gt;1&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="book"/&gt;
+  &lt;/documents&gt;
+  &lt;group&gt;
+    &lt;node distribution-key="0" hostalias="HOST1"/&gt;
+  &lt;/group&gt;
+&lt;/content&gt;
+&lt;content version="1.0" id="pc"&gt;
+  &lt;redundancy&gt;1&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="pc"/&gt;
+  &lt;/documents&gt;
+  &lt;group&gt;
+    &lt;node distribution-key="0" hostalias="HOST2"/&gt;
+  &lt;/group&gt;
+&lt;/content&gt;
+&lt;content version="1.0" id="sock"&gt;
+  &lt;redundancy&gt;1&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="sock"/&gt;
+  &lt;/documents&gt;
+  &lt;group&gt;
+    &lt;node distribution-key="0" hostalias="HOST3"/&gt;
+  &lt;/group&gt;
+&lt;/content&gt;
+</pre>
+No restarts are needed when adding clusters (assuming no content host overlap) -
+also refer to <a href="operations/admin-procedures.html">admin procedures</a>.
+</p>
+
+
+
+<h2 id="document-inheritance">Document Inheritance</h2>
+<p>
+Regardless of how you choose to deploy your search definitions,
+it is likely that some of them contains fields that are common across some or all of the documents.
+Vespa supports <em>document inheritance</em> to collect those documents in one or more super-documents.
+To search across different search definitions with one search,
+you <em>should</em> define common fields in superclasses.
+The result is not well defined when you search a field that is defined independently
+by two different search definitions.
+</p><p>
+To let a document inherit another,
+just add <code>inherits [document-name]</code> after the document name.
+Multiple inheritance is also supported, for example:
+<pre>
+  document cod inherits food, fish {
+    &hellip;
+  }
+</pre>
+Multiple levels of inheritance works as well, fish may inherit animal and so on.
+</p>
+
+
+<h3 id="overriding-super-fields">Overriding Super-Fields</h3>
+<p>
+Overriding super-fields is not allowed. However there are other ways
+you can do this.  Keep in mind that only documents are inherited. The
+recommended way is to separate the definition of the field and the search
+specific stuff. Create an external field which takes the physical
+field as input and does the search specific stuff.  This can be done in
+both base and inherited type. This leaves full freedom to do whatever
+you like.
+</p>
+
+
+<h3 id="sharing-super-documents-across-indexed-content-clusters">Sharing Super-Documents Across Indexed Content Clusters</h3>
+<p>
+If you have multiple indexed content clusters,
+you may want to have search definitions containing documents
+which should be available for inheriting in multiple indexed content clusters.
+To do this, you need to list them in the <code>documents</code> tag,
+along with the other search definitions. For example:
+<pre>
+&lt;content version="1.0" id="myid"&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="base" /&gt;
+  &lt;/documents&gt;
+  &hellip;
+&lt;/content&gt;
+</pre>
+</p>
+
+
+
+<h2 id="searching-multiple-document-types">Searching multiple document types</h2>
+<p>
+In an application with multiple types of data, decide which data to search in each query.
+Read up on <a href="federation.html">federation</a> before continuing.
+The following always apply:
+<ul>
+<li>
+  Vespa will by default search all document types and all clusters in parallel,
+  and blend results based on relevancy.
+  A query may end up with just hits of one type, or some mixture of different data,
+  depending on which type had the most relevant results.
+  It is possible to define different ranking for each search definition,
+  and Vespa will apply the correct ranking for each hit,
+  depending on the document type.</li>
+<li>
+  To limit the search to a subset of the types inside indexed content clusters,
+  set <a href="reference/search-api.html#model.restrict">restrict</a> to
+  a comma-separated list of search definition (document type) names.
+  This is typically used when having multiple document types
+  in one cluster (method 1). Example:
+<pre>
+/search/?query=lotr&amp;<span style="background-color: yellow;">restrict=music,book</span>
+</pre></li>
+<li>To limit the search to a subset of the indexed content clusters,
+  set <a href="reference/search-api.html#model.sources">sources</a> to
+  a comma-separated list of indexed content cluster names.
+  This is typically used when having multiple clusters
+  with one document type in each (method 2). Example:
+<pre>
+/search/?query=lotr&amp;<span style="background-color: yellow;">sources=music_cluster,book_cluster</span>
+</pre></li>
+<li>
+  To specify the number of results to return of each type,
+  instead of letting this be decided by relevancy,
+  either submit one request per type, or write a custom QRS plug-in.</li>
+<li>
+  The blending of hits from different sources is limited to simple relevancy blending.
+  For more sophisticated blending, e.g. include a minimum number of hits of each type,
+  prefer some type of results over others for certain queries and so on,
+  write a custom QRS plug-in.</li>
+<li>
+  Searches to indexes that are only present in some of the sources
+  will not return results from other sources (that is, this works as expected).</li>
+<li>
+  The behavior of Vespa is undefined if searching for an index which has the same name,
+  <em>but different attributes</em> across multiple search definitions
+  (one will not get entirely correct results).
+  It is legal to change relevancy boosts and relevancy type.</li>
+<li>
+  In addition to blending the hits,
+  Vespa will also unify grouping information about the same field
+  from multiple document types.</li>
+</ul>
+The above is true regardless of whether using multiple document
+types in one cluster (method 1) or multiple clusters (method 2).
+A search in a Vespa installation having multiple clusters is
+dispatched to all (selected) clusters in parallel.
+When multiple types are deployed on one cluster (method 1)
+it behaves just the same, the search is dispatched in parallel multiple times
+(one for each selected document type), now to the same indexed content cluster.
+</p>
+
+
+
+<h2 id="modify-search-definitions">Modify Search Definitions</h2>
+<p>
+This section describes how a search definition in a live application can be modified - categories:
+<ol>
+  <li><a href="#valid-changes-without-restart-or-re-feed">
+    Valid changes without restart or re-feed</a></li>
+  <li><a href="#changes-that-require-restart-but-not-re-feed">
+    Changes that require restart but not re-feed</a></li>
+  <li><a href="#changes-that-require-re-feed">
+    Changes that require re-feed</a></li>
+</ol>
+When running <code>vespa-deploy prepare</code> on a new application package,
+the changes in the search definition files are compared with the files in the current active package.
+If some of the changes require restart or re-feed, the output from <code>vespa-deploy prepare</code>
+specifies which actions are needed.
+</p><p>
+Note: If there are changes to perform on a live
+system that are not covered by this document and no output is given from <code>vespa-deploy prepare</code>,
+their impact is undefined and in no way guaranteed to allow a system to stay live until re-feeding.
+Changes not related to the search definition are discussed
+in <a href="operations/admin-procedures.html">admin procedures</a>.
+</p><p>
+It is best practise to try changes in a staging system first.
+</p>
+
+
+<h3 id="valid-changes-without-restart-or-re-feed">Valid changes without restart or re-feed</h3>
+<p>
+Procedure:
+<ol>
+  <li>Run <code>vespa-deploy prepare</code> on the changed application.</li>
+  <li>Run <code>vespa-deploy activate</code>. The changes will take effect immediately.</li>
+</ol>
+Changes:
+<table class="table">
+  <thead></thead><tbody>
+  <tr><th>Add a new document field</th>
+  <td>
+  Add a new document field as index, attribute, summary or any combinations of these.
+  Existing documents will implicitly get the new field with no content.
+  Documents fed after the change can specify the new field.
+  If the field has existed with same type earlier,
+  then old content <em>may or may not</em> reappear.
+  </td></tr>
+
+  <tr><th>Remove a document field</th>
+  <td>
+  Existing documents will no longer see the removed field,
+  but the field data is not completely removed from the search node.
+  </td></tr>
+
+  <tr><th>Add or remove an existing document field from document summary</th>
+  <td>
+  Add an existing field to summary or any number of summary
+  classes, and remove an existing field from summary or any
+  number of summary classes.
+  </td></tr>
+
+  <tr><th>Remove the attribute aspect from a field that is also an index field</th>
+  <td>
+  This is the only scenario of changing the attribute aspect of a
+  document field that is allowed without restart.
+  </td></tr>
+
+  <tr><th>Add, change or remove field sets</th>
+  <td>
+  Change <a href="reference/search-definitions-reference.html#fieldset">fieldsets</a>
+  used to group fields together for searching.
+  </td></tr>
+
+  <tr><th>Change the alias or sorting attribute settings for an attribute field</th>
+  <td><!-- ToDo -->
+  </td></tr>
+
+  <tr><th>Add, change or remove rank profiles</th>
+  <td>
+  </td></tr>
+
+  <tr><th>Change document field weights</th>
+  <td><!-- ToDo -->
+  </td></tr>
+
+  <tr><th>Add, change or remove field aliases</th>
+  <td><!-- ToDo -->
+  </td></tr>
+
+  <tr><th>Add, change or remove rank settings for a field</th>
+  <td>
+  Example: Adding <code>rank: filter</code> to a field.
+  </td></tr>
+  </tbody>
+</table>
+</p>
+
+
+<h3 id="changes-that-require-restart-but-not-re-feed">Changes that require restart but not re-feed</h3>
+<p>
+Procedure:
+<ol>
+  <li>Run <code>vespa-deploy prepare</code> on the changed application.
+    Output specifies which restart actions are needed.
+  <li>Run <code>vespa-deploy activate</code>.</li>
+  <li>Restart <code>services</code> on the services specified in the prepare output.
+</ol>
+Changes:
+<table class="table">
+  <thead></thead><tbody>
+    <tr><th>Change the attribute aspect of a document field</th>
+      <td>
+        Add or remove a field as attribute
+      </td></tr>
+    
+    <tr><th>Change the attribute settings for an attribute field</th>
+      <td>
+        Change the following attribute settings:
+        <em>fast-search</em>, <em>fast-access</em>, <em>huge</em>
+      </td></tr>
+  </tbody>
+</table>
+Example: Given an indexed content cluster <em>search</em>:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: summary }
+  }
+}
+</pre>
+Then add field <code>f1</code> as an attribute:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: attribute | summary }
+  }
+}
+</pre>
+The following is output from <code>vespa-deploy prepare</code> -
+which restart actions are needed:
+<pre>
+WARNING: Change(s) between active and new application that require restart:
+In cluster 'basicsearch' of type 'search':
+    Restart services of type 'searchnode' because:
+        1) Document type 'test': Field 'f1' changed: add attribute aspect
+</pre>
+</p>
+
+
+<h3 id="changes-that-require-re-feed">Changes that require re-feed</h3>
+<p>
+All of the changes listed below require re-feeding of all documents.
+Unless a change is listed in the above sections treat it as if it was listed here.
+Until re-feed is complete, affected fields will be empty
+or have potentially wrong annotations not matching the query processing. Procedure:
+<ol>
+  <li>Run <code>vespa-deploy prepare</code> on the changed application.
+    Output specifies which re-feed actions are needed.
+  <li>Stop feeding, wait until done</li>
+  <li>Run <code>vespa-deploy activate</code>.</li>
+  <li>Re-feed all documents.</li>
+</ol>
+Changes:
+<table class="table">
+  <thead></thead><tbody>
+    <tr><th>Change the data type or collection type of a document field</th>
+      <td>
+        Existing documents will no longer have any content for this field.
+        To populate the field, re-feed the existing documents using the new type for this field.
+        There will be no automatic conversion from old to new field type.
+        <br>
+        NOTE: If not re-feeding after such a change, serving works,
+        but searching this field will not give any results.
+      </td></tr>
+    
+    <tr><th>Change index aspect of a document field</th>
+      <td>
+        This changes the document processing pipeline before documents arrive in the backend.
+        Only documents fed after index aspect was added
+        will have annotations and be present in the reverse index.
+        Only documents fed after index aspect was removed
+        will avoid disk bloat due to unneeded annotations.
+      </td></tr>
+    
+    <tr><th>Change fields from static to dynamic summary, or vice versa</th>
+      <td><!-- ToDo -->
+      </td></tr>
+    
+    <tr><th>Switch stemming/normalizing on or off</th>
+      <td>
+        This changes the document processing pipeline before documents
+        arrive in the backend, and what annotations are made for an indexed field.
+        <br>
+        NOTE: If not re-feeding after such a change, serving works,
+        but recall is undefined as the index has been produced using a different setting
+        than the one used when doing stemming/normalizing of the query terms.
+      </td></tr>
+    
+    <tr><th>Switch bolding on or off</th>
+      <td><!-- ToDo -->
+      </td></tr>
+    
+    <tr><th>Add, change or remove match settings for a field</th>
+      <td>
+        Example: Adding <code>match: word</code> to a field.
+        <br>
+        This changes the document processing pipeline before documents
+        arrive in the backend, and what annotations are made for an indexed field.
+        <br>
+        NOTE: If not re-feeding after such a change, serving works,
+        but recall is undefined as the index has been produced using one match mode
+        while run-time is using a different match mode.
+      </td></tr>
+    
+    <tr><th>Change the tensor type of a tensor attribute</th>
+      <td><!-- ToDo -->
+      </td></tr>
+
+  </tbody>
+</table>
+Example: Given an indexed content cluster <em>search</em>:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: summary }
+  }
+}
+</pre>
+Then add field <code>f1</code> as an index:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: index | summary }
+  }
+}
+</pre>
+The following is output from <code>vespa-deploy prepare</code> -
+which re-feed actions are needed:
+<pre>
+WARNING: Change(s) between active and new application that require re-feed:
+Re-feed document type 'test' in cluster 'basicsearch' because:
+    1) Document type 'test': Field 'f1' changed: add index aspect, indexing script: '{ input f1 | summary f1; }' -&gt; '{ input f1 | tokenize normalize stem:"SHORTEST" | index f1 | summary f1; }'
+</pre>
+</p>

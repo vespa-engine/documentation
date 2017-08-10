@@ -1,0 +1,374 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Writing documents to Vespa"
+---
+
+<p>
+Vespa documents are created according to the
+<a href="reference/document-json-format.html">Document JSON Format</a>
+or constructed programmatically.
+Options for writing Documents to Vespa:
+<ul><li>
+  <a href="document-api.html">RESTified Document Operation API</a>:
+  Simple REST API for operations based on document ID (get, put, remove, update).
+  <strong>Use this for prototyping</strong>.
+</li><li>
+  <a href="vespa-http-client.html">The Vespa HTTP client</a>. This is a small standalone jar which
+  feeds to Vespa either through method calls in Java or by consuming a file from the command line.
+  It provides a simple API while achieving high performance by using multiplexing and multiple parallel async connections.
+  It is recommended in all cases when feeding from a node outside the Vespa cluster. The HTTP gateway must be added
+  to a container cluster in services.xml to use this.
+  <strong>Use this for production</strong>.
+</li><li>
+  <a href="document-api-guide.html">The Document API</a>. This provides direct read-and write access to Vespa documents
+  through Vespa's internal communication layer. Use this when accessing documents from Java components in Vespa
+  such as searchers and document processors.
+</li></ul>
+</p>
+<p>
+The CRUD operations are the four basic functions of persistent storage:
+</p>
+<table class="table">
+<thead>
+</thead><tbody>
+<tr>
+  <td><strong>Put</strong></td>
+  <td>
+    <a href="reference/document-json-format.html#put">Put</a> is used to write a document to Vespa.
+    A <em>document</em> is a set of name-value pairs referred to as <em>fields</em>.
+    The fields available for a given document is given by the document type,
+    provided by the application's <a href="search-definitions.html">search definition</a> -
+    see <a href="reference/search-definitions-reference.html#field">field types</a>.
+    A document is overwritten if a document with the same document ID exists
+    and no <em>test-and-set</em> condition is given.
+    By specifying a <a href="reference/document-json-format.html#conditional-updates-test-and-set">
+    test and set condition</a>, one can perform a conditional put
+    that only executes if the condition matches the already existing document.
+    <strong>Note:</strong> Conditional puts is considered an experimental feature.
+  </td>
+</tr><tr>
+  <td><strong>Remove</strong></td>
+  <td>
+    <a href="reference/document-json-format.html#remove">Remove</a>
+    removes a document from Vespa.
+    Later requests to access the document will not find it - read
+    more about <a href="elastic-vespa.html#data-retention-vs-size">remove-entries</a>.
+    If the document to be removed is not found, this is returned in the reply.
+    This is not considered a failure.
+    Like the put and update operations, a
+    <a href="reference/document-json-format.html#conditional-updates-test-and-set">
+    test and set condition</a> can be specified for remove operations,
+    only removing the document when the condition (document selection) matches the document.
+    <strong>Note:</strong> Conditional removes are considered an experimental feature.
+  </td>
+</tr><tr>
+  <td><strong>Update</strong></td>
+  <td>
+    <a href="reference/document-json-format.html#update">Update</a>
+    is also referred to as <em>partial update</em> as it updates parts of a document.
+    If the document to update does not exist, the update returns a reply
+    stating that no document was found.
+    A <a href="reference/document-json-format.html#conditional-updates-test-and-set">
+    test and set condition</a> can be specified for updates.
+    Example usage is updating only documents with given timestamps.
+  </td>
+</tr><tr>
+  <td><strong>Get</strong></td>
+  <td>
+    <a href="document-api.html#get">Get</a> returns the newest document instance.
+    The <em>get</em> reply includes the last-updated <a href="#timestamps">timestamp</a> of the document,
+    stating when the document was last written. <!-- ToDo check this -->
+  </td>
+</tr>
+</tbody>
+</table>
+
+
+
+<h2 id="ordering">Ordering</h2>
+<p>
+The Document API uses the document identifier to implement ordering.
+Documents with the same identifier will have the same serialize id,
+and a Document API client will ensure that only one operation with a given
+serialize id is pending at the same time.
+This ensures that if a client sends multiple operations for the
+same document, they will be processed in a defined order.
+</p><p>
+<strong>Note:</strong> If sending two <em>put</em> operations to the same
+document, and the first operation fails, the second operation that was
+enqueued is sent. If the client chooses to just resend the failed request,
+the order of operations has been switched.
+</p><p>
+If different clients have operations towards the same document pending,
+the order of operations is undefined.
+</p>
+
+
+<h2 id="timestamps">Timestamps</h2>
+<p>
+Write operations like <em>put</em>, <em>update</em> and <em>remove</em>,
+will have a timestamp assigned to them going through the <em>distributor</em>.
+This timestamp is guaranteed to be unique within the
+<a href="content/buckets.html">bucket</a> where it is stored.
+This timestamp is used by the content layer to decide which operation is newest.
+These timestamps may be used when
+<a href="content/visiting.html">visiting</a>, to only process/retrieve
+documents within a given timeframe.
+To guarantee unique timestamps, they are given in microseconds, and the
+microsecond part may be generated or altered to avoid conflicts with other
+documents.
+</p>
+
+
+<h3 id="last-modified-time">Last modified time</h3>
+<p>
+The internal timestamp is often referred to as the last modified time.
+This is the time of the last write operation
+going through the distributor. If documents are migrated from cluster to
+cluster, the target cluster will have new timestamps for their entries, and
+when reprocessing documents within a cluster, documents will have new
+timestamps even if not modified.
+</p>
+
+
+
+<h2 id="capacity-and-feed">Capacity and feed</h2>
+<p>
+Feed operations fail when a cluster is at full capacity.
+The following limits will block feeding:
+<table class="table">
+<thead>
+<tr><th>resource</th><th>default</th><th>metric</th><th>description</th></tr>
+</thead><tbody>
+<tr><td>disk</td>
+  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+    writefilter.disklimit</a></td>
+  <td>content.proton.resource_usage.disk</td>
+  <td><a href="reference/services-content.html#resource-limits">Configure</a> disk limit</td></tr>
+<tr><td>memory</td>
+  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+    writefilter.memorylimit</a></td>
+  <td>content.proton.resource_usage.memory</td>
+  <td><a href="reference/services-content.html#resource-limits">Configure</a> memory limit</td></tr>
+<tr><td>attribute enum store</td>
+  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+    writefilter.attribute.enumstorelimit</a>
+  </td><td>content.proton.documentdb.attribute.resource_usage.enum_store</td>
+  <td>For string attribute fields or attribute fields with
+    <a href="attributes.html#attributes-and-search">fast-search</a>,
+    there is a max limit on the size of the unique values stored for that attribute.
+    The component storing these values is called enum store. The limit is 32GB</td></tr>
+<tr><td>attribute multi-value</td>
+  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+    writefilter.attribute.multivaluelimit</a>
+  </td><td>content.proton.documentdb.attribute.resource_usage.multi_value</td>
+  <td>For array or weighted set attribute fields,
+    there is a max limit on the number of documents that can have the same number of values.
+    The limit is 128M (2^27) documents.
+    To remedy, either change the attribute field to use
+    <a href="reference/search-definitions-reference.html#attribute">huge</a>, or add/change nodes</td></tr>
+</tbody>
+<table>
+To remedy, add nodes to the content cluster or swap nodes with higher capacity.
+The data will <a href="elastic-vespa.html">auto-redistribute</a> and feeding will succeed again.
+These metrics indicate whether feeding is blocked (set to 1 when blocked):
+<ul>
+  <li><em>content.proton.resource_usage.feeding_blocked</em>: disk / memory</li>
+  <li><em>content.proton.documentdb.attribute.resource_usage.feeding_blocked</em>: attribute enum store or multi-value</li>
+</ul>
+When feeding is blocked, events are logged - examples:
+<pre>
+Put operation rejected for document 'id:test:test::0': 'diskLimitReached: { action: \"add more content nodes\", reason: \"disk used (0.85) &gt; disk limit (0.8)\", capacity: 100000000000, free: 85000000000, available: 85000000000, diskLimit: 0.8 }'
+
+Put operation rejected for document 'id:test:test::0': 'memoryLimitReached: { action: \"add more content nodes\", reason: \"memory used (0.75) &gt; memory limit (0.7)\", mapped: { virt: 0, rss: 0}, anonymous: { virt: 0, rss: 12000000000}, physicalMemory: 16000000000, memoryLimit : 0.7}'
+
+Put operation rejected for document 'id:test:test::0' of type 'test': 'enumStoreLimitReached: { action: \"add more content nodes\", reason: \"enum store address space used (0.65) &gt; limit (0.6)\", enumStore: { used: 22333829939, limit: 34359738368}, attributeName: \"a1\", subdb: \"ready\"}
+
+Put operation rejected for document 'id:test:test::0' of type 'test': 'multiValueLimitReached: { action: \"use 'huge' setting on attribute field or add more content nodes\", reason: \"multiValue address space used (0.55) &gt; limit (0.5)\", multiValue: { used: 73819750, limit: 134217728}, attributeName: \"a1\", subdb: \"ready\"}')
+</pre>
+</p>
+
+
+<!-- ToDo: Fix the below later, migrated from partial-update.html - rewrite / move this elsewhere -->
+
+
+<h2 id="performance">Performance</h2>
+<p>
+To improve feed throughput, increase
+<a href="reference/services-content.html#visibility-delay">visibility-delay</a>
+to batch writes on the content nodes for higher write performance.
+This trades off latency -
+writes will take effect in search results after <em>visibility-delay</em> seconds.
+This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
+</p><p>
+Speed of partial updates and garbage collection is reduced if
+<a href="reference/services-content.html#searchable-copies">
+searchable copies</a> is lower than <a href="reference/services-content.html#redundancy">redundancy</a>.
+This is caused by no <a href="attributes.html">attributes</a> for the non-searchable copies.
+Set <a href="reference/search-definitions-reference.html#attribute">fast-access</a> on the attributes to
+update to ensure they exist for the non-searchable copies as well.
+</p>
+
+
+<h3 id="load-priority">Load priority</h3>
+<p>
+Read/write operations are assigned default <em>priority levels</em> -
+modify these in <em>services.xml</em> using <a href="reference/services.html#clients">load types</a>.
+Metrics are generated per load type - example:
+<pre>
+&lt;get&gt;
+  &lt;default&gt;
+    &lt;count count="1"/&gt;
+    &lt;latency average="0.125977" last="0.125977" min="0.125977" max="0.125977" count="1"/&gt;
+    &lt;not_found count="1"/&gt;
+  &lt;/default&gt;
+  &lt;foo&gt;
+    &lt;count count="1"/&gt;
+    &lt;latency average="0.25708" last="0.25708" min="0.25708" max="0.25708" count="1"/&gt;
+  &lt;/foo&gt;
+  &lt;sum&gt;
+    &lt;count count="2"/&gt;
+    &lt;latency average="0.191528" last="0.25708" min="0.125977" max="0.25708" count="2"/&gt;
+    &lt;not_found count="1"/&gt;
+  &lt;/sum&gt;
+&lt;/get&gt;
+</pre>
+</p>
+
+
+<h2 id="combine-values-in-indexing-statements">Combine values in indexing statements</h2>
+<p>
+Vespa allows flexibility in how documents are turned into index structure
+data through <em>indexing statements</em>. Using indexing statements, multiple
+document fields can be used to produce one index structure field. For example,
+the index statement
+<pre>
+input field1 . input field2 | attribute field2;
+</pre>
+will combine the document fields <em>field1</em> and <em>field2</em>
+into the attribute named <em>field2</em>.
+When partially updating document which contains indexing statement which
+combines multiple fields the following rules apply:
+<ul>
+  <li>Only attributes where <em>all</em> the source values are available in
+    the source document update will be updated</li>
+  <li>The document update will fail when indexed (only) if <em>no</em>
+    attributes end up being updated when applying the rule above</li>
+</ul>
+</p><p>
+Example: If a search definition has the indexing statements
+<pre>
+input field1 | attribute field1;
+input field1 . input field2 | attribute field2;
+</pre>
+the following will happen for various partial updates.
+<table class="table">
+  <thead>
+  <tr><th>Partial update contains</th><th>Result</th></tr>
+  </thead></tbody>
+  <tr><td>field1</td><td>field1 is updated</td></tr>
+  <tr><td>field2</td><td>The update fails</td></tr>
+  <tr><td>field1 and field2</td><td>field1 and field2 is updated</td></tr>
+  </tbody>
+</table>
+</p>
+
+
+
+<h2 id="example">Example</h2>
+<pre>
+[
+    {
+        "put": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+        "fields": {
+            "popularity": {
+                "0": 3,
+                "1": 5,
+                "2": 30
+            },
+            "songs": "Knockin on Heaven's Door; Mr. Tambourine Man",
+            "title": "Best of Bob Dylan",
+            "tracks": [
+                "Mr. Tambourine Man",
+                "Someday Baby",
+                "Blowin' In The Wind"
+            ],
+            "url": "http://music.yahoo.com/bobdylan/BestOf"
+        }
+    },
+    {
+        "remove": "id:music:music::http://music.yahoo.com/BritneySpears/HitMe"
+    },
+    {
+        "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+        "fields": {
+            "title": {
+                "assign": "The Best of Bob Dylan"
+            },
+            "tracks": {
+                "add": [
+                    "Man Of Constant Sorrow"
+                ]
+            }
+        }
+    }
+]
+</pre>
+
+
+
+<h2 id="example-2">Example 2</h2>
+<p>
+In this example we add a set of tags to a set of music documents and
+then change these tags using updates. Clone the
+<a href="https://github.com/vespa-engine/vespa/tree/master/sample-apps/basic-search">music</a>
+sample application.
+Edit <em>music.sd</em> and add:
+<pre>
+field tags type weightedset&lt;string&gt; {
+  indexing: attribute | summary
+}
+</pre>
+Then deploy the application.
+</p><p>
+Use the <em>music-data-1.json</em> example feed as starting point and add a few tags to both documents.
+One of the documents will look something like this:
+</p>
+<pre>
+{
+    "put": "id:music:music::docid1",
+    "fields": {
+        "album": "Bad",
+        "artist": "Michael Jackson",
+        "title": "Bad",
+        "year": 1987,
+        "duration": 247,
+        "tags": {
+            "album": 3,
+            "legend": 7
+        }
+    }
+}
+</pre>
+<p>
+Feed the put using the <a href="vespa-http-client.html">Vespa HTTP client</a>.
+Verify that it has been indexed by searching for <em>tags:legend</em>.
+</p><p>
+Now, create an update feed, adding a new tag to the tags field:
+</p>
+<pre>
+{
+    "update": "id:music:music::docid1",
+    "fields": {
+        "tags": {
+            "add": {
+                "michael": 10
+            }
+        }
+    }
+}
+</pre>
+<p>
+Feed the update feed using the <a href="vespa-http-client.html">Vespa HTTP client</a>.
+Verify that the update is visible and searchable by searching for <em>tags:michael</em>.
+</p>

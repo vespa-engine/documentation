@@ -1,0 +1,155 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Profiling"
+---
+
+<p>
+Guidelines when profiling:
+</p>
+<ul>
+  <li>Define clearly what to profile.</li>
+  <li>Find a load that represents what to profile.
+    This is often the hardest part, as there is a lot of noise if stressing other components.</li>
+  <li>Make sure that there are no other bottlenecks that blocks stressing the profiled component.
+    It makes little sense to do cpu profiling if the network is the limitation.</li>
+  <li>If possible, write special unit-tests like benchmark programs
+    that stress exactly what to profile.</li>
+  <li>If the system is multithreaded:
+    <ul>
+      <li>Always profile single threaded first -
+        that gives a baseline for doing the scaling tests.
+        Verify one is utilizing as many cores as expected.</li>
+      <li>Increase scaling gradually to at least 2x numcores
+        or until throughput degrades.</li>
+    </ul>
+  </li>
+</ul>
+<p>
+Also see <a href="valgrind.html">Using valgrind with Vespa</a>.
+</p>
+
+
+
+<h2 id="cpu-profiling">CPU profiling</h2>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th>vmstat</th>
+      <td><p>
+        <em>vmstat</em> can be used to figure out what kind of resources are used:
+        <ul>
+          <li>cpu usage split in user, system, idle, and io wait:
+            system should be low(&lt;10)</li>
+          <li>swap in/out: should be zero.</li>
+        </ul>
+        Note: A maxed out system should have either maxed out disks or cpu (idle == 0).
+        If not, there might be locks.</p>
+        <p>Example:</p>
+<pre>
+$ vmstat 1
+
+procs -----------memory---------- ---swap-- -----io---- --system-- ----cpu----
+r  b   swpd   free   buff  cache   si   so    bi    bo   in    cs us sy id wa
+0  0   5628 3315460 304024 23008616    0    0    14    34    0     0  0  0 99  0
+1  0   5628 3298884 304024 23008640    0    0     0   396   33  4615  9  1 90  0
+0  0   5628 3316336 304028 23008644    0    0     0     0   15  4469  4  1 95  0
+0  0   5628 3316592 304028 23008644    0    0     0     0   24  4364  0  0 100  0
+0  0   5628 3316592 304028 23008644    0    0     0  2948   20  4305  0  0 100  0
+0  0   5628 3316468 304028 23008644    0    0     0     0   22  4259  0  0 100  0
+0  0   5628 3316468 304028 23008644    0    0     0   180   20  4279  0  0 100  0
+0  0   5628 3316468 304028 23008644    0    0     0     0   26  4349  0  0 100  0
+16  0   5628 3284236 304056 23008688    0    0    12   188   17  9196 38  2 60  0
+<span style="background-color: yellow;">19  0   5628 3267020 304056 23008732    0    0     8   128   44  6408 99  1  0  0
+16  0   5628 3245472 304060 23008840    0    0    20     0    9  7191 99  1  0  0
+17  0   5628 3227784 304060 23008872    0    0    20     0   27  6420 99  1  0  0</span>
+</pre>
+      </td>
+    </tr><tr>
+      <th>top</th>
+      <td>
+        Use <em>top</em> to see which applications consume cpu and memory.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="oprofile">OProfile</h2>
+<p>
+This section explains how to setup OProfile and doing simple profiling.
+See the <a href="http://oprofile.sourceforge.net/doc/index.html">OProfile manual</a>
+for examples of more complicated OProfile usage.
+OProfile is the best tool to find where the system is spending time.
+It gives an accurate view at a cost of 0.1-2%.
+Use a real host - it will not work on OpenVZ jails or linux containers.
+</p>
+
+
+
+<h3 id="install">Install</h3>
+<p>
+This will also install bindings that allow profiling java applications as well:
+<pre>
+$ sudo yum install oprofile oprofile-jit
+</pre>
+</p>
+
+
+<h3 id="set-up">Set up</h3>
+<p>
+It is useful to have kernel debug info installed to get symbol info for the Linux kernel:
+<pre>
+$ sudo yum install kernel-debuginfo
+</pre>
+Its important to get somewhat same version of <em>kernel-debuginfo</em>
+as the <em>kernel</em> package.
+Then setup OProfile to point to the kernel debuginfo file
+and ensure that one get per-application profiles:
+<pre>
+$ sudo opcontrol --separate=kernel --vmlinux=$(rpm -ql kernel-debuginfo | grep vmlinux)
+</pre>
+OProfile is typically run like:
+<pre>
+$ sudo opcontrol --start
+$ sudo opcontrol --reset
+$ # put some load on the system
+$ sudo opcontrol --shutdown
+</pre>
+</p>
+
+
+<h3 id="profile-java-applications">Profile java applications</h3>
+<p>
+To profile java applications, start the java application with <code>-agentlib:jvmti_oprofile</code>.
+For Vespa, set <a href="../reference/services-container.html#nodes">jvmargs</a>
+or set the <code>services.agentlib</code> variable to <em>jvmti_oprofile</em> -
+refer to <a href="../setting-vespa-variables.html">setting vespa variables</a>.
+<em>jvmti_oprofile</em> is installed when installing <a href="#installing">oprofile-jit with yum</a>.
+Then restart services.
+</p>
+
+
+<h3 id="troubleshooting">Troubleshooting</h3>
+<p>
+If there is no output from <em>opreport -l</em>, it is probably because the kernel is to old for the CPU.
+OProfile will not be able to do to event profiling.
+To fix, force OProfile to use the timer mode:
+<pre>
+$ sudo opcontrol --shutdown
+$ sudo opcontrol --deinit
+$ sudo modprobe oprofile timer=1
+</pre>
+</p>
+
+
+<h3 id="analysis">Analysis</h1>
+<pre>
+$ opreport -l # gives whole system - all one needs to know.
+$ opreport -l "path of binary" #  i.e. "*vespa-proton-bin" -&gt; gives a view of the binary only.
+</pre>
+<p>
+For java applications, its important to let the application run for a while
+to allow the JIT compiler to do its magic.
+Then run <code>opcontrol --dump</code> before inspecting OProfile reports.
+</p>

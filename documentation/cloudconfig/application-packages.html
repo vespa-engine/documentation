@@ -1,0 +1,127 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Application packages"
+---
+
+<p>
+An <em>application package</em> is a set of files in a specific structure
+which defines a deployable application.
+See <a href="../vespa-quick-start.html">Vespa quick-start</a>,
+<a href="../jdisc/developing-applications.html">developing applications</a> or
+the <a href="../tutorials/blog-search.html">Blog search tutorial</a> for examples.
+An application package contains all the configuration, components and auxiliary files
+needed to specify how a given cloud config-enabled set of subsystems should behave to run the application.
+It consists of one directory named the same as the application, containing at minimum:
+<pre>
+application/<a href="../reference/services.html">services.xml</a> - <em>mandatory specification of services required</em>
+application/<a href="../reference/hosts.html">hosts.xml</a> - <em>mapping of host ids to physical hosts</em>
+</pre>
+Additionally, <em>services.xml</em> might consume other files or directories from the application package -
+a quick summary of optional content:
+<pre>
+application/components/ - <em>OSGi components to be deployed to container nodes. See <a
+  href="../jdisc/how-does-jdisc-work.html">component types</a></em>
+application/searchdefinitions/ - <em>Vespa <a
+  href="../search-definitions.html">document schemas</a>, and optionally how to search them</em>
+application/search/query-profiles/ - <em>Vespa <a
+  href="../query-profiles.html">query profiles</a>; named collections of search request parameters</em>
+</pre>
+For a complete list of files and directories in an application package,
+see the <a href="../reference/application-packages-reference.html">application package reference</a>.
+</p>
+
+
+
+<h2 id="services.xml">services.xml</h2>
+<p>
+<em>services.xml</em> specifies the services that makes the application -
+each top-level element specifies one service. Example:
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;services version="1.0"&gt;
+
+  &lt;container id="default" version="1.0"&gt;
+    &lt;processing/&gt;      <strong style="background-color: yellow;">&lt;!-- Request-response processors go here. --&gt;</strong>
+    &lt;search/&gt;          <strong style="background-color: yellow;">&lt;!-- Use to run the search middleware. Searchers go here. --&gt;</strong>
+    &lt;docproc/&gt;         <strong style="background-color: yellow;">&lt;!-- Use to run the document processing middleware. DocumentProcessors go here. --&gt;</strong>
+    &lt;nodes&gt;            <strong style="background-color: yellow;">&lt;!-- Nodes in the jdisc cluster --&gt;</strong>
+      &lt;node hostalias="node1"/&gt;
+      &lt;node hostalias="node2"/&gt;
+      &lt;node hostalias="node3"/&gt;
+    &lt;/nodes/&gt;
+  &lt;/container&gt;
+
+  &lt;content id="my-content" version="1.0"&gt;
+    &lt;redundancy&gt;1&lt;/redundancy&gt;
+    &lt;documents&gt;         <strong style="background-color: yellow;">&lt;!-- Add document schemas here --&gt;</strong>
+      &lt;document type="my-searchable-type" mode="index"/&gt;
+      &lt;document type="my-other-type" mode="store-only"/&gt;
+    &lt;/documents&gt;
+    &lt;nodes&gt;             <strong style="background-color: yellow;">&lt;!-- # nodes in the content cluster --&gt;</strong>
+      &lt;node hostalias="node4"/&gt;
+      &lt;node hostalias="node5"/&gt;
+      &lt;node hostalias="node6"/&gt;
+    &lt;/nodes/&gt;
+  &lt;/content&gt;
+
+&lt;/services&gt;
+</pre>
+Refer to the <a href="../reference/services.html">services.xml reference</a>
+for different service types and configuration.
+The application package may also specify arbitrary binaries to be started
+and given configuration specified explicitly in the services file,
+see <a href="../reference/services.html#service">application-specific services</a>.
+</p>
+
+
+
+<h2 id="component-configuration">Component configuration</h2>
+<p>
+The application's custom Java code (in <em>components</em>) is configured in <em>services.xml</em>.
+E.g, a port number for a remote service:
+<pre>
+  &lt;container id="default" version="1.0"&gt;
+    &lt;handler id="com.myapp.vespatest.ConfiguredHandler"&gt;
+  <strong style="background-color: yellow;">    &lt;config name="vespatest.port"&gt;
+        &lt;port&gt;12345&lt;/port&gt;
+      &lt;/config&gt;</strong>
+</pre>
+Read more in <a href="../configuring-components.html">configuring components</a>.
+</p>
+
+
+
+<h2 id="deploy">Deploy</h2>
+<p>
+Deploy the application package using the <em>vespa-deploy</em> tool:
+<pre>
+$ vespa-deploy prepare [application]
+</pre>
+<ul>
+  <li>Verifies that a configuration server is up and running</li>
+  <li>Uploads the application to the configuration server for processing</li>
+  <li>Verifies that your application package contains all necessary files and performs a consistency check</li>
+  <li>Validates the xml config files against the schema found in <em>$VESPA_HOME/share/vespa/schema</em></li>
+  <li>Inspects the application package to find if there are any config changes between the
+    current active application and this prepared application that require extra actions in order
+    to be applied. The list of these actions are logged to the user and returned as part of
+    the <a href="../cloudconfig/deploy-rest-api-v2.html#prepare-session">prepare</a> step in
+    the deployment API</li>
+  <li>Creates metadata about the deployed the applications package (which user deployed it,
+    which directory was it deployed from and at what time was it deployed) and stores it on the config server in
+    <em>$VESPA_HOME/var/db/vespa/config_server/serverdb/tenants/[tenant]/sessions/[sessionid]/.applicationMetaData</em></li>
+  <li>Makes sure that bundles are distributed to all nodes that need them</li>
+  <li>Stores all the relevant configuration info in ZooKeeper, for the config servers to use</li>
+</ul>
+<em>vespa-deploy prepare</em> combines the
+<a href="../cloudconfig/deploy-rest-api-v2.html#create-session">upload</a> and
+<a href="../cloudconfig/deploy-rest-api-v2.html#prepare-session">prepare</a> steps in the
+<a href="../cloudconfig/deploy-rest-api-v2.html">deploy API</a>.
+Activate the application package:
+<pre>
+$ vespa-deploy activate
+</pre>
+This activates the application package in the configuration servers, and the instance is reconfigured.
+<em>vespa-deploy activate</em> executes the <a href="../cloudconfig/deploy-rest-api-v2.html#activate-session">
+activate</a> step in the <a href="../cloudconfig/deploy-rest-api-v2.html">deployment API</a>.
+</p>

@@ -1,0 +1,885 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Federation"
+---
+
+<p>
+The Vespa Container allows multiple sources of data to
+be <em>federated</em> to a common search service.
+The sources of data may be both search clusters belonging to the same application,
+or external services, backed by Vespa or any other kind of service.
+The container may be used as a pure <em>federation platform</em> by
+setting up a system consisting solely of container nodes federating to external services.
+This document gives a short intro to federation,
+explains how to create an application package doing federation
+and shows what support is available for choosing the sources given a query,
+and the final result given the query and some source specific results.
+</p><p>
+<em>Federation</em> allows users to access data from multiple
+sources of various kinds through one interface. This is useful to:
+<ul>
+<li>enrich the results returned from an application with auxiliary
+    data, like finding appropriate images to accompany news
+    articles.</li>
+<li>provide more comprehensive results by finding data from
+    alternative sources in the cases where the application has none,
+    like backfilling web results.</li>
+<li>create applications whose main purpose is not to provide access
+    to some data set but to provide users or frontend applications a
+    single starting point to access many kinds of data from various
+    sources. Examples are browse pages created dynamically for any
+    topic by pulling together data from external sources.</li>
+</ul>
+The main tasks in creating a federation solution are:
+<ol>
+<li>creating connectors to the various sources</li>
+<li>selecting the data sources which will receive a given query</li>
+<li>rewriting the received request to an executable query returning the
+    desired data from each source</li>
+<li>creating the final result by selecting from, organizing and
+    combining the returned data from each selected source</li>
+</ol>
+The container aids with these tasks by providing a way to
+organize a federated execution as a set of search chains which can be
+configured through the application package.
+Read the <a href="container-intro.html">Container intro</a> and
+<a href="chained-components.html">Chained components</a> before proceeding.
+Read about <a href="search-definitions.html#searching-multiple-document-types">
+Searching multiple document types</a>.
+Refer to the <code>com.yahoo.search.federation</code>
+<a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/search/federation/vespa/package-summary.html">
+  Javadoc</a>.
+</p>
+
+
+
+<h2 id="configuring-providers">Configuring Providers</h2>
+<p>
+A <em>provider</em> is a search chain that is responsible for the
+actual connection to a physical service.
+Create a new provider called <code>yahoo-search</code> as follows:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" /&gt;
+</pre>
+As expected, this gives you an empty search chain called
+<code>yahoo-search</code>.  But an empty search chain always gives you
+an empty result set back.
+</p><p>
+So how can we set up a provider that actually talks to an external service?
+We have to specify two pieces of information:
+<ol>
+  <li>
+    <em>Which nodes</em> it should talk to.
+  </li>
+  <li>
+    <em>How</em> it should talk to them.
+  </li>
+</ol>
+We specify <em>which nodes</em> it should talk to by giving a list of nodes,
+and <em>how</em> to talk to them by specifying their type:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]" /&gt;
+    &lt;/nodes&gt;
+  &lt;/provider&gt;
+</pre>
+Behind the scenes, this adds one or more searchers to this search
+chain that knows how to talk to a Vespa cluster.
+<code>type=local</code> can be used to talk to a search
+cluster which is part of the same application. If no type is given,
+this search chain must contain a bundled searcher which talks to the backend service.
+</p>
+
+
+
+<h2 id="configuring-sources">Configuring Sources</h2>
+<p>
+A provider might be able to give us different types of results.
+A <em>source</em> is a set of search chains that represents a way to
+get some particular kind of results from a set of providers.
+</p><p>
+Suppose that we want to retrieve two kinds of results from
+yahoo-search: web results and java API documentation:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+
+    &lt;source id="web" /&gt;
+    &lt;source id="java-api"&gt;
+      &lt;searcher id="com.yahoo.example.JavaApiSearcher" /&gt;
+    &lt;/source&gt;
+  &lt;/provider&gt;
+</pre>
+This results in two <em>source search chains</em> being created,
+<code>web@yahoo-search</code> and <code>java-api@yahoo-search</code>.
+Each of them constitutes a source,
+namely <code>web</code> and <code>java-api</code> respectively.
+As the example suggests, these search chains are named
+after the source and the enclosing provider.
+The at sign in the name should be read as <em>in</em>,
+so <code>web@yahoo-search</code> should for example be read as <em>web in yahoo search</em>.
+</p><p>
+The JavaApiSearcher is responsible for modifying the query so that we
+only get hits from the java API documentation.  We added this searcher
+directly inside the source element; source search chains and providers
+are as we remember search chains.  All the options for configuring
+regular search chains are therefore also available for them.
+</p><p>
+How does the <code>web@yahoo-search</code>
+and <code>java-api@yahoo-search</code> source search chains use the
+<code>yahoo-search</code> provider to send queries to the external
+service?  Internally, the source search chains <em>inherit</em> from
+the enclosing provider.  Since the provider contains searchers that
+know how to talk to the external service, the sources will also
+contain the same searchers.  As an example, consider the "web" search
+chain; It will contain exactly the same searchers as the
+<code>yahoo-search</code> search chain.
+</p><p>
+The provider search chain <code>yahoo-search</code> is <em>not modified</em> by adding sources.
+To verify this, try to send queries to the three search chains
+<code>yahoo-search</code>, <code>web@yahoo-search</code> and <code>java-api@yahoo-search</code>.
+</p>
+
+
+<h3 id="multiple-providers-per-source">Multiple Providers per Source</h3>
+<p>
+You can create a source that consists of source search chains from
+several providers.  Effectively, this lets you vary which provider
+should be used to satisfy each request to the source.
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+    &lt;source id="common-search" /&gt;
+  &lt;/provider&gt;
+
+  &lt;provider id="news-search" type="vespa"&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+    &lt;source idref="common-search" /&gt;
+  &lt;/provider&gt;
+</pre>
+Here, the two source search chains <code>common-search@news-search</code> and
+<code>common-search@yahoo-search</code> constitutes a single source <code>common-search</code>.
+The source search chains using the <code>idref</code> attribute are
+called participants, while the ones using the <code>id</code> attribute are called leaders.
+Each source must consist of a single leader and zero or more participants.
+</p><p>
+Per default, only the leader search chain is used when <em>federating</em> to a source.
+To use one of the participants instead,
+use <a href="reference/search-api-reference.html#model.sources">sources</a> and <em>source</em>:
+<pre>
+http://[host]:[port]/?sources=common-search&amp;<strong>source.common-search.provider=news-search</strong>
+</pre>
+<!-- ToDo: where is source documented? search-api-reference.html shoukld mention this -->
+</p>
+
+
+
+<h2 id="federation">Federation</h2>
+<p>
+Now we can search both the web and the java API documentation at the
+same time, and get a combined result set back.
+We achieve this by setting up a <em>federation</em> searcher:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+    &lt;source id="web" /&gt;
+    &lt;source id="java-api"&gt;
+      &lt;searcher id="com.yahoo.example.JavaApiSearcher" /&gt;
+    &lt;/source&gt;
+  &lt;/provider&gt;
+  &lt;chain id="combined"&gt;
+    &lt;federation id="combinator"&gt;
+      &lt;source idref="web" /&gt;
+      &lt;source idref="java-api" /&gt;
+    &lt;/federation&gt;
+  &lt;/chain&gt;
+</pre>
+Inside the Federation element, we list the sources we want to use.
+Do not let the name <em>source</em> fool you;
+If it behaves like a source, then you can use it as a source
+(i.e. all types of search chains including providers are accepted).
+As an example, try replacing the <em>web</em> reference with <em>yahoo-search</em>.
+</p><p>
+When searching, select a subset of the sources specified in the federation element
+by specifying the <a href="reference/search-api-reference.html#model.sources">sources</a> query parameter.
+</p>
+
+
+
+<h2 id="built-in-federation">Built-in Federation</h2>
+<p>
+To get you started, the built-in search chains <em>native</em> and
+<em>vespa</em> contain a federation searcher named <em>federation.</em>
+This searcher has been configured to federate to:
+<ul>
+  <li>All sources</li>
+  <li>All providers that does not contain a source</li>
+</ul>
+If configuring your own federation searcher, you are not limited to a subset of these sources -
+you can use any provider, source or search chain.
+</p>
+
+
+
+<h2 id="inheriting-default-sources">Inheriting default Sources</h2>
+<p>
+To get the same sources as the built-in federation searcher, inherit the default source set:
+<pre>
+&lt;search&gt;
+  &lt;chain id="my-chain"&gt;
+    &lt;federation id="combinator"&gt;
+      &lt;source-set inherits="default" /&gt;
+      ...
+    &lt;/federation&gt;
+  &lt;/chain&gt;
+&lt;/search&gt;
+</pre>
+</p>
+
+
+
+<h2 id="timeout-behavior">Timeout behavior</h2>
+<p>
+What if we want to limit how much time a provider is allowed to use to answer a query?
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;federationoptions <span style="background-color: yellow;">timeout="100 ms"</span> /&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+    &lt;source id="web" /&gt;
+    &lt;source id="java-api"&gt;
+      &lt;searcher id="com.yahoo.example.JavaApiSearcher" /&gt;
+    &lt;/source&gt;
+  &lt;/provider&gt;
+</pre>
+The provider search chain will then be limited to use 100 ms to execute each query.
+The Federation layer allows all providers to continue until the
+non-optional provider with the longest timeout is finished or canceled.
+</p><p>
+In some cases it is useful to be able to keep executing the request to a provider
+longer than we are willing to wait for it in that particular query.
+This allows us to populate caches inside sources
+which can only meet the timeout after caches are populated.
+To use this option, specify a request timeout for the provider:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;federationoptions timeout="100 ms" <span style="background-color: yellow;">requestTimeout="10000 ms"</span> /&gt;
+    ...
+  &lt;/provider&gt;
+</pre>
+</p>
+
+
+
+<h2 id="non-essential-providers">Non-essential Providers</h2>
+<p>
+Now let us add a provider that retrieves ads:
+<pre>
+&lt;search&gt;
+  &lt;provider id="ads"&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]" /&gt;
+    &lt;/nodes&gt;
+  &lt;/provider&gt;
+</pre>
+Suppose that it is more important to return the result to the user as
+fast as possible than to retrieve ads.
+To signal this, we mark the ads provider as <em>optional</em>:
+<pre>
+&lt;search&gt;
+  &lt;provider id="ads"&gt;
+    <span style="background-color: yellow;">&lt;federationoptions optional="true" /&gt;</span>
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]" /&gt;
+    &lt;/nodes&gt;
+  &lt;/provider&gt;
+</pre>
+The Federation searcher will then only wait for ads as long as it waits for mandatory providers.
+If the ads are available in time, they are used, otherwise they are dropped.
+</p><p>
+If only optional providers are selected for Federation, they will all be treated as mandatory.
+Otherwise, they would not get a chance to return any results.
+</p>
+
+
+
+<h2 id="federation-options-inheritance">Federation options inheritance</h2>
+<p>
+The sources automatically use the same Federation options as the enclosing provider.
+<em>override</em> one or more of the federation options in the sources:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;federationoptions timeout="100 ms" /&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+    &lt;source id="web"&gt;
+      <span style="background-color: yellow;">&lt;federationoptions timeout="200 ms" /&gt;</span>
+    &lt;/source&gt;
+    &lt;source id="java-api"&gt;
+      &lt;searcher id="com.yahoo.example.JavaApiSearcher" /&gt;
+    &lt;/source&gt;
+  &lt;/provider&gt;
+</pre>
+You can use a single source in different Federation searchers.
+If you send queries with different cost to the same source from different federation searchers,
+you might also want to <em>override</em> the federation options for when they are used:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;federationoptions timeout="100 ms" /&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+    &lt;source id="web"&gt;
+     &lt;federationoptions timeout="200 ms" /&gt;
+    &lt;/source&gt;
+    &lt;source id="java-api"&gt;
+      &lt;searcher id="com.yahoo.example.JavaApiSearcher" /&gt;
+    &lt;/source&gt;
+  &lt;/provider&gt;
+  &lt;chain id="combined"&gt;
+    &lt;federation id="combinator"&gt;
+      &lt;source idref="web"&gt;
+        &lt;federationoptions timeout="2.5 s" /&gt;
+      &lt;/source&gt;
+      &lt;source idref="java-api" /&gt;
+    &lt;/federation&gt;
+  &lt;/chain&gt;
+</pre>
+</p>
+
+
+
+<h2 id="caching">Caching</h2>
+<p>
+Most provider types support caching the results retrieved from the external service.
+To configure the caches for each provider, use <code>cachesize</code>:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa" <span style="background-color: yellow;">cachesize="200M"</span>&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]" /&gt;
+    &lt;/nodes&gt;
+  &lt;/provider&gt;
+</pre>
+Here we have reserved 200 megabytes of cache for this provider.
+The actual cache implementation will depend on the provider type.
+</p>
+
+
+
+<h2 id="disabling-redirects">Disabling redirects</h2>
+<p>
+Prevent the <em>vespa</em> federation searcher from following redirects using
+<a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/resources/configdefinitions/provider.def">
+followRedirects</a>:
+<pre>
+&lt;search&gt;
+  &lt;provider id="yahoo-search" type="vespa"&gt;
+    &lt;nodes&gt;
+      &lt;node host="[host]" port="[port]"/&gt;
+    &lt;/nodes&gt;
+<span style="background-color: yellow;">    &lt;config name="search.federation.provider"&gt;
+      &lt;followRedirects&gt;false&lt;/followRedirects&gt;
+    &lt;/config&gt;</span>
+  &lt;/provider&gt;
+</pre>
+</p>
+
+
+
+<h2 id="selecting-search-chains-programmatically">Selecting Search Chains programmatically</h2>
+<p>
+If we have complicated rules for when a search chain should be used,
+we can select search chains programmatically instead of setting up sources under federation in services.xml.
+The selection code is implemented as a
+<a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/search/federation/selection/TargetSelector.html">
+TargetSelector</a>. This TargetSelector is used by registering it on a federation searcher.
+<pre>
+package com.yahoo.example;
+
+import com.google.common.base.Preconditions;
+import com.yahoo.component.chain.Chain;
+import com.yahoo.processing.execution.chain.ChainRegistry;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.Searcher;
+import com.yahoo.search.federation.selection.FederationTarget;
+import com.yahoo.search.federation.selection.TargetSelector;
+import com.yahoo.search.searchchain.model.federation.FederationOptions;
+
+import java.util.Arrays;
+import java.util.Collection;
+
+class MyTargetSelector implements TargetSelector&lt;Object&gt; {
+    @Override
+    public Collection&lt;FederationTarget&lt;Object&gt;&gt; getTargets(Query query, ChainRegistry&lt;Searcher&gt; searcherChainRegistry) {
+        Chain&lt;Searcher&gt; searchChain = searcherChainRegistry.getComponent("my-chain");
+        Preconditions.checkNotNull(searchChain, "No search chain named 'my-chain' exists in services.xml");
+
+        return Arrays.asList(
+                new FederationTarget&lt;&gt;(searchChain, new FederationOptions(), null));
+    }
+
+    @Override
+    public void modifyTargetQuery(FederationTarget&lt;Object&gt; target, Query query) {
+        query.setHits(10);
+    }
+
+    @Override
+    public void modifyTargetResult(FederationTarget&lt;Object&gt; target, Result result) {
+        for (Hit hit: result.hits()) {
+            hit.setField("my-field", "hello-world");
+        }
+    }
+}
+</pre>
+The target selector chooses search chains for the federation searcher.
+In this example, MyTargetSelector.getTargets returns a single chain named "my-chain"
+that has been set up in <code>services.xml</code>.
+</p><p>
+Before executing each search chain, the federation searcher allows the target selector
+to modify the query by calling modifyTargetQuery.
+In the example, the number of hits to retrieve is set to 10.
+</p><p>
+After the search chain has been executed, the federation searcher allows the target selector
+to modify the result by calling modifyTargetResult.
+In the example, each hit gets a field called "my-field" with the value "hello-world".
+</p><p>
+Configure a federation searcher to use a target selector in <code>services.xml</code>.
+Only a single target selector is supported.
+<pre>
+&lt;search&gt;
+  &lt;chain id="my-chain"&gt;
+    &lt;federation id="my-federation"&gt;
+      &lt;target-selector id="com.yahoo.example.MyTargetSelector" bundle="MyBundle" /&gt;
+    &lt;/federation&gt;
+  &lt;/chain&gt;
+</pre>
+We can also set up both a target-selector and normal sources.
+The federation searcher will then send queries both to programmatically selected sources
+and those that would normally be selected without the target selector:
+<pre>
+&lt;search&gt;
+  &lt;chain id="my-chain"&gt;
+    &lt;federation id="my-federation"&gt;
+      &lt;target-selector id="com.yahoo.example.MyTargetSelector" bundle="MyBundle" /&gt;
+      &lt;source idref="java-api" /&gt;
+      &lt;source-set inherits="default" /&gt;
+      ...
+    &lt;/federation&gt;
+  &lt;/chain&gt;
+</pre>
+</p>
+
+
+
+<h2 id="setting-up-a-federated-service">Example: Setting up a Federated Service</h2>
+<p>
+A federation application is created by providing custom searcher
+components performing the basic federation tasks and combining these
+into chains in a federation setup in
+<a href="cloudconfig/application-packages.html#services.xml">services.xml</a>.
+For example, this is a complete configuration which sets up a cluster of
+container nodes (having 1 node) which federates to the another Vespa
+service (news) and to some web service:
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;services version="1.0"&gt;
+    &lt;admin version="2.0"&gt;
+        &lt;adminserver hostalias="node1"/&gt;
+    &lt;/admin&gt;
+
+    &lt;container id="test" version="1.0"&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1"/&gt;
+        &lt;/nodes&gt;
+        &lt;search&gt;
+            &lt;provider id="news" type="vespa"&gt;
+                &lt;nodes&gt;
+                    &lt;node host="[host]" port="[port]"/&gt;
+                &lt;/nodes&gt;
+                &lt;searcher id="com.yahoo.example.NewsCustomerIdSearcher"/&gt;
+            &lt;/provider&gt;
+            &lt;provider id="webService"&gt;
+                &lt;nodes&gt;
+                    &lt;node host="[host]" port="[port]" /&gt;
+                &lt;/nodes&gt;
+                &lt;searcher id="com.yahoo.example.ExampleProviderSearcher" /&gt;
+            &lt;/provider&gt;
+        &lt;/search&gt;
+    &lt;/container&gt;
+&lt;/services&gt;
+</pre>
+This creates a configuration of search chains like:
+</p>
+<figure>
+  <img src="img/federation/federation.png" />
+</figure>
+<p>
+Each provider <em>is</em> a search chain ending in a Searcher
+forwarding the query to a remote service.
+In addition there is a main chain (included by default) ending in a FederationSearcher,
+which by default forwards the query to all the providers in parallel.
+The provider chains returns their result upwards to the federation searcher
+which merges them into a complete result which is returned up the main chain.
+</p><p>
+This services file, an implementation of the <code>example</code> classes (see below),
+and <em><a href="reference/hosts.html">hosts.xml</a></em>
+listing the container nodes, is all that is needed to set up and
+<a href="cloudconfig/application-packages.html#deploying_a_vespa_application">deploy</a>
+an application federating to multiple sources.
+For a reference to these XML sections,
+see the <a href="reference/services-search.html#chain">chains reference</a>.
+</p><p>
+The following sections outlines how this can be elaborated into a
+solution producing more user friendly federated results.
+</p>
+
+
+<h3 id="creating-a-provider">Creating a Provider</h3>
+<p>
+The container includes a provider searcher which can talk to a remote Vespa instance,
+this can be included in the provider chain by setting <code>type=vespa</code> on the provider as shown above.
+Also, <code>type=local</code> should be used to access a search cluster which is part of the same application.
+</p><p>
+To talk to an external service which is not a Vespa instance, create a custom provider implementation.
+Example using some included utility classes which simplifies making HTTP clients:
+<pre>
+package com.yahoo.example;
+
+import com.yahoo.component.ComponentId;
+import com.yahoo.search.*;
+import com.yahoo.search.federation.http.*;
+import com.yahoo.search.result.Hit;
+import com.yahoo.search.searchchain.*;
+import com.yahoo.statistics.Statistics;
+import com.yahoo.search.federation.ProviderConfig;
+import com.yahoo.search.cache.QrBinaryCacheConfig;
+import com.yahoo.search.cache.QrBinaryCacheRegionConfig;
+
+import java.io.*;
+import java.util.*;
+
+@After("*")
+public class ExampleProviderSearcher extends ConfiguredHTTPProviderSearcher {
+
+    public ExampleProviderSearcher(ComponentId id, ProviderConfig config, QrBinaryCacheConfig c, QrBinaryCacheRegionConfig r, Statistics statistics) {
+        super(id, config, c, r, statistics);
+    }
+
+    /** Convenience for testing */
+    public ExampleProviderSearcher(String idString, String host, int port, String path, Statistics statistics) {
+        super(idString, host, port, path, statistics);
+    }
+
+    @Override
+    public void unmarshal(InputStream inputStream, long contentLength, Result result) throws IOException {
+        BufferedReader hitReader = new BufferedReader(
+                new InputStreamReader(inputStream, "UTF-8"));
+
+        String hit;
+        while ((hit = hitReader.readLine()) != null) {
+            result.hits().add(unmarshalHit(hit));
+        }
+    }
+
+    private Hit unmarshalHit(String hitString) {
+        String[] fields = hitString.split("\t");
+
+        Hit hit = new Hit(fields[0]);
+        hit.setField("exampleField", fields[1]);
+        return hit;
+    }
+
+    @Override
+    public Map&lt;String, String&gt; getCacheKey(Query q) {
+        Map&lt;String, String&gt; queryMap = new HashMap&lt;String, String&gt;();
+        queryMap.put("query",q.getModel().getQueryString());
+        return queryMap;
+    }
+
+}
+</pre>
+This should be <a href="bundle-plugin.html">built as bundle</a>
+and placed in <em>components/</em> in the
+<a href="cloudconfig/application-packages.html">application package</a>.
+</p>
+
+
+<h3 id="selecting-sources">Selecting Sources</h3>
+<p>
+To do the best possible job of bringing relevant data to the user,
+we should send every query to all sources, and decide what data to
+include when all the results are available and we have as much information as possible at hand.
+In general this is not advisable because of the resource cost involved,
+so we must select a subset based on information in the query.
+This is best viewed as a probabilistic optimization problem:
+The selected sources should be the ones having a high enough probability of being useful
+to offset the cost of querying it.
+</p><p>
+Any Searcher which is involved in selecting sources or processing the
+entire result should be added to the main search chain,
+which was created implicitly in the examples above.
+To do this, the main chain should be created explicitly:
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;services version="1.0"&gt;
+    &lt;admin version="2.0"&gt;
+        &lt;adminserver hostalias="node1"/&gt;
+    &lt;/admin&gt;
+    &lt;container id="test" version="1.0"&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1"/&gt;
+        &lt;/nodes&gt;
+        &lt;search&gt;
+<span style="background-color: yellow;">            &lt;chain id="default" inherits="native"&gt;
+                &lt;searcher id="com.yahoo.example.ResultBlender"/&gt;
+            &lt;/chain&gt;</span>
+            &lt;provider id="news" type="vespa"&gt;
+                &lt;nodes&gt;
+                    &lt;node host="[host]" port="[port]"/&gt;
+                &lt;/nodes&gt;
+                &lt;searcher id="com.yahoo.example.NewsCustomerIdSearcher"/&gt;
+            &lt;/provider&gt;
+            &lt;provider id="webService"&gt;
+                &lt;nodes&gt;
+                    &lt;node host="[host]" port="[port]"/&gt;
+                &lt;/nodes&gt;
+                &lt;searcher id="com.yahoo.example.ExampleProviderSearcher" /&gt;
+            &lt;/provider&gt;
+        &lt;/search&gt;
+    &lt;/container&gt;
+&lt;/services&gt;
+</pre>
+This adds an explicit main chain to the configuration
+which has two additional searchers in addition to those inherited
+from the <code>native</code> chain, which includes the FederationSearcher.
+Note that if the full Vespa functionality is needed,
+the <code>vespa</code> chain should be inherited rather than <code>native</code>.
+</p><p>
+The chain called <code>default</code> will be invoked if no
+searchChain parameter is given in the query.
+</p><p>
+To learn more about creating Searcher components,
+see <a href="searcher-development.html">searcher development</a>.
+</p>
+
+
+<h3 id="rewriting-queries-to-individual-providers">Rewriting Queries to Individual Providers</h3>
+<p>
+The <em>provider</em> searchers are responsible for accepting a Query object,
+translating it to a suitable request to the backend in question
+and deserializing the response into a Result object.
+There is often a need to modify the query to match the particulars of a provider before passing it on:
+<ul>
+<li>To get results from the provider which matches the determined
+    interpretation and intent as well as possible, the query may need
+    to be rewritten using detailed information about the provider</li>
+<li>Parameters beyond the basic ones supported by each provider
+    searcher may need to be translated to the provider</li>
+<li>There may be a need for provider specific business rules</li>
+</ul>
+These query changes may range in complexity from setting a query parameter,
+applying some source specific information to the query
+or transferring all the relevant query state into a new object
+representation which is consumed by the provider searcher.
+</p><p>
+This example shows a searcher adding a customer id to the <code>news</code> request:
+<pre>
+package com.yahoo.example;
+
+import com.yahoo.search.searchchain.Execution;
+import com.yahoo.search.*;
+
+public class NewsCustomerIdSearcher extends Searcher {
+
+    public @Override Result search(Query query,Execution execution) {
+        String customerId="provider.news.custid";
+        if (query.properties().get(customerId)==null)
+            query.properties().set(customerId,"yahoo/test");
+        if (query.getTraceLevel()&gt;=3)
+            query.trace("News provider: Will use " + customerId + "=" +
+                    query.properties().get(customerId),false,3);
+        return execution.search(query);
+    }
+
+}
+</pre>
+This searcher should be added to the <code>news</code> source chain as shown above.
+</p><p>
+You may have noticed that we have referred to the search chains
+talking to a service as a <strong>provider</strong>
+while referring to selection of <strong>sources</strong>.
+The reason for making this distinction is that it is sometimes useful to treat different kinds of
+processing of queries and results to/from the same service as different sources.
+Hence, it is possible to create <code>source</code> search chains
+in addition to the provider chains in <em>services.xml</em>.
+Each such source will refer to a provider (by inheriting the provider chain)
+but include some searchers specific to that source.
+Selection and routing of the query from the federation searchers is always to sources, not providers.
+By default, if no source tags are added in the provider,
+each provider implicitly creates a source by the same name.
+</p>
+
+
+<h3 id="processing-results">Processing Results</h3>
+<p>
+When we have selected the sources, created queries fitting to get
+results from each source and executed those queries,
+we have produced a result which contains a HitGroup per source
+containing the list of hits from that source.
+These results may be returned in XML as is,
+preserving the structure as XML, by requesting
+the <a href="reference/page-result-format.html">page</a> result format:
+<pre>
+http://[host]:[port]/search/?query=test&amp;presentation.format=page
+</pre>
+However, this is not suitable for presenting to the user in most cases.
+What we want to do is select the subset of the hits having the highest probable utility to the user,
+organized in a way that maximizes the user experience.
+This is not an easy task, and we will not attempt to solve it here,
+other than noting that any solution should make use of both the information in the intent model
+and the information within the results from each source,
+and that this is a highly connected optimization problem
+because the utility of including some data in the result depends on what other data is included.
+</p><p>
+Here we will just use a searcher which shows how this is done in principle,
+this searcher flattens the news and web service hit groups into a single list of hits,
+where only the highest ranked news ones are included:
+<pre>
+package com.yahoo.example;
+
+import com.yahoo.search.*;
+import com.yahoo.search.result.*;
+import com.yahoo.search.searchchain.Execution;
+
+public class ResultBlender extends Searcher {
+
+    public Result search(Query query,Execution execution) {
+        Result result=execution.search(query);
+        HitGroup news=(HitGroup)result.hits().remove("source:news");
+        HitGroup webService=(HitGroup)result.hits().remove("source:webService");
+        if (webService==null) return result;
+        result.hits().addAll(webService.asList());
+        if (news==null) return result;
+        for (Hit hit : news.asList())
+            if (shouldIncludeNewsHit(hit))
+                result.hits().add(hit);
+        return result;
+    }
+
+    private boolean shouldIncludeNewsHit(Hit hit) {
+        if (hit.isMeta()) return true;
+        if (hit.getRelevance().getScore()>0.7) return true;
+        return false;
+    }
+
+}
+</pre>
+The optimal result to return to the user is not necessarily one flattened list.
+In some cases it may be better to keep the source organization, or to pick some other organization.
+The <a href="reference/page-result-format.html">page result format</a>
+requested in the query above is able to represent any hierarchical organization as XML.
+A more realistic version of this searcher will use that to choose between some
+predefined layouts which the frontend in question knows how to handle,
+and choose some way of grouping the available hits suitable for the selected layout.
+</p><p>
+This searcher should be added to the main (<code>default</code>) search chain in
+<em>services.xml</em> together with the SourceSelector (the order does not matter).
+</p>
+
+
+<h3 id="unit-testing-the-result-processor">Unit Testing the Result Processor</h3>
+<p>
+Unit test example for the Searcher above:
+<pre>
+package com.yahoo.search.example.test;
+
+import com.yahoo.search.searchchain.*;
+import com.yahoo.search.example.ResultBlender;
+import com.yahoo.search.*;
+import com.yahoo.search.result.*;
+
+public class ResultBlenderTestCase extends junit.framework.TestCase {
+
+    public void testBlending() {
+        Chain&lt;Searcher&gt; chain=new Chain&lt;Searcher&gt;(new ResultBlender(),new MockBackend());
+        Context context = Execution.Context.createContextStub(null);
+        Result result=new Execution(chain, context).search(new Query("?query=test"));
+        assertEquals(4,result.hits().size());
+        assertEquals("webService:1",result.hits().get(0).getId().toString());
+        assertEquals("news:1",result.hits().get(1).getId().toString());
+        assertEquals("webService:2",result.hits().get(2).getId().toString());
+        assertEquals("webService:3",result.hits().get(3).getId().toString());
+    }
+
+    private static class MockBackend extends Searcher {
+
+        public @Override Result search(Query query,Execution execution) {
+            Result result=new Result(query);
+            HitGroup webService=new HitGroup("source:webService");
+            webService.add(new Hit("webService:1",0.9));
+            webService.add(new Hit("webService:2",0.7));
+            webService.add(new Hit("webService:3",0.5));
+            result.hits().add(webService);
+            HitGroup news=new HitGroup("source:news");
+            news.add(new Hit("news:1",0.8));
+            news.add(new Hit("news:2",0.6));
+            news.add(new Hit("news:3",0.4));
+            result.hits().add(news);
+            return result;
+        }
+    }
+}
+</pre>
+This shows how a search chain can be created programmatically,
+with a mock backend producing results suitable for exercising
+the functionality of the searcher being tested.
+</p>
+
+
+<h3 id="passing-arguments-to-services">Passing Arguments to Web Services</h3>
+<p>
+Pass arguments to services from a query profile or request parameter.
+They will be passed on in the remote HTTP request with the two first components of the name removed.
+The provided HTTPSearcher utility classes picks up properties following this name scheme:
+<table class="table">
+  <thead>
+  </thead><tbody>
+    <tr>
+      <th style="width:230px">source.[source].[property]</th>
+      <td>The value set is passed as [property] in the request to
+          providers invoked as this source</td>
+    </tr><tr>
+      <th>provider.[provider].[property]</th>
+      <td>The value set is passed as [property] in the request to this
+          provider regardless of source</td>
+    </tr><tr>
+      <th>service.[service].[property]</th>
+      <td>The value set is passed as [property] to services called
+          from a <em>client</em> - e.g when calling a service to add
+          information to the query rather than producing a result</td>
+    </tr>
+  </tbody>
+</table>
+</p>

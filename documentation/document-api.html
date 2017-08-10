@@ -1,0 +1,136 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "RESTified Document Operation API"
+---
+
+<p>
+This document explains the JSON REST API for put, update, remove, get and visit operations to a Vespa cluster.
+It is not a high throughput API, but designed for ease of use.
+Read the <a href="writing-to-vespa.html">introduction</a>.
+To enable the API, add <em>document-api</em> in <a href="reference/services-container.html">services.xml</a>:
+<pre>
+&lt;services&gt;
+  &lt;container&gt;
+    <span style="background-color: yellow;">&lt;document-api/&gt;</span>
+</pre>
+</p>
+
+
+
+<h2 id="document-format">Document Format</h2>
+<p>
+The structure is based on the <a href="reference/document-json-format.html">document format</a>,
+but the <a href="documents.html">document ID</a> is moved to the request URI instead of the document itself.
+The document fields must match the <a href="search-definitions.html">search definition</a>.
+A request looks like:
+<pre>
+[PUT/POST/DELETE/GET]: [host]:[port]/document/v1/{namespace}/{document-type}/docid/[{user-specified}]
+</pre>
+Documents can be <a href="content/data-placement.html">grouped</a>:
+<pre>
+[PUT/POST/DELETE/GET]: [host]:[port]/document/v1/{namespace}/{document-type}/<span style="background-color: yellow;">[group|number]/{group name or number value}</span>/[{user-specified}]
+</pre>
+Example, inserting a document:
+<pre>
+POST: [host]:[port]/document/v1/music/music/docid/123
+
+{
+    "fields": {
+        "songs": "Knockin on Heaven's Door; Mr. Tambourine Man",
+        "title": "Best of Bob Dylan",
+        "url": "http://music.yahoo.com/bobdylan/BestOf"
+    }
+}
+</pre>
+</p>
+
+
+
+<h2 id="put">Put</h2>
+<p>
+Insert a new document, using HTTP POST. Optional parameters:
+<a href="#parameters">condition</a> and <a href="#parameters">route</a>.
+<pre>
+$ curl -X POST --data-binary @document-1.json http://hostname:8080/document/v1/music/music/docid/1
+</pre>
+</p>
+
+
+
+<h2 id="update">Update</h2>
+<p>
+Update a document, using HTTP PUT. Optional parameters:
+<a href="#parameters">condition</a>, <a href="#parameters">create</a>, and <a href="#parameters">route</a>.
+<pre>
+$ curl -X PUT --data-binary @update.json http://hostname:8080/document/v1/music/music/docid/1
+</pre>
+</p>
+
+
+
+<h2 id="delete">Delete</h2>
+<p>
+Delete a document, using HTTP DELETE. Optional parameters:
+<a href="#parameters">condition</a> and <a href="#parameters">route</a>.
+<pre>
+$ curl -X DELETE http://hostname:8080/document/v1/music/music/docid/1
+</pre>
+</p>
+
+
+
+<h2 id="get">Get</h2>
+<!-- Replaces deprecated httpgateway-getsearcher.html -->
+<p>
+Get one or more documents, using HTTP GET:
+<pre>
+$ curl http://hostname:8080/document/v1/music/music/docid/1
+</pre>
+If <em>docid</em> is not specified,
+<a href="#parameters">selection</a> is supported and a set of documents is returned
+using <a href="content/visiting.html">visiting</a>:
+<pre>
+$ curl http://hostname:8080/document/v1/music/music/docid
+</pre>
+Visit all documents for a <a href="content/data-placement.html">group</a>:
+<pre>
+$ curl http://hostname:8080/document/v1/music/some-type-with-group/group/yellow/
+</pre>
+A specific document in a group:
+<pre>
+$ curl http://hostname:8080/document/v1/music/some-type-with-number/number/23/some_key
+</pre>
+To visit larger sets, use <a href="#parameters">continuation</a>.
+</p>
+
+
+<h2 id="parameters">Parameters</h2>
+<table class="table">
+<thead>
+</thead><tbody>
+  <tr>
+    <td><strong>condition</strong></td>
+    <td>Requires that this condition is true, otherwise a 40x is returned.
+    See <a href="reference/document-json-format.html#conditional-updates-test-and-set">
+    conditional updates</a> for details.</td>
+  </tr><tr>
+    <td><strong>create</strong></td>
+    <td>true | false. If set to true, updates will create new document if not existing.
+      See <a href="reference/document-json-format.html#update">updates</a>
+      for more details on updates to non existing documents.</td>
+  </tr><tr>
+    <td><strong>selection</strong></td>
+    <td>Select a set of documents using <a href="content/visiting.html">visiting</a> -
+      details in <a href="reference/document-select-language.html">document selector language</a>.</td>
+  </tr><tr>
+    <td><strong>continuation</strong></td>
+    <td>When visiting, a continuation token is returned if the result set is large.
+      Use the token in the <em>continuation</em> parameter (otherwise equal)
+      to get the next set of documents.</td>
+  </tr><tr>
+      <td><strong>route</strong></td>
+      <td>This is the route for document operations. Default value is 'default'.
+      See  <a href="routing.html">routes</a></td>
+  </tr>
+</tbody>
+<table>

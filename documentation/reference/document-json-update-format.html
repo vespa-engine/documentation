@@ -1,0 +1,290 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Document JSON format - Update"
+---
+
+<p>
+Vespa supports making changes to an existing document without submitting the
+entire document. This is called <em>partial update</em>.
+A partial update consists of the id of the existing document to update,
+and the operation or operations to perform on selected fields of the document.
+</p><p>
+Documents can be auto-created on updates using <a href="#create">create if nonexistent</a>.
+Also see <a href="document-json-format.html#conditional-updates-test-and-set">conditional updates</a>.
+All data structures (<a href="../attributes.html">attribute</a>,
+<em>index</em> and <a href="../document-summaries.html">summary</a>) are updatable.
+The following operations are supported:
+</p>
+<table class="table">
+    <thead></thead><tbody>
+    <tr>
+        <td><strong>All field types</strong></td>
+        <td><ul>
+            <li><code><a href="#assign">assign</a></code> (may also be used to clear fields)</li>
+        </ul></td>
+    </tr><tr>
+        <td><strong>Numeric field types</strong></td>
+        <td><ul>
+            <li><code><a href="#arithmetic">increment</a></code></li>
+            <li><code><a href="#arithmetic">decrement</a></code></li>
+            <li><code><a href="#arithmetic">multiply</a></code></li>
+            <li><code><a href="#arithmetic">divide</a></code></li>
+        </ul></td>
+    </tr><tr>
+        <td><strong>Composite types</strong></td>
+        <td><ul>
+            <li><code><a href="#add">add</a></code> (works for array and weighted set. To put into a map, see assign section)</li>
+            <li><code><a href="#removecomposite">remove</a></code></li>
+            <li><code><a href="#match">match</a></code> (pick element from collection, then apply given operation to matched element) </li>
+            <li><a href="#fieldpath">accessing elements within a composite using fieldpaths. NB: For Map and Struct types, this feature only works for streaming content cluster.</a></li>
+        </ul></td>
+    </tr>
+    </tbody>
+</table>
+
+
+<h3 id="assign">assign</h3>
+<p>
+<code>assign</code> is used to completely replace the value of a field with a new value.
+The new value is specified as an "action" for the field in the set of fields. Example:
+<pre>
+{
+    "update": "id:music:music::docid123",
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre>
+If the field is to be cleared, assign <code>null</code> to it.
+Example assign update to a tensor field with tensor type <em>tensor(x{},y{})</em>:
+<pre>
+{
+    "update": "id:tensordoctype:tensordoctype::example2",
+    "fields": {
+        "tensorfield": {
+            "assign": {
+                "cells": [
+                    { "address": { "x": "a", "y": "b" }, "value": 2.0 },
+                    { "address": { "x": "c", "y": "d" }, "value": 3.0 }
+                ]
+            }
+        }
+    }
+}
+</pre>
+<code>assign</code> can use fieldpath syntax when used on compiste types when they are not part of attribute or index.
+On a <code>map</code> it can be used as a put.
+In the following example a tuple (key1, value1) is inserted into the map
+regardless if there is an element with key "key1" before:
+<pre>
+{
+    "update": "id:music:music::example2",
+    "fields": {
+        "mapfield{key1}": {
+            "assign": "value1"
+        }
+    }
+}
+</pre>
+<code>assign</code> can be used on structs to set one field
+<strong>Note:</strong> does not work for <a href="services-content.html#document">index</a> mode:
+<pre>
+{
+    "update": "id:music:music::example3",
+    "fields": {
+        "structfieldperson.firstname": { "assign": "bob" },
+        "structfieldperson.lastname": { "assign": "the plumber" }
+    }
+}
+</pre>
+<code>assign</code> can be used on array to set one element. In this example we have an array of strings:
+<pre>
+{
+    "update": "id:music:music::example4",
+    "fields": {
+        "arrayfield[34]": { "assign": "bob" },
+    }
+}
+</pre>
+</p>
+
+
+<h3 id="add">add</h3>
+<p>
+<code>add</code> is used to add entries to multi-value fields: Arrays, tags, and weighted sets.
+Map does not support add - to put an element into a map type, see assign above.
+If the value is already present in the weighted set, the weight from the update will <em>replace</em> the old weight.
+Example:
+<pre>
+{
+    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+       "tracks": {
+            "add": [
+                "Lay Lady Lay",
+                "Every Grain of Sand"
+            ]
+        }
+    }
+}
+</pre>
+In other words, for the array field "tracks", we add the values from the
+<code>add</code> array.
+Example of adding an element to a weighted set:
+<pre>
+{
+    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "fields":  {
+        "weightedsetfield": {
+            "add": {
+                "britney":12
+            }
+        }
+    }
+}
+</pre>
+Note that if the element already exist the value will be overwritten.
+Example of an assign to a weighted set:
+<pre>
+{
+    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "fields": {
+        "intweightedsetfield":  {
+            "assign": {
+                "123": 123,
+                "456": 100
+            }
+        },
+        "stringweightedsetfield": {
+            "assign": {
+                "item 1": 144,
+                "item 2": 7
+            }
+        }
+    }
+}
+</pre>
+</p>
+
+
+<h3 id="removecomposite">remove</h3>
+<p>Example of removing an element from a weighted set:</p>
+<pre>
+{
+    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "fields":  {
+        "weightedsetfield": {
+            "remove": {
+                "britney": 0
+            }
+        }
+    }
+}
+</pre>
+
+
+<h3 id="arithmetic">increment, decrement, multiply, divide</h3>
+<p>
+The four arithmetic operators increment, decrement, multiply and divide are
+used to modify single value numeric values without having to look up the current
+value before applying the update. Example:
+<pre>
+{
+    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+        "sales": {
+            "increment": 1
+        }
+    }
+}
+</pre>
+</p>
+
+
+<h3 id="match">match</h3>
+<p>
+If an action, like an arithmetic operation, is to be done for a specific key
+in a composite structure, use the <code>match</code> operation:
+<pre>
+{
+    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+        "trackPopularity": {
+            "match": {
+                "element": "Lay Lady Lay",
+                "increment": 1
+            }
+        }
+    }
+}
+</pre>
+In other words, for the weighted set "trackPopularity", <code>match</code>
+the element "Lay Lady Lay", then <code>increment</code> its weight by 1.
+</p><p>
+<strong>Note:</strong> Only <em>one</em> element in a weighted set can be matched per update.
+</p>
+
+
+<h3 id="create">create (create if nonexistent)</h3>
+<p>
+Updates to nonexistent documents are supported using the <em>create</em> field -
+an empty document is created on the content node before the update is applied.
+This simplifies client code in the case of multiple writers:
+<pre>
+{
+    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    <span style="background-color: yellow;">"create": true,</span>
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre>
+Java example:
+<pre>
+public DocumentUpdate createUpdate(DocumentType musicType) {
+  DocumentUpdate update = new DocumentUpdate(musicType, "id:music:music::0");
+  update.setCreateIfNonExistent(true);
+}
+</pre>
+<strong>Note:</strong> <a href="document-json-update-format.html#create">create</a> cannot be used
+in combination with <a href="document-json-format.html#conditional-updates-test-and-set">condition</a>.
+This is due to the Vespa consistency model and use of timestamps on the document level for eventual consistency.
+</p>
+
+
+<h3 id="fieldpath">fieldpath</h3>
+<p>
+Fieldpath is for accessing fields within composite structures -
+for structures that are not part of index or attribute, it is possible to access elements directly using fieldpaths.
+This is done by adding more information to the field value.
+For map structures, specify the key (see <a href="#assign">example</a>).
+<pre>
+mymap{mykey}
+</pre>
+and then do operation on the element which is keyed by "mykey".
+Arrays can be accessed as well (see <a href="#assign">details</a>).
+<pre>
+myarray[3]
+</pre>
+And this is also true for structs (see <a href="#assign">details</a>).
+<strong>Note:</strong> Struct updates does not work for
+<a href="services-content.html#document">index</a> mode:
+<pre>
+mystruct.value1
+</pre>
+This also works for nested structures, e.g. a map of map to array of struct:
+<pre>
+{
+    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+        "nestedstructure{firstMapKey}{secondMapKey}[4].title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre>
+</p>

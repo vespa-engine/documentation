@@ -1,0 +1,286 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Streaming Search"
+---
+
+<p>
+A search engine normally implements indexing structures like reverse indexes to reduce query latency.
+It does <em>indexing</em> up-front, so later matching and ranking is quick.
+It also normally keeps a copy of the original document for later retrieval / use in search summaries.
+</p><p>
+Simplified, the engine keeps the original data plus auxillary data structures to reduce query latency.
+This induces both extra work - indexing - as compared to only store the raw data,
+and extra static resource usage - disk, memory - to keep these structures.
+</p><p>
+Streaming search is an alternative to indexed search.
+It is useful in cases where the document corpus is statically split
+into many subsets and all searches go to just one (or a few) of the small subsets.
+The canonical example being <em>personal indexes</em> where a user only searches his own data.
+Read more on <a href="documents.html">document identifier schemes</a>
+to learn how to specify subsets.
+</p><p>
+In streaming mode, only the raw data of the documents is stored, in the
+<a href="document-summaries.html#document-store">document store</a>.
+Only data structures for document IDs are in memory,
+not <a href="attributes.html">attributes</a>.
+It matches documents to queries by streaming through them, similar to a grep.
+This is too costly for a global search but works fine for searching small subsets of the
+data. This means Vespa can avoid the overhead of maintaining reverse indexes.
+Streaming mode is suitable when subsets are <em>on average</em> very small compared
+to the entire corpus. Vespa maintains low latency also for the occasional large
+subset (say, users with huge amounts of data) by automatically sharding the data
+over many content nodes, searched in parallel.
+</p><p>
+Streaming search uses the same implementation of most features in Vespa including
+ranking, matching and grouping and supports the same features. However, <em>streaming search does
+not support <a href="stemming.html">stemming</a></em> but supports a wider range of term matching options,
+which can be specified either at query time or at configuration time:
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Feature</th>
+      <th>Query language syntax</th>
+      <th>Search definition syntax</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>substring</td>
+      <td><a href="reference/simple-query-language-syntax.html#substring-searching">*bla*</a></td>
+      <td><a href="reference/search-definitions-reference.html#match">match:substring</a></td>
+      <td>/search/?query=*bla*</td>
+    </tr>
+    <tr>
+      <td>prefix</td>
+      <td><a href="reference/simple-query-language-syntax.html#prefix-searching">bla*</a></td>
+      <td><a href="reference/search-definitions-reference.html#match">match:prefix</a></td>
+      <td>/search/?query=bla*</td>
+    </tr>
+    <tr>
+      <td>suffix</td>
+      <td><a href="reference/simple-query-language-syntax.html#suffix-searching">*bla</a></td>
+      <td><a href="reference/search-definitions-reference.html#match">match:suffix</a></td>
+      <td>/search/?query=*bla</td>
+    </tr>
+    <tr>
+      <td>exact</td>
+      <td><a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/prelude/query/ExactstringItem.html">Exact string item</a></td>
+      <td><a href="reference/search-definitions-reference.html#match">match:exact</a></td>
+      <td>Text ToDo</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="summary">Summary</h3>
+<ul>
+  <li>Streaming search has low latency if the data searched per node is small.
+    Total data volume can be huge as data searched is limited by a predicate.</li>
+  <li>Streaming search is highly flexible as it does not create precomputed indexes,
+    and hence supports more matching options.</li>
+  <li>Streaming search uses less disk space and memory, and zero CPU for indexing.
+    It uses more CPU for search.</li>
+  <li>Streaming search does not have linguistic features like stemming and normalizations.</li>
+</ul>
+
+
+<h3 id="using-streaming-mode">Using streaming mode</h3>
+<p>
+To enable streaming, set <em>mode=streaming</em> on the document type:
+<pre>
+&lt;content id="mycluster" version="1.0"&gt;
+  &lt;documents&gt;
+    &lt;document type="mytype" <span style="background-color: yellow;">mode="streaming"</span> /&gt;
+</pre>
+<strong>Note:</strong> Switching indexing mode requires data re-feed.
+</p><p>
+To run a streaming search query: <!-- ToDo: rewrite - use group or userid, not both -->
+<ul>
+  <li>specify the subset group membership of every document in the document id,
+    see groupname / user id in <a href="documents.html">document IDs</a></li>
+  <li>specify the subset to search in every query using the query request attribute
+    <a href="reference/search-api-reference.html#streaming.groupname">streaming.groupname</a> or
+    <a href="reference/search-api-reference.html#streaming.userid">streaming.userid</a></li>
+</ul>
+Example: <em>http://hostname.com:8080/search?query=test&amp;hits=20&amp;streaming.userid=12345678&amp;timeout=10</em>
+</p>
+
+
+
+<h2 id="disk-sizing">Disk sizing</h2>
+<p>
+Disk sizing for streaming search is considering space used to store IDs in the
+<a href="attributes.html#document-meta-store">document meta store</a> and space used in the
+<a href="document-summaries.html#document-store">document store</a> (summary) - example:
+<pre>
+$ du -sh $VESPA_HOME/var/db/vespa/search/cluster.mystream/n1/documents/doctype/0.ready/*
+  4.0K	attribute
+  <span style="background-color: yellow;">216M	documentmetastore</span>
+  4.0K	index
+  <span style="background-color: yellow;">1.5G	summary</span>
+</pre>
+Both scale linearly with number of documents -
+<em>document meta store</em> with approx 30 bytes per document,
+<em>document store</em> depending on document size.
+Hence, to estimate disk used, feed X% of corpus and extrapolate.
+</p>
+
+
+
+<h2 id="memory-sizing">Memory sizing</h2>
+<p>
+Two data structures are loaded into memory in a streaming search:
+<ul>
+  <li>The <a href="attributes.html#document-meta-store">document meta store</a></li>
+  <li>The <a href="document-summaries.html#document-store-memory-usage">document store</a></li>
+</ul>
+This is the memory used to keep documents searchable -
+adding to this is the memory used per search.
+Applications with a low query rate can optimize for static memory use by presetting
+the document meta store ensuring it is never <a href="content/setup-proton-tuning.html#resizing">re-sized</a>
+- example setting 500M documents per node:
+<pre>
+&lt;tuning&gt;
+  &lt;searchnode&gt;
+    &lt;resizing&gt;
+      &lt;initialdocumentcount&gt;500000000&lt;/initialdocumentcount&gt;
+</pre>
+Note: This is a hard limit if the node does not have memory to keep more than one attribute in memory!
+</p>
+
+
+<h2 id="streaming-search-query-tuning">Streaming search query tuning</h2>
+<p>
+Streaming search is a <a href="content/visiting.html">visit</a> operation.
+Parallelism is configured using <a href="reference/services-content.html#thread">persistence-threads</a>:
+<pre>
+&lt;persistence-threads&gt;
+  &lt;thread count='8'/&gt;
+  &lt;thread count='4' lowest-priority='VERY_HIGH'/&gt;   &lt;!-- Threads dedicated to streaming search iterators --&gt;
+&lt;/persistence-threads&gt;
+&lt;visitors thread-count='8'/&gt;
+</pre>
+</p>
+
+
+<h3 id="summary-store-direct-io-and-cache">Summmary store: Direct IO and cache</h3>
+<p>
+For better control of memory usage, use direct IO for reads -
+this makes the OS buffer cache size smaller and proton memory usage larger.
+The summary cache does not apply to streaming search -
+the cache is only used to cache hits for intexed search.
+Set to zero if only streaming search is used:
+ToDo: check this - is this the visit cahce size as well?
+<pre>
+&lt;engine&gt;
+  &lt;proton&gt;
+    &lt;tuning&gt;
+      &lt;searchnode&gt;
+        &lt;summary&gt;
+          &lt;io&gt;
+            &lt;write&gt;directio&lt;/write&gt;
+<span style="background-color: yellow;">            &lt;read&gt;directio&lt;/read&gt;</span>
+          &lt;/io&gt;
+          &lt;store&gt;
+<span style="background-color: yellow;">            &lt;cache&gt;
+              &lt;maxsize&gt;0&lt;/maxsize&gt;
+            &lt;/cache&gt;</span>
+</pre>
+</p>
+
+<h3 id="visit-cache">Visit-cache</h3>
+<p>
+If there us data locality in the queries (e.g. repeated personal queries),
+use the <em>visit cache</em>:
+<pre>
+&lt;content id="mycluster" version="1.0"&gt;
+  &lt;config name="vespa.config.search.core.proton"&gt;
+    &lt;summary&gt;
+<span style="background-color: yellow;">      &lt;cache&gt;
+        &lt;allowvisitcaching&gt;true&lt;/allowvisitcaching&gt;
+      &lt;/cache&gt;</span>
+    &lt;/summary&gt;
+</pre>
+<strong>ToDo:</strong> Add details on cache size
+</p>
+
+
+<h3 id="searchable-copies">Searchable copies</h3>
+<p>
+Vespa has a concept of searchable and ready copies for indexed search.
+In short, indices are generated for replicas used in search -
+other replicas do not have the indices generated.
+This does not apply for streaming search, where the point is <em>not</em> having indices.
+When nodes stop, replicas transfer to the active database -
+for streaming, disable this by setting <em>searchable copies</em>
+to the same level as <em>redundancy</em>:
+<pre>
+  &lt;content id="mycluster" version="1.0"&gt;
+    <span style="background-color: yellow;">&lt;redundancy&gt;2&lt;/redundancy&gt;</span>
+    &lt;engine&gt;
+      &lt;proton&gt;
+        <span style="background-color: yellow;">&lt;searchable-copies&gt;2&lt;/searchable-copies&gt;</span>
+</pre>
+The effect of <em>not</em> setting the same number is higher load on nodes
+and hence worse latency during state transitions (i.e. nodes going up and down).
+</p><p>
+When redundancy = searchable copies, all documents are found in the <em>0.ready</em> database.
+</p>
+
+
+
+<!--
+A query is a visit.
+
+parallel visit config.
+  - how many buckets in parallel
+  - iterators per bucket
+
+can set fieldsets to limit fields when using streaming search?
+
+one or two phases?
+-->
+
+<!--
+ visit: proton knows all globalids, hence makes a list of LIDs (in bucket order)
+ 
+ mem structure: local if to chunk in .dat file
+ 
+ .dat file immutable
+ 
+ -->
+
+
+<!--
+ <config name="vespa.config.content.core.stor-visitor">
+ <defaultparalleliterators>48</defaultparalleliterators>
+ <iterators_per_bucket>3</iterators_per_bucket>
+ </config>
+ -->
+
+
+<!--
+<pre>
+&lt;engine&gt;
+  &lt;proton&gt;
+    &lt;searchable-copies&gt;2&lt;/searchable-copies&gt; &lt;!-- For streaming this should be the same as the redundancy --&gt;
+    &lt;tuning&gt;
+      &lt;searchnode&gt;
+        &lt;summary&gt;
+          &lt;io&gt;
+            &lt;write&gt;directio&lt;/write&gt;
+            &lt;read&gt;directio&lt;/read&gt;
+          &lt;/io&gt;
+          &lt;store&gt;
+            &lt;cache&gt;
+              &lt;maxsize&gt;21474836480&lt;/maxsize&gt; &lt;!-- 20G --&gt;
+            &lt;/cache&gt;
+            &lt;logstore&gt;
+              &lt;maxfilesize&gt;8000000000&lt;/maxfilesize&gt;
+              &lt;chunk&gt;
+                &lt;maxsize&gt;16384&lt;/maxsize&gt;
+              &lt;/chunk&gt;
+            &lt;/logstore&gt;
+</pre>
+ -->

@@ -1,0 +1,597 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa Search: Default JSON result format"
+---
+
+<p>
+The default JSON result format is returned when
+no <code>presentation.format</code> parameter is given in the query,
+see <a href="../reference/search-api-reference.html#presentation.format">the search
+API for details</a>.
+The JSON result format is also activated by setting
+<code>presentation.format</code> to <code>JsonRenderer</code> or
+<code>json</code>.
+</p><p>
+Results are rendered as a JSON object with two fields, the mandatory
+<code>root</code> field which contains the tree of returned data, and
+the optional <code>trace</code> field for storing meta data about query
+execution. All field names here are literal strings, the node <code>root</code>
+is the map key “root” in the return JSON object, in other words, only strings
+are used as map keys.
+</p>
+<ul>
+    <li><code>root</code> mandatory, map of string to object<br>
+        The root of the tree of returned data.
+    </li>
+    <ul>
+        <li><code>children</code> optional, array of objects<br>
+            Array of JSON objects with exactly the same structure as
+            <code>root</code>.
+        </li>
+
+        <li><code>coverage</code> optional, map of string to string and number<br>
+            Metadata about how much of the total corpus has been scanned to
+            return the given documents.
+        </li>
+        <ul>
+            <li><code>coverage</code> mandatory, integer<br>
+                Percentage of total corpus scanned.
+            </li>
+            <li><code>documents</code> mandatory, long<br>
+                The number of documents scanned.
+            </li>
+            <li><code>full</code> mandatory, boolean<br>
+                Whether the full corpus was
+                scanned.
+            </li>
+            <li><code>nodes</code> mandatory, integer<br>
+                The number of search instances used executing the query.
+            </li>
+            <li><code>results</code> mandatory, integer<br>
+                The number of results merged creating the final rendered
+                result.
+            </li>
+            <li><code>resultsFull</code> mandatory, integer<br>
+                The number of full result sets merged.
+            </li>
+        </ul>
+
+        <li><code>errors</code> optional, array of objects<br>
+            Array of error messages with the fields given below.
+        </li>
+        <ul>
+            <li><code>code</code> mandatory, integer<br>
+                Numeric identifier used by the container application.
+            </li>
+            <li><code>message</code> optional, string<br>
+                Full description.
+            </li>
+            <li><code>source</code> optional, string<br>
+                Which data provider logged the error condition.
+            </li>
+            <li><code>stackTrace</code> optional, string<br>
+                Stack trace if an exception was involved.
+            </li>
+            <li><code>summary</code> mandatory, string<br>
+                Short description.
+            </li>
+            <li><code>transient</code> optional, boolean<br>
+                Whether the system is expected to recover from the faulty
+                state on its own. If the flag is not present, this may or
+                may not be the case, or the flag is not applicable.
+            </li>
+        </ul>
+
+        <li><code>fields</code> optional, map of string to object<br>
+            The named document fields, this where fields of search documents go.
+        </li>
+        <li><code>id</code> optional, string<br>
+            String or URI identifying the hit, document or other data type.
+        </li>
+        <li><code>label</code> optional, string<br>
+            The label of a grouping list.
+        </li>
+        <li><code>limits</code> optional, object<br>
+            Used in grouping, the limits of a bucket in histogram style data.
+        </li>
+        <ul>
+            <li><code>from</code> optional, string<br>
+                Lower bound of a bucket group.
+            </li>
+            <li><code>to</code> optional, string<br>
+                Upper bound of a bucket group.
+            </li>
+        </ul>
+        <li><code>relevance</code> mandatory, double<br>
+            Double valure representing the rank score.
+        </li>
+        <li><code>source</code> optional, string<br>
+            Which data provider created this node.
+        </li>
+        <li><code>types</code> optional, array of string<br>
+            Meta data about what kind of document or other kind of node in
+            the result set this object is.
+        </li>
+        <li><code>value</code> optional, string<br>
+            Used in grouping for value groups, the argument for the grouping
+            data which is in the fields.
+        </li>
+    </ul>
+
+    <li><code>trace</code> optional, map of string to object<br>
+        Meta data about query execution.
+    </li>
+    <ul>
+        <li><code>children</code> optional, array of object<br>
+            Array of maps with exactly the same structure as <code>trace</code>
+            itself.
+        </li>
+        <li><code>timestamp</code> optional, long<br>
+            Number of milliseconds since the start of query execution this node
+            was added to the trace.
+        </li>
+        <li><code>message</code> optional, string<br>
+            Descriptive text regarding this step of query execution.
+        </li>
+    </ul>
+</ul>
+
+
+
+<h2 id="json-schema">JSON Schema</h2>
+<p>
+The source of truth is the descriptive text in the previous section.
+</p>
+<pre>
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Result",
+    "description": "Schema for Vespa results",
+    "type": "object",
+
+
+    "properties": {
+        "root": {
+            "type": "document_node",
+            "required": true
+        },
+        "trace": {
+            "type": "trace_node",
+            "required": false
+        }
+    },
+
+    "definitions": {
+        "document_node": {
+            "properties": {
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "type": "document_node"
+                    },
+                    "required": false
+                },
+                "coverage": {
+                    "type": "coverage",
+                    "required": false
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "type": "error"
+                    },
+                    "required": false
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "required": false
+                },
+                "id": {
+                    "type": "string",
+                    "required": false
+                },
+                "relevance": {
+                    "type": "number",
+                    "required": true
+                },
+                "types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "required": false
+                },
+                "source": {
+                    "type": "string",
+                    "required": false
+                },
+                "value": {
+                    "type": "string",
+                    "required": false
+                },
+                "limits": {
+                    "type": "object",
+                    "required": false
+                },
+                "label": {
+                    "type": "string",
+                    "required": false
+                }
+            },
+            "additionalProperties": true,
+        },
+        "trace_node": {
+            "properties": {
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "type": "trace_node"
+                    },
+                    "required": false
+                },
+                "timestamp": {
+                    "type": "number",
+                    "required": false
+                },
+                "message": {
+                    "type": "string",
+                    "required": false
+                }
+            }
+        },
+        "coverage": {
+            "properties": {
+                "coverage": {
+                    "type": "number",
+                    "required": true
+                },
+                "documents": {
+                    "type": "number",
+                    "required": true
+                },
+                "full": {
+                    "type": "boolean",
+                    "required": true
+                },
+                "nodes": {
+                    "type": "number",
+                    "required": true
+                },
+                "results": {
+                    "type": "number",
+                    "required": true
+                },
+                "resultsFull": {
+                    "type": "number",
+                    "required": true
+                }
+            }
+        },
+        "error": {
+            "properties": {
+                "code": {
+                    "type": "number",
+                    "required": true
+                },
+                "message": {
+                    "type": "string",
+                    "required": false
+                },
+                "source": {
+                    "type": "string",
+                    "required": false
+                },
+                "stackTrace": {
+                    "type": "string",
+                    "required": false
+                },
+                "summary": {
+                    "type": "string",
+                    "required": true
+                },
+                "transient": {
+                    "type": "boolean",
+                    "required": false
+                }
+            }
+        }
+    }
+}
+</pre>
+
+
+
+<h2 id="examples">Examples</h2>
+<p>
+A simple search application, many undefined fields. Query was
+<code>/search/?query=blues&amp;hits=3&amp;tracelevel=2</code>,
+result was as follows:
+</p>
+<pre>
+{
+
+    "trace": {
+        "children": [
+            {
+                "message": "No query profile is used"
+            },
+            {
+                "message": "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -&gt; com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -&gt; ... -&gt; federation@native]"
+            },
+            {
+                "children": [
+                    {
+                        "message": "Detected language: ENGLISH"
+                    },
+                    {
+                        "message": "Language ENGLISH determined by the characters in the terms."
+                    },
+                    {
+                        "message": "Query parsed to: select * from sources * where default contains \"blues\" limit 3;"
+                    },
+                    {
+                        "message": "Child execution",
+                        "children": [
+                            {
+                                "message": "Stemming: [select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false}]\"blue\") limit 3;]"
+                            },
+                            {
+                                "message": "Lowercasing: [select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false}]\"blue\") limit 3;]"
+                            },
+                            {
+                                "message": "sc0.num0 search to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}]\"blue\") limit 3;"
+                            },
+                            {
+                                "message": "sc0.num0 dispatch response: Result (3 of total 10 hits)"
+                            },
+                            {
+                                "message": "sc0.num0 fill to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music] summary=[null]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}]\"blue\") limit 3;"
+                            }
+                        ]
+                    },
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 10
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 10,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:0/0/0/dfd9fcfa650b44545ef0b8b2",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Electric Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "http://shopping.yahoo.com/shop?d=hab&amp;id=1807865261",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::http://shopping.yahoo.com/shop?d=hab&amp;id=1807865261"
+                }
+            },
+            {
+                "id": "index:0/0/0/273d384dc214386c934d793f",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Delta Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "http://shopping.yahoo.com/shop?d=hab&amp;id=1804905714",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::http://shopping.yahoo.com/shop?d=hab&amp;id=1804905714"
+                }
+            },
+            {
+                "id": "index:0/0/0/b3c74a9bf3aea1e2260311c0",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Chicago Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "http://shopping.yahoo.com/shop?d=hab&amp;id=1804905710",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::http://shopping.yahoo.com/shop?d=hab&amp;id=1804905710"
+                }
+            }
+        ]
+    }
+
+}
+</pre>
+<p>
+The grouping query
+<code>/search/%3Fhits%3D0%26format%3DJsonRenderer%26yql%3Dselect%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20purchase%20%7C%20all%28group%28customer%29%20each%28output%28sum%28price%29%29%29%29%3B</code>
+(the query unquoted is:
+<code>/search/?hits=0&amp;yql=select * from sources *
+where sddocname contains purchase | all(group(customer)
+each(output(sum(price))));</code>) may on the other hand produce the
+result:
+</p>
+<pre>
+{
+
+    "trace": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 20
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 20,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "group:root:0",
+                "relevance": 1,
+                "continuation": {
+                    "this": ""
+                },
+                "children": [
+                    {
+                        "id": "grouplist:customer",
+                        "relevance": 1,
+                        "label": "customer",
+                        "children": [
+                            {
+                                "id": "group:string:Jones",
+                                "relevance": 9870,
+                                "value": "Jones",
+                                "fields": {
+                                    "sum(price)": 39816
+                                }
+                            },
+                            {
+                                "id": "group:string:Brown",
+                                "relevance": 8000,
+                                "value": "Brown",
+                                "fields": {
+                                    "sum(price)": 20537
+                                }
+                            },
+                            {
+                                "id": "group:string:Smith",
+                                "relevance": 6100,
+                                "value": "Smith",
+                                "fields": {
+                                    "sum(price)": 19484
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+
+}
+</pre>

@@ -1,0 +1,284 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: Access Logging in JSON Format
+---
+
+<!-- Local styling of the table -->
+<style type="text/css">
+    .left, .right {padding-right: 30px;}
+</style>
+
+<p>
+In some applications, it may be desirable to generate jdisc access
+logs - which logs a line per request - in a format that is easier to parse and also 
+supports logging custom key/value pairs from plug-in code. The Vespa JSON access log
+format allows the logs to be processed by a number of available tools handling JSON
+based (log) files. With the ability to add custom key/value pairs to the log from any 
+Searcher, you can easily track the decisions done by searchers for given queries.
+</p>
+
+
+
+<h2 id="json-access-log-format">Vespa JSON Access Log Format</h2>
+<p>
+The Vespa JSON access log format is a format where each log event is logged as
+a single JSON object compressed on a single line. This makes it possible to
+use basic line-based tools such as <i>grep</i> to process the log file, but a
+JSON aware tool such as <i><a href="https://stedolan.github.io/jq/">jq</a></i>
+is obviously preferred.
+</p>
+
+
+<h3>Access log fields</h3>
+<p>
+The log format defines a list of fields that can be logged
+with every request. In addition to these fields, 
+<a href="#logging-key-values-to-the-json-access-log-from-searchers">custom key/value pairs</a> can be
+logged via Searcher code. The following fields are pre-defined by Vespa:
+</p>
+<table border="2" cellpadding="6" rules="groups" frame="hsides">
+<colgroup><col class="left" /><col class="left" /><col class="left" /><col class="right" />
+</colgroup>
+<thead>
+<tr><th scope="col" class="left">Name</th><th scope="col" class="left">Type</th><th scope="col" class="left">Description</th><th scope="col" class="left">Always present</th></tr>
+</thead>
+<tbody>
+<tr><td class="left">ip</td><td class="left">string</td><td class="left">The IP address request came from</td><td class="left">yes</td></tr>
+<tr><td class="left">time</td><td class="left">number</td><td class="left">UNIX timestamp with millisecond decimal precision (e.g. 1477828938.123)</td><td class="left">yes</td></tr>
+<tr><td class="left">duration</td><td class="left">number</td><td class="left">The duration of the request in seconds with millisecond decimal precision (e.g. 0.123)</td><td class="left">yes</td></tr>
+<tr><td class="left">responsesize</td><td class="left">number</td><td class="left">The size of the response in bytes</td><td class="left">yes</td></tr>
+<tr><td class="left">code</td><td class="left">number</td><td class="left">The HTTP status code returned</td><td class="left">yes</td></tr>
+<tr><td class="left">method</td><td class="left">string</td><td class="left">The HTTP method used (e.g. 'GET')</td><td class="left">yes</td></tr>
+<tr><td class="left">uri</td><td class="left">string</td><td class="left">The request URI from path and beyond (e.g. '/search?query=test')</td><td class="left">yes</td></tr>
+<tr><td class="left">version</td><td class="left">string</td><td class="left">The HTTP version (e.g. 'HTTP/1.1')</td><td class="left">yes</td></tr>
+<tr><td class="left">agent</td><td class="left">string</td><td class="left">The user agent specified in the request</td><td class="left">yes</td></tr>
+<tr><td class="left">host</td><td class="left">string</td><td class="left">The host header provided in the request</td><td class="left">yes</td></tr>
+<tr><td class="left">remoteaddr</td><td class="left">string</td><td class="left">The IP address of the <a href="#remote-address-port">remote client</a> if specified in HTTP header</td><td class="left">no</td></tr>
+<tr><td class="left">remoteport</td><td class="left">string</td><td class="left">The port used from the <a href="#remote-address-port">remote client</a> if specified in HTTP header </td><td class="left">no</td></tr>
+<tr><td class="left">peeraddr</td><td class="left">string</td><td class="left">Address of immediate client making request if different than <em>remoteaddr</em></td><td class="left">no</td></tr>
+<tr><td class="left">peerport</td><td class="left">string</td><td class="left">Port used by immediate client making request if different than <em>remoteport</em></td><td class="left">no</td></tr>
+<tr><td class="left">search</td><td class="left">object</td><td class="left">Object holding search specific fields</td><td class="left">no</td></tr>
+<tr><td class="left">search.totalhits</td><td class="left">number</td><td class="left">The total number of hits for the query</td><td class="left">no</td></tr>
+<tr><td class="left">search.hits</td><td class="left">number</td><td class="left">The hits returned in this specific response</td><td class="left">no</td></tr>
+<tr><td class="left">attributes</td><td class="left">object</td><td class="left">Object holding <a href="#logging-key-values-
+to-the-json-access-log-from-searchers">custom key/value pairs</a> logged in searcher.</td><td class="left">no</td></tr>
+</tbody>
+</table>
+<p>
+<em>NOTE:</em>IP addresses can be both IPv4 addresses in standard dotted format
+(e.g. 127.0.0.1) or IPv6 addresses in standard form with leading zeros omitted 
+(e.g. 2222:1111:123:1234:0:0:0:4321).
+</p><p>
+An example log line will look like this:
+<pre>
+{"ip":"152.200.54.243","time":920880005.023,"duration":0.122,"responsesize":9875,"code":200,"method":"GET","uri":"/search?query=test&amp;param=value","version":"HTTP/1.1","agent":"Mozilla/4.05 [en] (Win95; I)","host":"localhost","search":{"totalhits":1234,"hits":0}}
+</pre>
+A pretty print version of the same example:
+<pre>
+{
+  "ip": "152.200.54.243",
+  "time": 920880005.023,
+  "duration": 0.122,
+  "responsesize": 9875,
+  "code": 200,
+  "method": "GET",
+  "uri": "/search?query=test&amp;param=value",
+  "version": "HTTP/1.1",
+  "agent": "Mozilla/4.05 [en] (Win95; I)",
+  "host": "localhost",
+  "search": {
+    "totalhits": 1234,
+    "hits": 0
+  }
+}
+</pre>
+<em>NOTE:</em> The log format is extendible by design such
+that the order of the fields can be changed and new fields can be added
+between minor versions. Make sure any programmatic log handling is using a
+proper JSON processor.
+</p>
+
+
+<h3 id="remote-address-port">Logging Remote Address/Port</h3>
+<p>
+In some cases when a request passes through an intermediate service, this
+service may add HTTP headers indicating the IP address and port of the real
+origin client. These values are logged as <em>remoteaddr</em> and
+<em>remoteport</em> respectively. Vespa will log the contents in any of the
+following HTTP request headers as <em>remoteaddr</em>: <em>Y-RA</em>,
+<em>YahooRemoteIP</em>, <em>X-Forwarded-For</em> or <em>Client-IP</em>. The
+contents of the <em>Y-RP</em> HTTP request header will be logged as <em>remoteport</em>.
+</p><p>
+If the remote address or -port differs from those initiating the HTTP request,
+the address and port for the immediate client making the request are logged as
+<em>peeraddress</em> and <em>peerport</em> respectively.
+</p>
+
+
+
+<h2 id="configuring-json-logging">Configuring JSON Logging</h1>
+<p>
+In order for Vespa to use JSON access logging, add the following
+under the
+<a href="reference/services-container.html#accesslog">
+container</a> element in <em>services.xml</em>:
+<pre>
+&lt;accesslog type='json'
+           fileNamePattern='logs/vespa/qrs/access.%Y%m%d%H%M%S' /&gt;
+</pre>
+and redeploy the application package.
+</p>
+
+
+<h3>File name pattern</h3>
+<p>
+The file name pattern is expanded using the time when the file is created.
+The following parts in the file name are expanded:
+</p>
+
+<!--
+|-------+--------+--------------------------+---------------|
+| Field | Format | Meaning                  |       Example |
+|-------+--------+--------------------------+---------------|
+| %Y    | YYYY   | Year                     |          2003 |
+| %m    | MM     | Month, numeric           |            08 |
+| %x    | MMM    | Month, textual           |           Aug |
+| %d    | dd     | Date                     |            25 |
+| %H    | HH     | Hour                     |            14 |
+| %M    | mm     | Minute                   |            30 |
+| %S    | ss     | Seconds                  |            35 |
+| %s    | SSS    | Milliseconds             |           123 |
+| %Z    | Z      | Time zone                |         -0400 |
+| %T    | Long   | System.currentTimeMillis | 1349333576093 |
+| %%    | %      | Escape percentage        |             % |
+|-------+--------+--------------------------+---------------|
+-->
+
+<table border="2" cellpadding="6" rules="groups" frame="hsides">
+<colgroup><col class="left" /><col class="left" /><col class="left" /><col class="right" />
+</colgroup>
+<thead>
+<tr><th scope="col" class="left">Field</th><th scope="col" class="left">Format</th><th scope="col" class="left">Meaning</th><th scope="col" class="right">Example</th></tr>
+</thead>
+<tbody>
+<tr><td class="left">%Y</td><td class="left">YYYY</td><td class="left">Year</td><td class="right">2003</td></tr>
+<tr><td class="left">%m</td><td class="left">MM</td><td class="left">Month, numeric</td><td class="right">08</td></tr>
+<tr><td class="left">%x</td><td class="left">MMM</td><td class="left">Month, textual</td><td class="right">Aug</td></tr>
+<tr><td class="left">%d</td><td class="left">dd</td><td class="left">Date</td><td class="right">25</td></tr>
+<tr><td class="left">%H</td><td class="left">HH</td><td class="left">Hour</td><td class="right">14</td></tr>
+<tr><td class="left">%M</td><td class="left">mm</td><td class="left">Minute</td><td class="right">30</td></tr>
+<tr><td class="left">%S</td><td class="left">ss</td><td class="left">Seconds</td><td class="right">35</td></tr>
+<tr><td class="left">%s</td><td class="left">SSS</td><td class="left">Milliseconds</td><td class="right">123</td></tr>
+<tr><td class="left">%Z</td><td class="left">Z</td><td class="left">Time zone</td><td class="right">-0400</td></tr>
+<tr><td class="left">%T</td><td class="left">Long</td><td class="left">System.currentTimeMillis</td><td class="right">1349333576093</td></tr>
+<tr><td class="left">%%</td><td class="left">%</td><td class="left">Escape percentage</td><td class="right">%</td></tr>
+</tbody>
+</table>
+
+
+
+<h2>Log rotation</h2>
+<p>
+Apache httpd style log <em>rotation</em> can be
+configured by setting the <em>rotationScheme</em>.
+There's two alternatives for the rotationScheme, sequence and date.
+The rotation time is controlled by setting <em>rotationInterval</em>.
+</p>
+
+
+<h3>Sequence rotation scheme</h3>
+<p>
+The <em>fileNamePattern</em> is used for the active log file name
+(which in this case will often be a constant string).
+At rotation, this file is given the name fileNamePattern.N where N is 1 + the largest integer found by
+extracting the integers from all files ending by .&lt;Integer&gt; in the same directory
+</p>
+<pre>
+&lt;accesslog type='json'
+           fileNamePattern='logs/vespa/qrs/access.%Y%m%d%H%M%'
+           rotationScheme='sequence' /&gt;
+</pre>
+
+
+<h3>Date rotation scheme</h3>
+<p>
+The <em>fileNamePattern</em> is used for the active log file name here too,
+but the log files are not renamed at rotation.
+Instead, you must specify a time-dependent fileNamePattern so that each time a new log file is created,
+the name is unique.
+In addition, a symlink is created pointing to the active log file.
+The name of the symlink is specified using <em>symlinkName</em>.
+</p>
+<pre>
+&lt;accesslog type='json'
+           fileNamePattern='logs/vespa/qrs/access.%Y%m%d%H%M%'
+           rotationScheme='date'
+           symlinkName='json_access' /&gt;
+</pre>
+
+
+<h3>Rotation interval</h3>
+<p>
+The time of rotation is controlled by setting <em>rotationInterval</em>:
+<pre>
+&lt;accesslog type='json'
+           fileNamePattern='logs/vespa/qrs/access.%Y%m%d%H%M%'
+           rotationInterval='0 60 ...'
+           rotationScheme='date'
+           symlinkName='json_access' /&gt;
+</pre>
+The rotationInterval is a list of numbers specifying when to do rotation.
+Each element represents the number of minutes since midnight.
+Ending the list with '...' means continuing the
+<a href="http://en.wikipedia.org/wiki/Arithmetic_progression">arithmetic progression</a>
+defined by the two last numbers for the rest of the day.
+E.g. "0 100 240 480 ..." is expanded to "0 100 240 480 720 960 1200"
+</p>
+
+
+
+<h2 id="logging-key-values-to-the-json-access-log-from-searchers">Logging Key/Value pairs to the JSON Access Log from Searchers</h2>
+<p>
+To add a key/value pair to the access log from a searcher, use
+<pre>
+query/result.getContext(true).logValue(key,value)
+</pre>
+Such key/value pairs may be added from any thread participating in handling the
+query without incurring synchronization overhead.
+</p><p>
+If the same key is logged multiple times, the values written will
+be included in the log as an array of strings rather than a single string value.
+</p><p>
+The key/value pairs are added to the <em>attributes</em> object in the log.
+</p><p>
+An example log line will then look something like this:
+</p>
+<pre>
+{"ip":"152.200.54.243","time":920880005.023,"duration":0.122,"responsesize":9875,"code":200,"method":"GET","uri":"/search?query=test&amp;param=value","version":"HTTP/1.1","agent":"Mozilla/4.05 [en] (Win95; I)","host":"localhost","search":{"totalhits":1234,"hits":0},"attributes":{"singlevalue":"value1","multivalue":["value2","value3"]}}
+</pre>
+<p>A pretty print version of the same example:</p>
+<pre>
+{
+  "ip": "152.200.54.243",
+  "time": 920880005.023,
+  "duration": 0.122,
+  "responsesize": 9875,
+  "code": 200,
+  "method": "GET",
+  "uri": "/search?query=test&amp;param=value",
+  "version": "HTTP/1.1",
+  "agent": "Mozilla/4.05 [en] (Win95; I)",
+  "host": "localhost",
+  "search": {
+    "totalhits": 1234,
+    "hits": 0
+  },
+  "attributes": {
+    "singlevalue": "value1",
+    "multivalue": [
+      "value2",
+      "value3"
+    ]
+  }
+}
+</pre>

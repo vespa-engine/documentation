@@ -1,0 +1,158 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Building a HTTP API using request handlers and processors"
+---
+
+<p>
+This tutorial builds a simple application consisting of these pieces:
+<ul>
+	<li>A custom REST API - implemented in a <em>request handler</em>.
+	<li>Two pieces of request/response processing logic - implemented as two chained <em>processors</em>.
+	<li>A <em>component</em> shared by the above processors.
+	<li>A custom output format - a <em>renderer</em>.
+</ul>
+The end result is to process incoming request of the form
+<pre>
+http://hostname:port/demo?terms=something%20completely%20different
+</pre>
+into a nested structure response produced by the processors and serialized by the renderer.
+Use the sample application found at
+<a href="https://github.com/yahoo/vespa/tree/master/sample-apps/http-api-using-request-handlers-and-processors">
+http-api-using-request-handlers-and-processors</a>.
+
+</p>
+
+
+<h2 id="request-handler">Request handler</h2>
+<p>
+The custom request handler is required to implement a custom API.
+In many cases it is not necessary to add a custom handler
+as the Processors can access the request data directly.
+However it is needed if e.g your application wants more control over exactly which parameters
+are used to route to a particular processing chain.
+</p><p>
+In this case the request handler will simply add the request URI as a property
+and then forward to the build-in processing handler for processing.
+Refer to <a href="choosing-handler-base-class.html">selection of base classes</a>
+to choose the correct starting point for your own application, including adding an access log.
+</p><p>
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-request-handlers-and-processors/src/main/java/com/yahoo/demo/DemoHandler.java">
+DemoHandler.java</a>
+</p>
+
+
+
+<h2 id="processors">Processors</h2>
+<p>
+This application contains two processors, one for annotating the incoming
+request (using default values from config) and checking the result, and one for
+creating the result using the shared component.
+<p>
+
+
+<h3 id="annotatingprocessor">AnnotatingProcessor</h3>
+<p>
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-request-handlers-and-processors/src/main/java/com/yahoo/demo/AnnotatingProcessor.java">
+  AnnotatingProcessor.java</a>
+</p>
+
+
+<h3 id="dataprocessor">DataProcessor</h3>
+<p>
+The other processor creates some structured Response Data from data handled to it in the request.
+This is done in cases where the web service is a processing service.
+In cases where the service is implementing some middleware on top of other services,
+similar processors will instead make outgoing requests
+to downstream web services to produce Response Data.
+</p><p>
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-request-handlers-and-processors/src/main/java/com/yahoo/demo/DataProcessor.java">
+  DataProcessor.java</a>
+</p><p>
+Notice how the task of the server is decomposed into separate Processing steps which can be composed
+by chaining at configuration time and which communicates through the Request and Response only.
+This structure enhances sharing, reuse and modularity and makes it easy to create variations where some
+logic encapsulated in a Processor is added, removed or modified.
+</p><p>
+The order of the processors is decided by the @Before and @After annotations -
+refer to <a href="../chained-components.html">chained components</a>.
+</p>
+
+
+<h3 id="custom-configuration">Custom configuration</h3>
+<p>
+The default terms used by the AnnotatingProcessor are placed in user
+configuration, where the definition is in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-request-handlers-and-processors/src/main/resources/configdefinitions/demo.def">
+  demo.def</a>:
+<pre>
+namespace=demo
+
+demo[].term string
+</pre>
+In other words, a configuration class containing a single array named <em>demo</em>,
+containing a class Demo which only contains single string named <em>term</em>.
+</p>
+
+
+
+<h2 id="renderer">Renderer</h2>
+<p>
+The responsibility of the renderer is to serialize the structured result
+into bytes for transport back to the client.
+</p><p>
+Rendering works by first creating a single instance of the renderer,
+invoking the constructor, then cloning a new renderer for each result set to be rendered.
+<code>init()</code> will be invoked once on each new clone
+before <code>render()</code> is invoked.
+</p><p>
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-request-handlers-and-processors/src/main/java/com/yahoo/demo/DemoRenderer.java">
+  DemoRenderer.java</a>
+</p>
+
+
+
+<h2 id="shared-component">Shared component</h2>
+<p>
+The responsibility of this custom component is to decouple some parts
+of the application from the searcher. This makes it possible to reconfigure
+the searcher without rebuilding the potentially costly custom component.
+</p><p>
+In this case, what the component does is more than a little silly.
+More typical use would be an FSA or complex, shared helper functionality.
+</p><p>
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-request-handlers-and-processors/src/main/java/com/yahoo/demo/DemoComponent.java">
+  DemoComponent.java</a>
+</p>
+
+
+
+<h2 id="application">Application</h2>
+<p>
+Review the application's configuration in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-request-handlers-and-processors/src/main/application/services.xml">
+  services.xml</a>
+</p>
+
+
+
+<h2 id="try-it">Try it!</h2>
+<p>
+Build the project, then <a href="developing-applications.html#run">run a test</a>,
+querying <a href="http://localhost:8080/demo?terms=1%202%203%204">
+http://localhost:8080/demo?terms=1%202%203%204</a> gives:
+<pre>
+OK
+Renderer initialized: 1369733374898
+http://localhost:8080/demo?terms=1%202%203%204
+1
+    2
+        3
+            4
+Rendering finished work: 1369733374902
+</pre>
+</p>

@@ -1,0 +1,174 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Document JSON format"
+---
+<p>
+This document describes the JSON format used for sending document operations to Vespa.
+Field names and types are defined in the
+<a href="search-definitions-reference.html#field_types">search definition reference</a>.
+There are three types of operations:
+<ul>
+    <li>Put - for submitting full document, will insert and overwrite any old document with same ID</li>
+    <li>Remove - for removing a document with a given ID</li>
+    <li>Update - for updating fields in a document with a specified ID</li>
+</ul>
+The are two channels for sending document operations, with a slightly different format:
+</p>
+<table class="table">
+    <tr>
+        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
+        <th width="50%"><a href="../document-api.html">RESTified Document Operation API</a></th>
+    </tr><tr>
+        <td>This is a Java API and command line tool to feed asynchronous document operations to Vespa content clusters (for high performance operations)</td>
+        <td>This channel accepts one operation per request and is synchronous (not for high performance operations)</td>
+    </tr>
+</table>
+
+
+
+<h2 id="put">Put</h2>
+<p>
+Writing a document to Vespa looks like:
+<table class="table">
+        <tr>
+            <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
+            <th width="50%"> <a href="../document-api.html">RESTified Document Operation API</a></th>
+        </tr><tr>
+            <td><pre>
+{
+    "put": "id:music:music::123",
+    "fields": {
+        "title": "Best of Bob Dylan",
+    }
+}
+</pre></td><td><pre>
+http <span style="background-color: yellow;">post</span> /document/v1/music/music/docid/123
+{
+    "fields": {
+        "title": "Best of Bob Dylan",
+    }
+}
+</pre></td>
+        </tr>
+</table>
+Values for the document fields may be set using elements as shown above in the <em>fields</em> object.
+In this example, <em>title</em> field is specified in the document type.
+See examples using <a href="document-json-put-format.html">
+arrays, maps, structs, raw, tensor, and weighted sets</a>.
+</p>
+
+
+
+<h2 id="update">Update</h2>
+<p>
+Updates make changes to documents without submitting the entire document - great for efficiency.
+If the document does not exist, Vespa creates creates a new document if
+<a href="document-json-update-format.html#create">create if nonexistent</a> is used -
+otherwise, returns error.
+<table class="table">
+    <tr>
+        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
+        <th width="50%"><a href="../document-api.html">RESTified Document Operation API</a></th>
+    </tr><tr>
+        <td><pre>
+{
+    "update": "id:music:music::123",
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre></td>
+        <td><pre>
+http <span style="background-color: yellow;">put</span> /document/v1/music/music/docid/123
+{
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre></td>
+    </tr>
+</table>
+There are three basic operation on <em>field</em> level:
+<ul>
+  <li><em>Assign</em>: Replace the content of the field</li>
+  <li><em>Add</em>: Add a new value to a field (array, weightedset etc)</li>
+  <li><em>Remove</em>: Remove a value from a field</li>
+</ul>
+Find more examples of <a href="document-json-update-format.html">
+arithmetic updates and updating composite fields</a>.
+</p><p>
+<strong>Note:</strong> Messages can be re-sent by Vespa's Message Bus.
+This can cause unexpected results for all operations except <em>assign</em> and <em>remove</em>!
+If greater consistency is needed, use a <a href="#conditional-updates-test-and-set">conditional update</a> instead.
+</p>
+
+
+
+<h2 id="remove">Remove</h2>
+<table class="table">
+    <tr>
+        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
+        <th width="50%"> <a href="../document-api.html">RESTified Document Operation API</a></th>
+    </tr>
+    <tr>
+        <td><pre>
+{
+    "remove": "id:music:music::HitMe"
+}
+</pre></td>
+        <td><pre>
+http <span style="background-color: yellow;">delete</span> /document/v1/music/music/docid/HitMe
+
+
+</pre></td>
+    </tr>
+</table>
+
+
+
+<h2 id="conditional-updates-test-and-set">Conditional execution - test and set</h2>
+<p>
+An optional <em>condition</em> can be added to operations to specify a <em>test and set</em> condition.
+The value of the condition is a <a href="document-select-language.html">document selection</a> encoded as a string.
+The <em>put/update/remove</em> operation is only applied if the condition matches an already existing document with that id.
+Example: Increment the <em>sales</em> field only if it is already equal to 999:
+<table class="table">
+    <tr>
+        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
+        <th width="50%"> <a href="../document-api.html">RESTified Document Operation API</a></th>
+    </tr><tr>
+        <td><pre>
+{
+    "update": "id:music:music::BestOf",
+        "condition": "music.sales==999",
+        "fields": {
+            "sales": {
+                "increment": 1
+            }
+    }
+}
+</pre></td>
+        <td><pre>
+http put /document/v1/music/music/docid/BestOf?condition=music.sales=='999'
+{
+   "fields": {
+       "sales": {
+           "increment": 1
+        }
+    }
+}
+
+</pre></td>
+    </tr>
+</table>
+<strong>Note:</strong> Use <em>documenttype.fieldname</em> in the condition,
+not only <em>fieldname</em>.
+</p><p>
+<strong>Note:</strong> If the condition is not met, an error is returned.
+<strong>ToDo:</strong> There is a discussion whether to change to not return error,
+and instead return a <em>condition-not-met</em> in the response.
+</p>

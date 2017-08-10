@@ -1,0 +1,223 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "services.xml"
+---
+
+<p>
+<em>services.xml</em> is the primary configuration file in an
+<a href="../cloudconfig/application-packages.html">application package</a>. Elements:
+<pre><a href="#services">services [version]</a>
+  <a href="services-admin.html">admin [version]</a>
+  <a href="services-content.html">content [version]</a>
+  <a href="services-container.html">container [version]</a>
+  <a href="services-routing.html">routing [version]</a>
+  <a href="#service">service [command] [version]</a>
+  <a href="#clients">clients [version]</a>
+</pre>
+Note: the <em>container</em> element is equivalent to <em>jdisc</em> -
+use container, as jdisc will be discontinued. <!-- ToDo: remove this note after next major release -->
+<p></p>
+Some attributes are common to most of <em>services</em> sub-elements:
+<ul>
+  <li id="attr-jvmargs"><strong>jvmargs</strong>: Pass arguments to the JVM for the given service</li>
+  <li id="attr-preload"><strong>preload</strong>: Preload shared libraries for the given service. Vespa-internal use only</li>
+  <li id="attr-baseport"><strong>baseport</strong>: All services in a Vespa systems have a default baseport -
+    to change it, use <em>baseport</em>. The most common port to change is the
+    <a href="services-http.html#server">http port of jdisc container instances</a></li>
+  <li id="attr-hostalias"><strong>hostalias</strong>: All nodes/hosts referred to in <em>services.xml</em> must be defined in
+    <a href="hosts.html">hosts.xml</a></li>
+</ul>
+</p>
+
+
+
+<h2 id="services">services</h2>
+<p>
+Attributes:
+<ul>
+  <li><strong>version</strong> (required): 1.0</li>
+  <li><string>major-version</string> (optional): An integer:
+    The Vespa major version this application package is valid for.
+    Do not specify except to work around problems with a new major version.
+  </li>
+</ul>
+Optional subelements (one or more of <em>jdisc</em>, <em>content</em> or <em>service</em> is required):
+<ul>
+  <li><a href="services-admin.html"><code>admin</code></a></li>
+  <li><a href="services-content.html"><code>content</code></a></li>
+  <li><a href="services-container.html"><code>container</code></a></li>
+  <li><a href="services-routing.html"><code>routing</code></a></li>
+  <li><a href="#service"><code>service</code></a></li>
+  <li><a href="#clients"><code>clients</code></a></li>
+</ul>
+Example:
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;services version="1.0"&gt;
+  &lt;container version="1.0" id="container"&gt;
+    &lt;search /&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="node0"/&gt;
+    &lt;/nodes&gt;
+  &lt;/container&gt;
+  &lt;content id="music" version="1.0"&gt;
+    &lt;redundancy&gt;2&lt;/redundancy&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="node0"/&gt;
+    &lt;/nodes&gt;
+    &lt;documents&gt;
+      &lt;document type="music" /&gt;
+    &lt;/documents&gt;
+  &lt;/content&gt;
+&lt;/services&gt;
+</pre>
+</p>
+
+
+
+<h2 id="service">service</h2>
+<p>
+<em>Service</em> clusters can run any program - only the start command is needed.
+Vespa will start the service cluster, and keep processes alive (auto restarts). Attributes:
+<ul>
+  <li><strong>version (required)</strong>: 1.0</li>
+  <li><strong>command (required)</strong>: command to start the service</li>
+</ul>
+Example:
+<pre>
+&lt;service name="myprogram" command=".../bin/myprogram" version="1.0"&gt;
+  &lt;node hostalias="mynode"/&gt;
+&lt;/service&gt;
+</pre>
+<em>stdout</em> from the service is written to <em>vespa.log</em>.
+The service name will be that defined in the cluster. Example using <em>vespa-logfmt</em>:
+<pre>
+[2015-09-30 10:16:13.367] INFO    : myprogram    stdout     Started successfully
+</pre>
+If more than one instance of the same service run on the same node,
+the names will be <em>myprogram</em>, <em>myprogram2</em> etc.
+</p>
+
+
+
+<h2 id="clients">clients</h2>
+<p>
+<em>clients</em> holds feeding-relevant configuration. Attributes:
+<ul>
+  <li>
+    <strong>version (required):</strong> 2.0
+  </li>
+</ul>
+Optional subelements:
+<ul>
+  <li>
+    <a href="#load-types">load-types</a>
+  </li>
+</ul>
+Example:
+<pre>
+&lt;clients version="2.0"&gt;
+  &lt;load-types&gt;
+    &lt;type name="update" default-priority="NORMAL_2"/&gt;
+  &lt;/load-types&gt;
+&lt;/clients&gt;
+</pre>
+</p>
+
+
+<h3 id="load-types">load-types</h3>
+<p>
+<em>load-types</em> is a container for different classes (types) of load.
+Use this is prioritize <a href="../api.html">Document API</a> load,
+like de-prioritize backup reads or reprocessing jobs. Optional subelements:
+<ul>
+  <li>
+    <a href="#type">type</a>
+  </li>
+</ul>
+</p>
+
+
+<h3 id="type">type</h3>
+<p>
+Configure priority for a <em>load-type</em>. Attributes:
+<ul>
+  <li>
+    <strong>name (required):</strong> The name for the load type.
+  </li>
+  <li>
+    <strong>default-priority (required):</strong> Default priority
+    for the load-type - use priorities below.
+  </li>
+</ul>
+Priorities are byte values from 0 to 255, where 0 is the highest priority.
+16 priority values are mapped to names.
+Do not use HIGH_3 or higher, as this will interfere with internal Vespa operations.
+<ul>
+  <div style="background-color: lightgrey;">
+  <li>HIGHEST</li>
+  <li>VERY_HIGH</li>
+  <li>HIGH_1</li>
+  <li>HIGH_2</li>
+  <li>HIGH_3</li>
+  </div>
+  <li>NORMAL_1</li>
+  <li>NORMAL_2</li>
+  <li>NORMAL_3</li>
+  <li>NORMAL_4</li>
+  <li>NORMAL_5</li>
+  <li>NORMAL_6</li>
+  <li>LOW_1</li>
+  <li>LOW_2</li>
+  <li>LOW_3</li>
+  <li>VERY_LOW</li>
+  <li>LOWEST</li>
+</ul>
+Example:
+<pre>
+&lt;clients version="2.0"&gt;
+  &lt;load-types&gt;
+    &lt;type name="user_query"  default-priority="VERY_HIGH" /&gt;
+    &lt;type name="maintenance" default-priority="NORMAL_6" /&gt;
+    &lt;type name="third_party" default-priority="LOW_1" /&gt;
+  &lt;/load-types&gt;
+&lt;/clients&gt;
+</pre>
+</p>
+
+
+
+<h2 id="generic-config">Generic configuration using &lt;config&gt;</h2>
+<p>
+Most elements in <em>services.xml</em> accept a sub-element named <em>config</em>.
+<em>config</em> elements can be included on different levels in the XML structure
+and the lower-level ones will override values in the higher-level ones (example below).
+The <em>config</em> element must include the attribute <em>name</em>,
+which gives the full name of the configuration option in question, including the namespace.
+The name can either refer to configuration definitions that are shipped with Vespa
+or ones that are part of the <a href="config-files.html">application package</a>.
+<pre>
+&lt;container id="default" version="1.0"&gt;
+  &lt;handler id="com.yahoo.vespatest.ConfiguredHandler"&gt;
+<span style="background-color: yellow;">    &lt;config name="vespatest.response"&gt;
+      &lt;response&gt;configured string&lt;/response&gt;
+    &lt;/config&gt;</span>
+  &lt;/handler&gt;
+  &lt;nodes&gt;
+    &lt;node hostalias="node0"/&gt;
+  &lt;/nodes&gt;
+&lt;/container&gt;
+</pre>
+</p>
+
+
+
+<h2 id="modular">Modular Configuration</h2>
+<p>
+Some features are configurable using XML files in sub-directories of the application package.
+This means that the configuration found in these XML files
+will be used as if it was inlined in <em>services.xml</em>.
+This is supported for <a href="services-search.html#chain">search chains</a>,
+<a href="services-docproc.html#modular-config">docproc chains</a> and
+<a href="services-routing.html#modularconfig">routing tables</a>.
+</p>

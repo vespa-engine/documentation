@@ -1,0 +1,170 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Wand Search Operators"
+---
+
+<p>
+This document gives an overview of use cases for Wand search operators that are available in Vespa.
+All of these operators can be used for efficient top-k retrieval and are based on
+<em>Weak AND</em> or <em>Weighted AND</em> as described by Broder et al in
+<em>Efficient query evaluation using a two-level retrieval process</em>.
+These are operators that scales adaptively from OR to AND.
+The available operators are
+<a href="advanced-search-operators.html#parallel-wand">Parallel Wand</a> and
+<a href="advanced-search-operators.html#vespa-wand">Vespa Wand</a>.
+These operators may be used directly using
+<a href="../query-language.html">YQL</a>
+or from a Java Searcher plugin. Take a look at
+<a href="advanced-search-operators.html">Advanced Search Operators</a>
+for description and characteristics of the Wand operators.
+</p><p>
+Use cases for a Wand operator arise when you have many query
+terms that you would like to see matched with OR semantics,
+but you are only interested in a small number of top hits for the query.
+With the normal OR operator the cost rises very quickly with the number of terms,
+so five terms inside OR may already be "many":
+a simple rule of thumb is that the evaluation cost is proportional to
+the number of hits the OR yields.
+A Wand operator, in contrast, has a target for the number of hits you want it to produce,
+and may throw away hits that are not good enough once it has produced enough hits.
+</p><p>
+If you are only interested in the best 100 hits (or less) from an OR,
+a Wand operator should be a good match.
+The basic idea is that after seeing enough hits,
+the Wand algorithm will require that a document match more terms (or more relevant terms) in the query.
+The operator may go all the way to requiring match on all terms if that gives many hits.
+Note that since the behavior is adaptive you will always get at least the target number of hits,
+usually many more. Example use cases:
+<ul>
+  <li>Make recommendations based on user history</li>
+  <li>Find similar documents</li>
+  <li>Find extra content for a web page that is relevant to the text on the page</li>
+</ul>
+Note that in the cases above you would extract a large number of words from user history,
+from a document, or from some text you are going to display,
+and then make a query with all those words as weak criteria,
+looking for documents that contain as many of those words as possible,
+optionally with extra weight on those words that are considered more important.
+</p>
+
+
+<h2 id="parallel-wand">Parallel Wand</h2>
+<p>
+Create a Parallel Wand using <a href="../query-language.html#wand">wand() in YQL</a>
+or in a Java searcher plugin using the <code>com.yahoo.prelude.query.WandItem</code>.
+The field to search must be a weighted set attribute with fast-search.
+<p>
+
+
+<h3 id="example">Example</h3>
+<p>
+Lets imagine we have an application where we would like to search for popular blogs about cars
+and we have the following search definition file.
+The weighted set attribute <code>car_types</code> is used to tag an article
+with which car types that are discussed in that article,
+while the integer attribute <code>popularity</code>
+is used to track the static popularity of that article.
+We want to search the <code>car_types</code> field using Parallel Wand.
+<p><p>
+We also have two rank profiles:
+<code>default</code> uses the raw dot product score that is calculated by Parallel Wand,
+while <code>combined_score</code> combines the dot product score with the static popularity score:
+<pre>
+search article {
+  document article {
+    field car_types type weightedset&lt;string&gt; {
+      indexing: attribute
+      attribute: fast-search
+    }
+    field popularity type int {
+      indexing: attribute | summary
+    }
+  }
+  rank-profile default {
+    first-phase {
+      expression: rawScore(car_types)
+    }
+  }
+  rank-profile combined_score {
+    first-phase {
+      expression: rawScore(car_types) + attribute(popularity)
+    }
+  }
+}
+</pre>
+</p>
+
+
+<h3 id="wand-in-yql">wand() in YQL</h3>
+<p>
+Lets imagine a particular user that is interested in Italian cars, especially sports cars.
+This user would mainly like to get blogs discussing Italian sports cars,
+but blogs about more usual Italian cars could also be returned.
+In the following example we see how to use YQL to create a Parallel Wand for the
+<code>car_types</code> field with 25 as the target number of hits to produce.
+Notice that the weights for Italian sports cars are higher than for more usual cars.
+<pre>
+yql=select ignoredfield from ignoredsource where [ {"targetNumHits": 25} ]wand(car_types, {"pagani":400,"lamborghini":300,"maserati":250,"ferrari":150,"lancia":50,"alfa":40,"fiat":30});
+</pre>
+</p>
+
+
+<h3 id="com.yahoo.prelude.query.WandItem">com.yahoo.prelude.query.WandItem</h3>
+<p>
+The same example Parallel Wand can be added in a Java searcher plugin:
+<pre>
+import com.yahoo.prelude.query.*;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.query.QueryTree;
+import com.yahoo.search.searchchain.Execution;
+
+private Result hardCoded(Query query, Execution execution) {
+    WandItem filter = new WandItem("car_types", 25);
+    filter.addToken("pagini", 400);
+    filter.addToken("lamborghini", 300);
+    filter.addToken("maserati", 250);
+    filter.addToken("ferrari", 150);
+    filter.addToken("lancia", 50);
+    filter.addToken("alfa", 40);
+    filter.addToken("fiat", 30);
+    QueryTree tree = query.getModel().getQueryTree();
+    Item oldroot = tree.getRoot();
+    AndItem newtop = new AndItem();
+    newtop.addItem(oldroot);
+    newtop.addItem(filter);
+    tree.setRoot(newtop);
+    query.trace("added hardcoded filter: ", true, 2);
+    return execution.search(query);
+}
+</pre>
+</p>
+
+
+<h3 id="ranking-notes">Ranking notes</h3>
+<p>
+Note that when using the <code>default</code> rank profile in this example,
+we are guaranteed to get the top-k hits
+(according to the raw dot product score of the Parallel Wand)
+in the final search result.
+This is however not the case when using the <code>combined_score</code> rank profile.
+In this case the top-k hits (according to the raw dot product score)
+are also returned from the Parallel Wand in the match phase,
+but in the ranking phase we also consider the static popularity score
+which may alter what is the final top-k hits
+according to the expression in the rank profile.
+This means that when combining the raw dot product score of the Parallel Wand with something else
+(in either a first phase or second phase rank expression),
+you must ensure that these rank scores correlate somewhat.
+When combining scores like this you also should tune the
+<code>targetNumHits</code> used by the Parallel Wand.
+More information in <a href="advanced-search-operators.html#parallel-wand">Parallel Wand</a>.
+</p>
+
+<!-- The below seems broken, no WAND there - ToDo: look into
+<h3 id="wand-search-api">Wand Search API</h3>
+<p>
+The Parallel Wand can be specified using the
+<a href="search-api-reference.html#wand-search">WAND Search API</a>.
+</p>
+-->
