@@ -1,0 +1,562 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Visiting"
+---
+
+<p>
+Visiting is a feature to efficiently process a set of documents, identified by a
+<a href="../reference/document-select-language.html">document selection expression</a>.
+A client sends <em>visit</em>-requests to distributors,
+which picks a copy of all buckets to visit and forwards the requests to the content nodes.
+The content nodes reads the documents, and processes these documents in the same process.
+Typical use cases for this processing is to perform streaming search in the data,
+send the data back to the client, or send the data to some other target.
+</p><p>
+<a href="../streaming-search.html">Streaming search</a> uses visiting in a latency-critical context.
+</p><p>
+Background tasks like migration, reprocessing, backup or debugging are not latency critical.
+It is more important that such tasks have little impact on the user driven load,
+and have low priority and long run time.
+Throttling ensures that only a few requests are active per content node at a time.
+</p>
+
+
+
+<h2 id="tools">Tools</h2>
+<p>
+For programmatic access, check the
+<a href="../document-api-guide.html#visitorsession">visitor session API</a>.
+</p><p>
+<em>vespa-visit</em> is used to run a visit operation.
+See <em>vespa-visit --help</em> or <em>man vespa-visit</em> for details.
+By default, vespa-visit gets visited documents and emits to stdout.
+However, the tool may specify a visitor target and be used as a tool
+to run reprocessing or migration.
+It supports keeping a progress file on disk,
+such that you can restart it if it should fail in the middle for some reason.
+</p><p>
+<em>vespa-visit-target</em> is a tool to set up an endpoint for visiting data.
+It binds to a socket or to a slobrok address,
+which is specified as a target in the visit client.
+Check <em>vespa-visit-target --help</em> for details.
+</p>
+
+
+
+<h2 id="data-export-import">Data export / import</h2>
+<p>
+Export data to stdout:
+<pre>
+$ vespa-visit --jsonoutput
+</pre>
+As a full data dump takes time / space / resources, refine as needed:
+<pre>
+$ vespa-visit -v --priority LOW_1 -p progress-file --jsonoutput -s 'id.hash().abs() % 100 = 0' --fieldset 'music:[document]' > 100.json
+</pre>
+<ul>
+  <li><em>-v</em> prints a % finished</li>
+  <li><em>--priority LOW_1</em> <a href="#priority">de-prioritizes</a> the data dump -
+    useful in live applications</li>
+  <li><em>-p progress-file</em> saves progress, allowing the visitor to resume at next startup</li>
+  <li><em>-s 'id.hash().abs() % 100 = 0'</em> dumps 1% of the corpus - see <a href="#selection">selection</a></li>
+  <li><em>--fieldset 'music:[document]'</em> dumps all fields, excluding synthetic fields.
+    When visiting Indexed Search, one might find more fields dumped than put in,
+    causing problems when re-feeding documents.
+    The solution is using a <a href="../documents.html#fieldsets">fieldset</a> to return document fields only.
+    <em>[document]</em> is a shorthand for all fields for the given document type.
+  </li>
+</ul>
+Import into a cluster using <a href="../api.html">Document API</a>, like:
+<pre>
+$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file 100.json --host gatewayhost
+</pre>
+Or see next section, routing output directly to another Vespa cluster.
+</p>
+
+
+
+<h2 id="data-migration-synchronization">Data migration / synchronization</h2>
+<p>
+To migrate a set of documents from one cluster to another, use <em>visiting</em> -
+as the data is transferred directly, using a compact
+serialization format, from the source nodes to the targets,
+this is performance optimal (data is not piped through the visit client).
+Implement backup this way, or dump to file.
+</p><p>
+Search node recovery: Feed the documents directly to a search cluster.
+Example, selecting documents of type <em>music</em>:
+<pre>
+$ vespa-visit --selection music --datahandler indexing
+</pre>
+This feeds from the source into the search cluster in the same application.
+Note that simultaneous feed can make updates go lost.
+</p><p>
+Include <a href="../elastic-vespa.html#data-retention-vs-size">remove-entries</a>
+in the visit operation using <em>--visitremove</em> - this dumps the tombstones
+of documents recently removed.
+</p><p>
+The <a href="../reference/routingpolicies.html#storage">storage policy</a> can be configured to
+use a set of configuration servers from another cluster to configure
+itself. This is specified with the <em>config</em> parameter. As
+an example, the following route routes to the storage cluster
+<em>mycluster</em> with a configuration server on
+<em>myconfigserver.mydomain.com:12345</em>:
+<pre>
+[Storage:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]
+</pre>
+The following examples illustrate
+how to copy all data from a source cluster to another cluster using vespa-visit:
+<pre>
+# Copies all data in the local cluster, routing it to the remote cluster
+$ vespa-visit --datahandler '[Storage:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]'
+
+# Limit to 'music' documents only
+$ vespa-visit --selection music --datahandler '[Storage:config=tcp/myconfigserver.mydomain.com:19070;cluster=mycluster]'
+
+# Limit to all documents for user '1234'
+$ vespa-visit --selection id.user=1234 --datahandler '[Storage:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]'
+
+# Copies all music documents to a search cluster with id mycluster
+# When copying data to a search cluster, 'clusterconfigid' must also be specified.
+# It should be set to the same value as the cluster.
+$ vespa-visit --selection music --datahandler '[Storage:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster;clusterconfigid=mycluster]'
+</pre>
+</p>
+
+
+
+<h2 id="reprocessing">Reprocessing</h2>
+<p>
+Reprocessing is used to solve these use cases:
+<ul>
+  <li>
+    To change the document type used in ways that will not be
+    backward compatible, define a new type, and reprocess to change all
+    the existing documents.
+  </li><li>
+    Document identifiers can be changed to a new scheme.
+  </li><li>
+    Search documents can be reindexed after indexing steps have been changed.
+  </li>
+</ul>
+This example illustrates how one can identify a subset of the
+documents in a content cluster, reprocess these, and write them back.
+It is assumed that a Vespa cluster is set up, with data.
+</p>
+
+
+<h3 id="set-up-a-document-reprocessing-cluster">1. Set up a document reprocessing cluster</h3>
+<p>
+  This example document processor:
+<ul>
+  <li>deletes documents with an <em>artist</em> field whose value contains <em>Metallica</em></li>
+  <li>uppercases <em>title</em> field values of all other documents</li>
+</ul>
+<pre>
+import com.yahoo.docproc.Arguments;
+import com.yahoo.docproc.DocumentProcessor;
+import com.yahoo.docproc.Processing;
+import com.yahoo.docproc.documentstatus.DocumentStatus;
+import com.yahoo.document.DocumentOperation;
+import com.yahoo.document.DocumentPut;
+import com.yahoo.document.Document;
+
+/**
+ * Example of using a document processor will modify and/or delete
+ * documents in the context of a reprocessing use case.
+ */
+public class ReProcessor extends DocumentProcessor {
+    private String deleteFieldName;
+    private String deleteRegex;
+    private String uppercaseFieldName;
+
+    public ReProcessor() {
+        deleteFieldName = "artist";
+        deleteRegex = ".*Metallica.*";
+        uppercaseFieldName = "title";
+    }
+
+    public Progress process(Processing processing) {
+        Iterator&lt;DocumentOperation&gt; it = processing.getDocumentOperations().iterator();
+        while (it.hasNext()) {
+            DocumentOperation op = it.next();
+            if (op instanceof DocumentPut) {
+                Document doc = ((DocumentPut) op).getDocument();
+
+                // Delete the current document if it matches:
+                String deleteValue = (String) doc.getValue(deleteFieldName);
+                if (deleteValue != null) {
+                    if (deleteValue.matches(deleteRegex)) {
+                        it.remove();
+                        continue;
+                    }
+                }
+
+                // Uppercase the other field:
+                String uppercaseValue = doc.getValue(uppercaseFieldName).toString();
+                if (uppercaseValue != null) {
+                    doc.setValue(uppercaseFieldName, uppercaseValue.toUpperCase());
+                }
+            }
+        }
+        return Progress.DONE;
+    }
+}
+</pre>
+To compile this processor, see <a href="../jdisc/developing-applications.html">
+  Developing with the JDisc Container</a>.
+For more information on document processing, refer
+to <a href="../docproc-development.html">Document processor Development</a>.
+After having changed the Vespa setup, reload config:
+<pre>
+$ vespa-deploy prepare music
+$ vespa-deploy activate
+</pre>
+Restart nodes as well to activate.
+</p>
+
+
+<h3 id="select-documents">2. Select documents</h3>
+<p>
+Define a selection criteria for the documents to be reprocessed.
+(To reprocess <em>all</em> documents, skip this).
+For this example, assume all documents where the field <em>year</em> is greater than 1995.
+The selection string <em>music.year &gt; 1995</em> does this.
+</p>
+
+
+<h3 id="set-route">3. Set route</h3>
+<p>
+The visitor sends documents to a <a href="../routing.html">Messagebus route</a> - examples:
+<ul>
+<li><strong>default</strong> - Documents are sent to the <em>default</em>
+    route.</li>
+<li><strong>indexing</strong> - Documents are sent to <em>indexing</em>.</li>
+<li><strong>&lt;clustername&gt;/chain.&lt;chainname&gt;</strong>:
+    Documents are sent to the document processing chain <em>chainname</em> running in
+    cluster <em>clustername</em>.</li>
+</ul>
+Assume you have a container cluster with id <em>reprocessing</em>
+containing a docproc chain with id <em>reprocessing-chain</em>.
+This example route sends documents from the content node,
+into the document reprocessing chain, and ultimately, into indexing:
+<pre>
+reprocessing/chain.reprocessing-chain indexing
+</pre>
+Details: <a href="../routing.html">Message Bus Routing Guide</a>.
+</p>
+
+
+<h3 id="reprocess">4. Reprocess</h3>
+<p>
+Start reprocessing:
+<pre>
+$ vespa-visit -v --selection "music.year &gt; 1995" \
+  --datahandler "reprocessing/chain.reprocessing-chain indexing"
+</pre>
+The '-v' option emits progress information on standard error.
+</p>
+
+
+<h3 id="notes">Notes</h3>
+<p>
+With multiple search clusters with one document type each,
+and one content cluster storing all document types,
+there are a few adjustments that must be made.
+A visitor on a content node reads documents from disk,
+and sends batches of documents in messages over the network.
+If a visitor is set to visit all document types,
+one message may thus contain more than one document type.
+Since indexing is done in a separate indexing cluster for each search cluster,
+these indexing clusters can only handle documents of their own type.
+In the case where all documents regardless of document type are visited,
+some documents will thus end up in the wrong indexing cluster, and indexing will fail.
+In this use case, the solution is simple -
+use a selection string to reprocess one document type at a time.
+</p>
+
+
+
+<h2 id="selection">Selection</h2>
+<p>
+To select which documents to visit, use a
+<a href="../reference/document-select-language.html">document selection expression</a>.
+</p><p>
+If co-localization of documents has been used, and the selection specifieslocation criteria,
+the visitor client may be able to identify one or a few buckets
+that are guaranteed to include all documents that will match the expression.
+In all other cases, visiting needs to visit all buckets in the cluster.
+</p><p>
+Note that streaming search typically relies on this behavior to ensure low latency,
+but the visitor client will only be able to map visitors to a bucket subset
+if the document selection is simple.
+If streaming search uses a lot of time,
+verify that the selection is actually simple enough
+for the visitor client to map it to a small bucket set.
+</p>
+
+<h4>Selecting by last write time</h4>
+<p>
+In addition to the document selection,
+visiting can select a timeframe for documents to visit,
+using the internal last write time.
+This can be used to synchronize an external secondary storage,
+such as for instance a backup.
+</p><p>
+By default, the <em>to</em> timestamp is set to the current time when starting a visitor.
+This ensures that documents inserted after the visitor started are not visited.
+This property is important for instance for reprocessing,
+ensuring that documents that are reprocessed are not visited again by the same visitor.
+</p>
+
+
+
+<h2 id="client-visit-requests">Client visit requests</h2>
+<p>
+If the selection criteria managed to map the visitor to a specific set of buckets,
+these will be used when sending distributor visit requests.
+If not, the visit client will iterate the entire bucket space,
+typically at the minimum split level required to decide correct distributor.
+</p><p>
+The distributors will receive the requests and look at what buckets it has
+that are contained by the requested bucket.
+If more than one, the distributor will only start a limited number of bucket visitors at the same time.
+Once it has processed the first ones,
+it will reply to the visitor client with the last bucket processed.
+</p><p>
+As all buckets have a natural order, the client can use the returned bucket as a progress counter.
+Thus, after a distributor request has returned, the client knows one of the following:
+<ul>
+  <li>All buckets contained within the bucket sent have been visited</li>
+  <li>All buckets contained within the bucket sent,
+    up to this specific bucket in the order, have been visited</li>
+  <li>No buckets existed that was contained within the requested bucket</li>
+</ul>
+The client can decide whether to visit in strict order,
+allowing only one bucket to be pending at a time,
+or whether to start visiting many buckets at a time, allowing great throughput.
+</p>
+
+
+
+<h2 id="distributor-visit-requests">Distributor visit requests</h2>
+<p>
+The distributors receive visit requests from clients for a given bucket,
+which may map to none, one or many buckets within the distributor.
+It picks one or more of the first buckets in the order,
+picks out one content node copy of each
+and passes the request on to the content nodes.
+</p><p>
+Once all the content node requests have been responded to,
+the distributor will reply to the client with the last bucket visited,
+to be used as a progress counter.
+</p><p>
+Subsequent client requests to the distributor will have the progress counter set,
+letting the distributor ignore all the buckets prior to that point in the ordering.
+</p><p>
+Bucket splitting and joining does not alter the ordering,
+and does thus not affect visiting much as long as the buckets are consistently split.
+If two buckets are joined, where the first one have already been visited,
+a visit request has to be sent to the joined bucket.
+The content layer use the progress counter to avoid revisiting documents already processed in the bucket.
+</p><p>
+If the distributor only starts one bucket visitor at a time,
+it can ensure the visitor order is kept.
+Starting multiple buckets at a time may improve throughput and decrease latency,
+but progress tracking will be less fine grained,
+so a bit more documents may need to be revisited when continued after a failure.
+</p>
+
+
+
+<h2 id="content-node-visit-requests">Content node visit requests</h2>
+<p>
+The content node receives visit requests for single buckets for which they store documents.
+It may receive many in parallel, but their execution is independent of each other.
+</p><p>
+The visitor layer in the content node picks up the visit requests.
+There it is assigned a visitor thread,
+and an instance of the processor type is created for that visitor.
+The processor will set up an iterator in the backend
+and send one or more requests for documents to the backend.
+</p><p>
+The document selection specified in the visitor client is sent through to the backend,
+allowing it to filter out unwanted data at the lowest level possible.
+</p><p>
+Once documents are retrieved from the backend, back up to the visitor layer,
+the visit processor will process the data.
+</p><p>
+The default is one iterator request is pending to the backend at any time.
+By sending many small iterator requests, having several pending at a time,
+the processing may occur in parallel with the document fetching.
+</p>
+
+
+
+<h2 id="visitor-processor-types">Visitor processor types</h2>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th>Dump visitor</th>
+      <td>
+        The most commonly used visitor processor type is the dump visitor.
+        All it does is to send the read documents on to some external target
+        specified by the visitor.
+        Using the command line tool <em>vespa-visit</em>
+        the default is to just send the documents back to the client,
+        and have them printed to stdout.
+        The dump visitor is used to implement reprocessing.
+        Typically, using a messagebus route,
+        that will send the documents through the document processing cluster
+        and then back to the content cluster.
+        Migration of documents from one cluster to another
+        is also implemented using a dump visitor.
+      </td>
+    </tr><tr>
+      <th style="white-space: nowrap">Streaming search visitor</th>
+      <td>
+        Another visitor processor is the streaming search visitor,
+        searching through the read documents and sending search results out.
+        This is typically used from the search QR servers,
+        making it transparent whether search results were created from streaming search,
+        or through indexed search in proton.
+      </td>
+    </tr><tr>
+      <th>Statistics visitor</th>
+      <td>
+        There is also a statistics visitor that just generate some statistics of stored data
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="priority">Priority</h2>
+<p>
+Visitor requests have priorities just like any other requests.
+These priorities are kept throughout the chain of requests.
+A low priority reprocessing visitor will end up sending
+low priority visitor requests to the content nodes,
+which will send low priority put operations to be reprocessed,
+which will end up as low priority put operations to the backend. Example:
+<pre>
+$ vespa-visit --priority LOW_1 -p progress-file
+</pre>
+Refer to <a href="../reference/services.html#load-types">load types</a> for priority values.
+</p>
+
+
+<h3 id="max-concurrent-visitors-on-content-nodes">Max concurrent visitors on content nodes</h3>
+<p>
+Content nodes have a maximum amount of visitors they will process at a time.
+This maximum enforces that there is enough memory for the currently active ones,
+and that the active ones will complete in reasonable time,
+rather than having a huge number of active visitors that all use a long time to finish
+as they compete with so many other visitors for resources.
+</p><p>
+To prevent a lot of low priority visitors to stop high priority visitors from being started,
+the maximum amount of concurrent visitors is a function that depends on the priority:
+</p><p><!-- depends on mathjax -->
+$$\text{maxconcurrent}_{V} = \text{fixed + variable} \times ((255 - \text{priority}_{V}) / 255)$$
+</p><p>
+The <em>fixed</em> value represent the number always allowed to process in parallel regardless of priority,
+and the <em>variable</em> represent how many additional visitors can be run at maximum priority.
+</p><p>
+Thus, if only low priority visitors are running,
+there will be free slots in the queue for high priority visitors incoming.
+</p><p>
+Once visitors have started, backend requests for documents are also prioritized,
+but the processing of the documents are not.
+However, as the high priority backend requests will take priority,
+the high priority visitors should also get responses to process faster.
+</p><p>
+These values can be configured in
+<a href="../reference/services-content.html#max-concurrent">tuning</a>.
+</p>
+
+
+<h3 id="queueing">Queueing</h3>
+<p>
+Visitor requests may be queued at several layers.
+Visitor clients have a virtual queue by deciding only to send requests for a few buckets at a time.
+Distributors have a virtual queue deciding to only forward requests for some buckets at a time.
+These queues are per visitor, and can be adjusted through visitor parameters.
+</p><p>
+The content node queues up visitor requests if the maximum allowed is already running.
+If doing so, this queue will be kept in priority order.
+In the event of client hammering, this queue may also fill up, replying busy back to the clients.
+</p><p>
+The partition threads will queue up requests to read needed parts of data.
+These requests will be tagged with the priority of the visitor itself.
+Additionally, the responses from the backend will be queued for processing in the visitor thread.
+This queue is not a priority queue, but as it contains replies from data processed of a priority queue,
+this is not expected to be an issue.
+</p>
+
+
+
+<h2 id="visitor-targets">Visitor targets</h2>
+<p>
+Requests sent from the visitor processor are sent to a visitor target - types:
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="white-space: nowrap">Message bus routes</th>
+      <td>
+        You can specify a <a href="../routing.html">message bus route</a> name directly,
+        and this route will be used to send the results.
+        This is typically used when doing reprocessing or migration.
+        Message bus routes is set up in the application package.
+        In addition, some routes may have been auto-generated in simple setups,
+        for instance a route called <em>default</em> is generated
+        if your setup is simple enough for the config model
+        to likely guess where you want to send your data.
+      </td>
+    </tr><tr>
+      <th>Slobrok address</th>
+      <td><p>
+        You can also specify a slobrok address for data to be sent to.
+        A slobrok address is a slash-separated path
+        where you can use asterisk to mean any element within this path.
+        For instance, if you have a docproc cluster called <em>mydpcluster</em>,
+        it will have registered its nodes with slobrok names like
+        <em>docproc/cluster.mydpcluster/docproc/0/feed_processor</em>,
+        where the 0 here indicates the first node in the cluster.
+        You can thus specify to send visit data to this docproc cluster
+        by stating a slobrok address of <em>docproc/cluster.mydpcluster/docproc/*/feed_processor</em>.
+        Note that this will not send all the data to one or all the nodes.
+        The data sent from the visitor will be distributed among the matching nodes,
+        but each message will just be sent to one node.
+        </p><p>
+        Slobrok names may also be used if you use <em>vespa-visit-target</em>
+        to retrieve the data at some location.
+        If you start vespa-visit-target on two nodes,
+        listening to slobrok names <em>mynode/0/visit-destination</em>
+        and <em>mynode/1/visit-destination</em>,
+        you can send the results to these nodes by specifying
+        <em>mynode/*/visit-destination</em> as the data handler.
+        </p><p>
+        <em>vespadestination</em> is a small java program,
+        similar to vespa-visit-target in that it can receive messages
+        from messagebus and print the contents to stdout.
+        It can be useful in situations where you want to debug a route or a docproc,
+        by using the vespadestination as the endpoint of your route.</p>
+      </td>    <!-- ToDo: vespa-visit-target and vespadestination should be merged into one tool?
+                Need to decide what to do with these tools ...-->
+    </tr><tr>
+      <th>TCP socket</th>
+      <td>
+        TCP sockets can also be specified directly.
+        This requires that the endpoint speaks FNET RPC.
+        This is typically done, either by using the <em>vespa-visit-target</em> tool,
+        or by using a visitor destination programmatically by using utility class in the document API.
+        A socket address looks like the following:
+        tcp/<em>hostname</em>:<em>port</em>/<em>servicename</em>.
+        For instance, an address generated by <em>vespa-visit-target</em>
+        might look like: <em>tcp/myhost.mydomain.com:12345/visit-destination</em>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>

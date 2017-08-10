@@ -1,0 +1,553 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Document API"
+---
+
+<p>
+This is an introduction to how to build and compile Vespa clients using the Document API.
+This is a high-level interface that gives access to data in Vespa content clusters.
+It can be used for feeding, updating and retrieving documents,
+or removing documents from the repository. See also the
+<a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/documentapi/package-summary.html">
+Java reference</a>.
+</p>
+
+
+
+<h2 id="documents">Documents</h2>
+<p>
+All data fed, indexed and searched in Vespa are instances of the <code>Document</code> class.
+A <a href="documents.html">document</a> is a composite object that consists of:
+</p>
+<ul>
+<li><p>A <code>DocumentType</code> that defines the set of fields that
+    can exist in a document. A document can only have a single
+    <em>document type</em>, but document types can inherit the content of another.
+    All fields of an inherited type is available in all its descendants.
+    The document type definition is derived from the
+    <a href="reference/search-definitions-reference.html">search definition</a>,
+    which is converted into a configuration file to be read by the
+    <code>DocumentManager</code>.
+    </p><p>
+    All registered document types are instantiated and stored within
+    the document manager. A reference to these objects can be
+    retrieved using the <code>getDocumentType()</code> method by
+    supplying the name and the version of the wanted document type.
+    </p><p>
+    <code>DocumentManager</code> initialization is done automatically
+    by the Document API by subscribing to the appropriate
+    configuration.
+    </p></li>
+<li><p>A <code>DocumentId</code> which is a unique document identifier.
+    The document distribution uses the document identifier,
+    see the <a href="content/buckets.html#distribution">reference</a> for details.
+    </p></li>
+<li><p>A set of <code>(Field, FieldValue)</code> pairs, or
+    "fields" for short.  The <code>Field</code> class has
+    methods for getting its name, data type and internal
+    identifier. The field object for a given field name can be
+    retrieved using the <code>getField(&lt;fieldname&gt;)</code>
+    method in the <code>DocumentType</code>.
+    </p><p>
+    For most data types, simply assign a value object directly to a document.
+    For the complex data type <a href="#datatype.weightedset">DataType.WEIGHTEDSET</a>
+    there are special classes that must be used to wrap the data.
+    </p></li>
+</ul>
+<p>
+To construct a document one must first retrieve the document type from
+the document manager, construct a unique identifier, and then pass
+both of those objects to the constructor of the <code>Document</code> class:
+<pre>
+DocumentAccess access = DocumentAccess.createDefault();
+DocumentType type = access.getDocumentTypeManager().getDocumentType("music");
+DocumentId id = new DocumentId("id:music:music::0");
+Document document = new Document(type, id);
+</pre>
+To get and set the value of a field in a document, use
+the <code>getValue()</code> and <code>setValue()</code> method:
+<pre>
+document.setFieldValue(document.getType().getField("myIntField"), 100);
+FieldValue value = document.getFieldValue(document.getType().getField("myIntField"));
+int val = ((IntegerFieldValue) value).getInteger();
+</pre>
+</p>
+
+
+<h3 id="datatype.weightedset">DataType.WEIGHTEDSET</h3>
+<p>
+This type is used to hold a set of other field values of any one given
+data type with an associated integer weight. This is implemented as a
+generic so that any other data type can be contained in it:
+<pre>
+WeightedSetDataType dataType =
+        (WeightedSetDataType) document.getType().getField("myweightedset").getDataType();
+WeightedSet&lt;String&gt; val = new WeightedSet&lt;String&gt;(dataType);
+    val.put("foo", 100);
+    val.put("bar", 101);
+    assert (val.get("foo") == 100);
+</pre>
+</p>
+
+
+
+<h2 id="document-updates">Document updates</h2>
+<p>
+A document update is a request to modify a document.
+The update contains a document id to identify which document to update,
+a list of field updates, and a list of field path updates.
+</p>
+
+
+<h3 id="field-updates">Field updates</h3>
+<p>
+Each field update contains a field id to identify which field of the
+document to update (this id is retrieved from the document type
+using <code>getField(&lt;name&gt;).getId()</code>),
+and a list of value updates to perform.
+A value update can be any of the following:
+</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th id="addvalueupdate">AddValueUpdate</th>
+      <td>Adds its content to the target field value.</td>
+    </tr><tr>
+      <th>ArithmeticValueUpdate</th>
+      <td>
+        <p>
+        An arithmetic value update is an update to a numerical field
+        value. This can also be used in combination with
+        the <em>MapValueUpdate</em> below to modify
+        weights in weighted sets. This update has an operator (available by
+        the <code>getOperator()</code> and <code>setOperator()</code> methods)
+        and a numerical operand (available by the <code>getOperand()</code>
+        and <code>setOperand()</code> methods).
+        </p><p>
+        Note: Vespa provides <em>at least once</em> semantics.
+        Due to the non-idempotent nature of arithmetic updates,
+        situations that e.g. cause re-sending of messages
+        may result in the final value of the updated document field to differ from the expected value.
+        </p>
+      </td>
+    </tr><tr>
+      <th id="assigndvalueupdate">AssignValueUpdate</th>
+      <td>Assigns its content to the target field value.</td>
+    </tr><tr>
+      <th id="clearvalueupdate">ClearValueUpdate</th>
+      <td>Clears the target field value.</td>
+    </tr><tr>
+      <th id="mapvalueupdate">MapValueUpdate</th>
+      <td>
+        <p>
+        Since value updates are concerned with updating only a single field
+        value it is necessary for the update to be able to indicate which
+        value to modify in complex field data types such as weighted
+        sets. This is the purpose of the <code>MapValueUpdate</code> class. It
+        contains a value target (available by the
+        <code>setValue()</code> and <code>getValue()</code>) which is the
+        identifier of the value to update, and a value update (available by
+        the <code>getUpdate()</code> and <code>setUpdate()</code> methods)
+        which is the update to perform.
+        </p><p>
+        For simplicity, the <code>FieldUpdate</code> class contains factory
+        methods to create the most common maps. For example, if one was to
+        assign 100 as the weight to the &ldquo;foo&rdquo; key in the document
+        field &ldquo;myStrWSet&rdquo; (a weighted set of strings), the value
+        update in would be created as follows:
+        </p>
+<pre>
+DocumentAccess access = DocumentAccess.createDefault();
+DocumentType type = access.getDocumentTypeManager().getDocumentType("music");
+DocumentId id = new DocumentId("id:music:music::0");
+DocumentUpdate upd = new DocumentUpdate(type, id);
+
+upd.addFieldUpdate(FieldUpdate.createMap(type.getField("myStrWSet"), "foo", new AssignValueUpdate(100)));
+</pre>
+      </td>
+    </tr><tr>
+      <th id="removevalueupdate">RemoveValueUpdate</th>
+      <td>Removes the target field value.</td>
+    </tr>
+  </tbody>
+</table>
+
+
+<h3 id="field-path-updates">Field Path Updates</h3>
+<p>
+Field path updates are used to simplify updates to complex data structures,
+using maps, structs, arrays, and so on.
+A field path update uses a <a href="reference/document-field-path.html">field path</a>
+to designate what part of the document is to be changed.
+This can be combined with a <em>where clause</em>,
+which is a <a href="reference/document-select-language.html">document selection expression</a>.
+The <em>where clause</em> decides whether the document is to be changed at all,
+and also sets variables to use in the field path
+when deciding which parts of the document to change.
+There are three different field path updates:
+</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th id="assignfieldpathupdate">AssignFieldPathUpdate</th>
+      <td>Modify a value in any part of the document,
+        or add values to maps or weighted sets</td>
+    </tr><tr>
+      <th id="addfieldpathupdate">AddFieldPathUpdate</th>
+      <td>Add values to arrays</td>
+    </tr><tr>
+      <th id="removefieldpathupdate">RemoveFieldPathUpdate</th>
+      <td>Remove values from the document</td>
+    </tr>
+  </tbody>
+</table>
+
+
+<h3 id="update-reply-semantics">Update reply semantics</h3>
+<p>
+Sending in an update for which the system can not find a corresponding
+document to update is <em>not</em> considered an error.
+These are returned with a successful status code
+(assuming that no actual error occurred during the update processing).
+If one cares about whether the update was known to have been applied, use the
+<code>boolean UpdateDocumentReply.wasFound()</code> method.
+</p><p>
+If the update returns with an error reply, the update <em>may or may not</em>
+have been applied, depending on where in the platform stack the error occurred.
+</p>
+
+
+
+<h2 id="document-access">Document Access</h2>
+<p>
+The starting point of for passing documents and updates to Vespa
+is the <code>DocumentAccess</code> class.
+This is a singleton (see <code>get()</code> method) session factory
+(see <code>createXSession()</code> methods),
+that provides three distinct access types:
+</p>
+<ul>
+  <li><strong>Synchronous random access</strong>:
+    provided by the class <code>SyncSession</code>.
+    Suitable for low-throughput proof-of-concept applications.</li>
+  <li><a href="#asyncsession"><strong>Asynchronous random access</strong></a>:
+    provided by the class <code>AsyncSession</code>.
+    It allows for document repository writes and random access with <strong>high throughput</strong>.</li>
+  <li><a href="#visitorsession"><strong>Visiting</strong></a>:
+    provided by the class <code>VisitorSession</code>.
+    Allows a set of documents to be accessed in order decided by the document repository,
+    which gives higher read throughput than random access.</li>
+</ul>
+
+
+<h3 id="asyncsession">AsyncSession</h3>
+<p>
+This class represents a session for asynchronous access to a document repository.
+It is created by calling
+<code>myDocumentAccess.createAsyncSession(myAsyncSessionParams)</code>,
+and provides document repository writes and random access with high throughput.
+The usage pattern for an asynchronous session is like:
+<ol>
+<li>
+    <code>put()</code>, <code>update()</code>, <code>get()</code>
+    or <code>remove()</code> is invoked on the session,
+    and it returns a synchronous <code>Result</code> object that indicates
+    whether or not the request was successful.
+    The <code>Result</code> object also contains a <em>request identifier</em>.</li>
+<li>
+    The client polls the session for a <code>Response</code> through
+    its <code>getNext()</code> method.
+    Any operation accepted by an asynchronous session will produce
+    exactly one response within the configured timeout.</li>
+<li>
+    Once a response is available, it is matched to the request by
+    inspecting the response's request identifier.
+    The response may also contain data, either a retrieved document or a failed document put
+    or update that needs to be handled.</li>
+</ol>
+Example:
+</p>
+<pre>
+import com.yahoo.document.*;
+import com.yahoo.documentapi.*;
+
+public class MyClient {
+
+    private final DocumentAccess access = DocumentAccess.createDefault();
+    private final AsyncSession session = access.createAsyncSession(new AsyncParameters());
+    private boolean abort = false;
+    private int numPending = 0;
+
+    /**
+     * Implements application entry point.
+     *
+     * @param args Command line arguments.
+     */
+    public static void main(String[] args) {
+        MyClient app = null;
+        try {
+            app = new MyClient();
+            app.run();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (app != null) {
+                app.shutdown();
+            }
+        }
+        if (app == null || app.abort) {
+            System.exit(1);
+        }
+    }
+
+    /**
+     * This is the main entry point of the client. This method will not return until all available documents
+     * have been fed and their responses have been returned, or something signaled an abort.
+     */
+    public void run() {
+        System.out.println("client started");
+        while (!abort) {
+            flushResponseQueue();
+
+            Document doc = getNextDocument();
+            if (doc == null) {
+                System.out.println("no more documents to put");
+                break;
+            }
+            System.out.println("sending doc " + doc);
+
+            while (!abort) {
+                Result res = session.put(doc);
+                if (res.isSuccess()) {
+                    System.out.println("put has request id " + res.getRequestId());
+                    ++numPending;
+                    break; // step to next doc.
+                } else if (res.getType() == Result.ResultType.TRANSIENT_ERROR) {
+                    System.out.println("send queue full, waiting for some response");
+                    processNext(9999);
+                } else {
+                    res.getError().printStackTrace();
+                    abort = true; // this is a fatal error
+                }
+            }
+        }
+        if (!abort) {
+            waitForPending();
+        }
+        System.out.println("client stopped");
+    }
+
+    /**
+     * Shutdown the underlying api objects.
+     */
+    public void shutdown() {
+        System.out.println("shutting down document api");
+        session.destroy();
+        access.shutdown();
+    }
+
+    /**
+     * Returns the next document to feed to Vespa. This method should only return null when the end of the
+     * document stream has been reached, as returning null terminates the client. This is the point at which
+     * your application logic should block if it knows more documents will eventually become available.
+     *
+     * @return The next document to put, or null to terminate.
+     */
+    public Document getNextDocument() {
+        return null; // TODO: Implement at your discretion.
+    }
+
+    /**
+     * Processes all immediately available responses.
+     */
+    void flushResponseQueue() {
+        System.out.println("flushing response queue");
+        while (processNext(0)) {
+            // empty
+        }
+    }
+
+    /**
+     * Wait indefinitely for the responses of all sent operations to return. This method will only return
+     * early if the abort flag is set.
+     */
+    void waitForPending() {
+        while (numPending != 0) {
+            if (abort) {
+                System.out.println("waiting aborted, " + numPending + " still pending");
+                break;
+            }
+            System.out.println("waiting for " + numPending + " responses");
+            processNext(9999);
+        }
+    }
+
+    /**
+     * Retrieves and processes the next response available from the underlying asynchronous session. If no
+     * response becomes available within the given timeout, this method returns false.
+     *
+     * @param timeout The maximum number of seconds to wait for a response.
+     * @return True if a response was processed, false otherwise.
+     */
+    boolean processNext(int timeout) {
+        Response res;
+        try {
+            res = session.getNext(timeout);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            abort = true;
+            return false;
+        }
+        if (res == null) {
+            return false;
+        }
+        System.out.println("got response for request id " + res.getRequestId());
+        --numPending;
+        if (!res.isSuccess()) {
+            System.err.println(res.getTextMessage());
+            abort = true;
+            return false;
+        }
+        return true;
+    }
+}
+</pre>
+
+
+<h3 id="visitorsession">VisitorSession</h3>
+<p>
+This class represents a session for sequentially visiting documents with high throughput.
+</p><p>
+A visitor is started when creating the <code>VisitorSession</code>
+through a call to <code>createVisitorSession</code>.
+A visitor target, that is a receiver of visitor data,
+can be created through a call to <code>createVisitorDestinationSession</code>.
+The <code>VisitorSession</code> is a receiver of visitor data.
+See <a href="content/visiting.html">visiting reference</a> for details.
+The <code>VisitorSession</code>:
+<ul>
+  <li>Controls the operation of the visiting process</li>
+  <li>Handles the data resulting from visiting data in the system</li>
+</ul>
+Those two different tasks may be set up to be handled by
+a <code>VisitorControlHandler</code> and
+a <code>VisitorDataHandler</code> respectively.
+These handlers may be supplied to the <code>VisitorSession</code> in
+the <code>VisitorParameters</code> object,
+together with a set of other parameters for visiting.
+Example: To increase performance, let more separate visitor destinations handle
+visitor data - then specify the addresses to remote data handlers.
+</p><p>
+The default <code>VisitorDataHandler</code> used by
+the <code>VisitorSession</code> returned from
+<code>DocumentAccess</code> is <code>VisitorDataQueue</code> which
+queues up incoming documents and implements a polling API.
+The documents can be extracted by calls to the
+session's <code>getNext()</code> methods and can be ack-ed by
+the <code>ack()</code> method.
+The default <code>VisitorControlHandler</code> can be accessed through the
+session's <code>getProgress()</code>,
+<code>isDone()</code>, and <code>waitUntilDone()</code> methods.
+</p><p>
+Implement custom <code>VisitorControlHandler</code>
+and <code>VisitorDataHandler</code> by subclassing them and supplying
+these to the <code>VisitorParameters</code> object.
+</p><p>
+The <code>VisitorParameters</code> object controls how and what data will be visited -
+refer to the <a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/documentapi/VisitorParameters.html">javadoc</a>.
+Configure the
+<a href="reference/document-select-language.html">document selection</a> string
+to select what data to visit - the default is all data.
+<!-- ToDo: This is is probably not relevant anymore
+Another important parameter is the "visitor library".
+On the content side, all data read from a visitor is passed through a "visitor library",
+referring to a dynamically linked library installed on all storage nodes (an .so file
+located in <code>$VESPA_HOME/libexec/vespa/storage/</code>). This library
+processes the data and sends all or part of it back to the client (or
+generates other messages from the data). The default visitor library
+is "dumpVisitor", which sends the data back as-is. In certain cases,
+it can be interesting to visit only parts of documents.
+-->
+</p><p>
+For improved performance, dump a subset of the document fields -
+control which fields are returned by using
+<a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/documentapi/VisitorParameters.html">fieldSet</a> -
+see <a href="documents.html#fieldsets">Document field sets</a>.
+</p><p>
+Example: <!-- ToDo: modify to JSON output -->
+<pre>
+import com.yahoo.document.Document;
+import com.yahoo.document.DocumentId;
+import com.yahoo.documentapi.DocumentAccess;
+import com.yahoo.documentapi.DumpVisitorDataHandler;
+import com.yahoo.documentapi.ProgressToken;
+import com.yahoo.documentapi.VisitorControlHandler;
+import com.yahoo.documentapi.VisitorParameters;
+import com.yahoo.documentapi.VisitorSession;
+
+import java.util.concurrent.TimeoutException;
+
+public class MyClient {
+
+    public static void main(String[] args) throws Exception {
+        VisitorParameters params = new VisitorParameters("true");
+        params.setLocalDataHandler(new DumpVisitorDataHandler() {
+
+            @Override
+            public void onDocument(Document doc, long timeStamp) {
+                System.out.print(doc.toXML(""));
+            }
+
+            @Override
+            public void onRemove(DocumentId id) {
+                System.out.println("id=" + id);
+            }
+        });
+        params.setControlHandler(new VisitorControlHandler() {
+
+            @Override
+            public void onProgress(ProgressToken token) {
+                System.err.format("%.1f %% finished.\n", token.percentFinished());
+                super.onProgress(token);
+            }
+
+            @Override
+            public void onDone(CompletionCode code, String message) {
+                System.err.println("Completed visitation, code " + code + ": " + message);
+                super.onDone(code, message);
+            }
+        });
+        params.setRoute(args.length > 0 ? args[0] : "[Storage:cluster=storage;clusterconfigid=storage]");
+        params.setFieldSet(args.length > 1 ? args[1] : "[all]");
+
+        DocumentAccess access = DocumentAccess.createDefault();
+        VisitorSession session = access.createVisitorSession(params);
+        if (!session.waitUntilDone(0)) {
+            throw new TimeoutException();
+        }
+        session.destroy();
+        access.shutdown();
+    }
+}
+</pre>
+The first optional argument to this client is the <a href="routing.html">route</a> of the cluster to visit.
+The second is the <a href="documents.html#fieldsets">fieldset</a> set to retrieve.
+</p>
+
+
+
+<h2 id="compiling-and-linking">Compiling and linking</h2>
+<p>
+To compile Java applications using Document API,
+the library <code>$VESPA_HOME/lib/jars/documentapi-jar-with-dependencies.jar</code>
+needs to be included in the file path.
+<!-- ToDo: link to a simple maven sample app here -->
+Build and run the class <code>MyClient</code> from the file <code>MyClient.java</code>:
+<pre>
+$ javac -classpath $VESPA_HOME/lib/jars/documentapi-jar-with-dependencies.jar MyClient.java
+$ java -enableassertions -classpath .:$VESPA_HOME/lib/jars/documentapi-jar-with-dependencies.jar MyClient
+</pre>
+To feed from a non-Vespa node, set the <code>VESPA_CONFIG_SOURCES</code> environment variable.
+See the <a href="reference/files-processes-and-ports.html#ports">ports</a>
+and <a href="cloudconfig/configuration-server.html">config server</a> for details.
+</p>

@@ -1,0 +1,699 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "services.xml - container"
+---
+
+<p>
+This is the reference for container cluster configuration:
+<pre><a href="">container [version, id]</a>
+    <a href="services-http.html">http</a>
+        <a href="services-http.html#server">server [id, port]</a>
+        <a href="services-http.html#filtering">filtering</a>
+    <a href="#rest-api">rest-api</a>
+        <a href="#rest-api-components">components [bundle]</a>
+            <a href="#rest-api-package">package</a>
+    <a href="#servlet">servlet [id, class, bundle]</a>
+        <a href="#path">path</a>
+        <a href="#servlet-config">servlet-config</a>
+    <a href="#handler">handler [id, class, bundle]</a>
+        <a href="#binding">binding</a>
+        <a href="#clientbinding">clientbinding</a>
+        <a href="#component">component</a>
+    <a href="#client">client [id, class, bundle]</a>
+        <a href="#binding">binding</a>
+        <a href="#clientbinding">clientbinding</a>
+        <a href="#component">component</a>
+    <a href="#server">server [id, class, bundle]</a>
+    <a href="#components">components</a>
+    <a href="#component">component</a>
+    <a href="services-search.html">search</a>
+        <a href="#include">include [dir]</a>
+        <a href="services-search.html#binding">binding</a>
+        <a href="services-search.html#searcher">searcher</a>
+        <a href="services-search.html#federation">federation</a>
+        <a href="services-search.html#provider">provider</a>
+        <a href="services-processing.html#chain">chain</a>
+        <a href="services-search.html#renderer">renderer</a>
+    <a href="services-docproc.html">document-processing</a>
+        <a href="#include">include [dir]</a>
+        <a href="services-docproc.html#documentprocessor">documentprocessor</a>
+        <a href="services-processing.html#chain">chain</a>
+    <a href="services-processing.html">processing</a>
+        <a href="#include">include [dir]</a>
+        <a href="services-processing.html#binding">binding</a>
+        <a href="services-processing.html#processor">processor</a>
+        <a href="services-processing.html#chain">chain</a>
+        <a href="services-processing.html#renderer">renderer</a>
+    <a href="#document-api">document-api</a>
+        <a href="#abortondocumenterror">abortondocumenterror</a>
+        <a href="#retryenabled">retryenabled</a>
+        <a href="#route">route</a>
+        <a href="#maxpendingdocs">maxpendingdocs</a>
+        <a href="#maxpendingbytes">maxpendingbytes</a>
+        <a href="#retrydelay">retrydelay</a>
+        <a href="#timeout">timeout</a>
+        <a href="#tracelevel">tracelevel</a>
+        <a href="#mbusport">mbusport</a>
+    <a href="#document">document [type, class, bundle]</a>
+    <a href="#accesslog">accesslog [type, fileNamePattern, symlinkName, rotationInterval, rotationScheme]</a>
+    <a href="config-files.html#generic-configuration-in-services-xml">config</a>
+    <a href="#nodes">nodes [jvmargs, allocated-memory]</a>
+        <a href="#node">node [hostalias]</a>
+</pre>
+Note: <em>container</em> is equivalent to <em>jdisc</em> -
+use container, as jdisc will be discontinued. <!-- ToDo: remove this note after next major release -->
+</p><p>
+Contained in <a href="services.html">services</a>, zero or more <em>container</em> elements.
+The root element of a container cluster definition.
+Most elements takes optional <a href="config-files.html#generic-configuration-in-services-xml">config</a> elements. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="container.version">version</th>
+      <td>required</td>
+      <td>number</td>
+      <td></td>
+      <td>1.0 in this version of Vespa</td></tr>
+    <tr><th id="container.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>logical name of this cluster</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;container id="default" version="1.0"&gt;
+  &lt;search&gt;
+    &lt;chain id="default"&gt;
+      &lt;searcher id="com.mydomain.search.SimpleSearcher"/&gt;
+    &lt;/chain&gt;
+  &lt;/search&gt;
+  &lt;nodes&gt;
+    &lt;node hostalias="node1"/&gt;
+  &lt;/nodes&gt;
+&lt;/container&gt;
+</pre>
+Each container cluster has a default http server port, unless it contains a
+<a href="services-http.html">http</a> element.
+Hence, when running more than one <code>container</code> cluster on the same node,
+it is necessary to manually assign a port to the http server to all but one cluster.
+Otherwise, the application will not deploy. Assigning a port is done by adding a
+<a href="services-http.html#server">server</a> element with an explicit port number:
+<pre>
+&lt;container id="cluster2" version="1.0"&gt;
+  &lt;http&gt;
+    &lt;server id="myServer" port="8081" /&gt;
+  &lt;/http&gt;
+  ...
+&lt;/container&gt;
+</pre>
+</p>
+
+
+
+<h2 id="rest-api">rest-api</h2>
+<p>
+Add a Jersey web application with resources and providers to the container cluster.
+Multiple web applications can be created by adding multiple <code>rest-api</code>
+elements with unique paths. Bundles containing Jersey components are added by giving the
+symbolic name (and optional version) in <code>components</code> sub-elements.
+From each given bundle, all classes with root annotations will be included in the corresponding web application.
+Note: No extra dependencies in <em>pom.xml</em> -
+the relevant artifacts are already pulled in via <code>container</code>.
+The <a href="../bundle-plugin.html#exporting-importing-and-including-packages-from-bundles">
+bundle plugin</a> ensures that the Jersey resources are available. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="rest-api.path">path</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The path to bind the rest-api.</td></tr>
+  </tbody>
+</table>
+Notes:
+<ul>
+  <li>
+    <a href="../configuring-components.html">JDisc Components</a>
+    can be injected directly into Jersey resources
+  </li><li>
+    Injecting <a href="../cloudconfig/config-introduction.html#configuration">Config</a>
+    without wrapping it in a <a href="../configuring-components.html">JDisc Component</a> will not work
+  </li><li>
+    While Jersey creates a new resource instance for each request,
+    the JDisc Components is the same object until the application is restarted or redeployed
+  </li><li>
+    Injected components can be a subclass of the parameter class required by the resource constructor
+  </li>
+</ul>
+</p>
+
+
+
+<h2 id="rest-api-components">components</h2>
+<p>
+Add a bundle to scan for Jersey components. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="rest-api-components.bundle">bundle</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to include Jersey components from. Format: 'symbolicName:version'</td></tr>
+  </tbody>
+</table>
+</p>
+
+
+
+<h2 id="rest-api-package">package</h2>
+<p>
+Scan for components only in the given packages. If no <em>package</em> elements are given,
+all packages will be scanned. Example:
+<pre>
+&lt;rest-api path="my-app"&gt;
+  &lt;components bundle="my-bundle"&gt;
+    &lt;package&gt;com.mydomain.foo&lt;/package&gt;
+    &lt;package&gt;com.mydomain.bar&lt;/package&gt;
+  &lt;/components&gt;
+  &lt;components bundle="other-bundle:2.0.0" /&gt;
+&lt;/rest-api&gt;
+</pre>
+</p>
+
+
+
+<h2 id="servlet">servlet</h2>
+<p>
+Add a Servlet, one per <code>servlet</code> element.
+Minimum one <a href="#path">path</a> child element is required. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="servlet.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>A unique id</td></tr>
+    <tr><th id="servlet.class">class</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The class to load as a Servlet</td></tr>
+    <tr><th id="servlet.bundle">bundle</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle that the Servlet resides in</td></tr>
+  </tbody>
+</table>
+</p>
+
+
+
+<h2 id="path">path</h2>
+<p>
+The path the Servlet will bind to.
+</p>
+
+
+
+<h2 id="servlet-config">servlet-config</h2>
+<p>
+An alternative to regular <a href="config-files.html#generic-configuration-in-services-xml">config</a>
+to support legacy ServletConfig.
+It is a simple map of string keys to string values that will be available as ServletConfig inside the Servlet. Example:
+<pre>
+&lt;servlet id="my-servlet" class="com.mydomain.MyServlet" bundle="servlet-example"&gt;
+  &lt;path&gt;my-path&lt;/path&gt;
+  &lt;servlet-config&gt;
+    &lt;myKey&gt;myValue&lt;/myKey&gt;
+  &lt;/servlet-config&gt;
+&lt;/servlet&gt;
+</pre>
+</p>
+
+
+
+<h2 id="handler">handler</h2>
+<p>
+The <code>handler</code> element holds the configuration of a handler.
+If any binding tag, <code>binding</code> or <code>clientBinding</code>
+is present, the handler is a JDisc request handler, and will be bound
+to the pertinent JDisc interfaces using the given bindings.
+<ul>
+  <li><code>binding</code> For JDisc request handlers, add this server binding to this handler.</li>
+  <li><code>clientBinding</code> For JDisc request handlers, add this client binding to this handler.</li>
+  <li><a href="#component"><code>component</code></a> for injecting another component.
+    Must be a declaration of a new component, not a reference.</li>
+</ul>
+Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="handler.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The component ID</td></tr>
+    <tr><th id="handler.class">class</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The class of the handler, defaults to id</td></tr>
+    <tr><th id="handler.bundle">bundle</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to load the handler from, defaults to class or id (if no class is given)</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;container id="default" version="1.0"&gt;
+  &lt;handler id="com.yahoo.search.handler.LegacyBridge"&gt;
+    &lt;binding&gt;http://*/*&lt;/binding&gt;
+  &lt;/handler&gt;
+  &lt;handler bundle="myHandlers" id="com.mydomain.vespatest.RedirectingHandler"/&gt;
+  &lt;handler bundle="myHandlers" id="com.mydomain.vespatest.ExampleHandler"/&gt;
+  &lt;nodes&gt;
+    &lt;node hostalias="node1"/&gt;
+  &lt;/nodes&gt;
+&lt;/container&gt;
+</pre>
+</p>
+
+
+
+<h2 id="binding">binding</h2>
+<p>
+The URI to map a Handler to. Multiple elements are allowed. See example above.
+</p>
+  
+
+
+<h2 id="clientbinding">clientbinding</h2>
+<p>
+ToDo
+</p>
+
+
+
+<h2 id="client">client</h2>
+<p>
+The <code>client</code> element holds the configuration of a JDisc client provider.
+It has one mandatory attribute, <code>id</code>
+and must be bound to some URI pattern to be available for use.
+Same subelements as <a href="#handler">handler</a>. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="client.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The component ID</td></tr>
+    <tr><th id="client.class">class</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The class of the handler, defaults to id</td></tr>
+    <tr><th id="client.bundle">bundle</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to load the handler from, defaults to class or id (if no class is given)</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;client id="com.mydomain.vespatest.DemoClient"&gt;
+  &lt;config name="vespatest.response"&gt;
+    &lt;response&gt;DemoClient says: Hello, world!
+    &lt;/response&gt;
+  &lt;/config&gt;
+  &lt;binding&gt;http://remotehost/*&lt;/binding&gt;
+  &lt;binding&gt;http://another-remotehost/*&lt;/binding&gt;
+  &lt;serverBinding&gt;http://*:8080/DemoClient&lt;/serverBinding&gt;
+&lt;/client&gt;
+</pre>
+</p>
+
+
+
+<h2 id="server">server</h2>
+<p>
+The <code>server</code> element holds the configuration of a JDisc server provider. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="server.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The component ID</td></tr>
+    <tr><th id="server.class">class</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The class of the server, defaults to id</td></tr>
+    <tr><th id="client.bundle">bundle</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to load the server from, defaults to class or id (if no class is given)</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;server id="com.mydomain.vespatest.DemoServer"&gt;
+  &lt;config name="vespatest.demo-server"&gt;
+    &lt;response&gt;Hello, world!
+    &lt;/response&gt;
+    &lt;port&gt;16889&lt;/port&gt;
+  &lt;/config&gt;
+&lt;/server&gt;
+</pre>
+</p>
+
+
+
+<h2 id="components">components</h2>
+<p>
+Contains <a href="#component">component</a> elements.
+Can be used in conjunction with <a href="#include">include</a> for modular config of components.
+</p>
+
+
+
+<h2 id="component">component</h2>
+<p>
+The <code>component</code> element holds the configuration of a
+<a href="../jdisc/injecting-components.html#implement-provider">generic component</a>.
+Must be a declaration of a new component, not a reference.
+</p>
+<p>
+Nested <a href="#component"><code>component</code></a> child elements can be added for injecting
+specific component instances. This is useful if there is more than one declared component
+of the same Java class. Refer to <a href="../jdisc/injecting-components.html">Injecting
+components</a> for details and examples.
+</p>
+Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="component.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The component ID</td></tr>
+    <tr><th id="component.class">class</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The class of the component, defaults to id</td></tr>
+    <tr><th id="component.bundle">bundle</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to load the component from, defaults to class or id (if no class is given)</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;component id="com.mydomain.demo.DemoComponent" bundle="demo" /&gt;
+</pre>
+</p>
+
+
+
+<h2 id="document-api">document-api</h2>
+<p>
+Use to enable <a href="../api.html">Document API</a> operations to a container cluster.
+Children elements:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="binding">binding</th>
+      <td>optional</td>
+      <td>string</td>
+      <td>http://*/</td>
+      <td>
+        The URI to map the document-api handlers to. Multiple bindings are valid. Must end with a '/'.
+        Note that each document-api handler will get its individual binding by adding a
+        suffix, e.g. the feed handler will add 'feed/', the remove handler will add 'remove/'
+        and so on. Example:
+<pre>
+&lt;document-api&gt;
+  &lt;binding&gt;http://*/document-api/&lt;/binding&gt;
+  &lt;binding&gt;https://*/document-api/&lt;/binding&gt;
+&lt;/document-api&gt;
+</pre>
+        With these configured bindings, the feed handler will be available at
+        <code>http://*/document-api/feed/</code> and <code>https://*/document-api/feed/</code>.
+        For other handlers, just replace 'feed/' with the appropriate suffix, e.g. 'get/', 'remove/' etc.
+      </td></tr>
+    <tr><th id="abortondocumenterror">abortondocumenterror</th>
+      <td>optional</td>
+      <td>true/false</td>
+      <td>true</td>
+      <td>
+        Controls whether or not to abort the entire feed if a document-related error occurs,
+        ie. if a document contains an unknown field.
+        Setting this field to <code>true</code> will abort the feed on such errors,
+        while setting it to <code>false</code> will cause Vespa to simply skip to the next document in the feed.
+        Note that malformed XML in the input will abort the feed regardless of this setting.
+      </td></tr>
+    <tr><th id="maxpendingbytes">maxpendingbytes</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td>
+        The maximum number of pending bytes.
+        If <code>&lt;maxpendingdocs&gt;</code> is 0 and this is set to 0, this defaults to 100MB.
+        If <code>&lt;maxpendingdocs&gt;</code> is more than 0, and this is set to 0,
+        the send window is only limited by number of messages sent, not the memory footprint.
+      </td></tr>
+    <tr><th id="maxpendingdocs">maxpendingdocs</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td>
+        The maximum number of pending documents the client can have.
+        By default, the client will dynamically adjust the window size
+        based on the latency of the performed operations.
+        If the parameter is set, dynamic window sizing will be turned off in favor of the configured value.
+      </td></tr>
+    <tr><th id="mbusport">mbusport</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td>Set the MessageBus port</td></tr>
+    <tr><th id="retrydelay">retrydelay</th>
+      <td>optional</td>
+      <td>double</td>
+      <td>1.0</td>
+      <td>Delay in seconds between retries</td></tr>
+    <tr><th id="retryenabled">retryenabled</th>
+      <td>optional</td>
+      <td>true/false</td>
+      <td></td>
+      <td>
+        Enable or disable retrying documents that have failed.
+        <!-- ToDo: find defaults/values - probably true/false -->
+      </td></tr>
+    <tr><th id="route">route</th>
+      <td>optional</td>
+      <td>string</td>
+      <td>default</td>
+      <td>Set the route to feed documents to</td></tr>
+    <tr><th id="timeout">timeout</th>
+      <td>optional</td>
+      <td>double</td>
+      <td>180.0</td>
+      <td>Set the timeout value in seconds for an operation</td></tr>
+    <tr><th id="tracelevel">tracelevel</th>
+      <td>optional</td>
+      <td>0-9</td>
+      <td>0</td>
+      <td>
+        Configure the level of which to trace messages sent.
+        The higher the level, the more detailed descriptions.
+      </td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;document-api&gt;
+  &lt;binding&gt;http://*/document-api/&lt;/binding&gt;
+  &lt;binding&gt;https://*/document-api/&lt;/binding&gt;
+  &lt;abortondocumenterror&gt;false&lt;/abortondocumenterror&gt;
+  &lt;maxpendingbytes&gt;1048576&lt;/maxpendingdocs&gt;
+  &lt;maxpendingdocs&gt;1000&lt;/maxpendingdocs&gt;
+  &lt;mbusport&gt;1234&lt;/mbusport&gt
+  &lt;retrydelay&gt;5.5&lt;/retrydelay&gt;
+  &lt;retryenabled&gt;false&lt;/retryenabled&gt;
+  &lt;route&gt;default&lt;/route&gt;
+  &lt;timeout&gt;250.5&lt;/timeout&gt;
+  &lt;tracelevel&gt;3&lt;/tracelevel&gt;
+&lt;document-api&gt;
+</pre>
+</p>
+
+
+
+<h2 id="document">document</h2>
+<p>
+<a href="../concrete-documents.html">Concrete document type</a> bindings for the container. Example:
+<pre>
+&lt;container id="default" version="1.0"&gt;
+  &lt;document class="com.mydomain.concretedocs.Vehicle" bundle="concretedocs" type="vehicle"/&gt;
+  &lt;document class="com.mydomain.concretedocs.Vehicle" bundle="concretedocs" type="ship"/&gt;
+  &lt;document class="com.mydomain.concretedocs2.Disease" bundle="concretedocs2" type="disease"/&gt;
+  &lt;search/&gt;
+  &lt;document-processing&gt;
+    &lt;chain id="default"&gt;
+      &lt;documentprocessor bundle="concretedocs" id="concretedocs.ConcreteDocDocProc"/&gt;
+    &lt;/chain&gt;
+  &lt;/document-processing&gt;
+  &lt;nodes&gt;
+    &lt;node hostalias="node1"/&gt;
+  &lt;/nodes&gt;
+&lt;/container&gt;
+</pre>
+</p>
+
+
+
+<h2 id="accesslog">accesslog</h2>
+<p>
+Configures properties of the accesslog.
+Setting the type to <code>vespa</code> gives a classic Apache CLF-like format.
+For a more detailed and more easily parsable format, type <code>json</code> will give output in (line-based)
+<a href="../logging-in-json-format.html">JSON format</a>.
+Access logging can be disabled by setting the type to <code>disabled</code>. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="accesslog.type">type</th>
+      <td>optional</td>
+      <td>string</td>
+      <td>vespa</td>
+      <td>The accesslog type: <em>vespa</em>, <em>json</em> or <em>disabled</em></td></tr>
+    <tr><th id="accesslog.fileNamePattern">fileNamePattern</th>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>File name pattern</td></tr>
+    <tr><th id="accesslog.symlinkName">symlinkName</th>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>Symlink name</td></tr>
+    <tr><th id="accesslog.rotationInterval">rotationInterval</th>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>Rotation interval</td></tr>
+    <tr><th id="accesslog.rotationScheme">rotationScheme</th>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>Valid values are <em>date</em> or <em>sequence</em></td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;accesslog fileNamePattern='$VESPA_HOME/logs/vespa/qrs/QueryAccessLog.a.%Y%m%d%H%M%S' symlinkName='QueryAccessLog.a' rotationInterval='0 1 ...' type='vespa' /&gt;
+</pre>
+</p>
+
+
+
+<h2 id="include">include</h2>
+<p>
+Allows including XML snippets contained in external files.
+All files from all listed directories will be included.
+All files must have the same outer tag as they were referred from,
+i.e. search, document-processing or processing.
+The path must be relative to the application package root,
+and must never point outside of the package. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="include.dir">dir</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The directory to include files from. File inclusion order is undefined.</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;include dir="included_configs/search" /&gt;
+</pre>
+</p>
+
+
+
+<!-- ToDo: move node(s) to services.html -->
+<h2 id="nodes">nodes</h2>
+<p>
+The <code>nodes</code> element specifies the nodes that comprise this container cluster
+by adding <em>node</em> children. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="nodes.jvmargs">jvmargs</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>JVM arguments for nodes in this cluster</td></tr>
+    <tr><th id="nodes.allocated-memory">allocated-memory</th>
+      <td>optional</td>
+      <td>percentage</td>
+      <td></td>
+      <td>Memory to allocate to each JVM instance as a percentage of available memory.
+        Must be an integer percentage followed by <em>%</em></td></tr>
+  </tbody>
+</table>
+</p>
+
+
+
+<h2 id="node">node</h2>
+<p>
+Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="node.hostalias">hostalias</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>logical hostname - mapped to hostnames in <a href="hosts.html">hosts.xml</a></td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;nodes jvmargs="-XX:+PrintGCDetails -XX:+PrintGCTimeStamps" allocated-memory="50%"&gt;
+  &lt;node hostalias="searchnode1" /&gt;
+&lt;/nodes&gt;
+</pre>
+</p>

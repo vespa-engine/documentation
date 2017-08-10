@@ -1,0 +1,167 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Documents"
+---
+
+<p>
+Vespa models data as <em>documents</em>.
+A document have a string identifier, set by the application, unique across all documents.
+A document is a set of <a href="document-api-guide.html">key-value pairs</a>.
+A document has a schema (i.e. type),
+defined in the <a href="search-definitions.html">search definition</a>.
+</p><p>
+When configuring clusters, a <a href="reference/services-content.html#documents">documents</a>
+element set what document types a cluster is to store.
+This configuration is used to configure the garbage collector if it is enabled.
+Additionally it is used to define default routes for documents sent into the application.
+By default, a document will be sent to all clusters having the document type defined.
+Refer to <a href="routing.html">routing</a> for details.
+</p><p>
+Vespa uses the document ID to distribute documents to nodes.
+From the document identifier, the content layer calculates a numeric location.
+A bucket contains all the documents,
+where a given amount of least significant bits of the location are all equal.
+This property is used to enable co-localized storage of documents -
+read more in <a href="content/buckets.html">buckets</a> and <a href="elastic-vespa">elastic Vespa</a>.
+</p>
+
+
+<h2 "document-ids">Document IDs</h2>
+<p>
+The document identifiers are URIs, represented by a string,
+which must conform to a defined URI scheme for document identifiers.
+Schemes have two parts:
+<table class="table">
+  <thead></thead><tbody>
+    <tr><th>Namespace</th>
+      <td>Intended to be used to distinguish data from users who share the same
+        Vespa cluster and/or distinguish between different document types in search.
+        It is hence possible for various applications to use the same Vespa installation,
+        ensuring they do not create document identifier collisions.</td>
+    </tr><tr><th>User specified</th>
+      <td>Application specific.</dd>
+    </tr>
+  </tbody>
+</table>
+</p>
+
+
+<h3 "id-scheme">id scheme</h3>
+<p>
+Vespa has defined one scheme, the <em>id scheme</em>. Format:
+<em>id:&lt;namespace&gt;:&lt;document-type&gt;:&lt;key/value-pairs&gt;:&lt;user-specified&gt;</em>
+<table class="table">
+<thead></thead><tbody>
+  <tr><th>namespace</th><td>Required</td><td>See above</td></tr>
+  <tr><th>document-type</th><td>Required</td><td>Document type as defined in
+    <a href="reference/services-content.html#document">services.xml</a> and the
+    <a href="reference/search-definitions-reference.html">search definition</a></td></tr>
+  <tr><th>key/value-pairs</th><td>Optional</td><td>
+    <p>
+    Modifiers to the id scheme,
+    used to configure document distribution.
+    With no modifiers, the id scheme distributes all documents uniformly.
+    The &lt;key/value-pairs&gt; field contains a comma-separated list of
+    lexicographically sorted key/value pairs.
+    <strong>n</strong> and <strong>g</strong> are mutually exclusive:
+    <table class="table">
+      <thead></thead><tbody>
+        <tr><th>n=<em>&lt;number&gt;</em></th><td>
+          All documents with the same number will be stored close to each other.
+          The number must be in the range [0,2^63-1].</td></tr>
+        <tr><th>g=<em>&lt;groupname&gt;</em></th><td>
+          Just like n=, but with a string instead of number.</td></tr>
+      </tbody>
+    </table>
+    The modifiers should only be used in cases where document co-localization improves performance.
+    Examples are <a href="content/visiting.html">visiting</a> and
+    <a href="streaming-search.html">streaming search</a> touching a subset of the data.
+    Read more about <a href="content/buckets.html#document-to-bucket-distribution">
+    document to bucket distribution</a>.
+    </p><p>
+    For instance, schemes specifying a <em>groupname</em>, will have the LSB bits of
+    the location set to a hash of the <em>groupname</em>.
+    Thus all documents belonging to that group will have locations with similar least significant bits,
+    which will put them in the same bucket. If buckets end up split far enough
+    to use more bits than the hash bits overridden by the group, the data will
+    be split into many buckets, but each will typically only contain data for that group.
+    </p>
+  </td></tr>
+  <tr><th>user-specified</th><td>Required</td><td>A unique ID string</td></tr>
+</tbody>
+</table>
+Find examples in <a href="https://github.com/vespa-engine/vespa/tree/master/sample-apps/basic-search">
+basic search</a>.
+In most cases, the Vespa instance is not shared and hence no use for a namespace -
+here namespace is set to the same as the document type:
+<ul>
+<li>
+  Uniform distribution: <em>id:music:music::Michael-Jackson-Bad</em>
+</li><li>
+  Data access is grouped, e.g. personal data (each user has a numeric user id):
+  <em>id:music:music:n=12345:Michael-Jackson-Bad</em>
+</li><li>
+  Using a string identifier to group data:
+  <em>id:music:music:g=mymusicsite.com:Michael-Jackson-Bad</em>
+</li>
+</ul>
+Access documents using the <a href="document-api.html">Document API</a>:
+<pre>
+$ curl http://hostname:8080/document/v1/music/music/docid/Michael-Jackson-Bad
+
+$ curl http://hostname:8080/document/v1/music/music/number/12345/Michael-Jackson-Bad
+
+$ curl http://hostname:8080/document/v1/music/music/group/mymusicsite.com/Michael-Jackson-Bad
+</pre>
+</p>
+
+
+<h2 id="fieldsets">Fieldsets</h2>
+<p>
+Use <em>fieldset</em> to limit the fields that are returned from a read operation,
+like <em>get</em> or <em>visit</em>.
+Fieldsets should be considered hints to Vespa, used to optimize.
+It should not be considered an error if Vespa returns more fields than specified.
+</p><p>
+Note: Document field sets is a different thing than
+<a href="reference/search-definitions-reference.html#fieldset">searchable fieldsets</a>.
+</p><p>
+There are two options for specifying a field set:
+<ul>
+  <li>Built-in field set</li>
+  <li>Comma-separated list of fields</li>
+</ul>
+Built in field sets:
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th>[all]</th>
+      <td>
+        Returns all fields in the document, including the document ID.</td>
+    </tr><tr>
+      <th>[none]</th>
+      <td>
+        Returns no fields at all, not even the document ID. <em>Internal, do not use</em></td>
+    </tr><tr>
+      <th>[id]</th>
+      <td>
+        Returns only the document ID</td>
+    </tr><tr>
+      <th>&lt;document type&gt;:[document]</th>
+      <td>
+        Returns only the original document fields (generated fields not included)
+        together with the document ID. Supported for indexed search only.
+        <!-- ToDo check if only for endexed search --></td>
+    </tr>
+  </tbody>
+</table>
+If a built-in field set is not used, a list of fields can be specified. Syntax:
+<pre>
+&lt;document type&gt;:field1,field2,&hellip;
+</pre>
+Example:
+<pre>
+music:title,artist
+</pre>
+Also find examples in <a href="content/visiting.html">visiting</a>.
+</p>

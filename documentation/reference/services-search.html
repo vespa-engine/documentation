@@ -1,0 +1,537 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "services.xml - 'search'"
+---
+
+<p>
+This is the reference for the <em>search</em> part of the container config.
+Related: <a href="../chained-components.html">Chained components</a>
+and the <a href="../federation.html">federation tutorial</a>.
+The root element of the search configuration,
+declared as a subelement to <a href="services-container.html">container</a>:
+<pre>
+<a href="">search</a>
+  <a href="#binding">binding</a>
+  <a href="#searcher">searcher [id, class, bundle, provides, before, after]</a>
+  <a href="#federation">federation [id]</a>
+    <a href="#source-reference">source [idref]</a>
+      <a href="#federationoptions">federationoptions [timeout, requestTimeout, optional]</a>
+    <a href="#source-set">source-set [inherits]</a>
+    <a href="#target-selector">target-selector</a>
+  <a href="#chain">chain [id, inherits, excludes]</a>
+    <a href="#searcher">searcher [id, class, bundle, provides, before, after]</a>
+    <a href="#federation">federation [id]</a>
+      <a href="#source-reference">source [idref]</a>
+        <a href="#federationoptions">federationoptions [timeout, requestTimeout, optional]</a>
+      <a href="#source-set">source-set [inherits]</a>
+      <a href="#target-selector">target-selector</a>
+  <a href="#provider">provider [id, type, cluster, excludes, path, cacheweight,
+            readtimeout, connectiontimeout, connectionpooltimeout, retries]</a>
+    <a href="#federationoptions">federationoptions [timeout, requestTimeout, optional]</a>
+    <a href="#source">source [id]</a>
+      <a href="#searcher">searcher [id, class, bundle, provides, before, after]</a>
+    <a href="#nodes">nodes</a>
+      <a href="#node">node</a>
+  <a href="#renderer">renderer [id, class, bundle]</a>
+</pre>
+<a href="config-files.html#generic-configuration-in-services-xml">config</a>
+applies to all searchers in the JDisc cluster's search chains, unless
+overridden by individual search chains or searchers.
+</p>
+
+
+
+<h2 id="binding">binding</h2>
+<p>
+The URI to map the SearchHandler to. The default binding is
+<code>http://*/search/*</code>. Multiple elements are allowed. Example:
+<pre>
+&lt;binding&gt;http://*/search/*&lt;/binding&gt;
+</pre>
+</p>
+
+
+
+<h2 id="searcher">searcher</h2>
+<p>
+Searcher elements are contained in <a href="#chain">chain</a> elements or in the <a href="">search</a> root.
+<!-- ToDo: and/or in source as in the example at the end? -->
+</p><p>
+A searcher element is either a <em>definition</em> (using <em>id</em>) or a <em>reference</em> (using <em>idref</em>).
+</p><p>
+A searcher definition causes the creation of exactly one searcher instance.
+This instance is set up according to the content of the searcher element.
+A searcher definition contained in a search chain element defines an <em>inner searcher</em>.
+Otherwise, it defines an <em>outer searcher.</em>
+</p><p>
+Attributes, searcher definition:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="searcher.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>the component id of the searcher instance.
+        For inner searchers, the id must be unique inside the search chain.
+        For outer searchers, the id must be unique.
+        An inner searcher is not permitted to have the same id as an outer searcher.</td></tr>
+    <tr><th id="searcher.class">class</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>a component specification containing the name of the class
+        to instantiate to create the searcher instance. If missing, copied from id</td></tr>
+    <tr><th id="searcher.bundle">bundle</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>a component specification containing the bundle symbolic name
+        and version used to select the bundle. The class is retrieved from this bundle.
+        If missing, copied from class</td></tr>
+    <tr><th id="searcher.provides">provides</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>a space separated list of names that represents what this searcher produces.
+        For more information on provides, before and after,
+        see <a href="../chained-components.html">chained components</a></td></tr>
+    <tr><th id="searcher.before">before</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>a space separated list of phase or provided names.
+        Phases or searchers providing these names will be
+        placed later in the search chain than this searcher</td></tr>
+    <tr><th id="searcher.after">after</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>a space separated list of phase or provided names.
+        Phases or searchers providing these names will be
+        placed earlier in the search chain than this searcher</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;searcher id="componentId" class="className:versionSpecification" bundle="bundleSymbolicName:versionSpecification" /&gt;
+</pre>
+Attributes, searcher reference:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="searcher.idref">idref</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>Reference to a searcher definition</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;searcher idref="componentId" /&gt;
+</pre>
+</p>
+
+
+
+<h2 id="federation">federation</h2>
+<p>
+A federation is a <a href="../searcher-development.html#searchers">searcher</a> - see above.
+This element implements <em>federation</em> -
+it defines a searcher instance that sends each query to a set of search chains in parallel and combines the results.
+Read the <a href="../federation.html">federation guide</a> to learn more
+and find examples for use of federation and its children
+<a href="#source">source</a>, <a href="#source-set">source-set</a> and <a href="#target-selector">target-selector</a>,
+as well as <a href="#provider">provider</a>
+<pre>
+&lt;federation id="componentId"&gt;
+  &lt;source idref="componentSpecification" /&gt;
+  &lt;target-selector /&gt;
+&lt;/federation&gt;
+</pre>
+</p>
+
+
+
+<h2 id="target-selector">target-selector</h2>
+<p>
+Specifies a component that should be used to select search chains to federate to.
+This component must inherit from com.yahoo.search.federation.selection.TargetSelector.
+See <a href="services-container.html#component">component</a> for attributes and subelements.
+</p>
+
+
+
+<h2 id="source-set">source-set</h2>
+<p>
+Used to duplicate the sources of e.g. the built-in federation searcher:
+<pre>
+&lt;federation id="combinator"&gt;
+  &lt;source-set inherits="default" /&gt;
+  …
+&lt;/federation&gt;
+</pre>
+</p>
+
+
+
+<h2 id="source-reference">source</h2>
+<p>
+Reference to a source that should be used by the enclosing federation searcher.
+Child element <a href="#federationoptions">federationoptions</a> is optional
+<pre>
+&lt;source idref="componentSpecification"&gt;
+  &lt;federationoptions/&gt;
+&lt;/source&gt;
+</pre>
+</p>
+
+
+
+<h2 id="federationoptions">federationoptions</h2>
+<p>
+Contained in <a href="#source">source</a> or <a href="#provider">provider</a>.
+Specifies <em>how</em> a federation searcher should federate to a given search chain.
+If a federation options A <em>overrides</em> another federation options B,
+the result is a new federation options containing:
+<ul>
+<li>all the options in B not present in A</li>
+<li>all the options in A</li>
+</ul>
+When federating to a source or provider, the federation searcher per default
+uses the federation options from the search chain.
+If a <a href="#source-reference">source reference</a> contains federation options,
+it overrides the options of the search chain when used from the enclosing federation searcher. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="federationoptions.timeout">timeout</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td>The minimum number of seconds or milliseconds (if ms is present)
+        the federation searcher waits for the federated search chain executing the query</td></tr>
+    <tr><th id="federationoptions.requestTimeout">requestTimeout</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td>The minimum number of seconds or milliseconds (if ms is present)
+        the search chain executing the query should continue execution.
+        In some cases it is useful to set this higher than the timeout,
+        such that a chain can keep waiting for requested data longer than the query is waiting for the chain.
+        This allows queries to populate caches within the search chain even though
+        populating the caches requires waiting longer than the query timeout</td></tr>
+    <tr><th id="federationoptions.optional">optional</th>
+      <td>optional</td>
+      <td>true/false</td>
+      <td>false</td>
+      <td>Determines if the federation searcher should wait for this search chain at all.
+        Normally, it only waits for mandatory (i.e. not optional) search chains, and when they are done,
+        cancels the remaining search chains that are not finished.
+        If all the search chains federated to are optional, all of them will be treated as mandatory.
+        All search chains are per default mandatory</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;federationoptions timeout="2.0" requestTimeout="2500ms" optional="true" /&gt;
+</pre>
+</p>
+
+
+
+<h2 id="renderer">renderer</h2>
+<p>
+The definition of a <a href="../result-rendering.html">search result renderer</a>. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="renderer.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The component ID</td></tr>
+    <tr><th id="renderer.class">class</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The class of the component, defaults to id</td></tr>
+    <tr><th id="renderer.bundle">bundle</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to load the component from, defaults to class or id (if no class is given)</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;renderer id="componentId" class="className:versionSpecification" bundle="bundleSymbolicName:versionSpecification" /&gt;
+</pre>
+</p>
+
+
+
+<h2 id="chain">chain</h2>
+<p>
+Specifies how a search chain should be instantiated, and how the contained searchers should be ordered.
+Refer to the <a href="services-processing.html#chain">chain reference</a> for attributes and child elements.
+Chains can <a href="services-processing.html#inherits">inherit</a> searchers from other chains
+and use <a href="services-processing.html#phase">phases</a> for ordering.
+Note that <a href="#provider">provider</a> and <a href="#source">source</a> elements are also chains.
+Specify a search chain in a query using <a href="search-api-reference.html#searchChain">searchChain</a>.
+</p><p>
+Example:
+<pre>
+&lt;chain id="common"&gt;
+  &lt;searcher class="com.yahoo.vespatest.ExtraHitSearcher" id="CommonSearcher"&gt;
+    &lt;config name="vespatest.extra-hit"&gt;
+      &lt;exampleString&gt;A searcher for ...&lt;/exampleString&gt;
+    &lt;/config&gt;
+  &lt;/searcher&gt;
+&lt;/chain&gt;
+</pre>
+Optional sub-elements:
+<ul>
+  <li>searcher or federation (one or more), either a reference or  definition.
+  If the name given for a searcher matches an <em>outer searcher</em>,
+  it is a <em>searcher reference</em>.
+  Otherwise, it is a <em>searcher definition</em>.
+  If it is a searcher definition, it is also an implicit searcher reference saying: use
+  <em>exactly</em> this searcher. All these searcher elements must have different name.</li>
+  <li><a href="services-processing.html#phase">phase</a> (one or more).</li>
+  <li><a href="config-files.html#generic-configuration-in-services-xml">config</a>
+  (one or more - will apply to all <em>inner</em> searchers in this search chain,
+  unless overridden by individual inner searchers).</li>
+</ul>
+You can put search config in separate files in a directory under
+the application package using <a  href="services-container.html#include">include</a>.
+Each file must contain one <code>&lt;search&gt;</code> element like above.
+Vespa behaves as if each chain configured within was "inline" in
+<code>services.xml</code>. This is handy when multiple developers need
+to deploy individual search chains, say in different packages.
+Note: if  using multiple container clusters, the modular search chains will be available in all the clusters.
+</p><p>
+Each searcher reference must match the <em>type</em> of the searcher definition.
+So for example the searcher reference <em>federation idref="myId"</em> must match an outer
+searcher defined as <em>federation id="myId"</em>, not <em>searcher id="myId"</em>.
+</p>
+
+
+
+<h2 id="provider">provider</h2>
+<p>
+A provider is a search chain responsible for talking to an external service.
+Everything covered in <a href="#chain">chain</a> is also valid for providers. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="provider.id">id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>ID</td></tr>
+    <tr><th id="provider.excludes">excludes</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td></td></tr>
+    <tr><th id="provider.type">type</th>
+      <td>optional</td>
+      <td>http/vespa/local</td>
+      <td></td>
+      <td>
+        <p>
+        Determines which searchers are implicitly added to this search chain
+        to talk to the external service.</td></tr>
+  </tbody>
+</table>
+</p>
+
+
+<h3 id="local-provider">local provider</h3>
+<p>
+Local providers are providers with the type set to <em>local</em>,
+accessing a local Vespa cluster (i.e. a content cluster in the same application). Attribute:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="provider.type.local">cluster</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>
+        The name of the local cluster. Set cluster name (and document type, separated by a dot, if using streaming search)</li>
+      </td></tr>
+  </tbody>
+</table>
+<pre>
+&lt;provider id="storage" cluster="storage" type="local" excludes="com.yahoo.prelude.querytransform.StemmingSearcher" /&gt;
+</pre>
+</p>
+
+
+<h3 id="http-provider">http provider</h3>
+<p>
+Http providers are providers which either have the attribute <code>type=vespa</code>
+or no type but contains a component subclassing HTTPSearcher.
+</p><p>
+An http provider has a <a href="#nodes">nodes</a> element for endpoints.
+</p><p>
+Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="provider.cacheweight">cacheweight</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td>A non-negative floating point number determining how
+        much of the memory reserved for caching should be allocated to this provider
+      </td></tr>
+    <tr><th id="provider.path">path</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>the location of the resource
+      </td></tr>
+    <tr><th id="provider.readtimeout">readtimeout</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>
+        the HTTP client's socket timeout.
+        Normally, this value is calculated dynamically by Vespa.
+        (The timeout is basically the timeout for blocking read operations from the network.)
+        Valid units are <em>s</em> and <em>ms</em>, as in <em>2.5s</em> and <em>500 ms</em>.
+      </td></tr>
+    <tr><th id="provider.connectiontimeout">connectiontimeout</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>
+        Timeout for connecting to the provider.
+        Normally, this value is calculated dynamically by Vespa.
+        Valid units are <em>s</em> and <em>ms</em>.
+      </td></tr>
+    <tr><th id="provider.connectionpooltimeout">connectionpooltimeout</th>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>
+        Timeout for for acquiring a connection if using pooled connection.
+        Should not be necessary to tweak under normal circumstances.
+        Valid units are <em>s</em> and <em>ms</em>.
+      </td></tr>
+    <tr><th id="provider.retries">retries</th>
+      <td>optional</td>
+      <td></td>
+      <td>1</td>
+      <td>
+        the number of times to retry an HTTP operation if the error is
+        assumed to be transient
+      </td></tr>
+  </tbody>
+</table>
+Example:
+<!-- ToDo check: is http default? -->
+<pre>
+&lt;provider id="webService"&gt;
+  &lt;nodes&gt;
+    &lt;node port="8080" host="webservice.host"/&gt;
+  &lt;/nodes&gt;
+  &lt;searcher id="com.yahoo.example.ExampleProviderSearcher"/&gt;
+&lt;/provider&gt;
+</pre>
+
+
+<h3 id="vespa-provider">vespa provider</h3>
+For providers of type <code>vespa</code>, the query language used to serialize
+the query to the external cluster may be set to YQL by overriding
+<code>queryType</code> in the <code>provider</code> configuration.
+</p><p>
+<!-- ToDo: add more details here... -->
+<pre>
+&lt;provider id="local" excludes="" path="/search/" type="vespa"&gt;
+  &lt;config name="search.federation.provider"&gt;
+    &lt;queryType&gt;YQL&lt;/queryType&gt;
+  &lt;/config&gt;
+  &lt;nodes&gt;
+    &lt;node host="localhost" port="8080"/&gt;
+  &lt;/nodes&gt;
+&lt;/provider&gt;
+</pre>
+</p>
+
+
+
+<h2 id="source">source</h2>
+<p>
+Defines a source search chain and an associated source.
+<pre>
+&lt;provider id="providerA"&gt;
+  &lt;source id="commonSource"&gt;
+    &lt;searcher id="com.yahoo.example.AddHitSearcher"&gt;
+      &lt;config name="vespatest.hit-title"&gt;
+        &lt;hitTitle&gt;providerA&lt;/hitTitle&gt;
+      &lt;/config&gt;
+    &lt;/searcher&gt;
+  &lt;/source&gt;
+&lt;/provider&gt;
+</pre>
+The component id specified is the id of the associated source.
+The associated source consists of all the source search chains with the same source name.
+</p><p>
+Only a single source search chain can specify the source name using the "id" attribute.
+This search chain is called the <em>leader.</em>.
+The other source search chains must specify the source name using the "idref" attribute.
+The latter search chains are called participants.
+</p><p>
+A source can be used for <em>federation</em>.
+When federating to a source, the leader search chain is normally used.
+To use one of the participant search chains, the following query parameter must be set:
+source.<em>sourceId</em>.provider.<em>providerId</em>.
+</p><p>
+The id of the source search chain is <em>sourceId@providerId</em>.
+This search chain automatically inherits from the enclosing provider.
+It also automatically inherits the federation options of the enclosing provider.
+If the source contains federation options, they override the inherited ones.
+In all other respects, this search chain behaves like any other search chain.
+</p>
+
+
+
+<h2 id="nodes">nodes</h2>
+<p>
+Container for <a href="#node">node</a> elements.
+</p>
+
+
+
+<h2 id="node">node</h2>
+<p>
+Used by http/vespa providers to specify endpoints. Attributes:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th id="node.host">host</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>hostname</td></tr>
+    <tr><th id="node.port">port</th>
+      <td>required</td>
+      <td>number</td>
+      <td></td>
+      <td>port</td></tr>
+  </tbody>
+</table>
+</p>

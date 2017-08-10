@@ -1,0 +1,249 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Rank feature configuration"
+---
+
+<p>
+For some <a href="rank-features.html">rank features</a>,
+it is possible to set configuration variables for how the features are calculated.
+For features which are per field or attribute,
+the variables are set separately per field/attribute.
+</p>
+
+
+
+<h2 id="variables">Variables</h2>
+<p>
+Rank Features configuration variables are set by adding the following
+clause to the rank profile in question:
+<pre>
+rank-properties {
+    &lt;featurename&gt;.&lt;configuration-property&gt;: &lt;value&gt;
+}
+</pre>
+Where &lt;featurename&gt; is the name of a feature class (feature name
+up to the first dot), and &lt;configuration-property&gt; is a property
+from the list below, appropriate for the feature, and &lt;value&gt; is
+either a number of a quoted string.
+Example: set some properties on the fieldMatch feature class of two different fields:
+<pre>
+rank-properties {
+    fieldMatch(title).maxAlternativeSegmentations: 10
+    fieldmatch(title).maxOccurrences: 5
+    fieldMatch(description).maxOccurrences: 20
+}
+</pre>
+Note that rank profiles can be inherited to use the same variables in
+multiple profiles.
+</p>
+
+
+
+<h2 id="properties">Configuration Properties</h2>
+<table class="table">
+  <thead>
+    <tr><th>Feature</th><th>Parameter</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+
+<tr><td id="term">term</td>
+  <td>numTerms</td>
+  <td>5</td>
+  <td>The number of terms for which this is included in the rank features dump in the summary</td></tr>
+
+<tr><td id="fieldMatch" rowspan="10">fieldMatch</td>
+  <td>proximityLimit
+  </td><td>10</td>
+  <td>The maximum allowed gap within a segment.</td></tr>
+
+<tr>
+  <td>proximityTable</td>
+  <td>1/(2^(i/2)/3) for i in 9..0 followed by 1/2^(i/2) for i in 0..10</td>
+  <td>
+    The proximity table deciding the importance of separations of various distances,
+    The table must have size proximityLimit*2+1, where the first half is for reverse direction distances.
+    The table must only contain values between 0 and 1, where 1 is "perfect" and 0 is "worst".</td></tr>
+
+<tr>
+  <td>maxAlternativeSegmentations</td>
+  <td>10000</td>
+  <td>
+    The maximum number of <em>alternative</em> segmentations allowed in addition to the first one found.
+    This will prefer to not consider iterations on segments that are far out in the field,
+    and which starts late in the query.</td></tr>
+
+<tr>
+  <td>maxOccurrences</td>
+  <td>100</td>
+  <td>
+    The number of occurrences the number of occurrences of each word is normalized against.
+    This should be set as the number above which additional occurrences
+    of the term has no real significance.</td></tr>
+
+<tr>
+  <td>proximityCompletenessImportance</td>
+  <td>0.9</td>
+  <td>
+    A number between 0 and 1 which determines the importancy of field completeness in relation to
+    query completeness in the <code>match</code> and <code>completeness</code> metrics.</td></tr>
+
+<tr>
+  <td>relatednessImportance</td>
+  <td>0.9</td>
+  <td>
+    The normalized importance of relatedness used in the <code>match</code> metric.</td></tr>
+
+<tr>
+  <td>earlinessImportance</td>
+  <td>0.05</td>
+  <td>
+    The importance of the match occuring early in the query, relative to segmentProximityImportance,
+    occurrenceImportance and proximityCompletenessImportance in the <code>match</code> metric.</td></tr>
+
+<tr>
+  <td>segmentProximityImportance</td>
+  <td>0.05</td>
+  <td>
+    The importance of multiple segments being close to each other, relative to earlinessImportance,
+    occurrenceImportance and proximityCompletenessImportance in the <code>match</code> metric.</td></tr>
+
+<tr>
+  <td>occurrenceImportance</td>
+  <td>0.05</td>
+  <td>
+    The importance of having many occurrences of the query terms, relative to earlinessImportance,
+    segmentProximityImportance and proximityCompletenessImportance in the <code>match</code> metric.</td></tr>
+
+<tr>
+  <td>fieldCompletenessImportance</td>
+  <td>0.05</td>
+  <td>
+    A number between 0 and 1 which determines the importancy of field completeness in relation to
+    query completeness in the <code>match</code> and <code>completeness</code> metrics.</td></tr>
+
+<tr><td id="fieldTermMatch" rowspan="2">fieldTermMatch</td>
+  <td>numTerms</td>
+  <td>5</td>
+  <td>The number of terms for which this is included in the rank features dump in the summary</td></tr>
+
+<tr>
+  <td>numTerms.&lt;fieldName&gt;</td>
+  <td>5</td>
+  <td>
+    The number of terms for which this is included in the rank features dump
+    in the summary for the specified field</td></tr>
+
+<tr><td id="elementCompleteness">elementCompleteness</td>
+  <td>fieldCompletenessImportance</td>
+  <td>0.5</td>
+  <td>
+    Higher values favor field completeness, lower values favor query completeness.
+    Adjusting this parameter will also affect which element is selected as the best.</td></tr>
+
+<tr><td id="elementSimilarity" rowspan="2">elementSimilarity</td>
+  <td>output.default</td>
+  <td>max((0.35*p+0.15*o+0.30*q+0.20*f)*w)</td>
+  <td>
+    Describes how the default output should be calculated. The value must be on the
+    form <code>aggregator(expression)</code>. The expression is used to
+    combine the low-level similarity measures between the query and
+    individual elements in the field. The aggregator will be used to
+    aggregate the output of the expression across elements. The available
+    aggregators are <code>max</code>, <code>avg</code>
+    and <code>sum</code>. The available expression operators
+    are <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>
+    and <code>^</code>. Parenthesis may be used to override default
+    operator precedence. Note that you must quote the expression using <code>"expression"</code>.
+    Terminals can be numbers or any of the following symbols:
+<table>
+<tr><td><strong>p</strong></td><td>normalized <strong>proximity</strong> measure</td></tr>
+<tr><td><strong>o</strong></td><td>normalized term <strong>ordering</strong> measure</td></tr>
+<tr><td><strong>q</strong></td><td>normalized <strong>query</strong> coverage</td></tr>
+<tr><td><strong>f</strong></td><td>normalized <strong>field</strong> coverage</td></tr>
+<tr><td><strong>w</strong></td><td>element <strong>weight</strong></td></tr>
+</table>
+</td></tr>
+
+<tr>
+  <td>output.name</td>
+  <td>N/A</td>
+  <td>Define an additional feature output called <code>name</code>.
+    The value describes how the output should be calculated and has the same syntax
+    as the <code>default</code> output described above.</td></tr>
+
+<tr><td id="attributeMatch" rowspan="2">attributeMatch</td>
+  <td>fieldCompletenessImportance</td>
+  <td>0.05</td>
+  <td>
+    A number between 0 and 1 which determines the importance of field completeness in relation to
+    query completeness in the <code>match</code> and <code>completeness</code> metrics.</td></tr>
+
+<tr>
+  <td>maxWeight</td>
+  <td>256</td>
+  <td>
+    The maximal weight when calculating <code>attributeMatch(&lt;name&gt;).normalizedWeight</code>.
+    Weights higher than this will not have any effect on this feature.</td></tr>
+
+<tr><td id="closeness" rowspan="3">closeness</td>
+  <td>maxDistance</td>
+  <td>9013305.0</td>
+  <td>
+    The maximal distance when calculating <code>closeness(&lt;name&gt;)</code>.
+    Distances higher than this will not have any effect on this feature.
+    The default is about 1000 km (1 km is about 9013.305 microdegrees).</td></tr>
+
+<tr>
+  <td>scaleDistance</td>
+  <td>45066.525</td>
+  <td>
+    Deprecated; use <code>halfResponse</code> instead.
+    Basic scale for distances when calculating <code>closeness(&lt;name&gt;).logscale</code>.
+    The default is about 5 km.</td></tr>
+
+<tr>
+  <td>halfResponse</td>
+  <td>593861.739</td>
+  <td>
+    The distance that should give an output of 0.5 when calculating
+    <code>closeness(&lt;name&gt;).logscale</code>.
+    The default is about 65.89 km (must be in the range [1, maxDistance/2&gt;).
+    Use this parameter to fine tune the distance range where half of the dynamics
+    of the logscale function will be used.</td></tr>
+
+<tr><td id="freshness" rowspan="2">freshness</td>
+  <td>maxAge</td>
+  <td>3*30*24*60*60</td>
+  <td>
+    The maximal age in seconds when calculating <code>freshness(&lt;name&gt;)</code>.
+    Ages older than this will not have any effect on this feature.
+    The default is about 3 months.</td></tr>
+
+<tr>
+  <td>halfResponse</td>
+  <td>7*24*60*60</td>
+  <td>
+    The age in seconds that should give an output of 0.5 when calculating
+    <code>freshness(&lt;name&gt;).logscale</code>.
+    The default is 7 days (must be in the range [1, maxAge/2&gt;).
+    Use this parameter to fine tune the age range where half of the dynamics
+    of the logscale function will be used.</td></tr>
+
+<tr><td id="random">random</td>
+  <td>seed</td>
+  <td>Current time in microseconds</td>
+  <td>The random seed.</td></tr>
+
+<tr><td id="randomNormal">randomNormal</td>
+  <td>seed</td>
+  <td>Current time in microseconds</td>
+  <td>The random seed for randomNormal. </td></tr>
+
+<tr><td id="foreach">foreach</td>
+  <td>maxTerms</td>
+  <td>16</td>
+  <td>
+    Specifies how many query term indices to iterate over ([0, <code>maxTerms</code>&gt;)
+    when using dimension <code>terms</code>.</td></tr>
+
+</tbody>
+</table>

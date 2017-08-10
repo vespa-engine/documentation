@@ -1,0 +1,108 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "HTTP API use-case"
+---
+
+<p>
+A tutorial in how to build a simple application with a custom HTTP API
+(using a request handler) involving a basic query transform (in a searcher)
+involving a shared component and a custom output format (a renderer).
+Use the sample application found in
+<a href="https://github.com/yahoo/vespa/tree/master/sample-apps/http-api-using-searcher">
+http-api-using-searcher</a>.
+Also, it is useful to read the <a href="component-types.html">component types tutorial</a>
+for motivation in choice of component types.
+</p><p>
+Goal: process incoming request of the form
+<pre>
+http://hostname:8080/demo?extraTerm=something
+</pre>
+into search requests.
+</p>
+
+
+
+<h2 id="handler">Request handler</h2>
+<p>
+The request handler converts the HTTP GET request into something suitable for a Vespa search.
+Refer to this <a href="jdisc/choosing-handler-base-class.html">
+selection of base classes</a> to choose the correct starting point for the application.
+The @Inject annotation is not strictly necessary, but is included for clarity.
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-searcher/src/main/java/com/yahoo/demo/DemoHandler.java">
+DemoHandler.java</a>.
+</p>
+
+
+
+<h2 id="searcher">Searcher</h2>
+<p>
+The searcher does a structured query transform,
+i.e. adding a few custom terms programmatically to the query. Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-searcher/src/main/java/com/yahoo/demo/DemoSearcher.java">
+DemoSearcher.java</a>.
+The searcher uses custom configuration, where the config definition is in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-searcher/src/main/resources/configdefinitions/demo.def">
+demo.def</a>:
+<pre>
+namespace=demo
+
+demo[].term string
+</pre>
+In other words, a configuration class containing a single array named <em>demo</em>,
+containing a class Demo which only contains single string named <em>term</em>.
+</p>
+
+
+
+<h2 id="renderer">Renderer</h2>
+<p>
+The renderer serializes the structured result into bytes for transport back to the client.
+Note that rendering works by first creating a single instance of the renderer
+(invoking the constructor),
+then cloning a new renderer for each result set rendered.
+<code>init()</code> will be invoked once on each new clone before <code>render()</code> is invoked.
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-searcher/src/main/java/com/yahoo/demo/DemoRenderer.java">
+  DemoRenderer.java</a>
+</p>
+
+
+
+<h2 id="component">Shared component</h2>
+<p>
+The custom component decouples some parts of the application from the searcher.
+This makes it possible to reconfigure the searcher
+without rebuilding the potentially costly custom component.
+In this case, what the component does is more than a little silly.
+More typical use would be an FSA or complex, shared helper functionality.
+Review the code in
+<a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-searcher/src/main/java/com/yahoo/demo/DemoComponent.java">
+  DemoComponent.java</a>
+</p>
+
+
+
+<h2 id="try-it">Try it!</h2>
+<ul>
+  <li>
+    Review the configuration in
+    <a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-searcher/src/main/application/services.xml">
+      services.xml</a> and the search definition in
+    <a href="https://github.com/yahoo/vespa/blob/master/sample-apps/http-api-using-searcher/src/main/application/searchdefinitions/basic.sd">
+      basic.sd</a>.
+  </li><li>
+    <a href="jdisc/developing-applications.html#deploy">Deploy the application</a>
+    (cd to /vespa/sample-apps/http-api-using-searcher/)
+  </li><li>
+    Feed test documents:
+<pre>
+$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file feed.json --host localhost --port 8080
+</pre>
+  </li><li>
+    Query:
+<pre>
+$ curl 'http://localhost:8080/demo?extraTerm=something'
+</pre>
+  </li>
+</ul>

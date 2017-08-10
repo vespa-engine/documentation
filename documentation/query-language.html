@@ -1,0 +1,856 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Query Language - YQL"
+---
+
+<script>
+function replace(encodedText) {
+        var body_element = document.getElementsByTagName('body')[0];
+        var selection = window.getSelection();
+        var newdiv = document.createElement('div');
+        body_element.appendChild(newdiv);
+        newdiv.innerHTML = encodedText;
+        newdiv.style.position='absolute';
+        newdiv.style.left='-99999px';
+        selection.selectAllChildren(newdiv);
+        window.setTimeout(function() {
+                body_element.removeChild(newdiv);
+        },0);
+}
+function init() {
+        var elements = document.getElementsByClassName("urlunencode");
+        var len = elements.length
+        for (var i = 0 ; i < len; i++)
+        {
+          var original = elements[i].innerHTML;
+          elements[i].innerHTML = decodeURIComponent(original);
+          elements[i].getAttributeNode("oncopy").nodeValue = "replace(\""+original+"\");";
+        }
+
+}
+</script>
+
+<p>
+Vespa accepts unstructured human input and structured
+queries for application logic separately, then combines them into a single data
+structure for executing on the search nodes. Human input is parsed heuristically,
+while application queries are formulated in YQL.
+Storing the YQL query in query profiles allows for simple URLs executing complex queries.
+</p><p>
+Vespa search queries are not database queries.
+The basic assumption is ideally a single document should be returned,
+and that should be an optimal answer to the query.
+Therefore a query with e.g. no terms does not return
+all documents, it is an error. A query with only a negative condition,
+e.g. <em>field not contains "term"</em> is also not possible, as the base state is not
+filtering away from the total corpus, but matching from an as small as possible subset.
+This has led YQL in Vespa to return errors for many technically valid YQL queries
+to avoid confusing search results.
+</p>
+
+
+
+<h2 id="yql-101">YQL 101</h2>
+<p>
+A simple search URL looks like:
+<pre>
+http://myhost.mydomain.com:8080/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22%3B
+</pre>
+In other words, <em>yql</em> contains:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22%3B
+</pre>
+This is a search for all documents where the field named <em>text</em> contains the word <em>blues</em>.
+The match type is determined by the <a href="reference/search-definitions-reference.html">search definition</a>.
+</p><p>
+Note that the terminating semicolon must be URL-quoted.
+</p>
+
+
+
+<h2 id="select-statement">SELECT</h2>
+<p>
+SELECT is the list of requested <a href="search-definitions.html#indexing">summary fields</a>
+(a field with the "summary" index attribute).
+Vespa will hide other fields in the matching documents.
+<pre class="urlunencode" oncopy="">
+select%20price,isbn%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%3B
+</pre>
+The above explicitly requests the fields "price" and "isbn" (from all sources).
+The matching documents may contain other fields, but they will not be shown.
+To request all fields, use an asterisk as field selection:
+<pre class="urlunencode" oncopy="">
+select%20*%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%3B
+</pre>
+The above will show all fields for the fetched documents.
+No overriding of normal Vespa document summary fetching will take place.
+</p>
+
+
+
+<h2 id="from-sources">FROM SOURCES</h2>
+<p>
+FROM specifies which document sources to search,
+it is handled in a similar way to Vespa's "sources" parameter. Example:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20music%20where%20title%20contains%20%22madonna%22%3B
+</pre>
+searches in the source "music" for the documents matching the "where" filter expression.
+</p><p>
+Searching in all sources, done by using
+<code>select … from <strong>sources *</strong> where …</code>,
+while searching in a set of sources is done with
+<code>select … from <strong>sources source1, source2</strong> where …</code>
+and searching a single source is done by
+<code>select … from <strong>source1</strong> where …</code>
+</p><p>
+In other words, the "sources" keyword is used for querying all sources
+(and then in conjunction with an asterisk), or when explicitly querying more than one source.
+If only a single source is requested, the "sources" keyword is dropped.
+</p>
+
+
+
+<h2 id="contains">CONTAINS</h2>
+<p>
+CONTAINS is the basic building block for text search in Vespa.
+How the actual search will be done, depends on the field settings in the given application.
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%3B
+</pre>
+The field, in our case "title", must be an
+<a href="search-definitions.html#indexing-field-property">indexed field or attribute</a>
+in the <a href="reference/search-definitions-reference.html">search definition</a>.
+If an unknown field, or a field not configured to be somehow searchable,
+is attempted searched, an error message will be generated.
+</p><p>
+The string which is searched for in the field will be searched for
+exactly as written, though stemming, accent removal, etc may change its
+contents. Whether these should take effect may controlled using annotations, as in:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%28%5B%7B%22stem%22%3A%20false%7D%5D%22madonna%22%29%3B
+</pre>
+Note the use of parentheses to force the correct precedence.
+</p><p>
+The "not contains" operation is <em>not</em> implemented,
+as it would be error prone and have confusing semantics for a search platform.
+</p>
+
+
+
+<h2 id="or">OR</h2>
+<p>
+The OR statement accepts other OR statements, AND statements,
+<a href="#userquery">userQuery</a> - and contains statements as arguments:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20or%20title%20contains%20%22saint%22%3B
+</pre>
+</p>
+
+
+
+<h2 id="and">AND</h2>
+<p>
+The AND statement accepts other AND statements, OR statements,
+<a href="#userquery">userQuery</a>, logically inverted statements - and contains statements as arguments:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20and%20title%20contains%20%22saint%22%3B
+</pre>
+</p>
+
+
+
+<h2 id="and-not">AND NOT</h2>
+<p>
+Since Vespa does recall, as opposed to filtering, the only excluding operator in Vespa is "ANDNOT".
+In YQL this is expressed as the right hand side, and only the right hand side,
+argument of the AND operator may be a logically inverted expression, i.e. using the <em>!</em> operator:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20and%20%21%28title%20contains%20%22saint%22%29%3B
+</pre>
+</p>
+
+
+
+<h2 id="order-by">ORDER BY</h2>
+<p>
+Sorting the result according to attribute vectors in Vespa is supporting using <code>order by</code>.
+Adding <code>asc</code> or <code>desc</code> after the name of an attribute,
+specifies sorting in ascending or descending order, respectively.
+If no order is explicitly specified, ascending order is implied.
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20order%20by%20price%20asc%2C%20releasedate%20desc%3B
+</pre>
+Sorting function, locale and strength are defined using the annotations "function", "locale" and "strength", as in:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20order%20by%20%5B%7B%22function%22%3A%20%22uca%22%2C%20%22locale%22%3A%20%22en_US%22%2C%20%22strength%22%3A%20%22IDENTICAL%22%7D%5Dother%20desc%2C%20%5B%7B%22function%22%3A%20%22lowercase%22%7D%5Dsomething%3B
+</pre>
+<strong>Note: </strong> <a href="reference/search-definitions-reference.html#match-phase">match-phase</a>
+is enabled when sorting - refer to the <a href="reference/sorting.html">sorting reference</a>.
+</p>
+
+
+
+<h2 id="numeric-operators">Numeric Operators</h2>
+<p>
+The following numeric operators are available:
+<em>=, &lt;, &gt;, &lt;=, &gt;=</em>
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20500%20%3E%3D%20price%3B
+</pre>
+In addition, <em>range(<em>field</em>, <em>lower bound</em>, <em>upper bound</em>)</em>
+allows explicit matching of numeric ranges.
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20range%28field%2C%200%2C%20500%29%3B
+</pre>
+The interval is by default a closed interval.
+If the lower bound is exclusive, set the annotation "bounds" to "leftOpen".
+If the upper bound is exclusive, set the same annotation to "rightOpen".
+If both bounds are exclusive, set the annotation to "open". <!-- ToDo: example here! -->
+</p><p>
+These number operations support an extra annotation, the integer "hitLimit".
+This is used for <em>capped range search</em>.
+An alternative to using negative and positive values for "hitLimit"
+is always using a positive number of hits
+(as a negative number of hits do no not make much sense)
+and combine this with either of the boolean annotations "ascending" and "descending" (but not both).
+Then "[{"hitLimit": 38, "descending": true}]" would be equivalent to setting it to -38,
+i.e. only populate with 38 hits and start from upper boundary, i.e. descending order.
+</p><p>
+Numbers must be in the signed 32-bit range. To input 64-bit signed numbers, use "L" as suffix, e.g
+<pre class="urlunencode" oncopy="">
+... where%20range%28field%2C%200%2C%205000000000L%29%3B
+</pre>
+</p>
+
+
+
+<h2 id="grouping">Grouping</h2>
+<p>
+Group / aggregate results using a grouping expression:
+<pre class="urlunencode" oncopy="">
+select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%27purchase%27%20%7C%20 all(group(customer)%20each(output(sum(price))))%3B
+</pre>
+<a href="grouping.html">Read more</a>.
+</p>
+
+
+
+<h2 id="pagination">Pagination</h2>
+<p>
+To limit the number of hits returned,
+use <code>limit</code> and <code>offset</code> to specify a slice:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20limit%2031%20offset%2029%3B
+</pre>
+The above will return two hits (if there sufficiently many hits matching the query),
+skipping the 29 first documents.
+</p><p>
+<code>paged</code> and <code>next</code> is not supported.
+</p>
+
+
+
+<h2 id="timeout">TIMEOUT</h2>
+<p>
+Set query timeout in milliseconds using <code>timeout</code>:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20timeout%2070%3B
+</pre>
+Only literal numbers are allowed, e.g. setting another unit is not supported.
+</p>
+
+
+
+<h2 id="regex">Regular expressions</h2>
+<p>
+Limited support for using regular expressions for searching is provided.
+By replacing <code>contains</code> with <code>matches</code>, vespa will do a regex search instead.
+This example becomes a substring search:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22madonna%22%3B
+</pre>
+This example matches both <code>madonna</code>, <code>madona</code> and with any number of <code>n</code>s:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22mado%5Bn%5D%2Ba%22%3B
+</pre>
+Do note that you need to <strong>url encode</strong> these when using http.
+The above will then look like this:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22mado%5Bn%5D%2Ba%22%3B
+</pre>
+Here you match any string starting with <code>mad</code>:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22^mad%22%3B
+</pre>
+Vespa supports regular expressions with
+<a href="http://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Extended_Regular_Expressions">posix extended syntax</a>
+with the limitation that it is <strong>case insensitive</strong>.
+</p><p>
+<strong>Note:</strong> Only <a href="reference/search-definitions-reference.html#attribute">attribute</a>
+fields in <a href="reference/services-content.html#document">documents</a> that have <code>mode="index"</code> are supported.
+It is also not optimized.
+Having a prefix using the <code>^</code> will be faster than not having one.
+</p>
+
+
+
+<h2 id="search-specific-operators">Search specific operators</h2>
+<p>
+The right hand side argument of the contains operator is either a string literal, or a phrase.
+YQL has no native definition of e.g. phrase matching.
+Here the Vespa integration uses a function:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20phrase%28%22st%22%2C%20%22louis%22%2C%20%22blues%22%29%3B
+</pre>
+Other Vespa specific search operators, like <a href="#wand">wand</a>, is expressed using functions as well.
+</p><p>
+It may be necessary to pass along extra information about a search term,
+for instance when specifying a term should not be stemmed before matching.
+This is done by using YQL annotations:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%28%5B%7B%22stem%22%3A%20false%7D%5D%22blues%22%29%3B
+</pre>
+<p>
+
+
+<h3 id="near-and-ordered-near">Near and Ordered Near</h3>
+<p>
+<em>near()</em> and <em>onear()</em> (ordered near) are operators which match if all
+argument terms occur close to each other in the same document.
+onear() additionally requires the terms in the document having the same order as
+given in the function (i.e. it is a phrase allowing other words interleaved).
+</p><p>
+near() and onear() supports the annotation <em>distance</em> which controls
+how many words are allowed to separate the argument terms.
+The default value is 2.
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20description%20contains%20%28%5B%20%7B%22distance%22%3A%20100%7D%20%5Donear%28%22a%22%2C%20%22b%22%29%29%3B
+</pre>
+</p>
+
+
+<h3 id="equiv">Term Equivalence</h3>
+<p>
+If two terms in the same field should give exactly the same behavior when
+match, the equiv() operator behaves like a special case of "or".
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20fieldName%20contains%20equiv%28%22A%22%2C%22B%22%29%3B
+</pre>
+</p>
+
+
+<h3 id="term-annotations">Term Annotations</h3>
+<p>
+Terms and phrases can be annotated to manipulate the precise behavior of the search platform.
+</p>
+
+<h4>Annotations supported by strings</h4>
+<p>
+These annotations are supported by the string arguments to functions like
+and phrase() and near() and also the string argument to the "contains" operator.
+</p>
+<table class="table">
+<tr><td>"nfkc": true|false</td>
+    <td>NFKC normalization. Default on.</td>
+</tr>
+<tr><td>"implicitTransforms": true|false</td>
+    <td>Implicit term transformations (field defaults), default on.
+    If implicitTransforms is active, the settings for the field in the search
+    definition will be honored in term transforms, e.g. if the field has stemming, this term will be stemmed.
+    If implicitTransforms are turned off,
+    the search backend will receive the term exactly as written in the initial YQL expression.
+    This is in other words a top level switch to turn off all other stemming,
+    accent removal, Unicode normalizations and so on.</td>
+</tr>
+<tr><td>"annotations": {"string": "string"}</td>
+    <td>Custom term annotations. This is by default empty.</td>
+</tr>
+<tr><td>"origin": {"original": "string", "offset": int, "length": int}</td>
+    <td>The (sub-)string which produced this term. Default unset.</td>
+</tr>
+<tr><td>"usePositionData": true|false</td>
+    <td>Use position data for ranking algorithm. Default true.
+      This is <em>term</em> position, not to be confused with
+      <a href="reference/search-api-reference.html#geographical-searches">geo searches</a></td>
+</tr>
+<tr><td>"stem": true|false</td>
+    <td>Stem this term if it is the setting for this field, default on.</td>
+</tr>
+<tr><td>"normalizeCase": true|false</td>
+    <td>Normalize casing of this term if it is the setting for this field, default on.</td>
+</tr>
+<tr><td>"accentDrop": true|false</td>
+    <td>Remove accents from this term if it is the setting for this field, default on.</td>
+</tr>
+<tr><td>"andSegmenting": true|false</td>
+    <td>Force phrase or AND operator if re-segmenting (e.g. in stemming) this
+        term results in multiple terms. Default is choosing from language
+        settings.</td>
+</tr>
+<tr><td>"prefix": true|false</td>
+    <td>Do prefix matching for this word. Default false.  ("Search for
+        "word*".")</td>
+</tr>
+<tr><td>"suffix": true|false</td>
+    <td>Do suffix matching for this word. Default false. ("Search for
+        "*word".")</td>
+</tr>
+<tr><td>"substring": true|false</td>
+    <td>Do substring matching for this word if available in the index. Default
+        false. ("Search for "*word*".") Only supported for streaming
+        search.</td>
+</tr>
+</table>
+
+<h4>Annotations supported by strings and functions</h4>
+<p>
+These annotations are supported by strings and by the functions which
+are handled like leaf nodes internally in the query tree: phrase(),
+near(), onear(), range(), equiv(), weightedSet(), weakAnd() and wand().
+</p>
+<table class="table">
+<tr><td>"id": int</td>
+    <td>Unique ID used for e.g. connectivity.</td>
+</tr>
+<tr><td>"connectivity": {"id": int, "weight": double}</td>
+    <td>Map with the ID and weight of explicitly connectivity of this item.</td>
+</tr>
+<tr><td>"significance": double</td>
+    <td>Significance value for ranking.</td>
+</tr>
+<tr><td>"annotations": {"string": "string"}</td>
+    <td>Custom annotations. No special semantics inside the YQL layer.</td>
+</tr>
+<tr><td>"filter": true|false</td>
+    <td>Regard this term as a "filter" term. Default false.</td>
+</tr>
+<tr><td>"ranked": true|false</td>
+    <td>Include this term for ranking calculation. Default true.</td>
+</tr>
+<tr><td>"label": "string"</td>
+    <td>Label for referring to this term during ranking.</td>
+</tr>
+<tr><td>"weight": int</td>
+    <td>Term weight, used in some ranking calculations.</td>
+</tr>
+</table>
+
+<h4 id="annotations-of-sub-expressions">Annotations of sub-expressions</h4>
+<p>
+Consider the following query:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20%28%5B%7B%22stem%22%3A%20false%7D%5D%28foo%20contains%20%22a%22%20and%20bar%20contains%20%22b%22%29%29%20or%20foo%20contains%20%28%5B%7B%22stem%22%3A%20false%7D%5D%22c%22%29%3B
+</pre>
+The "stem" annotation controls whether a given term should be stemmed if its
+field is configured as a stemmed field (default is "true").
+The "AND" operator itself has no internal API for whether its operands should be stemmed or not,
+but we can still annotate as such,
+because when the value of a given annotation is determined,
+the expression tree is followed from the term in question and up through its ancestors.
+Traversing the tree stops when a value is found (or there is nothing more to traverse).
+In other words, none of the terms in this example will be stemmed.
+</p><p>
+How annotations behave may be easier to understand of expressing a boolean
+query in the style of an S-expression:
+<pre>
+(AND term1 term2 (OR term3 term4) (OR term5 (AND term6 term7)))
+</pre>
+The annotation scopes would then be as follows, i.e. annotations on
+which elements will be checked when determining the settings for a given term:
+<dl>
+<dt>term1</dt>
+    <dd>term1 itself, and the first AND.</dd>
+<dt>term2</dt>
+    <dd>term2 itself, and the first AND.</dd>
+<dt>term3</dt>
+    <dd>term3 itself, the first OR and the first AND.</dd>
+<dt>term4</dt>
+    <dd>term4 itself, the first OR and the first AND.</dd>
+<dt>term5</dt>
+    <dd>term5 itself, the second OR and the first AND.</dd>
+<dt>term6</dt>
+    <dd>term6 itself, the second AND, the second OR and the first AND.</dd>
+<dt>term7</dt>
+    <dd>term7 itself, the second AND, the second OR and the first AND.</dd>
+</dl>
+</p>
+
+
+
+<h2 id="query-properties">Query properties</h2>
+<p>
+The YQL variable syntax may be used to initialize words in phrases and as single terms.
+This alleviates the need for caring about quoting a term in YQL as well as URL quoting.
+The term will be used <em>exactly</em> as it is in the URL.
+</p><p>
+As an example, look at a query with a YQL argument, and the properties
+<em>animal</em> and <em>syntaxExample</em>:
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20foo%20contains%20%40animal%20and%20foo%20contains%20phrase%28%40animal%2C%20%40syntaxExample%2C%20%40animal%29%3B&amp;animal=panda&amp;syntaxExample=syntactic
+</pre>
+This YQL expression will then access the query properties <em>animal</em> and
+<em>syntaxExample</em> and evaluate to:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20%28foo%20contains%20%22panda%22%20AND%20foo%20contains%20phrase%28%22panda%22%2C%20%22syntactic%22%2C%20%22panda%22%29%29%3B
+</pre>
+</p>
+
+
+
+<h2 id="userinput">userInput()</h2>
+<p>
+<em>userInput()</em> is a robust way of mixing user input and a formal query.
+It allows controlling whether the user input is to be stemmed, lowercased, etc,
+but it also allows for controlling whether it should be treated as a raw string,
+whether it should simply be segmented or parsed as a query.
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20userInput%28%40animal%29%3B&amp;animal=panda
+</pre>
+Here, the userInput() function will access the query property "animal",
+and parse the property value as an "ALL" query, resulting in the following expression:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20default%20contains%20%22panda%22%3B
+</pre>
+Now, if we changed the value of "animal" without changing the rest of the expression:
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20userInput%28%40animal%29%3B&amp;animal=panda%20smokey
+</pre>
+The result would be:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20default%20contains%20%22panda%22%20and%20default%20contains%20%22smokey%22%3B
+</pre>
+Now, let's assume we want to combine multiple query properties and have a more complex expression as well:
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28userInput%28%40animal%29%20or%20userInput%28%40teddy%29%29%3B&amp;animal=panda&amp;teddy=bear%20roosevelt
+</pre>
+The resulting YQL expression will be:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28default%20contains%20%22panda%22%20or%20%28default%20contains%20%22bear%22%20and%20default%20contains%20%22roosevelt%22%29%29%3B
+</pre>
+Now, consider we do not want the "teddy" field to be treated as its own query segment,
+it should only be segmented with the linguistic libraries to get recall.
+We can do this by adding a "grammar" annotation to the userInput() call:
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28userInput%28%40animal%29%20or%20%5B%7B%22grammar%22%3A%20%22segment%22%7D%5DuserInput%28%40teddy%29%29%3B&amp;animal=panda&amp;teddy=bear%20roosevelt
+</pre>
+Then, the linguistic library will split on space, and the resulting expression is:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28default%20contains%20%22panda%22%20or%20default%20contains%20phrase%28%22bear%22%2C%20%22roosevelt%22%29%29%3B
+</pre>
+Instead of a variable reference, the userInput() function also accepts raw strings as arguments,
+but this would obviously not be suited for parametrizing the query from a query profile.
+It is mostly intended as test feature.
+</p>
+
+
+<h3 id="user-input-control-annotations">userInput() control annotations</h3>
+<table class="table">
+<thead>
+<tr>
+    <th>Name</th><th>Default value</th><th>Values</th><th>Effect</th>
+</tr>
+</thead>
+<tr>
+    <td>grammar</td>
+    <td><code>all</code></td>
+    <td><code>raw</code>, <code>segment</code> and all values accepted for the
+        <a href="reference/search-api-reference.html#model.type">model.type</a> argument
+        in the search API.
+    </td>
+    <td>How to parse the user input. "raw" will treat the user input as a
+        string to be matched without any processing, "segment" will do a
+        first pass through the linguistic libraries, while the rest of the
+        values will treat the string as a query to be parsed. If query parsing
+        fails, an error message will be returned.
+    </td>
+</tr>
+<tr>
+    <td>defaultIndex</td>
+    <td><code>default</code></td>
+    <td>Any searchable field in the system's search definition.</td>
+    <td>Same as <a
+        href="reference/search-api-reference.html#model.defaultIndex">model.defaultIndex</a>
+        in the search API. If "grammar" is set to "raw" or "segment",
+        this will be the field searched.
+    </td>
+</tr>
+<tr>
+    <td>language</td>
+    <td><em>Autodetect</em></td>
+    <td>RFC 3066 language code</td>
+    <td>Language setting for the linguistics treatment of this userInput() call,
+        also see <a
+        href="reference/search-api-reference.html#model.language">model.language</a> in
+        the search API reference.
+    </td>
+</tr>
+<tr>
+    <td>allowEmpty</td>
+    <td><code>false</code></td>
+    <td>Boolean true or false.</td>
+    <td>Whether to allow empty input for query parsing and search terms. If this
+        is true, a NullItem instance is inserted in the proper place in the
+        query tree. If "allowEmpty" is false, the query will fail if the user
+        provided data can not be parsed or is empty.
+    </td>
+</tr>
+</table>
+<p>
+In addition, other annotations, like <em>stem</em> or <em>ranked</em>, will take effect as normal.
+</p>
+
+<h4>Limitations of annotation inheritance when treating userInput() queries</h4>
+<p>
+The query parsing mechanism has currently certain limitations for propagating annotation,
+therefore, for any value of <em>grammar</em> other than <em>raw</em> or <em>segment</em>,
+only the following annotations will take effect:
+<ul>
+  <li><code>ranked</code></li>
+  <li><code>filter</code></li>
+  <li><code>stem</code></li>
+  <li><code>normalizeCase</code></li>
+  <li><code>accentDrop</code></li>
+  <li><code>usePositionData</code></li>
+</ul>
+</p>
+
+
+
+<h2 id="userquery">userQuery()</h2>
+<p>
+<em>userQuery()</em> evaluates to the parsed user query,
+i.e. the HTTP API parameter named <em>query</em>
+(including the <em>filter</em> part, if this is available).
+The function userQuery represents where the heuristically parsed query
+is to be inserted as a sub-tree into the YQL query.
+In other words, this is not a string substitution,
+the user query is first parsed with any of the supported grammars,
+then the resulting tree is inserted into the corresponding place in the YQL query tree:
+<pre>
+http://myhost.mydomain.com:8080/search/?query=abc%20def%20-ghi&amp;type=all&amp;yql=select%20%2A%20from%20sources%20%2A%20where%20vendor%20contains%20%22brick%20and%20mortar%22%20AND%20price%20%3C%2050%20AND%20userQuery%28%29%3B
+</pre>
+Breakdown:
+<table class="table">
+  <tr><td>query</td>
+    <td>abc def -ghi</td></tr>
+  <tr><td>type</td>
+    <td>all</td></tr>
+  <tr><td>yql</td>
+    <td>select * from sources * where vendor contains "brick and mortar" AND price &lt; 50 AND userQuery();</td></tr>
+</table>
+The above example will in other words evaluate to a query
+where the numeric field <em>price</em> must have a value lower than 50,
+<em>vendor</em> must match the term <em>brick and mortar</em>,
+<em>and</em> the default index must contain the two terms <em>abc</em> and <em>def</em>
+while <em>not</em> containing the term <em>ghi</em>.
+The spaces in the vendor term will not be used to split this into several new terms by YQL.
+The string specified by the search will be used.
+Query transformers may convert the string at a later stage,
+but it is not necessary to do anything "special" to create a search term containing arbitrary characters.
+</p>
+
+
+<h3 id="convert-user-queries-to-yql">Convert user queries to YQL</h3>
+<p>
+Run user queries through a container instance while setting
+<a href="reference/search-api-reference.html#tracelevel">tracelevel</a> to 2 or higher.
+The parsed query expressed as YQL will be available in the trace info.
+It is also possible to do this programmatically, using the instance method
+<code>com.yahoo.search.Query.yqlRepresentation()</code> in the search API of the container.
+</p>
+
+
+
+<h2 id="yql-in-query-profiles">YQL in query profiles</h2>
+<p>
+YQL requires quoting to be included in a URL.
+Since YQL is well suited to application logic, while not being intended for end users,
+a solution to this is storing the application's YQL queries into different
+<a href="query-profiles.html">query profiles</a>.
+To add a default query profile, add <em>search/query-profiles/default.xml</em> to the
+<a href="cloudconfig/application-packages.html">application package</a>:
+<pre>
+&lt;query-profile id="default"&gt;
+  &lt;field name="yql"&gt;select * from sources * where default contains "latest" or userQuery();&lt;/field&gt;
+&lt;/query-profile&gt;
+</pre>
+This will add <em>latest</em> as an <em>OR term</em> to all queries not having an explicit query profile parameter.
+The important thing to note is how it is not necessary to URL-quote anything in the query profiles files.
+They operate independently of the HTTP parsing as such.
+</p>
+
+
+
+<h2 id="rank">rank()</h2>
+<p>
+The first, and only the first, argument of the rank() function determines whether a document is a match,
+but all arguments are used for calculating rank score.
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20rank%28a%20contains%20%22A%22%2C%20b%20contains%20%22B%22%29%3B
+</pre>
+</p>
+
+
+
+<h2 id="advanced-functions">Advanced functions</h2>
+<p>
+These advanced functions have recall behavior similar to OR, but only return a limited number of documents.
+For more information on these functions take a look at
+<a href="reference/advanced-search-operators.html">Advanced Search Operators</a>.
+</p>
+
+
+<h3>Functions operating on a single field</h3>
+<p>
+wand(), dotProduct() and weightedSet() model very similar operations in the search core.
+The main function to use is wand().
+These functions specify a weighted set in their argument
+which is matched against a single field in the backend.
+</p>
+
+<h4 id="wand">wand()</h4>
+<p><em>wand()</em> (aka Parallel Wand) implements the "Weak AND"/"Weighted AND" algorithm
+and is used for matching the weighted set in its argument against a single weighted set field.
+The best "targetNumHits" (according to the dot product score calculated) is returned from this function:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20%5B%20%7B%22scoreThreshold%22%3A%2013%2C%20%22targetNumHits%22%3A%207%7D%20%5Dwand%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
+</pre>
+wand() also allows numeric arguments, then the search argument is an array of arrays of length two.
+In each pair, the first number is the search term, the second its weight:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20wand%28description%2C%20%5B%5B11%2C1%5D%2C%20%5B37%2C2%5D%5D%29%3B
+</pre>
+</p>
+
+<h4 id="dot-product">dotProduct()</h4>
+<p>
+dotProduct() calculates the dot product between the weighted set
+in its argument and a weighted set field in the document as its rank score contribution:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20dotProduct%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
+</pre>
+</p>
+
+<h4 id="weighted-set">weightedSet()</h4>
+<p>
+When using <em>weightedSet()</em> to search a field,
+all tokens present in the searched field will be matched against the weighted set in the query.
+This means that using a weighted set to search a single-value attribute field
+will have similar semantics to using a normal term to search a weighted set field.
+The low-level matching information resulting from matching a document with a weighted set in the query
+will contain the weights of all the matched tokens in descending order.
+Each matched weight will be represented as a standard occurrence on position 0 in element 0.
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20weightedSet%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
+</pre>
+</p>
+
+
+<h3>Functions operating across multiple fields</h3>
+
+<h4 id="weak-and">weakAnd()</h4>
+<p>
+<em>weakAnd()</em> (aka Vespa Wand) also implements the "Weak AND"/"Weighted AND" algorithm,
+but unlike wand(), it accepts arbitrary word matches (across arbitrary fields) as arguments.
+Only a limited number of documents are returned for ranking (default is 100),
+but it does not guarantee to return the best k hits.
+This function can be seen as an optimized OR:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20weakAnd%28a%20contains%20%22A%22%2C%20b%20contains%20%22B%22%29%3B
+</pre>
+</p>
+
+<h4>Optional Arguments</h4>
+<p>
+Both wand() and weakAnd() both support the annotations "scoreThreshold",
+which is an integer giving the minimum rank score for hits to include, and "targetNumHits"
+which is the desired number of hits to produce from the function in question:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20%5B%7B%22scoreThreshold%22%3A%2041%2C%20%22targetNumHits%22%3A%207%7D%5DweakAnd%28a%20contains%20%22A%22%2C%20b%20contains%20%22B%22%29%3B
+</pre>
+</p>
+
+
+
+<h2 id="non-empty">nonEmpty()</h2>
+<p>
+<em>nonEmpty</em> takes as its only argument an arbitrary search expression.
+It will then perform a set of checks on that expression.
+If all the checks pass, the result is the same expression, otherwise the query will fail.
+The checks are as follows:
+<ol>
+  <li>No empty search term.</li>
+  <li>No empty operators, like phrases without terms.</li>
+  <li>No null markers (NullItem) from e.g. failed query parsing.</li>
+</ol>
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20bar%20contains%20%22a%22%20and%20nonEmpty%28bar%20contains%20%22bar%22%20and%20foo%20contains%20%40foo%29&amp;foo=
+</pre>
+Note how "foo" is empty in this case, which will force the query to fail.
+If "foo" contained a searchable term, the query would not have failed.
+</p>
+
+
+
+<h2 id="predicate">predicate()</h2>
+<p>
+<em>predicate()</em> is used to specify a predicate query -
+see <a href="boolean-search.html">Boolean Search</a>.
+It takes three arguments: the predicate field to search, a map of attributes, and a map of range attributes:
+<pre class="urlunencode" oncopy="">
+select%20*%20from%20sources%20*%20where%20predicate(predicate_field%2C%7B%22gender%22%3A%22Female%22%7D%2C%7B%22age%22%3A20L%7D)%3B
+</pre>
+Due to a quirk in YQL-parsing, one cannot specify an empty map, use the number 0 instead.
+<pre class="urlunencode" oncopy="">
+select%20*%20from%20sources%20*%20where%20predicate(predicate_field%2C0%2C%7B%22age%22%3A20L%7D)%3B
+</pre>
+</p>
+
+
+
+
+<h2 id="known-issues">Known issues</h2>
+<p>
+<strong>Query rewriting in searcher plug-ins:</strong>
+In applications where query rewriting is done using a searcher
+plug-in in the container, one must annotate searchers.
+The <em>yql</em> query property is handled by a searcher as well,
+so if annotating the custom searcher with <em>@Before("ExternalYql")</em>
+the data in the YQL query parameter will never be present.
+Conversely, to ensure always getting the query defined in <em>yql</em>,
+annotate with <em>@After("ExternalYql")</em>.
+</p><p>
+<strong>Search in struct fields:</strong>
+Search in struct fields works in <a href="streaming-search.html">streaming search</a> only.
+YQL does not support dots '.' in field names.
+Use a <a href="reference/search-definitions-reference.html#fieldset">fieldset</a> to work around, example:
+<pre>
+search mydoc {
+    document mydoc {
+
+        struct Recipient {
+            field name type string { }
+            field smtp type string { }
+        }
+
+        field from type Recipient {
+            struct-field name { indexing: index | summary }
+            struct-field smtp { indexing: index | summary }
+        }
+    }
+
+    fieldset fromname {
+        fields: from.name
+    }
+}
+</pre>
+Then use <em>fromname</em> instead of <em>from.name</em> in queries, like:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20fromname%20contains%20%22thename%22%3B
+</pre>
+</p>
+
+<script>
+window.onload=init();
+</script>

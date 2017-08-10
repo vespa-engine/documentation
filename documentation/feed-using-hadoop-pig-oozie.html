@@ -1,0 +1,390 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: Feed using Hadoop, Pig, Oozie
+---
+
+<p>
+This document discusses methods to feed to Vespa from various grid resources.
+</p><p>
+Examples use a local file system.
+Prerequisite: Have some data on a Hadoop cluster, ready to feed to Vespa.
+This includes text or JSON files on HDFS, data in Hive or HBase table.
+</p><p>
+<code>vespa-hadoop</code> contains classes and utilities to enable feeding directly to Vespa endpoints.
+It is a minimal layer over the <a href="vespa-http-client.html">Vespa HTTP client</a>. Dependency:
+
+<pre class="code">
+        &lt;dependency&gt;
+            &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+            &lt;artifactId&gt;vespa-hadoop&lt;/artifactId&gt;
+            &lt;version&gt;...&lt;/version&gt;
+        &lt;/dependency&gt;
+</pre>
+
+<p class="alert alert-success">
+<code>vespa-hadoop</code> depends on the Apache HTTP client library.
+Hadoop also pulls in this library, possibly with a conflicting version.
+If jobs fail due to <em>NoSuchFieldErrors</em> or similar,
+try adding <code>-Dmapreduce.job.user.classpath.first=true</code>.
+</p>
+
+
+
+<h2 id="pig">Pig</h2>
+<p>
+<a href="https://pig.apache.org/">Apache Pig</a> is a platform for
+analyzing large data sets that consists of a high-level language for expressing
+data analysis programs, coupled with infrastructure for evaluating these programs.
+Pig is the standard method for ETL and grid scale analysis at Yahoo.
+Pig features methods to load data from many different types of sources,
+transform data, and store that data into various types of destinations.
+</p><p class="alert alert-success">
+Tip: try the <a href="tutorials/blog-recommendation.html">blog recommendation</a>
+tutorial for Pig usage.
+</p><p>
+The <em>vespa-hadoop</em> library provides the <code>VespaStorage</code> class
+which provides a simple way of storing data into a Vespa endpoint. Basic usage:
+<pre>
+REGISTER path/to/vespa-hadoop.jar
+
+DEFINE VespaStorage com.yahoo.vespa.hadoop.pig.VespaStorage(<options>);
+
+A = LOAD '&lt;path&gt;' [USING &lt;storage&gt;] [AS &lt;schema&gt;];
+
+-- apply any transformations
+
+STORE A INTO '$ENDPOINT' USING VespaStorage();
+</pre>
+To run the above Pig script, specify <a href="#vespa.feed.endpoint">endpoint</a>.
+The endpoint is whatever Vespa endpoint to feed to.
+<code>VespaStorage</code> supports feeding to multiple endpoints.
+To specify multiple endpoints, separate them by commas.
+Importantly, the endpoint should be defined as it is for the
+<a href="vespa-http-client.html">Vespa HTTP client</a>,
+which means the endpoint host name, without 'http://' and port number.
+Port 8080 is assumed.
+As an example, assume the above script is called <code>feed.pig</code>.
+Run it from a Hadoop node to two Vespa instances
+(add <a href="#vespa.feed.proxy.host">vespa.feed.proxy.host/port</a> as needed):
+<pre>
+pig -x local -f feed.pig
+    -p ENDPOINT=endpoint-1,endpoint-2
+    -Dvespa.feed.proxy.host=proxy-host
+    -Dvespa.feed.proxy.port=proxy-port
+</pre>
+</p>
+
+
+<h3 id="feeding-preconstructed-operations">Feeding preconstructed operations</h3>
+<p>
+In the case where the data already has the required <a href="reference/document-json-format.html">JSON format</a>,
+feed this directly to a Vespa endpoint:
+<pre>
+REGISTER vespa-hadoop.jar
+
+DEFINE VespaStorage com.yahoo.vespa.hadoop.pig.VespaStorage();
+
+-- Load data - one column for json data
+data = LOAD '&lt;source&gt;' AS (json:chararray);
+
+-- Store into Vespa
+STORE data INTO '$ENDPOINT' USING VespaStorage();
+</pre>
+</p>
+
+
+<h3 id="feeding-structured-data">Feeding structured data</h3>
+<p>
+In this example, use the search definition in
+<a href="https://github.com/vespa-engine/vespa/tree/master/sample-apps/basic-search">basic-search</a>.
+Sample data, tab separated:
+<pre>
+Bad     Michael Jackson Bad     1987    247
+Recovery        Eminem  So Bad  2010    240
+</pre>
+When loading data in Pig, specify a schema for that data unless it can be inferred from the data source.
+After selecting the fields to feed to Vespa,
+a <a href="reference/document-json-format.html">document operation</a>
+must be constructed. There are two ways this can be accomplished.
+Let the <code>VespaDocumentOperation</code> UDF construct the operation:
+<pre>
+REGISTER vespa-hadoop.jar
+
+-- Create valid Vespa put operations
+DEFINE VespaPutOperation
+       com.yahoo.vespa.hadoop.pig.VespaDocumentOperation(
+            'operation=put',
+            'docid=id:music:music::&lt;artist&gt;-&lt;year&gt;'
+       );
+
+DEFINE VespaStorage
+       com.yahoo.vespa.hadoop.pig.VespaStorage();
+
+-- Load data from any source - here we load using PigStorage
+data = LOAD '&lt;hdfs-path&gt;' AS (album:chararray, artist:chararray, title:chararray, year:int, duration:int);
+
+-- Transform tabular data to a Vespa document operation JSON format
+data = FOREACH data GENERATE VespaPutOperation(*);
+
+-- Store into Vespa
+STORE data INTO '$ENDPOINT' USING VespaStorage();
+</pre>
+Here, the <code>VespaDocumentOperation</code> is defined and configured to create the document operation.
+The notable part is the <code>docid=...</code> section,
+which specifies a document id template for each document.
+The fields inside the brackets will be replaced with the values in each record.
+This is a simple search and replace operation,
+define custom <a href="documents.html">document IDs</a> as needed.
+<code>PUT</code> is  default, use (<code>REMOVE</code>, <code>UPDATE</code>) as well.
+</p><p>
+Additionally, all fields in the relation (here <code>data</code>) will be
+converted into a JSON form with best effort, and should be suitable for most cases.
+It uses the Pig schema to determine type conversion, and the mapping between
+Pig data types and JSON Vespa types are as follows:
+<table class="table">
+  <thead></thead><tbody>
+    <tr><td><b>Pig type</b></td><td><b>JSON-Vespa type</b></td></tr>
+    <tr><td>int</td><td>number</td></tr>
+    <tr><td>long</td><td>number</td></tr>
+    <tr><td>float</td><td>number</td></tr>
+    <tr><td>double</td><td>number</td></tr>
+    <tr><td>chararray</td><td>string</td></tr>
+    <tr><td>bytearray</td><td>base64 encoded string</td></tr>
+    <tr><td>boolean</td><td>boolean</td></tr>
+    <tr><td>datetime</td><td>long - milliseconds since epoch</td></tr>
+    <tr><td>biginteger</td><td>number</td></tr>
+    <tr><td>bigdecimal</td><td>number</td></tr>
+    <tr><td>tuple</td><td>array</td></tr>
+    <tr><td>bag</td><td>array of arrays</td></tr>
+    <tr><td>map</td><td>JSON object</td></tr>
+  </tbody>
+</table>
+In this case, the first row in data above will be transformed to the following JSON:
+<pre>
+{
+    "put": "id:music:music::Michael Jackson-1987"
+    "fields": {
+        "album": "Bad",
+        "artist": "Michael Jackson",
+        "duration": 247,
+        "title": "Bad",
+        "year": 1987
+    }
+}
+</pre>
+In case the <code>VespaDocumentOperation</code> does not fit the needs,
+write a custom UDF (user defined function) in any of the supported
+languages to transform the data into valid Vespa operations.
+Refer to the <a href="http://pig.apache.org/docs/r0.14.0/udf.html">Pig documentation</a>
+for more details on how to write UDFs.
+</p><p>
+As an alternative to the above approach, let the <code>VespaStorage</code>
+class directly generate the document operations without using the above UDF:
+<pre>
+REGISTER vespa-hadoop.jar
+
+-- Transform tabular data to a Vespa document operation JSON format
+DEFINE VespaStorage
+       com.yahoo.vespa.hadoop.pig.VespaStorage(
+            'create-document-operation=true',
+            'operation=put',
+            'docid=id:music:music::&lt;artist&gt;-&lt;year&gt;'
+       );
+
+-- Load data from any source - here we load using PigStorage
+data = LOAD '&lt;source&gt;' AS (&lt;schema&gt;);
+
+-- transform and select fields
+
+-- Store into Vespa
+STORE data INTO '$ENDPOINT' USING VespaStorage();
+</pre>
+Here the required information to create document operations is added
+to the configuration of the <code>VespaStorage</code> class.
+Internally it uses the same code as the above approach, so results will be identical.
+Parameters for <code>VespaStorage</code> and <code>VespaDocumentOperation</code> are:
+<table class="table">
+  <thead>
+    <tr><th>parameter</th><th>default</th><th>description</th></tr>
+  </thead><tbody>
+    <tr><th>create-document-operation</th>
+      <td><em>false</em></td>
+      <td><em>true</em> or <em>false</em>. Only valid for <code>VespaStorage</code></td></tr>
+    <tr><th>operation</th>
+      <td><em>put</em></td>
+      <td>Any <a href="reference/document-json-format.html">valid Vespa document operation</a></td></tr>
+    <tr><th>docid</th>
+      <td></td>
+      <td>A document id template. Replaces &lt;field-name&gt; with it's value for every record</td></tr>
+    <tr><th>exclude-fields</th>
+      <td></td>
+      <td>A list of fields to exclude when creating document operation.
+      The field is still available for document id template</td></tr>
+  </tbody>
+</table>
+</p>
+
+
+<h3 id="feeding-status">Feeding status</h3>
+<p>
+<code>VespaStorage</code> does not check the schema  before data feeding.
+If the schema does not match the document type, feeding fails.
+</p><p>
+<code>VespaStorage</code> emits a set of counters at the end of a Pig job,
+and the values of these counters can differ than the ones reported by Pig.
+The reason for this is that the number of records stored as
+reported by Pig is the number of records sent to the feeder,
+while the feeder feeds and gathers statistics asynchronously for those documents. Example:
+<pre>
+...
+	Vespa Feed Counters
+		Documents failed=0
+		Documents ok=100000
+		Documents sent=100000
+		Documents skipped=1
+
+...
+Output(s):
+Successfully stored 100001 records in: "&lt;endpoint&gt;"
+...
+</pre>
+Here, Pig reports that is Successfully stored 100001 records,
+but <code>VespaStorage</code> skipped one probably due to a formatting error.
+Any errors can be found in the job logs.
+</p>
+
+
+<h3 id="efficiency">Efficiency</h3>
+<p>
+<code>VespaStorage</code> uses the
+<a href="vespa-http-client.html">Vespa HTTP Client</a>,
+and as such feeds as efficiently as possible.
+As <code>VespaStorage</code> runs in a Pig job which is compiled down to a MapReduce or Tez job,
+a number of mappers or reducers will be used to cover the file if the input file is sufficiently large.
+As each mapper will have their own client feeding to the endpoint, each with multiple threads,
+make sure the cluster can take the load.
+Each client will throttle to not overload the endpoint.
+Using a high number of effective thread (tasks times threads per mapper),
+can easily saturate feeding endpoints.
+</p><p>
+There are two primary factors controlling feed load: the number of mappers or
+reducers, and the number of concurrent connections per mapper/reducer.
+Control the number of splits and thus number of mappers to make based on the input file size:
+<pre>
+SET mapreduce.input.fileinputformat.split.minsize 128*1024*1024
+</pre>
+This is for Yarn and Hadoop v2, and will split the file after approximately 128Mb.
+See the Pig and Yarn documentation for more information.
+</p><p>
+To set the number of concurrent connections per mapper/reducer,
+set <a href="#vespa.feed.connections">vespa.feed.connections</a>.
+</p>
+
+One way to limit the number of parallel tasks feeding to Vespa for large job is to use <em>PARALLEL</em> directive of PIG
+
+<pre>
+data = LOAD '/projects/comms_psearch/psearch_suggest/hiveDB/ext_us_users_content_score/*' USING PigStorage('\u0001') AS (guid:chararray, query:chararray, to:double);
+grouped_data = GROUP data by guid PARALLEL 100;
+STORE grouped_data INTO '$ENDPOINT' USING VespaStorage();
+</pre>
+
+Another alternative is to limit number of tasks by  
+<pre>
+SET mapreduce.jobtracker.maxtasks.perjob 100
+</pre>
+
+<h2 id="hadoop-mapreduce">Hadoop MapReduce</h2>
+<p>
+The <code>VespaStorage</code> Pig class builds upon an <code>OutputFormat</code> class that feeds to Vespa.
+<code>OutputFormat</code>s are used in MapReduce jobs, for special needs one can use this class from a MapReduce job.
+Example:
+<pre>
+import java.io.IOException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+
+public class VespaFeed {
+
+    public static class FeedMapper extends Mapper<LongWritable, Text, LongWritable, Text> {
+        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+            context.write(key, value);
+        }
+    }
+
+    public static void main(String... args) throws Exception {
+
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "vespafeed");
+        job.setJarByClass(VespaFeed.class);
+        job.setMapperClass(FeedMapper.class);
+        job.setMapOutputValueClass(Text.class);
+
+        // Set output format class
+        job.setOutputFormatClass(VespaOutputFormat.class);
+
+        FileInputFormat.setInputPaths(job, new Path(args[0]));
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
+</pre>
+Run on Hadoop:
+<pre>
+hadoop jar my-jar.jar VespaFeed &lt;hdfs-path&gt;
+    -Dvespa.feed.endpoint=endpoint
+    -Dvespa.feed.proxy.host=proxyhost
+    -Dvespa.feed.proxy.port=proxyport
+</pre>
+The example above passes the each record straight through to the feeder as defined by the output format class.
+To feed, no reduce tasks are needed, for special requirements,
+such as the need to guarantee a certain order of the operations for each document,
+one can reduce on the document id and sort it out in the reducer.
+</p>
+
+
+
+<h2 id="configuration">Configuration</h2>
+<p>
+Parameters are sent using <code>-Dparam=value</code> for Pig and MapReduce.
+For Oozie, specify them as parameters in the configuration section of the action.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>parameter</th><th>default</th><th>description</th></tr>
+  </thead><tbody>
+    <tr id="vespa.feed.endpoint"><th>vespa.feed.endpoint</th>
+      <td></td>
+      <td>Feed endpoint(s)</td></tr>
+    <tr id="vespa.feed.proxy.host"><th>vespa.feed.proxy.host</th>
+      <td></td>
+      <td>HTTP proxy hostname</td></tr>
+    <tr id="vespa.feed.proxy.port"><th>vespa.feed.proxy.port</th>
+      <td></td>
+      <td>HTTP proxy port</td></tr>
+    <tr id="vespa.feed.dryrun"><th>vespa.feed.dryrun</th>
+      <td><em>false</em></td>
+      <td>Do not feed if set to <em>true</em></td></tr>
+    <tr id="vespa.feed.usecompression"><th>vespa.feed.usecompression</th>
+      <td><em>true</em>
+      </td><td>Compress the feed</td></tr>
+    <tr id="vespa.feed.data.format"><th>vespa.feed.data.format</th>
+      <td><em>json</em></td>
+      <td>The only supported format is <em>json</em>
+        <!-- or "xml". Default is "json", "xml" is currently not supported.--></td></tr>
+    <tr id="vespa.feed.progress.interval"><th>vespa.feed.progress.interval</th>
+      <td><em>1000</em></td>
+      <td>Log sent/ok/failed/skipped documents every n records</td></tr>
+    <tr id="vespa.feed.connections"><th>vespa.feed.connections</th>
+      <td><em>1</em></td>
+      <td>Number of concurrent connections per mapper/reducer.
+        <a href="http://github.com/pages/vespa-engine/javadoc/com/yahoo/vespa/http/client/config/ConnectionParams.Builder.html#setNumPersistentConnectionsPerEndpoint-int-">See javadoc</a></td></tr>
+    <tr id="vespa.feed.route"><th>vespa.feed.route</th>
+      <td><em>default</em></td>
+      <td><a href="routing.html">Route</a> to use on endpoint</td></tr>
+  </tbody>
+</table>

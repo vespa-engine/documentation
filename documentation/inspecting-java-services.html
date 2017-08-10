@@ -1,0 +1,115 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Inspecting Java services"
+---
+
+
+<h2 id="debug-interface">Debug interface</h2>
+<p>
+The following RPC commands are available in the <em>container</em> for debugging purposes:
+</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr><th>Name</th><th>Arguments</th><th>Result</th></tr>
+    <tr>
+      <td>debug.dump-query-packets</td>
+      <td>cluster-name, 0/1 (disable, enable)</td>
+      <td>Dumps query packets to
+        $VESPA_HOME/logs/vespa/qrs/qrs.&lt;server-index&gt;.&lt;cluster-name&gt;.query.dump</td>
+    </tr><tr>
+      <td>debug.dump-result-packets</td>
+      <td>cluster-name, 0/1 (disable, enable)</td>
+      <td>Dumps query packets to
+        $VESPA_HOME/logs/vespa/qrs/qrs.&lt;server-index&gt;.&lt;cluster-name&gt;.result.dump</td>
+    </tr><tr>
+      <td>debug.output-search-chain</td>
+      <td>search-chain-name</td>
+      <td>Returns a human readable description of a given search chain
+        and the search chains it forwards to.</td>
+    </tr><tr>
+      <td>debug.backend-statistics</td>
+      <td>cluster-name</td>
+      <td>Returns (backend, active connections, total connections)
+        tuples separated with the same order into three arrays.</td>
+    </tr>
+  </tbody>
+</table>
+<p>
+The commands can be called by using <em>invoke</em>
+(call it without arguments to get usage information).
+Example: output the searchers in a search chain:
+<pre>
+$ invoke -h &lt;hostname&gt;:8084 debug.output-search-chain &lt;searchChainName&gt;
+</pre>
+</p>
+
+
+
+<h2 id="jconsole">JConsole</h2>
+<p>
+Determine the state of each running Java Vespa service using JConsole.
+JConsole is distributed along with the Java developer kit.
+It can be started as follows:
+<pre>
+$ jconsole &lt;host&gt;:&lt;port&gt;
+</pre>
+where the host and port determine which service to attach to.
+For security purposes the JConsole tool can not directly attach to Vespa services from external machines.
+</p>
+
+
+<h3 id="connecting-to-a-vespa-instance">Connecting to a Vespa instance</h3>
+<p>
+To attach a JConsole to a Vespa service running on another host,
+create a tunnel from the JConsole host to the Vespa service host.
+This can for example be done by setting up two SSH tunnels as follows:
+<pre>
+$ ssh -N -L&lt;port1&gt;:localhost:&lt;port1&gt; &lt;service-host&gt; &amp;
+$ ssh -N -L&lt;port2&gt;:localhost:&lt;port2&gt; &lt;service-host&gt; &amp;
+</pre>
+where port1 and port2 are determined by the type of service (see below).
+A JConsole can then be attached to the service as follows:
+<pre>
+$ jconsole localhost:&lt;port1&gt;
+</pre>
+Port numbers:
+<table class="table">
+  <thead>
+    <tr>
+      <th>Service</th>
+      <th>Port 1</th>
+      <th>Port 2</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <tr>
+      <td>QRS</td>
+      <td>19015</td>
+      <td>19016</td>
+    </tr>
+    <tr>
+      <td>Docproc</td>
+      <td>19123</td>
+      <td>19124</td>
+    </tr>
+  </tbody>
+</table>
+Updated port information can be found by running:
+<pre>
+$ vespa-model-inspect service &lt;servicename&gt;
+</pre>
+where the resulting RMIREGISTRY and JMX lines determine port1 and port2, respectively.
+</p>
+
+
+<h3 id="examining-thread-states">Examining thread states</h3>
+<p>
+The state of each container is available in JConsole by pressing the Threads tab
+and selecting the thread of interest in the threads list.
+Threads of interest includes search, connector, closer, transport and
+acceptor (the latter four are used for backend communications):
+</p>
+<figure>
+  <img src="img/troubleshooting/jconsole.png" alt="Thread states in JConsole." />
+</figure>

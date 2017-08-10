@@ -1,0 +1,127 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa Benchmarking"
+---
+
+<p>
+Benchmarking a Vespa application is essential to get an idea of
+how well the test configuration performs.
+Thus, benchmarking is an essential part of sizing a search cluster itself.
+Benchmarking a cluster can answer the following questions:
+<ul>
+<li>What throughput and latency can you expect from a search node?</li>
+<li>Which resource is the bottleneck in the system?</li>
+</ul>
+These in turn indirectly answers other questions such as how many nodes are needed,
+and if it will help to upgrade your disk or CPU.
+Thus, benchmarking will help you get the optimal Vespa configuration,
+using all resources optimally, which in turn lowers your costs.
+But when should you benchmark?
+A good rule is to benchmark whenever your workload changes.
+You should benchmark before you setup your system initially.
+More benchmarking should be done when adding new features to your queries.
+</p><p>
+Before you start benchmarking, consider:
+<ul>
+<li>What is your expected query mix? Having a representative query mix
+    to test with is essential in order to get useful
+    results. Splitting up in different types of queries is also a
+    useful way to get an idea of which query is the heaviest.</li>
+<li>What is the expected SLA, both in terms of latency and
+    throughput?</li>
+<li>How important is real-time behavior for you? What is the rate of
+    incoming documents, if any?</li>
+</ul>
+Having an understanding of the query mix and SLA will help setting
+the parameters of the benchmarking tools.
+</p>
+
+
+
+<h2 id="benchmarking-tools">Benchmarking tools</h2>
+<p>
+Vespa provides a load generator tool, <a href="fbench.html">vespa-fbench</a>,
+to run queries and generate statistics, much like a traditional web server load generator.
+Fbench allows you to run any number of <em>clients</em>
+(i.e. the more clients, the higher load), for any length of time,
+and adjust the client response time before issuing another query.
+As outputs, vespa-fbench gives you the throughput, max, min, and average latency,
+as well as the 25, 50, 75, 90, 95 and 99 percentiles,
+allowing you to get quite accurate information of how well the system manages the workload.
+</p>
+
+
+
+<h2 id="preparing-queries">Preparing queries</h2>
+<p>
+vespa-fbench uses <em>query files</em>, which are files where each line is a query
+following this pattern: <code>/search/?query=foo&amp;parameter=blabla</code>
+</p><p>
+A common way to make query files is to use the queries from production installations,
+or generate the queries from the document feed or expected queries.
+Fbench runs each client in a separate thread, and to get a realistic query load,
+one should split the query files into one file per client.
+The <em>vespa-fbench-split-file</em> utility, can assist processing a query file for vespa-fbench.
+Having prepared the query files, one can move over to running the benchmark.
+</p>
+
+
+
+<h2 id="benchmark">Benchmark</h2>
+<p>
+A typical vespa-fbench command looks like:
+<pre>
+$ vespa-fbench -n 8 -q query%03d.txt -s 300 -c 0 myhost.mydomain.com 8080
+</pre>
+This starts 8 clients, each using queries from a query file
+prefixed with <code>query</code>, followed by the client number.
+This way, client 1 will use <code>query000.txt</code> etc.
+The <code>-s</code> parameter indicates that the benchmark will run for 300 seconds.
+The <code>-c</code> parameter, states that each
+client should wait for 0 milliseconds between each query.
+This enables you to control user interactivity.
+The last two parameters are the QRS hostname and port.
+Multiple QRS hosts and ports may be provided,
+and the clients will be uniformly distributed to query the QRS hosts round robin.
+</p><p>
+Run vespa-fbench with no arguments for more help.
+</p>
+
+
+
+<h2 id="post-processing">Post Processing</h2>
+<p>
+Having completed the benchmark, vespa-fbench will provide you with a summary - example:
+<pre>
+***************** Benchmark Summary *****************
+clients:                      30
+ran for:                    1800 seconds
+cycle time:                    0 ms
+lower response limit:          0 bytes
+skipped requests:              0
+failed requests:               0
+successful requests:    12169514
+cycles not held:        12169514
+minimum response time:      0.82 ms
+maximum response time:   3010.53 ms
+average response time:      4.44 ms
+25 percentile:              3.00 ms
+50 percentile:              4.00 ms
+75 percentile:              6.00 ms
+90 percentile:              7.00 ms
+95 percentile:              8.00 ms
+99 percentile:             11.00 ms
+actual query rate:       6753.90 Q/s
+utilization:               99.93 %
+</pre>
+The various aspects of latency and throughput are covered.
+It is also important to take note of the number of <em>failed requests</em>,
+as a high number here can indicate that the system is overloaded
+or that the queries are invalid.
+</p><p>
+There are also tools to format the vespa-fbench output into something more
+manageable for plotting.
+<code>resultfilter.pl</code> formats the above output into a space-separated format.
+</p>
+
+

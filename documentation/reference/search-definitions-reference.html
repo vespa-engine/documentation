@@ -1,0 +1,2711 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Search Definition reference"
+---
+
+<p>
+This document lists the syntax and content of search definitions,
+document types and fields. This is a reference,
+read <a href="../search-definitions.html">search definitions</a> first for an overview.
+Find an <a href="#example">example</a> at the end.
+</p><p>
+There must be at least one search definition (.sd) file containing a search element in
+an <a href="../cloudconfig/application-packages.html">application package</a>.
+</p>
+
+
+
+<h1 id="search_definition_syntax">Search definition syntax</h1>
+<p>
+Throughout this document, a string in square brackets represents some argument.
+The whole string, including the brackets, is replaced by a concrete string in a search definition.
+</p><p>
+Constructs in search definitions have a regular syntax. Each element
+starts by the element <em>identifier</em>, possibly followed by the
+<em>name</em> of this particular occurrence of the element, possibly followed by a
+space-separated list of interleaved <em>attribute names</em> and
+<em>attribute values</em>,
+possibly followed by the <em>element body</em>.
+Thus, one will find elements of these varieties:
+<pre>
+[element-identifier] : [element-body]
+</pre>
+<pre>
+[element-identifier] [element-name] : [element-body]
+</pre>
+<pre>
+[element-identifier] [element-name] [attribute-name] [attribute-value]
+</pre>
+<pre>
+[element-identifier] [element-name] [attribute-name] [attribute-value] {
+    [element-body]
+}
+</pre>
+Note that one-line element values starts by a colon and ends by
+newline. Multiline values (for fields supporting them) are any block
+of text enclosed in curly brackets.
+Comments may be inserted anywhere and start with a hash (#).
+</p>
+
+
+
+<h1 id="search-definition-elements">Search definition elements</h1>
+<p>
+A search definition must contain no more than one search clause - elements:
+</p>
+<pre>
+<a href="#search">search</a>
+    <a href="#document">document</a>
+        <a href="#struct">struct</a>
+            <a href="#field">field</a>
+                <a href="#match">match</a>
+        <a href="#field">field</a>
+            <a href="#alias">alias</a>
+            <a href="#attribute">attribute</a>
+            <a href="#bolding">bolding</a>
+            <a href="#id">id</a>
+            <a href="#index">index</a>
+            <a href="#indexing">indexing</a>
+            <a href="#indexing-rewrite">indexing-rewrite</a>
+            <a href="#match">match</a>
+            <a href="#normalizing">normalizing</a>
+            <a href="#query-command">query-command</a>
+            <a href="#rank">rank</a>
+            <a href="#rank-type">rank-type</a>
+            <a href="#sorting">sorting</a>
+            <a href="#stemming">stemming</a>
+            <a href="#struct-field">struct-field</a>
+                <a href="#indexing">indexing</a>
+                <a href="#match">match</a>
+                <a href="#query-command">query-command</a>
+                <a href="#struct-field">struct-field</a>
+                 &hellip;
+                <a href="#summary">summary</a>
+                <a href="#summary-to">summary-to</a>
+            <a href="#summary">summary</a>
+            <a href="#summary-to">summary-to</a>
+            <a href="#weight">weight</a>
+            <a href="#weightedset">weightedset</a>
+        <a href="#compression">compression</a>
+    <a href="#index">index</a>
+    <a href="#field">field</a>
+    <a href="#fieldset">fieldset</a>
+    <a href="#rank-profile">rank-profile</a>
+        <a href="#match-phase">match-phase</a>
+            <a href="#match-phase-attribute">attribute</a>
+            <a href="#match-phase-order">order</a>
+            <a href="#match-phase-max-hits">max-hits</a>
+            <a href="#diversity">diversity</a>
+                <a href="#diversity-attribute">attribute</a>
+                <a href="#diversity-min-groups">min-groups</a>
+        <a href="#firstphase-rank">first-phase</a>
+            <a href="#keep-rank-count">keep-rank-count</a>
+            <a href="#rank-score-drop-limit">rank-score-drop-limit</a>
+            <a href="#rankfeatures-expression">expression</a>
+        <a href="#ignore-default-rank-features">ignore-default-rank-features</a>
+        <a href="#num-threads-per-search">num-threads-per-search</a>
+        <a href="#rank">rank</a>
+        <a href="#rank-type">rank-type</a>
+        <a href="#rankfeatures">rank-features</a>
+        <a href="#constants">constants</a>
+        <a href="#rankproperties">rank-properties</a>
+        <a href="#secondphase-rank">second-phase</a>
+            <a href="#rankfeatures-expression">expression</a>
+            <a href="#rerank-count">rerank-count</a>
+        <a href="#summaryfeatures">summary-features</a>
+    <a href="#constant">constant</a>
+    <a href="#stemming">stemming</a>
+    <a href="#document-summary">document-summary</a>
+        <a href="#summary">summary</a>
+    <a href="#annotation">annotation</a>
+        <a href="#field">field</a>
+    <a href="#import-field">import field</a>
+</pre>
+
+
+
+<h2 id="search">search</h2>
+<p>
+The root element of search definitions. A search definition describes
+how some data should be stored, indexed, ranked and presented in
+results. A search definition must be defined in a file named
+<code>[search-definition-name].sd</code>.
+<pre>
+search [name] {
+    [body]
+}
+</pre>
+The body is mandatory and may contain:
+</p>
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#document">document</a></td>
+<td>A document defined in this search definition.</td>
+<td>One</td>
+</tr>
+
+<tr><td><a href="#field">field</a></td>
+<td>A field not contained in the document.
+Use fields outside documents when you want to derive new field values
+to be placed in the indexing structure from document fields.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#fieldset">fieldset</a></td>
+<td>
+A field set to provide a way to group document fields together for searching. When you query a field set,
+you will get results from all the fields in the field set.
+</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#rank-profile">rank-profile</a></td>
+<td>An explicitly defined set of ranking settings.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#constant">constant</a></td>
+<td>A constant tensor located in a file used for ranking.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#stemming">stemming</a></td>
+<td>The default stemming setting. Default is <code>shortest</code>.
+  Not applicable to <a href="../streaming-search.html">streaming search</a></td>
+<td>Zero or one</td>
+</tr>
+
+<tr><td><a href="#document-summary">document-summary</a></td>
+<td>An explicitly defined document summary.</td>
+<td>Zero to many</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+<h2 id="document">document</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>.
+Describes a document type. This can also be the root of the search
+definition, if the document is not to be searched directly. A document
+type may inherit the fields of one or more other document types. If no
+document types are explicitly inherited, the document inherits the
+generic <code>document</code> type.
+<pre>
+document [name] inherits [name-list] {
+    [body]
+}
+</pre>
+The document name is optional, it defaults to the containing <code>search</code>
+ element's name. If there is no containing <code>search</code> element, the document name is required.
+</p><p>
+The <code>inherits</code> attribute is optional and has as value a comma-separated
+list of names of other document types.
+</p><p>
+The body of a document type is optional and may contain:
+</p>
+<table class="table">
+<thead>
+  <tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#struct">struct</a></td>
+<td>A struct type definition for this document.</td><td>Zero to many</td></tr>
+
+<tr><td><a href="#field">field</a></td><td>A field of this document.
+</td><td>Zero to many</td></tr>
+
+<tr><td><a href="#compression">compression</a></td>
+<td>Specifies compression options for documents of this document type in storage.</td>
+<!-- ToDo Check does this apply to proton? -->
+<td>Zero to one</td>
+</tr>
+</tbody>
+</table>
+
+
+
+<h2 id="struct">struct</h2>
+<p>
+Contained in <code><a href="#document">document</a></code>.
+Defines a composite type. A struct consists of zero or more
+fields that the user can access together as one. The struct has to be
+defined before it is used as a type in a field specification.
+<pre>
+struct [name] {
+    [body]
+}
+</pre>
+The struct name should not contain any underscores.
+</p><p>
+Please note that struct types is not supported by indexed search and
+the behavior of operations over struct fields is undefined.
+<!--  ToDo Rewrite: struct fields in summary is OK - i.e. use structs in document store -->
+Searching in struct elements is  supported by
+<a href="../streaming-search.html">streaming search</a>.
+</p><p>
+The body of a struct is optional and may contain:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#field">field</a></td><td>A field of this struct.
+</td><td>Zero to many</td></tr>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="field">field</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>,
+<code><a href="#document">document</a></code>,
+<code><a href="#struct">struct</a></code> or
+<code><a href="#annotation">annotation</a></code>.
+Defines a named value with a type and (optionally) how this field
+should be stored, indexed, searched, presented and how it should influence ranking.
+<pre>
+field [name] type <a href="#field_types">[type-name]</a> {
+    [body]
+}
+</pre>
+You should stay away from using names that are used for other
+purposes in the indexing language or other places in the search
+definition file. The currently reserved names are:
+<ul>
+  <li>attribute</li>
+  <li>body</li>
+  <li>case</li>
+  <li>context</li>
+  <li>documentid</li>
+  <li>else</li>
+  <li>header</li>
+  <li>hit</li>
+  <li>host</li>
+  <li>if</li>
+  <li>index</li>
+  <li>position</li>
+  <li>reference</li>
+  <li>relevancy</li>
+  <li>sddocname</li>
+  <li>summary</li>
+  <li>switch</li>
+  <li>tokenize</li>
+</ul>
+
+Other names not to use include any words that start with a
+number or includes other special characters and words that match elements in the QRS output.</p>
+</p><p>
+The <em>type</em> attribute is mandatory and has one of the following values:
+</p>
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Type</th></tr>
+</thead><tbody>
+<tr><td><a href="#type:annotationreference">annotationreference&lt;annotationtype&gt;</a></td>
+    <td>Declares a reference to an annotation on a given string.
+      Should only be used for fields declared inside <a href="#annotation">annotation</a>,
+      or as a base type by the use of any of the compound types listed above,
+      inside <a href="#annotation">annotation</a>.</td></tr>
+<tr><td><a href="#type:array">array&lt;element-type&gt;</a></td><td>An array of <code>element-type</code>.
+  The element type can be any single value type.</td></tr>
+<tr><td><a href="#type:weightedset">weightedset&lt;element-type&gt;</a></td><td>A weighted set:
+  Like an array, but each element is also assigned an integer <em>weight</em>.</td></tr>
+<tr><td><a href="#type:byte">byte</a></td><td>signed 8-bit integer</td></tr>
+<tr><td><a href="#type:double">double</a></td><td>64-bit IEEE 754 floating point</td></tr>
+<tr><td><a href="#type:float">float</a></td><td>32-bit IEEE 754 floating point</td></tr>
+<tr><td><a href="#type:int">int</a></td><td>signed 32-bit integer</td></tr>
+<tr><td><a href="#type:long">long</a></td><td>signed 64-bit integer</td></tr>
+<tr><td><a href="#type:position">position</a></td><td>Document position in geographical coordinates,
+  e.g. latitude and longitude.</td></tr>
+<tr><td><a href="#type:predicate">predicate</a></td><td>A boolean expression in predicate logic.</td></tr>
+<tr><td><a href="#type:raw">raw</a></td><td>binary data</td></tr>
+<tr><td><a href="#type:string">string</a></td><td>any text</td></tr>
+<tr><td><a href="#type:struct">structname</a></td><td>Declares a field with a specific struct type,
+  given by the struct name. <a href="#type:map">Indexing restrictions</a></td></tr>
+<tr><td><a href="#type:map">map&lt;key-type,value-type&gt;</a></td><td>A map using the given types as keys and values.
+  Keys and values can be any type. <a href="#type:map">Indexing restrictions</a></td></tr>
+<tr><td><a href="#type:tensor">tensor</a></td><td>A tensor with a set of named dimensions and a set of values
+  located in the space of those dimensions.</td></tr>
+<tr><td><a href="#type:uri">uri</a></td><td>A Uniform Resource Identifier (a URL or any other unique string id)</td></tr>
+</tbody>
+</table>
+<p>
+The body of a field is optional for <code><a href="#search">search</a></code>,
+<code><a href="#document">document</a></code> and
+<code><a href="#struct">struct</a></code>, and <strong>disallowed</strong> for
+<code><a href="#annotation">annotation</a></code>. It may contain the following elements:
+</p>
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#alias">alias</a></td>
+<td>Make an index or attribute available in searches under an additional name</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#attribute">attribute</a></td>
+<td>Specify an attribute setting.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#bolding">bolding</a></td>
+<td>Specifies whether content of this field should be bolded.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#id">id</a></td>
+<td>Explicitly decide the numerical id of this field. Is normally not necessary, but can be used to save some disk space.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#index">index</a></td>
+<td>Specify a parameter of an index. <em>Not applicable to streaming search</em></td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#indexing">indexing</a></td>
+<td>The indexing statements used to create index structure additions
+from this field.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#indexing-rewrite">indexing-rewrite</a></td>
+<td>Determines the rewriting Vespa is allowed to do on the indexing
+statements of this field.<em>Not applicable to streaming search</em></td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#match">match</a></td>
+<td>Set the matching type to use for this field.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#normalizing">normalizing</a></td>
+<td>Specifies the kind of spelling normalizing to do on this field.</td>
+<td>Zero or one.</td>
+</tr>
+
+<tr><td><a href="#query-command">query-command</a></td>
+<td>Specifies a command which can be received by a plugin searcher in
+the QRS.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#rank">rank</a></td>
+<td>The high level ranking method to use for the field</td>
+<td>Zero or one</td>
+</tr>
+
+<tr><td><a href="#rank-type">rank-type</a></td>
+<td>Selects the set of low-level rank settings to be used for this field when using default <code>nativeRank</code>.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#sorting">sorting</a></td>
+<td>The sort specification for this field.</td>
+<td>Zero or one.</td>
+</tr>
+
+<tr><td><a href="#stemming">stemming</a></td>
+<td>Specifies the kind of stemming to use for this field. <em>Not applicable to streaming search</em></td>
+<td>Zero or one.</td>
+</tr>
+
+<tr><td><a href="#struct-field">struct-field</a></td>
+<td>A subfield of a field of type struct. The struct must have been defined to
+contain this subfield in the struct definition. If you want the subfield to
+be handled differently from the rest of the struct, you may specify it within
+the body of the struct-field.</td>
+<td>Zero to many.</td>
+</tr>
+
+<tr><td><a href="#summary">summary</a></td>
+<td>Sets a summary setting of this field, set to <code>dynamic</code>
+to make a dynamic summary.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#summary-to">summary-to</a></td>
+<td>The list of document summary names this should be included in. <em>Not applicable to streaming search, instead declare non-standard summaries in a document-summary tag outside of the document declaration</em></td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#weight">weight</a></td>
+<td>The importance of a term boost field, a positive integer.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#weightedset">weightedset</a></td>
+<td>Attributes of a weighted set type.</td>
+<td>Zero to one</td>
+</tr>
+</tbody>
+</table>
+<p>
+If the field is part of a struct definition, i.e. contained in the
+<code><a href="#struct">struct</a></code> element,
+only <code><a href="#match">match</a></code> may be specified.
+</p><p>
+If the field is of type struct, only
+<code><a href="#indexing">indexing</a></code>,
+<code><a href="#match">match</a></code> and
+<code><a href="#query-command">query-command</a></code> may be specified.</p>
+<p>
+A <code>field</code> declared outside of a <code>document</code> tag (i.e. immediately within
+a <code>search</code> tag) is referred to as an <em>extra-field</em>. Such fields may not be set directly,
+not programmatically and not through a feed - doing so will cause the document to be rejected by the indexer.
+Extra-field may only be populated using <a href="advanced-indexing-language.html">indexing statements</a>
+that input the value of proper fields
+(e.g. <code>indexing: input my_document_field | normalize | summary | index</code>).
+</p>
+
+
+
+<h2 id="struct-field">struct-field</h2>
+<p>
+Contained in <code><a href="#field">field</a></code> or
+<code><a href="#struct-field">struct-field</a></code>.
+Defines how this struct field (a subfield of a struct) should be stored,
+indexed, searched, presented and how it should influence ranking.
+The field in which this struct field is contained must be of
+type struct, which has defined this struct field.
+Note that struct fields are only available for streaming search.
+<pre>
+field [name] {
+    [body]
+}
+</pre>
+The body of a struct field is optional and may contain the following elements:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#indexing">indexing</a></td>
+<td>The indexing statements used to create index structure additions
+from this field.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#match">match</a></td>
+<td>Set the matching type to use for this field.</td>
+<td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#query-command">query-command</a></td>
+<td>Specifies a command which can be received by a plugin searcher in
+the QRS.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#struct-field">struct-field</a></td>
+<td>A subfield of a field of type struct. The struct must have been defined to
+contain this subfield in the struct definition. If you want the subfield to
+be handled differently from the rest of the struct, you may specify it within
+the body of the struct-field.</td>
+<td>Zero to many.</td>
+</tr>
+
+<tr><td><a href="#summary">summary</a></td>
+<td>Sets a summary setting of this field, set to <code>dynamic</code>
+to make a dynamic summary.</td>
+<td>Zero to many</td>
+</tr>
+
+<tr><td><a href="#summary-to">summary-to</a></td>
+<td>The list of document summary names this should be included in.</td>
+<td>Zero to one</td>
+</tr>
+</tbody>
+</table>
+If this struct field is of type struct (i.e. a nested struct), only
+<code><a href="#indexing">indexing</a></code>,
+<code><a href="#match">match</a></code> and
+<code><a href="#query-command">query-command</a></code> may be specified.
+</p>
+
+
+
+<h2 id="fieldset">fieldset</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>.
+<strong>Note:</strong> this is not related to the <a href="../documents.html#fieldsets">Document fieldset</a>.
+</p><p>
+Field sets provide a way to group fields together for searching. When you query a field set,
+you will get results from all the fields in the field set. Given the clause below:
+<pre>
+fieldset myfieldset {
+  fields: a,b,c
+}
+</pre>
+Using the query <code>yql=select+*+from+sources+*+where+myfieldset+contains+"foo"%3B</code>
+will return all the documents for which one or more of the fields a, b or c contain "foo".
+By naming the field set 'default', you can search those fields without
+specifying the field set in unstructured queries: <code>query=foo</code>.
+</p><p>
+The fields making up the field set should be as similar as possible in terms of indexing clause, matching etc.
+If they are not, you must test your application thoroughly. For example, it will work for a mix of attributes
+and indexes, but the matching for attribute fields will always be exact unless you are in streaming mode.
+</p><p>
+If you need specific match settings for the field set, such as exact, you must specify it using a
+<a href="#match">match</a> clause:
+<pre>
+fieldset myfieldset {
+  fields: a,b,c
+  match {
+    exact
+  }
+}
+</pre>
+You may use <code><a href="#query-command">query-commands</a></code> in the field set to set search settings.
+Example:
+<pre>
+fieldset myfieldset {
+  fields: a,b,c
+  query-command:"exact @@"
+}
+</pre>
+</p>
+
+
+
+<h2 id="compression">compression</h2>
+<!-- ToDo Check compression -->
+<p>
+Contained in <code><a href="#document">document</a></code>.
+If a compression level is set within this element,
+<strong>lz4</strong> compression is enabled for whole documents.
+<pre>
+compression {
+    [body]
+}
+</pre>
+The body of a compression specification is optional and may contain:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td id="type">type</a></td>
+<td><strong>LZ4</strong> is the only valid compression method.</td>
+<td>Zero to one</td>
+</tr>
+<tr><td id="level">level</a></td>
+<td>Enable compression. LZ4 is linear and 9 means HC(high compression)</td>
+<td>Zero to one</td>
+</tr>
+<tr><td id="threshold">threshold</a></td>
+<td>A percentage (multiplied by 100) giving the maximum size that
+  compressed data can have to keep the compressed value.
+  If the resulting compressed data is higher than this,
+  the document will be stored uncompressed. Default value is 95.</td>
+<td>Zero to one</td>
+</tr>
+</tbody>
+</table>
+</p>
+
+
+<h2 id="rank-profile">rank-profile</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>.
+A rank profile is a named set of rank settings which can be specified
+during queries (see the <code>ranking</code> parameter in the
+<a href="../reference/search-api-reference.html">search API</a>).
+</p><p>
+Rank profiles are used to specify an alternative ranking of the same data for
+different purposes, and to experiment with new rank settings.
+If no explicit rank profile is specified, one called "default" is implicitly
+created to hold the rank settings from each field. The "default" rank profile
+is always selected for queries which does not specify one. It is possible to
+add additional settings to the default rank profile by explicitly defining it.
+<pre>
+rank-profile [name] inherits [rank-profile] {
+    [body]
+}
+</pre>
+The <code>inherits</code> attribute is optional. If defined, it
+contains the name of one other rank profile in the same search
+definition. Values not defined in this rank profile will then be
+inherited as expected. It is possible to inherit the default rank
+profile, even if it is not explicitly listed.
+</p><p>
+In addition to the <code>default</code> rank profile, a profile named <code>unranked</code> is implicitly created.
+This rank-profile makes sure that the rank phases in the search backend are skipped and
+should be used for queries that only require matching and do not use ranking.
+If you are sorting on something different than rank score this is also the profile to use.
+Note that this profile should not be used if the query contains <code>Wand</code> search operators.
+Also note that using this profile will give better performance as the rank phases are skipped.
+</p><p>
+The body of a rank-profile may contain:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#match-phase">match-phase</a></td>
+<td>Ranking configuration to be used for hit limitation during matching.</td>
+<td>Zero or one</td>
+</tr>
+<tr><td><a href="#firstphase-rank">first-phase</a></td>
+<td>The ranking config to be used for first-phase ranking.</td>
+<td>Zero or one</td>
+</tr>
+<tr><td><a href="#rankfeatures">rank-features</a></td>
+<td>The <a href="../reference/rank-features.html">rank features</a> to be dumped when using the query-argument
+  <a href="search-api-reference.html#ranking.listFeatures">rankfeatures</a>.</td>
+<td>Zero or more</td>
+</tr>
+<tr><td><a href="#secondphase-rank">second-phase</a></td>
+<td>The ranking config to be used for second-phase ranking.</td>
+<td>Zero or one</td>
+</tr>
+<tr><td><a href="#summaryfeatures">summary-features</a></td>
+<td>The <a href="../reference/rank-features.html">rank features</a> to be dumped for all queries.</td>
+<td>Zero or more</td>
+</tr>
+<tr><td id="ignore-default-rank-features">ignore-default-rank-features</td>
+<td>Do not dump the default set of rank features, only those explicitly specified with the <a href="#rankfeatures">rank-features</a> command.</td>
+<td>Zero or one</td>
+</tr>
+<tr><td id="num-threads-per-search">num-threads-per-search</td>
+<td>Overrides the global
+<a href="../content/setup-proton-tuning.html#tuningrequestthreads">persearch</a> threads to a <strong>lower</strong> value.</td>
+<td>Zero or one</td>
+</tr>
+<tr><td><a href="#constants">constants</a></td>
+<td>List of constant key/value pairs available in ranking expressions.</td>
+<td>Zero or one</td>
+</tr>
+<tr><td><a href="#rankproperties">rank-properties</a></td>
+<td>List of any rank property key-values to be used by rank features.</td>
+<td>Zero or one</td>
+</tr>
+<tr><td><a href="#macro-rank">macro [name] </a></td>
+<td>A way to simply ranking expression by defining named macros that can be referenced during ranking phase(s) and as part of the summary-features.</td>
+<td>Zero or more</td>
+</tr>
+<tr><td><a href="#rank">rank</a></td>
+<td>The high level ranking method to use for a field in this profile.</td>
+<td>Zero or more</td>
+</tr>
+<tr><td><a href="#rank-type">rank-type</a></td>
+<td>The rank type of a field in this profile.</td>
+<td>Zero or more</td>
+</tr>
+</tbody>
+</table>
+Refer to the rank profiles defined in the example below.
+</p>
+
+
+
+<h2 id="match-phase">match-phase</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+The config specifying ranking to be used during matching.
+This is used to limit the result set in order to cut latency.
+It is particularly useful if the first-phase ranking is expensive.
+It can be used for sorting on numeric values to limit the evaluated result set.
+<p></p>
+Match-phase is a feature for performance optimization -
+how to rank documents using a quality attribute and using estimates to cut evaluation -
+read more in the <a href="../performance/sizing-search.html#using-match-phase-to-reduce-latency">sizing guide</a>.
+<pre>
+match-phase {
+    attribute: [numeric single value attribute]
+    order: [ascending | descending]
+    max-hits: [integer]
+    diversity
+}
+</pre>
+<table class="table">
+<thead>
+  <tr><th>Name</th><th>Description</th></tr>
+</thead><tbody>
+  <tr><td id="match-phase-attribute">attribute</td>
+  <td>Which attribute to use as the quality signal. The attribute referenced must be a single valued numeric attribute
+    with <a href="#attribute">fast-search</a> enabled. No default.</td></tr>
+  <tr><td id="match-phase-order">order</td>
+  <td>Whether the attribute should be used in <code>descending</code> order (prefer documents with a high score)
+    or <code>ascending</code> order (prefer documents with a low value in the attribute).
+    Usually it is not necessary to specify this, as the default value <code>descending</code>
+    is by far the most common.</td></tr>
+  <tr><td id="match-phase-max-hits">max-hits</td>
+  <td>Requested hits per search node.  Usually a number like 10000 works well here.
+    The default is 1400. <em>ToDo Check this</em></td></tr>
+  <tr><td id="match-phase-diversity">diversity</td>
+  <td>Guarantee a minimum result set <a href="#diversity">diversity</a>.</td></tr>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="diversity">diversity</h2>
+<p>
+Contained in <code><a href="#match-phase">match-phase</a></code>.
+Diversity is used to specify diversity in different phases -
+supported in <code><a href="#match-phase">match-phase</a></code>.
+It is used to guarantee a minimum result set  diversity.
+</p><p>
+Specify the name of an attribute that will be used to provide diversity.
+Result sets are guaranteed to get at least <code><a href="#diversity-min-groups">min-groups</a></code>
+unique values from the <code><a href="#diversity-min-groups">diversity attribute</a></code> from this phase.
+A document is considered as a candidate if:
+<ul>
+  <li>The query has not yet reached the <code><a href="#match-phase-max-hits">max-hits</a></code>
+    number produced from this phase.</li>
+  <li>The query has not yet reached the max number of candidates in one group.
+    This is computed by the <code><a href="#match-phase-max-hits">max-hits</a></code>
+    of the phase divided by <code><a href="#diversity-min-groups">min-groups</a></code></li>
+</ul>
+<pre>
+diversity {
+    attribute: [numeric attribute]
+    min-groups: [integer]
+}
+</pre>
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><td id="diversity-attribute">attribute</td>
+      <td>Which attribute to use when deciding diversity.
+        The attribute referenced must be a single valued numeric or string attribute.</td></tr>
+    <tr><td id="diversity-min-groups">min-groups</td>
+      <td>Specifies the minimum number of groups returned from the phase.
+        Using this with <code><a href="#match-phase">match-phase</a></code>
+        often means one can reduce <code><a href="#match-phase-max-hits">max-hits</a></code></td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="firstphase-rank">first-phase</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+The config specifying the first phase of ranking.
+This is the initial ranking performed on all hits, and you should therefore avoid doing heavy rank-calculations here.
+By default, this will use the ranking feature <code>nativeRank</code>.
+<pre>
+first-phase {
+    [body]
+}
+</pre>
+The body of a firstphase-ranking statement consists of:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td><a href="#rankfeatures-expression">expression</a></td>
+<td>Specify the ranking expression to be used for first phase of ranking -
+    see <a href="../reference/ranking-expressions.html">ranking expressions</a>.</td>
+</tr>
+<tr><td id="keep-rank-count">keep-rank-count</td>
+<td>How many documents to keep the first phase top rank values for. Default value is 10000.</td>
+</tr>
+<tr><td id="rank-score-drop-limit">rank-score-drop-limit</td>
+<td>Drop all hits with a first phase rank score less than or equal to this floating point number.
+Default value is -Double.MAX_VALUE.
+</tr>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="rankfeatures-expression">expression</h2>
+<p>
+Contained in <code><a href="#firstphase-rank">first-phase</a></code> or
+<code><a href="#secondphase-rank">second-phase</a></code>.
+Specify a <a href="../reference/ranking-expressions.html">ranking expression</a>.
+The expression can either be written directly or loaded from a file.
+When writing it directly the syntax is:
+<pre>
+expression: [ranking expression]
+</pre>
+or
+<pre>
+expression {
+    [ranking expression]
+    [ranking expression]
+    [ranking expression]
+}
+</pre>
+The second format is primarily a convenience feature when using long expressions, enabling them
+to be split over multiple lines.
+</p><p>
+Expressions can also be loaded from a separate file. This is useful when dealing with the very long
+expressions generated by e.g. MLR. The syntax is:
+<pre>
+expression: file:[path-to-expressionfile]
+</pre>
+The path is relative to the location of the search definition file
+(note: directories are not allowed in the path).
+The file itself must end with <code>.expression</code>. This suffix is optional in the sd-file.
+Therefore <code>expression: file:mlrranking.expression</code> and
+<code>expression: file:mlrranking</code> are identical.
+Both refer to a file called <code>mlrranking.expression</code> in the searchdefinition directory.
+</p>
+
+
+
+<h2 id="rankfeatures">rank-features</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+List of extra <a href="../reference/rank-features.html">rank features</a> to be dumped
+when using the query-argument <a href="search-api-reference.html#ranking.listFeatures">rankfeatures</a>.
+<pre>
+rank-features: [feature] [feature]
+</pre>
+or
+<pre>
+rank-features {
+    [feature]
+    [feature]
+}
+</pre>
+Any number of ranking features can be listed on each line, separated by space.
+</p>
+
+
+
+<h2 id="constants">constants</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+List of constants available in ranking expressions, resolved and optimized at configuration time.
+<pre>
+constants {
+    key: value
+}
+</pre>
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>key</td>
+<td>Name of the constants.
+</tr>
+<tr><td>value</td>
+<td>A number or any string. Must be quoted if it contains spacing.</td>
+</tr>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="rankproperties">rank-properties</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+List of generic properties, in the form of key/value pairs to be used by ranking features.
+<pre>
+rank-properties {
+    key: value
+}
+</pre>
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>key</td>
+<td>Name of the property.
+</tr>
+<tr><td>value</td>
+<td>A number or any string. Must be quoted if it contains spacing.</td>
+</tr>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="macro-rank">macro (inline)? [name]</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+It is possible to define named expression macros that can be referenced as a part of the ranking expression.
+A macro accepts any number of arguments.
+<pre>
+macro [name]([arg1], [arg2], [arg3]) {
+  expression: &hellip;
+}
+</pre>
+or
+<pre>
+macro [name] ([arg1], [arg2], [arg3]) {
+  expression {
+      [ranking expression]
+      [ranking expression]
+      &hellip;
+}
+</pre>
+Note that the parenthesis is required after the name.
+A rank-profile example is shown below:
+<pre>
+rank-profile default inherits default {
+  macro myfeature() {
+    expression: fieldMatch(title) + freshness(timestamp)
+  }
+  macro otherfeature(foo) {
+    expression{ nativeRank(foo, body) }
+  }
+
+  first-phase {
+    expression: myfeature * 10
+  }
+  second-phase {
+    expression: otherfeature(title) * myfeature
+  }
+  summary-features: myfeature
+}
+</pre>
+You can not include macros that accept arguments in summary features.
+</p><p>
+Adding the <code>inline</code> modifier will inline this macro in the calling expression
+if it also has no arguments.
+This is faster for very small and cheap macros (and more expensive for others).
+</p>
+
+
+
+<h2 id="secondphase-rank">second-phase</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+The config specifying the second phase of ranking. This is the optional reranking performed on the best hits from the
+first phase, and where you should put any advanced ranking calculations (e.g. MLR).
+By default, no second-phase ranking is performed.
+<em>In streaming search we perform the second phase ranking on all hits.
+You can therefore put all the rank calculation in the first phase rank expression and just skip second phase.</em>
+<pre>
+second-phase {
+    [body]
+}
+</pre>
+The body of a secondphase-ranking statement consists of:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td><a href="#rankfeatures-expression">expression</a></td>
+<td>Specify the ranking expression to be used for first phase of ranking. (for a description,
+    see the <a href="../reference/ranking-expressions.html">ranking expression</a> documentation.</td>
+</tr>
+<tr><td id="rerank-count">rerank-count</td>
+<td>Optional argument. Specifies the number of hits to be reranked. Default value is 100</td>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="summaryfeatures">summary-features</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+List of <a href="../reference/rank-features.html">rank
+features</a> to be dumped for every query. Using many items will have a
+performance impact, a larger list to be returned only when requested can
+be specified in <a href="#rankfeatures">ranking features</a>.
+<pre>
+summary-features: [feature] [feature]&hellip;
+</pre>
+or
+<pre>
+summary-features {
+    [feature]
+    [feature]
+}
+</pre>
+Any number of ranking features can be listed on each line, separated by space.
+</p>
+
+
+
+<h2 id="constant">constant</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>.
+This defines a named constant tensor located in a file with a given type
+that can be used in ranking expressions via the rank feature
+<a href="../reference/tensor.html#constant-feature">constant</a>.
+A constant with a given name is defined as follows:
+<pre>
+constant [name] {
+    [body]
+}
+</pre>
+The body of a constant must contain:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td>file</td>
+<td>Path to the location of the file containing the constant tensor. The path is relative to the root of the application package containing this sd-file.
+The format of the file is JSON and is the same as when specifying a tensor field in a document put or update.
+Please look at <a href="../reference/document-json-format.html#tensor">Document JSON Format</a> for reference.<br />
+Vespa supports LZ4 compression of tensors, which can be an option for large tensor files.
+If the filename ends with ".json.lz4", Vespa will assume the tensor has been LZ4 compressed, and will decompress the contents automatically.
+</p>
+
+</td>
+<td>One</td>
+</tr>
+<tr><td>type</td>
+<td>The type of the constant tensor. Please look at <a href="#tensor-type-spec">tensor-type-spec</a> for reference.</td>
+<td>One</td>
+</tr>
+</tbody>
+</table>
+The following example shows how to define a constant tensor:
+<pre>
+constant my_constant_tensor {
+    file: constants/my_constant_tensor_file.json
+    type: tensor(x{},y{})
+}
+</pre>
+In this example we have a constant tensor with two mapped dimensions, <code>x</code> and <code>y</code>.
+An example JSON file with such tensor constant:
+<pre>
+{
+    "cells": [
+        { "address": { "x": "a", "y": "b"}, "value": 2.0 },
+        { "address": { "x": "c", "y": "d"}, "value": 3.0 }
+    ]
+}
+</pre>
+When an application with tensor constants are deployed, the files are distributed to the search nodes using
+<a href="../reference/services-admin.html#filedistribution">filedistribution</a>
+before the new configuration is being used by the search nodes.
+We do not support incremental changes to constant tensors.
+When they change, you must replace the old file with a new one and re-deploy the application
+or introduce a new constant with a new name using the new file.
+</p>
+
+
+
+<h2 id="document-summary">document-summary</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>.
+An explicitly defined document summary. By default, a document summary
+named <code>default</code> is created.  Using this element, other document
+summaries containing a different set of fields can be created.
+<pre>
+document-summary [name] {
+    [body]
+}
+</pre>
+The body of a document summary consists of:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#summary">summary</a></td>
+<td>A summary field in this document summary.</td>
+<td>Zero to many</td>
+</tr>
+</tbody>
+</table>
+Use the <a href="search-api-reference.html#presentation.summary">summary</a>
+query parameter to choose a document summary in searches.
+See also <a href="../document-summaries.html">document summaries</a>.
+</p>
+
+
+
+<h2 id="stemming">stemming</h2>
+<p>
+Contained in <code><a href="#field">field</a></code>,
+<code><a href="#search">search</a></code> or
+<code><a href="#index">index</a></code>.
+Sets how to stem a field or an index, or how to stem by default.
+<a href="../stemming.html">Read more on stemming</a>.
+<em>Note: Not applicable to <a href="../streaming-search.html">streaming search</a></em>.
+<pre>
+stemming: [stemming-type]
+</pre>
+The stemming types are:
+<table class="table">
+<thead>
+<tr><th>Type</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td><code>none    </code></td><td>No stemming: Keep words as they are received.</td></tr>
+<tr><td><code>best    </code></td><td>Use the 'best' stem of each word according to some heuristic scoring.</td></tr>
+<tr><td><code>shortest</code></td><td>Use the shortest stem of each word. This is the default setting.</td></tr>
+<tr><td><code>multiple</code></td><td>Use multiple stems. Retains all stems returned from the linguistics library.</td></tr>
+</tbody>
+</table>
+Note: When combining multiple fields in a <a href="#fieldset">fieldset</a>,
+all fields should use the same stemming type.
+</p>
+
+
+
+<h2 id="normalizing">normalizing</h2>
+<p>Contained in <code><a href="#field">field</a></code>.
+Sets the normalizing to be done on this field. Normalizing will cause accents
+and similar decorations which are often misspelled to be normalized
+the same way both in documents and queries.
+<em>Not supported in <a href="../streaming-search.html">streaming search</a>.</em>
+<pre>
+normalizing: [normalizing-type]
+</pre>
+The normalizing type available is:
+<table class="table">
+<thead>
+<tr><th>Type</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td><code>none</code></td><td>No normalizing</td></tr>
+</tbody>
+</table>
+If this is not set, normalization will be done for this field.
+</p>
+
+
+
+<h2 id="alias">alias</h2>
+<p>
+Contained in <code><a href="#attribute">attribute</a></code>,
+<code><a href="#field">field</a></code> or
+<code><a href="#index">index</a></code>.
+Makes an index or attribute available under an additional name:
+<pre>
+alias [index/attr-name]: [alias]
+</pre>
+If the index/attribute name is skipped, the containing field or index name is
+used. Alias names can be any name string, dots are allowed as well.
+</p>
+
+
+
+<h2 id="attribute">attribute</h2>
+<p>Contained in <code><a href="#field">field</a></code>.
+Specifies a property of an index structure attribute:</em>
+<pre>
+attribute [attribute-name]: [property]
+</pre>
+or
+<pre>
+attribute [attribute-name] {
+    [property]
+    [property]
+    &hellip;
+}
+</pre>
+The attribute name can be skipped, in which case the field name is used.
+Refer to <a href="../search-definitions.html#modify-search-definitions">
+search definitions</a> for actions required when adding or modifying attributes.
+Read <a href="../attributes.html">Attributes</a> for an introduction to attributes.
+The following properties are available:
+<table class="table">
+<thead>
+<tr><th style="width:150px">Property</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>fast-search</td><td>At the cost of memory, speed up search when there are few hits and there are no other limiting factors.</td></tr>
+<tr><td>fast-access</td><td>
+In an indexed content cluster with
+<a href="services-content.html#searchable-copies"><code>searchable-copies</code></a> &lt;
+<a href="services-content.html#redundancy"><code>redundancy</code></a>
+this property can be set to make sure that this attribute is always kept in memory for fast access in
+the context of applying partial updates and when used in a
+<a href="services-content.html#documents">selection expression</a> for garbage collection.
+If <code>redundancy</code> == <code>searchable-copies</code> (default) this property is a no-op.
+</td></tr>
+<tr><td>huge</td><td>Set <em>huge</em> on multi-value attributes if there are more than 128M documents per node,
+  or there are many documents with more than 14 values for this attribute.
+  The cost is an additional 4 bytes per document,
+  but the loss is more than compensated by better memory management.</td></tr>
+<tr><td><a href="#alias">alias</a></td><td>An alias for the attribute.
+  Add an attribute name before the colon to specify an alias for another attribute than the one given by field name.</td>
+<tr><td><a href="#sorting">sorting</a></td><td>The sort specification for this attribute.</td></tr>
+<tr><td><a href="#tensor-type-spec">[tensor-type-spec]</a></td><td>The tensor type specification for this tensor attribute.</td></tr>
+</tbody>
+</table>
+An attribute is multi-valued if assigning it multiple values during indexing,
+either by using e.g. <em>split</em> and <em>for_each</em>
+or by letting multiple fields write their value to the attribute field.
+</p><p>
+Note that <a href="#normalizing">normalizing</a> and tokenization is not enabled by default for attribute fields.
+Queries in attribute fields are hence not normalized.
+Use <a href="#index">index</a> on fields to enable.
+Both <em>index</em> and <em>attribute</em> can be set on a field.
+</p>
+
+
+
+<h2 id="sorting">sorting</h2>
+<p>
+Contained in <code><a href="#attribute">attribute</a></code> or
+<code><a href="#field">field</a></code>.
+Specifies how sorting should be done.
+<pre>
+sorting : [property]
+</pre>
+or
+<pre>
+sorting {
+    [property]
+    [property]
+    &hellip;
+}
+</pre>
+<table class="table">
+  <thead>
+    <tr><th>Property</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr>
+      <td><code>order</code></td>
+      <td>
+        Either <em>ascending</em> or <em>descending</em>. Default is ascending.
+        Used unless overridden in <a href="../reference/sorting.html">sortspec</a> in query.
+      </td>
+    </tr>
+    <tr>
+      <td><code>function</code></td>
+      <td>
+        The <a href="../reference/sorting.html#sort-function">Sort
+        function</a> to be used.  Implemented functions
+        are <em>raw</em>, <em>lowercase</em>, and <em>uca</em>. The
+        default is <a href="../reference/sorting.html#uca"><em>uca</em></a>,
+        but please note that if no language or locale is specified in
+        the query sortspec, the field, or generally for the
+        query, <a href="../reference/sorting.html#lowercase">lowercase</a>
+        will be used instead. Used unless overridden
+        in <a href="../reference/sorting.html">sortspec</a> in query.
+      </td>
+    </tr>
+    <tr>
+      <td><code>strength</code></td>
+      <td>
+        <a href="../reference/sorting.html#uca">Sort
+        strength</a> to be used. Implemented levels are <em>primary</em>,
+        <em>secondary</em>, <em>tertiary</em>, <em>quaternary</em>
+        and <em>identical</em>. The default is <em>primary</em></a>.
+        Used unless overridden in <a href="../reference/sorting.html">sortspec</a>
+        in query. Only applicable if <code>function</code> is set to <em>uca</em>.
+      </td>
+    </tr>
+    <tr>
+      <td><code>locale</code></td>
+      <td>
+        <a href="../reference/sorting.html#uca">Locale</a>
+        to be used. The default is none, indicating that it is
+        inferred from query. It should only be set here if the
+        attribute is filled with data that is in 1 language only. Used
+        unless overridden in <a href="../reference/sorting.html">sortspec</a>
+        in query. Only applicable if <code>function</code> is set
+        to <em>uca</em>.
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+
+
+<h2 id="tensor-type-spec">tensor-type-spec</h2>
+<p>
+Contained in <code><a href="#attribute">attribute</a></code> or <code><a href="#constant">constant</a></code>.
+Specifies the tensor type for a tensor.
+A tensor type contains a list of dimensions on the format:
+<pre>
+tensor(dimension1,dimension2,...,dimensionN)
+</pre>
+A dimension is specified as follows:
+<ul>
+  <li><code>dimension-name{}</code> - a mapped dimension.
+  <li><code>dimension-name[size]</code> - a bound indexed dimension with the given size.
+  <li><code>dimension-name[]</code> - an unbound indexed dimension.
+</ul>
+We only support tensor types with either only mapped dimensions or
+only bound indexed dimensions.
+</p><p>
+The tensor type for a tensor with two mapped dimensions <em>x</em> and <em>y</em> looks like:
+<pre>
+tensor(x{}, y{})
+</pre>
+Example tensor with this type:
+<pre>{% raw %}
+{{x:a,y:b}:10, {x:c,y:d}:20}
+{% endraw %}</pre>
+The tensor type for a tensor with two bound indexed dimensions <em>x</em> and <em>y</em> with sizes 3 and 2 respectively looks like this:
+<pre>
+tensor(x[3],y[2])
+</pre>
+Example tensor with this type (representing a matrix):
+<pre>{% raw %}
+{{x:0,y:0}:1, {x:0,y:1}:2,
+ {x:1,y:0}:3, {x:1,y:1}:5,
+ {x:2,y:0}:7, {x:2,y:1}:11}
+{% endraw %}</pre>
+Note that the labels are indexes in the range <em>[0,dimension-size&gt;</em>
+</p>
+
+
+
+<h2 id="bolding">bolding</h2>
+<p>
+Contained in <code><a href="#field">field</a></code>.
+Highlight matching query terms in the <a href="#summary">summary</a>:
+<pre>
+bolding: on
+</pre>
+Not applicable to streaming search. Instead use <code>summary: dynamic</code>.
+</p><p>
+The default is no bolding, set <code>bolding: on</code> to enable it. Note that this command is overridden by
+<code>summary: dynamic</code>, if both are specified, bolding will be ignored. The difference between using bolding instead
+of <code>summary: dynamic</code> is the latter will provide a dynamic abstract in addition to highlighting
+search terms while the first only does highlighting.
+</p><p>
+The default XML element used to highlight the search terms is &lt;hi&gt; -
+to override, set <em>container.qr-searchers</em> configuration. Example using &lt;strong&gt;:
+<pre>
+&lt;container&gt;
+  &lt;search&gt;
+    &lt;config name="container.qr-searchers"&gt;
+      &lt;tag&gt;
+        &lt;bold&gt;
+          &lt;open&gt;&amp;lt;strong&amp;gt;&lt;/open&gt;
+          &lt;close&gt;&amp;lt;/strong&amp;gt;&lt;/close&gt;
+        &lt;/bold&gt;
+        &lt;separator&gt;...&lt;/separator&gt;
+      &lt;/tag&gt;
+    &lt;/config&gt;
+  &lt;search&gt;
+&lt;container&gt;
+</pre>
+</p>
+
+
+
+<h2 id="id">id</h2>
+<p>
+Contained in <code><a href="#field">field</a></code>.
+Sets the numerical id of this field.
+All fields have a document-internal id internally for transfer and storage.
+Id's are usually determined programmatically as a 31-bit number.
+Some storage and transfer space can be saved by instead explicitly setting id's to a 7-bit number.
+<!-- ToDo: check is this applies to proton -->
+<pre>
+id: [positive integer]
+</pre>
+An id must satisfy these requirements:</p>
+<ul>
+<li>Must be a positive integer</li>
+<li>Must be less than 100 or larger than 127</li>
+<li>Must be unique within the document and all documents this document inherits</li>
+</ul>
+</p>
+
+
+
+<h2 id="index">index</h2>
+<p>
+Contained in <code><a href="#field">field</a></code> or <code><a href="#search">search</a></code>.
+Sets index parameters.
+Content in fields with <em>index</em> are <a href="#normalizing">normalized</a> and tokenized by default.
+This element can be single- or multi-valued:
+<pre>
+index [index-name]: [property]
+</pre>
+or
+<pre>
+index [index-name] {
+    [property]
+    [property]
+    &hellip;
+}
+</pre>
+The index name can be skipped inside fields, causing the index name to be the field name. Parameters:
+<table class="table">
+<thead>
+<tr><th>Property</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><a href="#alias">alias</a></td>
+<td>Specify an alias to this index to be available in searches.</td>
+<td>Zero to many</td>
+</tr>
+<tr><td><a href="#stemming">stemming</a></td>
+<td>Set the stemming of this index.
+Indexes without a stemming setting get their stemming setting from
+the fields added to the index. Setting this explicitly is useful if
+fields with conflicting stemming settings are added to
+this index.</td>
+<td>Zero to one</td>
+</tr>
+<tr><td><a href="#arity">arity</a></td>
+<td>Set the arity value for boolean search. See
+<a href="../boolean-search.html#index_size">Using Boolean Search with Vespa</a>. The data
+type for the containing field must be <code>predicate</code>.</td>
+<td>One (mandatory for boolean search), else zero.</td>
+</tr>
+<tr><td><a href="#lower-bound">lower-bound</a></td>
+<td>Set the lower bound value for boolean search. See
+<a href="../boolean-search.html#upper_lower_bound">
+Using Boolean Search with Vespa</a>. The data
+type for the containing field must be <code>predicate</code>.</td>
+<td>Zero to one.</td>
+</tr>
+<tr><td><a href="#upper-bound">upper-bound</a></td>
+<td>Set the upper bound value for boolean search. See
+<a href="../boolean-search.html#upper_lower_bound">
+Using Boolean Search with Vespa</a>. The data
+type for the containing field must be <code>predicate</code>.</td>
+<td>Zero to one.</td>
+</tr>
+<tr><td><a href="#dense-posting-list-threshold">dense-posting-list-threshold</a></td>
+<td>Set the dense posting list threshold value for boolean search. See
+<a href="../boolean-search.html#dense_posting_list_threshold">
+Using Boolean Search with Vespa</a>. The data
+type for the containing field must be <code>predicate</code>.</td>
+<td>Zero to one.</td>
+</tr>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="indexing">indexing</h2>
+<p>
+Contained in <code><a href="#field">field</a></code> or
+<code><a href="#struct-field">struct-field</a></code>.
+One or more Indexing Language instructions used to produce index, attribute
+and summary data from this field. Indexing instructions has pipeline
+semantics similar to unix shell commands. The value of the field
+enters the pipeline during indexing and the pipeline puts the value
+into the desired index structures, possibly doing transformations and
+pulling in other values along the way.
+<pre>
+indexing: [index-statement]
+</pre>
+or
+<pre>
+indexing {
+    [indexing-statement];
+    [indexing-statement];
+    &hellip;
+}
+</pre>
+If the field containing this is defined outside the document, it
+must start by an indexing statement which
+outputs a value (either "field [fieldname]" to fetch a field value,
+or a literal). Fields in documents will use the value of the enclosing
+field as input (field [fieldname]) if one isn't explicitly provided.
+</p>
+<p>
+Specify the operations separated by the pipe (<code>|</code>) character.
+For advanced processing needs,
+use the <a href="advanced-indexing-language.html">indexing language</a>,
+or write a <a href="../docproc-development.html"> document processor</a>.
+Supported expressions for fields are:
+</p>
+<table class="table">
+<thead></thead><tbody>
+<tr><th>attribute</th>
+<td>
+  <a href="../attributes.html">Attribute</a> is used to make a field available for sorting and grouping.
+  <!-- ToDo check: All strings are lower-cased before stored in the attribute.
+   or lowercased when searching? -->
+</td></tr>
+<tr><th>index</th>
+<td>
+  Creates a searchable index for the values of this field. All strings
+  are lower-cased before stored in the index.
+  By default the index name will be the same as the name of the search definition field.
+  Use a <a href="#fieldset">fieldset</a> to combine fields in the same set for searching.
+</td></tr>
+<tr><th>set_language</th>
+<td>
+  Sets document language - <a href="advanced-indexing-language.html#set_language">details</a>.
+</td></tr>
+<tr><th>summary</th>
+<td>
+  Includes the value of this field in a <a href="advanced-indexing-language.html#summary">summary</a> field.
+  Modify summary output by using <a href="#summary">summary:</a> (e.g. to generate dynamic teasers).
+</td></tr>
+</tbody>
+</table>
+
+
+
+
+<h2 id="indexing-rewrite">indexing-rewrite</h2>
+<p>Contained in <code><a href="#field">field</a></code>.
+Vespa will normally rewrite indexing statements extensively to
+implement the technical tasks which are required to carry out the
+intentions of the indexing statement. The rewriting done can be
+controlled using this element.
+<pre>
+indexing-rewrite: none
+</pre>
+Include this to let an indexing statement pass through
+unaltered. Note that such statements must begin with an
+<code>input &lt;fieldname&gt;</code>, <code>get_var</code> or
+constant expression. You should understand which rewrites Vespa
+does, and be certain that your indexing statement can do without them
+to use this. This statement must be placed somewhere below the
+<code>indexing</code> statement in the field.
+</p>
+
+
+
+<h2 id="match">match</h2>
+<p>Contained in <code><a href="#field">field</a></code>, <code><a href="#fieldset">fieldset</a></code> or
+<code><a href="#struct-field">struct-field</a></code>.
+Sets the matching method to use for this field to something else than the default token matching.
+Note the restrictions found in the column named <em>Valid with</em>.
+<pre>
+match: [property]
+</pre>
+or
+<pre>
+match {
+    [property]
+    [property]
+    &hellip;
+}
+</pre>
+Whether the match type is <code>text</code>, <code>word</code> or <code>exact</code>,
+all term matching will be done after NFKC normalization and locale independent lowercasing (in that order).
+</p>
+<table class="table">
+<thead>
+<tr><th>Property</th><th>Description</th><th>Valid with</th><th>Remarks</th></tr>
+</thead><tbody>
+<tr><td><code>text</code></td>
+<td>This field is matched per token. Tokens are created by splitting on whitespace and non-letter characters, as
+well as by segmentation for CJK. All characters which are not letters or digits are ignored using text matching.
+Previously also known as "token" matching.
+</td>
+<td>Indexes, streaming</td>
+<td>Default for indexes. Can not be combined with exact matching.</td>
+</tr>
+
+<tr><td><code>word</code></td>
+<td><p>A single word is formed from the field input (or each item in the field input
+if it is an array or a weighted set).  This word is matched <em>exactly</em>:
+Strings containing any characters whatsoever will be indexed and matched as-is.
+In queries, the word to match is heuristically parsed taking into account some
+usual query syntax characters; one can also use double quotes to include space,
+star, or exclamation marks.  This is the default matching mode for string
+attributes.</p>
+
+<p>Example: If <code>artist</code> is a string attribute, this
+(advanced syntax) query:
+<pre>
+foo AND (artist:"'N Sync" OR artist:"*NSYNC" OR artist:A*teens OR artist:"Wham!")
+</pre>
+will match documents containing <code>foo</code> and at least one of
+<code>'N Sync</code> or <code>*NSYNC</code> or <code>A*teens</code> or <code>Wham!</code>
+as the artist field.</p>
+
+<p>Note that without the quotes, the space in <code>'N Sync</code> would end that word
+and would result in a search for just <code>'N</code>, similarly the <code>!</code> would mean to
+increase the weight of a <code>Wham</code> term if not quoted.
+</p>
+</td>
+<td>Indexes, attributes</td>
+<td>Default for attributes. Can not be combined with text (token) matching.</td>
+</tr>
+
+
+<tr id="exact"><td><code>exact</code></td>
+<td><p>This field is matched <em>exactly</em>: Strings containing any characters whatsoever will be
+indexed and matched as-is. In queries, the exact match string ends at
+the exact match terminator, which is <code>@@</code> per default.
+As a side effect, a field with <code>match: exact</code> is considered to be
+a <a href="#filter">filter field</a>, just as if <code>rank: filter</code> was specified.
+
+This is because you will only get one word per field (or per item in the
+case of multi-valued types such as <code>array&lt;string&gt;</code>),
+so there isn't much ranking information that you could get anyway.
+You can turn off the implicit <code>rank: filter</code> by adding an
+explicit <code>rank: normal</code>.
+</p>
+
+<p>Example: If <code>tag</code> is an exact match field, this
+(advanced syntax) query:
+<pre>
+someword AND (tag:!*!@@ OR tag:(kanoo)@@)
+</pre>
+will match documents containing <code>someword</code>
+and either <code>!*!</code> or <code>(kanoo)</code> as a tag.</p>
+
+<p>Note that without the <code>@@</code> terminating the
+second tag string, the second tag value would be <code>(kanoo))</code>.</p>
+</td>
+<td>Indexes, attributes, streaming</td>
+<td>Can not be combined with text (token) matching.</td>
+</tr>
+
+<tr><td><code>exact-terminator</code></td>
+<td><p>
+When using exact match, a terminator for use in queries should be
+specified.
+The default is <code>@@</code>, but if the strings to match can contain two
+at-signs in a row, a different terminator must be used.  Alternately
+the "word match" feature can be used, see above.
+</p>
+
+<p>Example
+<pre>
+    match {
+        exact
+        exact-terminator: "@@"
+    }
+</pre>
+on the <code>tag</code> field will cause the query <code>tag:a b c!@@</code>
+to match documents containing the exact string <code>a b c!</code></p>
+</td>
+<td>Indexes, attributes, streaming</td>
+<td>Only valid if exact matching is chosen.</td>
+</tr>
+
+<tr><td><code>prefix</code></td>
+<td>This field supports prefix* searches. For streaming: this field uses prefix* searching for all search terms.</td>
+<td>Attributes, streaming</td>
+<td>Prefix searching is always enabled for attributes and in streaming.
+In these cases use the query syntax for prefix terms to get prefix searching even though the match method is not prefix.</td>
+</tr>
+
+<tr><td><code>substring</code></td>
+<td>This field uses *substring* searching for all search terms as default.</td>
+<td>Streaming</td>
+<td>Substring searching is always enabled in streaming.
+Use the query syntax for substring terms to get substring searching even though the match method is not substring.</td>
+</tr>
+
+<tr><td><code>suffix</code></td>
+<td>This field uses *suffix searching for all search terms as default.</td>
+<td>Streaming</td>
+<td>Suffix searching is always enabled in streaming.
+Use the query syntax for suffix terms to get suffix searching even though the match method is not suffix.</td>
+</tr>
+
+<tr><td id="max-length"><code>max-length</code></td>
+<td>This limits the length of the field that will be used for matching.</td>
+<td>Indexes, streaming</td>
+<td>If this value is set it is the max number of characters of a field that will be considered during search.
+ If not the default <code><a href="#fieldmatchmaxlength">fieldmatchmaxlength</a></code> will be used.</td>
+</tr>
+
+<tr><td><code>gram</code></td>
+<td>This field is matched using n-grams. For example, with the default gram size 2 the string "hi blue" is tokenized to "hi bl lu ue" both in the index and in queries to the index.
+	<p>
+		N-gram matching is useful mainly as an alternative to segmentation in CJK languages. Typically it results in increased recall and lower precision. However, as
+Vespa usually uses proximity in ranking the precision offset may not be of much importance. Grams consumes more resources than other matching methods because both
+indexes and queries will have more terms, and the terms contains repetition of the same letters. On the other hand, CPU intensive CJK segmentation is avoided.
+<p>
+It may also be used for substring matching in general.</td>
+<td>Indexes</td>
+<td></td>
+</tr>
+
+<tr><td><code>gram-size</code></td>
+<td>Sets the gram size when gram matching is used. The default size (if this is not present) is 2.
+<p>Example
+<pre>
+    match {
+        gram
+        gram-size: 3
+    }
+</pre>
+<td>Indexes
+<td>This may be any positive number larger than 0.
+</tr>
+</tbody>
+</table>
+
+
+
+<h2 id="rank">rank</h2>
+<p>Contained in <code><a href="#field">field</a></code> or
+<code><a href="#rank-profile">rank-profile</a></code>.
+Set the kind of ranking calculations which will be done for the field. Even though the
+actual ranking expressions decide the ranking, this settings tells Vespa which preparatory calculations
+and which data structures are needed for the field.
+<pre>
+rank [field-name]: [ranking settings]
+</pre>
+or
+<pre>
+rank {
+    [ranking setting]
+}
+</pre>
+The field name should only be specified when used inside a rank-profile.
+The following ranking settings are supported in addition to the default:
+<table class="table">
+<thead>
+<tr><th>Ranking setting</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td id="filter"><code>filter</code></td><td>
+Indicates that matching in this field should use fast bit vector data
+structures only. This saves a lot of CPU during matching, but only a few
+simple ranking features will be available for the field. This setting
+is appropriate for fields typically used for filtering or simple boosting
+purposes, like filtering or boosting on the language of the document.
+</td></tr>
+<tr><td id="normal"><code>normal</code></td><td>
+The reverse of "filter", indicates that matching in this field should use
+normal data structures and give normal match information for ranking.
+Used to turn off implicit <code>rank: filter</code> when using
+<a href="#exact">match: exact</a>. If both "filter" and "normal" are set
+somehow, the effect is as if only "normal" was specified.
+</td></tr>
+</tbody>
+</table>
+</p>
+
+
+
+<h2 id="query-command">query-command</h2>
+<p>Contained in <code><a href="#fieldset">fieldset</a></code>, <code><a href="#field">field</a></code> or
+<code><a href="#struct-field">struct-field</a></code>.
+Specifies a function to be performed on query terms to the indexes
+of this field when searching. The QR server has support for writing
+Vespa Searcher plugins which processes these commands.</p>
+<pre>
+query-command: [any string]
+</pre>
+If you write a plugin searcher which needs some index-specific
+configuration parameter, that parameter can be set here.
+</p>
+
+
+
+<h2 id="rank-type">rank-type</h2>
+<p>Contained in <code><a
+href="#field">field</a></code> or
+<code><a href="#rank-profile">rank-profile</a></code>.
+Selects the low-level rank settings to be used for this field when using <code>nativeRank</code>.
+<pre>
+rank-type [field-name]: [rank-type-name]
+</pre>
+The field name can be skipped inside fields. Defined rank types are:
+<table class="table">
+  <thead>
+  <tr><th>Type</th><th>Description</th></tr>
+  </thead><tbody>
+  <tr>
+    <td>identity</td>
+    <td>
+      Used for fields which contains only what this document
+      <em>is</em>, e.g. "Title". Complete identity hits will get a
+      very high rank.
+    </td>
+  </tr><tr>
+    <td>about</td>
+    <td>
+      Some text which is (only) about this document,
+      e.g. "Description". About hits get high rank on partial
+      matches and higher for matches early in the text and
+      repetitive matches.
+      This is the default rank type.
+    </td>
+  </tr><tr>
+    <td>tags</td>
+    <td>
+      Used for simple tag fields of type tag. The tags rank type uses a logarithmic table to give more relative boost in the low range: As tags are added they should have significant impact on rank score, but as more and more tags are added, each new tag should contribute less.
+    </td>
+  </tr><tr>
+    <td>empty</td>
+    <td>
+      Gives no relevancy effect on matches. Used for fields you just
+      want to treat as filters.
+    </td>
+  </tr>
+  </tbody>
+</table>
+For <code>nativeRank</code> you can specify a rank type per field.
+If the supported rank types do not meet your requirements you can explicit configure
+the native rank features using rank-properties.
+See the <a href="../reference/nativerank.html">native rank reference</a> for more information.
+</p>
+
+
+
+<h2 id="summary-to">summary-to</h2>
+<p>
+Contained in <code><a href="#field">field</a></code> or
+<code><a href="#struct-field">struct-field</a></code>.
+Specifies the name of the document summaries which should contain this field.
+<pre>
+summary-to: [summary-name], [summary-name], &hellip;
+</pre>
+If this is not specified, the field or struct-field will be included in the default document
+summary. See also <a href="../document-summaries.html">document summaries</a>.
+</p>
+
+
+
+<h2 id="summary">summary</h2>
+<p>
+Contained in <code><a href="#field">field</a></code> or
+<code><a href="#document-summary">document-summary</a></code> or
+<code><a href="#struct-field">struct-field</a></code>.
+Declares a summary field.
+<pre>
+summary: [property]
+</pre>
+or
+<pre>
+summary [name] type <a href="#field_types">[type]</a> {
+    [body]
+}
+</pre>
+The summary <em>name</em> can be skipped if this is set inside a
+field. The name will then be the same as the name of the source
+field. In fields, the summary <em>type</em> can also be skipped, in
+which case the type will be determined by the field type.
+The summary data types available are the same as the document field data types.
+<em>full</em> summary is the default. Long field values (like document
+content fields) should be made <em>dynamic</em>.
+The body of a summary may contain:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+</thead><tbody>
+<tr><td><code><a href="#full">full</a></code></td>
+<td>Returns the full field value in the summary (the default).</td>
+<td>Zero to one</td></tr>
+<tr><td><code><a href="#dynamic">dynamic</a></code></td>
+<td>Make the value returned in results from this summary field be a <em>dynamic abstract</em> of the source summary
+  field by extracting fragments of text around matching words. Matching words will also be highlighted, in
+  similarity with the bolding feature.
+  This highlighting is not affected by the query-argument <span class="code">bolding</span>.
+  The default XML element used to highlight query terms is
+<code>&lt;hi&gt;</code> - refer to <a href="#bolding">bolding</a> for how to configure.
+</td>
+<td>Zero to one</td></tr>
+<tr><td><code><a href="#source">source</a></code></td>
+<td>Specifies the name of the field or fields from which the value of this summary
+  field should be fetched. If multiple fields are specified, the value
+  will be taken from the first field if that has a value, from the
+  second if the first one is empty and so on.
+<pre>
+source: [field-name], [field-name], &hellip;
+</pre>
+    When this is not specified, the source field is assumed to be the
+    field with the same name as the summary field.</td>
+<td>Zero to one</td></tr>
+<tr><td><code><a href="#to">to</a></code></td>
+<td>Specifies the name of the document summaries this should be included in.
+  An alternative form to summary-to in summaries.
+<pre>
+to: [document-summary-name], [document-summary-name], &hellip;
+</pre>
+  This can only be specified in fields, not in explicit document
+  summaries. When this is not specified, the field will go to the
+  <code>default</code> document summary.</td>
+<td>Zero to one</td></tr>
+</tbody>
+</table>
+Read more about <a href="../document-summaries.html">document summaries</a>.
+</p>
+
+
+
+<h2 id="weight">weight</h2>
+<p>
+Contained in <code><a href="#field">field</a></code>.
+The weight of a field - the default is 100.
+The field weight is used when calculating the <a href="../ranking.html">rank scores</a>.
+<pre>
+weight: [positive integer]
+</pre>
+</p>
+
+
+
+<h2 id="weightedset">weightedset</h2>
+<p>
+Contained in <code><a href="#field">field</a></code> of type weightedset.
+Properties of a weighted set.
+<pre>
+weightedset: [property]
+</pre>
+or
+<pre>
+weightedset {
+    [property]
+    [property]
+    &hellip;
+}
+</pre>
+<table class="table">
+  <thead>
+    <tr><th>Property</th><th>Description</th><th>Occurrence</th></tr>
+  </thead><tbody>
+    <tr><td><code>create-if-nonexistent</code></td>
+      <td>If the weight of a key is adjusted in a document using a partial update increment or decrement command,
+        but the key is currently not present, the command will be ignored by default.
+        Set this to make keys to be created in this case instead.
+        This is useful when the weight is used to represent the count of the key.</td>
+      <td>Zero to one</td></tr>
+    <tr><td><code>remove-if-zero</code></td>
+      <td>This is the companion of <code>create-if-nonexistent</code> for the converse case:
+        By default keys may have zero as weight.
+        With this turned on, keys whose weight is adjusted (or set) to zero, will be removed.</td>
+      <td>Zero to one</td></tr>
+  </tbody>
+</table>
+</p>
+
+
+
+<h2 id="annotation">annotation</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>.
+Defines an annotation type, to be used by the <a href="../annotations.html">Annotations API</a>.
+A name of the annotation is mandatory, the body is optional.
+<pre>
+annotation [name] {
+    [body]
+}
+</pre>
+</p>
+
+
+
+<h2 id="import-field">import field</h2>
+<p>
+Contained in <code><a href="#search">search</a></code>.
+Using a <a href="#type:reference">reference</a> to a document type,
+import a field from that document type into this search definition to be used for matching and ranking.
+Refer to <a href="../search-definitions.html#document-references">document references</a>.
+</p>
+<p>
+<strong>2017-07-11 Note:</strong> Using imported fields for grouping and sorting is currently not supported.
+</p>
+<p>
+Only attribute fields of non-tensor type can be imported.
+The imported field inherit all but the following properties from the parent field:
+<ul>
+    <li><code>attribute: fast-search</code>: Only filter matching available</li>
+    <li><code>attribute: fast-access</code></li>
+</ul>
+</p>
+
+
+
+<h2 id="field_types">Field types</h2>
+<table class="table">
+<thead></thead><tbody>
+
+<tr><th id="type:string">string</th>
+<td>Use for a text field of any length.
+<table class="table">
+<thead></thead><tbody>
+  <tr>
+    <th style="width:100px">Indexing</th>
+    <td>
+      By default, strings are <em>tokenized</em> before
+      indexing. Tokenization removes any non-word characters, and splits the
+      string into <em>tokens</em> on each word boundary. In addition, CJK
+      tokens are split using a <em>segmentation</em> algorithm. The resulting
+      tokens are what is becoming searchable in the index. To index strings
+      as-is (that is, avoid tokenization), use
+      <code><a href="#indexing-rewrite">indexing-rewrite</a>: none</code>.
+      By default, strings are also normalized and stemmed.
+    </td>
+  </tr><tr>
+    <th>Attribute</th>
+    <td>
+      Added as-is. <a href="#match">match</a> exact or prefix is
+      supported types of searches in string attributes. Searches are however
+      case-insensitive. A query for <code>BritneY.spears</code> will match a
+      document containing <code>BrItNeY.SpEars</code>
+    </td>
+  </tr><tr>
+    <th>Summary</th>
+    <td>Added as-is.</td>
+  </tr>
+</tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:int">int</th>
+<td>Use for single 32-bit integers.
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported. An attribute will automatically be used instead.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Becomes integer attributes, which supports range grouping and range searches.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as a 32-bit integer.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:long">long</th>
+<td>Use for single 64-bit integers.
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported. An attribute will automatically be used instead.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Becomes a 64-bit integer attribute, which supports range grouping and range searches.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as a 64-bit integer.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:byte">byte</th>
+<td>Use for single 8-bit numbers.
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported. An attribute will automatically be used instead.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as a byte which supports range searches.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as a byte.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:float">float</th>
+<td>Use for floating point numbers (32-bit IEEE 754 float).
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported. An attribute will automatically be used instead.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as a 32-bit IEEE 754 float which supports range searches.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as a 32-bit IEEE 754 float.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:double">double</th>
+<td>Use for high precision floating point numbers (64-bit IEEE 754 double).
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported. An attribute will automatically be used instead.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as a 64-bit IEEE 754 double which supports range searches.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as a 64-bit IEEE 754 double.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:position">position</th>
+<td>Used to filter and/or rank documents by distance to a position in the query.
+See <a href="../geo-search.html">Geo search</a>.
+The input format is a string with <em>latitude;longitude</em>,
+where the following are valid formats:
+<ol>
+  <li>S22.4532;W123.9887 - at output, this format is used</li>
+  <li>N72°23'52;E26°04'22</li>
+  <li>N72o20.92;E26o08.54</li>
+</ol>
+This format is also used in <a href="search-api-reference.html#geographical-searches">queries with position</a>.
+A semicolon is used as separator between latitude and longitude -
+remember to URL encode the semicolon as %3B.
+Latitude is prefixed by N or S, and longitude by E or W.
+The angular measurement can either be expressed as degrees with a decimal fraction
+(this is the recommended way),
+or as degrees subdivided in minutes and seconds.
+It is also valid to express minutes with a decimal fraction, supporting regular GPS output format.
+Small letter o may be used as a replacement for degrees.
+<ul>
+  <li>
+    Position fields in <em>search results</em> render differently -
+    returned is an item with an XML element with the <em>latitude;longitude</em> string plus
+    X/Y coordinates:
+<pre>
+"mypos.position": "&lt;position x=\"-121996000\" y=\"37401000\" latlong=\"N37.401000;W121.996000\" /&gt;"
+</pre>
+    The X/Y coordinates are in millionths of degrees - see coordinate system  in
+    <a href="../geo-search.html#summary-fields">summary fields</a>.
+    This document also lists options for rendering X / Y.
+  </li><li>
+    When using the <a href="../document-api.html">document api</a>,
+    position fields are rendered like:
+<pre>
+"mypos": {
+    "x": -123988700,
+    "y": -22453200
+},
+"mypos_zcurve": -6533494969659888,
+</pre>
+    Use <a href="../documents.html#fieldsets">fieldsets</a> to control which fields to output,
+    adding <em>--fieldset 'music:[document]'</em> skips extra fields like <em>_zcurve</em>.
+  </li>
+</ul>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as an interleaved 64-bit integer
+        (see <a href="http://en.wikipedia.org/wiki/Z-order_curve">Z-order curve</a>).</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as-is.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:predicate">predicate</th>
+<td>
+Use to match queries to a set of boolean constraints.
+See <a href="../boolean-search.html#queries">boolean search.</a>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Indexed in a variable size binary format that is optimized for application during query evaluation.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Not supported.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as-is.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:raw">raw</th>
+<td>Use for binary data
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Not supported.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as raw data.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:uri">uri</th>
+<td><p>Use for URLs.</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>
+<p>
+The URL is split into the different components which are indexed
+separately. Note that only URLs can be indexed this way, not other URIs.
+The different components are as defined by the HTTP standard:
+Scheme, hostname, port, path, query and fragment. Example:
+<pre>
+http://mysite.mydomain.com:8080/path/shop?d=hab&amp;id=1804905709&amp;cat=100#frag1
+</pre>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th>scheme</th><td>http</td>
+    </tr><tr>
+      <th>hostname</th><td>mysite.mydomain.com (indexed as "mysite", "mydomain" and "com")</td>
+    </tr><tr>
+      <th>port</th><td>8080 (note that port numbers 80 and 443 are not indexed, as they are the normal port numbers)</td>
+    </tr><tr>
+      <th>path</th><td>/path/shop (indexed as "path" and "shop")</td>
+    </tr><tr>
+      <th>query</th><td>d=hab&amp;id=1804905709&amp;cat=100 (indexed as "d", "hab", "id", "1804905709", "cat" and "100")</td>
+    </tr><tr>
+      <th>fragment</th><td>frag1</td>
+    </tr>
+  </tbody>
+</table>
+The syntax for searching these different components is:
+<pre>
+[field-name].[component-name]:term
+</pre>
+Example: In a uri field <code>sourceurl</code>, search for documents from slashdot:
+<pre>
+query=sourceurl.hostname:slashdot
+</pre>
+URL hostnames also support <em>anchored searching</em>, see
+<a href="../reference/simple-query-language-syntax.html#url_field">search in URL fields</a>.
+</p><p>
+It is not possible to index uri-typed fields into a common index, i.e. it has
+to be indexed separately from other fields. If you need to combine URLs
+with other fields you could store it in a string-field instead, but then
+you can not search in the different parts of the URL (scheme, hostname,
+port, path, query and fragment).
+</p><p>
+<strong>Aliasing</strong> also works different for URL fields - you
+are allowed to create aliases both to the index (as usual) and to the
+components of it. Use
+<pre>
+alias [component]: [alias]
+</pre>
+to create an alias to a component. For example, given this field:
+<pre>
+field surl type uri {
+    indexing: summary | index
+    alias: url
+    alias hostname: site
+}
+</pre>
+a search in "surl" and "url" will search in the entire url,
+while "surl.hostname" or "site" will search the hostname.
+</p>
+      </td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as-is as a string.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as-is as a string.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:array">array&lt;element-type&gt;</th>
+<td>
+Use to create a multi-value field of the element type.
+The element type can be any single value type, but not a nested array or weighted set.
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Each element is indexed separately.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as a multi-value attribute.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as a multi-value summary field.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:weightedset">weightedset&lt;element-type&gt;</th>
+<td><p>
+Use to create a multi-value field of the element type,
+where each element is assigned a signed 32-bit integer weight.
+The element type can be any single value type, but not a nested array or weighted set.
+The weights may be assigned any semantics by the application. Two main use cases:
+<ol>
+	<li>The weight symbolizes the number of occurrences</li>
+	<li>The weight specifies another value type, for instance the importance of the document</li>
+</ol>
+The weight of a matching value is by default used in <code>nativeRank</code> directly as the rank score of the field.
+It is also possible to create a rank type which uses a rank boost table,
+<code>weightboost</code> to calculate the rank value from the weight (the tags rank type does this by default).
+</p><p>
+The weights are returned in the summary for the attribute.
+The format of the field in the attribute summary is like:
+<!-- ToDo: JSON -->
+<pre>
+&lt;field name="some_field"&gt;
+    &lt;item weight="1"&gt;a&lt;/item&gt;
+    &lt;item weight="10"&gt;b&lt;/item&gt;
+    &lt;item weight="100"&gt;c&lt;/item&gt;
+&lt;/field&gt;
+</pre>
+It is possible to specify that a new key should be created if it does not exist before the update,
+and that it should be removed if the weight is set to zero.
+This is only usable together with the <code>increment</code> and <code>decrement</code> operations,
+see <a href="document-json-format.html#update"> document updates</a>.
+</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>
+        Each token present in the field is indexed separately.
+        Information indexed includes element number, element weight and a
+        list of token occurrence positions for each element in which the token is present.
+      </td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as a multi-value weighted attribute.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Added as a multi-value summary field if this is an attribute.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:tensor">tensor</th>
+<td>
+Use to create a tensor field that can be used for ranking - a tensor field is not searchable..
+See <a href="../reference/tensor.html">Tensor Evaluation Reference</a> for definition of tensors and
+<a href="../reference/document-json-format.html#tensor">Document JSON Format</a>
+for the JSON feed format for tensors.
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Added as-is in an attribute to be used for ranking.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>
+        Added as-is. The JSON result format (<code>presentation.format=json</code>) should be used
+        when returning a summary class containing a tensor field as part of search.
+      </td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:struct">struct</th>
+<td>
+Use to define a field with a struct datatype.
+To define a struct field, first create a <a href="#struct">struct definition</a>.
+The <a href="#struct">struct</a> must be defined inside the document definition.
+To declare a struct field in a document or struct, use the struct name to identify the field type:
+<pre>
+field foo type address {}
+</pre>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Structs have the same <a href="#type:map">indexing restrictions</a> as maps.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>Each field may or may not be an attribute according to its configuration.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Each field in the struct has its own summary configuration</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:map">map&lt;key-type,value-type&gt;</th>
+<td>
+Use to create a map of values. Use any other Vespa type as both key and value.
+These configurations are identical:
+<pre>
+field mymap type map&lt;string, string&gt; {
+}
+
+struct mystruct {
+    field key type string { }
+    field value type string { }
+}
+field mymap type array&lt;mystruct&gt; {
+}
+</pre>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>
+        A map is handled as a struct with a key and value field with key-type and value-type as types,
+        respectively - see below. Indexing restrictions:
+        <ul>
+          <li>Structs and maps can only be stored in the document summary store
+            and hence can be used in search result summaries.</li>
+          <li>Structs and maps fields cannot be indexed.</li>
+          <li>Structs and maps can only be searched in
+            <a href="../streaming-search.html">streaming search</a> mode.</li>
+          <li>Structs and maps cannot be <a href="../attributes.html">attributes</a>.</li>
+        </ul>
+      </td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>
+        <strong>ToDo</strong>
+      </td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>Both key and value have their own summary configuration.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:annotationreference">annotationreference</th>
+<td>
+Use to define a field (inside <a href="#annotation">annotation</a>, or inside e.g. a
+struct used by a field in an <a href="#annotation">annotation</a>) with a reference to another annotation.
+To define a such a field, you must first create an <a href="#annotation">annotation type</a>.
+The <a href="#annotation">struct</a> must be defined inside the search definition.
+To declare an annotationreference field in an annotation, use the annotation name to identify the field type:
+<pre>
+annotation foo {
+    field baz type annotationreference&lt;bar&gt; { }
+}
+
+annotation bar { }
+</pre>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>N/A.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>N/A.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>N/A.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:reference">reference&lt;document-type&gt;</th>
+<td>
+A <em>reference&lt;document-type&gt;</em> field is a reference to an instance of a document-type -
+i.e. a foreign key. The reference is the <a href="../documents.html">document id</a>
+of the document-type instance, hence a string.
+References are used to join documents in a
+<a href="../search-definitions.html#document-references">parent-child relationship</a>.
+A reference can only be made to <a href="../content/data-placement.html#global-documents">global documents</a>.
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Invalid - deployment will fail.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>As <a href="#type:string">string</a> - a reference must be an attribute.</td>
+    </tr><tr>
+      <th>Summary</th>
+      <td>As <a href="#type:string">string</a></td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+</tbody>
+</table>
+
+
+
+<h2 id="Document and search field types">Document and search field types</h2>
+<p>
+Note that it is possible to make a document field
+of one type into one or more instances of another search field, by
+declaring a field outside the document, which uses other fields as
+input. For example, to create an integer attribute for a
+string containing a comma-separated list of integers in the document,
+do like this:
+</p>
+<pre>
+search example {
+  document example {
+    field yearlist type string { # Comma-separated years
+      &hellip;
+    }
+    &hellip;
+  }
+
+  field year type array&lt;int&gt; { # Search field using the yearlist value
+    indexing: input yearlist | split "," | attribute
+  }
+}
+</pre>
+
+<h2 id="config overrides">Config overrides affecting searchdefinition</h2>
+
+<h3 id="maxtermoccurrences">maxtermoccurrences</h3>
+<p>Limits the number of occurrences of a term that will indexed. By default it is 100.
+This is a global setting that will be used for all fields in all document types.</p>
+<pre>
+&lt;config name='vespa.configdefinition.ilscripts'&gt;
+    &lt;maxtermoccurrences&gt100&lt/maxtermoccurrences&gt;
+&lt;/config&gt;
+</pre>
+
+<h3 id="fieldmatchmaxlength">fieldmatchmaxlength</h3>
+<p>This is the max length of a field that is tokenized and indexed. By default it is 1000000.
+This is a global setting that will be used for all fields in all document types.
+For individual control see <a href="#max-length">max-length</a></p>
+<pre>
+&lt;config name='vespa.configdefinition.ilscripts'&gt;
+    &lt;fieldmatchmaxlength&gt1000000&lt/fieldmatchmaxlength&gt;
+&lt;/config&gt;
+</pre>
+
+
+
+<h2 id="example">Example</h2>
+<pre>
+search example {
+
+  # This documents inherits the fields of two others
+  document example inherits mysuperdocument, another {
+
+    field title type string {
+      indexing: summary | index
+      alias: analias.totitle
+      alias default: analias_todefault
+    }
+
+    field description type string {
+      indexing: summary | index
+    }
+
+    field author type string {
+      indexing: summary | index
+      # author names only, so no stemming
+      stemming: none
+    }
+
+    field category type string {
+      indexing: summary | attribute
+      attribute: fast-search
+      match: exact
+    }
+
+    field popularity type int {
+      indexing: summary | attribute
+    }
+
+    field measurement type int {
+      indexing: summary | attribute
+    }
+
+    # Index each category token separately, do not tokenize categories
+    field categories type string {
+      indexing {
+        input categories | split "," | normalize | join " " | index
+      }
+      indexing-rewrite: none;
+    }
+
+    # Categories as an array - preferable
+    field morecategories type array&lt;string&gt; {
+      indexing: index
+    }
+
+    #restrict document access
+    field permissions type array&lt;byte&gt; {
+      indexing: input permissions . input geoperms . input adultness | summary | attribute
+      attribute: fast-search
+    }
+    #placeholder - elements added to global permissions
+    field geoperms type array&lt;byte&gt; {
+
+    }
+    #placeholder - elements added to global permissions
+    field adultness type array&lt;byte&gt; {
+
+    }
+  }
+
+  fieldset default {
+    fields: title, description
+  }
+
+  # Additional default settings
+  rank-profile default inherits default {
+    first-phase {
+        expression: nativeRank
+    }
+    second-phase {
+      expression {
+          0.5 * 0.5 * (0.1 * attribute(popularity) + fieldMatch(description))
+          + 0.2 * attributeMatch(category)
+          + 0.3 * fieldMatch(title)
+      }
+      rerank-count: 200
+    }
+  }
+
+  # Some experimental ranking changes
+  rank-profile experimental inherits default {
+    second-phase {
+      expression {
+          0.5 * 0.5 * (attribute(measurement) * attribute(popularity) + fieldMatch(description))
+          + 0.2 * attributeMatch(category)
+          + 0.3 * fieldMatch(title)
+      }
+    }
+  }
+
+  # Ranking expression from separate file (filename mlrrank.expression, in the same directory as the sd-file)
+  rank-profile mlrraning inherits default {
+    second-phase {
+      expression: file:mlrrank
+    }
+  }
+
+  rank-profile other inherits experimental {
+    second-phase {
+      rerank-count: 100
+    }
+  }
+
+  rank-profile justthebest {
+    match-phase {
+      attribute: popularity
+      max-hits: 10000
+      diversity {
+        attribute: category
+        min-groups: 20
+      }
+    }
+    first-phase {
+      expression: nativeRank + 0.1 * attribute(popularity)
+    }
+    second-phase {
+      expression {
+          0.5 * 0.5 * (0.1 * attribute(popularity) + fieldMatch(description))
+          + 0.2 * attributeMatch(category)
+          + 0.3 * fieldMatch(title)
+      }
+    }
+  }
+
+  # A derived field defined outside a document,
+  # note how each indexing statement
+  # fetches a value to index
+  field exact type string {
+    indexing {
+      input title | summary | index;
+      input category | summary | index;
+    }
+    stemming: none
+    normalizing: none
+    match {
+      exact
+      exact-terminator: "@@"
+    }
+  }
+
+}
+</pre>

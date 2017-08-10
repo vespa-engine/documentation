@@ -1,0 +1,188 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Configuring Java components"
+---
+
+<p>
+Any Java component might require some sort of configuration, be it simple strings or
+integers, or more complex structures.
+Because of all the boilerplate code that commonly goes into classes to hold such configuration,
+we often see this degenerate into a collection of key-value string pairs (e.g.
+<a href="http://docs.oracle.com/javaee/6/api/javax/servlet/FilterConfig.html">javax.servlet.FilterConfig</a>).
+To avoid this Vespa can deliver custom, type-safe configuration to all JDisc components.
+This configuration should be used for all state which is assumed to stay constant
+for the <em>lifetime of the component instance</em>. Read the document on
+<a href="jdisc/developing-applications.html">developing applications</a>
+to get started.
+</p><p>
+In a nutshell:
+<ul>
+  <li>The developer provides a config schema text file - .def</li>
+  <li>Use the Vespa maven plugin to generate a config class from .def</li>
+  <li>Inject config objects in your code</li>
+</ul>
+The application code is interfacing with config through generated code -
+code and config is always in sync.
+(For details about how configuration works in Vespa, see
+<a href="cloudconfig/config-introduction.html">Cloud Config System</a>.)
+</p>
+<p>
+Note: the <a href="bundle-plugin.html">bundle plugin</a> simplifies these steps -
+refer to the
+<a href="https://github.com/vespa-engine/vespa/blob/master/sample-apps/basic-search/">
+basic-search</a> sample application for an example.
+</p>
+
+
+<h2>Config definition - .def</h2>
+<p>
+Write a <a href="reference/config-files.html#config-definition-files">config definition</a>
+file and place it in the application's <code>src/main/resources/configdefinitions/</code>
+directory. E.g. <code>src/main/resources/configdefinitions/my-component.def</code>:
+<pre>
+namespace=example
+
+myCode     int     default=42
+myMessage  string  default=""
+</pre>
+</p>
+
+
+
+<h2>Generate config class</h2>
+<p>
+Generate Java config classes:
+<pre>
+$ mvn generate-resources
+</pre>
+This generates the config classes in <code>target/generated-sources/vespa-configgen-plugin/</code>.
+</p><p>
+In this example, the config definition file was named <em>my-component.def</em>,
+and the namespace used was <em>example</em> -
+this translates to a java class in <em>com.yahoo.example.MyComponentConfig</em>
+</p><p>
+It is a good idea to generate the config classes first,
+<em>then</em> resolve dependencies and compile in the IDE.
+</p>
+
+
+
+<h2>Use config in code</h2>
+<p>
+The generated config class is now available for your component through
+<a href="jdisc/injecting-components.html">constructor injection</a>, which means that the
+component can declare the generated class as one of its constructor arguments:
+<pre>
+package com.yahoo.example;
+
+public class MyComponent {
+
+    private final int code;
+    private final String message;
+
+    @Inject
+    public MyComponent(MyComponentConfig config) {
+        code = config.myCode();
+        message = config.myMessage();
+    }
+}
+</pre>
+The JDisc Container will take care of creating and injecting the config instance.
+To override the default values of the config,
+<a href="reference/config-files.html#generic-configuration-in-services-xml">specify</a>
+  values in <code>src/main/application/services.xml</code>. Following the above example:
+<pre>
+&lt;container version="1.0"&gt;
+    &lt;component id="com.yahoo.example.MyComponent"&gt;
+        &lt;config name="example.my-component"&gt;
+            &lt;myCode&gt;132&lt;/myCode&gt;
+            &lt;myMessage&gt;Hello, World!&lt;/myMessage&gt;
+        &lt;/config&gt;
+    &lt;/component&gt;
+&lt;/container&gt;
+</pre>
+and the deployed instance of <code>MyComponent</code> will be constructed using a
+corresponding instance of <code>MyComponentConfig</code>.
+</p>
+
+
+
+<h2 id="unit-testing-configurable-components">Unit Testing a Configurable Component</h2>
+<p>
+The generated config class provides a builder API that makes it easy to create
+config objects for unit testing. Below is an example that sets up a unit test for the
+<code>MyComponent</code> class from the previous example:
+<pre>
+import static com.yahoo.example.MyComponentConfig.*;
+
+public class MyComponentTest {
+
+    @Test
+    public void requireThatMyComponentGetsConfig() {
+        MyComponentConfig.Builder builder = new MyComponentConfig.Builder();
+        builder.myCode(668)
+               .myMessage("Neighbour of the beast");
+        MyComponentConfig config = new MyComponentConfig(builder);
+        MyComponent component = new MyComponent(config);
+        &hellip;
+   }
+}
+</pre>
+The config class used here is very simple - see a separate example of
+<a href="jdisc/testing-configurable-components.html">
+building a complex configuration object</a>.
+</p>
+
+
+
+<h2 id="files">Adding Files to the Component Configuration</h2>
+<p>
+This section describes what to do if your component needs larger configuration objects
+that are stored in files, e.g. automata or large tables. Before you proceed, you
+should take a look at how to create <a
+ href="jdisc/injecting-components.html#implement-provider">provider components</a>.  Instead of
+integrating large objects into e.g. a searcher or processor, you might be better off by
+splitting the resource-demanding part of your component's configuration into a separate
+provider component. The procedure described below can be applied to any component type.
+</p><p>
+Files can be transferred via Vespa's file distribution system by adding the
+files to your application package, and adding corresponding <code>path</code>
+parameters to your def file. See <a href="reference/config-files.html">the
+config file reference</a> for details about the <code>path</code> config type.
+</p><p>
+Assume this config definition, named <code>my-component.def</code>:
+<pre>
+namespace=example
+
+myFile path
+</pre>
+The file must reside in the application package, and the path (relative to
+the application package root) must be given in the component's configuration in
+<code>services.xml</code>:
+<pre>
+&lt;container version="1.0"&gt;
+    &lt;component id="com.yahoo.example.MyComponent"&gt;
+        &lt;config name="example.my-component"&gt;
+            &lt;myFile&gt;my-files/my-file.txt&lt;/myFile&gt;
+        &lt;/config&gt;
+    &lt;/component&gt;
+&lt;/container&gt;
+</pre>
+An example component that uses the file:
+<pre>
+package com.yahoo.example;
+import java.io.File;
+
+public class MyComponent {
+    private final File file;
+
+    public MyComponent(MyComponentConfig config) {
+        file = config.myFile().toFile();
+    }
+}
+</pre>
+The <code>myFile()</code> getter returns a <code>java.nio.Path</code> object.
+The container framework guarantees that the file is fully transferred and present at
+the given location before the component constructor is invoked.
+Hence, the component can access the file contents right away.
+</p>

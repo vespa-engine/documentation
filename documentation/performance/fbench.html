@@ -1,0 +1,691 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "vespa-fbench"
+---
+
+<p>
+This is the HTML version of the man page for the command line tool <em>vespa-fbench</em> -
+a tool used for benchmarking the capacity of a Vespa system. Description:
+<ul>
+  <li>Several hostnames and ports can be listed</li>
+  <!-- ToDo: make sure we have an example using multiple hosts -->
+  <li>This is distributed in round-robin manner to clients</li>
+</ul>
+</p>
+
+
+<h2 id="synopsis">Synopsis</h2>
+<p>
+<strong>vespa-fbench</strong> [-<strong>n</strong> <em>numClients</em>]
+[-<strong>c</strong> <em>cycleTime</em>] [-<strong>l</strong>
+<em>limit</em>] [-<strong>i</strong> <em>ignoreCount</em>] [-<strong>s</strong> <em>seconds</em>] [-<strong>q</strong>
+<em>queryFilePattern</em>] [-<strong>o</strong> <em>outputFilePattern</em>] [-<strong>r</strong>
+<em>restartLimit</em>] [-<strong>m</strong> <em>maxLineSize</em>]
+[-<strong>p</strong> <em>seconds</em>] [-<strong>k</strong>] [-<strong>x</strong>] [-<strong>y</strong>]
+[-<strong>z</strong>] &lt;hostname&gt; &lt;port&gt;
+</p>
+
+
+<h2 id="options">Options</h2>
+<p>
+Some options described below, use <em>vespa-fbench -h</em> for a complete list:
+</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:200px">-n <em>numClients</em></th>
+<td>
+Run vespa-fbench with <em>numClients</em> clients in parallel.  If not
+specified, vespa-fbench will use a default value of <em>10</em> clients.
+</td>
+    </tr><tr>
+      
+<th>-c <em>cycleTime</em></th>
+<td>
+each client will make a request each &lt;num&gt; milliseconds [1000]
+('-1' -&gt; cycle time should be twice the response time)
+</td>
+    </tr><tr>
+
+<th>-l <em>limit</em></th>
+<td>
+minimum response size for successful requests [0]
+</td>
+    </tr><tr>
+
+<th>-i <em>ignoreCount</em></th>
+<td>
+do not log the &lt;num&gt; first results. -1 means no logging [0]
+</td>
+    </tr><tr>
+
+<th>-s <em>seconds</em></th>
+<td>
+run the test for &lt;num&gt; seconds. -1 means forever [60]
+</td>
+    </tr><tr>
+
+<th>-q <em>queryFilePattern</em></th>
+<td>
+pattern defining input query files ['query%03d.txt'] (the pattern is
+            used with sprintf to generate filenames)
+</td>
+    </tr><tr>
+
+<th>-o <em>outputFilePattern</em></th>
+<td>
+save query results to output files with the given pattern (default is
+            not saving.)
+</td>
+    </tr><tr>
+
+<th>-r <em>restartLimit</em></th>
+<td>
+ number of times to re-use each query file. -1 means no limit [-1]
+</td>
+    </tr><tr>
+
+<th>-m <em>maxLineSize</em></th>
+<td>
+max line size in input query files [8192].  Can not be less than the
+            minimum [1024].
+</td>
+    </tr><tr>
+
+<th>-p <em>seconds</em></th>
+<td>
+print summary every &lt;num&gt; seconds.  only available when
+installing vespa-fbench from test branch,
+</td>
+    </tr><tr>
+
+<th>-k</th>
+<td>
+enable HTTP keep-alive.
+</td>
+    </tr><tr>
+
+<th>-x</th>
+<td>
+write benchmarkdata-reporting to output file.
+</td>
+    </tr><tr>
+
+<th>-y</th>
+<td>
+write data on coverage to output file (must used with -x).
+</td>
+    </tr><tr>
+
+<th>-z</th>
+<td>
+use single query file to be distributed between clients.
+</td>
+    </tr><tr>
+      
+      <th>-P</th>
+      <td>
+        use POST for requests instead of GET
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="using-prepare">Preparing query files</h3>
+<p>
+Fbench uses <em>query files</em>, which are files where each line
+is a query following the pattern:
+</p>
+<pre>/search/?query=<em>sddocname:music&amp;nocache</em></pre>
+
+<p>It is often desirable to collect queries from a live system</p>
+
+<p class="alert alert-success">
+Adding "&amp;nocache" to each query will force the QRS server to request
+results from the search nodes.  This parameter is recommended if the
+query set for benchmarking is small, otherwise the benchmark results
+will be biased by the caching performance of the QRS server.
+</p>
+
+<h2 id="using-fbench">Run vespa-fbench</h3>
+<p>It is recommended to run multiple tests by changing the value in
+<code>-n</code> parameter to measure how the system might sustain
+query load and still meet the QPS and/or latency requirements. For
+example, starting from 1 client, 10, 20, etc.</p>
+
+<p>A typical vespa-fbench command looks like:</p>
+<pre>
+$ vespa-fbench -n 10 -q query%03d.txt -s 300 -c 0 -o output%03d.txt -xy test.domain.com 8080
+</pre>
+
+
+<p>This creates 10 clients which will run for 300 seconds (5 minutes). The
+<code>-c</code> parameter states that each client will wait for 0
+milliseconds between each request. Each client would use a query and
+output file given by the given pattern and it's client number,
+i.e. client 1 will use query file query001.txt and output file output001.txt.</p>
+
+<p>The options <code>-xy</code> makes vespa-fbench clients output
+benchmarking data to it's output files</p>
+
+<p class="alert alert-success">
+It is possible to list several hostnames and ports. The different
+hostnames will be distributed to the clients in a round-robin manner,
+such that, with two hosts, client 0, 2, &hellip;, 38 would make requests to
+the first host while client 1, 3, &hellip;, 39 would make requests to the
+second host.
+</p>
+
+<h2 id="using-post">Using vespa-fbench results</h3>
+
+<p>After running vespa-fbench you will have a summary written to stdout and an
+output file from each client.</p>
+
+<p>vespa-fbench includes a script
+<a href="#fbench-formatter"><code>fbench-formatter</code></a>
+that creates a summary of the output files.</p>
+
+<p>scripts like
+<a href="#resultfilter"><code>vespa-fbench-result-filter.pl</code></a>
+can be used for formatting the summary to a space separated value
+format to ease plotting.</p>
+
+
+
+<h3 id="results">Understanding benchmarking results</h3>
+<p>After a test run has completed, vespa-fbench outputs various test
+results. This section will explain what each of these numbers mean. Notes:</p>
+<ul>
+  <li>'system utilization' provide no information about the Vespa
+  system under test and should not be used for benchmarking. </li>
+  <li> In
+  some modes of operation, vespa-fbench waits before sending the next
+  query.</li>
+  <li>'system utilization' represents the time that vespa-fbench is
+  sending queries and waiting for responses. For example a 'system
+  utilization' of 50% means that vespa-fbench is stress testing the system
+  50% of the time and is doing nothing the remaining 50% of the
+  time.</li>
+
+  <li>Do not run vespa-fbench on the same machine as the qrserver
+  or the search node because it will impact the performance of vespa
+  system.</li>
+
+  <li>vespa-fbench latency results include network latency. Measure and subtract network latency to obtain the true
+  vespa query latency. See also <a href="#results-extended-1">extended results</a> for this info from Vespa</li>
+
+  <li>If many of the queries return zero results, the average latency will be low.</li>
+</ul>
+
+
+<h3 id="results-basic">Basic results</h3>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+<th style="width:200px">connection reuse count</th>
+<td> This value indicates how many times HTTP
+     connections were reused to issue another
+     request. Note that this number will only be
+     displayed if the -k switch (enable HTTP
+     keep-alive) is used.
+</td>
+    </tr><tr>
+
+<th>clients</th>
+<td> Echo of the -n parameter.</td>
+    </tr><tr>
+
+<th>cycle time</th>
+<td> Echo of the -c parameter.</td>
+    </tr><tr>
+
+<th>lower response limit</th>
+<td> Echo of the -l parameter.</td>
+    </tr><tr>
+
+<th>skipped requests</th>
+<td> Number of requests that was skipped
+by vespa-fbench. vespa-fbench will typically skip a request if the line containing
+the query url exceeds a pre-defined limit. Skipped requests will have
+minimal impact on the statistical results.</td>
+    </tr><tr>
+
+<th>failed requests</th>
+<td> The number of failed requests. A
+request will be marked as failed if en error occurred while reading
+the result or if the result contained less bytes than 'lower response
+limit'.</td>
+    </tr><tr>
+
+<th>successful requests</th>
+<td> Number of successful
+requests. Each performed request is counted as either successful or
+failed. Skipped requests (see above) are not performed and therefore
+not counted.</td>
+    </tr><tr>
+
+<th>cycles not held</th>
+<td> Number of cycles not held. The cycle
+time is specified with the -c parameter. It defines how often a client
+should perform a new request. However, a client may not perform
+another request before the result from the previous request has been
+obtained. Whenever a client is unable to initiate a new request 'on
+time' due to not being finished with the previous request, this value
+will be increased.</td>
+    </tr><tr>
+
+<th>minimum response time</th>
+<td> The minimum response time. The
+response time is measured as the time period from just before the
+request is sent to the server, till the result is obtained from the
+server.</td>
+    </tr><tr>
+
+<th>maximum response time</th>
+<td> The maximum response time. The
+response time is measured as the time period from just before the
+request is sent to the server, till the result is obtained from the
+server.</td>
+    </tr><tr>
+
+<th>average response time</th>
+<td> The average response time. The
+response time is measured as the time period from just before the
+request is sent to the server, till the result is obtained from the
+server.</td>
+    </tr><tr>
+
+<th>X percentile</th>
+<td> The X percentile of the response time
+samples; a value selected such that X percent of the response time
+samples are below this value. In order to calculate percentiles, a
+histogram of response times is maintained for each client at runtime
+and merged after the test run ends. If a percentile value exceeds the
+upper bound of this histogram, it will be approximated (and thus less
+accurate) and marked with '(approx)'.</td>
+    </tr><tr>
+
+<th>actual query rate</th>
+<td> The average number of queries per
+second; QPS.</td>
+    </tr><tr>
+
+<th>utilization</th>
+<td> The percentage of time used waiting for
+the server to complete (successful) requests. Note that if a request
+fails, the utilization will drop since the client has 'wasted' the
+time spent on the failed request.</td>
+    </tr><tr>
+
+<th>zero hit queries</th>
+<td>The number of queries that gave zero hits in Vespa</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="results-extended">Extended results</h3>
+
+<h4 id="results-extended-1"><code>-x</code> Activate benchmarkdata-reporting</h4>
+<p>This results will be added to the output file if the <code>-x</code> switch is active(activate benchmarkdata-reporting) is used</p>
+
+<p>To get this numbers aggregated you can use
+<a href="#fbench-formatter"><code>fbench-formatter.py</code></a></p>
+
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:200px">NumHits</th>
+<td>Number of hits returned</td>
+    </tr><tr>
+
+<th>NumFastHits</th>
+<td>Number of actual document hits returned</td>
+    </tr><tr>
+
+<th>TotalHitCount</th>
+<td>Total number of hits for query</td>
+    </tr><tr>
+
+<th>QueryHits</th>
+<td>Hits as specified in query</td>
+    </tr><tr>
+
+<th>QueryOffset</th>
+<td>Offset as specified in query</td>
+    </tr><tr>
+
+<th>NumErrors</th>
+<td>Number of error hits returned</td>
+    </tr><tr>
+
+<th>NumGroupHits</th>
+<td>Number of grouping hits returned</td>
+    </tr><tr>
+
+<th>SearchTime</th>
+<td>Time used for searching. Entire query time for one phase search, first phase for
+two-phase search</td>
+    </tr><tr>
+
+<th>AttributeFetchTime</th>
+<td>Time used for attribute fetching, or 0 for one phase search</td>
+    </tr><tr>
+
+<th>FillTime</th>
+<td>Time used for summary fetching, or 0 for one phase search</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>In a simple straight forward vespa setup without any custom searchers doing multiple queries the total time spent
+should be 1 + 2 + 3 + rendering and network = vespa-fbench.</p>
+
+<h4 id="results-extended-2"><code>-y</code> Activate additional data on coverage</h4>
+<p>This uses the report coverage query feature.
+These results will be added to the output file if the <code>-y</code> switch is active.
+To get these numbers aggregated you can use
+<a href="#fbench-formatter"><code>fbench-formatter.py</code></a></p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:200px">DocsSearched</th>
+<td>Total number of documents in nodes searched</td>
+    </tr><tr>
+
+<th>NodesSearched</th>
+<td>Total number of search nodes which were used</td>
+    </tr><tr>
+
+<th>FullCoverage</th>
+<td>1 if true, 0 if false</td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+<!-- ToDo: Some of these scripts are not installed - fix install or remove the below
+
+<h2 id="queries-live">Usecase: Collect queries from a live system</h2>
+<p>To create 200 query files from log:</p>
+<pre>
+$ cat $VESPA_HOME/logs/vespa/qrs/QueryAccessLog.* | vespa-fbench-filter-file -a | vespa-fbench-split-file -p folder/file%03d.txt 200
+</pre>
+<p>
+This will create files <em>folder/file000.txt</em> to <em>folder/file/199.txt</em>
+</p>
+<p class="alert alert-success">
+To add <code>&amp;nocache</code> to the end of each line, use
+<code>sed 's/$/\&amp;nocache/g'</code>
+</p>
+<pre>
+$ <span class="input">cat $VESPA_HOME/logs/vespa/qrs/QueryAccessLog.* | ./vespa-fbench-filter-file -a | sed 's/$/\&amp;nocache/g' | vespa-fbench-split-file -p folder/file%03d.txt &lt;numClients&gt;</span>
+</pre>
+<p class="alert alert-success">
+A query file can become very large, and it can then be pratical to let
+the clients share query file.  To do this the flag <em>-z</em> must be
+set when invoking vespa-fbench. If the flag is not set all clients will send
+the same query, resulting in a artificial high performance
+</p>
+
+
+
+<h2>vespa-fbench scripts</h2>
+
+<h3>Preparing query files</h3>
+<dt><a href="#filterfile"><code>vespa-fbench-filter-file</code></a></dt>
+<dd>Takes query server logs as input and filters them into query file format <br />
+  <code> cat QueryAccessLog.* | vespa-fbench-filter-file -a &gt; query-file.txt</code></dd>
+
+<dt><a href="#splitfile"><code>vespa-fbench-split-file</code></a></dt>
+<dd>Splits a query file into several files <br />
+  <code>cat query-file.txt | vespa-fbench-split-file &lt;num parts&gt;</code></dd>
+
+<h3>Post processing </h3>
+<dt><a href="#fbench-formatter"><code>fbench-formatter.py</code></a></dt>
+<dd>Processes fbench output files and creates statistics <br />
+  <code>fbench-formatter.py fbench-output%d.txt</code> </dd>
+
+<dt><a href="#geturl"><code>vespa-fbench-geturl</code></a></dt>
+<dd>Print result of query to stdout</dd>
+
+<dt><a href="#resultfilter"><code>vespa-fbench-result-filter.pl</code></a></dt>
+<dd>Script for filtering vespa-fbench summary output into space separated list <br />
+  <code>vespa-fbench host port | vespa-fbench-result-filter &gt;&gt; result.txt</code></dd>
+
+<dt><a href="#plot"><code>plot.pl</code></a></dt>
+<dd>Script to make plot of vespa-fbench output in result.txt<br />
+  <code>plot.pl [1-3]</code></dd>
+
+<dt><a href="#separate"><code>seperate.pl</code></a></dt><dd></dd>
+
+<h3>Test scripts</h3>
+<dt><a href="#runtests"><code>runtests.sh</code></a></dt>
+<dd>Script for automatically run vespa-fbench with different number of clients and cycle times</dd>
+
+<dt><a href="#runtests"><code>pretest.sh</code></a></dt>
+<dd>Invoked by runtests.sh for initialization</dd>
+
+</p>
+
+
+
+<h2 id="fbench-formatter">fbench-formatter</h3>
+<p>Usage:</p>
+<pre>
+  Usage: fbench-formatter.py [options] [fbench output file]
+
+  Use  '-' for input from stdin
+
+  Wildcards:
+  %d : any digits
+  * : any string
+  . : any char
+
+  Example:
+  fbench-formatter.py file%d directory/file
+  cat filename | fbench-formatter.py -
+
+  Options:
+  -h, --help              show this help
+  -d, --dir=&lt;string&gt;      search directory [default: current directory]
+  -n, --depth=&lt;int&gt;       search depth for subfolders [default: no limit]
+  -f                      show file list
+
+  -w                      give output as html
+  -s                      give output as minimal tab separated list
+  (headers is written to stderr)
+  -c,                     give output as comma separated list
+  (headers is written to stderr)
+
+  -t, --tag=&lt;string&gt;      set tag to output (use with -s)
+</pre>
+<p><code>fbench-formatter.py</code> parses vespa-fbench output files and
+returns aggregated info of those. Example:</p>
+<pre>
+  $ cat output/out* | ./fbench-formatter.py -
+  Processing stdin&hellip;
+  NAME	         TOTAL	       AVG	   MIN	   MAX
+  TotalHitCount:	          3731	      0.62	     0	    21
+  SearchTime:	        629844	    104.92	    10	   392
+  FillTime:	        222128	     37.00	     0	   408
+  NumHits:	          3148	      0.52	     0	    10
+  QueryHits:	         60030	     10.00	    10	    10
+  DocsSearched:	       4540939	    756.44	   756	   757
+  NumFastHits:	          3148	      0.52	     0	    10
+  FullCoverage:	          6003	      1.00	     1	     1
+  AttributeFetchTime:	             0	      0.00	     0	     0
+  NumErrors:	             0	      0.00	     0	     0
+  QueryOffset:	             0	      0.00	     0	     0
+  NodesSearched:	         24012	      4.00	     4	     4
+
+  Search+Fill+AttrFetch:	    851972.000	    141.92	    13	   526
+  Standard deviation:	        58.833
+  Number of requests:	          6003
+  successful requests:	          6003
+  failed requests:	             0
+  zero hit requests:	          3332
+</pre>
+
+
+
+<h2 id="filterfile">vespa-fbench-filter-file</h3>
+<p>Usage:</p>
+<pre>
+  usage: vespa-fbench-filter-file [-a] [-h] [-m maxLineSize]
+
+  Read concatenated QRS logs from stdin and write
+  extracted query urls to stdout.
+
+  -a : all parameters to the original query urls are preserved.
+  If the -a switch is not given, only 'query' and 'type'
+  parameters are kept in the extracted query urls.
+  -h : print this usage information.
+  -m &lt;num&gt; : max line size for input/output lines.
+  Can not be less than the default [10240]
+</pre>
+<p>Filterfile is used for extracting queries from the query server. Example:</p>
+<pre>
+  cat $VESPA_HOME/logs/vespa/qrs/* | vespa-fbench-filter-file -a > query.txt
+</pre>
+<p>This will create a file with name 'query.txt', with queries extracted from the log files</p>
+
+
+
+<h2 id="resultfilter">vespa-fbench-result-filter.pl</h3>
+<p> This script converts an vespa-fbench summary report read from stdin to a
+single line containing only the numerical values written to # stdout. Example:
+</p>
+<pre>
+  $ cat result.txt
+  ***************** Benchmark Summary *****************
+  clients:                      10
+  ran for:                       1 seconds
+  cycle time:                    0 ms
+  lower response limit:          0 bytes
+  skipped requests:              0
+  failed requests:               0
+  successful requests:          66
+  cycles not held:              66
+  minimum response time:     36.46 ms
+  maximum response time:    322.66 ms
+  average response time:    156.37 ms
+  25 percentile:            108.00 ms
+  50 percentile:            143.00 ms
+  75 percentile:            194.00 ms
+  90 percentile:            271.00 ms
+  95 percentile:            294.50 ms
+  99 percentile:            321.05 ms
+  actual query rate:         63.94 Q/s
+  utilization:               99.99 %
+
+  $ cat result.txt | vespa-fbench-result-filter.pl
+  10 1 0 0 0 0 66 66 36.46 322.66 156.37 108.00 143.00 194.00 271.00 294.50 321.05 63.94 99.99
+</pre>
+
+
+
+<h2 id="splitfile">vespa-fbench-split-file</h3>
+<p>Usage:</p>
+<pre>
+  usage: vespa-fbench-split-file [-p pattern] [-m maxLineSize] &lt;numparts&gt; [&lt;file&gt;]
+
+  -p pattern : output name pattern ['query%03d.txt']
+  -m &lt;num&gt;   : max line size for input/output lines.
+  Can not be less than the default [10240]
+  &lt;numparts&gt; : number of output files to generate.
+
+  Reads from &lt;file&gt; (stdin if &lt;file&gt; is not given) and
+  randomly distributes each line between &lt;numpart&gt; output
+  files. The names of the output files are generated by
+  combining the &lt;pattern&gt; with sequential numbers using
+  the sprintf function.
+</pre>
+<p>To let each client have a distinct file, you should split
+the query urls into at least as many files as the number of clients
+you are planning to run.</p>
+<pre>./vespa-fbench-split-file -p folder/query%02d 2 queryfile</pre>
+<p>This will create two files, <code>folder/query00</code> and
+<code>folder/query01</code>. The content of <code>queryfile</code> is
+divided between them</p>
+
+
+
+<h2 id="plot">plot.pl</h3>
+<p>Usage:</p>
+<pre>
+  usage: plot.pl [-h] [-x] <plotno>
+    Plot the contents of 'result.txt'.
+    -h      This help
+    -x      Output to X11 window (default PS-file 'graph.ps')
+    plotno: 1: Response Time Percentiles by NumCli
+    2: Rate by NumCli
+    3: Response Time Percentiles by Rate
+</pre>
+<p>Example:</p>
+<pre>
+  vespa-fbench &hellip; host port | vespa-fbench-result-filter.pl &gt;&gt; result.txt
+  vespa-fbench &hellip; host port | vespa-fbench-result-filter.pl &gt;&gt; result.txt
+  vespa-fbench &hellip; host port | vespa-fbench-result-filter.pl &gt;&gt; result.txt
+  plot 1
+</pre>
+<p>This will plot the values of result.txt as response time percentiles by number of clients</p>
+
+
+
+<h2 id="runtests">runtests.sh</h3>
+<p>Usage:</p>
+<pre>
+  usage: runtests.sh [-o] [-l] &lt;minClients&gt; &lt;maxClients&gt; &lt;deltaClients&gt;
+  &lt;minCycle&gt; &lt;maxCycle&gt; &lt;deltaCycle&gt; [vespa-fbench options] &lt;hostname&gt; &lt;port&gt;
+
+  The number of clients varies from &lt;minClients&gt; to &lt;maxClients&gt; with
+  &lt;deltaClients&gt; increments. For each client count, the cycle time will
+  vary in the same way according to &lt;minCycle&gt;, &lt;maxCycle&gt; and &lt;deltaCycle&gt;.
+  vespa-fbench is run with each combination of client count and cycle time, and
+  the result output is filtered with the 'vespa-fbench-result-filter.pl' script.
+  If you want to save the results you should redirect stdout to a file.
+
+  -o : change the order in which the tests are performed so that client
+  count varies for each cycle time.
+  -l : output a blank line between test subseries. If -o is not specified this
+  will output a blank line between test series using different client count.
+  If -o was specified this will output blank lines between test series
+  using different cycle time.
+
+  [vespa-fbench options] &lt;hostname&gt; &lt;port&gt;: These arguments are passed to vespa-fbench.
+  There are 2 things to remember: first; do not specify either of the -n
+  or -c options since they will override the values for client count and
+  cycle time generated by this script. Secondly; make sure you specify
+  the correct host and port number. See the vespa-fbench usage (run vespa-fbench
+  without parameters) for more info on how to invoke vespa-fbench
+</pre>
+<p><code>runtests.sh</code> is used to run vespa-fbench with different values of n and c</p>
+<p>The script <code>pretest.sh</code> will be called before each
+individual run and can be used for clearing caches etc</p>
+
+
+
+<h2 id="geturl">vespa-fbench-geturl</h3>
+<p>Usage:</p>
+<pre>
+  usage: vespa-fbench-geturl &lt;host&gt; &lt;port&gt; &lt;url&gt;
+</pre>
+<p>vespa-fbench-geturl fetches the result of the query given. Example:</p>
+<pre>
+  vespa-fbench-geturl hostname port /search/?query=sddocname:music
+</pre>
+
+
+
+<h2 id="separate">separate.pl</h3>
+<p>Usage:</p>
+<pre>
+  usage: separate.pl &lt;sepcol&gt;
+  Separate a tabular numeric file into chunks using a blank
+  line whenever the value in column 'sepcol' changes.
+</pre>
+
+-->

@@ -1,0 +1,411 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Document selector language"
+---
+
+<p>
+This document describes the <em>document selector language</em>, used to
+select a subset of documents when feeding, dumping and garbage collecting data.
+It defines a text string format that can be parsed to build a parse tree,
+which in turn can answer whether a given document is contained within the subset or not.
+</p>
+
+
+
+<h2 id="examples">Examples</h2>
+<dl>
+<dt><code>music.author and music.length &lt;= 1000</code>
+<dd>This expression selects all documents with the above two conditions
+    set. The first condition states that the documents should be of type music,
+    and the author field must exist. The second states that the field length
+    must be set, and be less than 1000.
+<dt><code>book.author = "*John*Doe\n" or not book.author</code>
+<dd>This expression selects all documents where either of the subexpressions are
+    true. The first one states that the author field should include the name
+    John Doe, with anything in between or in front. The \n escape is converted
+    to a newline before the field comparison is done. Thus requiring the field
+    to end with Doe and a newline for a match to be true. The second expression
+    selects all books where no author is defined.
+<dt><code>not (music.length &gt; 1000) and (false or music.test)</code>
+<dd>Here is an example of how parentheses are used to group expressions.
+    Also, a constant value false has been used. Note that the <code>(false or music.test)</code>
+    sub-expression could be exchanged
+    with just <code>music.test</code> without altering the result of the
+    selection. The sub-expression within the <code>not</code> clause selects all documents
+    where the size field is above 1000 and the test field is defined. The <code>not</code>
+    clause inverts the selection, thus selecting all documents with size
+    less than or equal to 1000 or the test field undefined.
+</dl>
+Other examples:
+<ul>
+<li><code>music.version() == 3 and (music.givenname + " " + music.surname).lowercase() = "bruce springsteen"</code></li>
+<li><code>id.user.hash().abs() % 300 % 7 = 1</code></li>
+<li><code>music.wavstream.hash() == music.checksum</code></li>
+<li><code>music.size / music.length &gt; 10</code></li>
+<li><code>music.expire &gt; now() - 7200</code></li>
+</ul>
+
+
+<h3 id="case-sensitiveness">Case sensitiveness</h3>
+<p>
+The identifiers used in this language (<code>and or not true false null id
+scheme namespace specific user group</code>) are not case sensitive.
+It is recommended to use lower cased identifiers for consistency with the documentation.
+</p>
+
+
+
+<h2 id="branch-operators-precendence">Branch operators / precendence</h2>
+<p>
+The branch operators are used to combine other nodes in the parse tree
+generated from the text format. The different branch nodes existing is
+listed in the table below in order of precedence.
+Operators listed in order of precedence:
+<table class="table">
+<thead>
+  <tr><th>Operator</th><th>Description</th></tr>
+</thead><tbody>
+<tr>
+    <td>NOT</td>
+    <td>Unary prefix operator inverting the selection of the child node</td>
+  </tr><tr>
+    <td>AND</td>
+    <td>Binary infix operator, which is true if all its children are</td>
+  </tr><tr>
+    <td>OR</td>
+    <td>Binary infix operator, which is true if any of its children are</td>
+  </tr>
+</tbody>
+</table>
+Use parentheses to define own precedence.
+<code>a and b or c and d</code> is equivalent to <code>(a and b) or (c and d)
+</code> since and has higher precedence than or. The expression
+<code>a and (b or c) and d</code> is not
+equivalent to the previous two, since parentheses have been used to force the
+or expression to be evaluated first.
+</p><p>
+Parentheses can also be used in value calculations.
+Where modulo <code>%</code> has the highest precedence,
+multiplication <code>*</code> and division <code>/</code> next,
+addition <code>+</code> and subtractions <code>-</code> have lowest precedence.
+</p>
+
+
+
+<h2 id="primitives">Primitives</h2>
+<table class="table">
+<thead>
+  <tr><th>Primitive</th><th>Description</th></tr>
+</thead><tbody>
+  <tr>
+    <td>Boolean constant</td>
+    <td>The boolean constants <code>true</code> and <code>false</code> can be
+        used to match all/nothing</td>
+  </tr>
+  <tr>
+    <td>Document type</td>
+    <td>A document type can be used as a primitive to select a given type of
+        documents</td>
+  </tr>
+  <tr>
+    <td>Document field specification</td>
+    <td>A document field specification (<code>doctype.field</code>) can be used
+        as a primitive to select all documents that have field set -
+        a shorter form of <code>doctype.field != null</code></td>
+  </tr>
+  <tr>
+    <td>Comparison</td>
+    <td>The comparison is a primitive used to compare two values</td>
+  </tr>
+</tbody>
+</table>
+
+
+<h3 id="comparison">Comparison</h3>
+<p>
+Comparisons operators compares two values using an operator.
+All the operators are infix and take two arguments.
+<table class="table">
+<thead>
+  <tr><th>Operator</th><th>Description</th></tr>
+</thead><tbody>
+  <tr>
+    <td>&gt;</td>
+    <td>
+      This is true if the left argument is greater than the right one.
+      Operators using greater than or less than notations only makes sense where
+      both arguments are either numbers or strings. In case of strings, they are
+      ordered by their binary (byte-wise) representation, with the first character being the
+      most significant and the last character the least significant. If the argument
+      is of mixed type or one of the arguments are not a number or a string, the
+      comparison will be invalid and not match.</td>
+  </tr><tr>
+    <td>&lt;</td>
+    <td>Matches if left argument is less than the right one</td>
+  </tr><tr>
+    <td>&lt;=</td>
+    <td>Matches if the left argument is less than or equal to the right one</td>
+  </tr><tr>
+    <td>&gt;=</td>
+    <td>Matches if the left argument is greater than or equal to the right one</td>
+  </tr><tr>
+    <td>==</td>
+    <td>
+      Matches if both arguments are exactly the same.
+      Both arguments must be of the same type for a match</td>
+  </tr><tr>
+    <td>!=</td>
+    <td>Matches if both arguments are not the same</td>
+  </tr><tr>
+    <td>=</td>
+    <td>
+      String matching using a glob pattern. Matches only if the pattern given
+      as the right argument matches the whole string given by the left argument.
+      Asterisk <code>*</code> can be used to match zero or more of any character.
+      Question mark <code>?</code> can be used to match any one character.
+      The pattern matching operators, regex <code>=~</code> and glob <code>=</code>, only makes sense
+      if both arguments are strings. The regex operator will never match anything else.
+      The glob operator will revert to the behaviour of <code>==</code> if both arguments are not strings.</td>
+  </tr><tr>
+    <td>=~</td>
+    <td>
+      String matching using a regular expression.
+      Matches if the regular expression given as the right argument
+      matches the string given as the left argument. Regex notation is like perl.
+      Use '^' to indicate start of value, '$' to indicate end of value</td>
+  </tr>
+</tbody>
+</table>
+</p>
+
+<h4>Locale / Character sets</h4>
+<p>
+The language currently does not support character sets other than ASCII.
+Glob and regex matching of single characters are not guaranteed to match exactly one character,
+but might match a part of a character represented by multiple byte values.
+</p>
+
+<h4>Values</h4>
+<p>
+The comparison operator compares two values. A value can be any of the following:
+<table class="table">
+<thead></thead><tbody>
+<tr>
+	<th>Document field specification</th>
+  <td><p>
+		  Syntax: <code>&lt;doctype&gt;.&lt;fieldpath&gt;</code>
+		</p><p>
+		  Documents have a set of fields defined, depending on the document type.
+		  The field name is the identifier used for the field. This expression returns
+		  the value of the field, which can be an integer, a floating point number,
+		  a string, an array, or a map of these types.
+		</p><p>
+      For multivalues, we support only the equals operator for comparison.
+      The semantics is that the array returned by the fieldvalue must </em>contain</em> at least
+      one element that matches the other side of the comparison. For maps, there must exist a
+      key matching the comparison.
+    </p><p>
+      The simplest use of the fieldpath is to specify a field,
+      but for complex types please refer to
+      <a href="document-field-path.html">the field path syntax documentation</a>.
+  </p></td>
+</tr><tr>
+  <th>Id</th>
+  <td><p>
+		  Syntax: <code> id.[scheme|namespace|type|specific|user|group|order(W,d)] </code>
+	  	</p><p>
+		  Each document has a Document Id, uniquely identifying that document within
+		  a Vespa installation. The id operator returns the string identifier, or if
+		  an optional argument is given, a part of the id.
+		  <ul>
+  		  <li>scheme (id)</li>
+  	  	<li>namespace (to separate different users' data)</li>
+	  	  <li>type (specified in the id scheme)</li>
+  	  	<li>specific (User specified part to distinguish documents within a namespace)</li>
+	  	  <li>user (The number specified in document ids using the n= modifier)</li>
+  		  <li>group (The string group specified in document ids using the g= modifier)</li>
+	  	</ul>
+	</p></td>
+</tr><tr>
+	<th>null</th>
+  <td><p>
+		  The value null can be given to specify
+		  nothingness. For instance, a field specification for
+		  a document not containing the field will evaluate to
+		  null, so the comparison 'music.artist == null' will
+		  select all documents that don't have the artist
+		  field set. 'id.user == null' will match all
+		  documents that don't use the <code>n=</code>
+                  <a href="../documents.html#id-scheme">document id scheme</a>.
+  </p></td>
+</tr><tr>
+  <th>Number</th>
+  <td><p>
+		  A value can be a number, either an integer or a floating point number.
+		  Type of number is insignificant. You don't have to use the same type
+		  of number on both sides of a comparison. For instance '3.0 &lt; 4' will
+		  match, and '3.0 == 3' will probably match (operator == is generally not
+                  advised for floating point numbers due to rounding issues).
+		  Numbers can be written in multiple ways - examples:
+<pre>
+  1234  -234  +53  +534.34  543.34e4  -534E-3  0.2343e-8
+</pre>
+  </p></td>
+</tr><tr>
+  <th>Strings</th>
+  <td><p>
+		  A string value is given quoted with double quotes (ie. "mystring").
+		  The string is interpreted as an ASCII string. that is, only ASCII values
+		  32 to 126 can be used unescaped, apart from the characters \ and " which
+      also needs to be escaped. Escape common special characters like:
+		  <table class="table">
+		  <thead><tr><th>Character</th><th>Escaped character</th></tr></thead>
+      <tbody>
+		  <tr><td>Newline</td><td>\n</td></tr>
+		  <tr><td>Carriage return</td><td>\r</td></tr>
+		  <tr><td>Tab</td><td>\t</td></tr>
+		  <tr><td>Form feed</td><td>\f</td></tr>
+		  <tr><td>"</td><td>\"</td></tr>
+		  <tr><td>Any other character</td>
+				<td>\x## (where ## is a two digit hexadecimal number specifying the ASCII
+					 value.</td></tr>
+      </tbody>
+		  </table>
+  </p></td>
+</tr>
+</tbody>
+</table>
+</p>
+
+<h4>Value arithmetics</h4>
+<p>
+In addition to single values you can also do arithmetics on values.
+The common arithmetics operators addition <code>+</code>, subtraction <code>-</code>,
+multiplication <code>*</code>, division <code>/</code> and modulo <code>%</code> are supported.
+</p>
+
+<h4>Functions</h4>
+<p>
+Functions are called on something and returns a value that can be used in comparison expressions:
+<table class="table">
+<thead></thead><tbody>
+	<tr>
+		<th>Value functions</th>
+    <td>
+      A value function takes a value, does something with it and returns a value which can be of any type.
+		<ul>
+			<li>
+				<em>abs() </em>Called on a numeric type, returns the absolute value of that numeric type.
+        That is -3 returns 3 and -4.3 returns 4.3.
+			</li><li>
+				<em>hash() </em>Calculates an md5 hash of whatever value it is called on. The result is a
+        signed 64 bit integer. (Use abs() after if you want to only get positive hash values).
+			</li><li>
+				<em>lowercase() </em>Called on a string value to turn upper
+				case characters into lower case ones.
+				<strong>NOTE: </strong>This only works for the characters 'a' through 'z', no locale support.
+			</li>
+		</ul>
+    </td>
+	</tr><tr>
+		<th>Document type functions</th>
+    <td>
+      Some functions can take a document type instead of a value, and return a value based on the type.
+		<ul>
+			<li>
+				<em>version() </em>The <code>version()</code> function returns
+        the version number of a document type.
+			</li>
+		</ul>
+    </td>
+	</tr>
+</tbody>
+</table>
+</p>
+
+
+<h3 id="now-function">Now function</h3>
+<p>
+Document selection provides a <em>now()</em> function, which returns the current date timestamp.
+By putting an expiration date or insertion date field in the search definition,
+the following expression can make sure that you only have documents from the last 2 hours:
+</p><p>
+<code>music.inserttimestamp &gt; now() - 7200</code>
+</p><p>
+<strong>now() can only be used in a subset of the document selection language</strong>.
+All uses of now() must be on the form:
+</p><p>
+<code>&lt;doctype&gt;.&lt;field&gt; &gt; now() [ - &lt;seconds&gt; ]</code>
+</p><p>
+<em>now()</em> can be used with the &lt;documents&gt; tag for search,
+or in a selection expression for a visitor.
+Often used in <a href="services-content.html#documents">garbage collection selection</a>.
+</p>
+
+
+
+<h2 id="constraints">Constraints</h2>
+<p>
+Language identifiers restrict what can
+be used as document type names. The following values are not valid document type names:
+<em>true, false, and, or, not, id, null</em>
+</p>
+
+
+
+<h2 id="grammar-EBNF-of-the-language">Grammar - EBNF of the language</h2>
+<p>
+To simplify, double casing of strings has not been included.
+The identifiers "null", "true", "false" etc can be written in any case, including mixed case.
+<pre>
+nil              = "null" ;
+bool             = "true" | "false" ;
+posdigit         = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
+digit            = '0' | posdigit ;
+hexdigit         = digit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f'
+					 	   | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' ;
+integer          = [ '-' | '+' ], posdigit, { digit } ;
+float            = [ '-' | '+' ], digit, { digit },
+      			[ '.' , { digit }, [ ('e' | 'E'), posdigit, { digit } ] ] ;
+number           = float | integer ;
+stdchars         = ? All ASCII chars except '\\', '"', 0 - 31 and 127 - 255 ? ;
+alpha            = ? ASCII characters in the range a-z and A-Z ? ;
+alphanum         = alpha | digit ;
+space            = ( ' ' | '\t' | '\f' | '\r' | '\n' ) ;
+string           = '"', { stdchars | ( '\\', ( 't' | 'n' | 'f' | 'r' | '"' ) )
+							| ( "\\x", hexdigit, hexdigit ) }, '"' ;
+doctype          = alpha, { alphanum } ;
+fieldname        = { alphanum '{' |'}' | '[' | ']' '.' } ;
+function         = alpha, { alphanum } ;
+idarg            = "scheme" | "namespace" | "type" | "specific" | "user" | "group" | "order(W,d)&quot ;
+searchcolumnarg  = integer ;
+operator         = "&gt;=" | "&gt;" | "==" | "=~" | "=" | "&lt;=" | "&lt;" | "!=" ;
+idspec           = "id", [ '.', idarg ] ;
+searchcolumnspec = "searchcolumn", [ '.', searchcolumnarg ] ;
+fieldspec        = doctype, ( function | ('.', fieldname) ) ;
+value            = ( valuegroup | nil | number | string | idspec | searchcolumnspec | fieldspec ),
+				   { function } ;
+valuefuncmod     = ( valuegroup | value ), '%',
+				   ( valuefuncmod | valuegroup | value ) ;
+valuefuncmul     = ( valuefuncmod | valuegroup | value ), ( '*' | '/' ),
+				   ( valuefuncmul | valuefuncmod | valuegroup | value ) ;
+valuefuncadd     = ( valuefuncmul | valuefuncmod | valuegroup | value ),
+				   ( '+' | '-' ),
+				   ( valuefuncadd | valuefuncmul | valuefuncmod | valuegroup
+				   | value ) ;
+valuegroup       = '(', arithmvalue, ')' ;
+arithmvalue      = ( valuefuncadd | valuefuncmul | valuefuncmod | valuegroup
+				   | value ) ;
+comparison       = arithmvalue, { space }, operator, { space },
+				   arithmvalue ;
+leaf             = bool | comparison | fieldspec | doctype ;
+not              = "not", { space }, ( group | leaf ) ;
+and              = ( not | group | leaf ), { space }, "and", { space },
+				   ( and | not | group | leaf ) ;
+or               = ( and | not | group | leaf ), { space }, "or", { space },
+				   ( or | and | not | group | leaf ) ;
+group            = '(', { space }, ( or | and | not | group | leaf ),
+				   { space }, ')' ;
+expression       = ( or | and | not | group | leaf ) ;
+</pre>
+</p>

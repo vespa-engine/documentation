@@ -1,0 +1,622 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Elastic Vespa"
+---
+
+<p>
+Elasticity is a major Vespa feature.
+It allows applications to grow with data size and read/write load with automatic data redistribution.
+Change capacity while the service is running, with no restarts.
+Increase request rates by adding more nodes, as this reduces number of documents per node.
+This allows application owners to easily right-size the instances with minimal risk and effort.
+This article details three subjects:
+<ul>
+  <li><a href="#storage-and-retrieval">storage and retrieval of documents</a></li>
+  <li><a href="#indexed-search">indexed search in the stored documents</a></li>
+  <li><a href="#resizing">resizing the installation</a></li>
+</ul>
+</p>
+<p>
+
+
+</p><p>
+Modify the configuration to add/remove nodes,
+then <a href="cloudconfig/application-packages.html#deploy">deploy</a>.
+Add an elastic content cluster to the application by adding a
+<a href="reference/services-content.html">content</a> element
+in <a href="reference/services.html">services.xml</a>.
+Documents are distributed over nodes with a configured
+<a href="reference/services-content.html#redundancy">redundancy</a>.
+</p><p>
+Documents maps to <a href="content/buckets.html">buckets</a>.
+During feeding, the document is sent to all replicas of the bucket.
+If bucket replicas are out of sync, a bucket merge operation
+is run to re-sync the bucket.
+Buckets are split when they grow too large, and joined when they shrink.
+A bucket contains <a href="#data-retention-vs-size">tombstones</a> of recently removed documents.
+Read more about document expiry and batch removes in
+<a href="search-definitions.html#document-expiry">document expiry</a>.
+</p>
+
+
+
+<h2 id="storage-and-retrieval">Storage and retrieval</h2>
+<p>
+The elastic system consists of two main components: distributors and storage nodes.
+The storage nodes provide a <em>Service Provider Interface</em> (SPI) that abstracts
+how documents are stored in the elastic system.
+Documents are both written to and read from the system through a distributor.
+</p>
+
+
+<h3 id="service-provider-interface-SPI">Service Provider Interface (SPI)</h3>
+<p>
+To handle a large number of documents, Vespa groups them in <em>buckets</em>.
+The SPI is the link between the elastic bucket management system and the documents storage.
+In Vespa, the SPI is implemented by <em>proton</em> nodes.
+</p><p>
+Each document has an id which is used to map the document to a <a href="content/buckets.html">bucket</a>,
+either through hashing or through hints located in the id.
+</p><p>
+Vespa implements the SPI in terms of proton, Vespa's core engine.
+It is optimized for query performance, and sub-second indexing makes documents available for search immediately.
+</p>
+
+
+
+<h3 id="writing-documents">Writing documents</h3>
+<p>
+How the different processes interact when documents are fed:
+</p><img src="content/img/elastic_feed.png"/><p>
+Documents enter Vespa using the  <a href="api.html">Document API</a>.
+Next, they enter <a href="document-processing-overview.html">document processing</a>
+where the documents are prepared for indexing, before
+entering the <em>distributor</em>. The distributor determines which
+bucket should hold each document, and sends them to the
+correct <em>search nodes</em> (also called <em>content nodes</em>).
+</p>
+<p>
+The client library in the Document API forwards requests to distributors.
+Possibly splitting complex requests into multiple requests,
+which may be sent to distributors in sequence or in parallel.
+It calculates correct distributors to talk to using
+the distribution algorithm and knowledge of the cluster state.
+If it's cached knowledge is outdated, it may end up talking to the wrong distributor,
+in which case the distributor will reply with the correct state, enabling the
+client library to resend to the correct one.
+</p><p>
+With no known cluster state, the client library will send requests to random
+nodes, which will reply with the updated state if the node was not the correct one.
+Cluster states are versioned, such that clients hitting outdated distributors does not override
+updated states with old states.
+</p>
+
+<h4 id="document-processing">Document processing</h4>
+<p>
+The document processing chain is specified in the system setup. It is
+a chain of processors that manipulate documents before they are
+stored. Document processors can be user defined. When using indexed
+search, the final step in the chain prepares documents for
+indexing. The document processing chain calculates a bucket id for
+each document, which is used to select the correct distributor.
+</p>
+
+<h4 id="distributor">Distributor</h4>
+<p>
+The <em>distributor</em> keeps track of which search nodes should hold which copy of each bucket,
+based on the <em>redundancy</em> setting and information from the <em>cluster controller</em>.
+Distributors are responsible for keeping track of metadata for a non-overlapping subset of the data in the cluster.
+The distributors each keep a bucket database containing
+metadata of buckets it is responsible for. This metadata indicates what
+content nodes store copies of the buckets, the checksum of the bucket
+content and the number of documents and meta entries within the bucket.
+Each incoming document is assigned to a bucket and forwarded to the right search nodes.
+All requests related to these buckets are sent through the distributors.
+</p><p>
+A <a href="#bucket-distribution-algorithm">distribution algorithm</a>
+calculates what distributors are responsible for given buckets based on
+information of what nodes are available in the cluster. Clients can
+calculate what distributor to talk to using information in the cluster
+state.
+</p><p>
+When a distributor goes down or becomes available, all distributors
+reshuffle what buckets they are responsible for. During this reshuffling,
+clients may get some requests temporarily failing as distributors taking
+over bucket ownership doesn't yet know where copies of its buckets are located.
+These requests will automatically be resent, providing timeouts allow for it.
+Changes in what distributors are up and available will currently cause
+windows of availability loss. Other distributors take over bucket ownership.
+To do this they fetch bucket metadata for new buckets from
+all storage nodes, in memory operations for speed.
+</p><p>
+The distribution algorithm also calculates what content nodes copies
+of buckets should be stored on. As moving bucket copies take time,
+the distributors track current state in a bucket database,
+allowing requests to be processed independent of where buckets are currently located.
+Distributors use the distribution algorithm to detect buckets that are stored on wrong nodes,
+and move copies to correct nodes when there are free resources to do so.
+</p><p>
+In addition the distributor can track some historic knowledge. For instance
+it may know that of the currently existing bucket copies, a given copy has
+been available all the time and may be trusted to have all the information,
+while another copy may be on a storage node that recently restarted, so that
+copy may lack some documents. Such historic state is not persisted, and is
+thus lost on distributor restarts.
+</p><p>
+The distributors use the bucket metadata to ensure the buckets are in a good state.
+<ul>
+  <li>If buckets have too few copies, new copies are generated</li>
+  <li>If buckets have too many copies, superfluous copies are deleted once the
+    distributor knows the copies to delete don't contain data other copies do
+    not have</li>
+  <li>If all the copies do not contain the same data, merges are issued to get
+    bucket copies consistent</li>
+  <li>If two buckets exist, such that both may contain the same document, the
+    buckets are split or joined to remove such overlapping buckets</li>
+  <li>If buckets contain too little or too much data, they should be joined or
+    split</li>
+  <li>If not exactly one copy is marked active, and the backend wants a copy to
+    be marked active, activate or deactivate copies to get in a good
+    state</li>
+</ul>
+The various maintenance operations have various priorities depending on why
+they are needed. The distributor tries to prioritize to fix the most critical
+issues first. If no maintenance operations are needed, the cluster is said to
+be in the ideal state.
+The distributors synchronize maintenance load
+with user load, e.g. to remap requests to other buckets after
+bucket splitting and joining.
+</p><p>
+
+</p>
+
+
+<h4 id="cluster-controller">Cluster controller</h4>
+<p>
+The <a href="clustercontroller.html">cluster controller</a>
+keeps track of the state of the nodes in the installation.
+This cluster state is used by the document processing chains
+to know which distributor to send documents to,
+as well as by the distributor to know which search nodes should have which bucket.
+</p><p>
+A set of cluster controllers elect a master among themselves.
+The master gathers <a href="content/admin-states.html">node states</a>
+from all the distributor and content nodes, and combine them into a cluster state.
+The cluster state is broadcasted to all the nodes every time it changes,
+allowing all nodes to know what distributors are responsible for handling what parts of the data.
+Clients picks up an updated cluster state if they try talking to the wrong distributor.
+</p><p>
+As the cluster state is critical for clients to calculate the correct
+distributor to talk to, it is important that the cluster state is
+efficiently transferred and that all nodes agree on what the cluster state is.
+The cluster controller gathers node states from all distributor and content
+nodes and combine these to a cluster state, broadcasting it back to the same nodes.
+If clients use the wrong distributor for a bucket,
+it will get the correct cluster state returned in the reply.
+The client then calculates the correct distributor and resends the request.
+That way, clients do not depend directly on the cluster controller
+as distributors serves cluster states to clients.
+</p>
+
+<h4 id="search-node">Search node</h4>
+<p>
+The internal structure of a <em>search node</em>:
+</p><img src="content/img/proton_feed.png"/><p>
+The search node consists of a <em>bucket management system</em> which
+sends requests to a set of <em>document databases</em>, which each
+consists of three <em>sub-databases</em>.
+</p>
+
+<h4 id="bucket-management">Bucket management</h4>
+<p>
+When the node starts up it first needs to get an overview of what
+partitions it have, and what buckets each partition currently stores.
+Once it knows this, it is in initializing mode, able to handle load,
+but distributors do not yet know bucket metadata for all the buckets,
+and thus can't know whether buckets are consistent with copies on other nodes.
+Once metadata for all buckets are known, the content nodes transitions from
+initializing to up state.
+As the distributors wants quick access to bucket metadata,
+it keeps an in-memory bucket database to efficiently serve these requests.
+</p><p>
+It implements elasticity support in terms of the SPI.
+Operations are ordered according to priority,
+and only one operation per bucket can be in-flight at a time.
+Below bucket management is the persistence engine,
+which implements the SPI in terms of Vespa search.
+The persistence engine reads the document type from the document id,
+and dispatches requests to the correct document database.
+</p>
+
+<h4 id="document-database">Document database</h4>
+<p>
+Each document database is responsible for a single document type.
+It has a component called FeedHandler which takes care of incoming documents, updates, and remove requests.
+All requests are first written to a transaction log to make sure they are not lost if the node restarts.
+They are then handed to the appropriate sub-database, based on the request type.
+</p>
+
+<h4 id="sub-databases">Sub-databases</h4>
+<p>
+There are three types of sub-databases, each with its own
+<a href="attributes.html#document-meta-store">document meta store</a> and
+<a href="document-summaries.html#document-store">document store</a>.
+The document meta store holds a map from the document id to a local
+id. This local id is used to address the document in the document
+store. The document meta store also maintains information on the
+state of the buckets that are present in the sub-database.
+</p><p>
+The sub-databases are maintained by the <em>index maintainer</em>.
+The document distribution changes as the system is resized.
+When the number of nodes in the system changes,
+the index maintainer will move documents between the Ready and
+Not Ready sub-databases to reflect the new distribution.
+When an entry in the Removed sub-database gets old it is purged.
+</p><p>
+The sub-databases are:
+<dl class="dl-horizontal">
+  <dt>Not Ready</dt>
+  <dd>Holds the redundant documents that are not searchable,
+    i.e. the <em>not ready</em> documents.
+    Documents that are not ready are only stored, not
+    indexed. It takes some processing to move from this state to
+    the ready state.</dd>
+  <dt>Ready</dt>
+  <dd>Maintains an index of all <em>ready</em> documents and keeps them searchable.
+    One of the ready copies is <em>active</em> while the rest are <em>not active:</em>
+    <ul>
+      <li><strong>Active: </strong>
+        There should always be exactly one active copy of each
+        document in the system, though intermittently there may be
+        more. These documents produce results when queries are
+        evaluated.</li>
+      <li><strong>Not Active: </strong>
+        The ready copies that are not active are indexed but will
+        not produce results. By being indexed, they are ready to take
+        over immediately if the node holding the active copy becomes
+        unavailable.</li>
+    </ul></dd>
+  <dt>Removed</dt>
+  <dd>Keeps track of documents that have been removed.
+    The id and timestamp for each document is kept.
+    This information is used when buckets from two nodes are merged.
+    If the removed document exists on another node but with a different timestamp,
+    the most recent entry prevails.</dd>
+</dl>
+Hence, only <em>active</em> documents in <em>Ready</em> are searchable:
+<style>table, th, td { border: 1px solid black; padding: 15px; }</style>
+<table>
+  <tr><th></th><th>sub-db <em>Not Ready</em></th><th>sub-db <em>Ready</em></th><th>sub-db <em>Removed</em></th></tr>
+  <tr><th>Not searchable</th><td rowspan="2">not indexed</td><td>indexed - not active</td><td rowspan="2">not indexed</td></tr>
+  <tr><th>Searchable</th><td style="background-color: lightgreen;">indexed - active</td></tr>
+</table>
+&nbsp;
+</p>
+
+<h4 id="redundancy">Redundancy</h4>
+<p>
+<a href="reference/services-content.html#redundancy">redundancy</a>
+sets how many backend instances stores replicas of the same data.
+<a href="reference/services-content.html#searchable-copies">searchable-copies</a> configures
+how many replicas to keep in the <em>Ready</em> sub-database.
+Redundancy is handled at the bucket level, by maintaining <em>redundancy</em>
+replicas of each bucket. No node may store more than one replica of a bucket.
+The distributors detect whether there are enough bucket replicas on the
+content nodes and add/remove as needed.
+Write operations wait for replies from every replica
+and fail if less than redundancy are persisted within timeout.
+Replica placement is found in
+<a href="content/data-placement.html">document distribution</a>.
+</p>
+
+
+<h4 id="consistency">Consistency</h4>
+<p>
+Consistency is maintained at bucket level.
+Content nodes calculate checksums based on the bucket contents,
+and the distributors compare checksums among the bucket copies.
+If inconsistencies are detected, a merge is issued to resolve inconsistency.
+While there are inconsistent bucket replicas, the distributors try to route
+external operations to the best replica.
+</p><p>
+As buckets are split and joined, it is possible for replicas of a bucket to
+be split at different levels. A node may have been down while its buckets
+have been split or joined. This is called inconsistent bucket splitting.
+Bucket checksums can not be compared across buckets with different split
+levels. Consequently, distributors do not know whether all documents exist in
+enough replicas in this state. Due to this, inconsistent splitting is one of the
+highest maintenance priorities. After all buckets are split or joined back to
+the same level, the distributors can verify that all the replicas are consistent
+and fix any detected issues with a merge.
+</p><!-- ToDo link to other docs here -->
+
+
+<h3 id="retrieving-documents">Retrieving documents</h3>
+<p>
+Retrieving documents is done either by specifying a single id to <em>get</em>,
+or use a <a href="reference/document-select-language.html">selection expression</a>
+to <em>visit</em> a range of documents - refer to the <a href="api.html">Document API</a>.
+Overview:
+</p><img src="content/img/elastic_visit_get.png"/>
+
+<h4 id="get">Get</h4>
+<p>
+When the persistence engine receives a get request,
+it scans through all the document databases,
+and for each one it checks all three sub-databases.
+Once the document is found, the scan is stopped and the document returned.
+If the document is found in a Ready sub-database,
+the document retriever will patch in any changes that is stored in the
+<a href="attributes.html">attributes</a> before returning the document.
+</p>
+
+<h4 id="visit">Visit</h4>
+<p>
+A visit request creates an iterator over each candidate bucket.
+This iterator will retrieve matching documents from all sub-databases of all document databases.
+As for get, attributes are patched into documents in the Ready sub-database.
+</p>
+
+
+
+<h2 id="indexed-search">Indexed search</h2>
+<p>
+Indexed search has a separate pathway through the system.
+It does not use the distributor, nor has it anything to do with the SPI.
+It is orthogonal to the elasticity set up by the storage and retrieval described above.
+How queries move through the system:
+</p><img src="content/img/elastic_query.png"/><p>
+A query enters the system through the <em>QR-server</em> (query rewrite server).
+The QR-server issues one query per document type to the <em>top level dispatcher</em>,
+which in turn keeps track of all search nodes and relays queries to them.
+</p>
+
+
+<h3 id="qr-server">QR-server</h3>
+<p>
+The QR-server knows all the document types and rewrites queries as a
+collection of queries, one for each type.
+Queries may have a <a href="reference/search-api-reference.html#model.restrict">restrict</a> parameter,
+in which case the QR-server will send the query only to the specified document types.
+</p>
+
+
+<h3 id="top-level-dispatcher">Top level dispatcher</h3>
+<p>
+The top level dispatcher sends each query to every search node.
+It pings all search nodes every second to know whether they are alive,
+and keeps open TCP connections to each one.
+If a node goes down, the elastic system will make the documents available on other nodes.
+</p>
+
+
+<h3 id="Search-node-matching">Search node matching</h3>
+<p>
+The <em>match engine</em> <!-- link here to design doc / move it -->
+receives queries and routes them to the right document
+database based on the document type.
+In the document database the query is passed straight to the <em>Ready</em> sub-database,
+where the searchable documents are.
+Based on information stored in the document meta store,
+the query is augmented with a blacklist that ensures only <em>active</em> documents can get a match.
+</p>
+
+
+
+<h2 id="resizing">Resizing</h2>
+<p>
+Resizing is orchestrated by the distributor, and happens gradually in the background.
+It uses a variation of the <em>RUSH algorithms</em> to distribute documents.
+Under normal circumstances it makes a minimal number of documents move when nodes are added or removed.
+</p>
+
+
+<h3 id="bucket-distribution-algorithm">Bucket distribution algorithm</h3>
+<p>
+Central to the <a href="content/idealstate.html">ideal state distribution algorithm</a>
+is the assignment of a node sequence to each bucket.
+The illustration shows how each bucket uses a pseudo-random sequence
+of numbers to derive the node sequence.
+The pseudo-random generator is seeded with the bucket id, so each bucket will always get the same sequence:
+</p><img src="content/img/BucketNodeSequence.png"/><p>
+Each node is assigned a <em>distribution-key</em>, which is an
+index in the number sequence. The set of number/index pairs is sorted
+on descending numbers, and this new sequence of indexes determines
+which nodes the copies are placed on, with the first node being host
+to the primary copy, i.e. the <em>active</em> copy.
+This specification of where to place a bucket is called the bucket's <em>ideal state</em>.
+</p>
+
+
+<h3 id="adding-nodes">Adding nodes</h3>
+<p>
+When adding a new node, new ideal states are calculated for all buckets.
+The buckets that should have a copy on the new node are moved,
+while the superfluous copies are removed. Redistribution example -
+add a new node to the system, with redundancy 2:
+</p><img src="content/img/AddNodeMoveBuckets.png"/><p>
+The distribution algorithm generates a random node sequence for each
+bucket. In this example with redundancy of two, the two copies sorted
+first will store copies of the data. The figure shows how random
+placement onto two nodes changes as a third node is introduced. The new
+node introduced takes over as primary copy for the buckets where it got
+sorted first in order, and as secondary copy for the buckets where it got
+sorted second. This ensures minimal data movement when nodes come or go,
+and allows capacity to be changed easily.
+</p><p>
+No buckets are moved between the existing nodes when a new node is added.
+Based on the pseudo-random sequences, some buckets change from primary to secondary, or are removed.
+Many nodes can be added in the same deployment. Adding more than one minimizes the total
+bucket redistribution, but increases the time to get to the <em>ideal state</em>. Procedure:
+</p>
+<ol>
+  <li>
+    <strong>Node setup:</strong> Prepare nodes by installing software,
+    set up the file systems / directories and set configuration server(s).
+    <a href="vespa-quick-start.html">Details</a>. Start the node.
+  </li><li>
+    <strong>Modify configuration:</strong>
+    Add a <a href="reference/services-content.html#node">node</a>-element in <em>services.xml</em>
+    and <a href="reference/hosts.html">hosts.xml</a>.
+    Refer to <a href="operations/install-multinode.html">multinode setup</a>.
+    It is key that the node's <em>distribution-key</em> is higher than the highest existing index.
+  </li><li>
+    <strong>Deploy</strong>: <a href="operations/admin-procedures.html#monitor-distance-to-ideal-state">
+    Observe metrics</a> to track progress as the cluster redistributes documents.
+    Use the <a href="#cluster-controller">cluster controller</a>
+    to monitor the state of the cluster.
+  </li><li>
+    <strong>Restart dispatch nodes?:</strong> ToDo check this.
+  </li><li>
+    <strong>Tune performance:</strong> Use
+    <a href="https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def">
+    maxpendingidealstateoperations</a> to tune concurrency of bucket merge operations from distributor nodes.
+    Likewise, tune <a href="reference/services-content.html#merges">merges</a> -
+    concurrent merge operations per content node. The tradeoff is speed of bucket replication vs
+    use of resources, which impacts the applications' regular load.
+    <strong>ToDo:</strong> add something on bucket-oriented summary store as well.
+  </li><li>
+    <strong>Finish:</strong> The cluster is done redistributing when <em>idealstate.merge_bucket.pending</em>
+    is zero on all distributors.
+  </li>
+</ol>
+
+
+<h3 id="removing-nodes">Removing nodes</h3>
+<p>
+Whether a node fails or is deliberately removed, the same redistribution happens.
+If the remove is planned, the node remains up until it has been drained.
+Example of redistribution after node failure, redundancy 2:
+</p><img src="content/img/LoseNodeMoveBuckets.png"/><p>
+In the figure, node 2 fails. This node held the active copies of bucket 2 and 6.
+Once the node fails the secondary copies are set active.
+If they were already in a <em>ready</em> state, they can start serving queries immediately.
+Otherwise they will have to index their data.
+All buckets that no longer have secondary copies
+are copied to the remaining nodes according to their pseudo-random sequence.
+It is important that the nodes retain their original index;
+otherwise the buckets would all have to move to regain their ideal states.
+</p><p>
+Do not remove more than <em>redundancy</em>-1 nodes at a time.
+Observe <em>idealstate.merge_bucket.pending</em> to know bucket replica status,
+when zero on all distributor nodes, it is safe to remove more nodes.
+If <a href="content/data-placement.html">hierarchical distribution</a>
+is used to control bucket replicas, remove all nodes in a group
+if the reduncancy settings ensure replicas in each group.
+</p><p>
+To increase bucket redundancy level before taking nodes out,
+<a href="content/admin-states.html">retire</a> nodes.
+Again, track <em>idealstate.merge_bucket.pending</em> to know when done.
+Use the <a href="content/api-state-rest-api.html">State API</a> or
+<em>vespa-set-node-state</em><!-- ToDo: this tool should be documented somewhere -->
+to set a node to <em>retired</em>.
+The <a href="#cluster-controller">cluster controller's</a>
+status page lists node states.
+</p>
+
+
+<h3 id="merge-clusters">Merge clusters</h3>
+<p>
+To merge two content clusters, add nodes to the cluster like <em>add node</em> above, considering:
+<ul><li>
+  <a href="reference/services-content.html#node">distribution-keys</a> must be unique.
+  Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
+</li><li>
+  Set <em>services__addr_configserver</em>, then start the node.
+</li></ul>
+</p>
+
+
+<h3 id="migrate-clusters">Migrate clusters</h3>
+<p>
+An alternative to increasing cluster size is building a new cluster, then migrate documents to it.
+This is supported using <a href="content/visiting.html#data-export-import">visiting</a>.
+</p>
+
+
+
+<h2 id="limitations-and-tradeoffs">Limitations and tradeoffs</h2>
+<table class="table">
+<thead></thead></tbody>
+<tr><th id="availability-vs-resources">Availability vs resources</th>
+<td><p>
+Keeping index structures costs resources. Not all replicas of buckets are
+necessarily searchable, unless configured using
+<a href="reference/services-content.html#searchable-copies">searchable-copies</a>.
+As Vespa indexes buckets on-demand, the most cost-efficient setting is 1,
+if one can tolerate temporal coverage loss during node failures.
+Note that <em>searchable-copies</em> does not apply to <a href="streaming-search.html">streaming search</a>
+as this does not use index structures.
+</p><p>
+Distributing buckets using a <a href="content/data-placement.html">hierarchy</a>
+helps implement policies for availability and
+<a href="qps-scaling-content-cluster.html#hierarchical-distribution">query performance</a>.
+</p></td>
+</tr>
+<tr><th id="data-retention-vs-size">Data retention vs size</th>
+<td><p>
+When a document is removed, the document data is not immediately purged.
+Instead, a content cluster keeps <em>remove-entries</em> (tombstones of removed documents)
+for a configurable amount of time. The default is two weeks, refer to
+<a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+pruneremoveddocumentsage</a>.
+This ensures that removed documents stay removed in a distributed system where nodes change state.
+Entries are removed periodically after expiry.
+Hence, if a node comes back up after being down for a week,
+removed documents are available again, unless the data on the node is wiped first.
+A larger <em>pruneremoveddocumentsage</em> will hence grow the storage size as this keeps
+document and tombstones longer.
+</p><p>
+<strong>Note:</strong> The backend does not store remove-entries for nonexistent documents.
+This to prevent clients sending wrong document identifiers from
+filling a cluster with invalid remove-entries.
+A side-effect is that if a problem has caused all replicas of a bucket to be unavailable,
+documents in this bucket cannot be marked removed until at least one copy is available again.
+Documents are written in new bucket replicas while the others are down -
+if these are removed, then older versions of these will not re-emerge,
+as the most recent change wins.
+</p></td>
+</tr>
+<tr><th id="transition-time">Transition time</th>
+<td>
+See <a href="reference/services-content.html#transition-time">transition-time</a>
+for tradeoffs for how quickly nodes are set down vs. system stability.
+</td>
+</tr>
+<tr><th id="removing-unstable-nodes">Removing unstable nodes</th>
+<td>
+One can configure how many times a node is allowed to crash before it will automatically be removed.
+The crash count is reset if the node has been up or down continuously for more than the
+<a href="reference/services-content.html#stable-state-period">stable state period</a>.
+If the crash count exceeds
+<a href="reference/services-content.html#max-premature-crashes">max premature crashes</a>, the node will be disabled.
+Refer to <a href="operations/admin-procedures.html#troubleshooting">troubleshooting</a>.
+</td>
+</tr>
+<tr><th id="minimal-amount-of-nodes-required-to-be-available">Minimal amount of nodes required to be available</th>
+<td>
+A cluster is typically sized to handle a given amount of load.
+A given percentage of the cluster resources are required for normal operations,
+and the remainder is the available resources that can be used if some of the nodes are no longer usable.
+If the cluster loses enough hardware, it will be overloaded:
+</p>
+<ul>
+  <li>Remaining nodes may create disk full situation.
+    This will likely fail a lot of write operations, and if disk is shared with OS,
+    it may also stop the node from functioning.</li>
+  <li>Partition queues will grow to maximum size.
+    As queues are processed in FIFO order, operations are likely to get long latencies.</li>
+  <li>Many operations may time out while being processed,
+    causing the operation to be resent, adding more load to the cluster.</li>
+  <li>When new hardware is added, it cannot serve any requests
+    before data is moved to the new nodes from the already overloaded nodes.
+    Moving data puts even more load on the existing nodes,
+    and as moving data is typically not high priority this may never actually happen.</li>
+</ul>
+To configure what the minimal cluster size is, use
+<a href="reference/services-content.html#min-distributor-up-ratio">min-distributor-up-ratio</a> and
+<a href="reference/services-content.html#min-storage-up-ratio">min-storage-up-ratio</a>.
+</p></td>
+</tr>
+</tbody>
+</table>

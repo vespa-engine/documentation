@@ -1,0 +1,261 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Attribute sizing"
+---
+
+<p>
+<a href="../attributes.html">Attributes</a> are field-level,
+in-memory data structures that enable functionality
+like <a href="../reference/sorting.html">sorting</a>,
+<a href="../grouping.html">grouping</a>,
+and <a href="../ranking.html">ranking</a>.
+As attributes are stored in memory,
+it is important to have enough memory to avoid swapping and general unresponsiveness.
+Attribute structures are regularly optimized and this causes temporal resource usage -
+read more in <a href="../proton.html#proton-maintenance-jobs">Proton maintenance jobs</a>
+<p>
+
+
+
+<h2 id="data-types">Data types</h2>
+<p>
+The memory footprint of an attribute depends on a few factors,
+data type being the most important:
+</p>
+<ul>
+  <li>Numeric types (int, long, byte, and double) - fixed length
+      and fix cost per document</li>
+  <li>String type - the footprint depends on the length of the
+      strings and how many unique strings that needs to be
+      stored.</li>
+</ul>
+<p>
+Collection types like array and weighted sets increases the memory
+usage some, but the main factor is the average number of values per
+document. String attributes are typically the largest attributes, and
+requires most memory during initialization - use numeric types where possible.
+</p>
+<h3 id="example">Example</h3>
+<pre>
+search foo {
+    document bar {
+        field titles type array&lt;string&gt; {
+            indexing: summary | attribute
+        }
+    }
+}
+</pre>
+<p>
+Refer to formulas below.
+Assume average 5 values per document, and average string length 10.
+Then usage is 5*(10 + 32) bytes per document during
+initialization, with 10 million documents that becomes 2100000000
+bytes, or roughly 2GB of attribute data. Increase the average number of
+values per document to 10 (double) will also double the memory
+footprint during initialization (4GB). The steady state attribute
+footprint will be lower, but when doing the capacity plan,
+keep in mind the maximum footprint, which occurs during
+initialization. For the steady state footprint, the number of unique
+values is very important for string attributes.
+</p><p>
+Check the <a href="../files/Attribute-memory-Vespa.xls">Example attribute sizing spreadsheet</a>,
+ with various data types and collection types
+for a simple search application. It also contains estimates for how many documents a
+16GB RAM node can hold.
+</p>
+
+
+
+<h2 id="fast-search">fast-search</h2>
+<p>
+Attributes can be configured with <a href="../reference/search-definitions-reference.html#attribute">
+fast-search</a> - this impacts memory footprint:
+</p>
+<ul>
+  <li>Setting <em>fast-search</em> is not recommended unless you are going to
+    query the attribute without any other more restrictive terms
+    that are indexed</li>
+  <li><em>fast-search</em> will increase steady state memory usage for all
+    attribute types and also add initialization overhead for numeric
+    types</li>
+</ul>
+
+
+
+<h2 id="sizing">Sizing</h2>
+<p>
+Attribute sizing is not an exact science, rather an
+approximation. The reason is that they vary in size. Both number of
+documents, number of values and uniqueness of the values are
+varying. The components of the attributes that occupy memory are
+listed below - concepts:
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Abbreviation</th>
+      <th>Concept</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <tr>
+      <td>D</td>
+      <td>Number of documents</td>
+      <td>Number of documents on the node, or rather the maximum number of documentids allocated</td>
+    </tr>
+    <tr>
+      <td>V</td>
+      <td>Average number of values per document</td>
+      <td>Only applicable for arrays and weighted sets</td>
+    </tr>
+    <tr>
+      <td>U</td>
+      <td>Number of unique values</td>
+      <td>Only applies if <em>fast-search</em> is set</td>
+    </tr>
+    <tr>
+      <td>FW</td>
+      <td>Fixed data width</td>
+      <td>sizeof(T) for numerics, 1 byte for strings</td>
+    </tr>
+    <tr>
+      <td>WW</td>
+      <td>Weight width</td>
+      <td>Width of the weight in a weighted set, 4 bytes</td>
+    </tr>
+    <tr>
+      <td>EW</td>
+      <td>Enum index width</td>
+      <td>Width of the enum index, 4 bytes. Used by all strings and other attributes if
+        <a href="../reference/search-definitions-reference.html#attribute">fast-search</a> is set</td>
+    </tr>
+    <tr>
+      <td>VW</td>
+      <td>Variable data width</td>
+      <td>strlen(s) for strings, 0 bytes for the rest</td>
+    </tr>
+    <tr>
+      <td>PW</td>
+      <td>Posting width</td>
+      <td>Width of a postinglist entry for attribute. fast-search
+          -&gt; 4. array/weighted set -&gt; (4+4)</td>
+    </tr>
+    <tr>
+      <td>IW</td>
+      <td>Index width</td>
+      <td>Width of index - 4 bytes, 8 bytes if
+        <a href="../reference/search-definitions-reference.html#attribute">huge</a> is set</td>
+    </tr>
+    <tr>
+      <td>ROF</td>
+      <td>Resize overhead factor</td>
+      <td>Default is 6/5. This is the average overhead in any dynamic vector due to
+          resizing strategy. Resize strategy is 50% indicating that
+          structure is 5/6 full on average.</td>
+    </tr>
+    </tbody>
+</table>
+
+
+<h3 id="components">Components</h3>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Component</th>
+      <th>Formula</th>
+      <th>Approx Factor</th>
+      <th>Applies to</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <tr>
+      <td>Document vector</td>
+      <td>D * ((FW or EW) or IW)</td>
+      <td>ROF</td>
+      <td>FW for single value numeric attributes and IW for
+          multi-value attributes. EW for single value string or the
+          attribute is single value fast-search</td>
+    </tr>
+    <tr>
+      <td>Multi-value mapping</td>
+      <td>D * V * (FW or EW)</td>
+      <td>ROF</td>
+      <td>Applicable only for array or weighted sets. EW if string or fast-search</td>
+    </tr>
+    <tr>
+      <td>Enum store</td>
+      <td>U * (FW + VW) + 4</td>
+      <td>ROF</td>
+      <td>Applicable for strings or if fast-search is set</td>
+    </tr>
+    <tr>
+      <td>Posting list</td>
+      <td>D * V * PW</td>
+      <td>ROF</td>
+      <td>Applicable for strings or if fast-search is set</td>
+    </tr>
+  </tbody>
+</table>
+
+
+<h3 id="variants">Variants</h3>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Components</th>
+      <th>Formula</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <tr>
+      <td>Numeric single value plain</td>
+      <td>Document vector</td>
+      <td>D * FW * ROF</td>
+    </tr>
+    <tr>
+      <td>Numeric multi-value value plain</td>
+      <td>Document vector, Multi-value mapping</td>
+      <td>D * IW * ROF + D * V * FW * ROF </td>
+    </tr>
+    <tr>
+      <td>Numeric single value fast-search</td>
+      <td>Document vector, Enum store, Posting List</td>
+      <td>D * EW * ROF + D * PW  * ROF + U * (FW+4) * ROF</td>
+    </tr>
+    <tr>
+      <td>Numeric multi-value value plain</td>
+      <td>Document vector, Multi-value mapping</td>
+      <td>D * IW * ROF + D * V * FW * ROF </td>
+    </tr>
+    <tr>
+      <td>Numeric multi-value value fast-search</td>
+      <td>Document vector, Multi-value mapping, Enum store, Posting List</td>
+      <td>D * IW * ROF + D * V * EW * ROF + U * (FW+4) * ROF + D * V * PW * ROF</td>
+    </tr>
+    <tr>
+      <td>Single value string fast-search</td>
+      <td>Document vector, Enum store, Posting List</td>
+      <td>D * EW * ROF + U * (FW+VW+4) * ROF + D * PW * ROF</td>
+    </tr>
+    <tr>
+      <td>Single value string plain</td>
+      <td>Document vector, Enum store</td>
+      <td>D * EW * ROF + U * (FW+VW+4) * ROF</td>
+    </tr>
+    <tr>
+      <td>Multi-value string plain</td>
+      <td>Document vector, Multi-value mapping, Enum store</td>
+      <td>D * IW * ROF + D * V * EW * ROF + U * (FW+VW+4) * ROF</td>
+    </tr>
+    <tr>
+      <td>Multi-value string fast-search</td>
+      <td>Document vector, Multi-value mapping, Enum store, Posting list</td>
+      <td>D * IW * ROF + D * V * EW * ROF + U * (FW+VW+4) * ROF + D * V * PW * ROF</td>
+    </tr>
+  </tbody>
+</table>

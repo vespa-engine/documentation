@@ -1,0 +1,373 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Page Templates"
+---
+
+<p>
+When multiple kinds of data is fetched for a request, the application
+must decide how to lay out the data to return to the user.
+<em>Page templates</em> allows such page layouts to be defined as XML
+configuration files - one file per layout, corresponding to one use case.
+</p><p>
+The layouts are <em>structural</em> &mdash; they do not specify widths
+and heights, colors and similar, but define the various boxed
+components that will make up the page, and their ordering an nesting.
+It is also assumed that the complete application includes a <em>frontend</em>
+which is capable of rendering finished pages from result laid out by a template.
+</p><p>
+Page layouts may contain <em>choices</em> which specify alternative
+versions of the template. The choices in a template are taken by
+a <em>resolver</em> component at run time. Given an optimizing
+resolver the system can then learn to make the right choices given
+each particular query and result. An optimizing resolver is not
+bundled with the platform but must be added as a component.
+</p><p>
+This document describes how to <a href="#getting_started">get started</a>,
+explains the <a href="#introduction">page template language</a>
+and <a href="#using-choice-resolvers">how to add a choice resolver</a>.
+A complete reference of all the permissible content of page templates is found in the
+<a href="reference/page-templates-syntax.html">page template reference</a>.
+</p>
+
+
+
+<h2 id="getting-started">Getting Started</h2>
+<p>
+A page template is an xml file which is placed in the
+directory <code>search/page-templates/</code> in
+the <a href="cloudconfig/application-packages.html">application package</a>.
+To start using page templates:
+<ul>
+  <li>Create template XML files as
+      shown <a href="#introduction">below</a>
+      in <code>[app-package]/page-templates/</code></li>
+  <li>Add the searcher
+    <code><a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/search/pagetemplates/PageTemplateSearcher.html">com.yahoo.search.pagetemplates.PageTemplateSearcher</a></code>
+      to the default <a href="reference/services-search.html">search chain</a> in <em>services.xml</em>.</li>
+  <li><a href="cloudconfig/application-packages.html#deploy">deploy</a>
+      the application package.</li>
+  <li>Add these query parameters: <code>page.id=[comma-separated list of page id's]</code>
+      and <code>presentation.format=<a href="reference/page-result-format.html">page</a></code>.</li>
+</ul>
+The results returned will be as defined by the page template selected for each query.
+</p><p>
+The source names used in page templates are the same as those defined
+in the <a href="federation.html">federation</a> setup,
+and/or of any internal search clusters defined in the application.
+</p><p>
+A presentation layer (frontend) which understands the results created
+by the page templates in use must be set up or created to produce rendered pages.
+That is beyond the scope of this document.
+</p>
+
+
+
+<h2 id="introduction">Introduction to Page Templates</h2>
+<p>
+A page template is an XML file which contains
+a <code>&lt;page&gt;</code> tag at the top level.  The page element
+must have an <code>id</code> attribute, where the file name is the
+same as the id, followed by <em>.xml</em>.  If the id
+is <em>default</em>, this template will be used whenever no template
+is specified in the query.  The templates may also be versioned,
+see <a href="jdisc/component-versioning.html">Component Versioning</a>.
+</p><p>
+A page template consist of nested <em>sections</em> which correspond
+to screen areas in the final layout.  The top level section is defined
+by the page itself, while further sections can be defined by explicit
+&lt;section&gt; tags.  Each section may set a layout which will be
+used by the frontend renderer to lay out its content
+- <code>column</code> and <code>row</code> must be supported by
+all renderers, while some renderers may specify additional layouts.
+Each section may also specify sources of data which should be placed
+in the section. Renderers must be able to render multiple data items
+from different sources in a section.
+</p><p>
+For example, this template creates a page consisting of four equally
+large regions containing one source each:
+<pre>
+&lt;page id="fourSquare" layout="column"&gt;
+    &lt;section layout="row"&gt;
+        &lt;section source="news"/&gt;
+        &lt;section source="web"/&gt;
+    &lt;/section&gt;
+    &lt;section layout="row"&gt;
+        &lt;section source="image"/&gt;
+        &lt;section source="video"/&gt;
+    &lt;/section&gt;
+&lt;/page&gt;
+</pre>
+To use this template, save it
+as <em>[application-package]/page-templates/fourSquare.xml</em>.
+</p><p>
+Suppose we want to extend this template to be able to also show blogs
+in the "news" section. This can be done as follows:
+<pre>
+&lt;page id="fourSquare" layout="column"&gt;
+    &lt;section layout="row"&gt;
+        &lt;section source="news <strong>blog</strong>"/&gt;
+        &lt;section source="web"/&gt;
+    &lt;/section&gt;
+    &lt;section layout="row"&gt;
+        &lt;section source="image"/&gt;
+        &lt;section source="video"/&gt;
+    &lt;/section&gt;
+&lt;/page&gt;
+</pre>
+Data items from each possible source has a rendering implemented by the frontend.
+These renderers are used when nothing is specified in the template.
+If some alternative rendering is desired, this can be
+specified by a <code>renderer</code> tag. The same is true for
+rendering of the sections themselves.  Here we specify a different
+renderer for blog data items (hits), as well as for the entire
+<em>news/blog</em> section.
+<pre>
+&lt;page id="fourSquare" layout="column"&gt;
+    &lt;section layout="row"&gt;
+        &lt;section source="news"&gt;
+            <strong>&lt;renderer name="blueSection"&gt;
+            &lt;source name="blog"&gt;
+                &lt;renderer name="newBlogHitStyle"/&gt;
+            &lt;/source&gt;
+        &lt;section/&gt;</strong>
+        &lt;section source="web"/&gt;
+    &lt;/section&gt;
+    &lt;section layout="row"&gt;
+        &lt;section source="image"/&gt;
+        &lt;section source="video"/&gt;
+    &lt;/section&gt;
+&lt;/page&gt;
+</pre>
+Note that in order to add a renderer subelement, we now specify the
+blog source by a tag rather than by an attribute.  These two forms are
+equivalent - the attribute variant is just a shorthand syntax.
+</p><p>
+Sources and renderers can be given arbitrary key-value parameters
+- see the <a href="reference/page-templates-syntax.html">reference</a> for details.
+</p><p>
+But what if we want to choose either news or blogs, but not both?
+This can be achieved using a choice:
+<pre>
+&lt;page id="fourSquare" layout="column"&gt;
+    &lt;section layout="row"&gt; &lt;section;&gt;
+    &lt;renderer name="blueSection"&gt;
+            <strong>&lt;choice&gt;
+                &lt;source name="news"/&gt;</strong>
+                &lt;source name="blog"&gt;
+                    &lt;renderer name="newBlogHitStyle"/&gt;
+                &lt;/source&gt;
+            <strong>&lt;/choice&gt;</strong>
+        &lt;section/&gt;
+        &lt;section source="web"/&gt;
+    &lt;/section&gt;
+    &lt;section layout="row"&gt;
+        &lt;section source="image"/&gt;
+        &lt;section source="video"/&gt;
+    &lt;/section&gt;
+&lt;/page&gt;
+</pre>
+We can insert choices anywhere in a template, for example choose to
+show either the first or the second row rather than both:
+<pre>
+&lt;page id="fourSquare" layout="column"&gt;
+    <strong>&lt;choice&gt;</strong>
+        &lt;section layout="row"&gt;
+            &lt;section;&gt;
+                &lt;renderer name="blueSection"&gt;
+                &lt;choice&gt;
+                    &lt;source name="news"/&gt;
+                    &lt;source name="blog"&gt;
+                        &lt;renderer name="newBlogHitStyle"/&gt;
+                    &lt;/source&gt;
+                &lt;/choice&gt;
+            &lt;section/&gt;
+            &lt;section source="web"/&gt;
+        &lt;/section&gt;
+        &lt;section layout="row"&gt;
+            &lt;section source="image"/&gt;
+            &lt;section source="video"/&gt;
+        &lt;/section&gt;
+    <strong>&lt;/choice&gt;</strong>
+&lt;/page&gt;
+</pre>
+If we wanted to choose between two groups of multiple sections (or sources),
+this can be done by adding an enclosing <code>alternative</code> tag around each group.
+For the common special case of assigning a set of elements to a set of placeholders,
+a choice can contain a <code>map</code> tag instead of a list of alternatives.
+See the <a href="reference/page-templates-syntax.html">reference</a> for details.
+</p>
+
+
+
+<h2 id="using-choice-resolvers">Using Choice Resolvers</h2>
+<p>
+If templates including choices are used, some component must resolve
+those choices given each query and result.  The system includes some
+resolvers for demo and testing purposes, but a proper optimizing
+resolver must be deployed as part of the application. This section
+describes how to create, deploy and choose a resolver to use at
+runtime.
+</p>
+
+
+<h3 id="writing-a-resolver">Writing a Resolver</h3>
+<p>
+Resolvers are subclasses of
+<a href="http://github.com/pages/vespa-engine/javadoc/?com/yahoo/search/pagetemplates/engine/Resolver.html">
+com.yahoo.search.pagetemplates.engine.Resolver</a>.
+This API defines a method which accepts the page template in use
+(which contains the choices), the Query/Result pair and returns a Resolution.
+It is called at runtime once for every query which uses a page template.
+</p><p>
+There are also some helper methods which makes it simple to write
+resolvers which make each choice independently. Here is an example
+resolver which makes all choices by random using this helper methods:
+</p>
+<pre>
+package com.yahoo.search.pagetemplates.engine.resolvers;
+
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.pagetemplates.engine.*;
+import com.yahoo.search.pagetemplates.model.*;
+
+import java.util.*;
+
+/** A resolver which makes all choices by random. */
+public class RandomResolver extends Resolver {
+
+    private Random random=new Random(System.currentTimeMillis()); // Use of this is multithread safe
+
+    /** Chooses the last alternative of any choice */
+    @Override
+    public void resolve(Choice choice, Query query, Result result, Resolution resolution) {
+        resolution.addChoiceResolution(choice,random.nextInt(choice.alternatives().size()));
+    }
+
+    /** Chooses a mapping which is always by the literal order given in the source template */
+    @Override
+    public void resolve(MapChoice choice,Query query,Result result,Resolution resolution) {
+        Map&lt;String, List&lt;PageElement&gt;&gt; mapping=new HashMap&lt;String, List&lt;PageElement&gt;&gt;();
+        // Draw a random element from the value list on each iteration and assign it to a placeholder
+        List&lt;String&gt; placeholderIds=choice.placeholderIds();
+        List&lt;List&lt;PageElement&gt;&gt; valueList=new ArrayList&lt;List&lt;PageElement&gt;&gt;(choice.values());
+        for (String placeholderId : placeholderIds)
+            mapping.put(placeholderId,valueList.remove(random.nextInt(valueList.size())));
+        resolution.addMapChoiceResolution(choice,mapping);
+    }
+
+}
+</pre>
+
+
+<h3 id="deploying-a-resolver">Deploying a Resolver</h3>
+<p>
+Resolvers must be packaged as <a href="http://en.wikipedia.org/wiki/Osgi#Bundles">
+OSGI bundles</a> for deployment,
+see <a href="jdisc/container-components.html">container components</a>.
+</p><p>
+The packaged component is added to the <code>components/</code>
+directory of the <a href="cloudconfig/application-packages.html">application package</a>.
+</p><p>
+The page template searcher must be configured with a list of the
+resolvers which should be available.  This is done by expanding the
+page template searcher configuration with a components
+configuration:
+<pre>
+&lt;searcher id="com.yahoo.search.pagetemplates.PageTemplateSearcher"&gt;
+  &lt;config name="container.components"&gt;
+    &lt;component index="0"&gt;
+      &lt;id&gt;default&lt;/id&gt;
+      &lt;classId&gt;com.yahoo.my.Resolver1&lt;/classId&gt;
+      &lt;bundle&gt;myBundleSymbolicName&lt;/bundle&gt;
+    &lt;/component&gt;
+
+    &lt;component index="1"&gt;
+      &lt;id&gt;mySecondResolver&lt;/id&gt;
+      &lt;classId&gt;com.yahoo.my.Resolver2&lt;/classId&gt;
+      &lt;bundle&gt;myBundleSymbolicName&lt;/bundle&gt;
+    &lt;/component&gt;
+  &lt;/config&gt;
+&lt;/searcher&gt;
+</pre>
+With this, the application is
+<a href="cloudconfig/application-packages.html#deploy">deployed</a> as usual.
+</p>
+
+
+<h3 id="choosing-a-resolver">Choosing a Resolver</h3>
+<p>
+The resolver to use is determined by setting the query property
+<code>page.resolver</code> to the id (and optionally version) of the resolver component -
+either in the request, in a query profile or programmatically.
+</p><p>
+Two templates suitable for testing purposes are always available:
+<code>native.random</code>, which makes each choice by random,
+and <code>native.deterministic</code> which selects the last
+alternative of each choice.
+</p><p>
+If the page.resolver parameter is not set, the resolver having the
+id <code>default</code> is used. If no default resolver is deployed
+the random resolver is used.
+</p>
+
+
+
+<h2 id="examples">Examples</h2>
+<p>
+This section contains a few complete examples of page templates.
+</p><p>
+A blending search result page:
+<pre>
+&lt;page id="slottingSerp" layout="mainAndRight"&gt;
+  &lt;section layout="column" region="main" source="*"/&gt;
+  &lt;section layout="column" region="right" source="ads"/&gt;
+&lt;/page&gt;
+</pre>
+A richer search result page:
+<pre>
+&lt;page id="richSerp" layout="mainAndRight"&gt;
+  &lt;section layout="row" placement="main"&gt;
+    &lt;section layout="column" description="left main pane"&gt;
+      &lt;section layout="row" max="5" description="Bar of images, from one of two possible sources"&gt;
+        &lt;choice&gt;
+          &lt;source name="images"/&gt;
+          &lt;source name="flickr"/&gt;
+        &lt;/choice&gt;
+      &lt;/section&gt;
+      &lt;section max="1" source="local map video ticker weather"
+                  description="A single relevant graphically rich element"/&gt;
+      &lt;section max="10" source="web news"
+                  description="Various kinds of traditional search results"/&gt;
+    &lt;/section&gt;
+    &lt;section layout="column" order="[source]" source="answers blogs twitter"
+                description="right main pane, ugc stuff, grouped by source"/&gt;
+  &lt;/section&gt;
+  &lt;section layout="column" source="ads" region="right"/&gt;
+&lt;/page&gt;
+</pre>
+A mapping of multiple source modules to places on the page:
+<pre>
+&lt;page id="MapSourcesToSections" layout="column" description="4 sources are assigned to a section each"&gt;
+
+    &lt;section layout="row" description="row 1"&gt;
+        &lt;section id="box1"&gt;&lt;placeholder id="box1source"/&gt;&lt;/section&gt;
+        &lt;section id="box2"&gt;&lt;placeholder id="box2source"/&gt;&lt;/section&gt;
+    &lt;/section&gt;
+    &lt;section layout="row" description="row 2"&gt;
+        &lt;section id="box3"&gt;&lt;placeholder id="box3source"/&gt;&lt;/section&gt;
+        &lt;section id="box4"&gt;&lt;placeholder id="box4source"/&gt;&lt;/section&gt;
+    &lt;/section&gt;
+
+    &lt;choice method="myMethod"&gt;
+        &lt;map to="box1source box2source box3source box4source"&gt;
+            &lt;source name="source1"/&gt;
+            &lt;source name="source2"/&gt;
+            &lt;source name="source3"/&gt;
+            &lt;source name="source4"/&gt;
+        &lt;/map&gt;
+    &lt;/choice&gt;
+
+&lt;/page&gt;
+</pre>
+</p>
