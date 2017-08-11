@@ -1,0 +1,348 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.search.federation.http;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.component.ComponentId;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.jdisc.http.CertificateStore;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.yolean.Exceptions;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.search.Query;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import com.yahoo.search.Result;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import com.yahoo.processing.request.CompoundName;<a name="line.9"></a>
+<span class="sourceLineNo">010</span>import com.yahoo.search.result.ErrorMessage;<a name="line.10"></a>
+<span class="sourceLineNo">011</span>import com.yahoo.search.result.Hit;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import com.yahoo.search.searchchain.Execution;<a name="line.12"></a>
+<span class="sourceLineNo">013</span>import com.yahoo.statistics.Statistics;<a name="line.13"></a>
+<span class="sourceLineNo">014</span><a name="line.14"></a>
+<span class="sourceLineNo">015</span>import org.apache.http.HttpEntity;<a name="line.15"></a>
+<span class="sourceLineNo">016</span><a name="line.16"></a>
+<span class="sourceLineNo">017</span>import java.io.IOException;<a name="line.17"></a>
+<span class="sourceLineNo">018</span>import java.io.InputStream;<a name="line.18"></a>
+<span class="sourceLineNo">019</span>import java.net.MalformedURLException;<a name="line.19"></a>
+<span class="sourceLineNo">020</span>import java.net.URI;<a name="line.20"></a>
+<span class="sourceLineNo">021</span>import java.net.URISyntaxException;<a name="line.21"></a>
+<span class="sourceLineNo">022</span>import java.util.LinkedHashMap;<a name="line.22"></a>
+<span class="sourceLineNo">023</span>import java.util.List;<a name="line.23"></a>
+<span class="sourceLineNo">024</span>import java.util.Map;<a name="line.24"></a>
+<span class="sourceLineNo">025</span>import java.util.logging.Logger;<a name="line.25"></a>
+<span class="sourceLineNo">026</span><a name="line.26"></a>
+<span class="sourceLineNo">027</span>/**<a name="line.27"></a>
+<span class="sourceLineNo">028</span> * A utility parent for searchers which gets data from web services which is incorporated into the query.<a name="line.28"></a>
+<span class="sourceLineNo">029</span> * This searcher will take care of implementing the search method while the extending class implements<a name="line.29"></a>
+<span class="sourceLineNo">030</span> * {@link #getQueryMap} and {@link #handleResponse} to create the http request and handle the response, respectively.<a name="line.30"></a>
+<span class="sourceLineNo">031</span> *<a name="line.31"></a>
+<span class="sourceLineNo">032</span> * &lt;p&gt;This class automatically adds a meta hit containing latency and other<a name="line.32"></a>
+<span class="sourceLineNo">033</span> * meta information about the obtained HTTP data using createRequestMeta().<a name="line.33"></a>
+<span class="sourceLineNo">034</span> * The fields available in the hit are:&lt;/p&gt;<a name="line.34"></a>
+<span class="sourceLineNo">035</span> *<a name="line.35"></a>
+<span class="sourceLineNo">036</span>  * &lt;dl&gt;&lt;dt&gt;<a name="line.36"></a>
+<span class="sourceLineNo">037</span> * HTTPSearcher.LOG_LATENCY_START<a name="line.37"></a>
+<span class="sourceLineNo">038</span> * &lt;dd&gt;<a name="line.38"></a>
+<span class="sourceLineNo">039</span> *     The latency of the external provider answering a request.<a name="line.39"></a>
+<span class="sourceLineNo">040</span> * &lt;dt&gt;<a name="line.40"></a>
+<span class="sourceLineNo">041</span> * HTTPSearcher.LOG_LATENCY_FINISH<a name="line.41"></a>
+<span class="sourceLineNo">042</span> * &lt;dd&gt;<a name="line.42"></a>
+<span class="sourceLineNo">043</span> *     Total time of the HTTP traffic, but also decoding of the data, is this<a name="line.43"></a>
+<span class="sourceLineNo">044</span> *     happens at the same time.<a name="line.44"></a>
+<span class="sourceLineNo">045</span> * &lt;dt&gt;<a name="line.45"></a>
+<span class="sourceLineNo">046</span> * HTTPSearcher.LOG_URI<a name="line.46"></a>
+<span class="sourceLineNo">047</span> * &lt;dd&gt;<a name="line.47"></a>
+<span class="sourceLineNo">048</span> *     The complete URI used for external service.<a name="line.48"></a>
+<span class="sourceLineNo">049</span> * &lt;dt&gt;<a name="line.49"></a>
+<span class="sourceLineNo">050</span> * HTTPSearcher.LOG_SCHEME<a name="line.50"></a>
+<span class="sourceLineNo">051</span> * &lt;dd&gt;<a name="line.51"></a>
+<span class="sourceLineNo">052</span> *     The scheme of the request URI sent.<a name="line.52"></a>
+<span class="sourceLineNo">053</span> * &lt;dt&gt;<a name="line.53"></a>
+<span class="sourceLineNo">054</span> * HTTPSearcher.LOG_HOST<a name="line.54"></a>
+<span class="sourceLineNo">055</span> * &lt;dd&gt;<a name="line.55"></a>
+<span class="sourceLineNo">056</span> *     The host used for the request URI sent.<a name="line.56"></a>
+<span class="sourceLineNo">057</span> * &lt;dt&gt;<a name="line.57"></a>
+<span class="sourceLineNo">058</span> * HTTPSearcher.LOG_PORT<a name="line.58"></a>
+<span class="sourceLineNo">059</span> * &lt;dd&gt;<a name="line.59"></a>
+<span class="sourceLineNo">060</span> *     The port used for the request URI sent.<a name="line.60"></a>
+<span class="sourceLineNo">061</span> * &lt;dt&gt;<a name="line.61"></a>
+<span class="sourceLineNo">062</span> * HTTPSearcher.LOG_PATH<a name="line.62"></a>
+<span class="sourceLineNo">063</span> * &lt;dd&gt;<a name="line.63"></a>
+<span class="sourceLineNo">064</span> *     Path element of the request URI sent.<a name="line.64"></a>
+<span class="sourceLineNo">065</span> * &lt;dt&gt;<a name="line.65"></a>
+<span class="sourceLineNo">066</span> * HTTPSearcher.LOG_STATUS<a name="line.66"></a>
+<span class="sourceLineNo">067</span> * &lt;dd&gt;<a name="line.67"></a>
+<span class="sourceLineNo">068</span> *     Status code of the HTTP response.<a name="line.68"></a>
+<span class="sourceLineNo">069</span> * &lt;dt&gt;<a name="line.69"></a>
+<span class="sourceLineNo">070</span> * HTTPSearcher.LOG_PROXY_TYPE<a name="line.70"></a>
+<span class="sourceLineNo">071</span> * &lt;dd&gt;<a name="line.71"></a>
+<span class="sourceLineNo">072</span> *     The proxy type used, if any. Default is "http".<a name="line.72"></a>
+<span class="sourceLineNo">073</span> * &lt;dt&gt;<a name="line.73"></a>
+<span class="sourceLineNo">074</span> * HTTPSearcher.LOG_PROXY_HOST<a name="line.74"></a>
+<span class="sourceLineNo">075</span> * &lt;dd&gt;<a name="line.75"></a>
+<span class="sourceLineNo">076</span> *     The proxy host, if any.<a name="line.76"></a>
+<span class="sourceLineNo">077</span> * &lt;dt&gt;<a name="line.77"></a>
+<span class="sourceLineNo">078</span> * HTTPSearcher.LOG_PROXY_PORT<a name="line.78"></a>
+<span class="sourceLineNo">079</span> * &lt;dd&gt;<a name="line.79"></a>
+<span class="sourceLineNo">080</span> *     The proxy port, if any.<a name="line.80"></a>
+<span class="sourceLineNo">081</span> * &lt;dt&gt;<a name="line.81"></a>
+<span class="sourceLineNo">082</span> * HTTPSearcher.LOG_HEADER_PREFIX prepended to request header field name<a name="line.82"></a>
+<span class="sourceLineNo">083</span> * &lt;dd&gt;<a name="line.83"></a>
+<span class="sourceLineNo">084</span> *     The content of any additional request header fields.<a name="line.84"></a>
+<span class="sourceLineNo">085</span> * &lt;dt&gt;<a name="line.85"></a>
+<span class="sourceLineNo">086</span> * HTTPSearcher.LOG_RESPONSE_HEADER_PREFIX prepended to response header field name<a name="line.86"></a>
+<span class="sourceLineNo">087</span> * &lt;dd&gt;<a name="line.87"></a>
+<span class="sourceLineNo">088</span> *     The content of any additional response header fields.<a name="line.88"></a>
+<span class="sourceLineNo">089</span> * &lt;/dl&gt;<a name="line.89"></a>
+<span class="sourceLineNo">090</span><a name="line.90"></a>
+<span class="sourceLineNo">091</span> * @author &lt;a href="mailto:arnebef@yahoo-inc.com"&gt;Arne Bergene Fossaa&lt;/a&gt;<a name="line.91"></a>
+<span class="sourceLineNo">092</span> * @author bratseth<a name="line.92"></a>
+<span class="sourceLineNo">093</span> */<a name="line.93"></a>
+<span class="sourceLineNo">094</span>public abstract class HTTPClientSearcher extends HTTPSearcher {<a name="line.94"></a>
+<span class="sourceLineNo">095</span><a name="line.95"></a>
+<span class="sourceLineNo">096</span>    static final CompoundName REQUEST_META_CARRIER = new CompoundName("com.yahoo.search.federation.http.HTTPClientSearcher_requestMeta");<a name="line.96"></a>
+<span class="sourceLineNo">097</span><a name="line.97"></a>
+<span class="sourceLineNo">098</span>    protected final static Logger log = Logger.getLogger(HTTPClientSearcher.class.getName());<a name="line.98"></a>
+<span class="sourceLineNo">099</span><a name="line.99"></a>
+<span class="sourceLineNo">100</span>    /**<a name="line.100"></a>
+<span class="sourceLineNo">101</span>     * Creates a client searcher<a name="line.101"></a>
+<span class="sourceLineNo">102</span>     *<a name="line.102"></a>
+<span class="sourceLineNo">103</span>     * @param id the id of this instance<a name="line.103"></a>
+<span class="sourceLineNo">104</span>     * @param connections the connections this will load balance and fail over between<a name="line.104"></a>
+<span class="sourceLineNo">105</span>     * @param path the path portion of the url to be used<a name="line.105"></a>
+<span class="sourceLineNo">106</span>     */<a name="line.106"></a>
+<span class="sourceLineNo">107</span>    public HTTPClientSearcher(ComponentId id, List&lt;Connection&gt; connections,String path,Statistics statistics) {<a name="line.107"></a>
+<span class="sourceLineNo">108</span>        super(id, connections, path, statistics);<a name="line.108"></a>
+<span class="sourceLineNo">109</span>    }<a name="line.109"></a>
+<span class="sourceLineNo">110</span><a name="line.110"></a>
+<span class="sourceLineNo">111</span>    public HTTPClientSearcher(ComponentId id, List&lt;Connection&gt; connections,String path,Statistics statistics,<a name="line.111"></a>
+<span class="sourceLineNo">112</span>                              CertificateStore certificateStore) {<a name="line.112"></a>
+<span class="sourceLineNo">113</span>        super(id, connections, path, statistics, certificateStore);<a name="line.113"></a>
+<span class="sourceLineNo">114</span>    }<a name="line.114"></a>
+<span class="sourceLineNo">115</span><a name="line.115"></a>
+<span class="sourceLineNo">116</span>    public HTTPClientSearcher(ComponentId id, List&lt;Connection&gt; connections, HTTPParameters parameters, Statistics statistics) {<a name="line.116"></a>
+<span class="sourceLineNo">117</span>        super(id, connections, parameters, statistics);<a name="line.117"></a>
+<span class="sourceLineNo">118</span>    }<a name="line.118"></a>
+<span class="sourceLineNo">119</span>    /**<a name="line.119"></a>
+<span class="sourceLineNo">120</span>     * Creates a client searcher<a name="line.120"></a>
+<span class="sourceLineNo">121</span>     *<a name="line.121"></a>
+<span class="sourceLineNo">122</span>     * @param id the id of this instance<a name="line.122"></a>
+<span class="sourceLineNo">123</span>     * @param connections the connections this will load balance and fail over between<a name="line.123"></a>
+<span class="sourceLineNo">124</span>     * @param parameters the parameters to use when making http calls<a name="line.124"></a>
+<span class="sourceLineNo">125</span>     * @param certificateStore the certificate store to use to pass certificates in requests<a name="line.125"></a>
+<span class="sourceLineNo">126</span>     */<a name="line.126"></a>
+<span class="sourceLineNo">127</span>    public HTTPClientSearcher(ComponentId id, List&lt;Connection&gt; connections, HTTPParameters parameters,<a name="line.127"></a>
+<span class="sourceLineNo">128</span>                              Statistics statistics, CertificateStore certificateStore) {<a name="line.128"></a>
+<span class="sourceLineNo">129</span>        super(id, connections, parameters, statistics, certificateStore);<a name="line.129"></a>
+<span class="sourceLineNo">130</span>    }<a name="line.130"></a>
+<span class="sourceLineNo">131</span><a name="line.131"></a>
+<span class="sourceLineNo">132</span>    /** Overridden to avoid interfering with errors from nested searchers, which is inappropriate for a &lt;i&gt;client&lt;/i&gt; */<a name="line.132"></a>
+<span class="sourceLineNo">133</span>    @Override<a name="line.133"></a>
+<span class="sourceLineNo">134</span>    public Result robustSearch(Query query, Execution execution, Connection connection) {<a name="line.134"></a>
+<span class="sourceLineNo">135</span>        return search(query,execution,connection);<a name="line.135"></a>
+<span class="sourceLineNo">136</span>    }<a name="line.136"></a>
+<span class="sourceLineNo">137</span><a name="line.137"></a>
+<span class="sourceLineNo">138</span>    /** Implements a search towards the connection chosen by the cluster searcher for this query */<a name="line.138"></a>
+<span class="sourceLineNo">139</span>    @Override<a name="line.139"></a>
+<span class="sourceLineNo">140</span>    public Result search(Query query, Execution execution, Connection connection) {<a name="line.140"></a>
+<span class="sourceLineNo">141</span>        Hit requestMeta = doHttpRequest(query, connection);<a name="line.141"></a>
+<span class="sourceLineNo">142</span>        Result result = execution.search(query);<a name="line.142"></a>
+<span class="sourceLineNo">143</span>        result.hits().add(requestMeta);<a name="line.143"></a>
+<span class="sourceLineNo">144</span>        return result;<a name="line.144"></a>
+<span class="sourceLineNo">145</span>    }<a name="line.145"></a>
+<span class="sourceLineNo">146</span><a name="line.146"></a>
+<span class="sourceLineNo">147</span>    private Hit doHttpRequest(Query query, Connection connection) {<a name="line.147"></a>
+<span class="sourceLineNo">148</span>        URI uri;<a name="line.148"></a>
+<span class="sourceLineNo">149</span>        // Create default meta hit for holding logging information<a name="line.149"></a>
+<span class="sourceLineNo">150</span>        Hit requestMeta = createRequestMeta();<a name="line.150"></a>
+<span class="sourceLineNo">151</span>        query.properties().set(REQUEST_META_CARRIER, requestMeta);<a name="line.151"></a>
+<span class="sourceLineNo">152</span><a name="line.152"></a>
+<span class="sourceLineNo">153</span>        query.trace("Created request information hit",false,9);<a name="line.153"></a>
+<span class="sourceLineNo">154</span>        try {<a name="line.154"></a>
+<span class="sourceLineNo">155</span>            uri = getURI(query, connection);<a name="line.155"></a>
+<span class="sourceLineNo">156</span>        } catch (MalformedURLException e) {<a name="line.156"></a>
+<span class="sourceLineNo">157</span>            query.errors().add(createMalformedUrlError(query,e));<a name="line.157"></a>
+<span class="sourceLineNo">158</span>            return requestMeta;<a name="line.158"></a>
+<span class="sourceLineNo">159</span>        } catch (URISyntaxException e) {<a name="line.159"></a>
+<span class="sourceLineNo">160</span>            query.errors().add(createMalformedUrlError(query,e));<a name="line.160"></a>
+<span class="sourceLineNo">161</span>            return requestMeta;<a name="line.161"></a>
+<span class="sourceLineNo">162</span>        }<a name="line.162"></a>
+<span class="sourceLineNo">163</span><a name="line.163"></a>
+<span class="sourceLineNo">164</span>        HttpEntity entity;<a name="line.164"></a>
+<span class="sourceLineNo">165</span>        try {<a name="line.165"></a>
+<span class="sourceLineNo">166</span>            if (query.getTraceLevel()&gt;=1)<a name="line.166"></a>
+<span class="sourceLineNo">167</span>                query.trace("Fetching " + uri.toString(), false, 1);<a name="line.167"></a>
+<span class="sourceLineNo">168</span>            entity = getEntity(uri, requestMeta, query);<a name="line.168"></a>
+<span class="sourceLineNo">169</span>        } catch (IOException e) {<a name="line.169"></a>
+<span class="sourceLineNo">170</span>            query.errors().add(ErrorMessage.createBackendCommunicationError(<a name="line.170"></a>
+<span class="sourceLineNo">171</span>                    "Error when trying to connect to HTTP backend in " + this + " using " + connection + " for " +<a name="line.171"></a>
+<span class="sourceLineNo">172</span>                    query + ": " + Exceptions.toMessageString(e)));<a name="line.172"></a>
+<span class="sourceLineNo">173</span>            return requestMeta;<a name="line.173"></a>
+<span class="sourceLineNo">174</span>        } catch (TimeoutException e) {<a name="line.174"></a>
+<span class="sourceLineNo">175</span>            query.errors().add(ErrorMessage.createTimeout("HTTP traffic timed out in "<a name="line.175"></a>
+<span class="sourceLineNo">176</span>                    + this + " for " + query + ": " + e.getMessage()));<a name="line.176"></a>
+<span class="sourceLineNo">177</span>            return requestMeta;<a name="line.177"></a>
+<span class="sourceLineNo">178</span>        }<a name="line.178"></a>
+<span class="sourceLineNo">179</span>        if (entity==null) {<a name="line.179"></a>
+<span class="sourceLineNo">180</span>            query.errors().add(ErrorMessage.createBackendCommunicationError(<a name="line.180"></a>
+<span class="sourceLineNo">181</span>                    "No result from connecting to HTTP backend in " + this + " using " + connection + " for " +  query));<a name="line.181"></a>
+<span class="sourceLineNo">182</span>            return requestMeta;<a name="line.182"></a>
+<span class="sourceLineNo">183</span>        }<a name="line.183"></a>
+<span class="sourceLineNo">184</span><a name="line.184"></a>
+<span class="sourceLineNo">185</span>        try {<a name="line.185"></a>
+<span class="sourceLineNo">186</span>            query = handleResponse(entity,query);<a name="line.186"></a>
+<span class="sourceLineNo">187</span>        }<a name="line.187"></a>
+<span class="sourceLineNo">188</span>        catch (IOException e) {<a name="line.188"></a>
+<span class="sourceLineNo">189</span>            query.errors().add(ErrorMessage.createBackendCommunicationError(<a name="line.189"></a>
+<span class="sourceLineNo">190</span>                    "Error when trying to consume input in " + this + ": " + Exceptions.toMessageString(e)));<a name="line.190"></a>
+<span class="sourceLineNo">191</span>        } finally {<a name="line.191"></a>
+<span class="sourceLineNo">192</span>            cleanupHttpEntity(entity);<a name="line.192"></a>
+<span class="sourceLineNo">193</span>        }<a name="line.193"></a>
+<span class="sourceLineNo">194</span>        return requestMeta;<a name="line.194"></a>
+<span class="sourceLineNo">195</span>    }<a name="line.195"></a>
+<span class="sourceLineNo">196</span><a name="line.196"></a>
+<span class="sourceLineNo">197</span>    /** Overrides to pass the query on to the next searcher */<a name="line.197"></a>
+<span class="sourceLineNo">198</span>    @Override<a name="line.198"></a>
+<span class="sourceLineNo">199</span>    public Result search(Query query, Execution execution, ErrorMessage error) {<a name="line.199"></a>
+<span class="sourceLineNo">200</span>        query.errors().add(error);<a name="line.200"></a>
+<span class="sourceLineNo">201</span>        return execution.search(query);<a name="line.201"></a>
+<span class="sourceLineNo">202</span>    }<a name="line.202"></a>
+<span class="sourceLineNo">203</span><a name="line.203"></a>
+<span class="sourceLineNo">204</span>    /** Do nothing on fill in client searchers */<a name="line.204"></a>
+<span class="sourceLineNo">205</span>    @Override<a name="line.205"></a>
+<span class="sourceLineNo">206</span>    public void fill(Result result,String summaryClass,Execution execution,Connection connection) {<a name="line.206"></a>
+<span class="sourceLineNo">207</span>    }<a name="line.207"></a>
+<span class="sourceLineNo">208</span><a name="line.208"></a>
+<span class="sourceLineNo">209</span>    /**<a name="line.209"></a>
+<span class="sourceLineNo">210</span>     * Convenience hook for unmarshalling the response and adding the information to the query.<a name="line.210"></a>
+<span class="sourceLineNo">211</span>     * Implement this or &lt;code&gt;handleResponse(entity,query)&lt;/code&gt; in any subclass.<a name="line.211"></a>
+<span class="sourceLineNo">212</span>     * This default implementation throws an exception.<a name="line.212"></a>
+<span class="sourceLineNo">213</span>     *<a name="line.213"></a>
+<span class="sourceLineNo">214</span>     * @param inputStream the stream containing the data from the http service<a name="line.214"></a>
+<span class="sourceLineNo">215</span>     * @param contentLength the length of the content in the stream in bytes, or a negative number if not known<a name="line.215"></a>
+<span class="sourceLineNo">216</span>     * @param query the current query, to which information from the stream should be added<a name="line.216"></a>
+<span class="sourceLineNo">217</span>     * @return query the query to propagate down the chain. This should almost always be the<a name="line.217"></a>
+<span class="sourceLineNo">218</span>     *         query instance given as a parameter.<a name="line.218"></a>
+<span class="sourceLineNo">219</span>     */<a name="line.219"></a>
+<span class="sourceLineNo">220</span>    public Query handleResponse(InputStream inputStream, long contentLength, Query query) throws IOException {<a name="line.220"></a>
+<span class="sourceLineNo">221</span>        throw new UnsupportedOperationException("handleResponse must be implemented by " + this);<a name="line.221"></a>
+<span class="sourceLineNo">222</span>    }<a name="line.222"></a>
+<span class="sourceLineNo">223</span><a name="line.223"></a>
+<span class="sourceLineNo">224</span>    /**<a name="line.224"></a>
+<span class="sourceLineNo">225</span>     * Unmarshals the response and adds the resulting data to the given query.<a name="line.225"></a>
+<span class="sourceLineNo">226</span>     * This default implementation calls<a name="line.226"></a>
+<span class="sourceLineNo">227</span>     * &lt;code&gt;return handleResponse(entity.getContent(), entity.getContentLength(), query);&lt;/code&gt;<a name="line.227"></a>
+<span class="sourceLineNo">228</span>     * (and does some detailed query tracing).<a name="line.228"></a>
+<span class="sourceLineNo">229</span>     *<a name="line.229"></a>
+<span class="sourceLineNo">230</span>     * @param query the current query, to which information from the stream should be added<a name="line.230"></a>
+<span class="sourceLineNo">231</span>     * @return query the query to propagate down the chain. This should almost always be the<a name="line.231"></a>
+<span class="sourceLineNo">232</span>     *         query instance given as a parameter.<a name="line.232"></a>
+<span class="sourceLineNo">233</span>     */<a name="line.233"></a>
+<span class="sourceLineNo">234</span>    public Query handleResponse(HttpEntity entity, Query query) throws IOException {<a name="line.234"></a>
+<span class="sourceLineNo">235</span>        long len = entity.getContentLength();<a name="line.235"></a>
+<span class="sourceLineNo">236</span>        if (query.getTraceLevel()&gt;=4)<a name="line.236"></a>
+<span class="sourceLineNo">237</span>            query.trace("Received " + len + " bytes response in " + this, false, 4);<a name="line.237"></a>
+<span class="sourceLineNo">238</span>        query = handleResponse(entity.getContent(), len, query);<a name="line.238"></a>
+<span class="sourceLineNo">239</span>        if (query.getTraceLevel()&gt;=2)<a name="line.239"></a>
+<span class="sourceLineNo">240</span>            query.trace("Handled " + len + " bytes response in " + this, false, 2);<a name="line.240"></a>
+<span class="sourceLineNo">241</span>        return query;<a name="line.241"></a>
+<span class="sourceLineNo">242</span>    }<a name="line.242"></a>
+<span class="sourceLineNo">243</span><a name="line.243"></a>
+<span class="sourceLineNo">244</span>    /** Never retry individual queries to clients for now */<a name="line.244"></a>
+<span class="sourceLineNo">245</span>    @Override<a name="line.245"></a>
+<span class="sourceLineNo">246</span>    protected boolean shouldRetry(Query query,Result result) { return false; }<a name="line.246"></a>
+<span class="sourceLineNo">247</span><a name="line.247"></a>
+<span class="sourceLineNo">248</span>    /**<a name="line.248"></a>
+<span class="sourceLineNo">249</span>     * numHits and offset should not be part of the cache key as cache supports<a name="line.249"></a>
+<span class="sourceLineNo">250</span>     * partial read/write that is only one cache entry is maintained per query<a name="line.250"></a>
+<span class="sourceLineNo">251</span>     * irrespective of the offset and numhits.<a name="line.251"></a>
+<span class="sourceLineNo">252</span>     */<a name="line.252"></a>
+<span class="sourceLineNo">253</span>    public abstract Map&lt;String, String&gt; getCacheKey(Query q);<a name="line.253"></a>
+<span class="sourceLineNo">254</span><a name="line.254"></a>
+<span class="sourceLineNo">255</span>    /**<a name="line.255"></a>
+<span class="sourceLineNo">256</span>     * Adds all key-values starting by "service." + getClientName() in query.properties().<a name="line.256"></a>
+<span class="sourceLineNo">257</span>     * Returns the empty map if {@link #getServiceName} is not overridden.<a name="line.257"></a>
+<span class="sourceLineNo">258</span>     */<a name="line.258"></a>
+<span class="sourceLineNo">259</span>    @Override<a name="line.259"></a>
+<span class="sourceLineNo">260</span>    public Map&lt;String,String&gt; getQueryMap(Query query) {<a name="line.260"></a>
+<span class="sourceLineNo">261</span>        LinkedHashMap&lt;String, String&gt; queryMap=new LinkedHashMap&lt;&gt;();<a name="line.261"></a>
+<span class="sourceLineNo">262</span>        if (getServiceName().isEmpty()) return queryMap;<a name="line.262"></a>
+<span class="sourceLineNo">263</span><a name="line.263"></a>
+<span class="sourceLineNo">264</span>        for (Map.Entry&lt;String,Object&gt; objectProperty : query.properties().listProperties("service." + getServiceName()).entrySet()) // TODO: Make more efficient using CompoundName<a name="line.264"></a>
+<span class="sourceLineNo">265</span>            queryMap.put(objectProperty.getKey(),objectProperty.getValue().toString());<a name="line.265"></a>
+<span class="sourceLineNo">266</span>        return queryMap;<a name="line.266"></a>
+<span class="sourceLineNo">267</span>    }<a name="line.267"></a>
+<span class="sourceLineNo">268</span><a name="line.268"></a>
+<span class="sourceLineNo">269</span>    /**<a name="line.269"></a>
+<span class="sourceLineNo">270</span>     * Override this to return the name of the service this is a client of.<a name="line.270"></a>
+<span class="sourceLineNo">271</span>     * This is used to look up service specific properties as service.getServiceName.serviceSpecificProperty.<a name="line.271"></a>
+<span class="sourceLineNo">272</span>     * This default implementation returns "", which means service specific parameters will not be used.<a name="line.272"></a>
+<span class="sourceLineNo">273</span>     */<a name="line.273"></a>
+<span class="sourceLineNo">274</span>    protected String getServiceName() { return ""; }<a name="line.274"></a>
+<span class="sourceLineNo">275</span><a name="line.275"></a>
+<span class="sourceLineNo">276</span>}<a name="line.276"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

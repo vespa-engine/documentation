@@ -1,0 +1,162 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.search.cluster;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.search.result.ErrorMessage;<a name="line.4"></a>
+<span class="sourceLineNo">005</span><a name="line.5"></a>
+<span class="sourceLineNo">006</span>/**<a name="line.6"></a>
+<span class="sourceLineNo">007</span> * This node monitor is responsible for maintaining the state of a monitored node.<a name="line.7"></a>
+<span class="sourceLineNo">008</span> * It has the following properties:<a name="line.8"></a>
+<span class="sourceLineNo">009</span> * &lt;ul&gt;<a name="line.9"></a>
+<span class="sourceLineNo">010</span> * &lt;li&gt;A node is taken out of operation if it gives no response in 10 s&lt;/li&gt;<a name="line.10"></a>
+<span class="sourceLineNo">011</span> * &lt;li&gt;A node is put back in operation when it responds correctly again<a name="line.11"></a>
+<span class="sourceLineNo">012</span> * &lt;/ul&gt;<a name="line.12"></a>
+<span class="sourceLineNo">013</span> *<a name="line.13"></a>
+<span class="sourceLineNo">014</span> * @author Steinar Knutsen<a name="line.14"></a>
+<span class="sourceLineNo">015</span> */<a name="line.15"></a>
+<span class="sourceLineNo">016</span>public class TrafficNodeMonitor&lt;T&gt; extends BaseNodeMonitor&lt;T&gt; {<a name="line.16"></a>
+<span class="sourceLineNo">017</span><a name="line.17"></a>
+<span class="sourceLineNo">018</span>    /** Creates a new node monitor for a node */<a name="line.18"></a>
+<span class="sourceLineNo">019</span>    public TrafficNodeMonitor(T node, MonitorConfiguration configuration, boolean internal) {<a name="line.19"></a>
+<span class="sourceLineNo">020</span>        super(internal);<a name="line.20"></a>
+<span class="sourceLineNo">021</span>        this.node = node;<a name="line.21"></a>
+<span class="sourceLineNo">022</span>        this.configuration = configuration;<a name="line.22"></a>
+<span class="sourceLineNo">023</span>    }<a name="line.23"></a>
+<span class="sourceLineNo">024</span><a name="line.24"></a>
+<span class="sourceLineNo">025</span>    /** Whether or not this has ever responded successfully */<a name="line.25"></a>
+<span class="sourceLineNo">026</span>    private boolean atStartUp = true;<a name="line.26"></a>
+<span class="sourceLineNo">027</span><a name="line.27"></a>
+<span class="sourceLineNo">028</span>    public T getNode() { return node; }<a name="line.28"></a>
+<span class="sourceLineNo">029</span><a name="line.29"></a>
+<span class="sourceLineNo">030</span>    /**<a name="line.30"></a>
+<span class="sourceLineNo">031</span>     * Called when this node fails.<a name="line.31"></a>
+<span class="sourceLineNo">032</span>     *<a name="line.32"></a>
+<span class="sourceLineNo">033</span>     * @param error a container which should contain a short description<a name="line.33"></a>
+<span class="sourceLineNo">034</span>     */<a name="line.34"></a>
+<span class="sourceLineNo">035</span>    @Override<a name="line.35"></a>
+<span class="sourceLineNo">036</span>    public void failed(ErrorMessage error) {<a name="line.36"></a>
+<span class="sourceLineNo">037</span>        respondedAt = now();<a name="line.37"></a>
+<span class="sourceLineNo">038</span><a name="line.38"></a>
+<span class="sourceLineNo">039</span>        switch (error.getCode()) {<a name="line.39"></a>
+<span class="sourceLineNo">040</span>            // TODO: Remove hard coded error messages.<a name="line.40"></a>
+<span class="sourceLineNo">041</span>            // Refer to docs/errormessages<a name="line.41"></a>
+<span class="sourceLineNo">042</span>            case 10:<a name="line.42"></a>
+<span class="sourceLineNo">043</span>            case 11:<a name="line.43"></a>
+<span class="sourceLineNo">044</span>                // Only count not being able to talk to backend at all<a name="line.44"></a>
+<span class="sourceLineNo">045</span>                // as errors we care about<a name="line.45"></a>
+<span class="sourceLineNo">046</span>                if ((respondedAt-succeededAt) &gt; 10000) {<a name="line.46"></a>
+<span class="sourceLineNo">047</span>                    setWorking(false, "Not working for 10 s: " + error.toString());<a name="line.47"></a>
+<span class="sourceLineNo">048</span>                }<a name="line.48"></a>
+<span class="sourceLineNo">049</span>                break;<a name="line.49"></a>
+<span class="sourceLineNo">050</span>            default:<a name="line.50"></a>
+<span class="sourceLineNo">051</span>                succeededAt = respondedAt;<a name="line.51"></a>
+<span class="sourceLineNo">052</span>                break;<a name="line.52"></a>
+<span class="sourceLineNo">053</span>        }<a name="line.53"></a>
+<span class="sourceLineNo">054</span>    }<a name="line.54"></a>
+<span class="sourceLineNo">055</span><a name="line.55"></a>
+<span class="sourceLineNo">056</span>    /**<a name="line.56"></a>
+<span class="sourceLineNo">057</span>     * Called when a response is received from this node.<a name="line.57"></a>
+<span class="sourceLineNo">058</span>     */<a name="line.58"></a>
+<span class="sourceLineNo">059</span>    public void responded() {<a name="line.59"></a>
+<span class="sourceLineNo">060</span>        respondedAt=now();<a name="line.60"></a>
+<span class="sourceLineNo">061</span>        succeededAt=respondedAt;<a name="line.61"></a>
+<span class="sourceLineNo">062</span>        atStartUp = false;<a name="line.62"></a>
+<span class="sourceLineNo">063</span><a name="line.63"></a>
+<span class="sourceLineNo">064</span>        if (!isWorking)<a name="line.64"></a>
+<span class="sourceLineNo">065</span>            setWorking(true,"Responds correctly");<a name="line.65"></a>
+<span class="sourceLineNo">066</span>    }<a name="line.66"></a>
+<span class="sourceLineNo">067</span><a name="line.67"></a>
+<span class="sourceLineNo">068</span>    /** Thread-safely changes the state of this node if required */<a name="line.68"></a>
+<span class="sourceLineNo">069</span>    protected synchronized void setWorking(boolean working,String explanation) {<a name="line.69"></a>
+<span class="sourceLineNo">070</span>        if (this.isWorking==working) return; // Old news<a name="line.70"></a>
+<span class="sourceLineNo">071</span><a name="line.71"></a>
+<span class="sourceLineNo">072</span>        if (explanation==null) {<a name="line.72"></a>
+<span class="sourceLineNo">073</span>            explanation="";<a name="line.73"></a>
+<span class="sourceLineNo">074</span>        } else {<a name="line.74"></a>
+<span class="sourceLineNo">075</span>            explanation=": " + explanation;<a name="line.75"></a>
+<span class="sourceLineNo">076</span>        }<a name="line.76"></a>
+<span class="sourceLineNo">077</span><a name="line.77"></a>
+<span class="sourceLineNo">078</span>        if (working) {<a name="line.78"></a>
+<span class="sourceLineNo">079</span>            log.info("Putting " + node + " in service" + explanation);<a name="line.79"></a>
+<span class="sourceLineNo">080</span>        }<a name="line.80"></a>
+<span class="sourceLineNo">081</span>        else {<a name="line.81"></a>
+<span class="sourceLineNo">082</span>            if (!atStartUp || !isInternal())<a name="line.82"></a>
+<span class="sourceLineNo">083</span>                log.warning("Taking " + node + " out of service" + explanation);<a name="line.83"></a>
+<span class="sourceLineNo">084</span>            failedAt=now();<a name="line.84"></a>
+<span class="sourceLineNo">085</span>        }<a name="line.85"></a>
+<span class="sourceLineNo">086</span><a name="line.86"></a>
+<span class="sourceLineNo">087</span>        this.isWorking=working;<a name="line.87"></a>
+<span class="sourceLineNo">088</span>    }<a name="line.88"></a>
+<span class="sourceLineNo">089</span><a name="line.89"></a>
+<span class="sourceLineNo">090</span>}<a name="line.90"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

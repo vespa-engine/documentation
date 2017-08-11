@@ -1,0 +1,149 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.jdisc.http.filter;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.jdisc.AbstractResource;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.jdisc.Response;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.jdisc.handler.ContentChannel;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.jdisc.handler.ResponseHandler;<a name="line.7"></a>
+<span class="sourceLineNo">008</span><a name="line.8"></a>
+<span class="sourceLineNo">009</span>import com.yahoo.jdisc.http.HttpRequest;<a name="line.9"></a>
+<span class="sourceLineNo">010</span><a name="line.10"></a>
+<span class="sourceLineNo">011</span>import java.util.ArrayList;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import java.util.Arrays;<a name="line.12"></a>
+<span class="sourceLineNo">013</span>import java.util.Collections;<a name="line.13"></a>
+<span class="sourceLineNo">014</span>import java.util.List;<a name="line.14"></a>
+<span class="sourceLineNo">015</span><a name="line.15"></a>
+<span class="sourceLineNo">016</span>/**<a name="line.16"></a>
+<span class="sourceLineNo">017</span> * Implementation of TypedFilterChain for DiscFilterRequest<a name="line.17"></a>
+<span class="sourceLineNo">018</span> *<a name="line.18"></a>
+<span class="sourceLineNo">019</span> * @author tejalk<a name="line.19"></a>
+<span class="sourceLineNo">020</span> */<a name="line.20"></a>
+<span class="sourceLineNo">021</span>public final class SecurityRequestFilterChain extends AbstractResource implements RequestFilter {<a name="line.21"></a>
+<span class="sourceLineNo">022</span><a name="line.22"></a>
+<span class="sourceLineNo">023</span>    private final List&lt;SecurityRequestFilter&gt; filters = new ArrayList&lt;&gt;();<a name="line.23"></a>
+<span class="sourceLineNo">024</span><a name="line.24"></a>
+<span class="sourceLineNo">025</span>    private SecurityRequestFilterChain(Iterable&lt;? extends SecurityRequestFilter&gt; filters) {<a name="line.25"></a>
+<span class="sourceLineNo">026</span>        for (SecurityRequestFilter filter : filters) {<a name="line.26"></a>
+<span class="sourceLineNo">027</span>            this.filters.add(filter);<a name="line.27"></a>
+<span class="sourceLineNo">028</span>        }<a name="line.28"></a>
+<span class="sourceLineNo">029</span>    }<a name="line.29"></a>
+<span class="sourceLineNo">030</span><a name="line.30"></a>
+<span class="sourceLineNo">031</span>    @Override<a name="line.31"></a>
+<span class="sourceLineNo">032</span>    public void filter(HttpRequest request, ResponseHandler responseHandler) {<a name="line.32"></a>
+<span class="sourceLineNo">033</span>        DiscFilterRequest discFilterRequest = new JdiscFilterRequest(request);<a name="line.33"></a>
+<span class="sourceLineNo">034</span>        filter(discFilterRequest, responseHandler);<a name="line.34"></a>
+<span class="sourceLineNo">035</span>    }<a name="line.35"></a>
+<span class="sourceLineNo">036</span><a name="line.36"></a>
+<span class="sourceLineNo">037</span>    public void filter(DiscFilterRequest request, ResponseHandler responseHandler) {<a name="line.37"></a>
+<span class="sourceLineNo">038</span>        ResponseHandlerGuard guard = new ResponseHandlerGuard(responseHandler);<a name="line.38"></a>
+<span class="sourceLineNo">039</span>        for (int i = 0, len = filters.size(); i &lt; len &amp;&amp; !guard.isDone(); ++i) {<a name="line.39"></a>
+<span class="sourceLineNo">040</span>            filters.get(i).filter(request, guard);<a name="line.40"></a>
+<span class="sourceLineNo">041</span>        }<a name="line.41"></a>
+<span class="sourceLineNo">042</span>    }<a name="line.42"></a>
+<span class="sourceLineNo">043</span><a name="line.43"></a>
+<span class="sourceLineNo">044</span>    public static RequestFilter newInstance(SecurityRequestFilter... filters) {<a name="line.44"></a>
+<span class="sourceLineNo">045</span>        return newInstance(Arrays.asList(filters));<a name="line.45"></a>
+<span class="sourceLineNo">046</span>    }<a name="line.46"></a>
+<span class="sourceLineNo">047</span><a name="line.47"></a>
+<span class="sourceLineNo">048</span>    public static RequestFilter newInstance(List&lt;? extends SecurityRequestFilter&gt; filters) {<a name="line.48"></a>
+<span class="sourceLineNo">049</span>        return new SecurityRequestFilterChain(filters);<a name="line.49"></a>
+<span class="sourceLineNo">050</span>    }<a name="line.50"></a>
+<span class="sourceLineNo">051</span><a name="line.51"></a>
+<span class="sourceLineNo">052</span>    private static class ResponseHandlerGuard implements ResponseHandler {<a name="line.52"></a>
+<span class="sourceLineNo">053</span><a name="line.53"></a>
+<span class="sourceLineNo">054</span>        private final ResponseHandler responseHandler;<a name="line.54"></a>
+<span class="sourceLineNo">055</span>        private boolean done = false;<a name="line.55"></a>
+<span class="sourceLineNo">056</span><a name="line.56"></a>
+<span class="sourceLineNo">057</span>        public ResponseHandlerGuard(ResponseHandler handler) {<a name="line.57"></a>
+<span class="sourceLineNo">058</span>            this.responseHandler = handler;<a name="line.58"></a>
+<span class="sourceLineNo">059</span>        }<a name="line.59"></a>
+<span class="sourceLineNo">060</span><a name="line.60"></a>
+<span class="sourceLineNo">061</span>        @Override<a name="line.61"></a>
+<span class="sourceLineNo">062</span>        public ContentChannel handleResponse(Response response) {<a name="line.62"></a>
+<span class="sourceLineNo">063</span>            done = true;<a name="line.63"></a>
+<span class="sourceLineNo">064</span>            return responseHandler.handleResponse(response);<a name="line.64"></a>
+<span class="sourceLineNo">065</span>        }<a name="line.65"></a>
+<span class="sourceLineNo">066</span><a name="line.66"></a>
+<span class="sourceLineNo">067</span>        public boolean isDone() {<a name="line.67"></a>
+<span class="sourceLineNo">068</span>            return done;<a name="line.68"></a>
+<span class="sourceLineNo">069</span>        }<a name="line.69"></a>
+<span class="sourceLineNo">070</span>    }<a name="line.70"></a>
+<span class="sourceLineNo">071</span><a name="line.71"></a>
+<span class="sourceLineNo">072</span>    /** Returns an unmodifiable viuew of the filters in this */<a name="line.72"></a>
+<span class="sourceLineNo">073</span>    public List&lt;SecurityRequestFilter&gt; getFilters() {<a name="line.73"></a>
+<span class="sourceLineNo">074</span>        return Collections.unmodifiableList(filters);<a name="line.74"></a>
+<span class="sourceLineNo">075</span>    }<a name="line.75"></a>
+<span class="sourceLineNo">076</span><a name="line.76"></a>
+<span class="sourceLineNo">077</span>}<a name="line.77"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

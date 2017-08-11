@@ -1,0 +1,191 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.search.searchers;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.container.jdisc.HttpRequest;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.processing.request.CompoundName;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.search.Query;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.search.Result;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import com.yahoo.search.Searcher;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import com.yahoo.search.searchchain.Execution;<a name="line.9"></a>
+<span class="sourceLineNo">010</span><a name="line.10"></a>
+<span class="sourceLineNo">011</span>import java.util.concurrent.TimeUnit;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import java.util.function.LongSupplier;<a name="line.12"></a>
+<span class="sourceLineNo">013</span><a name="line.13"></a>
+<span class="sourceLineNo">014</span>/**<a name="line.14"></a>
+<span class="sourceLineNo">015</span> * Searcher which can enforce HTTP connection close based on query properties.<a name="line.15"></a>
+<span class="sourceLineNo">016</span> *<a name="line.16"></a>
+<span class="sourceLineNo">017</span> * &lt;p&gt;<a name="line.17"></a>
+<span class="sourceLineNo">018</span> * This searcher informs the client to close a persistent HTTP connection if the<a name="line.18"></a>
+<span class="sourceLineNo">019</span> * connection is older than the configured max lifetime. This is done by adding<a name="line.19"></a>
+<span class="sourceLineNo">020</span> * the "Connection" HTTP header with the value "Close" to the result.<a name="line.20"></a>
+<span class="sourceLineNo">021</span> * &lt;/p&gt;<a name="line.21"></a>
+<span class="sourceLineNo">022</span> *<a name="line.22"></a>
+<span class="sourceLineNo">023</span> * &lt;p&gt;<a name="line.23"></a>
+<span class="sourceLineNo">024</span> * The searcher reads the query property "connectioncontrol.maxlifetime", which<a name="line.24"></a>
+<span class="sourceLineNo">025</span> * is an integer number of seconds, to get the value for maximum connection<a name="line.25"></a>
+<span class="sourceLineNo">026</span> * lifetime. Setting it to zero will enforce connection close independently of<a name="line.26"></a>
+<span class="sourceLineNo">027</span> * the age of the connection. Typical usage would be as follows:<a name="line.27"></a>
+<span class="sourceLineNo">028</span> * &lt;/p&gt;<a name="line.28"></a>
+<span class="sourceLineNo">029</span> *<a name="line.29"></a>
+<span class="sourceLineNo">030</span> * &lt;ol&gt;<a name="line.30"></a>
+<span class="sourceLineNo">031</span> * &lt;li&gt;Add the ConnectionControlSearcher to the default search chain of your<a name="line.31"></a>
+<span class="sourceLineNo">032</span> * application. (It has no special ordering considerations.)&lt;/li&gt;<a name="line.32"></a>
+<span class="sourceLineNo">033</span> *<a name="line.33"></a>
+<span class="sourceLineNo">034</span> * &lt;li&gt;For the default query profile of your application, set a reasonable value<a name="line.34"></a>
+<span class="sourceLineNo">035</span> * for "connectioncontrol.maxlifetime". The definition of reasonable will be<a name="line.35"></a>
+<span class="sourceLineNo">036</span> * highly application dependent, but it should always be less than the grace<a name="line.36"></a>
+<span class="sourceLineNo">037</span> * period when taking the container out of production traffic.&lt;/li&gt;<a name="line.37"></a>
+<span class="sourceLineNo">038</span> *<a name="line.38"></a>
+<span class="sourceLineNo">039</span> * &lt;li&gt;Deploy application. The container will now inform clients to close<a name="line.39"></a>
+<span class="sourceLineNo">040</span> * connections/reconnect within the configured time limit.<a name="line.40"></a>
+<span class="sourceLineNo">041</span> * &lt;/ol&gt;<a name="line.41"></a>
+<span class="sourceLineNo">042</span> *<a name="line.42"></a>
+<span class="sourceLineNo">043</span> * @author frodelu<a name="line.43"></a>
+<span class="sourceLineNo">044</span> * @author Steinar Knutsen<a name="line.44"></a>
+<span class="sourceLineNo">045</span> */<a name="line.45"></a>
+<span class="sourceLineNo">046</span>public class ConnectionControlSearcher extends Searcher {<a name="line.46"></a>
+<span class="sourceLineNo">047</span><a name="line.47"></a>
+<span class="sourceLineNo">048</span>    private final String simpleName = this.getClass().getSimpleName();<a name="line.48"></a>
+<span class="sourceLineNo">049</span><a name="line.49"></a>
+<span class="sourceLineNo">050</span>    private final LongSupplier clock;<a name="line.50"></a>
+<span class="sourceLineNo">051</span><a name="line.51"></a>
+<span class="sourceLineNo">052</span>    private static final CompoundName KEEPALIVE_MAXLIFETIMESECONDS = new CompoundName("connectioncontrol.maxlifetime");<a name="line.52"></a>
+<span class="sourceLineNo">053</span>    private static final String HTTP_CONNECTION_HEADER_NAME = "Connection";<a name="line.53"></a>
+<span class="sourceLineNo">054</span>    private static final String HTTP_CONNECTION_CLOSE_ARGUMENT = "Close";<a name="line.54"></a>
+<span class="sourceLineNo">055</span><a name="line.55"></a>
+<span class="sourceLineNo">056</span>    public ConnectionControlSearcher() {<a name="line.56"></a>
+<span class="sourceLineNo">057</span>        this(() -&gt; System.currentTimeMillis());<a name="line.57"></a>
+<span class="sourceLineNo">058</span>    }<a name="line.58"></a>
+<span class="sourceLineNo">059</span><a name="line.59"></a>
+<span class="sourceLineNo">060</span>    private ConnectionControlSearcher(LongSupplier clock) {<a name="line.60"></a>
+<span class="sourceLineNo">061</span>        this.clock = clock;<a name="line.61"></a>
+<span class="sourceLineNo">062</span>    }<a name="line.62"></a>
+<span class="sourceLineNo">063</span><a name="line.63"></a>
+<span class="sourceLineNo">064</span>    /**<a name="line.64"></a>
+<span class="sourceLineNo">065</span>     * Create a searcher instance suitable for unit tests.<a name="line.65"></a>
+<span class="sourceLineNo">066</span>     *<a name="line.66"></a>
+<span class="sourceLineNo">067</span>     * @param clock a simulated or real clock behaving similarly to System.currentTimeMillis()<a name="line.67"></a>
+<span class="sourceLineNo">068</span>     * @return a fully initialised instance<a name="line.68"></a>
+<span class="sourceLineNo">069</span>     */<a name="line.69"></a>
+<span class="sourceLineNo">070</span>    public static ConnectionControlSearcher createTestInstance(LongSupplier clock) {<a name="line.70"></a>
+<span class="sourceLineNo">071</span>        return new ConnectionControlSearcher(clock);<a name="line.71"></a>
+<span class="sourceLineNo">072</span>    }<a name="line.72"></a>
+<span class="sourceLineNo">073</span><a name="line.73"></a>
+<span class="sourceLineNo">074</span>    @Override<a name="line.74"></a>
+<span class="sourceLineNo">075</span>    public Result search(Query query, Execution execution) {<a name="line.75"></a>
+<span class="sourceLineNo">076</span>        Result result = execution.search(query);<a name="line.76"></a>
+<span class="sourceLineNo">077</span><a name="line.77"></a>
+<span class="sourceLineNo">078</span>        query.trace(false, 3, simpleName, " updating headers.");<a name="line.78"></a>
+<span class="sourceLineNo">079</span>        keepAliveProcessing(query, result);<a name="line.79"></a>
+<span class="sourceLineNo">080</span>        return result;<a name="line.80"></a>
+<span class="sourceLineNo">081</span>    }<a name="line.81"></a>
+<span class="sourceLineNo">082</span><a name="line.82"></a>
+<span class="sourceLineNo">083</span>    /**<a name="line.83"></a>
+<span class="sourceLineNo">084</span>     * If the HTTP connection has been alive for too long, set the header<a name="line.84"></a>
+<span class="sourceLineNo">085</span>     * "Connection: Close" to tell the client to close the connection after this<a name="line.85"></a>
+<span class="sourceLineNo">086</span>     * request.<a name="line.86"></a>
+<span class="sourceLineNo">087</span>     */<a name="line.87"></a>
+<span class="sourceLineNo">088</span>    private void keepAliveProcessing(Query query, Result result) {<a name="line.88"></a>
+<span class="sourceLineNo">089</span>        int maxLifetimeSeconds = query.properties().getInteger(KEEPALIVE_MAXLIFETIMESECONDS, -1);<a name="line.89"></a>
+<span class="sourceLineNo">090</span><a name="line.90"></a>
+<span class="sourceLineNo">091</span>        if (maxLifetimeSeconds &lt; 0) {<a name="line.91"></a>
+<span class="sourceLineNo">092</span>            return;<a name="line.92"></a>
+<span class="sourceLineNo">093</span>        } else if (maxLifetimeSeconds == 0) {<a name="line.93"></a>
+<span class="sourceLineNo">094</span>            result.getHeaders(true).put(HTTP_CONNECTION_HEADER_NAME, HTTP_CONNECTION_CLOSE_ARGUMENT);<a name="line.94"></a>
+<span class="sourceLineNo">095</span>            query.trace(false, 5, simpleName, ": Max HTTP connection lifetime set to 0; adding \"", HTTP_CONNECTION_HEADER_NAME,<a name="line.95"></a>
+<span class="sourceLineNo">096</span>                    ": ", HTTP_CONNECTION_CLOSE_ARGUMENT, "\" header");<a name="line.96"></a>
+<span class="sourceLineNo">097</span>        } else {<a name="line.97"></a>
+<span class="sourceLineNo">098</span>            setCloseIfLifetimeExceeded(query, result, maxLifetimeSeconds);<a name="line.98"></a>
+<span class="sourceLineNo">099</span>        }<a name="line.99"></a>
+<span class="sourceLineNo">100</span>    }<a name="line.100"></a>
+<span class="sourceLineNo">101</span><a name="line.101"></a>
+<span class="sourceLineNo">102</span>    private void setCloseIfLifetimeExceeded(Query query, Result result, int maxLifetimeSeconds) {<a name="line.102"></a>
+<span class="sourceLineNo">103</span>        final HttpRequest httpRequest = query.getHttpRequest();<a name="line.103"></a>
+<span class="sourceLineNo">104</span>        if (httpRequest == null) {<a name="line.104"></a>
+<span class="sourceLineNo">105</span>            query.trace(false, 5, simpleName, " got max lifetime = ", maxLifetimeSeconds,<a name="line.105"></a>
+<span class="sourceLineNo">106</span>                    ", but got no JDisc request. Setting no header.");<a name="line.106"></a>
+<span class="sourceLineNo">107</span>            return;<a name="line.107"></a>
+<span class="sourceLineNo">108</span>        }<a name="line.108"></a>
+<span class="sourceLineNo">109</span><a name="line.109"></a>
+<span class="sourceLineNo">110</span>        final long connectedAtMillis = httpRequest.getJDiscRequest().getConnectedAt(TimeUnit.MILLISECONDS);<a name="line.110"></a>
+<span class="sourceLineNo">111</span>        final long maxLifeTimeMillis = maxLifetimeSeconds * 1000L;<a name="line.111"></a>
+<span class="sourceLineNo">112</span>        if (connectedAtMillis + maxLifeTimeMillis &lt; clock.getAsLong()) {<a name="line.112"></a>
+<span class="sourceLineNo">113</span>            result.getHeaders(true).put(HTTP_CONNECTION_HEADER_NAME, HTTP_CONNECTION_CLOSE_ARGUMENT);<a name="line.113"></a>
+<span class="sourceLineNo">114</span>            query.trace(false, 5, simpleName, ": Max HTTP connection lifetime (", maxLifetimeSeconds, ") exceeded; adding \"",<a name="line.114"></a>
+<span class="sourceLineNo">115</span>                    HTTP_CONNECTION_HEADER_NAME, ": ", HTTP_CONNECTION_CLOSE_ARGUMENT, "\" header");<a name="line.115"></a>
+<span class="sourceLineNo">116</span>        }<a name="line.116"></a>
+<span class="sourceLineNo">117</span>    }<a name="line.117"></a>
+<span class="sourceLineNo">118</span><a name="line.118"></a>
+<span class="sourceLineNo">119</span>}<a name="line.119"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

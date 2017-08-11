@@ -1,0 +1,242 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.search.federation.vespa;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import java.util.Iterator;<a name="line.4"></a>
+<span class="sourceLineNo">005</span><a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.prelude.query.*;<a name="line.6"></a>
+<span class="sourceLineNo">007</span><a name="line.7"></a>
+<span class="sourceLineNo">008</span>/**<a name="line.8"></a>
+<span class="sourceLineNo">009</span> * Marshal a query stack into an advanced query string suitable for<a name="line.9"></a>
+<span class="sourceLineNo">010</span> * passing to another QRS.<a name="line.10"></a>
+<span class="sourceLineNo">011</span> *<a name="line.11"></a>
+<span class="sourceLineNo">012</span> * @author &lt;a href="mailto:steinar@yahoo-inc.com"&gt;Steinar Knutsen&lt;/a&gt;<a name="line.12"></a>
+<span class="sourceLineNo">013</span> * @author &lt;a href="mailto:rafan@yahoo-inc.com"&gt;Rong-En Fan&lt;/a&gt;<a name="line.13"></a>
+<span class="sourceLineNo">014</span> */<a name="line.14"></a>
+<span class="sourceLineNo">015</span>public class QueryMarshaller {<a name="line.15"></a>
+<span class="sourceLineNo">016</span>    private boolean atRoot = true;<a name="line.16"></a>
+<span class="sourceLineNo">017</span><a name="line.17"></a>
+<span class="sourceLineNo">018</span>    public String marshal(Item root) {<a name="line.18"></a>
+<span class="sourceLineNo">019</span>        if (root == null || root instanceof NullItem) {<a name="line.19"></a>
+<span class="sourceLineNo">020</span>            return null;<a name="line.20"></a>
+<span class="sourceLineNo">021</span>        }<a name="line.21"></a>
+<span class="sourceLineNo">022</span>        StringBuilder s = new StringBuilder();<a name="line.22"></a>
+<span class="sourceLineNo">023</span>        marshal(root, s);<a name="line.23"></a>
+<span class="sourceLineNo">024</span>        atRoot = true;<a name="line.24"></a>
+<span class="sourceLineNo">025</span>        return s.toString();<a name="line.25"></a>
+<span class="sourceLineNo">026</span>    }<a name="line.26"></a>
+<span class="sourceLineNo">027</span><a name="line.27"></a>
+<span class="sourceLineNo">028</span>    /**<a name="line.28"></a>
+<span class="sourceLineNo">029</span>     * We do not yet care about exact match indices<a name="line.29"></a>
+<span class="sourceLineNo">030</span>     */<a name="line.30"></a>
+<span class="sourceLineNo">031</span>    private void marshal(Item root, StringBuilder s) {<a name="line.31"></a>
+<span class="sourceLineNo">032</span>        switch (root.getItemType()) {<a name="line.32"></a>
+<span class="sourceLineNo">033</span>        case OR:<a name="line.33"></a>
+<span class="sourceLineNo">034</span>            marshalOr((OrItem) root, s);<a name="line.34"></a>
+<span class="sourceLineNo">035</span>            break;<a name="line.35"></a>
+<span class="sourceLineNo">036</span>        case AND:<a name="line.36"></a>
+<span class="sourceLineNo">037</span>            marshalAnd((CompositeItem) root, s);<a name="line.37"></a>
+<span class="sourceLineNo">038</span>            break;<a name="line.38"></a>
+<span class="sourceLineNo">039</span>        case NOT:<a name="line.39"></a>
+<span class="sourceLineNo">040</span>            marshalNot((NotItem) root, s);<a name="line.40"></a>
+<span class="sourceLineNo">041</span>            break;<a name="line.41"></a>
+<span class="sourceLineNo">042</span>        case RANK:<a name="line.42"></a>
+<span class="sourceLineNo">043</span>            marshalRank((RankItem) root, s);<a name="line.43"></a>
+<span class="sourceLineNo">044</span>            break;<a name="line.44"></a>
+<span class="sourceLineNo">045</span>        case WORD:<a name="line.45"></a>
+<span class="sourceLineNo">046</span>        case INT:<a name="line.46"></a>
+<span class="sourceLineNo">047</span>        case PREFIX:<a name="line.47"></a>
+<span class="sourceLineNo">048</span>        case SUBSTRING:<a name="line.48"></a>
+<span class="sourceLineNo">049</span>        case SUFFIX:<a name="line.49"></a>
+<span class="sourceLineNo">050</span>            marshalWord((TermItem) root, s);<a name="line.50"></a>
+<span class="sourceLineNo">051</span>            break;<a name="line.51"></a>
+<span class="sourceLineNo">052</span>        case PHRASE:<a name="line.52"></a>
+<span class="sourceLineNo">053</span>            // PhraseItem and PhraseSegmentItem don't add quotes for segmented<a name="line.53"></a>
+<span class="sourceLineNo">054</span>            // termse<a name="line.54"></a>
+<span class="sourceLineNo">055</span>            if (root instanceof PhraseSegmentItem) {<a name="line.55"></a>
+<span class="sourceLineNo">056</span>                marshalPhrase((PhraseSegmentItem) root, s);<a name="line.56"></a>
+<span class="sourceLineNo">057</span>            } else {<a name="line.57"></a>
+<span class="sourceLineNo">058</span>                marshalPhrase((PhraseItem) root, s);<a name="line.58"></a>
+<span class="sourceLineNo">059</span>            }<a name="line.59"></a>
+<span class="sourceLineNo">060</span>            break;<a name="line.60"></a>
+<span class="sourceLineNo">061</span>        case NEAR:<a name="line.61"></a>
+<span class="sourceLineNo">062</span>            marshalNear((NearItem) root, s);<a name="line.62"></a>
+<span class="sourceLineNo">063</span>            break;<a name="line.63"></a>
+<span class="sourceLineNo">064</span>        case ONEAR:<a name="line.64"></a>
+<span class="sourceLineNo">065</span>            marshalNear((ONearItem) root, s);<a name="line.65"></a>
+<span class="sourceLineNo">066</span>            break;<a name="line.66"></a>
+<span class="sourceLineNo">067</span>        case WEAK_AND:<a name="line.67"></a>
+<span class="sourceLineNo">068</span>            marshalWeakAnd((WeakAndItem)root, s);<a name="line.68"></a>
+<span class="sourceLineNo">069</span>        default:<a name="line.69"></a>
+<span class="sourceLineNo">070</span>            break;<a name="line.70"></a>
+<span class="sourceLineNo">071</span>        }<a name="line.71"></a>
+<span class="sourceLineNo">072</span>    }<a name="line.72"></a>
+<span class="sourceLineNo">073</span><a name="line.73"></a>
+<span class="sourceLineNo">074</span><a name="line.74"></a>
+<span class="sourceLineNo">075</span>    private void marshalWord(TermItem item, StringBuilder s) {<a name="line.75"></a>
+<span class="sourceLineNo">076</span>        String index = item.getIndexName();<a name="line.76"></a>
+<span class="sourceLineNo">077</span>        if (index.length() != 0) {<a name="line.77"></a>
+<span class="sourceLineNo">078</span>            s.append(item.getIndexName()).append(':');<a name="line.78"></a>
+<span class="sourceLineNo">079</span>        }<a name="line.79"></a>
+<span class="sourceLineNo">080</span>        s.append(item.stringValue());<a name="line.80"></a>
+<span class="sourceLineNo">081</span>        if (item.getWeight() != Item.DEFAULT_WEIGHT)<a name="line.81"></a>
+<span class="sourceLineNo">082</span>            s.append("!").append(item.getWeight());<a name="line.82"></a>
+<span class="sourceLineNo">083</span>    }<a name="line.83"></a>
+<span class="sourceLineNo">084</span><a name="line.84"></a>
+<span class="sourceLineNo">085</span>    private void marshalRank(RankItem root, StringBuilder s) {<a name="line.85"></a>
+<span class="sourceLineNo">086</span>        marshalComposite("RANK", root, s);<a name="line.86"></a>
+<span class="sourceLineNo">087</span>    }<a name="line.87"></a>
+<span class="sourceLineNo">088</span><a name="line.88"></a>
+<span class="sourceLineNo">089</span>    private void marshalNot(NotItem root, StringBuilder s) {<a name="line.89"></a>
+<span class="sourceLineNo">090</span>        marshalComposite("ANDNOT", root, s);<a name="line.90"></a>
+<span class="sourceLineNo">091</span>    }<a name="line.91"></a>
+<span class="sourceLineNo">092</span><a name="line.92"></a>
+<span class="sourceLineNo">093</span>    private void marshalOr(OrItem root, StringBuilder s) {<a name="line.93"></a>
+<span class="sourceLineNo">094</span>        marshalComposite("OR", root, s);<a name="line.94"></a>
+<span class="sourceLineNo">095</span>    }<a name="line.95"></a>
+<span class="sourceLineNo">096</span><a name="line.96"></a>
+<span class="sourceLineNo">097</span>    /**<a name="line.97"></a>
+<span class="sourceLineNo">098</span>     * Dump WORD items, and add space between each of them unless those<a name="line.98"></a>
+<span class="sourceLineNo">099</span>     * words came from segmentation.<a name="line.99"></a>
+<span class="sourceLineNo">100</span>     *<a name="line.100"></a>
+<span class="sourceLineNo">101</span>     * @param root CompositeItem<a name="line.101"></a>
+<span class="sourceLineNo">102</span>     * @param s current marshaled query<a name="line.102"></a>
+<span class="sourceLineNo">103</span>     */<a name="line.103"></a>
+<span class="sourceLineNo">104</span>    private void dumpWords(CompositeItem root, StringBuilder s) {<a name="line.104"></a>
+<span class="sourceLineNo">105</span>        for (Iterator&lt;Item&gt; i = root.getItemIterator(); i.hasNext();) {<a name="line.105"></a>
+<span class="sourceLineNo">106</span>            Item word = i.next();<a name="line.106"></a>
+<span class="sourceLineNo">107</span>            boolean useSeparator = true;<a name="line.107"></a>
+<span class="sourceLineNo">108</span>            if (word instanceof TermItem) {<a name="line.108"></a>
+<span class="sourceLineNo">109</span>                s.append(((TermItem) word).stringValue());<a name="line.109"></a>
+<span class="sourceLineNo">110</span>                if (word instanceof WordItem) {<a name="line.110"></a>
+<span class="sourceLineNo">111</span>                    useSeparator = !((WordItem) word).isFromSegmented();<a name="line.111"></a>
+<span class="sourceLineNo">112</span>                }<a name="line.112"></a>
+<span class="sourceLineNo">113</span>            } else {<a name="line.113"></a>
+<span class="sourceLineNo">114</span>                dumpWords((CompositeItem) word, s);<a name="line.114"></a>
+<span class="sourceLineNo">115</span>            }<a name="line.115"></a>
+<span class="sourceLineNo">116</span>            if (useSeparator &amp;&amp; i.hasNext()) {<a name="line.116"></a>
+<span class="sourceLineNo">117</span>                s.append(' ');<a name="line.117"></a>
+<span class="sourceLineNo">118</span>            }<a name="line.118"></a>
+<span class="sourceLineNo">119</span>        }<a name="line.119"></a>
+<span class="sourceLineNo">120</span>    }<a name="line.120"></a>
+<span class="sourceLineNo">121</span><a name="line.121"></a>
+<span class="sourceLineNo">122</span>    private void marshalPhrase(PhraseItem root, StringBuilder s) {<a name="line.122"></a>
+<span class="sourceLineNo">123</span>        marshalPhrase(root, s, root.isExplicit(), false);<a name="line.123"></a>
+<span class="sourceLineNo">124</span>    }<a name="line.124"></a>
+<span class="sourceLineNo">125</span><a name="line.125"></a>
+<span class="sourceLineNo">126</span>    private void marshalPhrase(PhraseSegmentItem root, StringBuilder s) {<a name="line.126"></a>
+<span class="sourceLineNo">127</span>        marshalPhrase(root, s, root.isExplicit(), true);<a name="line.127"></a>
+<span class="sourceLineNo">128</span>    }<a name="line.128"></a>
+<span class="sourceLineNo">129</span><a name="line.129"></a>
+<span class="sourceLineNo">130</span>    private void marshalPhrase(IndexedItem root, StringBuilder s, boolean isExplicit, boolean isSegmented) {<a name="line.130"></a>
+<span class="sourceLineNo">131</span>        String index = root.getIndexName();<a name="line.131"></a>
+<span class="sourceLineNo">132</span>        if (index.length() != 0) {<a name="line.132"></a>
+<span class="sourceLineNo">133</span>            s.append(root.getIndexName()).append(':');<a name="line.133"></a>
+<span class="sourceLineNo">134</span>        }<a name="line.134"></a>
+<span class="sourceLineNo">135</span>        if (isExplicit || !isSegmented) s.append('"');<a name="line.135"></a>
+<span class="sourceLineNo">136</span>        dumpWords((CompositeItem) root, s);<a name="line.136"></a>
+<span class="sourceLineNo">137</span>        if (isExplicit || !isSegmented) s.append('"');<a name="line.137"></a>
+<span class="sourceLineNo">138</span>    }<a name="line.138"></a>
+<span class="sourceLineNo">139</span><a name="line.139"></a>
+<span class="sourceLineNo">140</span>    private void marshalNear(NearItem root, StringBuilder s) {<a name="line.140"></a>
+<span class="sourceLineNo">141</span>        marshalComposite(root.getName() + "(" + root.getDistance() + ")", root, s);<a name="line.141"></a>
+<span class="sourceLineNo">142</span>    }<a name="line.142"></a>
+<span class="sourceLineNo">143</span><a name="line.143"></a>
+<span class="sourceLineNo">144</span>    // Not only AndItem returns ItemType.AND<a name="line.144"></a>
+<span class="sourceLineNo">145</span>    private void marshalAnd(CompositeItem root, StringBuilder s) {<a name="line.145"></a>
+<span class="sourceLineNo">146</span>        marshalComposite("AND", root, s);<a name="line.146"></a>
+<span class="sourceLineNo">147</span>    }<a name="line.147"></a>
+<span class="sourceLineNo">148</span><a name="line.148"></a>
+<span class="sourceLineNo">149</span>    private void marshalWeakAnd(WeakAndItem root, StringBuilder s) {<a name="line.149"></a>
+<span class="sourceLineNo">150</span>        marshalComposite("WAND(" + root.getN() + ")", root, s);<a name="line.150"></a>
+<span class="sourceLineNo">151</span>    }<a name="line.151"></a>
+<span class="sourceLineNo">152</span><a name="line.152"></a>
+<span class="sourceLineNo">153</span>    private void marshalComposite(String operator, CompositeItem root, StringBuilder s) {<a name="line.153"></a>
+<span class="sourceLineNo">154</span>        boolean useParen = !atRoot;<a name="line.154"></a>
+<span class="sourceLineNo">155</span>        if (useParen) {<a name="line.155"></a>
+<span class="sourceLineNo">156</span>            s.append("( ");<a name="line.156"></a>
+<span class="sourceLineNo">157</span>        } else {<a name="line.157"></a>
+<span class="sourceLineNo">158</span>            atRoot = false;<a name="line.158"></a>
+<span class="sourceLineNo">159</span>        }<a name="line.159"></a>
+<span class="sourceLineNo">160</span>        for (Iterator&lt;Item&gt; i = root.getItemIterator(); i.hasNext();) {<a name="line.160"></a>
+<span class="sourceLineNo">161</span>            Item item = i.next();<a name="line.161"></a>
+<span class="sourceLineNo">162</span>            marshal(item, s);<a name="line.162"></a>
+<span class="sourceLineNo">163</span>            if (i.hasNext())<a name="line.163"></a>
+<span class="sourceLineNo">164</span>                s.append(' ').append(operator).append(' ');<a name="line.164"></a>
+<span class="sourceLineNo">165</span>        }<a name="line.165"></a>
+<span class="sourceLineNo">166</span>        if (useParen) {<a name="line.166"></a>
+<span class="sourceLineNo">167</span>            s.append(" )");<a name="line.167"></a>
+<span class="sourceLineNo">168</span>        }<a name="line.168"></a>
+<span class="sourceLineNo">169</span>    }<a name="line.169"></a>
+<span class="sourceLineNo">170</span>}<a name="line.170"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

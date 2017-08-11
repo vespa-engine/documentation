@@ -1,0 +1,172 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.config.provision;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.slime.ArrayTraverser;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.slime.Cursor;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.slime.Inspector;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.slime.Slime;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import com.yahoo.vespa.config.SlimeUtils;<a name="line.8"></a>
+<span class="sourceLineNo">009</span><a name="line.9"></a>
+<span class="sourceLineNo">010</span>import java.io.IOException;<a name="line.10"></a>
+<span class="sourceLineNo">011</span>import java.util.*;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import java.util.logging.Logger;<a name="line.12"></a>
+<span class="sourceLineNo">013</span><a name="line.13"></a>
+<span class="sourceLineNo">014</span>/**<a name="line.14"></a>
+<span class="sourceLineNo">015</span> * Information about provisioned hosts, and (de)serialization (from)to JSON.<a name="line.15"></a>
+<span class="sourceLineNo">016</span> *<a name="line.16"></a>
+<span class="sourceLineNo">017</span> * @author lulf<a name="line.17"></a>
+<span class="sourceLineNo">018</span> * @since 5.12<a name="line.18"></a>
+<span class="sourceLineNo">019</span> */<a name="line.19"></a>
+<span class="sourceLineNo">020</span>public class ProvisionInfo {<a name="line.20"></a>
+<span class="sourceLineNo">021</span><a name="line.21"></a>
+<span class="sourceLineNo">022</span>    private static final String mappingKey = "mapping";<a name="line.22"></a>
+<span class="sourceLineNo">023</span>    private static final String hostSpecKey = "hostSpec";<a name="line.23"></a>
+<span class="sourceLineNo">024</span>    private static final String hostSpecHostName = "hostName";<a name="line.24"></a>
+<span class="sourceLineNo">025</span>    private static final String hostSpecMembership = "membership";<a name="line.25"></a>
+<span class="sourceLineNo">026</span>    private static final String dockerImage = "dockerImage";<a name="line.26"></a>
+<span class="sourceLineNo">027</span><a name="line.27"></a>
+<span class="sourceLineNo">028</span>    private final Set&lt;HostSpec&gt; hosts = new LinkedHashSet&lt;&gt;();<a name="line.28"></a>
+<span class="sourceLineNo">029</span><a name="line.29"></a>
+<span class="sourceLineNo">030</span>    private ProvisionInfo(Set&lt;HostSpec&gt; hosts) {<a name="line.30"></a>
+<span class="sourceLineNo">031</span>        this.hosts.addAll(hosts);<a name="line.31"></a>
+<span class="sourceLineNo">032</span>    }<a name="line.32"></a>
+<span class="sourceLineNo">033</span><a name="line.33"></a>
+<span class="sourceLineNo">034</span>    public static ProvisionInfo withHosts(Set&lt;HostSpec&gt; hosts) {<a name="line.34"></a>
+<span class="sourceLineNo">035</span>        return new ProvisionInfo(hosts);<a name="line.35"></a>
+<span class="sourceLineNo">036</span>    }<a name="line.36"></a>
+<span class="sourceLineNo">037</span><a name="line.37"></a>
+<span class="sourceLineNo">038</span>    private void toSlime(Cursor cursor) {<a name="line.38"></a>
+<span class="sourceLineNo">039</span>        Cursor array = cursor.setArray(mappingKey);<a name="line.39"></a>
+<span class="sourceLineNo">040</span>        for (HostSpec host : hosts) {<a name="line.40"></a>
+<span class="sourceLineNo">041</span>            Cursor object = array.addObject();<a name="line.41"></a>
+<span class="sourceLineNo">042</span>            serializeHostSpec(object.setObject(hostSpecKey), host);<a name="line.42"></a>
+<span class="sourceLineNo">043</span>        }<a name="line.43"></a>
+<span class="sourceLineNo">044</span>    }<a name="line.44"></a>
+<span class="sourceLineNo">045</span><a name="line.45"></a>
+<span class="sourceLineNo">046</span>    private void serializeHostSpec(Cursor cursor, HostSpec host) {<a name="line.46"></a>
+<span class="sourceLineNo">047</span>        cursor.setString(hostSpecHostName, host.hostname());<a name="line.47"></a>
+<span class="sourceLineNo">048</span>        if (host.membership().isPresent()) {<a name="line.48"></a>
+<span class="sourceLineNo">049</span>            cursor.setString(hostSpecMembership, host.membership().get().stringValue());<a name="line.49"></a>
+<span class="sourceLineNo">050</span>            if (host.membership().get().cluster().dockerImage().isPresent())<a name="line.50"></a>
+<span class="sourceLineNo">051</span>                cursor.setString(dockerImage, host.membership().get().cluster().dockerImage().get());<a name="line.51"></a>
+<span class="sourceLineNo">052</span>        }<a name="line.52"></a>
+<span class="sourceLineNo">053</span>    }<a name="line.53"></a>
+<span class="sourceLineNo">054</span><a name="line.54"></a>
+<span class="sourceLineNo">055</span>    public Set&lt;HostSpec&gt; getHosts() {<a name="line.55"></a>
+<span class="sourceLineNo">056</span>        return Collections.unmodifiableSet(hosts);<a name="line.56"></a>
+<span class="sourceLineNo">057</span>    }<a name="line.57"></a>
+<span class="sourceLineNo">058</span><a name="line.58"></a>
+<span class="sourceLineNo">059</span>    private static ProvisionInfo fromSlime(Inspector inspector) {<a name="line.59"></a>
+<span class="sourceLineNo">060</span>        Inspector array = inspector.field(mappingKey);<a name="line.60"></a>
+<span class="sourceLineNo">061</span>        final Set&lt;HostSpec&gt; hosts = new LinkedHashSet&lt;&gt;();<a name="line.61"></a>
+<span class="sourceLineNo">062</span>        array.traverse(new ArrayTraverser() {<a name="line.62"></a>
+<span class="sourceLineNo">063</span>            @Override<a name="line.63"></a>
+<span class="sourceLineNo">064</span>            public void entry(int i, Inspector inspector) {<a name="line.64"></a>
+<span class="sourceLineNo">065</span>                hosts.add(createHostSpec(inspector.field(hostSpecKey)));<a name="line.65"></a>
+<span class="sourceLineNo">066</span>            }<a name="line.66"></a>
+<span class="sourceLineNo">067</span>        });<a name="line.67"></a>
+<span class="sourceLineNo">068</span>        return new ProvisionInfo(hosts);<a name="line.68"></a>
+<span class="sourceLineNo">069</span>    }<a name="line.69"></a>
+<span class="sourceLineNo">070</span><a name="line.70"></a>
+<span class="sourceLineNo">071</span>    private static HostSpec createHostSpec(Inspector object) {<a name="line.71"></a>
+<span class="sourceLineNo">072</span>        Optional&lt;ClusterMembership&gt; membership =<a name="line.72"></a>
+<span class="sourceLineNo">073</span>            object.field(hostSpecMembership).valid() ? Optional.of(readMembership(object)) : Optional.empty();<a name="line.73"></a>
+<span class="sourceLineNo">074</span>        HostSpec h = new HostSpec(object.field(hostSpecHostName).asString(), Collections.emptyList(), Optional.empty(), membership);<a name="line.74"></a>
+<span class="sourceLineNo">075</span>        return h;<a name="line.75"></a>
+<span class="sourceLineNo">076</span>    }<a name="line.76"></a>
+<span class="sourceLineNo">077</span><a name="line.77"></a>
+<span class="sourceLineNo">078</span>    private static ClusterMembership readMembership(Inspector object) {<a name="line.78"></a>
+<span class="sourceLineNo">079</span>        return ClusterMembership.from(object.field(hostSpecMembership).asString(),<a name="line.79"></a>
+<span class="sourceLineNo">080</span>                                      object.field(dockerImage).valid() ? Optional.of(object.field(dockerImage).asString()) : Optional.empty());<a name="line.80"></a>
+<span class="sourceLineNo">081</span>    }<a name="line.81"></a>
+<span class="sourceLineNo">082</span><a name="line.82"></a>
+<span class="sourceLineNo">083</span>    public byte[] toJson() throws IOException {<a name="line.83"></a>
+<span class="sourceLineNo">084</span>        Slime slime = new Slime();<a name="line.84"></a>
+<span class="sourceLineNo">085</span>        toSlime(slime.setObject());<a name="line.85"></a>
+<span class="sourceLineNo">086</span>        return SlimeUtils.toJsonBytes(slime);<a name="line.86"></a>
+<span class="sourceLineNo">087</span>    }<a name="line.87"></a>
+<span class="sourceLineNo">088</span><a name="line.88"></a>
+<span class="sourceLineNo">089</span>    public static ProvisionInfo fromJson(byte[] json) {<a name="line.89"></a>
+<span class="sourceLineNo">090</span>        return fromSlime(SlimeUtils.jsonToSlime(json).get());<a name="line.90"></a>
+<span class="sourceLineNo">091</span>    }<a name="line.91"></a>
+<span class="sourceLineNo">092</span><a name="line.92"></a>
+<span class="sourceLineNo">093</span>    public ProvisionInfo merge(ProvisionInfo provisionInfo) {<a name="line.93"></a>
+<span class="sourceLineNo">094</span>        Set&lt;HostSpec&gt; mergedSet = new LinkedHashSet&lt;&gt;();<a name="line.94"></a>
+<span class="sourceLineNo">095</span>        mergedSet.addAll(this.hosts);<a name="line.95"></a>
+<span class="sourceLineNo">096</span>        mergedSet.addAll(provisionInfo.getHosts());<a name="line.96"></a>
+<span class="sourceLineNo">097</span>        return ProvisionInfo.withHosts(mergedSet);<a name="line.97"></a>
+<span class="sourceLineNo">098</span>    }<a name="line.98"></a>
+<span class="sourceLineNo">099</span><a name="line.99"></a>
+<span class="sourceLineNo">100</span>}<a name="line.100"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

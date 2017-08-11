@@ -1,0 +1,169 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.jdisc.handler;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.google.common.util.concurrent.Futures;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.google.common.util.concurrent.JdkFutureAdapters;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.google.common.util.concurrent.ListenableFuture;<a name="line.6"></a>
+<span class="sourceLineNo">007</span><a name="line.7"></a>
+<span class="sourceLineNo">008</span>import java.util.LinkedList;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import java.util.List;<a name="line.9"></a>
+<span class="sourceLineNo">010</span>import java.util.concurrent.*;<a name="line.10"></a>
+<span class="sourceLineNo">011</span><a name="line.11"></a>
+<span class="sourceLineNo">012</span>/**<a name="line.12"></a>
+<span class="sourceLineNo">013</span> * &lt;p&gt;This class implements a Future&amp;lt;Boolean&amp;gt; that is conjunction of zero or more other Future&amp;lt;Boolean&amp;gt;s,<a name="line.13"></a>
+<span class="sourceLineNo">014</span> * i.e. it evaluates to &lt;tt&gt;true&lt;/tt&gt; if, and only if, all its operands evaluate to &lt;tt&gt;true&lt;/tt&gt;. To use this class,<a name="line.14"></a>
+<span class="sourceLineNo">015</span> * simply create an instance of it and add operands to it using the {@link #addOperand(ListenableFuture)} method.&lt;/p&gt;<a name="line.15"></a>
+<span class="sourceLineNo">016</span> * TODO: consider rewriting usage of FutureConjunction to use CompletableFuture instead.<a name="line.16"></a>
+<span class="sourceLineNo">017</span> *<a name="line.17"></a>
+<span class="sourceLineNo">018</span> * @author &lt;a href="mailto:simon@yahoo-inc.com"&gt;Simon Thoresen&lt;/a&gt;<a name="line.18"></a>
+<span class="sourceLineNo">019</span> */<a name="line.19"></a>
+<span class="sourceLineNo">020</span>public final class FutureConjunction implements ListenableFuture&lt;Boolean&gt; {<a name="line.20"></a>
+<span class="sourceLineNo">021</span><a name="line.21"></a>
+<span class="sourceLineNo">022</span>    private final List&lt;ListenableFuture&lt;Boolean&gt;&gt; operands = new LinkedList&lt;&gt;();<a name="line.22"></a>
+<span class="sourceLineNo">023</span><a name="line.23"></a>
+<span class="sourceLineNo">024</span>    /**<a name="line.24"></a>
+<span class="sourceLineNo">025</span>     * &lt;p&gt;Adds a ListenableFuture&amp;lt;Boolean&amp;gt; to this conjunction. This can be called at any time, even after having called<a name="line.25"></a>
+<span class="sourceLineNo">026</span>     * {@link #get()} previously.&lt;/p&gt;<a name="line.26"></a>
+<span class="sourceLineNo">027</span>     *<a name="line.27"></a>
+<span class="sourceLineNo">028</span>     * @param operand The operand to add to this conjunction.<a name="line.28"></a>
+<span class="sourceLineNo">029</span>     */<a name="line.29"></a>
+<span class="sourceLineNo">030</span>    public void addOperand(ListenableFuture&lt;Boolean&gt; operand) {<a name="line.30"></a>
+<span class="sourceLineNo">031</span>        operands.add(operand);<a name="line.31"></a>
+<span class="sourceLineNo">032</span>    }<a name="line.32"></a>
+<span class="sourceLineNo">033</span><a name="line.33"></a>
+<span class="sourceLineNo">034</span>    @Override<a name="line.34"></a>
+<span class="sourceLineNo">035</span>    public void addListener(Runnable listener, Executor executor) {<a name="line.35"></a>
+<span class="sourceLineNo">036</span>        Futures.allAsList(operands).addListener(listener, executor);<a name="line.36"></a>
+<span class="sourceLineNo">037</span>    }<a name="line.37"></a>
+<span class="sourceLineNo">038</span><a name="line.38"></a>
+<span class="sourceLineNo">039</span>    @Override<a name="line.39"></a>
+<span class="sourceLineNo">040</span>    public final boolean cancel(boolean mayInterruptIfRunning) {<a name="line.40"></a>
+<span class="sourceLineNo">041</span>        boolean ret = true;<a name="line.41"></a>
+<span class="sourceLineNo">042</span>        for (Future&lt;Boolean&gt; op : operands) {<a name="line.42"></a>
+<span class="sourceLineNo">043</span>            if (!op.cancel(mayInterruptIfRunning)) {<a name="line.43"></a>
+<span class="sourceLineNo">044</span>                ret = false;<a name="line.44"></a>
+<span class="sourceLineNo">045</span>            }<a name="line.45"></a>
+<span class="sourceLineNo">046</span>        }<a name="line.46"></a>
+<span class="sourceLineNo">047</span>        return ret;<a name="line.47"></a>
+<span class="sourceLineNo">048</span>    }<a name="line.48"></a>
+<span class="sourceLineNo">049</span><a name="line.49"></a>
+<span class="sourceLineNo">050</span>    @Override<a name="line.50"></a>
+<span class="sourceLineNo">051</span>    public final boolean isCancelled() {<a name="line.51"></a>
+<span class="sourceLineNo">052</span>        for (Future&lt;Boolean&gt; op : operands) {<a name="line.52"></a>
+<span class="sourceLineNo">053</span>            if (!op.isCancelled()) {<a name="line.53"></a>
+<span class="sourceLineNo">054</span>                return false;<a name="line.54"></a>
+<span class="sourceLineNo">055</span>            }<a name="line.55"></a>
+<span class="sourceLineNo">056</span>        }<a name="line.56"></a>
+<span class="sourceLineNo">057</span>        return true;<a name="line.57"></a>
+<span class="sourceLineNo">058</span>    }<a name="line.58"></a>
+<span class="sourceLineNo">059</span><a name="line.59"></a>
+<span class="sourceLineNo">060</span>    @Override<a name="line.60"></a>
+<span class="sourceLineNo">061</span>    public final boolean isDone() {<a name="line.61"></a>
+<span class="sourceLineNo">062</span>        for (Future&lt;Boolean&gt; op : operands) {<a name="line.62"></a>
+<span class="sourceLineNo">063</span>            if (!op.isDone()) {<a name="line.63"></a>
+<span class="sourceLineNo">064</span>                return false;<a name="line.64"></a>
+<span class="sourceLineNo">065</span>            }<a name="line.65"></a>
+<span class="sourceLineNo">066</span>        }<a name="line.66"></a>
+<span class="sourceLineNo">067</span>        return true;<a name="line.67"></a>
+<span class="sourceLineNo">068</span>    }<a name="line.68"></a>
+<span class="sourceLineNo">069</span><a name="line.69"></a>
+<span class="sourceLineNo">070</span>    @Override<a name="line.70"></a>
+<span class="sourceLineNo">071</span>    public final Boolean get() throws InterruptedException, ExecutionException {<a name="line.71"></a>
+<span class="sourceLineNo">072</span>        Boolean ret = Boolean.TRUE;<a name="line.72"></a>
+<span class="sourceLineNo">073</span>        for (Future&lt;Boolean&gt; op : operands) {<a name="line.73"></a>
+<span class="sourceLineNo">074</span>            if (!op.get()) {<a name="line.74"></a>
+<span class="sourceLineNo">075</span>                ret = Boolean.FALSE;<a name="line.75"></a>
+<span class="sourceLineNo">076</span>            }<a name="line.76"></a>
+<span class="sourceLineNo">077</span>        }<a name="line.77"></a>
+<span class="sourceLineNo">078</span>        return ret;<a name="line.78"></a>
+<span class="sourceLineNo">079</span>    }<a name="line.79"></a>
+<span class="sourceLineNo">080</span><a name="line.80"></a>
+<span class="sourceLineNo">081</span>    @Override<a name="line.81"></a>
+<span class="sourceLineNo">082</span>    public final Boolean get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException,<a name="line.82"></a>
+<span class="sourceLineNo">083</span>                                                                 TimeoutException {<a name="line.83"></a>
+<span class="sourceLineNo">084</span>        Boolean ret = Boolean.TRUE;<a name="line.84"></a>
+<span class="sourceLineNo">085</span>        long nanos = unit.toNanos(timeout);<a name="line.85"></a>
+<span class="sourceLineNo">086</span>        long lastTime = System.nanoTime();<a name="line.86"></a>
+<span class="sourceLineNo">087</span>        for (Future&lt;Boolean&gt; op : operands) {<a name="line.87"></a>
+<span class="sourceLineNo">088</span>            if (!op.get(nanos, TimeUnit.NANOSECONDS)) {<a name="line.88"></a>
+<span class="sourceLineNo">089</span>                ret = Boolean.FALSE;<a name="line.89"></a>
+<span class="sourceLineNo">090</span>            }<a name="line.90"></a>
+<span class="sourceLineNo">091</span>            long now = System.nanoTime();<a name="line.91"></a>
+<span class="sourceLineNo">092</span>            nanos -= now - lastTime;<a name="line.92"></a>
+<span class="sourceLineNo">093</span>            lastTime = now;<a name="line.93"></a>
+<span class="sourceLineNo">094</span>        }<a name="line.94"></a>
+<span class="sourceLineNo">095</span>        return ret;<a name="line.95"></a>
+<span class="sourceLineNo">096</span>    }<a name="line.96"></a>
+<span class="sourceLineNo">097</span>}<a name="line.97"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

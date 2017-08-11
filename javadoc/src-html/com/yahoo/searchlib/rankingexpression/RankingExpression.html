@@ -1,0 +1,332 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.searchlib.rankingexpression;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.searchlib.rankingexpression.evaluation.Context;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.searchlib.rankingexpression.evaluation.DoubleValue;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.searchlib.rankingexpression.evaluation.Value;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.searchlib.rankingexpression.parser.ParseException;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import com.yahoo.searchlib.rankingexpression.parser.RankingExpressionParser;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import com.yahoo.searchlib.rankingexpression.parser.TokenMgrError;<a name="line.9"></a>
+<span class="sourceLineNo">010</span>import com.yahoo.searchlib.rankingexpression.rule.ConstantNode;<a name="line.10"></a>
+<span class="sourceLineNo">011</span>import com.yahoo.searchlib.rankingexpression.rule.ExpressionNode;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import com.yahoo.searchlib.rankingexpression.rule.SerializationContext;<a name="line.12"></a>
+<span class="sourceLineNo">013</span>import com.yahoo.searchlib.rankingexpression.rule.SetMembershipNode;<a name="line.13"></a>
+<span class="sourceLineNo">014</span><a name="line.14"></a>
+<span class="sourceLineNo">015</span>import java.io.*;<a name="line.15"></a>
+<span class="sourceLineNo">016</span>import java.util.*;<a name="line.16"></a>
+<span class="sourceLineNo">017</span><a name="line.17"></a>
+<span class="sourceLineNo">018</span>/**<a name="line.18"></a>
+<span class="sourceLineNo">019</span> * &lt;p&gt;A ranking expression. Ranking expressions are used to calculate a rank score for a searched instance from a set of<a name="line.19"></a>
+<span class="sourceLineNo">020</span> * &lt;i&gt;rank features&lt;/i&gt;.&lt;/p&gt;<a name="line.20"></a>
+<span class="sourceLineNo">021</span> *<a name="line.21"></a>
+<span class="sourceLineNo">022</span> * &lt;p&gt;A ranking expression wraps a expression node tree and may also optionally have a name.&lt;/p&gt;<a name="line.22"></a>
+<span class="sourceLineNo">023</span> *<a name="line.23"></a>
+<span class="sourceLineNo">024</span> * &lt;p&gt;The identity of a ranking expression is decided by both its name and expression tree. Two expressions which<a name="line.24"></a>
+<span class="sourceLineNo">025</span> * looks the same in string form are the same.&lt;/p&gt;<a name="line.25"></a>
+<span class="sourceLineNo">026</span> *<a name="line.26"></a>
+<span class="sourceLineNo">027</span> * &lt;h3&gt;Simple usage&lt;/h3&gt;<a name="line.27"></a>
+<span class="sourceLineNo">028</span>&lt;pre&gt;&lt;code&gt;<a name="line.28"></a>
+<span class="sourceLineNo">029</span>try {<a name="line.29"></a>
+<span class="sourceLineNo">030</span>    MapContext context=new MapContext();<a name="line.30"></a>
+<span class="sourceLineNo">031</span>    context.put("one",1d);<a name="line.31"></a>
+<span class="sourceLineNo">032</span>    RankingExpression expression=new RankingExpression("10*if(i&amp;gt;35,if(i&amp;gt;one,if(i&amp;gt;=670,4,8),if(i&amp;gt;8000,5,3)),if(i==478,90,91))");<a name="line.32"></a>
+<span class="sourceLineNo">033</span>    double result=expression.evaluate(context);<a name="line.33"></a>
+<span class="sourceLineNo">034</span>   }<a name="line.34"></a>
+<span class="sourceLineNo">035</span>catch (ParseException e) {<a name="line.35"></a>
+<span class="sourceLineNo">036</span>    throw new RuntimeException(e);<a name="line.36"></a>
+<span class="sourceLineNo">037</span>}<a name="line.37"></a>
+<span class="sourceLineNo">038</span>&lt;/code&gt;&lt;/pre&gt;<a name="line.38"></a>
+<span class="sourceLineNo">039</span> *<a name="line.39"></a>
+<span class="sourceLineNo">040</span> * &lt;h3&gt;Or, usage optimized for repeated evaluation of the same expression&lt;/h3&gt;<a name="line.40"></a>
+<span class="sourceLineNo">041</span>&lt;pre&gt;&lt;code&gt;<a name="line.41"></a>
+<span class="sourceLineNo">042</span>// Members in a class living across multiple evaluations<a name="line.42"></a>
+<span class="sourceLineNo">043</span>RankingExpression expression;<a name="line.43"></a>
+<span class="sourceLineNo">044</span>ArrayContext contextPrototype;<a name="line.44"></a>
+<span class="sourceLineNo">045</span><a name="line.45"></a>
+<span class="sourceLineNo">046</span>...<a name="line.46"></a>
+<span class="sourceLineNo">047</span><a name="line.47"></a>
+<span class="sourceLineNo">048</span>// Initialization of the above members (once)<a name="line.48"></a>
+<span class="sourceLineNo">049</span>// Create reusable, gbdt optimized expression and context.<a name="line.49"></a>
+<span class="sourceLineNo">050</span>// The expression is multithread-safe while the context created is not<a name="line.50"></a>
+<span class="sourceLineNo">051</span>try {<a name="line.51"></a>
+<span class="sourceLineNo">052</span>    RankingExpression expression=new RankingExpression("10*if(i&amp;gt;35,if(i&amp;gt;one,if(i&amp;gt;=670,4,8),if(i&amp;gt;8000,5,3)),if(i==478,90,91))");<a name="line.52"></a>
+<span class="sourceLineNo">053</span>    ArrayContext contextPrototype=new ArrayContext(expression);<a name="line.53"></a>
+<span class="sourceLineNo">054</span>    ExpressionOptimizer optimizer=new ExpressionOptimizer(); // Increases evaluation speed of gbdt form expressions by 3-4x<a name="line.54"></a>
+<span class="sourceLineNo">055</span>    OptimizationReport triviaAboutTheOptimization=optimizer.optimize(expression,contextPrototype);<a name="line.55"></a>
+<span class="sourceLineNo">056</span>}<a name="line.56"></a>
+<span class="sourceLineNo">057</span>catch (ParseException e) {<a name="line.57"></a>
+<span class="sourceLineNo">058</span>    throw new RuntimeException(e);<a name="line.58"></a>
+<span class="sourceLineNo">059</span>}<a name="line.59"></a>
+<span class="sourceLineNo">060</span><a name="line.60"></a>
+<span class="sourceLineNo">061</span>...<a name="line.61"></a>
+<span class="sourceLineNo">062</span><a name="line.62"></a>
+<span class="sourceLineNo">063</span>// Execution (many)<a name="line.63"></a>
+<span class="sourceLineNo">064</span>context=contextPrototype.clone(); // If evaluation is multithreaded - skip this if execution is single-threaded<a name="line.64"></a>
+<span class="sourceLineNo">065</span>context.put("one",1d);<a name="line.65"></a>
+<span class="sourceLineNo">066</span>double result=expression.evaluate(context);<a name="line.66"></a>
+<span class="sourceLineNo">067</span>&lt;/code&gt;&lt;/pre&gt;<a name="line.67"></a>
+<span class="sourceLineNo">068</span> *<a name="line.68"></a>
+<span class="sourceLineNo">069</span> * @author Simon Thoresen<a name="line.69"></a>
+<span class="sourceLineNo">070</span> * @author bratseth<a name="line.70"></a>
+<span class="sourceLineNo">071</span> */<a name="line.71"></a>
+<span class="sourceLineNo">072</span>public class RankingExpression implements Serializable {<a name="line.72"></a>
+<span class="sourceLineNo">073</span><a name="line.73"></a>
+<span class="sourceLineNo">074</span>    private String name = "";<a name="line.74"></a>
+<span class="sourceLineNo">075</span>    private ExpressionNode root;<a name="line.75"></a>
+<span class="sourceLineNo">076</span><a name="line.76"></a>
+<span class="sourceLineNo">077</span>    /** Creates an anonymous ranking expression by consuming from the reader */<a name="line.77"></a>
+<span class="sourceLineNo">078</span>    public RankingExpression(Reader reader) throws ParseException {<a name="line.78"></a>
+<span class="sourceLineNo">079</span>        root = parse(reader);<a name="line.79"></a>
+<span class="sourceLineNo">080</span>    }<a name="line.80"></a>
+<span class="sourceLineNo">081</span><a name="line.81"></a>
+<span class="sourceLineNo">082</span>    /**<a name="line.82"></a>
+<span class="sourceLineNo">083</span>     * Creates a new ranking expression by consuming from the reader<a name="line.83"></a>
+<span class="sourceLineNo">084</span>     *<a name="line.84"></a>
+<span class="sourceLineNo">085</span>     * @param name the name of the ranking expression<a name="line.85"></a>
+<span class="sourceLineNo">086</span>     * @param reader the reader that contains the string to parse.<a name="line.86"></a>
+<span class="sourceLineNo">087</span>     * @throws ParseException if the string could not be parsed.<a name="line.87"></a>
+<span class="sourceLineNo">088</span>     */<a name="line.88"></a>
+<span class="sourceLineNo">089</span>    public RankingExpression(String name, Reader reader) throws ParseException {<a name="line.89"></a>
+<span class="sourceLineNo">090</span>        this.name = name;<a name="line.90"></a>
+<span class="sourceLineNo">091</span>        root = parse(reader);<a name="line.91"></a>
+<span class="sourceLineNo">092</span>    }<a name="line.92"></a>
+<span class="sourceLineNo">093</span><a name="line.93"></a>
+<span class="sourceLineNo">094</span>    /**<a name="line.94"></a>
+<span class="sourceLineNo">095</span>     * Creates a ranking expression from a string<a name="line.95"></a>
+<span class="sourceLineNo">096</span>     *<a name="line.96"></a>
+<span class="sourceLineNo">097</span>     * @param expression The reader that contains the string to parse.<a name="line.97"></a>
+<span class="sourceLineNo">098</span>     * @throws ParseException if the string could not be parsed.<a name="line.98"></a>
+<span class="sourceLineNo">099</span>     */<a name="line.99"></a>
+<span class="sourceLineNo">100</span>    public RankingExpression(String expression) throws ParseException {<a name="line.100"></a>
+<span class="sourceLineNo">101</span>        try {<a name="line.101"></a>
+<span class="sourceLineNo">102</span>            if (expression == null || expression.length() == 0) {<a name="line.102"></a>
+<span class="sourceLineNo">103</span>                throw new IllegalArgumentException("Empty ranking expressions are not allowed");<a name="line.103"></a>
+<span class="sourceLineNo">104</span>            }<a name="line.104"></a>
+<span class="sourceLineNo">105</span>            root = parse(new StringReader(expression));<a name="line.105"></a>
+<span class="sourceLineNo">106</span>        }<a name="line.106"></a>
+<span class="sourceLineNo">107</span>        catch (ParseException e) {<a name="line.107"></a>
+<span class="sourceLineNo">108</span>            ParseException p = new ParseException("Could not parse '" + expression + "'");<a name="line.108"></a>
+<span class="sourceLineNo">109</span>            p.initCause(e);<a name="line.109"></a>
+<span class="sourceLineNo">110</span>            throw p;<a name="line.110"></a>
+<span class="sourceLineNo">111</span>        }<a name="line.111"></a>
+<span class="sourceLineNo">112</span>    }<a name="line.112"></a>
+<span class="sourceLineNo">113</span><a name="line.113"></a>
+<span class="sourceLineNo">114</span>    /**<a name="line.114"></a>
+<span class="sourceLineNo">115</span>     * Creates a ranking expression from a file. For convenience, the file.getName() up to any dot becomes the name of<a name="line.115"></a>
+<span class="sourceLineNo">116</span>     * this expression.<a name="line.116"></a>
+<span class="sourceLineNo">117</span>     *<a name="line.117"></a>
+<span class="sourceLineNo">118</span>     * @param file the name of the file whose content to parse.<a name="line.118"></a>
+<span class="sourceLineNo">119</span>     * @throws ParseException           if the string could not be parsed.<a name="line.119"></a>
+<span class="sourceLineNo">120</span>     * @throws IllegalArgumentException if the file could not be found<a name="line.120"></a>
+<span class="sourceLineNo">121</span>     */<a name="line.121"></a>
+<span class="sourceLineNo">122</span>    public RankingExpression(File file) throws ParseException {<a name="line.122"></a>
+<span class="sourceLineNo">123</span>        try {<a name="line.123"></a>
+<span class="sourceLineNo">124</span>            name = file.getName().split("\\.")[0];<a name="line.124"></a>
+<span class="sourceLineNo">125</span>            root = parse(new FileReader(file));<a name="line.125"></a>
+<span class="sourceLineNo">126</span>        }<a name="line.126"></a>
+<span class="sourceLineNo">127</span>        catch (FileNotFoundException e) {<a name="line.127"></a>
+<span class="sourceLineNo">128</span>            throw new IllegalArgumentException("Could not create a ranking expression", e);<a name="line.128"></a>
+<span class="sourceLineNo">129</span>        }<a name="line.129"></a>
+<span class="sourceLineNo">130</span>    }<a name="line.130"></a>
+<span class="sourceLineNo">131</span><a name="line.131"></a>
+<span class="sourceLineNo">132</span>    /**<a name="line.132"></a>
+<span class="sourceLineNo">133</span>     * Creates a named ranking expression from an expression root node.<a name="line.133"></a>
+<span class="sourceLineNo">134</span>     */<a name="line.134"></a>
+<span class="sourceLineNo">135</span>    public RankingExpression(String name, ExpressionNode root) {<a name="line.135"></a>
+<span class="sourceLineNo">136</span>        this.name = name;<a name="line.136"></a>
+<span class="sourceLineNo">137</span>        this.root = root;<a name="line.137"></a>
+<span class="sourceLineNo">138</span>    }<a name="line.138"></a>
+<span class="sourceLineNo">139</span><a name="line.139"></a>
+<span class="sourceLineNo">140</span>    /**<a name="line.140"></a>
+<span class="sourceLineNo">141</span>     * Creates a ranking expression from an expression root node.<a name="line.141"></a>
+<span class="sourceLineNo">142</span>     *<a name="line.142"></a>
+<span class="sourceLineNo">143</span>     * @param root The root node.<a name="line.143"></a>
+<span class="sourceLineNo">144</span>     */<a name="line.144"></a>
+<span class="sourceLineNo">145</span>    public RankingExpression(ExpressionNode root) {<a name="line.145"></a>
+<span class="sourceLineNo">146</span>        this.root = root;<a name="line.146"></a>
+<span class="sourceLineNo">147</span>    }<a name="line.147"></a>
+<span class="sourceLineNo">148</span><a name="line.148"></a>
+<span class="sourceLineNo">149</span>    /**<a name="line.149"></a>
+<span class="sourceLineNo">150</span>     * Parses the content of the reader object as an expression string.<a name="line.150"></a>
+<span class="sourceLineNo">151</span>     *<a name="line.151"></a>
+<span class="sourceLineNo">152</span>     * @param reader A reader object that contains an expression string.<a name="line.152"></a>
+<span class="sourceLineNo">153</span>     * @return An expression node that corresponds to the given string.<a name="line.153"></a>
+<span class="sourceLineNo">154</span>     * @throws ParseException if the string could not be parsed.<a name="line.154"></a>
+<span class="sourceLineNo">155</span>     */<a name="line.155"></a>
+<span class="sourceLineNo">156</span>    private static ExpressionNode parse(Reader reader) throws ParseException {<a name="line.156"></a>
+<span class="sourceLineNo">157</span>        try {<a name="line.157"></a>
+<span class="sourceLineNo">158</span>            return new RankingExpressionParser(reader).rankingExpression();<a name="line.158"></a>
+<span class="sourceLineNo">159</span>        }<a name="line.159"></a>
+<span class="sourceLineNo">160</span>        catch (TokenMgrError e) {<a name="line.160"></a>
+<span class="sourceLineNo">161</span>            throw new ParseException(e.getMessage());<a name="line.161"></a>
+<span class="sourceLineNo">162</span>        }<a name="line.162"></a>
+<span class="sourceLineNo">163</span>    }<a name="line.163"></a>
+<span class="sourceLineNo">164</span><a name="line.164"></a>
+<span class="sourceLineNo">165</span>    /**<a name="line.165"></a>
+<span class="sourceLineNo">166</span>     * Returns the name of this ranking expression, or "" if no name is set.<a name="line.166"></a>
+<span class="sourceLineNo">167</span>     *<a name="line.167"></a>
+<span class="sourceLineNo">168</span>     * @return The name of this expression.<a name="line.168"></a>
+<span class="sourceLineNo">169</span>     */<a name="line.169"></a>
+<span class="sourceLineNo">170</span>    public String getName() {<a name="line.170"></a>
+<span class="sourceLineNo">171</span>        return name;<a name="line.171"></a>
+<span class="sourceLineNo">172</span>    }<a name="line.172"></a>
+<span class="sourceLineNo">173</span><a name="line.173"></a>
+<span class="sourceLineNo">174</span>    /**<a name="line.174"></a>
+<span class="sourceLineNo">175</span>     * Sets the name of this ranking expression.<a name="line.175"></a>
+<span class="sourceLineNo">176</span>     *<a name="line.176"></a>
+<span class="sourceLineNo">177</span>     * @param name The name to set.<a name="line.177"></a>
+<span class="sourceLineNo">178</span>     */<a name="line.178"></a>
+<span class="sourceLineNo">179</span>    public void setName(String name) {<a name="line.179"></a>
+<span class="sourceLineNo">180</span>        this.name = name;<a name="line.180"></a>
+<span class="sourceLineNo">181</span>    }<a name="line.181"></a>
+<span class="sourceLineNo">182</span><a name="line.182"></a>
+<span class="sourceLineNo">183</span>    /**<a name="line.183"></a>
+<span class="sourceLineNo">184</span>     * Returns the root of the expression tree of this expression.<a name="line.184"></a>
+<span class="sourceLineNo">185</span>     *<a name="line.185"></a>
+<span class="sourceLineNo">186</span>     * @return The root node.<a name="line.186"></a>
+<span class="sourceLineNo">187</span>     */<a name="line.187"></a>
+<span class="sourceLineNo">188</span>    public ExpressionNode getRoot() {<a name="line.188"></a>
+<span class="sourceLineNo">189</span>        return root;<a name="line.189"></a>
+<span class="sourceLineNo">190</span>    }<a name="line.190"></a>
+<span class="sourceLineNo">191</span><a name="line.191"></a>
+<span class="sourceLineNo">192</span>    /**<a name="line.192"></a>
+<span class="sourceLineNo">193</span>     * Sets the root of the expression tree of this expression.<a name="line.193"></a>
+<span class="sourceLineNo">194</span>     *<a name="line.194"></a>
+<span class="sourceLineNo">195</span>     * @param root The root node to set.<a name="line.195"></a>
+<span class="sourceLineNo">196</span>     */<a name="line.196"></a>
+<span class="sourceLineNo">197</span>    public void setRoot(ExpressionNode root) {<a name="line.197"></a>
+<span class="sourceLineNo">198</span>        this.root = root;<a name="line.198"></a>
+<span class="sourceLineNo">199</span>    }<a name="line.199"></a>
+<span class="sourceLineNo">200</span><a name="line.200"></a>
+<span class="sourceLineNo">201</span>    @Override<a name="line.201"></a>
+<span class="sourceLineNo">202</span>    public int hashCode() {<a name="line.202"></a>
+<span class="sourceLineNo">203</span>        return toString().hashCode();<a name="line.203"></a>
+<span class="sourceLineNo">204</span>    }<a name="line.204"></a>
+<span class="sourceLineNo">205</span><a name="line.205"></a>
+<span class="sourceLineNo">206</span>    @Override<a name="line.206"></a>
+<span class="sourceLineNo">207</span>    public boolean equals(Object obj) {<a name="line.207"></a>
+<span class="sourceLineNo">208</span>        return obj instanceof RankingExpression &amp;&amp; toString().equals(obj.toString());<a name="line.208"></a>
+<span class="sourceLineNo">209</span>    }<a name="line.209"></a>
+<span class="sourceLineNo">210</span><a name="line.210"></a>
+<span class="sourceLineNo">211</span>    @Override<a name="line.211"></a>
+<span class="sourceLineNo">212</span>    public String toString() {<a name="line.212"></a>
+<span class="sourceLineNo">213</span>        if ("".equals(name)) {<a name="line.213"></a>
+<span class="sourceLineNo">214</span>            return root.toString();<a name="line.214"></a>
+<span class="sourceLineNo">215</span>        } else {<a name="line.215"></a>
+<span class="sourceLineNo">216</span>            return name + ": " + root.toString();<a name="line.216"></a>
+<span class="sourceLineNo">217</span>        }<a name="line.217"></a>
+<span class="sourceLineNo">218</span>    }<a name="line.218"></a>
+<span class="sourceLineNo">219</span><a name="line.219"></a>
+<span class="sourceLineNo">220</span>    /**<a name="line.220"></a>
+<span class="sourceLineNo">221</span>     * Creates the necessary rank properties required to implement this expression.<a name="line.221"></a>
+<span class="sourceLineNo">222</span>     *<a name="line.222"></a>
+<span class="sourceLineNo">223</span>     * @param macros the expression macros to expand.<a name="line.223"></a>
+<span class="sourceLineNo">224</span>     * @return a list of named rank properties required to implement this expression.<a name="line.224"></a>
+<span class="sourceLineNo">225</span>     */<a name="line.225"></a>
+<span class="sourceLineNo">226</span>    public Map&lt;String, String&gt; getRankProperties(List&lt;ExpressionFunction&gt; macros) {<a name="line.226"></a>
+<span class="sourceLineNo">227</span>        Map&lt;String, ExpressionFunction&gt; arg = new HashMap&lt;&gt;();<a name="line.227"></a>
+<span class="sourceLineNo">228</span>        for (ExpressionFunction function : macros) {<a name="line.228"></a>
+<span class="sourceLineNo">229</span>            arg.put(function.getName(), function);<a name="line.229"></a>
+<span class="sourceLineNo">230</span>        }<a name="line.230"></a>
+<span class="sourceLineNo">231</span>        Deque&lt;String&gt; path = new LinkedList&lt;&gt;();<a name="line.231"></a>
+<span class="sourceLineNo">232</span>        SerializationContext context = new SerializationContext(macros);<a name="line.232"></a>
+<span class="sourceLineNo">233</span>        String serializedRoot = root.toString(context, path, null);<a name="line.233"></a>
+<span class="sourceLineNo">234</span>        Map&lt;String, String&gt; serializedExpressions = context.serializedFunctions();<a name="line.234"></a>
+<span class="sourceLineNo">235</span>        serializedExpressions.put(propertyName(name), serializedRoot);<a name="line.235"></a>
+<span class="sourceLineNo">236</span>        return serializedExpressions;<a name="line.236"></a>
+<span class="sourceLineNo">237</span>    }<a name="line.237"></a>
+<span class="sourceLineNo">238</span><a name="line.238"></a>
+<span class="sourceLineNo">239</span>    /**<a name="line.239"></a>
+<span class="sourceLineNo">240</span>     * Returns the rank-property name for a given expression name.<a name="line.240"></a>
+<span class="sourceLineNo">241</span>     *<a name="line.241"></a>
+<span class="sourceLineNo">242</span>     * @param expressionName The expression name to mangle.<a name="line.242"></a>
+<span class="sourceLineNo">243</span>     * @return The property name.<a name="line.243"></a>
+<span class="sourceLineNo">244</span>     */<a name="line.244"></a>
+<span class="sourceLineNo">245</span>    public static String propertyName(String expressionName) {<a name="line.245"></a>
+<span class="sourceLineNo">246</span>        return "rankingExpression(" + expressionName + ").rankingScript";<a name="line.246"></a>
+<span class="sourceLineNo">247</span>    }<a name="line.247"></a>
+<span class="sourceLineNo">248</span><a name="line.248"></a>
+<span class="sourceLineNo">249</span>    /**<a name="line.249"></a>
+<span class="sourceLineNo">250</span>     * Returns the value of evaluating this expression over the given context.<a name="line.250"></a>
+<span class="sourceLineNo">251</span>     *<a name="line.251"></a>
+<span class="sourceLineNo">252</span>     * @param context The variable bindings to use for this evaluation.<a name="line.252"></a>
+<span class="sourceLineNo">253</span>     * @return The evaluation result.<a name="line.253"></a>
+<span class="sourceLineNo">254</span>     * @throws IllegalArgumentException if there are variables which are not bound in the given map<a name="line.254"></a>
+<span class="sourceLineNo">255</span>     */<a name="line.255"></a>
+<span class="sourceLineNo">256</span>    public Value evaluate(Context context) {<a name="line.256"></a>
+<span class="sourceLineNo">257</span>        return root.evaluate(context);<a name="line.257"></a>
+<span class="sourceLineNo">258</span>    }<a name="line.258"></a>
+<span class="sourceLineNo">259</span><a name="line.259"></a>
+<span class="sourceLineNo">260</span>}<a name="line.260"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

@@ -1,0 +1,359 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.processing.request;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.google.common.collect.ImmutableList;<a name="line.4"></a>
+<span class="sourceLineNo">005</span><a name="line.5"></a>
+<span class="sourceLineNo">006</span>import java.util.ArrayList;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import java.util.Arrays;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import java.util.List;<a name="line.8"></a>
+<span class="sourceLineNo">009</span><a name="line.9"></a>
+<span class="sourceLineNo">010</span>import static com.yahoo.text.Lowercase.toLowerCase;<a name="line.10"></a>
+<span class="sourceLineNo">011</span><a name="line.11"></a>
+<span class="sourceLineNo">012</span>/**<a name="line.12"></a>
+<span class="sourceLineNo">013</span> * An immutable compound name of the general form "a.bb.ccc",<a name="line.13"></a>
+<span class="sourceLineNo">014</span> * where there can be any number of such compounds, including one or zero.<a name="line.14"></a>
+<span class="sourceLineNo">015</span> * &lt;p&gt;<a name="line.15"></a>
+<span class="sourceLineNo">016</span> * Using CompoundName is generally substantially faster than using strings.<a name="line.16"></a>
+<span class="sourceLineNo">017</span> *<a name="line.17"></a>
+<span class="sourceLineNo">018</span> * @author bratseth<a name="line.18"></a>
+<span class="sourceLineNo">019</span> */<a name="line.19"></a>
+<span class="sourceLineNo">020</span>public final class CompoundName {<a name="line.20"></a>
+<span class="sourceLineNo">021</span><a name="line.21"></a>
+<span class="sourceLineNo">022</span>    /**<a name="line.22"></a>
+<span class="sourceLineNo">023</span>     * The string name of this compound.<a name="line.23"></a>
+<span class="sourceLineNo">024</span>     */<a name="line.24"></a>
+<span class="sourceLineNo">025</span>    private final String name;<a name="line.25"></a>
+<span class="sourceLineNo">026</span>    private final String lowerCasedName;<a name="line.26"></a>
+<span class="sourceLineNo">027</span><a name="line.27"></a>
+<span class="sourceLineNo">028</span>    private final ImmutableList&lt;String&gt; compounds;<a name="line.28"></a>
+<span class="sourceLineNo">029</span><a name="line.29"></a>
+<span class="sourceLineNo">030</span>    /** A hashcode which is always derived from the compounds (NEVER the string) */<a name="line.30"></a>
+<span class="sourceLineNo">031</span>    private final int hashCode;<a name="line.31"></a>
+<span class="sourceLineNo">032</span><a name="line.32"></a>
+<span class="sourceLineNo">033</span>    /** This name with the first component removed */<a name="line.33"></a>
+<span class="sourceLineNo">034</span>    private final CompoundName rest;<a name="line.34"></a>
+<span class="sourceLineNo">035</span><a name="line.35"></a>
+<span class="sourceLineNo">036</span>    /** The empty compound */<a name="line.36"></a>
+<span class="sourceLineNo">037</span>    public static final CompoundName empty = new CompoundName("");<a name="line.37"></a>
+<span class="sourceLineNo">038</span><a name="line.38"></a>
+<span class="sourceLineNo">039</span>    /**<a name="line.39"></a>
+<span class="sourceLineNo">040</span>     * Constructs this from a string which may contains dot-separated components<a name="line.40"></a>
+<span class="sourceLineNo">041</span>     *<a name="line.41"></a>
+<span class="sourceLineNo">042</span>     * @throws NullPointerException if name is null<a name="line.42"></a>
+<span class="sourceLineNo">043</span>     */<a name="line.43"></a>
+<span class="sourceLineNo">044</span>    public CompoundName(final String name) {<a name="line.44"></a>
+<span class="sourceLineNo">045</span>        this(name, parse(name));<a name="line.45"></a>
+<span class="sourceLineNo">046</span>    }<a name="line.46"></a>
+<span class="sourceLineNo">047</span><a name="line.47"></a>
+<span class="sourceLineNo">048</span>    /** Constructs this from an array of name components which are assumed not to contain dots */<a name="line.48"></a>
+<span class="sourceLineNo">049</span>    public static CompoundName fromComponents(String ... components) {<a name="line.49"></a>
+<span class="sourceLineNo">050</span>        return new CompoundName(Arrays.asList(components));<a name="line.50"></a>
+<span class="sourceLineNo">051</span>    }<a name="line.51"></a>
+<span class="sourceLineNo">052</span><a name="line.52"></a>
+<span class="sourceLineNo">053</span>    /** Constructs this from a list of compounds. */<a name="line.53"></a>
+<span class="sourceLineNo">054</span>    public CompoundName(List&lt;String&gt; compounds) {<a name="line.54"></a>
+<span class="sourceLineNo">055</span>        this(toCompoundString(compounds), compounds);<a name="line.55"></a>
+<span class="sourceLineNo">056</span>    }<a name="line.56"></a>
+<span class="sourceLineNo">057</span><a name="line.57"></a>
+<span class="sourceLineNo">058</span>    /**<a name="line.58"></a>
+<span class="sourceLineNo">059</span>     * Constructs this from a name with already parsed compounds.<a name="line.59"></a>
+<span class="sourceLineNo">060</span>     * Private to avoid creating names with inconsistencies.<a name="line.60"></a>
+<span class="sourceLineNo">061</span>     *<a name="line.61"></a>
+<span class="sourceLineNo">062</span>     * @param name the string representation of the compounds<a name="line.62"></a>
+<span class="sourceLineNo">063</span>     * @param compounds the compounds of this name<a name="line.63"></a>
+<span class="sourceLineNo">064</span>     */<a name="line.64"></a>
+<span class="sourceLineNo">065</span>    private CompoundName(String name, List&lt;String&gt; compounds) {<a name="line.65"></a>
+<span class="sourceLineNo">066</span>        if (name == null) throw new NullPointerException("Name can not be null");<a name="line.66"></a>
+<span class="sourceLineNo">067</span><a name="line.67"></a>
+<span class="sourceLineNo">068</span>        this.name = name;<a name="line.68"></a>
+<span class="sourceLineNo">069</span>        this.lowerCasedName = toLowerCase(name);<a name="line.69"></a>
+<span class="sourceLineNo">070</span>        if (compounds.size()==1 &amp;&amp; compounds.get(0).isEmpty())<a name="line.70"></a>
+<span class="sourceLineNo">071</span>            this.compounds = ImmutableList.of();<a name="line.71"></a>
+<span class="sourceLineNo">072</span>        else<a name="line.72"></a>
+<span class="sourceLineNo">073</span>            this.compounds = ImmutableList.copyOf(compounds);<a name="line.73"></a>
+<span class="sourceLineNo">074</span>        this.hashCode = this.compounds.hashCode();<a name="line.74"></a>
+<span class="sourceLineNo">075</span><a name="line.75"></a>
+<span class="sourceLineNo">076</span>        int size = this.compounds.size();<a name="line.76"></a>
+<span class="sourceLineNo">077</span>        rest = size &gt; 1 ? new CompoundName(compounds.subList(1, size))<a name="line.77"></a>
+<span class="sourceLineNo">078</span>                        : size == 1 ? empty : this; // size==0 -&gt; this needed during construction of empty<a name="line.78"></a>
+<span class="sourceLineNo">079</span>    }<a name="line.79"></a>
+<span class="sourceLineNo">080</span><a name="line.80"></a>
+<span class="sourceLineNo">081</span>    private static List&lt;String&gt; parse(String s) {<a name="line.81"></a>
+<span class="sourceLineNo">082</span>        ArrayList&lt;String&gt; l = new ArrayList&lt;&gt;();<a name="line.82"></a>
+<span class="sourceLineNo">083</span>        int p = 0;<a name="line.83"></a>
+<span class="sourceLineNo">084</span>        final int m = s.length();<a name="line.84"></a>
+<span class="sourceLineNo">085</span>        for (int i = 0; i &lt; m; i++) {<a name="line.85"></a>
+<span class="sourceLineNo">086</span>            if (s.charAt(i) == '.') {<a name="line.86"></a>
+<span class="sourceLineNo">087</span>                l.add(s.substring(p, i));<a name="line.87"></a>
+<span class="sourceLineNo">088</span>                p = i + 1;<a name="line.88"></a>
+<span class="sourceLineNo">089</span>            }<a name="line.89"></a>
+<span class="sourceLineNo">090</span>        }<a name="line.90"></a>
+<span class="sourceLineNo">091</span>        if (p == 0) {<a name="line.91"></a>
+<span class="sourceLineNo">092</span>            l.add(s);<a name="line.92"></a>
+<span class="sourceLineNo">093</span>        } else if (p &lt; m) {<a name="line.93"></a>
+<span class="sourceLineNo">094</span>            l.add(s.substring(p, m));<a name="line.94"></a>
+<span class="sourceLineNo">095</span>        } else {<a name="line.95"></a>
+<span class="sourceLineNo">096</span>            throw new IllegalArgumentException("'" + s + "' is not a legal compound name. Names can not end with a dot.");<a name="line.96"></a>
+<span class="sourceLineNo">097</span>        }<a name="line.97"></a>
+<span class="sourceLineNo">098</span>        return l;<a name="line.98"></a>
+<span class="sourceLineNo">099</span>    }<a name="line.99"></a>
+<span class="sourceLineNo">100</span><a name="line.100"></a>
+<span class="sourceLineNo">101</span>    /**<a name="line.101"></a>
+<span class="sourceLineNo">102</span>     * Returns a compound name which has the given compound string appended to it<a name="line.102"></a>
+<span class="sourceLineNo">103</span>     *<a name="line.103"></a>
+<span class="sourceLineNo">104</span>     * @param name if name is empty this returns &lt;code&gt;this&lt;/code&gt;<a name="line.104"></a>
+<span class="sourceLineNo">105</span>     */<a name="line.105"></a>
+<span class="sourceLineNo">106</span>    public CompoundName append(String name) {<a name="line.106"></a>
+<span class="sourceLineNo">107</span>        if (name.isEmpty()) return this;<a name="line.107"></a>
+<span class="sourceLineNo">108</span>        if (isEmpty()) return new CompoundName(name);<a name="line.108"></a>
+<span class="sourceLineNo">109</span>        List&lt;String&gt; newCompounds = new ArrayList&lt;&gt;(compounds);<a name="line.109"></a>
+<span class="sourceLineNo">110</span>        newCompounds.addAll(parse(name));<a name="line.110"></a>
+<span class="sourceLineNo">111</span>        return new CompoundName(concat(this.name, name), newCompounds);<a name="line.111"></a>
+<span class="sourceLineNo">112</span>    }<a name="line.112"></a>
+<span class="sourceLineNo">113</span><a name="line.113"></a>
+<span class="sourceLineNo">114</span>    /**<a name="line.114"></a>
+<span class="sourceLineNo">115</span>     * Returns a compound name which has the given compounds appended to it<a name="line.115"></a>
+<span class="sourceLineNo">116</span>     *<a name="line.116"></a>
+<span class="sourceLineNo">117</span>     * @param name if name is empty this returns &lt;code&gt;this&lt;/code&gt;<a name="line.117"></a>
+<span class="sourceLineNo">118</span>     */<a name="line.118"></a>
+<span class="sourceLineNo">119</span>    public CompoundName append(CompoundName name) {<a name="line.119"></a>
+<span class="sourceLineNo">120</span>        if (name.isEmpty()) return this;<a name="line.120"></a>
+<span class="sourceLineNo">121</span>        if (isEmpty()) return name;<a name="line.121"></a>
+<span class="sourceLineNo">122</span>        List&lt;String&gt; newCompounds = new ArrayList&lt;&gt;(compounds);<a name="line.122"></a>
+<span class="sourceLineNo">123</span>        newCompounds.addAll(name.compounds);<a name="line.123"></a>
+<span class="sourceLineNo">124</span>        return new CompoundName(concat(this.name, name.name), newCompounds);<a name="line.124"></a>
+<span class="sourceLineNo">125</span>    }<a name="line.125"></a>
+<span class="sourceLineNo">126</span><a name="line.126"></a>
+<span class="sourceLineNo">127</span>    private String concat(String name1, String name2) {<a name="line.127"></a>
+<span class="sourceLineNo">128</span>        return name1 + "." + name2;<a name="line.128"></a>
+<span class="sourceLineNo">129</span>    }<a name="line.129"></a>
+<span class="sourceLineNo">130</span><a name="line.130"></a>
+<span class="sourceLineNo">131</span>    /**<a name="line.131"></a>
+<span class="sourceLineNo">132</span>     * Returns a compound name which has the given name components prepended to this name,<a name="line.132"></a>
+<span class="sourceLineNo">133</span>     * in the given order, i.e new ComponentName("c").prepend("a","b") will yield "a.b.c".<a name="line.133"></a>
+<span class="sourceLineNo">134</span>     *<a name="line.134"></a>
+<span class="sourceLineNo">135</span>     * @param nameParts if name is empty this returns &lt;code&gt;this&lt;/code&gt;<a name="line.135"></a>
+<span class="sourceLineNo">136</span>     */<a name="line.136"></a>
+<span class="sourceLineNo">137</span>    public CompoundName prepend(String ... nameParts) {<a name="line.137"></a>
+<span class="sourceLineNo">138</span>        if (nameParts.length == 0) return this;<a name="line.138"></a>
+<span class="sourceLineNo">139</span>        if (isEmpty()) return fromComponents(nameParts);<a name="line.139"></a>
+<span class="sourceLineNo">140</span><a name="line.140"></a>
+<span class="sourceLineNo">141</span>        List&lt;String&gt; newCompounds = new ArrayList&lt;&gt;();<a name="line.141"></a>
+<span class="sourceLineNo">142</span>        for (String namePart : nameParts)<a name="line.142"></a>
+<span class="sourceLineNo">143</span>            newCompounds.add(namePart);<a name="line.143"></a>
+<span class="sourceLineNo">144</span>        newCompounds.addAll(this.compounds);<a name="line.144"></a>
+<span class="sourceLineNo">145</span>        return new CompoundName(newCompounds);<a name="line.145"></a>
+<span class="sourceLineNo">146</span>    }<a name="line.146"></a>
+<span class="sourceLineNo">147</span><a name="line.147"></a>
+<span class="sourceLineNo">148</span>    /**<a name="line.148"></a>
+<span class="sourceLineNo">149</span>     * Returns the name after the last dot. If there are no dots, the full name is returned.<a name="line.149"></a>
+<span class="sourceLineNo">150</span>     */<a name="line.150"></a>
+<span class="sourceLineNo">151</span>    public String last() {<a name="line.151"></a>
+<span class="sourceLineNo">152</span>        if (compounds.isEmpty()) return "";<a name="line.152"></a>
+<span class="sourceLineNo">153</span>        return compounds.get(compounds.size() - 1);<a name="line.153"></a>
+<span class="sourceLineNo">154</span>    }<a name="line.154"></a>
+<span class="sourceLineNo">155</span><a name="line.155"></a>
+<span class="sourceLineNo">156</span>    /**<a name="line.156"></a>
+<span class="sourceLineNo">157</span>     * Returns the name before the first dot. If there are no dots the full name is returned.<a name="line.157"></a>
+<span class="sourceLineNo">158</span>     */<a name="line.158"></a>
+<span class="sourceLineNo">159</span>    public String first() {<a name="line.159"></a>
+<span class="sourceLineNo">160</span>        if (compounds.isEmpty()) return "";<a name="line.160"></a>
+<span class="sourceLineNo">161</span>        return compounds.get(0);<a name="line.161"></a>
+<span class="sourceLineNo">162</span>    }<a name="line.162"></a>
+<span class="sourceLineNo">163</span><a name="line.163"></a>
+<span class="sourceLineNo">164</span>    /**<a name="line.164"></a>
+<span class="sourceLineNo">165</span>     * Returns the first n components of this.<a name="line.165"></a>
+<span class="sourceLineNo">166</span>     *<a name="line.166"></a>
+<span class="sourceLineNo">167</span>     * @throws IllegalArgumentException if this does not have at least n components<a name="line.167"></a>
+<span class="sourceLineNo">168</span>     */<a name="line.168"></a>
+<span class="sourceLineNo">169</span>    public CompoundName first(int n) {<a name="line.169"></a>
+<span class="sourceLineNo">170</span>        if (compounds.size() &lt; n)<a name="line.170"></a>
+<span class="sourceLineNo">171</span>            throw new IllegalArgumentException("Asked for the first " + n + " components but '" +<a name="line.171"></a>
+<span class="sourceLineNo">172</span>                                               this + "' only have " + compounds.size() + " components.");<a name="line.172"></a>
+<span class="sourceLineNo">173</span>        return new CompoundName(compounds.subList(0, n));<a name="line.173"></a>
+<span class="sourceLineNo">174</span>    }<a name="line.174"></a>
+<span class="sourceLineNo">175</span><a name="line.175"></a>
+<span class="sourceLineNo">176</span>    /**<a name="line.176"></a>
+<span class="sourceLineNo">177</span>     * Returns the name after the first dot, or "" if this name has no dots<a name="line.177"></a>
+<span class="sourceLineNo">178</span>     */<a name="line.178"></a>
+<span class="sourceLineNo">179</span>    public CompoundName rest() { return rest; }<a name="line.179"></a>
+<span class="sourceLineNo">180</span><a name="line.180"></a>
+<span class="sourceLineNo">181</span>    /**<a name="line.181"></a>
+<span class="sourceLineNo">182</span>     * Returns the name starting after the n first components (i.e dots).<a name="line.182"></a>
+<span class="sourceLineNo">183</span>     * This may be the empty name.<a name="line.183"></a>
+<span class="sourceLineNo">184</span>     *<a name="line.184"></a>
+<span class="sourceLineNo">185</span>     * @throws IllegalArgumentException if this does not have at least that many components<a name="line.185"></a>
+<span class="sourceLineNo">186</span>     */<a name="line.186"></a>
+<span class="sourceLineNo">187</span>    public CompoundName rest(int n) {<a name="line.187"></a>
+<span class="sourceLineNo">188</span>        if (n == 0) return this;<a name="line.188"></a>
+<span class="sourceLineNo">189</span>        if (compounds.size() &lt; n)<a name="line.189"></a>
+<span class="sourceLineNo">190</span>            throw new IllegalArgumentException("Asked for the rest after " + n + " components but '" +<a name="line.190"></a>
+<span class="sourceLineNo">191</span>                                               this + "' only have " + compounds.size() + " components.");<a name="line.191"></a>
+<span class="sourceLineNo">192</span>        if (n == 1) return rest();<a name="line.192"></a>
+<span class="sourceLineNo">193</span>        if (compounds.size() == n) return empty;<a name="line.193"></a>
+<span class="sourceLineNo">194</span>        return rest.rest(n-1);<a name="line.194"></a>
+<span class="sourceLineNo">195</span>    }<a name="line.195"></a>
+<span class="sourceLineNo">196</span><a name="line.196"></a>
+<span class="sourceLineNo">197</span>    /**<a name="line.197"></a>
+<span class="sourceLineNo">198</span>     * Returns the number of compound elements in this. Which is exactly the number of dots in the string plus one.<a name="line.198"></a>
+<span class="sourceLineNo">199</span>     * The size of an empty compound is 0.<a name="line.199"></a>
+<span class="sourceLineNo">200</span>     */<a name="line.200"></a>
+<span class="sourceLineNo">201</span>    public int size() {<a name="line.201"></a>
+<span class="sourceLineNo">202</span>        return compounds.size();<a name="line.202"></a>
+<span class="sourceLineNo">203</span>    }<a name="line.203"></a>
+<span class="sourceLineNo">204</span><a name="line.204"></a>
+<span class="sourceLineNo">205</span>    /**<a name="line.205"></a>
+<span class="sourceLineNo">206</span>     * Returns the compound element as the given index<a name="line.206"></a>
+<span class="sourceLineNo">207</span>     */<a name="line.207"></a>
+<span class="sourceLineNo">208</span>    public String get(int i) {<a name="line.208"></a>
+<span class="sourceLineNo">209</span>        return compounds.get(i);<a name="line.209"></a>
+<span class="sourceLineNo">210</span>    }<a name="line.210"></a>
+<span class="sourceLineNo">211</span><a name="line.211"></a>
+<span class="sourceLineNo">212</span>    /**<a name="line.212"></a>
+<span class="sourceLineNo">213</span>     * Returns a compound which have the name component at index i set to the given name.<a name="line.213"></a>
+<span class="sourceLineNo">214</span>     * As an optimization, if the given name == the name component at this index, this is returned.<a name="line.214"></a>
+<span class="sourceLineNo">215</span>     */<a name="line.215"></a>
+<span class="sourceLineNo">216</span>    public CompoundName set(int i, String name) {<a name="line.216"></a>
+<span class="sourceLineNo">217</span>        if (get(i) == name) return this;<a name="line.217"></a>
+<span class="sourceLineNo">218</span>        List&lt;String&gt; newCompounds = new ArrayList&lt;&gt;(compounds);<a name="line.218"></a>
+<span class="sourceLineNo">219</span>        newCompounds.set(i, name);<a name="line.219"></a>
+<span class="sourceLineNo">220</span>        return new CompoundName(newCompounds);<a name="line.220"></a>
+<span class="sourceLineNo">221</span>    }<a name="line.221"></a>
+<span class="sourceLineNo">222</span><a name="line.222"></a>
+<span class="sourceLineNo">223</span>    /**<a name="line.223"></a>
+<span class="sourceLineNo">224</span>     * Returns whether this name has more than one element<a name="line.224"></a>
+<span class="sourceLineNo">225</span>     */<a name="line.225"></a>
+<span class="sourceLineNo">226</span>    public boolean isCompound() {<a name="line.226"></a>
+<span class="sourceLineNo">227</span>        return compounds.size() &gt; 1;<a name="line.227"></a>
+<span class="sourceLineNo">228</span>    }<a name="line.228"></a>
+<span class="sourceLineNo">229</span><a name="line.229"></a>
+<span class="sourceLineNo">230</span>    public boolean isEmpty() {<a name="line.230"></a>
+<span class="sourceLineNo">231</span>        return compounds.isEmpty();<a name="line.231"></a>
+<span class="sourceLineNo">232</span>    }<a name="line.232"></a>
+<span class="sourceLineNo">233</span><a name="line.233"></a>
+<span class="sourceLineNo">234</span>    /**<a name="line.234"></a>
+<span class="sourceLineNo">235</span>     * Returns whether the given name is a prefix of this.<a name="line.235"></a>
+<span class="sourceLineNo">236</span>     * Prefixes are taken on the component, not character level, so<a name="line.236"></a>
+<span class="sourceLineNo">237</span>     * "a" is a prefix of "a.b", but not a prefix of "ax.b<a name="line.237"></a>
+<span class="sourceLineNo">238</span>     */<a name="line.238"></a>
+<span class="sourceLineNo">239</span>    public boolean hasPrefix(CompoundName prefix) {<a name="line.239"></a>
+<span class="sourceLineNo">240</span>        if (prefix.size() &gt; this.size()) return false;<a name="line.240"></a>
+<span class="sourceLineNo">241</span><a name="line.241"></a>
+<span class="sourceLineNo">242</span>        int prefixLength = prefix.name.length();<a name="line.242"></a>
+<span class="sourceLineNo">243</span>        if (prefixLength == 0)<a name="line.243"></a>
+<span class="sourceLineNo">244</span>            return true;<a name="line.244"></a>
+<span class="sourceLineNo">245</span><a name="line.245"></a>
+<span class="sourceLineNo">246</span>        if (name.length() &gt; prefixLength &amp;&amp; name.charAt(prefixLength) != '.')<a name="line.246"></a>
+<span class="sourceLineNo">247</span>            return false;<a name="line.247"></a>
+<span class="sourceLineNo">248</span><a name="line.248"></a>
+<span class="sourceLineNo">249</span>        return name.startsWith(prefix.name);<a name="line.249"></a>
+<span class="sourceLineNo">250</span>    }<a name="line.250"></a>
+<span class="sourceLineNo">251</span><a name="line.251"></a>
+<span class="sourceLineNo">252</span>    /**<a name="line.252"></a>
+<span class="sourceLineNo">253</span>     * Returns an immutable list of the components of this<a name="line.253"></a>
+<span class="sourceLineNo">254</span>     */<a name="line.254"></a>
+<span class="sourceLineNo">255</span>    public List&lt;String&gt; asList() {<a name="line.255"></a>
+<span class="sourceLineNo">256</span>        return compounds;<a name="line.256"></a>
+<span class="sourceLineNo">257</span>    }<a name="line.257"></a>
+<span class="sourceLineNo">258</span><a name="line.258"></a>
+<span class="sourceLineNo">259</span>    @Override<a name="line.259"></a>
+<span class="sourceLineNo">260</span>    public int hashCode() { return hashCode; }<a name="line.260"></a>
+<span class="sourceLineNo">261</span><a name="line.261"></a>
+<span class="sourceLineNo">262</span>    @Override<a name="line.262"></a>
+<span class="sourceLineNo">263</span>    public boolean equals(Object o) {<a name="line.263"></a>
+<span class="sourceLineNo">264</span>        if (o == this) return true;<a name="line.264"></a>
+<span class="sourceLineNo">265</span>        if ( ! (o instanceof CompoundName)) return false;<a name="line.265"></a>
+<span class="sourceLineNo">266</span>        CompoundName other = (CompoundName)o;<a name="line.266"></a>
+<span class="sourceLineNo">267</span>        return this.name.equals(other.name);<a name="line.267"></a>
+<span class="sourceLineNo">268</span>    }<a name="line.268"></a>
+<span class="sourceLineNo">269</span><a name="line.269"></a>
+<span class="sourceLineNo">270</span>    /**<a name="line.270"></a>
+<span class="sourceLineNo">271</span>     * Returns the string representation of this - all the name components in order separated by dots.<a name="line.271"></a>
+<span class="sourceLineNo">272</span>     */<a name="line.272"></a>
+<span class="sourceLineNo">273</span>    @Override<a name="line.273"></a>
+<span class="sourceLineNo">274</span>    public String toString() { return name; }<a name="line.274"></a>
+<span class="sourceLineNo">275</span><a name="line.275"></a>
+<span class="sourceLineNo">276</span>    public String getLowerCasedName() {<a name="line.276"></a>
+<span class="sourceLineNo">277</span>        return lowerCasedName;<a name="line.277"></a>
+<span class="sourceLineNo">278</span>    }<a name="line.278"></a>
+<span class="sourceLineNo">279</span><a name="line.279"></a>
+<span class="sourceLineNo">280</span>    private static String toCompoundString(List&lt;String&gt; compounds) {<a name="line.280"></a>
+<span class="sourceLineNo">281</span>        StringBuilder b = new StringBuilder();<a name="line.281"></a>
+<span class="sourceLineNo">282</span>        for (String compound : compounds)<a name="line.282"></a>
+<span class="sourceLineNo">283</span>            b.append(compound).append(".");<a name="line.283"></a>
+<span class="sourceLineNo">284</span>        return b.length()==0 ? "" : b.substring(0, b.length()-1);<a name="line.284"></a>
+<span class="sourceLineNo">285</span>    }<a name="line.285"></a>
+<span class="sourceLineNo">286</span><a name="line.286"></a>
+<span class="sourceLineNo">287</span>}<a name="line.287"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

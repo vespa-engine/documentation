@@ -1,0 +1,154 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.processing.response;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.google.common.util.concurrent.ForwardingFuture;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.google.common.util.concurrent.ListenableFutureTask;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.processing.Request;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.processing.Response;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import com.yahoo.processing.execution.Execution;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import com.yahoo.processing.request.ErrorMessage;<a name="line.9"></a>
+<span class="sourceLineNo">010</span><a name="line.10"></a>
+<span class="sourceLineNo">011</span>import java.util.concurrent.Callable;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import java.util.concurrent.ExecutionException;<a name="line.12"></a>
+<span class="sourceLineNo">013</span>import java.util.concurrent.TimeUnit;<a name="line.13"></a>
+<span class="sourceLineNo">014</span>import java.util.concurrent.TimeoutException;<a name="line.14"></a>
+<span class="sourceLineNo">015</span>import java.util.logging.Level;<a name="line.15"></a>
+<span class="sourceLineNo">016</span>import java.util.logging.Logger;<a name="line.16"></a>
+<span class="sourceLineNo">017</span><a name="line.17"></a>
+<span class="sourceLineNo">018</span>/**<a name="line.18"></a>
+<span class="sourceLineNo">019</span> * A processing response which will arrive in the future.<a name="line.19"></a>
+<span class="sourceLineNo">020</span> *<a name="line.20"></a>
+<span class="sourceLineNo">021</span> * @author bratseth<a name="line.21"></a>
+<span class="sourceLineNo">022</span> */<a name="line.22"></a>
+<span class="sourceLineNo">023</span>public class FutureResponse extends ForwardingFuture&lt;Response&gt; {<a name="line.23"></a>
+<span class="sourceLineNo">024</span><a name="line.24"></a>
+<span class="sourceLineNo">025</span>    private final Request request;<a name="line.25"></a>
+<span class="sourceLineNo">026</span><a name="line.26"></a>
+<span class="sourceLineNo">027</span>    /**<a name="line.27"></a>
+<span class="sourceLineNo">028</span>     * Only used for generating messages<a name="line.28"></a>
+<span class="sourceLineNo">029</span>     */<a name="line.29"></a>
+<span class="sourceLineNo">030</span>    private final Execution execution;<a name="line.30"></a>
+<span class="sourceLineNo">031</span><a name="line.31"></a>
+<span class="sourceLineNo">032</span>    private final static Logger log = Logger.getLogger(FutureResponse.class.getName());<a name="line.32"></a>
+<span class="sourceLineNo">033</span><a name="line.33"></a>
+<span class="sourceLineNo">034</span>    private final ListenableFutureTask&lt;Response&gt; futureTask;<a name="line.34"></a>
+<span class="sourceLineNo">035</span><a name="line.35"></a>
+<span class="sourceLineNo">036</span>    public FutureResponse(final Callable&lt;Response&gt; callable, Execution execution, final Request request) {<a name="line.36"></a>
+<span class="sourceLineNo">037</span>        this.futureTask = ListenableFutureTask.create(callable);<a name="line.37"></a>
+<span class="sourceLineNo">038</span>        this.request = request;<a name="line.38"></a>
+<span class="sourceLineNo">039</span>        this.execution = execution;<a name="line.39"></a>
+<span class="sourceLineNo">040</span>    }<a name="line.40"></a>
+<span class="sourceLineNo">041</span><a name="line.41"></a>
+<span class="sourceLineNo">042</span>    @Override<a name="line.42"></a>
+<span class="sourceLineNo">043</span>    public ListenableFutureTask&lt;Response&gt; delegate() {<a name="line.43"></a>
+<span class="sourceLineNo">044</span>        return futureTask;<a name="line.44"></a>
+<span class="sourceLineNo">045</span>    }<a name="line.45"></a>
+<span class="sourceLineNo">046</span><a name="line.46"></a>
+<span class="sourceLineNo">047</span>    public<a name="line.47"></a>
+<span class="sourceLineNo">048</span>    @Override<a name="line.48"></a>
+<span class="sourceLineNo">049</span>    Response get() {<a name="line.49"></a>
+<span class="sourceLineNo">050</span>        try {<a name="line.50"></a>
+<span class="sourceLineNo">051</span>            return super.get();<a name="line.51"></a>
+<span class="sourceLineNo">052</span>        } catch (InterruptedException e) {<a name="line.52"></a>
+<span class="sourceLineNo">053</span>            return new Response(request, new ErrorMessage("'" + execution + "' was interrupted", e));<a name="line.53"></a>
+<span class="sourceLineNo">054</span>        } catch (ExecutionException e) {<a name="line.54"></a>
+<span class="sourceLineNo">055</span>            log.log(Level.WARNING, "Exception on executing " + execution + " for " + request, e);<a name="line.55"></a>
+<span class="sourceLineNo">056</span>            return new Response(request, new ErrorMessage("Error in '" + execution + "'", e));<a name="line.56"></a>
+<span class="sourceLineNo">057</span>        }<a name="line.57"></a>
+<span class="sourceLineNo">058</span>    }<a name="line.58"></a>
+<span class="sourceLineNo">059</span><a name="line.59"></a>
+<span class="sourceLineNo">060</span>    public<a name="line.60"></a>
+<span class="sourceLineNo">061</span>    @Override<a name="line.61"></a>
+<span class="sourceLineNo">062</span>    Response get(long timeout, TimeUnit timeunit) {<a name="line.62"></a>
+<span class="sourceLineNo">063</span>        try {<a name="line.63"></a>
+<span class="sourceLineNo">064</span>            return super.get(timeout, timeunit);<a name="line.64"></a>
+<span class="sourceLineNo">065</span>        } catch (InterruptedException e) {<a name="line.65"></a>
+<span class="sourceLineNo">066</span>            return new Response(request, new ErrorMessage("'" + execution + "' was interrupted", e));<a name="line.66"></a>
+<span class="sourceLineNo">067</span>        } catch (ExecutionException e) {<a name="line.67"></a>
+<span class="sourceLineNo">068</span>            log.log(Level.WARNING, "Exception on executing " + execution + " for " + request, e);<a name="line.68"></a>
+<span class="sourceLineNo">069</span>            return new Response(request, new ErrorMessage("Error in '" + execution + "'", e));<a name="line.69"></a>
+<span class="sourceLineNo">070</span>        } catch (TimeoutException e) {<a name="line.70"></a>
+<span class="sourceLineNo">071</span>            return new Response(request, new ErrorMessage("Error executing '" + execution + "': " + " Chain timed out."));<a name="line.71"></a>
+<span class="sourceLineNo">072</span>        }<a name="line.72"></a>
+<span class="sourceLineNo">073</span>    }<a name="line.73"></a>
+<span class="sourceLineNo">074</span><a name="line.74"></a>
+<span class="sourceLineNo">075</span>    /**<a name="line.75"></a>
+<span class="sourceLineNo">076</span>     * Returns the query used in this execution, never null<a name="line.76"></a>
+<span class="sourceLineNo">077</span>     */<a name="line.77"></a>
+<span class="sourceLineNo">078</span>    public Request getRequest() {<a name="line.78"></a>
+<span class="sourceLineNo">079</span>        return request;<a name="line.79"></a>
+<span class="sourceLineNo">080</span>    }<a name="line.80"></a>
+<span class="sourceLineNo">081</span><a name="line.81"></a>
+<span class="sourceLineNo">082</span>}<a name="line.82"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

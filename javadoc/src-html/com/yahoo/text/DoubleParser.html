@@ -1,0 +1,271 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.text;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>/**<a name="line.4"></a>
+<span class="sourceLineNo">005</span> * Utility class to parse a String into a double.<a name="line.5"></a>
+<span class="sourceLineNo">006</span> * &lt;p&gt;<a name="line.6"></a>
+<span class="sourceLineNo">007</span> * This is intended as a lower-cost replacement for the standard<a name="line.7"></a>
+<span class="sourceLineNo">008</span> * Double.parseDouble(String) since that method will cause lock<a name="line.8"></a>
+<span class="sourceLineNo">009</span> * contention if it's used too often.<a name="line.9"></a>
+<span class="sourceLineNo">010</span> * &lt;p&gt;<a name="line.10"></a>
+<span class="sourceLineNo">011</span> * Note that this implementation won't always produce the same results<a name="line.11"></a>
+<span class="sourceLineNo">012</span> * as java.lang.Double (low-order bits may differ), and it doesn't<a name="line.12"></a>
+<span class="sourceLineNo">013</span> * properly support denormalized numbers.<a name="line.13"></a>
+<span class="sourceLineNo">014</span> * &lt;p&gt;<a name="line.14"></a>
+<span class="sourceLineNo">015</span> * Also, this implementation is very poorly tested at the moment, so<a name="line.15"></a>
+<span class="sourceLineNo">016</span> * it should be used carefully, only in cases where you know the input<a name="line.16"></a>
+<span class="sourceLineNo">017</span> * will be well-defined and you don't need full precision.<a name="line.17"></a>
+<span class="sourceLineNo">018</span> *<a name="line.18"></a>
+<span class="sourceLineNo">019</span> * @author arnej27959<a name="line.19"></a>
+<span class="sourceLineNo">020</span> */<a name="line.20"></a>
+<span class="sourceLineNo">021</span>public final class DoubleParser {<a name="line.21"></a>
+<span class="sourceLineNo">022</span><a name="line.22"></a>
+<span class="sourceLineNo">023</span>    /**<a name="line.23"></a>
+<span class="sourceLineNo">024</span>     * Utility method that parses a String and returns a double.<a name="line.24"></a>
+<span class="sourceLineNo">025</span>     *<a name="line.25"></a>
+<span class="sourceLineNo">026</span>     * @param  data the String to parse<a name="line.26"></a>
+<span class="sourceLineNo">027</span>     * @return double parsed value of the string<a name="line.27"></a>
+<span class="sourceLineNo">028</span>     * @throws NumberFormatException if the string is not a well-formatted number<a name="line.28"></a>
+<span class="sourceLineNo">029</span>     * @throws NullPointerException if the string is a null pointer<a name="line.29"></a>
+<span class="sourceLineNo">030</span>     */<a name="line.30"></a>
+<span class="sourceLineNo">031</span>    public static double parse(String data) {<a name="line.31"></a>
+<span class="sourceLineNo">032</span>        final int len = data.length();<a name="line.32"></a>
+<span class="sourceLineNo">033</span>        double result = 0;<a name="line.33"></a>
+<span class="sourceLineNo">034</span>        boolean negative = false;<a name="line.34"></a>
+<span class="sourceLineNo">035</span>        int beforePoint = 0;<a name="line.35"></a>
+<span class="sourceLineNo">036</span>        int exponent = 0;<a name="line.36"></a>
+<span class="sourceLineNo">037</span>        byte[] digits = new byte[25];<a name="line.37"></a>
+<span class="sourceLineNo">038</span>        int numDigits = 0;<a name="line.38"></a>
+<span class="sourceLineNo">039</span><a name="line.39"></a>
+<span class="sourceLineNo">040</span>        int i = 0;<a name="line.40"></a>
+<span class="sourceLineNo">041</span>        while (i &lt; len &amp;&amp; Character.isWhitespace(data.charAt(i))) {<a name="line.41"></a>
+<span class="sourceLineNo">042</span>            i++;<a name="line.42"></a>
+<span class="sourceLineNo">043</span>        }<a name="line.43"></a>
+<span class="sourceLineNo">044</span>        if (data.charAt(i) == '+') {<a name="line.44"></a>
+<span class="sourceLineNo">045</span>            i++;<a name="line.45"></a>
+<span class="sourceLineNo">046</span>        } else if (data.charAt(i) == '-') {<a name="line.46"></a>
+<span class="sourceLineNo">047</span>            negative = true;<a name="line.47"></a>
+<span class="sourceLineNo">048</span>            i++;<a name="line.48"></a>
+<span class="sourceLineNo">049</span>        }<a name="line.49"></a>
+<span class="sourceLineNo">050</span>        if (i + 3 &lt;= len &amp;&amp; data.substring(i, i+3).equals("NaN")) {<a name="line.50"></a>
+<span class="sourceLineNo">051</span>            i += 3;<a name="line.51"></a>
+<span class="sourceLineNo">052</span>            result = Double.NaN;<a name="line.52"></a>
+<span class="sourceLineNo">053</span>        } else if (i + 8 &lt;= len &amp;&amp; data.substring(i, i+8).equals("Infinity")) {<a name="line.53"></a>
+<span class="sourceLineNo">054</span>            i += 8;<a name="line.54"></a>
+<span class="sourceLineNo">055</span>            if (negative) {<a name="line.55"></a>
+<span class="sourceLineNo">056</span>                result = Double.NEGATIVE_INFINITY;<a name="line.56"></a>
+<span class="sourceLineNo">057</span>            } else {<a name="line.57"></a>
+<span class="sourceLineNo">058</span>                result = Double.POSITIVE_INFINITY;<a name="line.58"></a>
+<span class="sourceLineNo">059</span>            }<a name="line.59"></a>
+<span class="sourceLineNo">060</span>        } else {<a name="line.60"></a>
+<span class="sourceLineNo">061</span>            while (i &lt; len &amp;&amp; Character.isDigit(data.charAt(i))) {<a name="line.61"></a>
+<span class="sourceLineNo">062</span>                int dval = Character.digit(data.charAt(i), 10);<a name="line.62"></a>
+<span class="sourceLineNo">063</span>                assert dval &gt;= 0;<a name="line.63"></a>
+<span class="sourceLineNo">064</span>                assert dval &lt; 10;<a name="line.64"></a>
+<span class="sourceLineNo">065</span>                if (numDigits &lt; 25) {<a name="line.65"></a>
+<span class="sourceLineNo">066</span>                    digits[numDigits++] = (byte)dval;<a name="line.66"></a>
+<span class="sourceLineNo">067</span>                }<a name="line.67"></a>
+<span class="sourceLineNo">068</span>                ++beforePoint;<a name="line.68"></a>
+<span class="sourceLineNo">069</span>                i++;<a name="line.69"></a>
+<span class="sourceLineNo">070</span>            }<a name="line.70"></a>
+<span class="sourceLineNo">071</span>            if (i &lt; len &amp;&amp; data.charAt(i) == '.') {<a name="line.71"></a>
+<span class="sourceLineNo">072</span>                i++;<a name="line.72"></a>
+<span class="sourceLineNo">073</span>                while (i &lt; len &amp;&amp; Character.isDigit(data.charAt(i))) {<a name="line.73"></a>
+<span class="sourceLineNo">074</span>                    int dval = Character.digit(data.charAt(i), 10);<a name="line.74"></a>
+<span class="sourceLineNo">075</span>                    assert dval &gt;= 0;<a name="line.75"></a>
+<span class="sourceLineNo">076</span>                    assert dval &lt; 10;<a name="line.76"></a>
+<span class="sourceLineNo">077</span>                    if (numDigits &lt; 25) {<a name="line.77"></a>
+<span class="sourceLineNo">078</span>                        digits[numDigits++] = (byte)dval;<a name="line.78"></a>
+<span class="sourceLineNo">079</span>                    }<a name="line.79"></a>
+<span class="sourceLineNo">080</span>                    i++;<a name="line.80"></a>
+<span class="sourceLineNo">081</span>                }<a name="line.81"></a>
+<span class="sourceLineNo">082</span>            }<a name="line.82"></a>
+<span class="sourceLineNo">083</span>            if (numDigits == 0) {<a name="line.83"></a>
+<span class="sourceLineNo">084</span>                throw new NumberFormatException("No digits in number: '"+data+"'");<a name="line.84"></a>
+<span class="sourceLineNo">085</span>            }<a name="line.85"></a>
+<span class="sourceLineNo">086</span>            if (i &lt; len &amp;&amp; (data.charAt(i) == 'e' || data.charAt(i) == 'E')) {<a name="line.86"></a>
+<span class="sourceLineNo">087</span>                i++;<a name="line.87"></a>
+<span class="sourceLineNo">088</span>                boolean expNeg = false;<a name="line.88"></a>
+<span class="sourceLineNo">089</span>                int expDigits = 0;<a name="line.89"></a>
+<span class="sourceLineNo">090</span>                if (data.charAt(i) == '+') {<a name="line.90"></a>
+<span class="sourceLineNo">091</span>                    i++;<a name="line.91"></a>
+<span class="sourceLineNo">092</span>                } else if (data.charAt(i) == '-') {<a name="line.92"></a>
+<span class="sourceLineNo">093</span>                    expNeg = true;<a name="line.93"></a>
+<span class="sourceLineNo">094</span>                    i++;<a name="line.94"></a>
+<span class="sourceLineNo">095</span>                }<a name="line.95"></a>
+<span class="sourceLineNo">096</span>                while (i &lt; len &amp;&amp; Character.isDigit(data.charAt(i))) {<a name="line.96"></a>
+<span class="sourceLineNo">097</span>                    int dval = Character.digit(data.charAt(i), 10);<a name="line.97"></a>
+<span class="sourceLineNo">098</span>                    assert dval &gt;= 0;<a name="line.98"></a>
+<span class="sourceLineNo">099</span>                    assert dval &lt; 10;<a name="line.99"></a>
+<span class="sourceLineNo">100</span>                    exponent *= 10;<a name="line.100"></a>
+<span class="sourceLineNo">101</span>                    exponent += dval;<a name="line.101"></a>
+<span class="sourceLineNo">102</span>                    ++expDigits;<a name="line.102"></a>
+<span class="sourceLineNo">103</span>                    i++;<a name="line.103"></a>
+<span class="sourceLineNo">104</span>                }<a name="line.104"></a>
+<span class="sourceLineNo">105</span>                if (expDigits == 0) {<a name="line.105"></a>
+<span class="sourceLineNo">106</span>                    throw new NumberFormatException("Missing digits in exponent part: "+data);<a name="line.106"></a>
+<span class="sourceLineNo">107</span>                }<a name="line.107"></a>
+<span class="sourceLineNo">108</span>                if (expNeg) {<a name="line.108"></a>
+<span class="sourceLineNo">109</span>                    exponent = -exponent;<a name="line.109"></a>
+<span class="sourceLineNo">110</span>                }<a name="line.110"></a>
+<span class="sourceLineNo">111</span>            }<a name="line.111"></a>
+<span class="sourceLineNo">112</span>            // System.out.println("parsed exp: "+exponent);<a name="line.112"></a>
+<span class="sourceLineNo">113</span>            // System.out.println("before pt: "+beforePoint);<a name="line.113"></a>
+<span class="sourceLineNo">114</span>            exponent += beforePoint;<a name="line.114"></a>
+<span class="sourceLineNo">115</span>            exponent -= numDigits;<a name="line.115"></a>
+<span class="sourceLineNo">116</span>            // System.out.println("adjusted exp: "+exponent);<a name="line.116"></a>
+<span class="sourceLineNo">117</span>            for (int d = numDigits; d &gt; 0; d--) {<a name="line.117"></a>
+<span class="sourceLineNo">118</span>                double dv = digits[d-1];<a name="line.118"></a>
+<span class="sourceLineNo">119</span>                dv *= powTen(numDigits - d);<a name="line.119"></a>
+<span class="sourceLineNo">120</span>                result += dv;<a name="line.120"></a>
+<span class="sourceLineNo">121</span>            }<a name="line.121"></a>
+<span class="sourceLineNo">122</span>            // System.out.println("digits sum: "+result);<a name="line.122"></a>
+<span class="sourceLineNo">123</span>            while (exponent &lt; -99) {<a name="line.123"></a>
+<span class="sourceLineNo">124</span>                result *= powTen(-99);<a name="line.124"></a>
+<span class="sourceLineNo">125</span>                exponent += 99;<a name="line.125"></a>
+<span class="sourceLineNo">126</span>            }<a name="line.126"></a>
+<span class="sourceLineNo">127</span>            while (exponent &gt; 99) {<a name="line.127"></a>
+<span class="sourceLineNo">128</span>                result *= powTen(99);<a name="line.128"></a>
+<span class="sourceLineNo">129</span>                exponent -= 99;<a name="line.129"></a>
+<span class="sourceLineNo">130</span>            }<a name="line.130"></a>
+<span class="sourceLineNo">131</span>            // System.out.println("digits sum: "+result);<a name="line.131"></a>
+<span class="sourceLineNo">132</span>            // System.out.println("exponent multiplier: "+powTen(exponent));<a name="line.132"></a>
+<span class="sourceLineNo">133</span>            result *= powTen(exponent);<a name="line.133"></a>
+<span class="sourceLineNo">134</span><a name="line.134"></a>
+<span class="sourceLineNo">135</span>            if (negative) {<a name="line.135"></a>
+<span class="sourceLineNo">136</span>                result = -result;<a name="line.136"></a>
+<span class="sourceLineNo">137</span>            }<a name="line.137"></a>
+<span class="sourceLineNo">138</span>        }<a name="line.138"></a>
+<span class="sourceLineNo">139</span>        while (i &lt; len &amp;&amp; Character.isWhitespace(data.charAt(i))) {<a name="line.139"></a>
+<span class="sourceLineNo">140</span>            i++;<a name="line.140"></a>
+<span class="sourceLineNo">141</span>        }<a name="line.141"></a>
+<span class="sourceLineNo">142</span>        if (i &lt; len) {<a name="line.142"></a>
+<span class="sourceLineNo">143</span>            throw new NumberFormatException("Extra characters after number: "+data.substring(i));<a name="line.143"></a>
+<span class="sourceLineNo">144</span>        }<a name="line.144"></a>
+<span class="sourceLineNo">145</span>        return result;<a name="line.145"></a>
+<span class="sourceLineNo">146</span>    }<a name="line.146"></a>
+<span class="sourceLineNo">147</span><a name="line.147"></a>
+<span class="sourceLineNo">148</span>    private static double[] tens = {<a name="line.148"></a>
+<span class="sourceLineNo">149</span>        1.0e00, 1.0e01, 1.0e02, 1.0e03, 1.0e04, 1.0e05, 1.0e06,<a name="line.149"></a>
+<span class="sourceLineNo">150</span>        1.0e07, 1.0e08, 1.0e09, 1.0e10, 1.0e11, 1.0e12, 1.0e13,<a name="line.150"></a>
+<span class="sourceLineNo">151</span>        1.0e14, 1.0e15, 1.0e16, 1.0e17, 1.0e18, 1.0e19, 1.0e20,<a name="line.151"></a>
+<span class="sourceLineNo">152</span>        1.0e21, 1.0e22, 1.0e23, 1.0e24, 1.0e25, 1.0e26, 1.0e27,<a name="line.152"></a>
+<span class="sourceLineNo">153</span>        1.0e28, 1.0e29, 1.0e30, 1.0e31, 1.0e32, 1.0e33, 1.0e34,<a name="line.153"></a>
+<span class="sourceLineNo">154</span>        1.0e35, 1.0e36, 1.0e37, 1.0e38, 1.0e39, 1.0e40, 1.0e41,<a name="line.154"></a>
+<span class="sourceLineNo">155</span>        1.0e42, 1.0e43, 1.0e44, 1.0e45, 1.0e46, 1.0e47, 1.0e48,<a name="line.155"></a>
+<span class="sourceLineNo">156</span>        1.0e49, 1.0e50, 1.0e51, 1.0e52, 1.0e53, 1.0e54, 1.0e55,<a name="line.156"></a>
+<span class="sourceLineNo">157</span>        1.0e56, 1.0e57, 1.0e58, 1.0e59, 1.0e60, 1.0e61, 1.0e62,<a name="line.157"></a>
+<span class="sourceLineNo">158</span>        1.0e63, 1.0e64, 1.0e65, 1.0e66, 1.0e67, 1.0e68, 1.0e69,<a name="line.158"></a>
+<span class="sourceLineNo">159</span>        1.0e70, 1.0e71, 1.0e72, 1.0e73, 1.0e74, 1.0e75, 1.0e76,<a name="line.159"></a>
+<span class="sourceLineNo">160</span>        1.0e77, 1.0e78, 1.0e79, 1.0e80, 1.0e81, 1.0e82, 1.0e83,<a name="line.160"></a>
+<span class="sourceLineNo">161</span>        1.0e84, 1.0e85, 1.0e86, 1.0e87, 1.0e88, 1.0e89, 1.0e90,<a name="line.161"></a>
+<span class="sourceLineNo">162</span>        1.0e91, 1.0e92, 1.0e93, 1.0e94, 1.0e95, 1.0e96, 1.0e97,<a name="line.162"></a>
+<span class="sourceLineNo">163</span>        1.0e98, 1.0e99<a name="line.163"></a>
+<span class="sourceLineNo">164</span>    };<a name="line.164"></a>
+<span class="sourceLineNo">165</span><a name="line.165"></a>
+<span class="sourceLineNo">166</span>    private static double[] tenths = {<a name="line.166"></a>
+<span class="sourceLineNo">167</span>        1.0e-00, 1.0e-01, 1.0e-02, 1.0e-03, 1.0e-04, 1.0e-05,<a name="line.167"></a>
+<span class="sourceLineNo">168</span>        1.0e-06, 1.0e-07, 1.0e-08, 1.0e-09, 1.0e-10, 1.0e-11,<a name="line.168"></a>
+<span class="sourceLineNo">169</span>        1.0e-12, 1.0e-13, 1.0e-14, 1.0e-15, 1.0e-16, 1.0e-17,<a name="line.169"></a>
+<span class="sourceLineNo">170</span>        1.0e-18, 1.0e-19, 1.0e-20, 1.0e-21, 1.0e-22, 1.0e-23,<a name="line.170"></a>
+<span class="sourceLineNo">171</span>        1.0e-24, 1.0e-25, 1.0e-26, 1.0e-27, 1.0e-28, 1.0e-29,<a name="line.171"></a>
+<span class="sourceLineNo">172</span>        1.0e-30, 1.0e-31, 1.0e-32, 1.0e-33, 1.0e-34, 1.0e-35,<a name="line.172"></a>
+<span class="sourceLineNo">173</span>        1.0e-36, 1.0e-37, 1.0e-38, 1.0e-39, 1.0e-40, 1.0e-41,<a name="line.173"></a>
+<span class="sourceLineNo">174</span>        1.0e-42, 1.0e-43, 1.0e-44, 1.0e-45, 1.0e-46, 1.0e-47,<a name="line.174"></a>
+<span class="sourceLineNo">175</span>        1.0e-48, 1.0e-49, 1.0e-50, 1.0e-51, 1.0e-52, 1.0e-53,<a name="line.175"></a>
+<span class="sourceLineNo">176</span>        1.0e-54, 1.0e-55, 1.0e-56, 1.0e-57, 1.0e-58, 1.0e-59,<a name="line.176"></a>
+<span class="sourceLineNo">177</span>        1.0e-60, 1.0e-61, 1.0e-62, 1.0e-63, 1.0e-64, 1.0e-65,<a name="line.177"></a>
+<span class="sourceLineNo">178</span>        1.0e-66, 1.0e-67, 1.0e-68, 1.0e-69, 1.0e-70, 1.0e-71,<a name="line.178"></a>
+<span class="sourceLineNo">179</span>        1.0e-72, 1.0e-73, 1.0e-74, 1.0e-75, 1.0e-76, 1.0e-77,<a name="line.179"></a>
+<span class="sourceLineNo">180</span>        1.0e-78, 1.0e-79, 1.0e-80, 1.0e-81, 1.0e-82, 1.0e-83,<a name="line.180"></a>
+<span class="sourceLineNo">181</span>        1.0e-84, 1.0e-85, 1.0e-86, 1.0e-87, 1.0e-88, 1.0e-89,<a name="line.181"></a>
+<span class="sourceLineNo">182</span>        1.0e-90, 1.0e-91, 1.0e-92, 1.0e-93, 1.0e-94, 1.0e-95,<a name="line.182"></a>
+<span class="sourceLineNo">183</span>        1.0e-96, 1.0e-97, 1.0e-98, 1.0e-99<a name="line.183"></a>
+<span class="sourceLineNo">184</span>    };<a name="line.184"></a>
+<span class="sourceLineNo">185</span><a name="line.185"></a>
+<span class="sourceLineNo">186</span>    private static double powTen(int exponent) {<a name="line.186"></a>
+<span class="sourceLineNo">187</span>        if (exponent &gt; 0) {<a name="line.187"></a>
+<span class="sourceLineNo">188</span>            assert exponent &lt; 100;<a name="line.188"></a>
+<span class="sourceLineNo">189</span>            return tens[exponent];<a name="line.189"></a>
+<span class="sourceLineNo">190</span>        }<a name="line.190"></a>
+<span class="sourceLineNo">191</span>        if (exponent &lt; 0) {<a name="line.191"></a>
+<span class="sourceLineNo">192</span>            exponent = -exponent;<a name="line.192"></a>
+<span class="sourceLineNo">193</span>            assert exponent &lt; 100;<a name="line.193"></a>
+<span class="sourceLineNo">194</span>            return tenths[exponent];<a name="line.194"></a>
+<span class="sourceLineNo">195</span>        }<a name="line.195"></a>
+<span class="sourceLineNo">196</span>        return 1.0;<a name="line.196"></a>
+<span class="sourceLineNo">197</span>    }<a name="line.197"></a>
+<span class="sourceLineNo">198</span><a name="line.198"></a>
+<span class="sourceLineNo">199</span>}<a name="line.199"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>
