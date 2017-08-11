@@ -1,0 +1,209 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.search.cluster;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>/**<a name="line.4"></a>
+<span class="sourceLineNo">005</span> * A hasher load balances between a set of nodes, represented by object ids.<a name="line.5"></a>
+<span class="sourceLineNo">006</span> *<a name="line.6"></a>
+<span class="sourceLineNo">007</span> * @author Arne B Fossaa<a name="line.7"></a>
+<span class="sourceLineNo">008</span> * @author bratseth<a name="line.8"></a>
+<span class="sourceLineNo">009</span> * @author Prashanth B. Bhat<a name="line.9"></a>
+<span class="sourceLineNo">010</span> */<a name="line.10"></a>
+<span class="sourceLineNo">011</span>public class Hasher&lt;T&gt; {<a name="line.11"></a>
+<span class="sourceLineNo">012</span><a name="line.12"></a>
+<span class="sourceLineNo">013</span>    public static class NodeFactor&lt;T&gt; {<a name="line.13"></a>
+<span class="sourceLineNo">014</span>        private final T node;<a name="line.14"></a>
+<span class="sourceLineNo">015</span><a name="line.15"></a>
+<span class="sourceLineNo">016</span>        /**<a name="line.16"></a>
+<span class="sourceLineNo">017</span>         * The relative weight of the different nodes.<a name="line.17"></a>
+<span class="sourceLineNo">018</span>         * Hashing are based on the proportions of the weights.<a name="line.18"></a>
+<span class="sourceLineNo">019</span>         */<a name="line.19"></a>
+<span class="sourceLineNo">020</span>        private final int load;<a name="line.20"></a>
+<span class="sourceLineNo">021</span><a name="line.21"></a>
+<span class="sourceLineNo">022</span>        public NodeFactor(T node, int load) {<a name="line.22"></a>
+<span class="sourceLineNo">023</span>            this.node = node;<a name="line.23"></a>
+<span class="sourceLineNo">024</span>            this.load = load;<a name="line.24"></a>
+<span class="sourceLineNo">025</span>        }<a name="line.25"></a>
+<span class="sourceLineNo">026</span><a name="line.26"></a>
+<span class="sourceLineNo">027</span>        public final T getNode() { return node; }<a name="line.27"></a>
+<span class="sourceLineNo">028</span><a name="line.28"></a>
+<span class="sourceLineNo">029</span>        public final int getLoad() { return load; }<a name="line.29"></a>
+<span class="sourceLineNo">030</span><a name="line.30"></a>
+<span class="sourceLineNo">031</span>    }<a name="line.31"></a>
+<span class="sourceLineNo">032</span><a name="line.32"></a>
+<span class="sourceLineNo">033</span>    public static class NodeList&lt;T&gt; {<a name="line.33"></a>
+<span class="sourceLineNo">034</span><a name="line.34"></a>
+<span class="sourceLineNo">035</span>        private final NodeFactor&lt;T&gt;[] nodes;<a name="line.35"></a>
+<span class="sourceLineNo">036</span><a name="line.36"></a>
+<span class="sourceLineNo">037</span>        private int totalLoadFactor;<a name="line.37"></a>
+<span class="sourceLineNo">038</span><a name="line.38"></a>
+<span class="sourceLineNo">039</span>        public NodeList(NodeFactor&lt;T&gt;[] nodes) {<a name="line.39"></a>
+<span class="sourceLineNo">040</span>            this.nodes = nodes;<a name="line.40"></a>
+<span class="sourceLineNo">041</span>            totalLoadFactor = 0;<a name="line.41"></a>
+<span class="sourceLineNo">042</span>            if(nodes != null) {<a name="line.42"></a>
+<span class="sourceLineNo">043</span>                for(NodeFactor&lt;T&gt; node:nodes) {<a name="line.43"></a>
+<span class="sourceLineNo">044</span>                    totalLoadFactor += node.getLoad();<a name="line.44"></a>
+<span class="sourceLineNo">045</span>                }<a name="line.45"></a>
+<span class="sourceLineNo">046</span>            }<a name="line.46"></a>
+<span class="sourceLineNo">047</span>        }<a name="line.47"></a>
+<span class="sourceLineNo">048</span><a name="line.48"></a>
+<span class="sourceLineNo">049</span>        public int getNodeCount() {<a name="line.49"></a>
+<span class="sourceLineNo">050</span>            return nodes.length;<a name="line.50"></a>
+<span class="sourceLineNo">051</span>        }<a name="line.51"></a>
+<span class="sourceLineNo">052</span><a name="line.52"></a>
+<span class="sourceLineNo">053</span>        public T select(int code, int trynum) {<a name="line.53"></a>
+<span class="sourceLineNo">054</span>            if (totalLoadFactor &lt;= 0) return null;<a name="line.54"></a>
+<span class="sourceLineNo">055</span><a name="line.55"></a>
+<span class="sourceLineNo">056</span>            // Multiply by a prime number much bigger than the likely number of hosts<a name="line.56"></a>
+<span class="sourceLineNo">057</span>            int hashValue=(Math.abs(code*76103)) % totalLoadFactor;<a name="line.57"></a>
+<span class="sourceLineNo">058</span>            int sumLoad=0;<a name="line.58"></a>
+<span class="sourceLineNo">059</span>            int targetNode;<a name="line.59"></a>
+<span class="sourceLineNo">060</span>            for (targetNode=0; targetNode&lt;nodes.length; targetNode++) {<a name="line.60"></a>
+<span class="sourceLineNo">061</span>                sumLoad +=nodes[targetNode].getLoad();<a name="line.61"></a>
+<span class="sourceLineNo">062</span>                if (sumLoad &gt; hashValue)<a name="line.62"></a>
+<span class="sourceLineNo">063</span>                    break;<a name="line.63"></a>
+<span class="sourceLineNo">064</span>            }<a name="line.64"></a>
+<span class="sourceLineNo">065</span>            <a name="line.65"></a>
+<span class="sourceLineNo">066</span>            // Skip the ones we have tried before.<a name="line.66"></a>
+<span class="sourceLineNo">067</span>            targetNode += trynum;<a name="line.67"></a>
+<span class="sourceLineNo">068</span>            targetNode %= nodes.length;<a name="line.68"></a>
+<span class="sourceLineNo">069</span>            return nodes[targetNode].getNode();<a name="line.69"></a>
+<span class="sourceLineNo">070</span>        }<a name="line.70"></a>
+<span class="sourceLineNo">071</span><a name="line.71"></a>
+<span class="sourceLineNo">072</span>        public boolean hasNode(T node) {<a name="line.72"></a>
+<span class="sourceLineNo">073</span>            for (int i = 0;i&lt;nodes.length;i++) {<a name="line.73"></a>
+<span class="sourceLineNo">074</span>                if(node == nodes[i].getNode()) {<a name="line.74"></a>
+<span class="sourceLineNo">075</span>                    return true;<a name="line.75"></a>
+<span class="sourceLineNo">076</span>                }<a name="line.76"></a>
+<span class="sourceLineNo">077</span>            }<a name="line.77"></a>
+<span class="sourceLineNo">078</span>            return false;<a name="line.78"></a>
+<span class="sourceLineNo">079</span>        }<a name="line.79"></a>
+<span class="sourceLineNo">080</span><a name="line.80"></a>
+<span class="sourceLineNo">081</span>    }<a name="line.81"></a>
+<span class="sourceLineNo">082</span><a name="line.82"></a>
+<span class="sourceLineNo">083</span>    private volatile NodeList&lt;T&gt; nodes;<a name="line.83"></a>
+<span class="sourceLineNo">084</span><a name="line.84"></a>
+<span class="sourceLineNo">085</span>    @SuppressWarnings("unchecked")<a name="line.85"></a>
+<span class="sourceLineNo">086</span>    public Hasher() {<a name="line.86"></a>
+<span class="sourceLineNo">087</span>        this.nodes = new NodeList&lt;T&gt;(new NodeFactor[0]);<a name="line.87"></a>
+<span class="sourceLineNo">088</span>    }<a name="line.88"></a>
+<span class="sourceLineNo">089</span><a name="line.89"></a>
+<span class="sourceLineNo">090</span>    /** Adds a node with load factor 100 */<a name="line.90"></a>
+<span class="sourceLineNo">091</span>    public void add(T node) {<a name="line.91"></a>
+<span class="sourceLineNo">092</span>        add(node,100);<a name="line.92"></a>
+<span class="sourceLineNo">093</span>    }<a name="line.93"></a>
+<span class="sourceLineNo">094</span><a name="line.94"></a>
+<span class="sourceLineNo">095</span>    /**<a name="line.95"></a>
+<span class="sourceLineNo">096</span>     * Adds a code with a load factor.<a name="line.96"></a>
+<span class="sourceLineNo">097</span>     * The load factor is relative to the load of the other added nodes<a name="line.97"></a>
+<span class="sourceLineNo">098</span>     * and determines how often this node will be selected compared<a name="line.98"></a>
+<span class="sourceLineNo">099</span>     * to the other nodes<a name="line.99"></a>
+<span class="sourceLineNo">100</span>     */<a name="line.100"></a>
+<span class="sourceLineNo">101</span>    public synchronized void add(T node,int load) {<a name="line.101"></a>
+<span class="sourceLineNo">102</span>        assert(nodes != null);<a name="line.102"></a>
+<span class="sourceLineNo">103</span>        if(!nodes.hasNode(node)) {<a name="line.103"></a>
+<span class="sourceLineNo">104</span>            NodeFactor&lt;T&gt;[] oldNodes = nodes.nodes;<a name="line.104"></a>
+<span class="sourceLineNo">105</span>            @SuppressWarnings("unchecked")<a name="line.105"></a>
+<span class="sourceLineNo">106</span>            NodeFactor&lt;T&gt;[] newNodes = (NodeFactor&lt;T&gt;[]) new NodeFactor[oldNodes.length+ 1];<a name="line.106"></a>
+<span class="sourceLineNo">107</span>            System.arraycopy(oldNodes,0,newNodes,0,oldNodes.length);<a name="line.107"></a>
+<span class="sourceLineNo">108</span>            newNodes[newNodes.length-1] = new NodeFactor&lt;&gt;(node, load);<a name="line.108"></a>
+<span class="sourceLineNo">109</span><a name="line.109"></a>
+<span class="sourceLineNo">110</span>            //Atomic switch due to volatile<a name="line.110"></a>
+<span class="sourceLineNo">111</span>            nodes = new NodeList&lt;&gt;(newNodes);<a name="line.111"></a>
+<span class="sourceLineNo">112</span>        }<a name="line.112"></a>
+<span class="sourceLineNo">113</span>    }<a name="line.113"></a>
+<span class="sourceLineNo">114</span><a name="line.114"></a>
+<span class="sourceLineNo">115</span>    /** Removes a node */<a name="line.115"></a>
+<span class="sourceLineNo">116</span>    public synchronized void remove(T node) {<a name="line.116"></a>
+<span class="sourceLineNo">117</span>        if( nodes.hasNode(node)) {<a name="line.117"></a>
+<span class="sourceLineNo">118</span>            NodeFactor&lt;T&gt;[] oldNodes = nodes.nodes;<a name="line.118"></a>
+<span class="sourceLineNo">119</span>            @SuppressWarnings("unchecked")<a name="line.119"></a>
+<span class="sourceLineNo">120</span>            NodeFactor&lt;T&gt;[] newNodes = (NodeFactor&lt;T&gt;[]) new NodeFactor[oldNodes.length - 1];<a name="line.120"></a>
+<span class="sourceLineNo">121</span>            for (int i = 0, j = 0; i &lt; oldNodes.length; i++) {<a name="line.121"></a>
+<span class="sourceLineNo">122</span>                if (oldNodes[i].getNode() != node) {<a name="line.122"></a>
+<span class="sourceLineNo">123</span>                    newNodes[j++] = oldNodes[i];<a name="line.123"></a>
+<span class="sourceLineNo">124</span>                }<a name="line.124"></a>
+<span class="sourceLineNo">125</span>            }<a name="line.125"></a>
+<span class="sourceLineNo">126</span>            // An atomic switch due to volatile.<a name="line.126"></a>
+<span class="sourceLineNo">127</span>            nodes = new NodeList&lt;&gt;(newNodes);<a name="line.127"></a>
+<span class="sourceLineNo">128</span>        }<a name="line.128"></a>
+<span class="sourceLineNo">129</span>    }<a name="line.129"></a>
+<span class="sourceLineNo">130</span><a name="line.130"></a>
+<span class="sourceLineNo">131</span>    /**<a name="line.131"></a>
+<span class="sourceLineNo">132</span>     * Returns a list of nodes that are up.<a name="line.132"></a>
+<span class="sourceLineNo">133</span>     */<a name="line.133"></a>
+<span class="sourceLineNo">134</span>    public NodeList&lt;T&gt; getNodes() {<a name="line.134"></a>
+<span class="sourceLineNo">135</span>        return nodes;<a name="line.135"></a>
+<span class="sourceLineNo">136</span>    }<a name="line.136"></a>
+<span class="sourceLineNo">137</span>}<a name="line.137"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

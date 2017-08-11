@@ -1,0 +1,358 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.docproc;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.component.provider.ComponentRegistry;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.document.DocumentOperation;<a name="line.5"></a>
+<span class="sourceLineNo">006</span><a name="line.6"></a>
+<span class="sourceLineNo">007</span>import java.util.ArrayList;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import java.util.HashMap;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import java.util.Iterator;<a name="line.9"></a>
+<span class="sourceLineNo">010</span>import java.util.List;<a name="line.10"></a>
+<span class="sourceLineNo">011</span>import java.util.Map;<a name="line.11"></a>
+<span class="sourceLineNo">012</span><a name="line.12"></a>
+<span class="sourceLineNo">013</span>/**<a name="line.13"></a>
+<span class="sourceLineNo">014</span> * A document processing. This contains the document(s) or document update(s) to process,<a name="line.14"></a>
+<span class="sourceLineNo">015</span> * a map of processing context data and the processing instance to<a name="line.15"></a>
+<span class="sourceLineNo">016</span> * invoke the next time any work needs to be done on this processing.<a name="line.16"></a>
+<span class="sourceLineNo">017</span> *<a name="line.17"></a>
+<span class="sourceLineNo">018</span> * @author bratseth<a name="line.18"></a>
+<span class="sourceLineNo">019</span> */<a name="line.19"></a>
+<span class="sourceLineNo">020</span>public class Processing {<a name="line.20"></a>
+<span class="sourceLineNo">021</span>    /**<a name="line.21"></a>
+<span class="sourceLineNo">022</span>     * The name of the service which owns this processing.<a name="line.22"></a>
+<span class="sourceLineNo">023</span>     * Null is the same as "default"<a name="line.23"></a>
+<span class="sourceLineNo">024</span>     */<a name="line.24"></a>
+<span class="sourceLineNo">025</span>    private String service = null;<a name="line.25"></a>
+<span class="sourceLineNo">026</span><a name="line.26"></a>
+<span class="sourceLineNo">027</span>    /** The processors to call the next work is done on this processing */<a name="line.27"></a>
+<span class="sourceLineNo">028</span>    private CallStack callStack = null;<a name="line.28"></a>
+<span class="sourceLineNo">029</span><a name="line.29"></a>
+<span class="sourceLineNo">030</span>    /** The collection of documents or document updates processed by this. This is never null */<a name="line.30"></a>
+<span class="sourceLineNo">031</span>    private List&lt;DocumentOperation&gt; documentOperations;<a name="line.31"></a>
+<span class="sourceLineNo">032</span><a name="line.32"></a>
+<span class="sourceLineNo">033</span>    /**<a name="line.33"></a>
+<span class="sourceLineNo">034</span>     * Documents or document updates which should be added to &lt;code&gt;documents&lt;/code&gt; before<a name="line.34"></a>
+<span class="sourceLineNo">035</span>     * the next access, or null if documents or document updates have never been added to<a name="line.35"></a>
+<span class="sourceLineNo">036</span>     * this processing<a name="line.36"></a>
+<span class="sourceLineNo">037</span>     */<a name="line.37"></a>
+<span class="sourceLineNo">038</span>    private List&lt;DocumentOperation&gt; documentsToAdd = null;<a name="line.38"></a>
+<span class="sourceLineNo">039</span><a name="line.39"></a>
+<span class="sourceLineNo">040</span>    /** The processing context variables */<a name="line.40"></a>
+<span class="sourceLineNo">041</span>    private Map&lt;String, Object&gt; context = null;<a name="line.41"></a>
+<span class="sourceLineNo">042</span><a name="line.42"></a>
+<span class="sourceLineNo">043</span>    /** The endpoint of this processing. */<a name="line.43"></a>
+<span class="sourceLineNo">044</span>    private ProcessingEndpoint endpoint = null;<a name="line.44"></a>
+<span class="sourceLineNo">045</span><a name="line.45"></a>
+<span class="sourceLineNo">046</span>    /** The registry of docproc services. */<a name="line.46"></a>
+<span class="sourceLineNo">047</span>    ComponentRegistry&lt;DocprocService&gt; docprocServiceRegistry = null;<a name="line.47"></a>
+<span class="sourceLineNo">048</span>    private boolean getNumDocsCalled = false;<a name="line.48"></a>
+<span class="sourceLineNo">049</span><a name="line.49"></a>
+<span class="sourceLineNo">050</span>    /**<a name="line.50"></a>
+<span class="sourceLineNo">051</span>     * Create a Processing with no documents. Useful with DocprocService.process(Processing).<a name="line.51"></a>
+<span class="sourceLineNo">052</span>     * Note that the callstack is initially empty when using this constructor (but it is<a name="line.52"></a>
+<span class="sourceLineNo">053</span>     * set by DocprocService.process(Processing).)<a name="line.53"></a>
+<span class="sourceLineNo">054</span>     */<a name="line.54"></a>
+<span class="sourceLineNo">055</span>    public Processing() {<a name="line.55"></a>
+<span class="sourceLineNo">056</span>        this.documentOperations = new ArrayList&lt;&gt;(1);<a name="line.56"></a>
+<span class="sourceLineNo">057</span>    }<a name="line.57"></a>
+<span class="sourceLineNo">058</span><a name="line.58"></a>
+<span class="sourceLineNo">059</span>    /**<a name="line.59"></a>
+<span class="sourceLineNo">060</span>     * Create a Processing from the given document operation<a name="line.60"></a>
+<span class="sourceLineNo">061</span>     */<a name="line.61"></a>
+<span class="sourceLineNo">062</span>    public static Processing of(DocumentOperation documentOperation) {<a name="line.62"></a>
+<span class="sourceLineNo">063</span>        return new Processing(documentOperation);<a name="line.63"></a>
+<span class="sourceLineNo">064</span>    }<a name="line.64"></a>
+<span class="sourceLineNo">065</span><a name="line.65"></a>
+<span class="sourceLineNo">066</span>    /**<a name="line.66"></a>
+<span class="sourceLineNo">067</span>     * Create a Processing from the given document operation<a name="line.67"></a>
+<span class="sourceLineNo">068</span>     * @deprecated Use {@link #of(DocumentOperation)} instead<a name="line.68"></a>
+<span class="sourceLineNo">069</span>     */<a name="line.69"></a>
+<span class="sourceLineNo">070</span>    @Deprecated<a name="line.70"></a>
+<span class="sourceLineNo">071</span>    @SuppressWarnings("unused")<a name="line.71"></a>
+<span class="sourceLineNo">072</span>    public static Processing fromDocumentOperation(DocumentOperation documentOperation) {<a name="line.72"></a>
+<span class="sourceLineNo">073</span>        return Processing.of(documentOperation);<a name="line.73"></a>
+<span class="sourceLineNo">074</span>    }<a name="line.74"></a>
+<span class="sourceLineNo">075</span><a name="line.75"></a>
+<span class="sourceLineNo">076</span>    private Processing(DocumentOperation documentOperation) {<a name="line.76"></a>
+<span class="sourceLineNo">077</span>        this();<a name="line.77"></a>
+<span class="sourceLineNo">078</span>        addDocumentOperation(documentOperation);<a name="line.78"></a>
+<span class="sourceLineNo">079</span>    }<a name="line.79"></a>
+<span class="sourceLineNo">080</span><a name="line.80"></a>
+<span class="sourceLineNo">081</span>    /**<a name="line.81"></a>
+<span class="sourceLineNo">082</span>     * Create a processing with one document. The given document put or document update will be the single<a name="line.82"></a>
+<span class="sourceLineNo">083</span>     * element in &lt;code&gt;documentOperations&lt;/code&gt;.<a name="line.83"></a>
+<span class="sourceLineNo">084</span>     *<a name="line.84"></a>
+<span class="sourceLineNo">085</span>     * @param service           the unique name of the service processing this<a name="line.85"></a>
+<span class="sourceLineNo">086</span>     * @param documentOperation document operation (DocumentPut or DocumentUpdate)<a name="line.86"></a>
+<span class="sourceLineNo">087</span>     * @param callStack         the document processors to call in this processing.<a name="line.87"></a>
+<span class="sourceLineNo">088</span>     * @param endp              the endpoint of this processing<a name="line.88"></a>
+<span class="sourceLineNo">089</span>     */<a name="line.89"></a>
+<span class="sourceLineNo">090</span>    Processing(String service, DocumentOperation documentOperation, CallStack callStack, ProcessingEndpoint endp) {<a name="line.90"></a>
+<span class="sourceLineNo">091</span>        this.service = service;<a name="line.91"></a>
+<span class="sourceLineNo">092</span>        this.documentOperations = new ArrayList&lt;&gt;(1);<a name="line.92"></a>
+<span class="sourceLineNo">093</span>        documentOperations.add(documentOperation);<a name="line.93"></a>
+<span class="sourceLineNo">094</span>        this.callStack = callStack;<a name="line.94"></a>
+<span class="sourceLineNo">095</span>        this.endpoint = endp;<a name="line.95"></a>
+<span class="sourceLineNo">096</span>    }<a name="line.96"></a>
+<span class="sourceLineNo">097</span><a name="line.97"></a>
+<span class="sourceLineNo">098</span>    /**<a name="line.98"></a>
+<span class="sourceLineNo">099</span>     * Create a processing with one document. The given document put or document update will be the single<a name="line.99"></a>
+<span class="sourceLineNo">100</span>     * element in &lt;code&gt;documentOperations&lt;/code&gt;.<a name="line.100"></a>
+<span class="sourceLineNo">101</span>     *<a name="line.101"></a>
+<span class="sourceLineNo">102</span>     * @param service           the unique name of the service processing this<a name="line.102"></a>
+<span class="sourceLineNo">103</span>     * @param documentOperation document operation (DocumentPut or DocumentUpdate)<a name="line.103"></a>
+<span class="sourceLineNo">104</span>     * @param callStack         the document processors to call in this processing.<a name="line.104"></a>
+<span class="sourceLineNo">105</span>     *                          This &lt;b&gt;tranfers ownership&lt;/b&gt; of this structure<a name="line.105"></a>
+<span class="sourceLineNo">106</span>     *                          to this class. The caller &lt;i&gt;must not&lt;/i&gt; modify it<a name="line.106"></a>
+<span class="sourceLineNo">107</span>     */<a name="line.107"></a>
+<span class="sourceLineNo">108</span>    public Processing(String service, DocumentOperation documentOperation, CallStack callStack) {<a name="line.108"></a>
+<span class="sourceLineNo">109</span>        this(service, documentOperation, callStack, null);<a name="line.109"></a>
+<span class="sourceLineNo">110</span>    }<a name="line.110"></a>
+<span class="sourceLineNo">111</span><a name="line.111"></a>
+<span class="sourceLineNo">112</span>    @SuppressWarnings("unused")<a name="line.112"></a>
+<span class="sourceLineNo">113</span>    private Processing(String service, List&lt;DocumentOperation&gt; documentOpsAndUpdates, CallStack callStack, ProcessingEndpoint endp, boolean unused) {<a name="line.113"></a>
+<span class="sourceLineNo">114</span>        this.service = service;<a name="line.114"></a>
+<span class="sourceLineNo">115</span>        this.documentOperations = new ArrayList&lt;&gt;(documentOpsAndUpdates.size());<a name="line.115"></a>
+<span class="sourceLineNo">116</span>        documentOperations.addAll(documentOpsAndUpdates);<a name="line.116"></a>
+<span class="sourceLineNo">117</span>        this.callStack = callStack;<a name="line.117"></a>
+<span class="sourceLineNo">118</span>        this.endpoint = endp;<a name="line.118"></a>
+<span class="sourceLineNo">119</span>    }<a name="line.119"></a>
+<span class="sourceLineNo">120</span><a name="line.120"></a>
+<span class="sourceLineNo">121</span>    static Processing createProcessingFromDocumentOperations(String service, List&lt;DocumentOperation&gt; documentOpsAndUpdates, CallStack callStack, ProcessingEndpoint endp) {<a name="line.121"></a>
+<span class="sourceLineNo">122</span>        return new Processing(service, documentOpsAndUpdates, callStack, endp, false);<a name="line.122"></a>
+<span class="sourceLineNo">123</span>    }<a name="line.123"></a>
+<span class="sourceLineNo">124</span><a name="line.124"></a>
+<span class="sourceLineNo">125</span>    /**<a name="line.125"></a>
+<span class="sourceLineNo">126</span>     *<a name="line.126"></a>
+<span class="sourceLineNo">127</span>     * @param service               the unique name of the service processing this<a name="line.127"></a>
+<span class="sourceLineNo">128</span>     * @param documentsAndUpdates   the document operation list. This &lt;b&gt;transfers ownership&lt;/b&gt; of this list<a name="line.128"></a>
+<span class="sourceLineNo">129</span>     *                              to this class. The caller &lt;i&gt;must not&lt;/i&gt; modify it<a name="line.129"></a>
+<span class="sourceLineNo">130</span>     * @param callStack             the document processors to call in this processing.<a name="line.130"></a>
+<span class="sourceLineNo">131</span>     *                              This &lt;b&gt;transfers ownership&lt;/b&gt; of this structure<a name="line.131"></a>
+<span class="sourceLineNo">132</span>     *                              to this class. The caller &lt;i&gt;must not&lt;/i&gt; modify it<a name="line.132"></a>
+<span class="sourceLineNo">133</span>     */<a name="line.133"></a>
+<span class="sourceLineNo">134</span>    public static Processing createProcessingFromDocumentOperations(String service, List&lt;DocumentOperation&gt; documentsAndUpdates, CallStack callStack) {<a name="line.134"></a>
+<span class="sourceLineNo">135</span>        return new Processing(service, documentsAndUpdates, callStack, null, false);<a name="line.135"></a>
+<span class="sourceLineNo">136</span>    }<a name="line.136"></a>
+<span class="sourceLineNo">137</span><a name="line.137"></a>
+<span class="sourceLineNo">138</span>    public ComponentRegistry&lt;DocprocService&gt; getDocprocServiceRegistry() {<a name="line.138"></a>
+<span class="sourceLineNo">139</span>        return docprocServiceRegistry;<a name="line.139"></a>
+<span class="sourceLineNo">140</span>    }<a name="line.140"></a>
+<span class="sourceLineNo">141</span><a name="line.141"></a>
+<span class="sourceLineNo">142</span>    public void setDocprocServiceRegistry(ComponentRegistry&lt;DocprocService&gt; docprocServiceRegistry) {<a name="line.142"></a>
+<span class="sourceLineNo">143</span>        this.docprocServiceRegistry = docprocServiceRegistry;<a name="line.143"></a>
+<span class="sourceLineNo">144</span>    }<a name="line.144"></a>
+<span class="sourceLineNo">145</span><a name="line.145"></a>
+<span class="sourceLineNo">146</span>    /** Returns the name of the service processing this. This will never return null */<a name="line.146"></a>
+<span class="sourceLineNo">147</span>    public String getServiceName() {<a name="line.147"></a>
+<span class="sourceLineNo">148</span>        if (service == null) return "default";<a name="line.148"></a>
+<span class="sourceLineNo">149</span>        return service;<a name="line.149"></a>
+<span class="sourceLineNo">150</span>    }<a name="line.150"></a>
+<span class="sourceLineNo">151</span><a name="line.151"></a>
+<span class="sourceLineNo">152</span>    /** Sets the name of the service processing this. */<a name="line.152"></a>
+<span class="sourceLineNo">153</span>    public void setServiceName(String service) {<a name="line.153"></a>
+<span class="sourceLineNo">154</span>        this.service = service;<a name="line.154"></a>
+<span class="sourceLineNo">155</span>    }<a name="line.155"></a>
+<span class="sourceLineNo">156</span><a name="line.156"></a>
+<span class="sourceLineNo">157</span>    /**<a name="line.157"></a>
+<span class="sourceLineNo">158</span>     * Convenience method for looking up and returning the service processing this. This might return null<a name="line.158"></a>
+<span class="sourceLineNo">159</span>     * if #getServiceName returns a name that is not registered in {@link com.yahoo.docproc.DocprocService}.<a name="line.159"></a>
+<span class="sourceLineNo">160</span>     *<a name="line.160"></a>
+<span class="sourceLineNo">161</span>     * @return the service processing this, or null if unknown.<a name="line.161"></a>
+<span class="sourceLineNo">162</span>     */<a name="line.162"></a>
+<span class="sourceLineNo">163</span>    public DocprocService getService() {<a name="line.163"></a>
+<span class="sourceLineNo">164</span>        if (docprocServiceRegistry != null) {<a name="line.164"></a>
+<span class="sourceLineNo">165</span>            return docprocServiceRegistry.getComponent(getServiceName());<a name="line.165"></a>
+<span class="sourceLineNo">166</span>        }<a name="line.166"></a>
+<span class="sourceLineNo">167</span>        return null;<a name="line.167"></a>
+<span class="sourceLineNo">168</span>    }<a name="line.168"></a>
+<span class="sourceLineNo">169</span><a name="line.169"></a>
+<span class="sourceLineNo">170</span>    /** Returns a context variable, or null if it is not set */<a name="line.170"></a>
+<span class="sourceLineNo">171</span>    public Object getVariable(String name) {<a name="line.171"></a>
+<span class="sourceLineNo">172</span>        if (context == null) return null;<a name="line.172"></a>
+<span class="sourceLineNo">173</span>        return context.get(name);<a name="line.173"></a>
+<span class="sourceLineNo">174</span>    }<a name="line.174"></a>
+<span class="sourceLineNo">175</span><a name="line.175"></a>
+<span class="sourceLineNo">176</span>    /**<a name="line.176"></a>
+<span class="sourceLineNo">177</span>     * Returns an iterator of all context variables that are set<a name="line.177"></a>
+<span class="sourceLineNo">178</span>     *<a name="line.178"></a>
+<span class="sourceLineNo">179</span>     * @return an iterator over objects of type Map.Entry<a name="line.179"></a>
+<span class="sourceLineNo">180</span>     */<a name="line.180"></a>
+<span class="sourceLineNo">181</span>    public Iterator&lt;Map.Entry&lt;String, Object&gt;&gt; getVariableAndNameIterator() {<a name="line.181"></a>
+<span class="sourceLineNo">182</span>        if (context == null) context = new HashMap&lt;&gt;();<a name="line.182"></a>
+<span class="sourceLineNo">183</span>        return context.entrySet().iterator();<a name="line.183"></a>
+<span class="sourceLineNo">184</span>    }<a name="line.184"></a>
+<span class="sourceLineNo">185</span><a name="line.185"></a>
+<span class="sourceLineNo">186</span>    /** Clears all context variables that have been set */<a name="line.186"></a>
+<span class="sourceLineNo">187</span>    public void clearVariables() {<a name="line.187"></a>
+<span class="sourceLineNo">188</span>        if (context == null) return;<a name="line.188"></a>
+<span class="sourceLineNo">189</span>        context.clear();<a name="line.189"></a>
+<span class="sourceLineNo">190</span>    }<a name="line.190"></a>
+<span class="sourceLineNo">191</span><a name="line.191"></a>
+<span class="sourceLineNo">192</span>    /** Sets a context variable. */<a name="line.192"></a>
+<span class="sourceLineNo">193</span>    public void setVariable(String name, Object value) {<a name="line.193"></a>
+<span class="sourceLineNo">194</span>        if (context == null) context = new java.util.HashMap&lt;&gt;();<a name="line.194"></a>
+<span class="sourceLineNo">195</span>        context.put(name, value);<a name="line.195"></a>
+<span class="sourceLineNo">196</span>    }<a name="line.196"></a>
+<span class="sourceLineNo">197</span><a name="line.197"></a>
+<span class="sourceLineNo">198</span>    public Object removeVariable(String name) {<a name="line.198"></a>
+<span class="sourceLineNo">199</span>        if (context == null) return null;<a name="line.199"></a>
+<span class="sourceLineNo">200</span>        return context.remove(name);<a name="line.200"></a>
+<span class="sourceLineNo">201</span>    }<a name="line.201"></a>
+<span class="sourceLineNo">202</span><a name="line.202"></a>
+<span class="sourceLineNo">203</span>    /** Returns true if this variable is present, even if it is null */<a name="line.203"></a>
+<span class="sourceLineNo">204</span>    public boolean hasVariable(String name) {<a name="line.204"></a>
+<span class="sourceLineNo">205</span>        return context != null &amp;&amp; context.containsKey(name);<a name="line.205"></a>
+<span class="sourceLineNo">206</span>    }<a name="line.206"></a>
+<span class="sourceLineNo">207</span><a name="line.207"></a>
+<span class="sourceLineNo">208</span>    /**<a name="line.208"></a>
+<span class="sourceLineNo">209</span>     * Returns the ProcessingEndpoint that is called when this Processing is complete, if any.<a name="line.209"></a>
+<span class="sourceLineNo">210</span>     *<a name="line.210"></a>
+<span class="sourceLineNo">211</span>     * @return the ProcessingEndpoint, or null<a name="line.211"></a>
+<span class="sourceLineNo">212</span>     */<a name="line.212"></a>
+<span class="sourceLineNo">213</span>    ProcessingEndpoint getEndpoint() {<a name="line.213"></a>
+<span class="sourceLineNo">214</span>        return endpoint;<a name="line.214"></a>
+<span class="sourceLineNo">215</span>    }<a name="line.215"></a>
+<span class="sourceLineNo">216</span><a name="line.216"></a>
+<span class="sourceLineNo">217</span>    /**<a name="line.217"></a>
+<span class="sourceLineNo">218</span>     * Sets the ProcessingEndpoint to be called when this Processing is complete.<a name="line.218"></a>
+<span class="sourceLineNo">219</span>     *<a name="line.219"></a>
+<span class="sourceLineNo">220</span>     * @param endpoint the ProcessingEndpoint to use<a name="line.220"></a>
+<span class="sourceLineNo">221</span>     */<a name="line.221"></a>
+<span class="sourceLineNo">222</span>    void setEndpoint(ProcessingEndpoint endpoint) {<a name="line.222"></a>
+<span class="sourceLineNo">223</span>        this.endpoint = endpoint;<a name="line.223"></a>
+<span class="sourceLineNo">224</span>    }<a name="line.224"></a>
+<span class="sourceLineNo">225</span><a name="line.225"></a>
+<span class="sourceLineNo">226</span>    public void addDocumentOperation(DocumentOperation documentOperation) {<a name="line.226"></a>
+<span class="sourceLineNo">227</span>        if (documentsToAdd == null) documentsToAdd = new ArrayList&lt;&gt;(1);<a name="line.227"></a>
+<span class="sourceLineNo">228</span>        documentsToAdd.add(documentOperation);<a name="line.228"></a>
+<span class="sourceLineNo">229</span>    }<a name="line.229"></a>
+<span class="sourceLineNo">230</span><a name="line.230"></a>
+<span class="sourceLineNo">231</span>    private void updateDocumentOperations() {<a name="line.231"></a>
+<span class="sourceLineNo">232</span>        if (documentsToAdd != null) {<a name="line.232"></a>
+<span class="sourceLineNo">233</span>            documentOperations.addAll(documentsToAdd);<a name="line.233"></a>
+<span class="sourceLineNo">234</span>            documentsToAdd.clear();<a name="line.234"></a>
+<span class="sourceLineNo">235</span>        }<a name="line.235"></a>
+<span class="sourceLineNo">236</span>    }<a name="line.236"></a>
+<span class="sourceLineNo">237</span><a name="line.237"></a>
+<span class="sourceLineNo">238</span>    public List&lt;DocumentOperation&gt; getDocumentOperations() {<a name="line.238"></a>
+<span class="sourceLineNo">239</span>        updateDocumentOperations();<a name="line.239"></a>
+<span class="sourceLineNo">240</span>        return documentOperations;<a name="line.240"></a>
+<span class="sourceLineNo">241</span>    }<a name="line.241"></a>
+<span class="sourceLineNo">242</span><a name="line.242"></a>
+<span class="sourceLineNo">243</span>    /** Returns the processors to call in this processing */<a name="line.243"></a>
+<span class="sourceLineNo">244</span>    public CallStack callStack() {<a name="line.244"></a>
+<span class="sourceLineNo">245</span>        return callStack;<a name="line.245"></a>
+<span class="sourceLineNo">246</span>    }<a name="line.246"></a>
+<span class="sourceLineNo">247</span><a name="line.247"></a>
+<span class="sourceLineNo">248</span>    /**<a name="line.248"></a>
+<span class="sourceLineNo">249</span>     * Package-private method to set the callstack of this processing. Only to be used<a name="line.249"></a>
+<span class="sourceLineNo">250</span>     * by DocprocService.process(Processing).<a name="line.250"></a>
+<span class="sourceLineNo">251</span>     *<a name="line.251"></a>
+<span class="sourceLineNo">252</span>     * @param callStack the callstack to set<a name="line.252"></a>
+<span class="sourceLineNo">253</span>     */<a name="line.253"></a>
+<span class="sourceLineNo">254</span>    void setCallStack(CallStack callStack) {<a name="line.254"></a>
+<span class="sourceLineNo">255</span>        this.callStack = callStack;<a name="line.255"></a>
+<span class="sourceLineNo">256</span>    }<a name="line.256"></a>
+<span class="sourceLineNo">257</span><a name="line.257"></a>
+<span class="sourceLineNo">258</span>    public String toString() {<a name="line.258"></a>
+<span class="sourceLineNo">259</span>        String previousCall = "";<a name="line.259"></a>
+<span class="sourceLineNo">260</span>        if (callStack != null) {<a name="line.260"></a>
+<span class="sourceLineNo">261</span>            Call call = callStack.getLastPopped();<a name="line.261"></a>
+<span class="sourceLineNo">262</span>            if (call != null) {<a name="line.262"></a>
+<span class="sourceLineNo">263</span>                previousCall = "Last call: " + call;<a name="line.263"></a>
+<span class="sourceLineNo">264</span>            }<a name="line.264"></a>
+<span class="sourceLineNo">265</span>        }<a name="line.265"></a>
+<span class="sourceLineNo">266</span>        if (documentOperations.size() == 1) {<a name="line.266"></a>
+<span class="sourceLineNo">267</span>            return "Processing of " + documentOperations.get(0) + ". " + previousCall;<a name="line.267"></a>
+<span class="sourceLineNo">268</span>        } else {<a name="line.268"></a>
+<span class="sourceLineNo">269</span>            String listString = documentOperations.toString();<a name="line.269"></a>
+<span class="sourceLineNo">270</span>            if (listString.length() &gt; 100) {<a name="line.270"></a>
+<span class="sourceLineNo">271</span>                listString = listString.substring(0, 99);<a name="line.271"></a>
+<span class="sourceLineNo">272</span>                listString += "...]";<a name="line.272"></a>
+<span class="sourceLineNo">273</span>            }<a name="line.273"></a>
+<span class="sourceLineNo">274</span><a name="line.274"></a>
+<span class="sourceLineNo">275</span>            return "Processing of " + listString + ". " + previousCall;<a name="line.275"></a>
+<span class="sourceLineNo">276</span>        }<a name="line.276"></a>
+<span class="sourceLineNo">277</span>    }<a name="line.277"></a>
+<span class="sourceLineNo">278</span><a name="line.278"></a>
+<span class="sourceLineNo">279</span>    int getNumDocsToBeProcessed() {<a name="line.279"></a>
+<span class="sourceLineNo">280</span>        if (getNumDocsCalled) {<a name="line.280"></a>
+<span class="sourceLineNo">281</span>            return 0;<a name="line.281"></a>
+<span class="sourceLineNo">282</span>        }<a name="line.282"></a>
+<span class="sourceLineNo">283</span>        getNumDocsCalled = true;<a name="line.283"></a>
+<span class="sourceLineNo">284</span>        return getDocumentOperations().size();<a name="line.284"></a>
+<span class="sourceLineNo">285</span>    }<a name="line.285"></a>
+<span class="sourceLineNo">286</span>}<a name="line.286"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

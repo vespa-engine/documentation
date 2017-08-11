@@ -1,0 +1,176 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.document.predicate;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import java.util.ArrayList;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import java.util.Iterator;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import java.util.List;<a name="line.6"></a>
+<span class="sourceLineNo">007</span><a name="line.7"></a>
+<span class="sourceLineNo">008</span>/**<a name="line.8"></a>
+<span class="sourceLineNo">009</span> * A FeatureConjunction is a special type of Conjunction where<a name="line.9"></a>
+<span class="sourceLineNo">010</span> * all children are either a FeatureSet or a Negation (with an underlying FeatureSet).<a name="line.10"></a>
+<span class="sourceLineNo">011</span> * The underlying FeatureSets may only have one value.<a name="line.11"></a>
+<span class="sourceLineNo">012</span> *<a name="line.12"></a>
+<span class="sourceLineNo">013</span> * @author bjorncs<a name="line.13"></a>
+<span class="sourceLineNo">014</span> */<a name="line.14"></a>
+<span class="sourceLineNo">015</span>public class FeatureConjunction extends PredicateOperator {<a name="line.15"></a>
+<span class="sourceLineNo">016</span>    private final List&lt;Predicate&gt; operands;<a name="line.16"></a>
+<span class="sourceLineNo">017</span><a name="line.17"></a>
+<span class="sourceLineNo">018</span>    public FeatureConjunction(List&lt;Predicate&gt; operands) {<a name="line.18"></a>
+<span class="sourceLineNo">019</span>        validateOperands(operands);<a name="line.19"></a>
+<span class="sourceLineNo">020</span>        this.operands = new ArrayList&lt;&gt;(operands);<a name="line.20"></a>
+<span class="sourceLineNo">021</span>    }<a name="line.21"></a>
+<span class="sourceLineNo">022</span><a name="line.22"></a>
+<span class="sourceLineNo">023</span>    private static void validateOperands(List&lt;Predicate&gt; operands) {<a name="line.23"></a>
+<span class="sourceLineNo">024</span>        if (operands.size() &lt;= 1) {<a name="line.24"></a>
+<span class="sourceLineNo">025</span>            throw new IllegalArgumentException("Number of operands must 2 or more, was: " + operands.size());<a name="line.25"></a>
+<span class="sourceLineNo">026</span>        }<a name="line.26"></a>
+<span class="sourceLineNo">027</span>        if (!operands.stream()<a name="line.27"></a>
+<span class="sourceLineNo">028</span>                .allMatch(FeatureConjunction::isValidFeatureConjunctionOperand)) {<a name="line.28"></a>
+<span class="sourceLineNo">029</span>            throw new IllegalArgumentException(<a name="line.29"></a>
+<span class="sourceLineNo">030</span>                    "A FeatureConjunction may only contain instances of Negation and FeatureSet, " +<a name="line.30"></a>
+<span class="sourceLineNo">031</span>                            "and a FeatureSet may only have one value.");<a name="line.31"></a>
+<span class="sourceLineNo">032</span>        }<a name="line.32"></a>
+<span class="sourceLineNo">033</span><a name="line.33"></a>
+<span class="sourceLineNo">034</span>        long uniqueKeys = operands.stream().map(FeatureConjunction::getFeatureSetKey).distinct().count();<a name="line.34"></a>
+<span class="sourceLineNo">035</span>        if (operands.size() &gt; uniqueKeys) {<a name="line.35"></a>
+<span class="sourceLineNo">036</span>            throw new IllegalArgumentException("Each FeatureSet key must have a unique key.");<a name="line.36"></a>
+<span class="sourceLineNo">037</span>        }<a name="line.37"></a>
+<span class="sourceLineNo">038</span>    }<a name="line.38"></a>
+<span class="sourceLineNo">039</span><a name="line.39"></a>
+<span class="sourceLineNo">040</span>    private static String getFeatureSetKey(Predicate predicate) {<a name="line.40"></a>
+<span class="sourceLineNo">041</span>        if (predicate instanceof FeatureSet) {<a name="line.41"></a>
+<span class="sourceLineNo">042</span>            return ((FeatureSet) predicate).getKey();<a name="line.42"></a>
+<span class="sourceLineNo">043</span>        } else {<a name="line.43"></a>
+<span class="sourceLineNo">044</span>            Negation negation = (Negation) predicate;<a name="line.44"></a>
+<span class="sourceLineNo">045</span>            return ((FeatureSet) negation.getOperand()).getKey();<a name="line.45"></a>
+<span class="sourceLineNo">046</span>        }<a name="line.46"></a>
+<span class="sourceLineNo">047</span>    }<a name="line.47"></a>
+<span class="sourceLineNo">048</span><a name="line.48"></a>
+<span class="sourceLineNo">049</span>    public static boolean isValidFeatureConjunctionOperand(Predicate operand) {<a name="line.49"></a>
+<span class="sourceLineNo">050</span>        return operand instanceof Negation<a name="line.50"></a>
+<span class="sourceLineNo">051</span>                    &amp;&amp; ((Negation) operand).getOperand() instanceof FeatureSet<a name="line.51"></a>
+<span class="sourceLineNo">052</span>                    &amp;&amp; isValidFeatureConjunctionOperand(((Negation) operand).getOperand())<a name="line.52"></a>
+<span class="sourceLineNo">053</span>                || operand instanceof FeatureSet &amp;&amp; ((FeatureSet) operand).getValues().size() == 1;<a name="line.53"></a>
+<span class="sourceLineNo">054</span>    }<a name="line.54"></a>
+<span class="sourceLineNo">055</span><a name="line.55"></a>
+<span class="sourceLineNo">056</span>    @Override<a name="line.56"></a>
+<span class="sourceLineNo">057</span>    public List&lt;Predicate&gt; getOperands() {<a name="line.57"></a>
+<span class="sourceLineNo">058</span>        return operands;<a name="line.58"></a>
+<span class="sourceLineNo">059</span>    }<a name="line.59"></a>
+<span class="sourceLineNo">060</span><a name="line.60"></a>
+<span class="sourceLineNo">061</span>    @Override<a name="line.61"></a>
+<span class="sourceLineNo">062</span>    protected void appendTo(StringBuilder out) {<a name="line.62"></a>
+<span class="sourceLineNo">063</span>        for (Iterator&lt;Predicate&gt; it = operands.iterator(); it.hasNext(); ) {<a name="line.63"></a>
+<span class="sourceLineNo">064</span>            Predicate operand = it.next();<a name="line.64"></a>
+<span class="sourceLineNo">065</span>            if (operand instanceof Disjunction) {<a name="line.65"></a>
+<span class="sourceLineNo">066</span>                out.append('(');<a name="line.66"></a>
+<span class="sourceLineNo">067</span>                operand.appendTo(out);<a name="line.67"></a>
+<span class="sourceLineNo">068</span>                out.append(')');<a name="line.68"></a>
+<span class="sourceLineNo">069</span>            } else {<a name="line.69"></a>
+<span class="sourceLineNo">070</span>                operand.appendTo(out);<a name="line.70"></a>
+<span class="sourceLineNo">071</span>            }<a name="line.71"></a>
+<span class="sourceLineNo">072</span>            if (it.hasNext()) {<a name="line.72"></a>
+<span class="sourceLineNo">073</span>                out.append(" conj ");<a name="line.73"></a>
+<span class="sourceLineNo">074</span>            }<a name="line.74"></a>
+<span class="sourceLineNo">075</span>        }<a name="line.75"></a>
+<span class="sourceLineNo">076</span>    }<a name="line.76"></a>
+<span class="sourceLineNo">077</span><a name="line.77"></a>
+<span class="sourceLineNo">078</span>    @Override<a name="line.78"></a>
+<span class="sourceLineNo">079</span>    public FeatureConjunction clone() throws CloneNotSupportedException {<a name="line.79"></a>
+<span class="sourceLineNo">080</span>        return new FeatureConjunction(operands);<a name="line.80"></a>
+<span class="sourceLineNo">081</span>    }<a name="line.81"></a>
+<span class="sourceLineNo">082</span><a name="line.82"></a>
+<span class="sourceLineNo">083</span>    @Override<a name="line.83"></a>
+<span class="sourceLineNo">084</span>    public int hashCode() {<a name="line.84"></a>
+<span class="sourceLineNo">085</span>        return operands.hashCode();<a name="line.85"></a>
+<span class="sourceLineNo">086</span>    }<a name="line.86"></a>
+<span class="sourceLineNo">087</span><a name="line.87"></a>
+<span class="sourceLineNo">088</span>    @Override<a name="line.88"></a>
+<span class="sourceLineNo">089</span>    public boolean equals(Object obj) {<a name="line.89"></a>
+<span class="sourceLineNo">090</span>        if (obj == this) {<a name="line.90"></a>
+<span class="sourceLineNo">091</span>            return true;<a name="line.91"></a>
+<span class="sourceLineNo">092</span>        }<a name="line.92"></a>
+<span class="sourceLineNo">093</span>        if (!(obj instanceof FeatureConjunction)) {<a name="line.93"></a>
+<span class="sourceLineNo">094</span>            return false;<a name="line.94"></a>
+<span class="sourceLineNo">095</span>        }<a name="line.95"></a>
+<span class="sourceLineNo">096</span>        FeatureConjunction rhs = (FeatureConjunction)obj;<a name="line.96"></a>
+<span class="sourceLineNo">097</span>        if (!operands.equals(rhs.operands)) {<a name="line.97"></a>
+<span class="sourceLineNo">098</span>            return false;<a name="line.98"></a>
+<span class="sourceLineNo">099</span>        }<a name="line.99"></a>
+<span class="sourceLineNo">100</span>        return true;<a name="line.100"></a>
+<span class="sourceLineNo">101</span>    }<a name="line.101"></a>
+<span class="sourceLineNo">102</span><a name="line.102"></a>
+<span class="sourceLineNo">103</span><a name="line.103"></a>
+<span class="sourceLineNo">104</span>}<a name="line.104"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

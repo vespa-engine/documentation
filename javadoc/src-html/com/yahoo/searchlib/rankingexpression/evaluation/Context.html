@@ -1,0 +1,180 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.searchlib.rankingexpression.evaluation;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.yahoo.searchlib.rankingexpression.rule.Arguments;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.tensor.evaluation.EvaluationContext;<a name="line.5"></a>
+<span class="sourceLineNo">006</span><a name="line.6"></a>
+<span class="sourceLineNo">007</span>import java.util.Set;<a name="line.7"></a>
+<span class="sourceLineNo">008</span><a name="line.8"></a>
+<span class="sourceLineNo">009</span>/**<a name="line.9"></a>
+<span class="sourceLineNo">010</span> * &lt;p&gt;The context providing value bindings for an expression evaluation.&lt;/p&gt;<a name="line.10"></a>
+<span class="sourceLineNo">011</span> *<a name="line.11"></a>
+<span class="sourceLineNo">012</span> * @author bratseth<a name="line.12"></a>
+<span class="sourceLineNo">013</span> */<a name="line.13"></a>
+<span class="sourceLineNo">014</span>public abstract class Context implements EvaluationContext {<a name="line.14"></a>
+<span class="sourceLineNo">015</span><a name="line.15"></a>
+<span class="sourceLineNo">016</span>    /**<a name="line.16"></a>
+<span class="sourceLineNo">017</span>     * &lt;p&gt;Returns the value of a simple variable name.&lt;/p&gt;<a name="line.17"></a>
+<span class="sourceLineNo">018</span>     *<a name="line.18"></a>
+<span class="sourceLineNo">019</span>     * @param name The name of the variable whose value to return.<a name="line.19"></a>
+<span class="sourceLineNo">020</span>     * @return The value of the named variable.<a name="line.20"></a>
+<span class="sourceLineNo">021</span>     */<a name="line.21"></a>
+<span class="sourceLineNo">022</span>    public abstract Value get(String name);<a name="line.22"></a>
+<span class="sourceLineNo">023</span><a name="line.23"></a>
+<span class="sourceLineNo">024</span>    /**<a name="line.24"></a>
+<span class="sourceLineNo">025</span>     * &lt;p&gt;Returns the value of a &lt;i&gt;structured variable&lt;/i&gt; on the form<a name="line.25"></a>
+<span class="sourceLineNo">026</span>     * &lt;code&gt;name(argument*)(.output)?&lt;/code&gt;, where &lt;i&gt;argument&lt;/i&gt; is any<a name="line.26"></a>
+<span class="sourceLineNo">027</span>     * string.  This may be used to implement more advanced variables whose<a name="line.27"></a>
+<span class="sourceLineNo">028</span>     * values are calculated at runtime from arguments.  Supporting this in a<a name="line.28"></a>
+<span class="sourceLineNo">029</span>     * context is optional. Implementations may choose to throw<a name="line.29"></a>
+<span class="sourceLineNo">030</span>     * UnsupportedOperationException or always return null, or to handle outputs<a name="line.30"></a>
+<span class="sourceLineNo">031</span>     * but not arguments.&lt;/p&gt;<a name="line.31"></a>
+<span class="sourceLineNo">032</span>     *<a name="line.32"></a>
+<span class="sourceLineNo">033</span>     * &lt;p&gt;This default implementation does the latter - if arguments is non-null<a name="line.33"></a>
+<span class="sourceLineNo">034</span>     * and non-empty an UnsupportedOperationException is thrown, otherwise<a name="line.34"></a>
+<span class="sourceLineNo">035</span>     * get(name + "." + output) is called (or just get(name)) if output is also<a name="line.35"></a>
+<span class="sourceLineNo">036</span>     * null.&lt;/p&gt;<a name="line.36"></a>
+<span class="sourceLineNo">037</span>     *<a name="line.37"></a>
+<span class="sourceLineNo">038</span>     * @param name      The name of this variable.<a name="line.38"></a>
+<span class="sourceLineNo">039</span>     * @param arguments The parsed arguments as given in the textual expression.<a name="line.39"></a>
+<span class="sourceLineNo">040</span>     * @param output    The name of the value to output (to enable one named<a name="line.40"></a>
+<span class="sourceLineNo">041</span>     *                  calculation to output several), or null to output the<a name="line.41"></a>
+<span class="sourceLineNo">042</span>     *                  "main" (or only) value.<a name="line.42"></a>
+<span class="sourceLineNo">043</span>     */<a name="line.43"></a>
+<span class="sourceLineNo">044</span>    public Value get(String name, Arguments arguments,String output) {<a name="line.44"></a>
+<span class="sourceLineNo">045</span>        if (arguments!=null &amp;&amp; arguments.expressions().size() &gt; 0)<a name="line.45"></a>
+<span class="sourceLineNo">046</span>            throw new UnsupportedOperationException(this + " does not support structured ranking expression variables, attempted to reference '" +<a name="line.46"></a>
+<span class="sourceLineNo">047</span>                                                    name + arguments + "'");<a name="line.47"></a>
+<span class="sourceLineNo">048</span>        if (output==null)<a name="line.48"></a>
+<span class="sourceLineNo">049</span>            return get(name);<a name="line.49"></a>
+<span class="sourceLineNo">050</span>        return get(name + "." + output);<a name="line.50"></a>
+<span class="sourceLineNo">051</span>    }<a name="line.51"></a>
+<span class="sourceLineNo">052</span><a name="line.52"></a>
+<span class="sourceLineNo">053</span>    /**<a name="line.53"></a>
+<span class="sourceLineNo">054</span>     * &lt;p&gt;Lookup by index rather than name. This is supported by some optimized<a name="line.54"></a>
+<span class="sourceLineNo">055</span>     * context subclasses.  This default implementation throws<a name="line.55"></a>
+<span class="sourceLineNo">056</span>     * UnsupportedOperationException.&lt;/p&gt;<a name="line.56"></a>
+<span class="sourceLineNo">057</span>     *<a name="line.57"></a>
+<span class="sourceLineNo">058</span>     * @param index The index of the variable whose value to return.<a name="line.58"></a>
+<span class="sourceLineNo">059</span>     * @return The value of the indexed variable.<a name="line.59"></a>
+<span class="sourceLineNo">060</span>     */<a name="line.60"></a>
+<span class="sourceLineNo">061</span>    public Value get(int index) {<a name="line.61"></a>
+<span class="sourceLineNo">062</span>        throw new UnsupportedOperationException(this + " does not support variable lookup by index");<a name="line.62"></a>
+<span class="sourceLineNo">063</span>    }<a name="line.63"></a>
+<span class="sourceLineNo">064</span><a name="line.64"></a>
+<span class="sourceLineNo">065</span>    /**<a name="line.65"></a>
+<span class="sourceLineNo">066</span>     * &lt;p&gt;Lookup by index rather than name directly to a double. This is supported by some optimized<a name="line.66"></a>
+<span class="sourceLineNo">067</span>     * context subclasses.  This default implementation throws<a name="line.67"></a>
+<span class="sourceLineNo">068</span>     * UnsupportedOperationException.&lt;/p&gt;<a name="line.68"></a>
+<span class="sourceLineNo">069</span>     *<a name="line.69"></a>
+<span class="sourceLineNo">070</span>     * @param index The index of the variable whose value to return.<a name="line.70"></a>
+<span class="sourceLineNo">071</span>     * @return The value of the indexed variable.<a name="line.71"></a>
+<span class="sourceLineNo">072</span>     */<a name="line.72"></a>
+<span class="sourceLineNo">073</span>    public double getDouble(int index) {<a name="line.73"></a>
+<span class="sourceLineNo">074</span>        throw new UnsupportedOperationException(this + " does not support variable lookup by index");<a name="line.74"></a>
+<span class="sourceLineNo">075</span>    }<a name="line.75"></a>
+<span class="sourceLineNo">076</span><a name="line.76"></a>
+<span class="sourceLineNo">077</span>    /**<a name="line.77"></a>
+<span class="sourceLineNo">078</span>     * Same as put(name,DoubleValue.frozen(value))<a name="line.78"></a>
+<span class="sourceLineNo">079</span>     */<a name="line.79"></a>
+<span class="sourceLineNo">080</span>    public final void put(String name, double value) {<a name="line.80"></a>
+<span class="sourceLineNo">081</span>        put(name, DoubleValue.frozen(value));<a name="line.81"></a>
+<span class="sourceLineNo">082</span>    }<a name="line.82"></a>
+<span class="sourceLineNo">083</span><a name="line.83"></a>
+<span class="sourceLineNo">084</span>    /**<a name="line.84"></a>
+<span class="sourceLineNo">085</span>     * &lt;p&gt;Sets a value to this, or throws an UnsupportedOperationException if<a name="line.85"></a>
+<span class="sourceLineNo">086</span>     * this is not supported. This default implementation does the latter.&lt;/p&gt;     *<a name="line.86"></a>
+<span class="sourceLineNo">087</span>     *<a name="line.87"></a>
+<span class="sourceLineNo">088</span>     * @param name  The name of the variable to set.<a name="line.88"></a>
+<span class="sourceLineNo">089</span>     * @param value the value to set. Ownership of this value is transferred to this - if it is mutable<a name="line.89"></a>
+<span class="sourceLineNo">090</span>     *              (not frozen) it may be modified during execution<a name="line.90"></a>
+<span class="sourceLineNo">091</span>     * @since 5.1.5<a name="line.91"></a>
+<span class="sourceLineNo">092</span>     */<a name="line.92"></a>
+<span class="sourceLineNo">093</span>    public void put(String name, Value value) {<a name="line.93"></a>
+<span class="sourceLineNo">094</span>        throw new UnsupportedOperationException(this + " does not support variable assignment");<a name="line.94"></a>
+<span class="sourceLineNo">095</span>    }<a name="line.95"></a>
+<span class="sourceLineNo">096</span><a name="line.96"></a>
+<span class="sourceLineNo">097</span>    /**<a name="line.97"></a>
+<span class="sourceLineNo">098</span>     * &lt;p&gt;Returns all the names available in this, or throws an<a name="line.98"></a>
+<span class="sourceLineNo">099</span>     * UnsupportedOperationException if this operation is not supported. This<a name="line.99"></a>
+<span class="sourceLineNo">100</span>     * default implementation does the latter.&lt;/p&gt;<a name="line.100"></a>
+<span class="sourceLineNo">101</span>     *<a name="line.101"></a>
+<span class="sourceLineNo">102</span>     * @return The set of all variable names.<a name="line.102"></a>
+<span class="sourceLineNo">103</span>     */<a name="line.103"></a>
+<span class="sourceLineNo">104</span>    public Set&lt;String&gt; names() {<a name="line.104"></a>
+<span class="sourceLineNo">105</span>        throw new UnsupportedOperationException(this + " does not support return a list of its names");<a name="line.105"></a>
+<span class="sourceLineNo">106</span>    }<a name="line.106"></a>
+<span class="sourceLineNo">107</span><a name="line.107"></a>
+<span class="sourceLineNo">108</span>}<a name="line.108"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

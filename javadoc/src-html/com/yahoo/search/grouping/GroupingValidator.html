@@ -1,0 +1,157 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.search.grouping;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.google.inject.Inject;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.component.chain.dependencies.After;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.component.chain.dependencies.Before;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.component.chain.dependencies.Provides;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import com.yahoo.vespa.config.search.AttributesConfig;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import com.yahoo.container.QrSearchersConfig;<a name="line.9"></a>
+<span class="sourceLineNo">010</span>import com.yahoo.processing.request.CompoundName;<a name="line.10"></a>
+<span class="sourceLineNo">011</span>import com.yahoo.search.Query;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import com.yahoo.search.Result;<a name="line.12"></a>
+<span class="sourceLineNo">013</span>import com.yahoo.search.Searcher;<a name="line.13"></a>
+<span class="sourceLineNo">014</span>import com.yahoo.search.config.ClusterConfig;<a name="line.14"></a>
+<span class="sourceLineNo">015</span>import com.yahoo.search.grouping.request.AttributeValue;<a name="line.15"></a>
+<span class="sourceLineNo">016</span>import com.yahoo.search.grouping.request.ExpressionVisitor;<a name="line.16"></a>
+<span class="sourceLineNo">017</span>import com.yahoo.search.grouping.request.GroupingExpression;<a name="line.17"></a>
+<span class="sourceLineNo">018</span>import com.yahoo.search.searchchain.Execution;<a name="line.18"></a>
+<span class="sourceLineNo">019</span>import com.yahoo.search.searchchain.PhaseNames;<a name="line.19"></a>
+<span class="sourceLineNo">020</span><a name="line.20"></a>
+<span class="sourceLineNo">021</span>import java.util.HashSet;<a name="line.21"></a>
+<span class="sourceLineNo">022</span>import java.util.Set;<a name="line.22"></a>
+<span class="sourceLineNo">023</span><a name="line.23"></a>
+<span class="sourceLineNo">024</span>import static com.yahoo.search.grouping.GroupingQueryParser.SELECT_PARAMETER_PARSING;<a name="line.24"></a>
+<span class="sourceLineNo">025</span><a name="line.25"></a>
+<span class="sourceLineNo">026</span>/**<a name="line.26"></a>
+<span class="sourceLineNo">027</span> * This searcher ensure that all {@link GroupingRequest} objects attached to a {@link Query} makes sense to the search<a name="line.27"></a>
+<span class="sourceLineNo">028</span> * cluster for which this searcher has been deployed. This searcher uses exceptions to signal invalid grouping<a name="line.28"></a>
+<span class="sourceLineNo">029</span> * requests.<a name="line.29"></a>
+<span class="sourceLineNo">030</span> *<a name="line.30"></a>
+<span class="sourceLineNo">031</span> * @author &lt;a href="mailto:simon@yahoo-inc.com"&gt;Simon Thoresen&lt;/a&gt;<a name="line.31"></a>
+<span class="sourceLineNo">032</span> */<a name="line.32"></a>
+<span class="sourceLineNo">033</span>@Before(PhaseNames.BACKEND)<a name="line.33"></a>
+<span class="sourceLineNo">034</span>@After(SELECT_PARAMETER_PARSING)<a name="line.34"></a>
+<span class="sourceLineNo">035</span>@Provides(GroupingValidator.GROUPING_VALIDATED)<a name="line.35"></a>
+<span class="sourceLineNo">036</span>public class GroupingValidator extends Searcher {<a name="line.36"></a>
+<span class="sourceLineNo">037</span><a name="line.37"></a>
+<span class="sourceLineNo">038</span>    public static final String GROUPING_VALIDATED = "GroupingValidated";<a name="line.38"></a>
+<span class="sourceLineNo">039</span>    public static final CompoundName PARAM_ENABLED = new CompoundName("validate_" + GroupingQueryParser.PARAM_REQUEST);<a name="line.39"></a>
+<span class="sourceLineNo">040</span>    private final Set&lt;String&gt; attributeNames = new HashSet&lt;&gt;();<a name="line.40"></a>
+<span class="sourceLineNo">041</span>    private final String clusterName;<a name="line.41"></a>
+<span class="sourceLineNo">042</span>    private final boolean enabled;<a name="line.42"></a>
+<span class="sourceLineNo">043</span><a name="line.43"></a>
+<span class="sourceLineNo">044</span>    /**<a name="line.44"></a>
+<span class="sourceLineNo">045</span>     * Constructs a new instance of this searcher with the given component id and config.<a name="line.45"></a>
+<span class="sourceLineNo">046</span>     *<a name="line.46"></a>
+<span class="sourceLineNo">047</span>     * @param qrsConfig     The shared config for all searchers.<a name="line.47"></a>
+<span class="sourceLineNo">048</span>     * @param clusterConfig The config for the cluster that this searcher is deployed for.<a name="line.48"></a>
+<span class="sourceLineNo">049</span>     */<a name="line.49"></a>
+<span class="sourceLineNo">050</span>    @Inject<a name="line.50"></a>
+<span class="sourceLineNo">051</span>    public GroupingValidator(QrSearchersConfig qrsConfig, ClusterConfig clusterConfig,<a name="line.51"></a>
+<span class="sourceLineNo">052</span>                             AttributesConfig attributesConfig) {<a name="line.52"></a>
+<span class="sourceLineNo">053</span>        int clusterId = clusterConfig.clusterId();<a name="line.53"></a>
+<span class="sourceLineNo">054</span>        QrSearchersConfig.Searchcluster.Indexingmode.Enum indexingMode = qrsConfig.searchcluster(clusterId).indexingmode();<a name="line.54"></a>
+<span class="sourceLineNo">055</span>        enabled = (indexingMode != QrSearchersConfig.Searchcluster.Indexingmode.STREAMING);<a name="line.55"></a>
+<span class="sourceLineNo">056</span>        clusterName = enabled ? qrsConfig.searchcluster(clusterId).name() : null;<a name="line.56"></a>
+<span class="sourceLineNo">057</span>        for (AttributesConfig.Attribute attr : attributesConfig.attribute()) {<a name="line.57"></a>
+<span class="sourceLineNo">058</span>            attributeNames.add(attr.name());<a name="line.58"></a>
+<span class="sourceLineNo">059</span>        }<a name="line.59"></a>
+<span class="sourceLineNo">060</span>    }<a name="line.60"></a>
+<span class="sourceLineNo">061</span><a name="line.61"></a>
+<span class="sourceLineNo">062</span>    @Override<a name="line.62"></a>
+<span class="sourceLineNo">063</span>    public Result search(Query query, Execution execution) {<a name="line.63"></a>
+<span class="sourceLineNo">064</span>        if (enabled &amp;&amp; query.properties().getBoolean(PARAM_ENABLED, true)) {<a name="line.64"></a>
+<span class="sourceLineNo">065</span>            ExpressionVisitor visitor = new MyVisitor();<a name="line.65"></a>
+<span class="sourceLineNo">066</span>            for (GroupingRequest req : GroupingRequest.getRequests(query)) {<a name="line.66"></a>
+<span class="sourceLineNo">067</span>                req.getRootOperation().visitExpressions(visitor);<a name="line.67"></a>
+<span class="sourceLineNo">068</span>            }<a name="line.68"></a>
+<span class="sourceLineNo">069</span>        }<a name="line.69"></a>
+<span class="sourceLineNo">070</span>        return execution.search(query);<a name="line.70"></a>
+<span class="sourceLineNo">071</span>    }<a name="line.71"></a>
+<span class="sourceLineNo">072</span><a name="line.72"></a>
+<span class="sourceLineNo">073</span>    private class MyVisitor implements ExpressionVisitor {<a name="line.73"></a>
+<span class="sourceLineNo">074</span><a name="line.74"></a>
+<span class="sourceLineNo">075</span>        @Override<a name="line.75"></a>
+<span class="sourceLineNo">076</span>        public void visitExpression(GroupingExpression exp) {<a name="line.76"></a>
+<span class="sourceLineNo">077</span>            if (exp instanceof AttributeValue) {<a name="line.77"></a>
+<span class="sourceLineNo">078</span>                String name = ((AttributeValue)exp).getAttributeName();<a name="line.78"></a>
+<span class="sourceLineNo">079</span>                if (!attributeNames.contains(name)) {<a name="line.79"></a>
+<span class="sourceLineNo">080</span>                    throw new UnavailableAttributeException(clusterName, name);<a name="line.80"></a>
+<span class="sourceLineNo">081</span>                }<a name="line.81"></a>
+<span class="sourceLineNo">082</span>            }<a name="line.82"></a>
+<span class="sourceLineNo">083</span>        }<a name="line.83"></a>
+<span class="sourceLineNo">084</span>    }<a name="line.84"></a>
+<span class="sourceLineNo">085</span>}<a name="line.85"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>

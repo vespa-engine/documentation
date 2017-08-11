@@ -1,0 +1,654 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="en">
+<head>
+<title>Source code</title>
+<link rel="stylesheet" type="text/css" href="../../../../../../stylesheet.css" title="Style">
+</head>
+<body>
+<div class="sourceContainer">
+<pre><span class="sourceLineNo">001</span>// Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.<a name="line.1"></a>
+<span class="sourceLineNo">002</span>package com.yahoo.documentapi.messagebus.protocol;<a name="line.2"></a>
+<span class="sourceLineNo">003</span><a name="line.3"></a>
+<span class="sourceLineNo">004</span>import com.google.common.annotations.Beta;<a name="line.4"></a>
+<span class="sourceLineNo">005</span>import com.yahoo.collections.Tuple2;<a name="line.5"></a>
+<span class="sourceLineNo">006</span>import com.yahoo.component.Version;<a name="line.6"></a>
+<span class="sourceLineNo">007</span>import com.yahoo.component.VersionSpecification;<a name="line.7"></a>
+<span class="sourceLineNo">008</span>import com.yahoo.document.DocumentTypeManager;<a name="line.8"></a>
+<span class="sourceLineNo">009</span>import com.yahoo.document.DocumentTypeManagerConfigurer;<a name="line.9"></a>
+<span class="sourceLineNo">010</span>import com.yahoo.documentapi.messagebus.loadtypes.LoadTypeSet;<a name="line.10"></a>
+<span class="sourceLineNo">011</span>import com.yahoo.documentapi.metrics.DocumentProtocolMetricSet;<a name="line.11"></a>
+<span class="sourceLineNo">012</span>import com.yahoo.messagebus.*;<a name="line.12"></a>
+<span class="sourceLineNo">013</span>import com.yahoo.messagebus.metrics.MetricSet;<a name="line.13"></a>
+<span class="sourceLineNo">014</span>import com.yahoo.messagebus.routing.RoutingContext;<a name="line.14"></a>
+<span class="sourceLineNo">015</span>import com.yahoo.messagebus.routing.RoutingNodeIterator;<a name="line.15"></a>
+<span class="sourceLineNo">016</span>import com.yahoo.messagebus.routing.RoutingPolicy;<a name="line.16"></a>
+<span class="sourceLineNo">017</span>import com.yahoo.text.Utf8String;<a name="line.17"></a>
+<span class="sourceLineNo">018</span><a name="line.18"></a>
+<span class="sourceLineNo">019</span>import java.util.*;<a name="line.19"></a>
+<span class="sourceLineNo">020</span>import java.util.logging.Logger;<a name="line.20"></a>
+<span class="sourceLineNo">021</span><a name="line.21"></a>
+<span class="sourceLineNo">022</span>/**<a name="line.22"></a>
+<span class="sourceLineNo">023</span> * Implements the message bus protocol that is used by all components of Vespa.<a name="line.23"></a>
+<span class="sourceLineNo">024</span> *<a name="line.24"></a>
+<span class="sourceLineNo">025</span> * @author &lt;a href="mailto:simon@yahoo-inc.com"&gt;Simon Thoresen&lt;/a&gt;<a name="line.25"></a>
+<span class="sourceLineNo">026</span> */<a name="line.26"></a>
+<span class="sourceLineNo">027</span>public class DocumentProtocol implements Protocol {<a name="line.27"></a>
+<span class="sourceLineNo">028</span><a name="line.28"></a>
+<span class="sourceLineNo">029</span>    private static final Logger log = Logger.getLogger(DocumentProtocol.class.getName());<a name="line.29"></a>
+<span class="sourceLineNo">030</span>    private final DocumentProtocolMetricSet metrics = new DocumentProtocolMetricSet();<a name="line.30"></a>
+<span class="sourceLineNo">031</span>    private final RoutingPolicyRepository routingPolicyRepository = new RoutingPolicyRepository(metrics);<a name="line.31"></a>
+<span class="sourceLineNo">032</span>    private final RoutableRepository routableRepository;<a name="line.32"></a>
+<span class="sourceLineNo">033</span>    private final DocumentTypeManager docMan;<a name="line.33"></a>
+<span class="sourceLineNo">034</span><a name="line.34"></a>
+<span class="sourceLineNo">035</span>    /**<a name="line.35"></a>
+<span class="sourceLineNo">036</span>     * The name of this protocol.<a name="line.36"></a>
+<span class="sourceLineNo">037</span>     */<a name="line.37"></a>
+<span class="sourceLineNo">038</span>    public static final Utf8String NAME = new Utf8String("document");<a name="line.38"></a>
+<span class="sourceLineNo">039</span><a name="line.39"></a>
+<span class="sourceLineNo">040</span>    /**<a name="line.40"></a>
+<span class="sourceLineNo">041</span>     * All message types that are implemented by this protocol.<a name="line.41"></a>
+<span class="sourceLineNo">042</span>     */<a name="line.42"></a>
+<span class="sourceLineNo">043</span>    public static final int DOCUMENT_MESSAGE = 100000;<a name="line.43"></a>
+<span class="sourceLineNo">044</span>    public static final int MESSAGE_GETDOCUMENT = DOCUMENT_MESSAGE + 3;<a name="line.44"></a>
+<span class="sourceLineNo">045</span>    public static final int MESSAGE_PUTDOCUMENT = DOCUMENT_MESSAGE + 4;<a name="line.45"></a>
+<span class="sourceLineNo">046</span>    public static final int MESSAGE_REMOVEDOCUMENT = DOCUMENT_MESSAGE + 5;<a name="line.46"></a>
+<span class="sourceLineNo">047</span>    public static final int MESSAGE_UPDATEDOCUMENT = DOCUMENT_MESSAGE + 6;<a name="line.47"></a>
+<span class="sourceLineNo">048</span>    public static final int MESSAGE_CREATEVISITOR = DOCUMENT_MESSAGE + 7;<a name="line.48"></a>
+<span class="sourceLineNo">049</span>    public static final int MESSAGE_DESTROYVISITOR = DOCUMENT_MESSAGE + 8;<a name="line.49"></a>
+<span class="sourceLineNo">050</span>    public static final int MESSAGE_VISITORINFO = DOCUMENT_MESSAGE + 9;<a name="line.50"></a>
+<span class="sourceLineNo">051</span>    public static final int MESSAGE_SEARCHRESULT = DOCUMENT_MESSAGE + 11;<a name="line.51"></a>
+<span class="sourceLineNo">052</span>    public static final int MESSAGE_DOCUMENTSUMMARY = DOCUMENT_MESSAGE + 14;<a name="line.52"></a>
+<span class="sourceLineNo">053</span>    public static final int MESSAGE_MAPVISITOR = DOCUMENT_MESSAGE + 15;<a name="line.53"></a>
+<span class="sourceLineNo">054</span>    public static final int MESSAGE_GETBUCKETSTATE = DOCUMENT_MESSAGE + 18;<a name="line.54"></a>
+<span class="sourceLineNo">055</span>    public static final int MESSAGE_STATBUCKET = DOCUMENT_MESSAGE + 19;<a name="line.55"></a>
+<span class="sourceLineNo">056</span>    public static final int MESSAGE_GETBUCKETLIST = DOCUMENT_MESSAGE + 20;<a name="line.56"></a>
+<span class="sourceLineNo">057</span>    public static final int MESSAGE_DOCUMENTLIST = DOCUMENT_MESSAGE + 21;<a name="line.57"></a>
+<span class="sourceLineNo">058</span>    public static final int MESSAGE_EMPTYBUCKETS = DOCUMENT_MESSAGE + 23;<a name="line.58"></a>
+<span class="sourceLineNo">059</span>    public static final int MESSAGE_REMOVELOCATION = DOCUMENT_MESSAGE + 24;<a name="line.59"></a>
+<span class="sourceLineNo">060</span>    public static final int MESSAGE_QUERYRESULT = DOCUMENT_MESSAGE + 25;<a name="line.60"></a>
+<span class="sourceLineNo">061</span>    public static final int MESSAGE_BATCHDOCUMENTUPDATE = DOCUMENT_MESSAGE + 26;<a name="line.61"></a>
+<span class="sourceLineNo">062</span><a name="line.62"></a>
+<span class="sourceLineNo">063</span>    /**<a name="line.63"></a>
+<span class="sourceLineNo">064</span>     * All reply types that are implemented by this protocol.<a name="line.64"></a>
+<span class="sourceLineNo">065</span>     */<a name="line.65"></a>
+<span class="sourceLineNo">066</span>    public static final int DOCUMENT_REPLY = 200000;<a name="line.66"></a>
+<span class="sourceLineNo">067</span>    public static final int REPLY_GETDOCUMENT = DOCUMENT_REPLY + 3;<a name="line.67"></a>
+<span class="sourceLineNo">068</span>    public static final int REPLY_PUTDOCUMENT = DOCUMENT_REPLY + 4;<a name="line.68"></a>
+<span class="sourceLineNo">069</span>    public static final int REPLY_REMOVEDOCUMENT = DOCUMENT_REPLY + 5;<a name="line.69"></a>
+<span class="sourceLineNo">070</span>    public static final int REPLY_UPDATEDOCUMENT = DOCUMENT_REPLY + 6;<a name="line.70"></a>
+<span class="sourceLineNo">071</span>    public static final int REPLY_CREATEVISITOR = DOCUMENT_REPLY + 7;<a name="line.71"></a>
+<span class="sourceLineNo">072</span>    public static final int REPLY_DESTROYVISITOR = DOCUMENT_REPLY + 8;<a name="line.72"></a>
+<span class="sourceLineNo">073</span>    public static final int REPLY_VISITORINFO = DOCUMENT_REPLY + 9;<a name="line.73"></a>
+<span class="sourceLineNo">074</span>    public static final int REPLY_SEARCHRESULT = DOCUMENT_REPLY + 11;<a name="line.74"></a>
+<span class="sourceLineNo">075</span>    public static final int REPLY_DOCUMENTSUMMARY = DOCUMENT_REPLY + 14;<a name="line.75"></a>
+<span class="sourceLineNo">076</span>    public static final int REPLY_MAPVISITOR = DOCUMENT_REPLY + 15;<a name="line.76"></a>
+<span class="sourceLineNo">077</span>    public static final int REPLY_GETBUCKETSTATE = DOCUMENT_REPLY + 18;<a name="line.77"></a>
+<span class="sourceLineNo">078</span>    public static final int REPLY_STATBUCKET = DOCUMENT_REPLY + 19;<a name="line.78"></a>
+<span class="sourceLineNo">079</span>    public static final int REPLY_GETBUCKETLIST = DOCUMENT_REPLY + 20;<a name="line.79"></a>
+<span class="sourceLineNo">080</span>    public static final int REPLY_DOCUMENTLIST = DOCUMENT_REPLY + 21;<a name="line.80"></a>
+<span class="sourceLineNo">081</span>    public static final int REPLY_EMPTYBUCKETS = DOCUMENT_REPLY + 23;<a name="line.81"></a>
+<span class="sourceLineNo">082</span>    public static final int REPLY_REMOVELOCATION = DOCUMENT_REPLY + 24;<a name="line.82"></a>
+<span class="sourceLineNo">083</span>    public static final int REPLY_QUERYRESULT = DOCUMENT_REPLY + 25;<a name="line.83"></a>
+<span class="sourceLineNo">084</span>    public static final int REPLY_BATCHDOCUMENTUPDATE = DOCUMENT_REPLY + 26;<a name="line.84"></a>
+<span class="sourceLineNo">085</span>    public static final int REPLY_WRONGDISTRIBUTION = DOCUMENT_REPLY + 1000;<a name="line.85"></a>
+<span class="sourceLineNo">086</span>    public static final int REPLY_DOCUMENTIGNORED = DOCUMENT_REPLY + 1001;<a name="line.86"></a>
+<span class="sourceLineNo">087</span><a name="line.87"></a>
+<span class="sourceLineNo">088</span>    /**<a name="line.88"></a>
+<span class="sourceLineNo">089</span>     * Important note on adding new error codes to the Document protocol:<a name="line.89"></a>
+<span class="sourceLineNo">090</span>     *<a name="line.90"></a>
+<span class="sourceLineNo">091</span>     * Changes to this protocol must be reflected in both the Java and C++ versions<a name="line.91"></a>
+<span class="sourceLineNo">092</span>     * of the code. Furthermore, ErrorCodesTest must be updated across both languages<a name="line.92"></a>
+<span class="sourceLineNo">093</span>     * to include the new error code. Otherwise, cross-language correctness may no<a name="line.93"></a>
+<span class="sourceLineNo">094</span>     * longer be guaranteed.<a name="line.94"></a>
+<span class="sourceLineNo">095</span>     */<a name="line.95"></a>
+<span class="sourceLineNo">096</span><a name="line.96"></a>
+<span class="sourceLineNo">097</span>    /**<a name="line.97"></a>
+<span class="sourceLineNo">098</span>     * Used by policies to  indicate an inappropriate message.<a name="line.98"></a>
+<span class="sourceLineNo">099</span>     */<a name="line.99"></a>
+<span class="sourceLineNo">100</span>    public static final int ERROR_MESSAGE_IGNORED = ErrorCode.APP_FATAL_ERROR + 1;<a name="line.100"></a>
+<span class="sourceLineNo">101</span>    /**<a name="line.101"></a>
+<span class="sourceLineNo">102</span>     * Used for error policy when policy creation failed.<a name="line.102"></a>
+<span class="sourceLineNo">103</span>     */<a name="line.103"></a>
+<span class="sourceLineNo">104</span>    public static final int ERROR_POLICY_FAILURE = ErrorCode.APP_FATAL_ERROR + 2;<a name="line.104"></a>
+<span class="sourceLineNo">105</span>    /**<a name="line.105"></a>
+<span class="sourceLineNo">106</span>     * Document in operation cannot be found. (VDS Get and Remove)<a name="line.106"></a>
+<span class="sourceLineNo">107</span>     */<a name="line.107"></a>
+<span class="sourceLineNo">108</span>    public static final int ERROR_DOCUMENT_NOT_FOUND = ErrorCode.APP_FATAL_ERROR + 1001;<a name="line.108"></a>
+<span class="sourceLineNo">109</span>    /**<a name="line.109"></a>
+<span class="sourceLineNo">110</span>     * Operation cannot be performed because token already exist. (Create bucket, create visitor)<a name="line.110"></a>
+<span class="sourceLineNo">111</span>     */<a name="line.111"></a>
+<span class="sourceLineNo">112</span>    public static final int ERROR_DOCUMENT_EXISTS = ErrorCode.APP_FATAL_ERROR + 1002;<a name="line.112"></a>
+<span class="sourceLineNo">113</span>    /**<a name="line.113"></a>
+<span class="sourceLineNo">114</span>     * Node have not implemented support for the given operation.<a name="line.114"></a>
+<span class="sourceLineNo">115</span>     */<a name="line.115"></a>
+<span class="sourceLineNo">116</span>    public static final int ERROR_NOT_IMPLEMENTED = ErrorCode.APP_FATAL_ERROR + 1004;<a name="line.116"></a>
+<span class="sourceLineNo">117</span>    /**<a name="line.117"></a>
+<span class="sourceLineNo">118</span>     * Parameters given in request is illegal.<a name="line.118"></a>
+<span class="sourceLineNo">119</span>     */<a name="line.119"></a>
+<span class="sourceLineNo">120</span>    public static final int ERROR_ILLEGAL_PARAMETERS = ErrorCode.APP_FATAL_ERROR + 1005;<a name="line.120"></a>
+<span class="sourceLineNo">121</span>    /**<a name="line.121"></a>
+<span class="sourceLineNo">122</span>     * Unknown request received. (New client requesting from old server)<a name="line.122"></a>
+<span class="sourceLineNo">123</span>     */<a name="line.123"></a>
+<span class="sourceLineNo">124</span>    public static final int ERROR_UNKNOWN_COMMAND = ErrorCode.APP_FATAL_ERROR + 1007;<a name="line.124"></a>
+<span class="sourceLineNo">125</span>    /**<a name="line.125"></a>
+<span class="sourceLineNo">126</span>     * Request cannot be decoded.<a name="line.126"></a>
+<span class="sourceLineNo">127</span>     */<a name="line.127"></a>
+<span class="sourceLineNo">128</span>    public static final int ERROR_UNPARSEABLE = ErrorCode.APP_FATAL_ERROR + 1008;<a name="line.128"></a>
+<span class="sourceLineNo">129</span>    /**<a name="line.129"></a>
+<span class="sourceLineNo">130</span>     * Not enough free space on disk to perform operation.<a name="line.130"></a>
+<span class="sourceLineNo">131</span>     */<a name="line.131"></a>
+<span class="sourceLineNo">132</span>    public static final int ERROR_NO_SPACE = ErrorCode.APP_FATAL_ERROR + 1009;<a name="line.132"></a>
+<span class="sourceLineNo">133</span>    /**<a name="line.133"></a>
+<span class="sourceLineNo">134</span>     * Request was not handled correctly.<a name="line.134"></a>
+<span class="sourceLineNo">135</span>     */<a name="line.135"></a>
+<span class="sourceLineNo">136</span>    public static final int ERROR_IGNORED = ErrorCode.APP_FATAL_ERROR + 1010;<a name="line.136"></a>
+<span class="sourceLineNo">137</span>    /**<a name="line.137"></a>
+<span class="sourceLineNo">138</span>     * We failed in some way we didn't expect to fail.<a name="line.138"></a>
+<span class="sourceLineNo">139</span>     */<a name="line.139"></a>
+<span class="sourceLineNo">140</span>    public static final int ERROR_INTERNAL_FAILURE = ErrorCode.APP_FATAL_ERROR + 1011;<a name="line.140"></a>
+<span class="sourceLineNo">141</span>    /**<a name="line.141"></a>
+<span class="sourceLineNo">142</span>     * Node refuse to perform operation. (Illegally formed message?)<a name="line.142"></a>
+<span class="sourceLineNo">143</span>     */<a name="line.143"></a>
+<span class="sourceLineNo">144</span>    public static final int ERROR_REJECTED = ErrorCode.APP_FATAL_ERROR + 1012;<a name="line.144"></a>
+<span class="sourceLineNo">145</span>    /**<a name="line.145"></a>
+<span class="sourceLineNo">146</span>     * Test and set condition (selection) failed.<a name="line.146"></a>
+<span class="sourceLineNo">147</span>     */<a name="line.147"></a>
+<span class="sourceLineNo">148</span>    @Beta<a name="line.148"></a>
+<span class="sourceLineNo">149</span>    public static final int ERROR_TEST_AND_SET_CONDITION_FAILED = ErrorCode.APP_FATAL_ERROR + 1013;<a name="line.149"></a>
+<span class="sourceLineNo">150</span><a name="line.150"></a>
+<span class="sourceLineNo">151</span>    /**<a name="line.151"></a>
+<span class="sourceLineNo">152</span>     * Failed to process the given request. (Used by docproc)<a name="line.152"></a>
+<span class="sourceLineNo">153</span>     */<a name="line.153"></a>
+<span class="sourceLineNo">154</span>    public static final int ERROR_PROCESSING_FAILURE = ErrorCode.APP_FATAL_ERROR + 2001;<a name="line.154"></a>
+<span class="sourceLineNo">155</span>    /** Unique timestamp specified for new operation is already in use. */<a name="line.155"></a>
+<span class="sourceLineNo">156</span>    public static final int ERROR_TIMESTAMP_EXIST    = ErrorCode.APP_FATAL_ERROR + 2002;<a name="line.156"></a>
+<span class="sourceLineNo">157</span>    /**<a name="line.157"></a>
+<span class="sourceLineNo">158</span>     * Node not ready to perform operation. (Initializing VDS nodes)<a name="line.158"></a>
+<span class="sourceLineNo">159</span>     */<a name="line.159"></a>
+<span class="sourceLineNo">160</span>    public static final int ERROR_NODE_NOT_READY = ErrorCode.APP_TRANSIENT_ERROR + 1001;<a name="line.160"></a>
+<span class="sourceLineNo">161</span>    /**<a name="line.161"></a>
+<span class="sourceLineNo">162</span>     * Wrong node to talk to in current state. (VDS system state disagreement)<a name="line.162"></a>
+<span class="sourceLineNo">163</span>     */<a name="line.163"></a>
+<span class="sourceLineNo">164</span>    public static final int ERROR_WRONG_DISTRIBUTION = ErrorCode.APP_TRANSIENT_ERROR + 1002;<a name="line.164"></a>
+<span class="sourceLineNo">165</span>    /**<a name="line.165"></a>
+<span class="sourceLineNo">166</span>     * Operation cut short and aborted. (Destroy visitor, node stopping)<a name="line.166"></a>
+<span class="sourceLineNo">167</span>     */<a name="line.167"></a>
+<span class="sourceLineNo">168</span>    public static final int ERROR_ABORTED = ErrorCode.APP_TRANSIENT_ERROR + 1004;<a name="line.168"></a>
+<span class="sourceLineNo">169</span>    /**<a name="line.169"></a>
+<span class="sourceLineNo">170</span>     * Node too busy to process request (Typically full queues)<a name="line.170"></a>
+<span class="sourceLineNo">171</span>     */<a name="line.171"></a>
+<span class="sourceLineNo">172</span>    public static final int ERROR_BUSY = ErrorCode.APP_TRANSIENT_ERROR + 1005;<a name="line.172"></a>
+<span class="sourceLineNo">173</span>    /**<a name="line.173"></a>
+<span class="sourceLineNo">174</span>     * Lost connection with the node we requested something from.<a name="line.174"></a>
+<span class="sourceLineNo">175</span>     */<a name="line.175"></a>
+<span class="sourceLineNo">176</span>    public static final int ERROR_NOT_CONNECTED = ErrorCode.APP_TRANSIENT_ERROR + 1006;<a name="line.176"></a>
+<span class="sourceLineNo">177</span>    /**<a name="line.177"></a>
+<span class="sourceLineNo">178</span>     * We failed accessing the disk, which we think is a disk hardware problem.<a name="line.178"></a>
+<span class="sourceLineNo">179</span>     */<a name="line.179"></a>
+<span class="sourceLineNo">180</span>    public static final int ERROR_DISK_FAILURE = ErrorCode.APP_TRANSIENT_ERROR + 1007;<a name="line.180"></a>
+<span class="sourceLineNo">181</span>    /**<a name="line.181"></a>
+<span class="sourceLineNo">182</span>     * We failed during an IO operation, we dont think is a specific disk hardware problem.<a name="line.182"></a>
+<span class="sourceLineNo">183</span>     */<a name="line.183"></a>
+<span class="sourceLineNo">184</span>    public static final int ERROR_IO_FAILURE = ErrorCode.APP_TRANSIENT_ERROR + 1008;<a name="line.184"></a>
+<span class="sourceLineNo">185</span>    /**<a name="line.185"></a>
+<span class="sourceLineNo">186</span>     * Bucket given in operation not found due to bucket database<a name="line.186"></a>
+<span class="sourceLineNo">187</span>     * inconsistencies between storage and distributor nodes.<a name="line.187"></a>
+<span class="sourceLineNo">188</span>     */<a name="line.188"></a>
+<span class="sourceLineNo">189</span>    public static final int ERROR_BUCKET_NOT_FOUND = ErrorCode.APP_TRANSIENT_ERROR + 1009;<a name="line.189"></a>
+<span class="sourceLineNo">190</span>    /**<a name="line.190"></a>
+<span class="sourceLineNo">191</span>     * Bucket recently removed, such that operation cannot be performed.<a name="line.191"></a>
+<span class="sourceLineNo">192</span>     * Differs from BUCKET_NOT_FOUND in that there is no db inconsistency.<a name="line.192"></a>
+<span class="sourceLineNo">193</span>     */<a name="line.193"></a>
+<span class="sourceLineNo">194</span>    public static final int ERROR_BUCKET_DELETED = ErrorCode.APP_TRANSIENT_ERROR + 1012;<a name="line.194"></a>
+<span class="sourceLineNo">195</span>    /**<a name="line.195"></a>
+<span class="sourceLineNo">196</span>     * Storage node received a timestamp that is stale. Likely clock skew.<a name="line.196"></a>
+<span class="sourceLineNo">197</span>     */<a name="line.197"></a>
+<span class="sourceLineNo">198</span>    public static final int ERROR_STALE_TIMESTAMP = ErrorCode.APP_TRANSIENT_ERROR + 1013;<a name="line.198"></a>
+<span class="sourceLineNo">199</span><a name="line.199"></a>
+<span class="sourceLineNo">200</span>    /**<a name="line.200"></a>
+<span class="sourceLineNo">201</span>     * The given node have gotten a critical error and have suspended itself.<a name="line.201"></a>
+<span class="sourceLineNo">202</span>     */<a name="line.202"></a>
+<span class="sourceLineNo">203</span>    public static final int ERROR_SUSPENDED = ErrorCode.APP_TRANSIENT_ERROR + 2001;<a name="line.203"></a>
+<span class="sourceLineNo">204</span><a name="line.204"></a>
+<span class="sourceLineNo">205</span>    /**<a name="line.205"></a>
+<span class="sourceLineNo">206</span>     * &lt;p&gt;Define the different priorities allowed for document api messages. Most user traffic should be fit into the<a name="line.206"></a>
+<span class="sourceLineNo">207</span>     * NORMAL categories. Traffic in the HIGH end will be usually be prioritized over important maintenance operations.<a name="line.207"></a>
+<span class="sourceLineNo">208</span>     * Traffic in the LOW end will be prioritized after these operations.&lt;/p&gt;<a name="line.208"></a>
+<span class="sourceLineNo">209</span>     */<a name="line.209"></a>
+<span class="sourceLineNo">210</span>    public static enum Priority {<a name="line.210"></a>
+<span class="sourceLineNo">211</span>        HIGHEST(0),<a name="line.211"></a>
+<span class="sourceLineNo">212</span>        VERY_HIGH(1),<a name="line.212"></a>
+<span class="sourceLineNo">213</span>        HIGH_1(2),<a name="line.213"></a>
+<span class="sourceLineNo">214</span>        HIGH_2(3),<a name="line.214"></a>
+<span class="sourceLineNo">215</span>        HIGH_3(4),<a name="line.215"></a>
+<span class="sourceLineNo">216</span>        NORMAL_1(5),<a name="line.216"></a>
+<span class="sourceLineNo">217</span>        NORMAL_2(6),<a name="line.217"></a>
+<span class="sourceLineNo">218</span>        NORMAL_3(7),<a name="line.218"></a>
+<span class="sourceLineNo">219</span>        NORMAL_4(8),<a name="line.219"></a>
+<span class="sourceLineNo">220</span>        NORMAL_5(9),<a name="line.220"></a>
+<span class="sourceLineNo">221</span>        NORMAL_6(10),<a name="line.221"></a>
+<span class="sourceLineNo">222</span>        LOW_1(11),<a name="line.222"></a>
+<span class="sourceLineNo">223</span>        LOW_2(12),<a name="line.223"></a>
+<span class="sourceLineNo">224</span>        LOW_3(13),<a name="line.224"></a>
+<span class="sourceLineNo">225</span>        VERY_LOW(14),<a name="line.225"></a>
+<span class="sourceLineNo">226</span>        LOWEST(15);<a name="line.226"></a>
+<span class="sourceLineNo">227</span><a name="line.227"></a>
+<span class="sourceLineNo">228</span>        private final int val;<a name="line.228"></a>
+<span class="sourceLineNo">229</span><a name="line.229"></a>
+<span class="sourceLineNo">230</span>        private Priority(int val) {<a name="line.230"></a>
+<span class="sourceLineNo">231</span>            this.val = val;<a name="line.231"></a>
+<span class="sourceLineNo">232</span>        }<a name="line.232"></a>
+<span class="sourceLineNo">233</span><a name="line.233"></a>
+<span class="sourceLineNo">234</span>        public int getValue() {<a name="line.234"></a>
+<span class="sourceLineNo">235</span>            return val;<a name="line.235"></a>
+<span class="sourceLineNo">236</span>        }<a name="line.236"></a>
+<span class="sourceLineNo">237</span>    }<a name="line.237"></a>
+<span class="sourceLineNo">238</span><a name="line.238"></a>
+<span class="sourceLineNo">239</span>    /**<a name="line.239"></a>
+<span class="sourceLineNo">240</span>     * Get a priority enum instance by its value.<a name="line.240"></a>
+<span class="sourceLineNo">241</span>     *<a name="line.241"></a>
+<span class="sourceLineNo">242</span>     * @param val The value of the priority to return.<a name="line.242"></a>
+<span class="sourceLineNo">243</span>     * @return The priority enum instance.<a name="line.243"></a>
+<span class="sourceLineNo">244</span>     * @throws IllegalArgumentException If priority value is unknown.<a name="line.244"></a>
+<span class="sourceLineNo">245</span>     */<a name="line.245"></a>
+<span class="sourceLineNo">246</span>    public static Priority getPriority(int val) {<a name="line.246"></a>
+<span class="sourceLineNo">247</span>        for (Priority pri : Priority.values()) {<a name="line.247"></a>
+<span class="sourceLineNo">248</span>            if (val == pri.val) {<a name="line.248"></a>
+<span class="sourceLineNo">249</span>                return pri;<a name="line.249"></a>
+<span class="sourceLineNo">250</span>            }<a name="line.250"></a>
+<span class="sourceLineNo">251</span>        }<a name="line.251"></a>
+<span class="sourceLineNo">252</span>        throw new IllegalArgumentException("Unknown priority: " + val);<a name="line.252"></a>
+<span class="sourceLineNo">253</span>    }<a name="line.253"></a>
+<span class="sourceLineNo">254</span><a name="line.254"></a>
+<span class="sourceLineNo">255</span>    /**<a name="line.255"></a>
+<span class="sourceLineNo">256</span>     * Get priority enum instance by its name.<a name="line.256"></a>
+<span class="sourceLineNo">257</span>     *<a name="line.257"></a>
+<span class="sourceLineNo">258</span>     * @param name Name of priority.<a name="line.258"></a>
+<span class="sourceLineNo">259</span>     * @return Priority enum instance, given that &lt;code&gt;name&lt;/code&gt; is valid.<a name="line.259"></a>
+<span class="sourceLineNo">260</span>     * @throws IllegalArgumentException If priority name is unknown.<a name="line.260"></a>
+<span class="sourceLineNo">261</span>     */<a name="line.261"></a>
+<span class="sourceLineNo">262</span>    public static Priority getPriorityByName(String name) {<a name="line.262"></a>
+<span class="sourceLineNo">263</span>        return Priority.valueOf(name);<a name="line.263"></a>
+<span class="sourceLineNo">264</span>    }<a name="line.264"></a>
+<span class="sourceLineNo">265</span><a name="line.265"></a>
+<span class="sourceLineNo">266</span>    public DocumentProtocol(DocumentTypeManager docMan) {<a name="line.266"></a>
+<span class="sourceLineNo">267</span>        this(docMan, null, new LoadTypeSet());<a name="line.267"></a>
+<span class="sourceLineNo">268</span>    }<a name="line.268"></a>
+<span class="sourceLineNo">269</span><a name="line.269"></a>
+<span class="sourceLineNo">270</span>    public DocumentProtocol(DocumentTypeManager docMan, String configId) {<a name="line.270"></a>
+<span class="sourceLineNo">271</span>        this(docMan, configId, new LoadTypeSet());<a name="line.271"></a>
+<span class="sourceLineNo">272</span>    }<a name="line.272"></a>
+<span class="sourceLineNo">273</span><a name="line.273"></a>
+<span class="sourceLineNo">274</span>    public DocumentProtocol(DocumentTypeManager docMan, String configId, LoadTypeSet set) {<a name="line.274"></a>
+<span class="sourceLineNo">275</span>        // Prepare config string for routing policy factories.<a name="line.275"></a>
+<span class="sourceLineNo">276</span>        String cfg = (configId == null ? "client" : configId);<a name="line.276"></a>
+<span class="sourceLineNo">277</span>        if (docMan != null) {<a name="line.277"></a>
+<span class="sourceLineNo">278</span>            this.docMan = docMan;<a name="line.278"></a>
+<span class="sourceLineNo">279</span>        } else {<a name="line.279"></a>
+<span class="sourceLineNo">280</span>            this.docMan = new DocumentTypeManager();<a name="line.280"></a>
+<span class="sourceLineNo">281</span>            DocumentTypeManagerConfigurer.configure(this.docMan, cfg);<a name="line.281"></a>
+<span class="sourceLineNo">282</span>        }<a name="line.282"></a>
+<span class="sourceLineNo">283</span>        routableRepository = new RoutableRepository(set);<a name="line.283"></a>
+<span class="sourceLineNo">284</span><a name="line.284"></a>
+<span class="sourceLineNo">285</span>        // When adding factories to this list, please KEEP THEM ORDERED alphabetically like they are now.<a name="line.285"></a>
+<span class="sourceLineNo">286</span>        putRoutingPolicyFactory("AND", new RoutingPolicyFactories.AndPolicyFactory());<a name="line.286"></a>
+<span class="sourceLineNo">287</span>        putRoutingPolicyFactory("Content", new RoutingPolicyFactories.ContentPolicyFactory());<a name="line.287"></a>
+<span class="sourceLineNo">288</span>        putRoutingPolicyFactory("DocumentRouteSelector", new RoutingPolicyFactories.DocumentRouteSelectorPolicyFactory(cfg));<a name="line.288"></a>
+<span class="sourceLineNo">289</span>        putRoutingPolicyFactory("Extern", new RoutingPolicyFactories.ExternPolicyFactory());<a name="line.289"></a>
+<span class="sourceLineNo">290</span>        putRoutingPolicyFactory("LocalService", new RoutingPolicyFactories.LocalServicePolicyFactory());<a name="line.290"></a>
+<span class="sourceLineNo">291</span>        putRoutingPolicyFactory("MessageType", new RoutingPolicyFactories.MessageTypePolicyFactory(cfg));<a name="line.291"></a>
+<span class="sourceLineNo">292</span>        putRoutingPolicyFactory("RoundRobin", new RoutingPolicyFactories.RoundRobinPolicyFactory());<a name="line.292"></a>
+<span class="sourceLineNo">293</span>        putRoutingPolicyFactory("LoadBalancer", new RoutingPolicyFactories.LoadBalancerPolicyFactory());<a name="line.293"></a>
+<span class="sourceLineNo">294</span>        putRoutingPolicyFactory("SearchColumn", new RoutingPolicyFactories.SearchColumnPolicyFactory());<a name="line.294"></a>
+<span class="sourceLineNo">295</span>        putRoutingPolicyFactory("SearchRow", new RoutingPolicyFactories.SearchRowPolicyFactory());<a name="line.295"></a>
+<span class="sourceLineNo">296</span>        putRoutingPolicyFactory("Storage", new RoutingPolicyFactories.StoragePolicyFactory());<a name="line.296"></a>
+<span class="sourceLineNo">297</span>        putRoutingPolicyFactory("SubsetService", new RoutingPolicyFactories.SubsetServicePolicyFactory());<a name="line.297"></a>
+<span class="sourceLineNo">298</span><a name="line.298"></a>
+<span class="sourceLineNo">299</span>        // Prepare version specifications to use when adding routable factories.<a name="line.299"></a>
+<span class="sourceLineNo">300</span>        VersionSpecification version50 = new VersionSpecification(5, 0);<a name="line.300"></a>
+<span class="sourceLineNo">301</span>        VersionSpecification version51 = new VersionSpecification(5, 1);<a name="line.301"></a>
+<span class="sourceLineNo">302</span>        VersionSpecification version52 = new VersionSpecification(5, 115);<a name="line.302"></a>
+<span class="sourceLineNo">303</span><a name="line.303"></a>
+<span class="sourceLineNo">304</span>        List&lt;VersionSpecification&gt; from50 = Arrays.asList(version50, version51, version52);<a name="line.304"></a>
+<span class="sourceLineNo">305</span>        List&lt;VersionSpecification&gt; from51 = Arrays.asList(version51, version52);<a name="line.305"></a>
+<span class="sourceLineNo">306</span>        List&lt;VersionSpecification&gt; from52 = Arrays.asList(version52);<a name="line.306"></a>
+<span class="sourceLineNo">307</span><a name="line.307"></a>
+<span class="sourceLineNo">308</span>        // 5.0 serialization (keep alphabetized please)<a name="line.308"></a>
+<span class="sourceLineNo">309</span>        putRoutableFactory(MESSAGE_BATCHDOCUMENTUPDATE, new RoutableFactories50.BatchDocumentUpdateMessageFactory(), from50);<a name="line.309"></a>
+<span class="sourceLineNo">310</span>        putRoutableFactory(MESSAGE_CREATEVISITOR, new RoutableFactories50.CreateVisitorMessageFactory(), from50);<a name="line.310"></a>
+<span class="sourceLineNo">311</span>        putRoutableFactory(MESSAGE_DESTROYVISITOR, new RoutableFactories50.DestroyVisitorMessageFactory(), from50);<a name="line.311"></a>
+<span class="sourceLineNo">312</span>        putRoutableFactory(MESSAGE_DOCUMENTLIST, new RoutableFactories50.DocumentListMessageFactory(), from50);<a name="line.312"></a>
+<span class="sourceLineNo">313</span>        putRoutableFactory(MESSAGE_DOCUMENTSUMMARY, new RoutableFactories50.DocumentSummaryMessageFactory(), from50);<a name="line.313"></a>
+<span class="sourceLineNo">314</span>        putRoutableFactory(MESSAGE_EMPTYBUCKETS, new RoutableFactories50.EmptyBucketsMessageFactory(), from50);<a name="line.314"></a>
+<span class="sourceLineNo">315</span>        putRoutableFactory(MESSAGE_GETBUCKETLIST, new RoutableFactories50.GetBucketListMessageFactory(), from50);<a name="line.315"></a>
+<span class="sourceLineNo">316</span>        putRoutableFactory(MESSAGE_GETBUCKETSTATE, new RoutableFactories50.GetBucketStateMessageFactory(), from50);<a name="line.316"></a>
+<span class="sourceLineNo">317</span>        putRoutableFactory(MESSAGE_GETDOCUMENT, new RoutableFactories50.GetDocumentMessageFactory(), from50);<a name="line.317"></a>
+<span class="sourceLineNo">318</span>        putRoutableFactory(MESSAGE_MAPVISITOR, new RoutableFactories50.MapVisitorMessageFactory(), from50);<a name="line.318"></a>
+<span class="sourceLineNo">319</span>        putRoutableFactory(MESSAGE_PUTDOCUMENT, new RoutableFactories50.PutDocumentMessageFactory(), from50);<a name="line.319"></a>
+<span class="sourceLineNo">320</span>        putRoutableFactory(MESSAGE_QUERYRESULT, new RoutableFactories50.QueryResultMessageFactory(), from50);<a name="line.320"></a>
+<span class="sourceLineNo">321</span>        putRoutableFactory(MESSAGE_REMOVEDOCUMENT, new RoutableFactories50.RemoveDocumentMessageFactory(), from50);<a name="line.321"></a>
+<span class="sourceLineNo">322</span>        putRoutableFactory(MESSAGE_REMOVELOCATION, new RoutableFactories50.RemoveLocationMessageFactory(), from50);<a name="line.322"></a>
+<span class="sourceLineNo">323</span>        putRoutableFactory(MESSAGE_SEARCHRESULT, new RoutableFactories50.SearchResultMessageFactory(), from50);<a name="line.323"></a>
+<span class="sourceLineNo">324</span>        putRoutableFactory(MESSAGE_STATBUCKET, new RoutableFactories50.StatBucketMessageFactory(), from50);<a name="line.324"></a>
+<span class="sourceLineNo">325</span>        putRoutableFactory(MESSAGE_UPDATEDOCUMENT, new RoutableFactories50.UpdateDocumentMessageFactory(), from50);<a name="line.325"></a>
+<span class="sourceLineNo">326</span>        putRoutableFactory(MESSAGE_VISITORINFO, new RoutableFactories50.VisitorInfoMessageFactory(), from50);<a name="line.326"></a>
+<span class="sourceLineNo">327</span>        putRoutableFactory(REPLY_BATCHDOCUMENTUPDATE, new RoutableFactories50.BatchDocumentUpdateReplyFactory(), from50);<a name="line.327"></a>
+<span class="sourceLineNo">328</span>        putRoutableFactory(REPLY_CREATEVISITOR, new RoutableFactories50.CreateVisitorReplyFactory(), from50);<a name="line.328"></a>
+<span class="sourceLineNo">329</span>        putRoutableFactory(REPLY_DESTROYVISITOR, new RoutableFactories50.DestroyVisitorReplyFactory(), from50);<a name="line.329"></a>
+<span class="sourceLineNo">330</span>        putRoutableFactory(REPLY_DOCUMENTLIST, new RoutableFactories50.DocumentListReplyFactory(), from50);<a name="line.330"></a>
+<span class="sourceLineNo">331</span>        putRoutableFactory(REPLY_DOCUMENTSUMMARY, new RoutableFactories50.DocumentSummaryReplyFactory(), from50);<a name="line.331"></a>
+<span class="sourceLineNo">332</span>        putRoutableFactory(REPLY_EMPTYBUCKETS, new RoutableFactories50.EmptyBucketsReplyFactory(), from50);<a name="line.332"></a>
+<span class="sourceLineNo">333</span>        putRoutableFactory(REPLY_GETBUCKETLIST, new RoutableFactories50.GetBucketListReplyFactory(), from50);<a name="line.333"></a>
+<span class="sourceLineNo">334</span>        putRoutableFactory(REPLY_GETBUCKETSTATE, new RoutableFactories50.GetBucketStateReplyFactory(), from50);<a name="line.334"></a>
+<span class="sourceLineNo">335</span>        putRoutableFactory(REPLY_GETDOCUMENT, new RoutableFactories50.GetDocumentReplyFactory(), from50);<a name="line.335"></a>
+<span class="sourceLineNo">336</span>        putRoutableFactory(REPLY_MAPVISITOR, new RoutableFactories50.MapVisitorReplyFactory(), from50);<a name="line.336"></a>
+<span class="sourceLineNo">337</span>        putRoutableFactory(REPLY_PUTDOCUMENT, new RoutableFactories50.PutDocumentReplyFactory(), from50);<a name="line.337"></a>
+<span class="sourceLineNo">338</span>        putRoutableFactory(REPLY_QUERYRESULT, new RoutableFactories50.QueryResultReplyFactory(), from50);<a name="line.338"></a>
+<span class="sourceLineNo">339</span>        putRoutableFactory(REPLY_REMOVEDOCUMENT, new RoutableFactories50.RemoveDocumentReplyFactory(), from50);<a name="line.339"></a>
+<span class="sourceLineNo">340</span>        putRoutableFactory(REPLY_REMOVELOCATION, new RoutableFactories50.RemoveLocationReplyFactory(), from50);<a name="line.340"></a>
+<span class="sourceLineNo">341</span>        putRoutableFactory(REPLY_SEARCHRESULT, new RoutableFactories50.SearchResultReplyFactory(), from50);<a name="line.341"></a>
+<span class="sourceLineNo">342</span>        putRoutableFactory(REPLY_STATBUCKET, new RoutableFactories50.StatBucketReplyFactory(), from50);<a name="line.342"></a>
+<span class="sourceLineNo">343</span>        putRoutableFactory(REPLY_UPDATEDOCUMENT, new RoutableFactories50.UpdateDocumentReplyFactory(), from50);<a name="line.343"></a>
+<span class="sourceLineNo">344</span>        putRoutableFactory(REPLY_UPDATEDOCUMENT, new RoutableFactories50.UpdateDocumentReplyFactory(), from50);<a name="line.344"></a>
+<span class="sourceLineNo">345</span>        putRoutableFactory(REPLY_VISITORINFO, new RoutableFactories50.VisitorInfoReplyFactory(), from50);<a name="line.345"></a>
+<span class="sourceLineNo">346</span>        putRoutableFactory(REPLY_WRONGDISTRIBUTION, new RoutableFactories50.WrongDistributionReplyFactory(), from50);<a name="line.346"></a>
+<span class="sourceLineNo">347</span><a name="line.347"></a>
+<span class="sourceLineNo">348</span>        // 5.1 serialization<a name="line.348"></a>
+<span class="sourceLineNo">349</span>        putRoutableFactory(MESSAGE_CREATEVISITOR, new RoutableFactories51.CreateVisitorMessageFactory(), from51);<a name="line.349"></a>
+<span class="sourceLineNo">350</span>        putRoutableFactory(MESSAGE_GETDOCUMENT, new RoutableFactories51.GetDocumentMessageFactory(), from51);<a name="line.350"></a>
+<span class="sourceLineNo">351</span>        putRoutableFactory(REPLY_DOCUMENTIGNORED, new RoutableFactories51.DocumentIgnoredReplyFactory(), from51);<a name="line.351"></a>
+<span class="sourceLineNo">352</span><a name="line.352"></a>
+<span class="sourceLineNo">353</span>        // 5.2 serialization<a name="line.353"></a>
+<span class="sourceLineNo">354</span>        putRoutableFactory(MESSAGE_PUTDOCUMENT, new RoutableFactories52.PutDocumentMessageFactory(), from52);<a name="line.354"></a>
+<span class="sourceLineNo">355</span>        putRoutableFactory(MESSAGE_UPDATEDOCUMENT, new RoutableFactories52.UpdateDocumentMessageFactory(), from52);<a name="line.355"></a>
+<span class="sourceLineNo">356</span>        putRoutableFactory(MESSAGE_REMOVEDOCUMENT, new RoutableFactories52.RemoveDocumentMessageFactory(), from52);<a name="line.356"></a>
+<span class="sourceLineNo">357</span>    }<a name="line.357"></a>
+<span class="sourceLineNo">358</span><a name="line.358"></a>
+<span class="sourceLineNo">359</span>    /**<a name="line.359"></a>
+<span class="sourceLineNo">360</span>     * Adds a new routable factory to this protocol. This method is thread-safe, and may be invoked on a protocol object<a name="line.360"></a>
+<span class="sourceLineNo">361</span>     * that is already in use by a message bus instance. Notice that the name you supply for a factory is the<a name="line.361"></a>
+<span class="sourceLineNo">362</span>     * case-sensitive name that will be referenced by routes.<a name="line.362"></a>
+<span class="sourceLineNo">363</span>     *<a name="line.363"></a>
+<span class="sourceLineNo">364</span>     * @param name    The name of the factory to add.<a name="line.364"></a>
+<span class="sourceLineNo">365</span>     * @param factory The factory to add.<a name="line.365"></a>
+<span class="sourceLineNo">366</span>     * @return This, to allow chaining.<a name="line.366"></a>
+<span class="sourceLineNo">367</span>     */<a name="line.367"></a>
+<span class="sourceLineNo">368</span>    public DocumentProtocol putRoutingPolicyFactory(String name, RoutingPolicyFactory factory) {<a name="line.368"></a>
+<span class="sourceLineNo">369</span>        routingPolicyRepository.putFactory(name, factory);<a name="line.369"></a>
+<span class="sourceLineNo">370</span>        return this;<a name="line.370"></a>
+<span class="sourceLineNo">371</span>    }<a name="line.371"></a>
+<span class="sourceLineNo">372</span><a name="line.372"></a>
+<span class="sourceLineNo">373</span>    /**<a name="line.373"></a>
+<span class="sourceLineNo">374</span>     * Adds a new routable factory to this protocol. This method is thread-safe, and may be invoked on a protocol object<a name="line.374"></a>
+<span class="sourceLineNo">375</span>     * that is already in use by a message bus instance. Notice that you must explicitly register a factory for each<a name="line.375"></a>
+<span class="sourceLineNo">376</span>     * supported version. You can always bypass this by passing a default version specification object to this function,<a name="line.376"></a>
+<span class="sourceLineNo">377</span>     * because that object will match any version.<a name="line.377"></a>
+<span class="sourceLineNo">378</span>     *<a name="line.378"></a>
+<span class="sourceLineNo">379</span>     * @param type    The routable type to assign a factory to.<a name="line.379"></a>
+<span class="sourceLineNo">380</span>     * @param factory The factory to add.<a name="line.380"></a>
+<span class="sourceLineNo">381</span>     * @param version The version for which this factory can be used.<a name="line.381"></a>
+<span class="sourceLineNo">382</span>     * @return This, to allow chaining.<a name="line.382"></a>
+<span class="sourceLineNo">383</span>     */<a name="line.383"></a>
+<span class="sourceLineNo">384</span>    public DocumentProtocol putRoutableFactory(int type, RoutableFactory factory, VersionSpecification version) {<a name="line.384"></a>
+<span class="sourceLineNo">385</span>        routableRepository.putFactory(version, type, factory);<a name="line.385"></a>
+<span class="sourceLineNo">386</span>        return this;<a name="line.386"></a>
+<span class="sourceLineNo">387</span>    }<a name="line.387"></a>
+<span class="sourceLineNo">388</span><a name="line.388"></a>
+<span class="sourceLineNo">389</span>    /**<a name="line.389"></a>
+<span class="sourceLineNo">390</span>     * Convenience method to call {@link #putRoutableFactory(int, RoutableFactory, com.yahoo.component.VersionSpecification)}<a name="line.390"></a>
+<span class="sourceLineNo">391</span>     * for multiple version specifications.<a name="line.391"></a>
+<span class="sourceLineNo">392</span>     *<a name="line.392"></a>
+<span class="sourceLineNo">393</span>     * @param type     The routable type to assign a factory to.<a name="line.393"></a>
+<span class="sourceLineNo">394</span>     * @param factory  The factory to add.<a name="line.394"></a>
+<span class="sourceLineNo">395</span>     * @param versions The versions for which this factory can be used.<a name="line.395"></a>
+<span class="sourceLineNo">396</span>     * @return This, to allow chaining.<a name="line.396"></a>
+<span class="sourceLineNo">397</span>     */<a name="line.397"></a>
+<span class="sourceLineNo">398</span>    public DocumentProtocol putRoutableFactory(int type, RoutableFactory factory, List&lt;VersionSpecification&gt; versions) {<a name="line.398"></a>
+<span class="sourceLineNo">399</span>        for (VersionSpecification version : versions) {<a name="line.399"></a>
+<span class="sourceLineNo">400</span>            putRoutableFactory(type, factory, version);<a name="line.400"></a>
+<span class="sourceLineNo">401</span>        }<a name="line.401"></a>
+<span class="sourceLineNo">402</span>        return this;<a name="line.402"></a>
+<span class="sourceLineNo">403</span>    }<a name="line.403"></a>
+<span class="sourceLineNo">404</span><a name="line.404"></a>
+<span class="sourceLineNo">405</span>    /**<a name="line.405"></a>
+<span class="sourceLineNo">406</span>     * Returns a string representation of the given error code.<a name="line.406"></a>
+<span class="sourceLineNo">407</span>     *<a name="line.407"></a>
+<span class="sourceLineNo">408</span>     * @param code The code whose string symbol to return.<a name="line.408"></a>
+<span class="sourceLineNo">409</span>     * @return The error string.<a name="line.409"></a>
+<span class="sourceLineNo">410</span>     */<a name="line.410"></a>
+<span class="sourceLineNo">411</span>    public static String getErrorName(int code) {<a name="line.411"></a>
+<span class="sourceLineNo">412</span>        switch (code) {<a name="line.412"></a>
+<span class="sourceLineNo">413</span>        case ERROR_MESSAGE_IGNORED:<a name="line.413"></a>
+<span class="sourceLineNo">414</span>            return "MESSAGE_IGNORED";<a name="line.414"></a>
+<span class="sourceLineNo">415</span>        case ERROR_POLICY_FAILURE:<a name="line.415"></a>
+<span class="sourceLineNo">416</span>            return "POLICY_FAILURE";<a name="line.416"></a>
+<span class="sourceLineNo">417</span>        case ERROR_DOCUMENT_NOT_FOUND:<a name="line.417"></a>
+<span class="sourceLineNo">418</span>            return "DOCUMENT_NOT_FOUND";<a name="line.418"></a>
+<span class="sourceLineNo">419</span>        case ERROR_DOCUMENT_EXISTS:<a name="line.419"></a>
+<span class="sourceLineNo">420</span>            return "DOCUMENT_EXISTS";<a name="line.420"></a>
+<span class="sourceLineNo">421</span>        case ERROR_BUCKET_NOT_FOUND:<a name="line.421"></a>
+<span class="sourceLineNo">422</span>            return "BUCKET_NOT_FOUND";<a name="line.422"></a>
+<span class="sourceLineNo">423</span>        case ERROR_BUCKET_DELETED:<a name="line.423"></a>
+<span class="sourceLineNo">424</span>            return "BUCKET_DELETED";<a name="line.424"></a>
+<span class="sourceLineNo">425</span>        case ERROR_NOT_IMPLEMENTED:<a name="line.425"></a>
+<span class="sourceLineNo">426</span>            return "NOT_IMPLEMENTED";<a name="line.426"></a>
+<span class="sourceLineNo">427</span>        case ERROR_ILLEGAL_PARAMETERS:<a name="line.427"></a>
+<span class="sourceLineNo">428</span>            return "ILLEGAL_PARAMETERS";<a name="line.428"></a>
+<span class="sourceLineNo">429</span>        case ERROR_IGNORED:<a name="line.429"></a>
+<span class="sourceLineNo">430</span>            return "IGNORED";<a name="line.430"></a>
+<span class="sourceLineNo">431</span>        case ERROR_UNKNOWN_COMMAND:<a name="line.431"></a>
+<span class="sourceLineNo">432</span>            return "UNKNOWN_COMMAND";<a name="line.432"></a>
+<span class="sourceLineNo">433</span>        case ERROR_UNPARSEABLE:<a name="line.433"></a>
+<span class="sourceLineNo">434</span>            return "UNPARSEABLE";<a name="line.434"></a>
+<span class="sourceLineNo">435</span>        case ERROR_NO_SPACE:<a name="line.435"></a>
+<span class="sourceLineNo">436</span>            return "NO_SPACE";<a name="line.436"></a>
+<span class="sourceLineNo">437</span>        case ERROR_INTERNAL_FAILURE:<a name="line.437"></a>
+<span class="sourceLineNo">438</span>            return "INTERNAL_FAILURE";<a name="line.438"></a>
+<span class="sourceLineNo">439</span>        case ERROR_PROCESSING_FAILURE:<a name="line.439"></a>
+<span class="sourceLineNo">440</span>            return "PROCESSING_FAILURE";<a name="line.440"></a>
+<span class="sourceLineNo">441</span>        case ERROR_TIMESTAMP_EXIST:<a name="line.441"></a>
+<span class="sourceLineNo">442</span>            return "TIMESTAMP_EXIST";<a name="line.442"></a>
+<span class="sourceLineNo">443</span>        case ERROR_STALE_TIMESTAMP:<a name="line.443"></a>
+<span class="sourceLineNo">444</span>            return "STALE_TIMESTAMP";<a name="line.444"></a>
+<span class="sourceLineNo">445</span>        case ERROR_NODE_NOT_READY:<a name="line.445"></a>
+<span class="sourceLineNo">446</span>            return "NODE_NOT_READY";<a name="line.446"></a>
+<span class="sourceLineNo">447</span>        case ERROR_WRONG_DISTRIBUTION:<a name="line.447"></a>
+<span class="sourceLineNo">448</span>            return "WRONG_DISTRIBUTION";<a name="line.448"></a>
+<span class="sourceLineNo">449</span>        case ERROR_REJECTED:<a name="line.449"></a>
+<span class="sourceLineNo">450</span>            return "REJECTED";<a name="line.450"></a>
+<span class="sourceLineNo">451</span>        case ERROR_ABORTED:<a name="line.451"></a>
+<span class="sourceLineNo">452</span>            return "ABORTED";<a name="line.452"></a>
+<span class="sourceLineNo">453</span>        case ERROR_BUSY:<a name="line.453"></a>
+<span class="sourceLineNo">454</span>            return "BUSY";<a name="line.454"></a>
+<span class="sourceLineNo">455</span>        case ERROR_NOT_CONNECTED:<a name="line.455"></a>
+<span class="sourceLineNo">456</span>            return "NOT_CONNECTED";<a name="line.456"></a>
+<span class="sourceLineNo">457</span>        case ERROR_DISK_FAILURE:<a name="line.457"></a>
+<span class="sourceLineNo">458</span>            return "DISK_FAILURE";<a name="line.458"></a>
+<span class="sourceLineNo">459</span>        case ERROR_IO_FAILURE:<a name="line.459"></a>
+<span class="sourceLineNo">460</span>            return "IO_FAILURE";<a name="line.460"></a>
+<span class="sourceLineNo">461</span>        case ERROR_SUSPENDED:<a name="line.461"></a>
+<span class="sourceLineNo">462</span>            return "SUSPENDED";<a name="line.462"></a>
+<span class="sourceLineNo">463</span>        case ERROR_TEST_AND_SET_CONDITION_FAILED:<a name="line.463"></a>
+<span class="sourceLineNo">464</span>            return "TEST_AND_SET_CONDITION_FAILED";<a name="line.464"></a>
+<span class="sourceLineNo">465</span>        default:<a name="line.465"></a>
+<span class="sourceLineNo">466</span>            return ErrorCode.getName(code);<a name="line.466"></a>
+<span class="sourceLineNo">467</span>        }<a name="line.467"></a>
+<span class="sourceLineNo">468</span>    }<a name="line.468"></a>
+<span class="sourceLineNo">469</span><a name="line.469"></a>
+<span class="sourceLineNo">470</span>    /**<a name="line.470"></a>
+<span class="sourceLineNo">471</span>     * This is a convenient entry to the {@link #merge(RoutingContext,Set)} method by way of a routing context object.<a name="line.471"></a>
+<span class="sourceLineNo">472</span>     * The replies of all child contexts are merged and stored in the context.<a name="line.472"></a>
+<span class="sourceLineNo">473</span>     *<a name="line.473"></a>
+<span class="sourceLineNo">474</span>     * @param ctx The context whose children to merge.<a name="line.474"></a>
+<span class="sourceLineNo">475</span>     */<a name="line.475"></a>
+<span class="sourceLineNo">476</span>    public static void merge(RoutingContext ctx) {<a name="line.476"></a>
+<span class="sourceLineNo">477</span>        merge(ctx, new HashSet&lt;Integer&gt;(0));<a name="line.477"></a>
+<span class="sourceLineNo">478</span>    }<a name="line.478"></a>
+<span class="sourceLineNo">479</span><a name="line.479"></a>
+<span class="sourceLineNo">480</span>    /**<a name="line.480"></a>
+<span class="sourceLineNo">481</span>     * This method implements the common way to merge document replies for whatever routing policy. In case of an error<a name="line.481"></a>
+<span class="sourceLineNo">482</span>     * in any of the replies, it will prepare an EmptyReply() and add all errors to it. If there are no errors, this<a name="line.482"></a>
+<span class="sourceLineNo">483</span>     * method will use the first reply in the list and transfer whatever feed answers might exist in the replies to it.<a name="line.483"></a>
+<span class="sourceLineNo">484</span>     *<a name="line.484"></a>
+<span class="sourceLineNo">485</span>     * @param ctx  The context whose children to merge.<a name="line.485"></a>
+<span class="sourceLineNo">486</span>     * @param mask The indexes of the children to skip.<a name="line.486"></a>
+<span class="sourceLineNo">487</span>     */<a name="line.487"></a>
+<span class="sourceLineNo">488</span>    public static void merge(RoutingContext ctx, Set&lt;Integer&gt; mask) {<a name="line.488"></a>
+<span class="sourceLineNo">489</span>        List&lt;Reply&gt; replies = new LinkedList&lt;&gt;();<a name="line.489"></a>
+<span class="sourceLineNo">490</span>        for (RoutingNodeIterator it = ctx.getChildIterator();<a name="line.490"></a>
+<span class="sourceLineNo">491</span>             it.isValid(); it.next()) {<a name="line.491"></a>
+<span class="sourceLineNo">492</span>            Reply ref = it.getReplyRef();<a name="line.492"></a>
+<span class="sourceLineNo">493</span>            replies.add(ref);<a name="line.493"></a>
+<span class="sourceLineNo">494</span>        }<a name="line.494"></a>
+<span class="sourceLineNo">495</span>        Tuple2&lt;Integer, Reply&gt; tuple = merge(replies, mask);<a name="line.495"></a>
+<span class="sourceLineNo">496</span>        if (tuple.first != null) {<a name="line.496"></a>
+<span class="sourceLineNo">497</span>            ctx.getChildIterator().skip(tuple.first).removeReply();<a name="line.497"></a>
+<span class="sourceLineNo">498</span>        }<a name="line.498"></a>
+<span class="sourceLineNo">499</span>        ctx.setReply(tuple.second);<a name="line.499"></a>
+<span class="sourceLineNo">500</span>    }<a name="line.500"></a>
+<span class="sourceLineNo">501</span><a name="line.501"></a>
+<span class="sourceLineNo">502</span>    private static Tuple2&lt;Integer, Reply&gt; merge(List&lt;Reply&gt; replies, Set&lt;Integer&gt; mask) {<a name="line.502"></a>
+<span class="sourceLineNo">503</span>        ReplyMerger rm = new ReplyMerger();<a name="line.503"></a>
+<span class="sourceLineNo">504</span>        for (int i = 0; i &lt; replies.size(); ++i) {<a name="line.504"></a>
+<span class="sourceLineNo">505</span>            if (mask.contains(i)) {<a name="line.505"></a>
+<span class="sourceLineNo">506</span>                continue;<a name="line.506"></a>
+<span class="sourceLineNo">507</span>            }<a name="line.507"></a>
+<span class="sourceLineNo">508</span>            rm.merge(i, replies.get(i));<a name="line.508"></a>
+<span class="sourceLineNo">509</span>        }<a name="line.509"></a>
+<span class="sourceLineNo">510</span>        return rm.mergedReply();<a name="line.510"></a>
+<span class="sourceLineNo">511</span>    }<a name="line.511"></a>
+<span class="sourceLineNo">512</span><a name="line.512"></a>
+<span class="sourceLineNo">513</span>    /**<a name="line.513"></a>
+<span class="sourceLineNo">514</span>     * This method implements the common way to merge document replies for whatever routing policy. In case of an error<a name="line.514"></a>
+<span class="sourceLineNo">515</span>     * in any of the replies, it will prepare an EmptyReply() and add all errors to it. If there are no errors, this<a name="line.515"></a>
+<span class="sourceLineNo">516</span>     * method will use the first reply in the list and transfer whatever feed answers might exist in the replies to it.<a name="line.516"></a>
+<span class="sourceLineNo">517</span>     *<a name="line.517"></a>
+<span class="sourceLineNo">518</span>     *<a name="line.518"></a>
+<span class="sourceLineNo">519</span>     * @param replies The replies to merge.<a name="line.519"></a>
+<span class="sourceLineNo">520</span>     * @return The merged Reply.<a name="line.520"></a>
+<span class="sourceLineNo">521</span>     */<a name="line.521"></a>
+<span class="sourceLineNo">522</span>    public static Reply merge(List&lt;Reply&gt; replies) {<a name="line.522"></a>
+<span class="sourceLineNo">523</span>        return merge(replies, new HashSet&lt;Integer&gt;(0)).second;<a name="line.523"></a>
+<span class="sourceLineNo">524</span>    }<a name="line.524"></a>
+<span class="sourceLineNo">525</span><a name="line.525"></a>
+<span class="sourceLineNo">526</span>    /**<a name="line.526"></a>
+<span class="sourceLineNo">527</span>     * Returns true if the given reply has at least one error, and all errors are of the given type.<a name="line.527"></a>
+<span class="sourceLineNo">528</span>     *<a name="line.528"></a>
+<span class="sourceLineNo">529</span>     * @param reply   The reply to check for error.<a name="line.529"></a>
+<span class="sourceLineNo">530</span>     * @param errCode The error code to check for.<a name="line.530"></a>
+<span class="sourceLineNo">531</span>     * @return Whether or not the reply has only the given error code.<a name="line.531"></a>
+<span class="sourceLineNo">532</span>     */<a name="line.532"></a>
+<span class="sourceLineNo">533</span>    public static boolean hasOnlyErrorsOfType(Reply reply, int errCode) {<a name="line.533"></a>
+<span class="sourceLineNo">534</span>        if (!reply.hasErrors()) {<a name="line.534"></a>
+<span class="sourceLineNo">535</span>            return false;<a name="line.535"></a>
+<span class="sourceLineNo">536</span>        }<a name="line.536"></a>
+<span class="sourceLineNo">537</span>        for (int i = 0; i &lt; reply.getNumErrors(); ++i) {<a name="line.537"></a>
+<span class="sourceLineNo">538</span>            if (reply.getError(i).getCode() != errCode) {<a name="line.538"></a>
+<span class="sourceLineNo">539</span>                return false;<a name="line.539"></a>
+<span class="sourceLineNo">540</span>            }<a name="line.540"></a>
+<span class="sourceLineNo">541</span>        }<a name="line.541"></a>
+<span class="sourceLineNo">542</span>        return true;<a name="line.542"></a>
+<span class="sourceLineNo">543</span>    }<a name="line.543"></a>
+<span class="sourceLineNo">544</span><a name="line.544"></a>
+<span class="sourceLineNo">545</span>    public String getName() {<a name="line.545"></a>
+<span class="sourceLineNo">546</span>        return NAME.toString();<a name="line.546"></a>
+<span class="sourceLineNo">547</span>    }<a name="line.547"></a>
+<span class="sourceLineNo">548</span><a name="line.548"></a>
+<span class="sourceLineNo">549</span>    public RoutingPolicy createPolicy(String name, String param) {<a name="line.549"></a>
+<span class="sourceLineNo">550</span>        return routingPolicyRepository.createPolicy(name, param);<a name="line.550"></a>
+<span class="sourceLineNo">551</span>    }<a name="line.551"></a>
+<span class="sourceLineNo">552</span><a name="line.552"></a>
+<span class="sourceLineNo">553</span>    public byte[] encode(Version version, Routable routable) {<a name="line.553"></a>
+<span class="sourceLineNo">554</span>        return routableRepository.encode(version, routable);<a name="line.554"></a>
+<span class="sourceLineNo">555</span>    }<a name="line.555"></a>
+<span class="sourceLineNo">556</span><a name="line.556"></a>
+<span class="sourceLineNo">557</span>    public Routable decode(Version version, byte[] data) {<a name="line.557"></a>
+<span class="sourceLineNo">558</span>        try {<a name="line.558"></a>
+<span class="sourceLineNo">559</span>            return routableRepository.decode(docMan, version, data);<a name="line.559"></a>
+<span class="sourceLineNo">560</span>        } catch (RuntimeException e) {<a name="line.560"></a>
+<span class="sourceLineNo">561</span>            e.printStackTrace();<a name="line.561"></a>
+<span class="sourceLineNo">562</span>            log.warning(e.getMessage());<a name="line.562"></a>
+<span class="sourceLineNo">563</span>            return null;<a name="line.563"></a>
+<span class="sourceLineNo">564</span>        }<a name="line.564"></a>
+<span class="sourceLineNo">565</span>    }<a name="line.565"></a>
+<span class="sourceLineNo">566</span><a name="line.566"></a>
+<span class="sourceLineNo">567</span>    /**<a name="line.567"></a>
+<span class="sourceLineNo">568</span>     * Returns a list of routable types that support the given version.<a name="line.568"></a>
+<span class="sourceLineNo">569</span>     *<a name="line.569"></a>
+<span class="sourceLineNo">570</span>     * @param version The version to return types for.<a name="line.570"></a>
+<span class="sourceLineNo">571</span>     * @return The list of supported types.<a name="line.571"></a>
+<span class="sourceLineNo">572</span>     */<a name="line.572"></a>
+<span class="sourceLineNo">573</span>    public List&lt;Integer&gt; getRoutableTypes(Version version) {<a name="line.573"></a>
+<span class="sourceLineNo">574</span>        return routableRepository.getRoutableTypes(version);<a name="line.574"></a>
+<span class="sourceLineNo">575</span>    }<a name="line.575"></a>
+<span class="sourceLineNo">576</span><a name="line.576"></a>
+<span class="sourceLineNo">577</span>    public MetricSet getMetrics() {<a name="line.577"></a>
+<span class="sourceLineNo">578</span>        return metrics;<a name="line.578"></a>
+<span class="sourceLineNo">579</span>    }<a name="line.579"></a>
+<span class="sourceLineNo">580</span><a name="line.580"></a>
+<span class="sourceLineNo">581</span>    final public DocumentTypeManager getDocumentTypeManager() { return docMan; }<a name="line.581"></a>
+<span class="sourceLineNo">582</span>}<a name="line.582"></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+</div>
+</body>
+</html>
