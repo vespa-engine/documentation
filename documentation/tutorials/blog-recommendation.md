@@ -19,7 +19,7 @@ tailored for that specific user.
 
 Code source and build instructions related to the code used throughout this
 tutorial can be found at our tutorial supporting [code
-repository](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-tutorial-shared).
+repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared).
 
 ## Vespa and Hadoop
 
@@ -67,7 +67,7 @@ and will not attempt to retrieve scripts and data from HDFS. You need both Pig
 and Hadoop libraries installed on your machine to run this locally, but you
 don't need to install and start a running instance of Hadoop. More examples of
 feeding to Vespa from Pig can be found in the [sample apps
-directory](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-tutorial-shared/src/main/pig).
+directory](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig).
 
 
 ## Vespa Evaluation Framework
@@ -167,7 +167,7 @@ $$u$$ from the recommended list of blog posts.
 
 {% comment %}
 
-[This Scala script](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-recommendation/src/spark/expected_percentile.scala)
+[This Scala script](https://github.com/vespa-engine/sample-apps/tree/master/blog-recommendation/src/spark/expected_percentile.scala)
 illustrates how to compute the expected percentile ranking with the following inputs:
 
 - test_file_path: location of the folder where test set pairs (post_id,
@@ -307,7 +307,7 @@ In this section we will use the complete training set to compute user and item
 latent factors. We will leave the discussion about tuning and performance
 improvement of the model used to the section about [model tuning and offline
 evaluation](#model-tuning-and-offline-evaluation). If you [submit the following
-Spark job](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-tutorial-shared#building-and-running-the-spark-script-for-calculating-latent-factors)
+Spark job](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#building-and-running-the-spark-script-for-calculating-latent-factors)
 
 	spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
 		--master local[4] blog-support.jar \
@@ -335,7 +335,7 @@ The following is the Pig command used to feed these latent factors to Vespa:
 		-param ENDPOINT=$(hostname):8080
 
 * the "tutorial_feed_content_and_tensor_vespa.pig" script can be found
-  [at our code repository](https://github.com/vespa-engine/vespa/blob/master/sample-apps/blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig)
+  [at our code repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig)
 * ``VESPA_HADOOP_JAR`` is the vespa-hadoop library jar file that is part of
   [the Vespa code](https://github.com/vespa-engine/vespa/tree/master/vespa-hadoop)
 * ``DATA_PATH`` is the JSON file containing the information about the blog

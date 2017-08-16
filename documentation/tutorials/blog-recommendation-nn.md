@@ -80,14 +80,14 @@ with label = 0.
 
 <!-- Pre computed dataset can be found [here](link here when published) and -->
 Find code to generate the dataset in the [utility
-scripts](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-tutorial-shared#create-training-dataset).
+scripts](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#create-training-dataset).
 
 ### Training with TensorFlow
 
 With the training data in hand, we have split it into 80% training set and 20%
 validation set and used TensorFlow to train the model. The script used can be
 found in the [utility
-scripts](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-tutorial-shared#train-model-with-tensorflow)
+scripts](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#train-model-with-tensorflow)
 and executed by
 
 	$ python vespaModel.py --product_features_file_path vespa_tutorial_data/user_item_cf_cv/product.json \
@@ -171,7 +171,7 @@ format](../reference/document-json-format.html#tensor).
 
 The complete code to serialize the model parameters using Vespa Tensor format
 can be found  in the [utility
-scripts](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-tutorial-shared#export-model-parameters-to-tensor-vespa-format)
+scripts](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#export-model-parameters-to-tensor-vespa-format)
 but the following code snipped shows how to serialize the hidden layer weights
 $$W_1$$:
 
@@ -216,7 +216,7 @@ profile named ```nn_tensor```, which rerank the top 200 documents using the
 neural network model discussed in the previous section.
 
 We will walk through each part of the ```blog_post``` search definition, see
-[blog_post.sd](https://github.com/vespa-engine/vespa/blob/master/sample-apps/blog-recommendation/src/main/application/searchdefinitions/blog_post.sd).
+[blog_post.sd](https://github.com/vespa-engine/sample-apps/tree/master/blog-recommendation/src/main/application/searchdefinitions/blog_post.sd).
 
 As always, we start the a search definition with the following line
 
@@ -363,7 +363,7 @@ which reranks the top 200 documents using the neural network model.
 	  -param OUTPUT=blog-job/cf-metric
 
 The ```tutorial_compute_metric.pig``` script can be found [in our
-repo](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-tutorial-shared#offline-evaluation).
+repo](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#offline-evaluation).
 
 Comparing the recommendations obtained by those two ranking profiles and our
 test set, we see that by deploying a more complex and accurate model in the
