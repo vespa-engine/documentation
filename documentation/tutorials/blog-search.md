@@ -90,10 +90,11 @@ trainPosts.json will be our practice document data. This file is around 5GB in s
 
 ## Dataset & Resource usage
 
-Indexing the data requires 25GB disk space.
-Also note that Vespa blocks feed before filling the disk, at 80% -
-read more in [resource limits](../writing-to-vespa.html#capacity-and-feed).
-The tutorials have been tested with a Docker container with 10GB RAM.
+Indexing the full data set requires 23GB disk space.
+The tutorials have been tested with a Docker container with 10GB RAM. We used similar settings as described in the [vespa quick start guide ](../vespa-quick-start.html). As in the guide we assume that $VESPA_SOURCE env variable points to the directory with your local clone of the [vespa sample apps](https://github.com/vespa-engine/sample-apps).
+
+    $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial --privileged --volume $VESPA_SOURCE:/vespa-source --publish 8080:8080 vespaengine/vespa
+
 
 ## Searching blog posts
 
@@ -162,6 +163,9 @@ services to run and how many nodes per service:
       </container>
 
       <content id='blog_post' version='1.0'>
+	<search>
+	  <visibility-delay>1.0</visibility-delay>
+	</search>
         <redundancy>1</redundancy>
         <documents>
           <document mode='index' type='blog_post'/>
@@ -330,14 +334,16 @@ before it can be fed to Vespa.  Find a parser in the [utility
 repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared)
 for this tutorial:
 
-    $ python parse.py trainPosts.json > tutorial_feed.json
+    $ python parse.py trainPosts.json |head -10000 > tutorial_feed.json
+
+We use the first 10,000 documents from the data set, feel free to load all 1,1M entries if you prefer a full data set. 
 
 With Vespa-compatible data, send this to Vespa using one of the tools Vespa
 provides for feeding.  In this part of the tutorial, the [Java feeding
 API](../vespa-http-client.html) is used, which is suitable for most
 applications requiring high thoughput.
 
-    $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file tutorial_feed.json --host localhost --port 8080
+    $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --verbose --file tutorial_feed.json --host localhost --port 8080
 
 Note that in the sample app directory, there is a file with sample data. You
 may also feed this file using this method.
@@ -350,14 +356,16 @@ number of documents indexed:
 
     $ curl -s 'http://localhost:19112/state/v1/metrics' | tr ',' '\n' | grep -A 2 proton.doctypes.blog_post.numdocs
 
+You can also inspect the search node state by 
 
-pa-deploy prepare src/main/application && vespa-deploy activate Fetch documents
+    $ vespa-proton-cmd --local getState  
+
+Fetch documents
 
 Although searching is the most useful way to access the documents, one can
 fetch documents by document id using the [Document API](../api.html):
 
     $ curl -s http://localhost:8080/document/v1/blog-search/blog_post/docid/1750271 | python -m json.tool
-
 
 
 ## The first query
@@ -527,7 +535,7 @@ Use [parse.py](https://github.com/vespa-engine/sample-apps/blob/master/blog-tuto
 which has a _-p_ option to calculate and add a `popularity` field –
 and then feed the parsed data:
 
-    $ python parse.py -p trainPosts.json > tutorial_feed_with_popularity.json
+    $ python parse.py -p trainPosts.json |head -10000 > tutorial_feed_with_popularity.json
     $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file tutorial_feed_with_popularity.json --host localhost --port 8080
 
 After feeding, query:
