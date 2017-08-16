@@ -36,33 +36,6 @@ This tutorial will address:
 The next tutorial will show how to extend this basic search engine application
 with machine learned models to create a blog recommendation engine.
 
-Indexing the data requires 25GB disk space.
-Also note that Vespa blocks feed before filling the disk, at 80% -
-read more in [resource limits](../writing-to-vespa.html#capacity-and-feed).
-The tutorials have been tested with a Docker container with 10GB RAM.
-Less memory might cause crashes or require
-[jvm heap size](../performance/container-tuning.html#jvm-heap-size) tuning or
-[file size](../content/setup-proton-tuning.html#summary-store-logstore-maxfilesize) tuning due to
-[compaction](../proton.html#document-store-compaction):
-
-    <engine>
-      <proton>
-        <searchable-copies>1</searchable-copies>
-        <tuning>
-          <searchnode>
-            <summary>
-              <store>
-                <logstore>
-                  <maxfilesize>100000000</maxfilesize>
-                </logstore>
-              </store>
-            </summary>
-          </searchnode>
-        </tuning>
-      </proton>
-    </engine>
-
-
 ## Dataset
 
 The dataset used throughout this tutorial contains blog posts written by WP
@@ -112,10 +85,15 @@ here](https://www.kaggle.com/c/predict-wordpress-likes/download/trainPosts.zip)
 log in using your account on one of the digital identity platforms available
 (Facebook, Google, Yahoo) to be able to download the file.
 
-Once you have the zip file downloaded, unzip it. The 1196111 line
-trainPosts.json will be our practice data. This file is around 5GB in size.
+Once you have the zip file downloaded, unzip it. The 1,196,111 line
+trainPosts.json will be our practice document data. This file is around 5GB in size.
 
+## Dataset & Resource usage
 
+Indexing the data requires 25GB disk space.
+Also note that Vespa blocks feed before filling the disk, at 80% -
+read more in [resource limits](../writing-to-vespa.html#capacity-and-feed).
+The tutorials have been tested with a Docker container with 10GB RAM.
 
 ## Searching blog posts
 
@@ -162,7 +140,7 @@ The _search definition_ is a required part of an application package -
 the other required files are _services.xml_ and _hosts.xml_.
 
 The sample application [blog
-search](https://github.com/yahoo/vespa/tree/master/sample-apps/blog-search)
+search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
 creates a simple but functional blog post search engine. The application
 package is found in
 [src/main/application](https://github.com/yahoo/vespa/tree/master/sample-apps/blog-search/src/main/application).
@@ -322,11 +300,10 @@ used above - _index_ and _summary_ - are the most common ones:
 ## Deploy the Application Package
 
 Once done with the application package, deploy the Vespa application -
-build and start Vespa as in the [quick start](../vespa-quick-start.html).
-Note that peak memory usage in the following tutorials requires an 10GB RAM instance.
+build and start Vespa as in the [quick start](../vespa-quick-start.html). We assume that the vespa source code repository is mounted at /vespa-source as in the quick stark guide.
 Deploy the application:
 
-    $ cd /vespa/sample-apps/blog-search
+    $ cd /vespa-source/sample-apps/blog-search
     $ vespa-deploy prepare src/main/application && vespa-deploy activate
 
 This prints that the application was activated successfully and also
@@ -350,7 +327,7 @@ As mentioned before, the data fed to Vespa must match the search definition for
 the document type.  The data downloaded from Kaggle, contained in
 <em>trainPosts.json</em>, must be converted to a valid Vespa document format
 before it can be fed to Vespa.  Find a parser in the [utility
-repository](https://github.com/yahoo/vespa/tree/master/sample-apps/blog-tutorial-shared/)
+repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared)
 for this tutorial:
 
     $ python parse.py trainPosts.json > tutorial_feed.json
@@ -374,23 +351,12 @@ number of documents indexed:
     $ curl -s 'http://localhost:19112/state/v1/metrics' | tr ',' '\n' | grep -A 2 proton.doctypes.blog_post.numdocs
 
 
-### Remove all documents
-
-Feeding data to Vespa will not remove old data. If modifying data and refeeding it to Vespa,
-queries will return documents of both the old and the new data specification. This will remove all documents from Vespa:
-
-    $ $VESPA_HOME/bin/vespa-stop-services
-    $ vespa-remove-index
-    $ $VESPA_HOME/bin/vespa-start-services
-
-
-
-### Fetch documents
+pa-deploy prepare src/main/application && vespa-deploy activate Fetch documents
 
 Although searching is the most useful way to access the documents, one can
 fetch documents by document id using the [Document API](../api.html):
 
-    $ curl -s localhost:8080/document/v1/blog-search/blog_post/docid/1750271 | python -m json.tool
+    $ curl -s http://localhost:8080/document/v1/blog-search/blog_post/docid/1750271 | python -m json.tool
 
 
 
@@ -421,7 +387,7 @@ default field set defined in the search definition - any document containing
 the word "music" in one or more of these two fields will be considered to match our
 query below.
 
-    $ curl -s localhost:8080/search/?query=music | python -m json.tool
+    $ curl -s "http://localhost:8080/search/?query=music&hits=1" | python -m json.tool
 
 Looking at the output, please note:
 
@@ -441,20 +407,20 @@ Looking at the output, please note:
 If you add `&tracelevel=2` to the end of the simple query above, you will see
 that the parsed query is given by
 
-    Query parsed to: "select * from sources * where default contains \"music\";"
+    Query parsed to: "select * from sources * where default contains \"music\" limit 1;"
 
 which can be written in YQL as following:
 
-    $ curl -s localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B | python -m json.tool
+    $ curl -s http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+limit+1%3B |python -m json.tool
 
 Note that in order to have curl interpret `&tracelevel=2` as part of the url,
 the entire url must be in quotes:
 
-    $ curl -s "localhost:8080/search/?query=music&tracelevel=2" | python -m json.tool
+    $ curl -s "http://localhost:8080/search/?query=music&tracelevel=2" | python -m json.tool
 
 ### Other examples
 
-    yql=select+*+from+sources+*+where+title+contains+%22music%22%3B
+    yql=select+title+from+sources+*+where+title+contains+%22music%22%3B
 
 Once more a search for the single term "music", but this time with the explicit
 field title. This means that we only want to match documents that contain the
@@ -566,7 +532,7 @@ and then feed the parsed data:
 
 After feeding, query:
 
-    $ curl localhost:8080/search/?query=music | python -m json.tool
+    $ curl -s http://localhost:8080/search/?query=music | python -m json.tool
 
 and find documents with high `post_popularity` values at the top.
 
@@ -699,13 +665,13 @@ The hits are sorted by relevance; the better the document matched our query,
 the higher the relevance, and the higher up in the list of hits.
 Now try to send the following query to Vespa and look at the order of the hits:
 
-    $ curl localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date%3B | python -m json.tool
+    $ curl -s http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date%3B | python -m json.tool
 
 Adding the keyword `desc` after the attribute name leads to sorting in
 descending order, while omitting the keyword (or using `asc`) sorts the results
 in ascending order.
 
-    $ curl localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date+desc%3B | python -m json.tool
+    $ curl -s http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date+desc%3B | python -m json.tool
 
 ### Query time data grouping
 
@@ -730,7 +696,7 @@ For now we will only do a very simple grouping query to get a list of unique
 values for `date` ordered by the number of documents they occur in and top 3 is
 shown:
 
-    curl "localhost:4080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B" | python -m json.tool
+   $ curl -s "http://localhost:8080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B" | python -m json.tool
 
 You then get the following output:
 
@@ -864,3 +830,11 @@ understanding of how Vespa can help build your application. In the
 [next part of the tutorial](blog-recommendation.html)
 we will proceed to show how can we use Statistics and Machine
 Learning to extend a basic search application into a recommendation system.
+
+### Clean environment by removing all documents
+
+This will remove all documents from Vespa:
+
+    $ $VESPA_HOME/bin/vespa-stop-services
+    $ vespa-remove-index
+    $ $VESPA_HOME/bin/vespa-start-services
