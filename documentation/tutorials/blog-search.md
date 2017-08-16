@@ -143,7 +143,7 @@ The sample application [blog
 search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
 creates a simple but functional blog post search engine. The application
 package is found in
-[src/main/application](https://github.com/yahoo/vespa/tree/master/sample-apps/blog-search/src/main/application).
+[src/main/application](https://github.com/vespa-engine/sample-apps/tree/master/blog-search/src/main/application).
 
 ### Services Specification
 
@@ -523,7 +523,7 @@ Deploy the configuration:
 
     $ vespa-deploy prepare src/main/application && vespa-deploy activate
 
-Use [parse.py](https://github.com/yahoo/vespa/blob/master/sample-apps/blog-tutorial-shared/src/python/parse.py),
+Use [parse.py](https://github.com/vespa-engine/sample-apps/blob/master/blog-tutorial-shared/src/python/parse.py),
 which has a _-p_ option to calculate and add a `popularity` field –
 and then feed the parsed data:
 
