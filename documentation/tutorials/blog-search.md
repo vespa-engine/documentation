@@ -91,9 +91,9 @@ trainPosts.json will be our practice document data. This file is around 5GB in s
 ## Dataset & Resource usage
 
 Indexing the full data set requires 23GB disk space.
-The tutorials have been tested with a Docker container with 10GB RAM. We used similar settings as described in the [vespa quick start guide ](../vespa-quick-start.html). As in the guide we assume that $VESPA_SOURCE env variable points to the directory with your local clone of the [vespa sample apps](https://github.com/vespa-engine/sample-apps).
+The tutorials have been tested with a Docker container with 10GB RAM. We used similar settings as described in the [vespa quick start guide ](../vespa-quick-start.html). As in the guide we assume that $VESPA_SAMPLEAPP env variable points to the directory with your local clone of the [vespa sample apps](https://github.com/vespa-engine/sample-apps).
 
-    $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial --privileged --volume $VESPA_SOURCE:/vespa-source --publish 8080:8080 vespaengine/vespa
+    $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial --privileged --volume $VESPA_SAMPLEAPP:/vespa-sampleapp --publish 8080:8080 vespaengine/vespa
 
 
 ## Searching blog posts
@@ -304,10 +304,11 @@ used above - _index_ and _summary_ - are the most common ones:
 ## Deploy the Application Package
 
 Once done with the application package, deploy the Vespa application -
-build and start Vespa as in the [quick start](../vespa-quick-start.html). We assume that the vespa source code repository is mounted at /vespa-source as in the quick stark guide.
+build and start Vespa as in the [quick start](../vespa-quick-start.html).
+We assume that the vespa source code repository is mounted at /vespa-sampleapp as in the quick stark guide.
 Deploy the application:
 
-    $ cd /vespa-source/sample-apps/blog-search
+    $ cd /vespa-sampleapp/blog-search
     $ vespa-deploy prepare src/main/application && vespa-deploy activate
 
 This prints that the application was activated successfully and also
