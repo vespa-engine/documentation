@@ -69,180 +69,92 @@ nodes, which will reply with the updated state if the node was not the correct o
 Cluster states are versioned, such that clients hitting outdated distributors does not override
 updated states with old states.
 </p>
-
-<h4 id="document-processing">Document processing</h4>
-<p>
-The document processing chain is specified in the system setup. It is
-a chain of processors that manipulate documents before they are
-stored. Document processors can be user defined. When using indexed
-search, the final step in the chain prepares documents for
-indexing. The document processing chain calculates a bucket id for
-each document, which is used to select the correct distributor.
-</p>
-
-<h4 id="distributor">Distributor</h4>
-<p>
-The <a href="distributor.html">distributor</a> keeps track of
-which search nodes should hold which copy of each bucket,
-based on the <em>redundancy</em> setting and information from the <em>cluster controller</em>.
-Distributors are responsible for keeping track of metadata for a non-overlapping subset of the data in the cluster.
-The distributors each keep a bucket database containing metadata of buckets it is responsible for.
-This metadata indicates what content nodes store copies of the buckets,
-the checksum of the bucket content and the number of documents and meta entries within the bucket.
-Each incoming document is assigned to a bucket and forwarded to the right search nodes.
-All requests related to these buckets are sent through the distributors.
-<a href="distributor.html">Read more</a>.
-</p>
-
-<h4 id="cluster-controller">Cluster controller</h4>
-<p>
-The <a href="clustercontroller.html">cluster controller</a>
-keeps track of the state of the nodes in the installation.
-This cluster state is used by the document processing chains
-to know which distributor to send documents to,
-as well as by the distributor to know which search nodes should have which bucket.
-<a href="clustercontroller.html">Read more</a>.
-</p>
-
-<h4 id="search-node">Search node</h4>
-<p>
-The internal structure of a <em>search node</em>:
-</p><img src="content/img/proton_feed.png"/><p>
-The search node consists of a <em>bucket management system</em> which
-sends requests to a set of <em>document databases</em>, which each
-consists of three <em>sub-databases</em>.
-</p>
-
-<h4 id="bucket-management">Bucket management</h4>
-<p>
-When the node starts up it first needs to get an overview of what
-partitions it have, and what buckets each partition currently stores.
-Once it knows this, it is in initializing mode, able to handle load,
-but distributors do not yet know bucket metadata for all the buckets,
-and thus can't know whether buckets are consistent with copies on other nodes.
-Once metadata for all buckets are known, the content nodes transitions from
-initializing to up state.
-As the distributors wants quick access to bucket metadata,
-it keeps an in-memory bucket database to efficiently serve these requests.
-</p><p>
-It implements elasticity support in terms of the SPI.
-Operations are ordered according to priority,
-and only one operation per bucket can be in-flight at a time.
-Below bucket management is the persistence engine,
-which implements the SPI in terms of Vespa search.
-The persistence engine reads the document type from the document id,
-and dispatches requests to the correct document database.
-</p>
-
-<h4 id="document-database">Document database</h4>
-<p>
-Each document database is responsible for a single document type.
-It has a component called FeedHandler which takes care of incoming documents, updates, and remove requests.
-All requests are first written to a transaction log to make sure they are not lost if the node restarts.
-They are then handed to the appropriate sub-database, based on the request type.
-</p>
-
-<h4 id="sub-databases">Sub-databases</h4>
-<p>
-There are three types of sub-databases, each with its own
-<a href="attributes.html#document-meta-store">document meta store</a> and
-<a href="document-summaries.html#document-store">document store</a>.
-The document meta store holds a map from the document id to a local
-id. This local id is used to address the document in the document
-store. The document meta store also maintains information on the
-state of the buckets that are present in the sub-database.
-</p><p>
-The sub-databases are maintained by the <em>index maintainer</em>.
-The document distribution changes as the system is resized.
-When the number of nodes in the system changes,
-the index maintainer will move documents between the Ready and
-Not Ready sub-databases to reflect the new distribution.
-When an entry in the Removed sub-database gets old it is purged.
-The sub-databases are:
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th>Not Ready</th>
+      <th id="document-processing">Document processing</th>
       <td>
-        Holds the redundant documents that are not searchable,
-        i.e. the <em>not ready</em> documents.
-        Documents that are not ready are only stored, not indexed.
-        It takes some processing to move from this state to the ready state.
+        The document processing chain is specified in the system setup.
+        It is a chain of processors that manipulate documents before they are stored.
+        Document processors can be user defined.
+        When using indexed search, the final step in the chain prepares documents for indexing.
+        The document processing chain calculates a bucket id for each document,
+        which is used to select the correct distributor.
+        <a href="document-processing-overview.html">Read more</a>.
       </td>
     </tr><tr>
-      <th>Ready</th>
+      <th id="distributor">Distributor</th>
       <td>
-        Maintains an index of all <em>ready</em> documents and keeps them searchable.
-        One of the ready copies is <em>active</em> while the rest are <em>not active:</em>
-        <ul>
-          <li><strong>Active: </strong>
-            There should always be exactly one active copy of each
-            document in the system, though intermittently there may be more.
-            These documents produce results when queries are evaluated.
-          </li>
-          <li><strong>Not Active: </strong>
-            The ready copies that are not active are indexed but will not produce results.
-            By being indexed, they are ready to take over immediately
-            if the node holding the active copy becomes unavailable.
-          </li>
-        </ul>
+        The <a href="distributor.html">distributor</a> keeps track of
+        which search nodes should hold which copy of each bucket,
+        based on the <em>redundancy</em> setting and information from the <em>cluster controller</em>.
+        Distributors are responsible for keeping track of metadata for a non-overlapping subset of the data in the cluster.
+        The distributors each keep a bucket database containing metadata of buckets it is responsible for.
+        This metadata indicates what content nodes store copies of the buckets,
+        the checksum of the bucket content and the number of documents and meta entries within the bucket.
+        Each incoming document is assigned to a bucket and forwarded to the right search nodes.
+        All requests related to these buckets are sent through the distributors.
+        <a href="distributor.html">Read more</a>.
       </td>
     </tr><tr>
-      <th>Removed</th>
-      <td>Keeps track of documents that have been removed.
-        The id and timestamp for each document is kept.
-        This information is used when buckets from two nodes are merged.
-        If the removed document exists on another node but with a different timestamp,
-        the most recent entry prevails.
+      <th id="cluster-controller">Cluster controller</th>
+      <td>
+        The <a href="clustercontroller.html">cluster controller</a>
+        keeps track of the state of the nodes in the installation.
+        This cluster state is used by the document processing chains
+        to know which distributor to send documents to,
+        as well as by the distributor to know which search nodes should have which bucket.
+        <a href="clustercontroller.html">Read more</a>.
+      </td>
+    </tr><tr>
+      <th id="search-node">Search node</th>
+      <td>
+        The search node consists of a <em>bucket management system</em> which
+        sends requests to a set of <em>document databases</em>, which each
+        consists of three <em>sub-databases</em>.
+        In short, this node activates and deactivates buckets for search.
+        Refer to <a href="proton.html">proton</a> for details.
+      </td>
+    </tr><tr>
+      <th id="redundancy">Redundancy</th>
+      <td>
+        <a href="reference/services-content.html#redundancy">redundancy</a>
+        sets how many backend instances stores replicas of the same data.
+        <a href="reference/services-content.html#searchable-copies">searchable-copies</a> configures
+        how many replicas to keep in the <em>Ready</em> sub-database.
+        Redundancy is handled at the bucket level, by maintaining <em>redundancy</em>
+        replicas of each bucket. No node may store more than one replica of a bucket.
+        The distributors detect whether there are enough bucket replicas on the
+        content nodes and add/remove as needed.
+        Write operations wait for replies from every replica
+        and fail if less than redundancy are persisted within timeout.
+        Replica placement is found in
+        <a href="content/data-placement.html">document distribution</a>.
+      </td>
+    </tr><tr>
+      <th id="consistency">Consistency</th>
+      <td>
+        Consistency is maintained at bucket level.
+        Content nodes calculate checksums based on the bucket contents,
+        and the distributors compare checksums among the bucket copies.
+        If inconsistencies are detected, a merge is issued to resolve inconsistency.
+        While there are inconsistent bucket replicas, the distributors try to route
+        external operations to the best replica.
+        <br/><br/>
+        As buckets are split and joined, it is possible for replicas of a bucket to
+        be split at different levels. A node may have been down while its buckets
+        have been split or joined. This is called inconsistent bucket splitting.
+        Bucket checksums can not be compared across buckets with different split
+        levels. Consequently, distributors do not know whether all documents exist in
+        enough replicas in this state. Due to this, inconsistent splitting is one of the
+        highest maintenance priorities. After all buckets are split or joined back to
+        the same level, the distributors can verify that all the replicas are consistent
+        and fix any detected issues with a merge.
+        <a href="content/consistency.html">Read more</a>.
       </td>
     </tr>
   </tbody>
 </table>
-Hence, only <em>active</em> documents in <em>Ready</em> are searchable:
-<table style="border: 1px solid black; padding: 15px;">
-  <tr><th></th><th>sub-db <em>Not Ready</em></th><th>sub-db <em>Ready</em></th><th>sub-db <em>Removed</em></th></tr>
-  <tr><th>Not searchable</th><td rowspan="2">not indexed</td><td>indexed - not active</td><td rowspan="2">not indexed</td></tr>
-  <tr><th>Searchable</th><td style="background-color: lightgreen;">indexed - active</td></tr>
-</table>
-&nbsp;
-</p>
-
-<h4 id="redundancy">Redundancy</h4>
-<p>
-<a href="reference/services-content.html#redundancy">redundancy</a>
-sets how many backend instances stores replicas of the same data.
-<a href="reference/services-content.html#searchable-copies">searchable-copies</a> configures
-how many replicas to keep in the <em>Ready</em> sub-database.
-Redundancy is handled at the bucket level, by maintaining <em>redundancy</em>
-replicas of each bucket. No node may store more than one replica of a bucket.
-The distributors detect whether there are enough bucket replicas on the
-content nodes and add/remove as needed.
-Write operations wait for replies from every replica
-and fail if less than redundancy are persisted within timeout.
-Replica placement is found in
-<a href="content/data-placement.html">document distribution</a>.
-</p>
-
-
-<h4 id="consistency">Consistency</h4>
-<p>
-Consistency is maintained at bucket level.
-Content nodes calculate checksums based on the bucket contents,
-and the distributors compare checksums among the bucket copies.
-If inconsistencies are detected, a merge is issued to resolve inconsistency.
-While there are inconsistent bucket replicas, the distributors try to route
-external operations to the best replica.
-</p><p>
-As buckets are split and joined, it is possible for replicas of a bucket to
-be split at different levels. A node may have been down while its buckets
-have been split or joined. This is called inconsistent bucket splitting.
-Bucket checksums can not be compared across buckets with different split
-levels. Consequently, distributors do not know whether all documents exist in
-enough replicas in this state. Due to this, inconsistent splitting is one of the
-highest maintenance priorities. After all buckets are split or joined back to
-the same level, the distributors can verify that all the replicas are consistent
-and fix any detected issues with a merge.
-</p><!-- ToDo link to other docs here -->
 
 
 <h3 id="retrieving-documents">Retrieving documents</h3>
@@ -252,24 +164,29 @@ or use a <a href="reference/document-select-language.html">selection expression<
 to <em>visit</em> a range of documents - refer to the <a href="api.html">Document API</a>.
 Overview:
 </p><img src="content/img/elastic_visit_get.png"/>
-
-<h4 id="get">Get</h4>
-<p>
-When the persistence engine receives a get request,
-it scans through all the document databases,
-and for each one it checks all three sub-databases.
-Once the document is found, the scan is stopped and the document returned.
-If the document is found in a Ready sub-database,
-the document retriever will patch in any changes that is stored in the
-<a href="attributes.html">attributes</a> before returning the document.
-</p>
-
-<h4 id="visit">Visit</h4>
-<p>
-A visit request creates an iterator over each candidate bucket.
-This iterator will retrieve matching documents from all sub-databases of all document databases.
-As for get, attributes are patched into documents in the Ready sub-database.
-</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th id="get">Get</th>
+      <td>
+        When the persistence engine receives a get request,
+        it scans through all the document databases,
+        and for each one it checks all three sub-databases.
+        Once the document is found, the scan is stopped and the document returned.
+        If the document is found in a Ready sub-database,
+        the document retriever will patch in any changes that is stored in the
+        <a href="attributes.html">attributes</a> before returning the document.
+      </td>
+    </tr><tr>
+      <th id="visit">Visit</th>
+      <td>
+        A visit request creates an iterator over each candidate bucket.
+        This iterator will retrieve matching documents from all sub-databases of all document databases.
+        As for get, attributes are patched into documents in the Ready sub-database.
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 
 
@@ -446,7 +363,7 @@ To merge two content clusters, add nodes to the cluster like <em>add node</em> a
   <a href="reference/services-content.html#node">distribution-keys</a> must be unique.
   Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
 </li><li>
-  Set <em>services__addr_configserver</em>, then start the node.
+  Set <a href="setting-vespa-variables.html">VESPA_CONFIGSERVERS</a>, then start the node.
 </li></ul>
 </p>
 
@@ -501,7 +418,7 @@ if these are removed, then older versions of these will not re-emerge,
 as the most recent change wins.
 </p></td>
 </tr>
-<tr><th id="transition-time">Transition time</th>
+<tr><th id="transition-time" style="white-space:nowrap;">Transition time</th>
 <td>
 See <a href="reference/services-content.html#transition-time">transition-time</a>
 for tradeoffs for how quickly nodes are set down vs. system stability.
