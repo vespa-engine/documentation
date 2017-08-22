@@ -2,31 +2,29 @@
 
 # Creating Vespa documentation
 
-All features of Vespa must have user documentation.
-This document explains how to add documentation.
+All Vespa features must have user documentation - this document explains how to write documentation.
 
 ## Practical information
 
-Vespa documentation is served using straightforward
+Vespa documentation is served using
 [GitHub Project pages](https://help.github.com/categories/github-pages-basics/)
 with
 [Jekyll](https://help.github.com/categories/customizing-github-pages/).
-To edit documentation check out and work off the branch gh-pages from the
-[documentation repository](https://github.com/vespa-engine/documentation).
+To edit documentation, check out and work off the master branch in this repository.
 
-Documentation are written in straightforward HTML.
+Documentation is written in HTML or Markdown.
 We use a single Jekyll template (_layouts/default.html) to add header, footer and layout.
-With Jekyll installed (follow the link above) you can use
+With Jekyll installed (follow the link above), use
 
     bundle exec jekyll serve
 
 to set up a local server at localhost:4000 to see the pages as they will look when served.
 
-The layout is written in Bootstrap and we refer directly to the Bootstrap CSS.
-Refer to [Bootstrap documentation](http://getbootstrap.com/css/) if you need to
-add style effects to your page. Note that the entire documentation page content
-is contained in a Bootstrap layout column with column width 12. Please do not add custom style sheets
-as it is a pain to maintain.
+The layout is written in Bootstrap, documents refers directly to the Bootstrap CSS.
+Refer to [Bootstrap documentation](http://getbootstrap.com/css/) to
+add style effects to articles. Note that the entire documentation page content
+is contained in a Bootstrap layout column with column width 12.
+Please do not add custom style sheets, as it is harder to maintain.
 
 ## Writing good documentation
 
@@ -35,13 +33,12 @@ Please read the following guide to writing good documentation before writing som
 ### Guides and references
 
 A document cannot be both comprehensive and comprehensible.
-Because of this we split our documentation into *guides* and *reference* documents.
+Because of this, documentation is split into *guides* and *reference* documents.
 
 Guides should be easy to understand by only explaining the most important concepts under discussion.
 Reference documents on the other hand must be complete but should skip verbiage meant to aid understanding.
 
-Reference documents are those that are placed in reference/ subdirectories
-(with the exception of parts of content/, where this separation became messed up at some point).
+Reference documents are those that are placed in reference/ subdirectories.
 
 ### Maintainability
 
@@ -71,12 +68,11 @@ Make the text as short, clear, and easy to read as possible:
 
 ### Links
 
-Add an *id* attribute to each heading such that link can refer to it: Use the exact same text as the heading as id, lowercased and with spaces replaced by dashes such that references
-can be made without checking the source. Don't change headings/ids unless completely necessary as that breaks links.
+Add an *id* attribute to each heading such that link can refer to it: Use the exact same text as the heading as id, lowercased and with spaces replaced by dashes such that references can be made without checking the source.
+Don't change headings/ids unless completely necessary as that breaks links.
 
 Example:
 &lt;h2 id=&quot;my-nice-heading&quot;&gt;My nice Heading&lt;/h2&gt;
 If this algorithmic transformation is followed it is possible to link to this section using &lt;a href=&quot;doc.html#my-nice-heading&quot;&gt; without having to consult the html source of the page to find the right id.
 
 *By Jon Bratseth in June 2016*
-
