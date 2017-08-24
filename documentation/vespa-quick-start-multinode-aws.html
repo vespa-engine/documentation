@@ -1,0 +1,221 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Multi-Node Quick Start: Install and run Vespa on AWS EC2"
+---
+
+<p>Requirements:
+<ul>
+  <li>An AWS account </li>
+  <li>
+Readers are expected to be familiar with <a
+ href="vespa-quick-start-centos.html">setting up a single-node system</a>.
+</ul>
+</p>
+
+<p>
+This document explains how to set up a multinode Vespa system.
+The tasks involved with setting up a multinode Vespa system are
+similar to setting up a single-node system. However, due to the
+distributed nature of a multinode system, some of the steps involved
+differ from setting up a single-node system.
+</p><p>
+
+<h2 id="launch-instances">Launch instances on <a href="aws.amazon.com/ec2">AWS EC2</a> </h2>
+<ol>
+	<li><strong>Configure an AWS security group</strong>
+	<p>First we'll need to configure an <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html">AWS security group</a> which we use to limit access to the installation and also allow our launced EC2 instances to talk to each other without restrictions. You should allow access to TCP port 8080 from your source IP range and allow All TCP traffic on port range 0 - 65535 for members of the security group. This is done by first creating the security group with basic access from your source IP range to port 8080 for search and feed then once saved edit it with an additional inbound rule which uses the security group name as source.</p>
+	</li>
+	<li><strong>Chose Amazon Machine image (AMI) </strong>:
+	<p>Chose Linux/Unix, CentOS 7 | 64-bit Amazon Machine Image (AMI) as Amazon Machine Image (AMI) when launching your new instances. There are both commercial AMI's and Community based AMI's.</p>
+	</li>
+
+	<li><strong>Chose instance type and launch 4 instances</strong></li>
+	<p>This quick start guide recommends the <i>t2.medium</i> general purprose instance type but for production use cases see our <a href="performance/sizing-search.html">sizing guide </a>. 
+	</p> 
+	</li>
+</ol>
+
+
+<h2 id="running-vespa">Install and run Vespa</h2>
+<p> Create a hostfile listing the hosts in the system
+(<em>vespa-instances.txt</em>) to simplify the process of multinode
+install.
+</p>
+<pre class="brush: cli">
+$ cat vespa-instances.txt
+ip-172-1-1-1.us-east-2.compute.internal
+ip-172-1-1-2.us-east-2.compute.internal
+ip-172-1-1-3.us-east-2.compute.internal
+ip-172-1-1-4.us-east-2.compute.internal
+</pre>
+We'll use the <em>ip-172-1-1-1.us-east-2.compute.internal</em>instance as our administration node and all commands below are run from that node.
+<ol>
+<li><p><strong>Install Vespa on all instances:</strong></p>
+<p>First log on to the adminstration instance using the Public DNS record name, e.g <em>ec2-18-1-1-1.us-east-2.compute.amazonaws.com</em> using your aws identify <em> ssh -i</em>, then you can start installing vespa.</p>
+<pre>
+[centos@ip-172-1-1-1 ~]$  for i in $(cat vespa-instances.txt); do \
+	 ssh -i my-aws.key centos@$i sudo yum -y install yum-utils epel-release;\
+  done
+[centos@ip-172-1-1-1 ~]$ for i in $(cat vespa-instances.txt); do \
+	ssh -i my-aws.key centos@$i sudo yum-config-manager --add-repo https://copr.fedorainfracloud.org/coprs/g/vespa/vespa/repo/epel-7/group_vespa-vespa-epel-7.repo;\
+  done
+[centos@ip-172-1-1-1 ~]$ for i in $(cat vespa-instances.txt); do \
+	sudo yum -y install vespa \
+  done
+</pre>
+</li>
+
+<li><p><strong>Set the environment variable VESPA_HOME and update PATH:</strong></p>
+<pre>[centos@ip-172-1-1-1 ~]$ export VESPA_HOME=/opt/vespa; export PATH=$PATH:/opt/vespa/bin</pre></li>
+
+<li><p><strong>Set the Vespa config server(s) address:</strong>
+This must be a fully qualified hostname, add the following to the <a href="setting-vespa-variables">default Vespa environment variables file</a>:  
+<pre>
+[centos@ip-172-1-1-1 ~]$ sudo echo "override VESPA_CONFIGSERVERS ip-172-1-1-1.us-east-2.compute.internal" >> $VESPA_HOME/conf/vespa/default-env.txt
+[centos@ip-172-1-1-1 ~]$ for i in $(cat vespa-instances.txt); do \
+        scp -i my-aws.key $VESPA_HOME/conf/vespa/default-env.txt centos@$i:tmp.env.txt; \
+  done
+
+[centos@ip-172-1-1-1 ~]$ for i in $(cat vespa-instances.txt); do \
+	ssh -i my-aws.key centos@$i mv tmp.env.txt $VESPA_HOME/conf/vespa/default-env.txt;\
+  done
+</pre>
+
+Vespa requires that the 'hostname' command returns the exact same Name as registered in DNS, e.g by <i>nslookup $(hostname) |grep Name</i>.<br/>
+If it does not match you can update it on CentOs 7 by running : 
+<pre>
+[centos@ip-172-1-1-1 ~]$ for i in $(cat vespa-instances.txt); do \
+	ssh -i my-aws.key centos@$i sudo hostnamectl set-hostname $i;\
+  done
+</pre>
+
+<li><p><strong>Start the Vespa config server:</strong>
+Start the Vespa config server, which needs to be up and running
+before deploying your application (wait five seconds after start, then proceed to next step):</p>
+<pre>
+[centos@ip-172-1-1-1 ~]$ sudo service vespa-configserver start
+</pre>
+</li>
+
+<li><p><strong>Configure the multi-node application:</strong> An example application is found at
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search">github.com/vespa-engine/sample-apps/basic-search</a>.
+Clone it :</p>
+<pre>
+[centos@ip-172-1-1-1 ~]$ git clone git@github.com:vespa-engine/sample-apps.git
+[centos@ip-172-1-1-1 ~]$ cd sample-apps/basic-search
+</pre>
+Modify <em>src/main/application/hosts.xml</em> so the resulting file looks like:
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;!-- Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. --&gt;
+&lt;hosts&gt;
+  &lt;host name="ip-172-1-1-1.us-east-2.compute.internal"&gt;
+    &lt;alias&gt;admin0&lt;/alias&gt;
+    &lt;alias&gt;stateless0&lt;/alias&gt;
+  &lt;/host&gt;
+
+  &lt;host name="ip-172-1-1-2.us-east-2.compute.internal"&gt;
+    &lt;alias&gt;stateless1&lt;/alias&gt;
+  &lt;/host&gt;
+
+  &lt;host name="ip-172-1-1-3.us-east-2.compute.internal"&gt;
+    &lt;alias&gt;content0&lt;/alias&gt;
+  &lt;/host&gt;
+
+  &lt;host name="ip-172-1-1-4.us-east-2.compute.internal"&gt;
+    &lt;alias&gt;content1&lt;/alias&gt;
+  &lt;/host&gt;
+</pre>
+Now modify the <em>src/main/application/services.xml</em> so the resulting file is:
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;!-- Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. --&gt;
+&lt;services version="1.0"&gt;
+  &lt;admin version="2.0"&gt;
+  &lt;adminserver hostalias="admin0" /&gt;
+    &lt;configservers&gt;
+      &lt;configserver hostalias="admin0" /&gt;
+    &lt;/configservers&gt;
+  &lt;/admin&gt;
+  &lt;jdisc version="1.0" id="default"&gt;
+    &lt;document-api /&gt;
+    &lt;search /&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="stateless0" /&gt;
+      &lt;node hostalias="stateless1" /&gt;
+    &lt;/nodes&gt;
+  &lt;/jdisc&gt;
+
+  &lt;content id="music" version="1.0"&gt;
+    &lt;redundancy&gt;2&lt;/redundancy&gt;
+    &lt;documents&gt;
+      &lt;document type="music" mode="index" /&gt;
+    &lt;/documents&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="content0" distribution-key="0" /&gt;
+      &lt;node hostalias="content1" distribution-key="1" /&gt;
+    &lt;/nodes&gt;
+  &lt;/content&gt;
+&lt;/services&gt;
+</pre>
+</li>
+
+<li><p><strong>Deploy the application :</strong></p>
+<pre>
+[centos@ip-172-1-1-1 ~]$ vespa-deploy prepare src/main/application && vespa-deploy activate 
+</li>
+
+<li><p><strong>Start Vespa service on all nodes:</strong></p>
+<pre>
+[centos@ip-172-1-1-1 ~]$  for i in $(cat vespa-instances.txt); do \
+	ssh -i my-aws.key centos@$i   sudo service vespa start; \
+  done
+</pre>
+</li>
+
+<li><p><strong>Feed documents :</strong> Feed sample documents:
+<pre>
+[centos@ip-172-1-1-1 ~]$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file music-data-feed.json --host localhost --port 8080
+</pre>
+</li>
+
+<li><p><strong>Run a search query against the containers   </strong></p>
+<pre>
+$ curl -s http://ip-172-1-1-1.us-east-2.compute.internal:8080/search/?query=bad | python -m json.tool
+$ curl -s http://ip-172-1-1-2.us-east-2.compute.internal:8080/search/?query=bad | python -m json.tool
+</pre>
+  Read more in the
+  <a href="search-api.html">Search API</a>:
+</li>
+<li><strong>Configure AWS EC2 Load Balancer</strong>
+<p> 
+ Once setup is complete you can configure a load balancer using the same security group which forwards 
+ requests to our two serving containers listening on 
+ port 8080 mentioned above, using </em>/status.html</em> as health check. You can then access both endpoints 
+ through a DNS A record, e.g <em>vespa-multinode-12345678910.us-east-2.elb.amazonaws.com:8080</em>. Note that feeding through a VIP or Load Balancer is not recommended.
+
+</li>
+</ol>
+
+
+
+<h2 id="next-steps">Next Steps</h2>
+<ul>
+  <li>
+    Try the <a href="tutorials/blog-search.html">Blog search tutorial</a>
+    to learn more about using different Vespa features
+  </li><li>
+    Developing with Vespa means writing Java plugins for document and query processors.
+    Try <a href="jdisc/developing-applications.html">developing applications</a>
+    to compile and test Vespa JDisc Container plugins
+  </li><li>
+    <a href="api.html">Vespa APIs</a> is useful to understand how to interface with Vespa
+  </li><li>
+    Explore the <a href="https://github.com/vespa-engine/sample-apps/tree/master">
+      sample applications</a>
+  </li><li>
+    How to <a href="securing-your-vespa-installation.html">secure a Vespa installation</a>
+  </li>
+</ul>
+
+
