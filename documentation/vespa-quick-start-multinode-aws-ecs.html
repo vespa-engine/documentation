@@ -1,0 +1,195 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Multi-Node Quick Start: Install and run Vespa on AWS ECS"
+---
+
+<p>Requirements:
+<ul>
+  <li>An AWS account </li>
+  <li>
+Readers are expected to be familiar with <a
+ href="vespa-quick-start-centos.html">setting up a single-node system</a>.
+</ul>
+</p>
+
+<p>
+  This document explains how to set up a multinode system using the Vespa
+  docker image. In this quick start we will use the EC2 Container Service to
+  configure and run containers that comprise a working Vespa installation.
+</p>
+
+<p>
+
+<h2 id="configure-cluster">Configure a <a href="https://us-east-2.console.aws.amazon.com/ecs">AWS ECS</a> cluster</h2>
+<ol>
+<li><strong>Create a cluster</strong><br/>
+<ul>
+  <li>Log in to AWS and the EC2 Container Service</li>
+  <li>Click <strong>Create Cluster</strong> and fill in the the following parameters:</li>
+  <table border="1">
+    <tr><td>Cluster name</td><td>vespa</td>
+    <tr><td>EC2 instance type</td><td>t2.medium</td>
+    <tr><td>Number of instances</td><td>4</td>
+    <tr><td>Key pair</td><td><i>Select or create your keypair</i></td>
+    <tr><td>Security group inbound rules - Port range</td><td>0 - 65535</td>
+  </table>
+  <li>Click <strong>Create</strong> and wait for the tasks to succeed.</li>
+  <li>Click <strong>View Cluster</strong>.</li>
+</ul>
+</li>
+<li><strong>Configure ECS instances</strong><br/>
+<ul>
+<li>Click the <strong>ECS Instances tab</strong>. This should show 4 container instances.</li>
+  <li>Select the first Container instance checkbox, then <strong>Actions -> View/Edit attributes</strong>.</li>
+  <li>Click <strong>Add attribute</strong>. Set <strong>Name=type</strong> and <strong>Value=configserver</strong> and click the green checkbox on the right. Then click <strong>Close</strong>.</li>
+  <li>Select the bottom 3 Container instance checkboxes, then <strong>Actions -> View/Edit attributes</strong>.</li>
+  <li>Click <strong>Add attribute</strong>. Set <strong>Name=type</strong> and <strong>Value=services</strong> and click the green checkbox on the right. Then click <strong>Close</strong>.</li>
+  <li>Click on the first <strong>Container Intance</strong> name.</li>
+  <li>Take a note of the config server Private DNS address on the screen (e.g. ip-10-0-1-194.us-east-2.compute.internal) as we will use this in the following configuration.</li>
+</ul>
+<li><strong>Start the config server task</strong><br/>
+  <ul>
+    <li>Click <strong>Task Definitions</strong>.</li>
+    <li>Click <strong>Create new Task Definition</strong>.</li>
+    <li>Click <strong>Configure via JSON</strong> and replace the content with this:</li>
+<pre>
+{
+    "networkMode": "host",
+    "containerDefinitions": [
+        {
+            "name": "configserver",
+            "environment": [
+                {
+                    "name": "VESPA_CONFIGSERVERS",
+                    "value": "PUT_CONFIGSERVER_ADDRESS_HERE"
+                }
+            ],
+            "image": "vespaengine/vespa",
+            "command": [
+                "configserver"
+            ],
+            "privileged": true,
+            "memoryReservation": 1024
+        }
+    ],
+    "placementConstraints": [
+        {
+            "expression": "attribute:type == configserver",
+            "type": "memberOf"
+        }
+    ],
+    "family": "configserver"
+}
+</pre>
+    <li>Replace the <strong>PUT_CONFIGSERVER_ADDRESS_HERE</strong> with the config server hostname found previously.</li>
+    <li>Click <strong>Save</strong>.</li>
+    <li>Click <strong>Create</strong>.</li>
+    <li>Choose <strong>Actions -> Run task</strong> and configure the following parameters:</li>
+    <table border="1">
+      <tr><td>Cluster</td><td>vespa</td></tr>
+      <tr><td>Number of tasks</td><td>1</td></tr>
+      <tr><td>Placement templates</td><td>One Task Per Host</td></tr>
+    </table>
+    <li>Click <strong>Run Task</strong>.</il>
+</ul>
+</li>
+<li><strong>Start the services tasks</strong><br/>
+  <ul>
+    <li>Click <strong>Task Definitions</strong>.</li>
+    <li>Click <strong>Create new Task Definition</strong>.</li>
+    <li>Click <strong>Configure via JSON</strong> and replace the content with this:</li>
+<pre>
+{
+    "networkMode": "host",
+    "containerDefinitions": [
+        {
+            "name": "services",
+            "environment": [
+                {
+                    "name": "VESPA_CONFIGSERVERS",
+                    "value": "PUT_CONFIGSERVER_HOSTNAME_HERE"
+                }
+            ],
+            "image": "vespaengine/vespa",
+            "command": [
+                "services"
+            ],
+            "privileged": true,
+            "memoryReservation": 1024
+        }
+    ],
+    "placementConstraints": [
+        {
+            "expression": "attribute:type == services",
+            "type": "memberOf"
+        }
+    ],
+    "family": "services"
+}
+</pre>
+    <li>Replace the <strong>PUT_CONFIGSERVER_ADDRESS_HERE</strong> with the config server hostname found previously.</li>
+    <li>Click <strong>Save</strong>.</li>
+    <li>Click <strong>Create</strong>.</li>
+    <li>Choose <strong>Actions -> Run task</strong> and configure the following parameters:</li>
+    <table border="1">
+      <tr><td>Cluster</td><td>vespa</td></tr>
+      <tr><td>Number of tasks</td><td>3</td></tr>
+      <tr><td>Placement templates</td><td>One Task Per Host</td></tr>
+    </table>
+    <li>Click <strong>Run Task</strong>.</il>
+</ul>
+</li>
+</ol>
+
+<h2 id="configure-vespa">Configure Vespa Service Topology and deploy </h2>
+<ol>
+<li><strong>Gather required host information</strong><br/>
+Navigate to <strong>Clusters -> vespa</strong> and select the <strong>Tasks</strong> tab. You should now see one configserver and 3 services tasks running.
+Click on each <strong>Container Instance</strong> and note down the external and internal hostnames. <br/>
+Example:
+<table border="1">
+<tr><th>Task type</th><th>External hostname</th><th>Internal hostname</th></tr>
+<tr><td>configserver</td><td>ec2-52-14-175-194.us-east-2.compute.amazonaws.com</td><td>ip-10-0-1-194.us-east-2.compute.internal</td></tr>
+<tr><td>services</td><td>ec2-52-15-184-219.us-east-2.compute.amazonaws.com</td><td>ip-10-0-0-219.us-east-2.compute.internal</td></tr>
+<tr><td>services</td><td>ec2-52-14-69-95.us-east-2.compute.amazonaws.com</td><td>ip-10-0-1-57.us-east-2.compute.internal</td></tr>
+<tr><td>services</td><td>ec2-18-220-230-182.us-east-2.compute.amazonaws.com</td><td>ip-10-0-0-38.us-east-2.compute.internal</td></tr>
+</table>
+</li>
+<li><strong>Connect to the public hostname of the config server</strong>
+<pre>
+$ ssh -i my-aws.key ec2-user@ec2-52-14-175-194.us-east-2.compute.amazonaws.com
+</pre>
+</li>
+<li><strong>Find the configserver container name (e.g. ecs-configserver-7-configserver-aa8991a7c2ebe0a44800)</strong>
+<pre>
+[ec2-user@ip-10-0-1-194 ~]$ docker ps
+</pre>
+</li>
+<li><strong>Enter the container</strong>
+<pre>
+[ec2-user@ip-10-0-1-194 ~]$ docker exec -ti &lt;container name&gt; bash
+[root@ip-10-0-1-194 ]#
+</pre>
+</li>
+<li><strong>Follow <a href="vespa-quick-start-multinode-aws.html#configure-vespa">this</a> guide to configure and deply a sample application.</strong>
+</li>
+</ol>
+
+<h2 id="next-steps">Next Steps</h2>
+<ul>
+  <li>
+    Try the <a href="tutorials/blog-search.html">Blog search tutorial</a>
+    to learn more about using different Vespa features
+  </li><li>
+    Developing with Vespa means writing Java plugins for document and query processors.
+    Try <a href="jdisc/developing-applications.html">developing applications</a>
+    to compile and test Vespa JDisc Container plugins
+  </li><li>
+    <a href="api.html">Vespa APIs</a> is useful to understand how to interface with Vespa
+  </li><li>
+    Explore the <a href="https://github.com/vespa-engine/sample-apps/tree/master">
+      sample applications</a>
+  </li><li>
+    How to <a href="securing-your-vespa-installation.html">secure a Vespa installation</a>
+  </li>
+</ul>
