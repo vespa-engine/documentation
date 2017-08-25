@@ -15,28 +15,32 @@ Readers are expected to be familiar with <a
 <p>
 This document explains how to set up a multinode Vespa system.
 The tasks involved with setting up a multinode Vespa system are
-similar to setting up a single-node system. However, due to the
-distributed nature of a multinode system, some of the steps involved
-differ from setting up a single-node system.
+similar to setting up a single-node system.
 </p><p>
 
 <h2 id="launch-instances">Launch instances on <a href="aws.amazon.com/ec2">AWS EC2</a> </h2>
 <ol>
 	<li><strong>Configure an AWS security group</strong>
-	<p>First we'll need to configure an <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html">AWS security group</a> which we use to limit access to the installation and also allow our launced EC2 instances to talk to each other without restrictions. You should allow access to TCP port 8080 from your source IP range and allow All TCP traffic on port range 0 - 65535 for members of the security group. This is done by first creating the security group with basic access from your source IP range to port 8080 for search and feed then once saved edit it with an additional inbound rule which uses the security group name as source.</p>
+	<p>First we'll need to configure an <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html">AWS security group</a>
+	 which we use to limit access to the installation and also allow our launced EC2 instances to talk to each other without restrictions.</p> 
+	 <ul>
+	<li><p>Allow access inbound TCP port 8080 (feed & search interface) from your source IP range</p> </li>
+	<li><p>Allow access inbound for all TCP traffic on port range 0 - 65535 for members of the security group. 
+	This is done by first creating the security group with basic access from your source IP range to port 8080 for search and feed then once saved edit it with an 
+	additional inbound rule which uses the security group name as source</p>
+	</li>
+	</ul>
 	</li>
 	<li><strong>Chose Amazon Machine image (AMI) </strong>:
-	<p>Chose Linux/Unix, CentOS 7 | 64-bit Amazon Machine Image (AMI) as Amazon Machine Image (AMI) when launching your new instances. There are both commercial AMI's and Community based AMI's.</p>
+	<p>Chose Linux/Unix, CentOS 7 | 64-bit Amazon Machine Image (AMI) as Amazon Machine Image (AMI) when launching your new instances. There are both commercial AMI's and Community based AMI's available.</p>
 	</li>
-
 	<li><strong>Chose instance type and launch 4 instances</strong></li>
-	<p>This quick start guide recommends the <i>t2.medium</i> general purprose instance type but for production use cases see our <a href="performance/sizing-search.html">sizing guide </a>. 
-	</p> 
+	<p>For getting through this start guide the <i>t2.medium</i> will do the job but for real production use cases see our <a href="performance/sizing-search.html">sizing guide</a>.</p> 
 	</li>
 </ol>
 
 
-<h2 id="running-vespa">Install and run Vespa</h2>
+<h2 id="install-vespa">Install and run Vespa</h2>
 <p> Create a hostfile listing the hosts in the system
 (<em>vespa-instances.txt</em>) to simplify the process of multinode
 install.
@@ -48,10 +52,11 @@ ip-172-1-1-2.us-east-2.compute.internal
 ip-172-1-1-3.us-east-2.compute.internal
 ip-172-1-1-4.us-east-2.compute.internal
 </pre>
-We'll use the <em>ip-172-1-1-1.us-east-2.compute.internal</em>instance as our administration node and all commands below are run from that node.
+<p>
+We'll use the <em>ip-172-1-1-1.us-east-2.compute.internal</em>instance as our administration node and all commands below are run from that node.</p>
 <ol>
 <li><p><strong>Install Vespa on all instances:</strong></p>
-<p>First log on to the adminstration instance using the Public DNS record name, e.g <em>ec2-18-1-1-1.us-east-2.compute.amazonaws.com</em> using your aws identify <em> ssh -i</em>, then you can start installing vespa.</p>
+<p>First log on to the adminstration instance using the Public DNS record name, e.g <em>ec2-18-1-1-1.us-east-2.compute.amazonaws.com</em> using your aws identify <em> ssh -i</em>, then install vespa on all instances by:</p>
 <pre>
 [centos@ip-172-1-1-1 ~]$  for i in $(cat vespa-instances.txt); do \
 	 ssh -i my-aws.key centos@$i sudo yum -y install yum-utils epel-release;\
@@ -80,9 +85,9 @@ This must be a fully qualified hostname, add the following to the <a href="setti
 	ssh -i my-aws.key centos@$i mv tmp.env.txt $VESPA_HOME/conf/vespa/default-env.txt;\
   done
 </pre>
-
-Vespa requires that the 'hostname' command returns the exact same Name as registered in DNS, e.g by <i>nslookup $(hostname) |grep Name</i>.<br/>
-If it does not match you can update it on CentOs 7 by running : 
+<p>
+Vespa requires that the <em>'hostname'</em> command returns the exact same name as registered in DNS, e.g by <em>nslookup $(hostname) |grep Name</em>.
+If it does not match you can update it on CentOs 7 by running : </p>
 <pre>
 [centos@ip-172-1-1-1 ~]$ for i in $(cat vespa-instances.txt); do \
 	ssh -i my-aws.key centos@$i sudo hostnamectl set-hostname $i;\
@@ -95,13 +100,27 @@ before deploying your application (wait five seconds after start, then proceed t
 <pre>
 [centos@ip-172-1-1-1 ~]$ sudo service vespa-configserver start
 </pre>
+<p>Note that the configuration server only needs to be started on the instance(s) which matches the VESPA_CONFIGSERVER env variable</p>
 </li>
+
+<li><p><strong>Start Vespa service on all nodes:</strong></p>
+<pre>
+[centos@ip-172-1-1-1 ~]$  for i in $(cat vespa-instances.txt); do \
+	ssh -i my-aws.key centos@$i   sudo service vespa start; \
+  done
+</pre>
+</li>
+</ol>
+
+<h2 id="configure-vespa">Configure Vespa Service Topology and deploy </h2>
+<ol>
 
 <li><p><strong>Configure the multi-node application:</strong> An example application is found at
 <a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search">github.com/vespa-engine/sample-apps/basic-search</a>.
-Clone it :</p>
+Install git and clone a copy:</p>
 <pre>
-[centos@ip-172-1-1-1 ~]$ git clone git@github.com:vespa-engine/sample-apps.git
+[centos@ip-172-1-1-1 ~]$ sudo yum -y install git 
+[centos@ip-172-1-1-1 ~]$ git clone https://github.com/vespa-engine/sample-apps.git 
 [centos@ip-172-1-1-1 ~]$ cd sample-apps/basic-search
 </pre>
 Modify <em>src/main/application/hosts.xml</em> so the resulting file looks like:
@@ -163,19 +182,15 @@ Now modify the <em>src/main/application/services.xml</em> so the resulting file 
 <li><p><strong>Deploy the application :</strong></p>
 <pre>
 [centos@ip-172-1-1-1 ~]$ vespa-deploy prepare src/main/application && vespa-deploy activate 
+</pre>
+<p>Our instances running vespa will subscribe to configuration and once the applicaiton is deployed the set of services configured will start, no need to re-start vespa or the configuration server</p>
 </li>
 
-<li><p><strong>Start Vespa service on all nodes:</strong></p>
-<pre>
-[centos@ip-172-1-1-1 ~]$  for i in $(cat vespa-instances.txt); do \
-	ssh -i my-aws.key centos@$i   sudo service vespa start; \
-  done
-</pre>
-</li>
 
 <li><p><strong>Feed documents :</strong> Feed sample documents:
 <pre>
-[centos@ip-172-1-1-1 ~]$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file music-data-feed.json --host localhost --port 8080
+[centos@ip-172-1-1-1 ~]$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar \
+  --file music-data-feed.json --host localhost --port 8080
 </pre>
 </li>
 
@@ -184,15 +199,16 @@ Now modify the <em>src/main/application/services.xml</em> so the resulting file 
 $ curl -s http://ip-172-1-1-1.us-east-2.compute.internal:8080/search/?query=bad | python -m json.tool
 $ curl -s http://ip-172-1-1-2.us-east-2.compute.internal:8080/search/?query=bad | python -m json.tool
 </pre>
+<p>
   Read more in the
-  <a href="search-api.html">Search API</a>:
+  <a href="search-api.html">Search API</a></p>
 </li>
-<li><strong>Configure AWS EC2 Load Balancer</strong>
+<li><strong>Configure AWS EC2 Load Balancer (Optional) </strong>
 <p> 
  Once setup is complete you can configure a load balancer using the same security group which forwards 
  requests to our two serving containers listening on 
  port 8080 mentioned above, using </em>/status.html</em> as health check. You can then access both endpoints 
- through a DNS A record, e.g <em>vespa-multinode-12345678910.us-east-2.elb.amazonaws.com:8080</em>. Note that feeding through a VIP or Load Balancer is not recommended.
+ through a DNS A record, e.g <em>vespa-multinode-12345678910.us-east-2.elb.amazonaws.com:8080</em>. </p>
 
 </li>
 </ol>
