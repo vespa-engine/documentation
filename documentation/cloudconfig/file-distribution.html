@@ -1,0 +1,65 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "File distribution"
+---
+
+<p>
+An <a href="../reference/application-packages-reference.html">application package</a>
+has possibly components and other large files to be distributed to the Vespa nodes.
+The <em>file-distribution</em> service distributes these files to the nodes
+at <em>vespa-deploy activate</em>.
+</p><p>
+<strong>This document is work in progress</strong>
+</p>
+
+
+
+<h2>Files</h2>
+<p>
+which files are distributed?
+<ul>
+  <li>components</li>
+  <li>rules</li>
+  <li>all files in app package not in searchdefinitions, search, ext</li>
+  <li><a href="../reference/search-definitions-reference.html#constant">constant tensors</a></li>
+</ul>
+Reference to file made by hashing content and write the reference/content to
+<em>$VESPA_HOME/var/db/vespa/filedistribution</em>
+</p><p>
+when new components are distributed, the container gets a new ref, waits for it to be available
+(some details here on the workings)
+</p><p>
+<a href="../configuring-components.html#adding-files-to-the-component-configuration">large files and config</a>
+</p>
+
+
+
+<h2>Transfer</h2>
+<p>
+File transfer from config servers to nodes is implemented using BitTorrent.
+Refer to the <a href="../reference/services-admin.html#filedistribution">filedistribution reference</a>
+to configure transfer bitrate.
+</p>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>
+<em>vespa-status-filedistribution</em> can be run to
+check if application files have been transferred to all the hosts.
+</p>
+<p>
+The following scenario has occasionally been overserved:
+Clients nodes (such as containers) request components from file distribution at reconfiguration,
+but the files are never delivered, such that a timeout occur and the node fail to reconfigure.
+Log messages starting by <em>Could not install bundle</em>
+followed by timeout information is found in the logs.
+This can be caused by too many file references (many historical versions of files)
+in the file distribution subsystem which for some reason have not been cleaned up - clean up manually:
+<pre>
+$ zkctl rmr /vespa/filedistribution
+$ rm $VESPA_HOME/var/db/vespa/filedistribution/*
+</pre>
+The first command can be run on any config server node while config servers are running.
+The second should be run on all config server nodes.
+</p>
