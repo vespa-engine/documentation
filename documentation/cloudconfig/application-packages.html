@@ -93,35 +93,68 @@ Read more in <a href="../configuring-components.html">configuring components</a>
 
 <h2 id="deploy">Deploy</h2>
 <p>
-Deploy the application package using the <em>vespa-deploy</em> tool:
-<pre>
-$ vespa-deploy prepare [application]
-</pre>
-<ul>
-  <li>Verifies that a configuration server is up and running</li>
-  <li>Uploads the application to the configuration server for processing</li>
-  <li>Verifies that your application package contains all necessary files and performs a consistency check</li>
-  <li>Validates the xml config files against the schema found in <em>$VESPA_HOME/share/vespa/schema</em></li>
-  <li>Inspects the application package to find if there are any config changes between the
-    current active application and this prepared application that require extra actions in order
-    to be applied. The list of these actions are logged to the user and returned as part of
-    the <a href="../cloudconfig/deploy-rest-api-v2.html#prepare-session">prepare</a> step in
-    the deployment API</li>
-  <li>Creates metadata about the deployed the applications package (which user deployed it,
-    which directory was it deployed from and at what time was it deployed) and stores it on the config server in
-    <em>$VESPA_HOME/var/db/vespa/config_server/serverdb/tenants/[tenant]/sessions/[sessionid]/.applicationMetaData</em></li>
-  <li>Makes sure that bundles are distributed to all nodes that need them</li>
-  <li>Stores all the relevant configuration info in ZooKeeper, for the config servers to use</li>
-</ul>
+Deploy the application package using the <em>vespa-deploy</em> tool.
+This tool uses the <a href="deploy-rest-api-v2.html">deploy API</a>.
+</p>
+
+
+<h3 id="prepare">prepare</h3>
+<p>
 <em>vespa-deploy prepare</em> combines the
 <a href="../cloudconfig/deploy-rest-api-v2.html#create-session">upload</a> and
 <a href="../cloudconfig/deploy-rest-api-v2.html#prepare-session">prepare</a> steps in the
 <a href="../cloudconfig/deploy-rest-api-v2.html">deploy API</a>.
+<pre>
+$ vespa-deploy prepare [application-path]
+</pre>
+The <em>prepare</em> step:
+<ol>
+  <li>
+    Verifies that a configuration server is up and running
+  </li><li>
+    Uploads the application to the configuration server, which stores it in
+    <em>$VESPA_HOME/var/db/vespa/config_server/serverdb/tenants/[tenant]/sessions/[sessionid]</em>.
+    <em>[sessionid]</em> increases for each <em>prepare</em>-call.
+    <em>[tenant]</em> is <em>default</em> in a single-tenant system.
+    The config server also stores the application in a <a href="configuration-server.html">ZooKeeper</a>
+    instance at <em>/config/v2/tenants/default/sessions/[sessionid]</em> -
+    this distributes the application to all config servers. <!-- ToDo: CHECK files ... -->
+  </li><li>
+    Creates metadata about the deployed the applications package (which user deployed it,
+    which directory was it deployed from and at what time was it deployed) and stores it  in
+    <em>...sessions/[sessionid]/.applicationMetaData</em>
+  </li><li>
+    Verifies that the application package contains the required files and performs a consistency check
+  </li><li>
+    Validates the xml config files using the
+    <a href="https://github.com/vespa-engine/vespa/tree/master/config-model/src/main/resources/schema">schema</a>,
+    found in <em>$VESPA_HOME/share/vespa/schema</em>
+  </li><li>
+    Checks if there are config changes between the active application and this prepared application
+    that require actions like restart or re-feed (like changes to
+    <a href="../search-definitions.html">search definitions</a>).
+    These actions are returned as part of the
+    <a href="../cloudconfig/deploy-rest-api-v2.html#prepare-session">prepare</a>
+    step in the deployment API.
+    This prevents breaking changes to production - also read about
+    <a href="../reference/validation-overrides.html">validation overrides</a>
+  </li><li>
+    Distributes bundles with <a href="../jdisc/container-components.html">components</a>
+    to nodes using <a href="file-distribution.html">file-distribution</a>
+  </li>
+</ol>
+</p>
+
+
+<h3 id="activate">activate</h3>
+<p>
+<em>vespa-deploy activate</em> invokes the
+<a href="../cloudconfig/deploy-rest-api-v2.html#activate-session">activate</a>
+step in the <a href="../cloudconfig/deploy-rest-api-v2.html">deployment API</a>.
 Activate the application package:
 <pre>
 $ vespa-deploy activate
 </pre>
-This activates the application package in the configuration servers, and the instance is reconfigured.
-<em>vespa-deploy activate</em> executes the <a href="../cloudconfig/deploy-rest-api-v2.html#activate-session">
-activate</a> step in the <a href="../cloudconfig/deploy-rest-api-v2.html">deployment API</a>.
+This activates the application package in the configuration servers,
+all configurations are propagated to services that subscribe to them.
 </p>
