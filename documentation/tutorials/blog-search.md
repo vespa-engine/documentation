@@ -413,12 +413,12 @@ Looking at the output, please note:
 If you add `&tracelevel=2` to the end of the simple query above, you will see
 the query is parsed 
 
-    $ curl -s 'localhost:4080/search/?query=music&tracelevel=2' | python -m json.tool | grep Query
+    $ curl -s 'http://localhost:8080/search/?query=music&tracelevel=2' | python -m json.tool | grep Query
     "message": "Query parsed to: select * from sources * where default contains \"music\";"
 
 which can also be written in YQL as:
 
-    $ curl -s 'localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' | python -m json.tool
+    $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' | python -m json.tool
 
 ### Other examples
 
@@ -697,7 +697,7 @@ For now we will only do a very simple grouping query to get a list of unique
 values for `date` ordered by the number of documents they occur in and top 3 is
 shown:
 
-    curl -s 'localhost:4080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B' | python -m json.tool
+    curl -s 'http://localhost:8080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B' | python -m json.tool
 
 You then get the following output:
 
