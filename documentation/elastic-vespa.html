@@ -48,39 +48,37 @@ Read more about document expiry and batch removes in
 
 <h3 id="writing-documents">Writing documents</h3>
 <p>
-Documents enter Vespa using the <a href="api.html">Document API</a>.
-Next, they enter <a href="document-processing-overview.html">document processing</a>
+Documents enter Vespa using the <a href="api.html">Document API</a>,
+using
+<a href="reference/vespa-feeder.html">vespa-feeder</a>, <a href="document-api.html">Document API</a>,
+the <a href="vespa-http-client.html">Vespa HTTP Client</a> or <a href="document-api-guide.html">Java Document API</a>
+(all binaries use the Java Document API).
+If no <a href="routing.html">route</a> is set, clients feed to the <em>default</em> route.
+Next, they enter <a href="document-processing-overview.html">document processing</a> (round-robin)
 where the documents are prepared for indexing, before
 entering the <em>distributor</em>. The distributor determines which
-bucket should hold each document, and sends them to the
-<em>search nodes</em> (also called <em>content nodes</em>):
+bucket should hold each document, and sends them to
+<em>content nodes</em>:
 </p><img src="content/img/elastic_feed.png"/><p>
-The client library in the Document API forwards requests to distributors.
-Possibly splitting complex requests into multiple requests,
-which may be sent to distributors in sequence or in parallel.
-It calculates correct distributors to talk to using
-the distribution algorithm and knowledge of the cluster state.
-If it's cached knowledge is outdated, it may end up talking to the wrong distributor,
-in which case the distributor will reply with the correct state, enabling the
-client library to resend to the correct one.
-</p><p>
-With no known cluster state, the client library will send requests to random
-nodes, which will reply with the updated state if the node was not the correct one.
-Cluster states are versioned, such that clients hitting outdated distributors does not override
-updated states with old states.
 </p>
 <table class="table">
   <thead></thead><tbody>
     <tr>
       <th id="document-processing">Document processing</th>
       <td>
-        The document processing chain is specified in the system setup.
-        It is a chain of processors that manipulate documents before they are stored.
+        The <a href="document-processing-overview.html">document processing chain</a>
+        is a chain of processors that manipulate documents before they are stored.
         Document processors can be user defined.
         When using indexed search, the final step in the chain prepares documents for indexing.
         The document processing chain calculates a bucket id for each document,
-        which is used to select the correct distributor.
-        <a href="document-processing-overview.html">Read more</a>.
+        which is used to select the correct distributor, using the Document API.
+        The Document API forwards requests to distributors.
+        It calculates correct distributors to talk to using
+        the distribution algorithm and knowledge of the cluster state.
+        With no known cluster state, the client library will send requests to random
+        nodes, which will reply with the updated state if the node was not the correct one.
+        Cluster states are versioned, such that clients hitting outdated distributors does not override
+        updated states with old states.
       </td>
     </tr><tr>
       <th id="distributor">Distributor</th>
@@ -115,7 +113,15 @@ updated states with old states.
         In short, this node activates and deactivates buckets for search.
         Refer to <a href="proton.html">proton</a> for details.
       </td>
-    </tr><tr>
+    </tr>
+  </tbody>
+</table>
+<p>
+Other aspects of feeding:
+</p>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
       <th id="redundancy">Redundancy</th>
       <td>
         <a href="reference/services-content.html#redundancy">redundancy</a>
@@ -155,6 +161,15 @@ updated states with old states.
     </tr>
   </tbody>
 </table>
+<p>
+Detailed process overview:
+</p><p>
+<img src="img/reference/flow/feed1.png"/>
+</p><p>
+Content node expanded:
+</p><p>
+<img src="img/reference/flow/feed2.png" />
+</p>
 
 
 <h3 id="retrieving-documents">Retrieving documents</h3>
@@ -235,6 +250,7 @@ which in turn keeps track of all search nodes and relays queries to them:
 </p>
 
 
+
 <h2 id="resizing">Resizing</h2>
 <p>
 Resizing is orchestrated by the distributor, and happens gradually in the background.
@@ -249,7 +265,6 @@ in <a href="reference/services.html">services.xml</a>.
 Documents are distributed over nodes with a configured
 <a href="reference/services-content.html#redundancy">redundancy</a>.
 </p>
-
 
 
 <h3 id="bucket-distribution-algorithm">Bucket distribution algorithm</h3>
