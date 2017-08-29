@@ -1,0 +1,54 @@
+---
+# Copyright 2016 Yahoo Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "vespa-feeder"
+---
+
+<p>
+vespa-feeder is a feeding client that parses
+<a href="http://docs.vespa.ai/documentation/reference/document-json-format.html">JSON</a>
+input as Vespa document operations and sends to a Vespa application.
+File format is auto-detected. Use <em>vespa-feeder --help</em> for usage.
+Typical use is:
+<pre>
+$ vespa-feeder mydocs.json
+</pre>
+The binary parses the content of the input sequentially, and feeds each operation in order.
+However, since many operations will be pending at any one time, and because the
+processing time of an operation varies, there is no guarantee as to
+which order operations reach the backend. Because this can be very
+important when it comes to operations that apply to the same document
+id, there is logic in place to never send an operation for a document
+id to which there is already a pending operation.
+</p><p>
+An option to note is <em>--abortondataerror</em>,
+which can be set to <em>no</em> in case the input has errors (e.g. invalid characters).
+<em>vespa-feeder</em> notifies on parsing errors at the end of the feed, but it will not abort.
+</p>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>
+At the end of the feed, <em>vespa-feeder</em> prints a report.
+To print this report once a minute, use <em>--verbose</em> - sample output:
+<pre>
+Messages sent to vespa (route default) :
+----------------------------------------
+PutDocument: ok: 999997 msgs/sec: 411.38 failed: 0 <span style="background-color: yellow;">ignored: 0</span> latency(min, max, avg): 2, 4360, 99
+</pre>
+<em>ignored</em> reports the number of documents that could not be
+routed to any <a href="services-content.html">content clusters</a> because they did not match any of the
+<a href="services-content.html#documents">configured document types</a> or selections - examples are:
+<ul>
+  <li>
+    A document type is removed from the application
+    and the feed file contains documents with this type
+  </li><li>
+    One or more selection expressions restrict the documents the cluster accepts,
+    and the feed file contains documents that are excluded.
+    An example is feeding <a href="../search-definitions.html#document-expiry">expired documents</a> -
+    a selection for documents that are less than 30 days old
+    and the feed file contains documents that are 30+ days old.
+  </li>
+</ul>
+</p>
