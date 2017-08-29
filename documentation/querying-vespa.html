@@ -1,0 +1,74 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Querying Vespa"
+---
+
+<p>
+This is an overview of the components and data flow for Vespa queries.
+</p>
+<ol>
+  <li>
+    A query is sent from a front-end application to a Query Result Server node - QRS.
+    The QRS is implemented using the <a href="jdisc/index.html">Vespa container</a>.
+  </li><li>
+    Query processing, like stemming and geo-tagging, is done in <em>search chains</em> in the QRS.
+    <!-- ToDo should link to a doc with search chains here -->
+  </li><li>
+    The query is sent from the QRS to all content clusters in the system -
+    see <a href="federation.html">federation</a>.
+    Content clusters have top-level <a href="#dispatch">dispatchers</a> (TLDs),
+    which dispatches queries to <a href="proton.html">proton</a> search nodes.
+    For better caching, queries have affinity to TLDs.
+  </li>
+</ol>
+<p>
+<img src="img/reference/flow/query1.png" />
+</p><p>
+At this point the query enters one or more <a href="reference/services-content.html">content clusters</a>:
+</p>
+<ol>
+
+      <li>
+        The query arrives at each content node's mid-level dispatcher (MLD - binary is the same as for TLD).
+        An exception to this is <a href="content/data-placement.html">grouped clusters</a>,
+        in this case a subset of content nodes are queried.
+        MLD forwards the query to vespa-proton.
+      </li><li>
+        vespa-proton searches its index and returns its results  to the MLD.
+      </li><li>
+    When all MLDs have responded to the TLD,
+    it merges their partial results and responds to the QRS.
+  </li><li>
+    The QRS performs processing of the results in search chains,
+    requerying data if needed, before it  returns these to the querying entity.
+  </li>
+</ol>
+<p>
+<img src="img/reference/flow/query2.png" />
+</p>
+
+
+<h2 id="dispatch">Dispatch</h2>
+<p>
+The vespa-dispatch service's primary task is to dispatch queries
+such that it covers the entire document base,
+with the lowest possible maximum load on its relevant search nodes.
+The TLD knows what queries are being processed and at which nodes,
+and load balancing is done by dispatching to the node (MLD) with the lowest number of running queries.
+</p>
+
+
+<h3 id="tld-and-mld">TLD and MLD</h3>
+<p>
+The two dispatch modes are separable in the log files by their entry;
+the MLD writes:
+<pre>
+(...) searchnode.dispatch0.dispatch
+vespa-dispatch (...)
+</pre>
+whereas the TLD writes:
+<pre>
+(...)
+topleveldispatch vespa-dispatch (...)
+</pre>
+</p>
