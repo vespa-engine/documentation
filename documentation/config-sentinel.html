@@ -5,32 +5,92 @@ title: "Config sentinel"
 
 <p>
 The config sentinel starts and stops services -
-and restart failed services unless are manually stopped - in short:
+and restart failed services unless are manually stopped
+</p>
+
+<h2 id="services-start">Services start</h2>
+<p>
+All nodes in a Vespa system has at least these running services:
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th><a href="reference/config-proxy.html">config-proxy</a></th>
+      <td>
+        proxies config requests between Vespa applications and the configserver node.
+        All configuration is cached locally so that this node can maintain its current configuration,
+        even if the configserver shuts down
+      </td>
+    </tr><tr>
+      <th style="white-space:nowrap;">config-sentinel</th>
+      <td>
+        registers itself with the <em>config-proxy</em>
+        and subscribes to and enforces node configuration,
+        meaning the configuration of what services should be run locally,
+        and with what parameters
+      </td>
+    </tr><tr>
+      <th><a href="reference/logs.html#logd">vespa-logd</a></th>
+      <td>
+        monitors <em>$VESPA_HOME/logs/vespa/vespa.log</em>, which is used by all other services,
+        and relays everything to the <a href="reference/logs.html#log-server">log-server</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p><p>
+<img src="img/reference/flow/deploy.png" />
+</p><p>
+Sequence:
 <ol>
   <li>
-    At cluster start, a <em>config-sentinel</em> process is started on all nodes.
+    <em>config-proxy</em> is started.
+    The environment variables <code><a href="setting-vespa-variables.html">VESPA_CONFIGSERVERS</a></code>
+    and <code><a href="setting-vespa-variables.html">VESPA_CONFIGSERVER_RPC_PORT</a></code> are used to
+    connect to the <a href="cloudconfig/configuration-server.html">config-server(s)</a>.
+    It will retry all config servers in case some are down.
   </li><li>
-    This process reads the config server names from
-    <a href="setting-vespa-variables.html">VESPA_CONFIGSERVERS</a>.
-    It picks a config server and issues a subscription for a process list config,
+    <em>config-sentinel</em> is started,
+    and subscribes to node configuration (i.e. a service list) from <em>config-proxy</em>
     using its hostname as the <a href="cloudconfig/configapi-dev.html#config-id">config id</a>.
-    It will retry using other config servers in case some are down.
-  </li><li>
-    The config for the config-sentinel (the process list)
-    lists the processes to be started on the node,
-    along with the <em>config id</em> to assign to each,
+    The config for the config-sentinel (the service list)
+    lists the processes to be started, along with the <em>config id</em> to assign to each,
     typically the logical name of that service instance.
-    The processes are started with the config id as argument -
-    see example output below, like <em>id="search/qrservers/qrserver.0"</em>
   </li><li>
-    The processes can then in turn instantiate internal components,
-    each assigned the same or another config id, and instantiating further components.
+    <em>config-proxy</em> subscribes to node configuration from <em>config-server</em>,
+    caches it, and returns the result to <em>config-sentinel</em>
+  </li><li>
+    <em>config-sentinel</em> starts the services given in the node configuration,
+    with the config id as argument -
+    see example output below, like <em>id="search/qrservers/qrserver.0"</em>. Each service:
+    <ol type="a">
+      <li>
+        Subscribes to configuration from <em>config-proxy</em>
+      </li><li>
+        <em>config-proxy</em> subscribes to configuration from <em>config-server</em>,
+        caches it and returns result to the service
+      </li><li>
+        The service runs according to its configuration,
+        logging to <em>$VESPA_HOME/logs/vespa/vespa.log</em>.
+        The processes instantiate internal components,
+        each assigned the same or another config id, and instantiating further components.
+      </li>
+    </ol>
+  </li>
 </ol>
+When the <em>config-server</em> receives updated configuration for a running system,
+it propagates the changed configuration to nodes subscribing to it.
+In turn, these nodes reconfigure themselves accordingly.
+</p>
+
+
+
+<h2 id="user-interface">User interface</h2>
+<p>
 The config sentinel runs a telnet service which can be used to list,
 start and stop the services supposed to run on that node.
 The port number is 19098 by default,
 use the <a href="reference/vespa-model-inspect.html">Vespa Model Inspector</a> to verify -
-the service name is <code>config-sentinel</code>, and the port is tagged <em>telnet interactive</em>.
+the service name is <em>config-sentinel</em>, and the port is tagged <em>telnet interactive</em>.
 Open the interface:
 <pre>
 $ telnet localhost 19098
