@@ -10,15 +10,12 @@ or constructed programmatically.
 Options for writing Documents to Vespa:
 <ul><li>
   <a href="document-api.html">RESTified Document Operation API</a>:
-  Simple REST API for operations based on document ID (get, put, remove, update).
-  <strong>Use this for prototyping</strong>.
+  Simple REST API for operations based on document ID (get, put, remove, update,visit). 
 </li><li>
   <a href="vespa-http-client.html">The Vespa HTTP client</a>. This is a small standalone jar which
   feeds to Vespa either through method calls in Java or by consuming a file from the command line.
   It provides a simple API while achieving high performance by using multiplexing and multiple parallel async connections.
-  It is recommended in all cases when feeding from a node outside the Vespa cluster. The HTTP gateway must be added
-  to a container cluster in services.xml to use this.
-  <strong>Use this for production</strong>.
+  It is recommended in all cases when feeding from a node outside the Vespa cluster. 
 </li><li>
   <a href="document-api-guide.html">The Document API</a>. This provides direct read-and write access to Vespa documents
   through Vespa's internal communication layer. Use this when accessing documents from Java components in Vespa
@@ -44,7 +41,6 @@ The CRUD operations are the four basic functions of persistent storage:
     By specifying a <a href="reference/document-json-format.html#conditional-updates-test-and-set">
     test and set condition</a>, one can perform a conditional put
     that only executes if the condition matches the already existing document.
-    <strong>Note:</strong> Conditional puts is considered an experimental feature.
   </td>
 </tr><tr>
   <td><strong>Remove</strong></td>
@@ -59,7 +55,6 @@ The CRUD operations are the four basic functions of persistent storage:
     <a href="reference/document-json-format.html#conditional-updates-test-and-set">
     test and set condition</a> can be specified for remove operations,
     only removing the document when the condition (document selection) matches the document.
-    <strong>Note:</strong> Conditional removes are considered an experimental feature.
   </td>
 </tr><tr>
   <td><strong>Update</strong></td>
@@ -186,43 +181,6 @@ Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
   available: 85000000000,
   diskLimit: 0.8
 }'
-
-Put operation rejected for document 'id:test:test::0': 'memoryLimitReached: {
-  action: \"add more content nodes\",
-  reason: \"memory used (0.75) &gt; memory limit (0.7)\",
-  mapped: {
-    virt: 0,
-    rss:  0
-  },
-  anonymous: {
-    virt: 0,
-    rss:  12000000000
-  },
-  physicalMemory: 16000000000,
-  memoryLimit : 0.7
-}'
-
-Put operation rejected for document 'id:test:test::0' of type 'test': 'enumStoreLimitReached: {
-  action: \"add more content nodes\",
-  reason: \"enum store address space used (0.65) &gt; limit (0.6)\",
-  enumStore: {
-    used:  22333829939,
-    limit: 34359738368
-  },
-  attributeName: \"a1\",
-  subdb: \"ready\"
-}'
-
-Put operation rejected for document 'id:test:test::0' of type 'test': 'multiValueLimitReached: {
-  action: \"use 'huge' setting on attribute field or add more content nodes\",
-  reason: \"multiValue address space used (0.55) &gt; limit (0.5)\",
-  multiValue: {
-    used:  73819750,
-    limit: 134217728
-  },
-  attributeName: \"a1\",
-  subdb: \"ready\"
-}'
 </pre>
 </p>
 
@@ -248,166 +206,3 @@ update to ensure they exist for the non-searchable copies as well.
 </p>
 
 
-<h3 id="load-priority">Load priority</h3>
-<p>
-Read/write operations are assigned default <em>priority levels</em> -
-modify these in <em>services.xml</em> using <a href="reference/services.html#clients">load types</a>.
-Metrics are generated per load type - example:
-<pre>
-&lt;get&gt;
-  &lt;default&gt;
-    &lt;count count="1"/&gt;
-    &lt;latency average="0.125977" last="0.125977" min="0.125977" max="0.125977" count="1"/&gt;
-    &lt;not_found count="1"/&gt;
-  &lt;/default&gt;
-  &lt;foo&gt;
-    &lt;count count="1"/&gt;
-    &lt;latency average="0.25708" last="0.25708" min="0.25708" max="0.25708" count="1"/&gt;
-  &lt;/foo&gt;
-  &lt;sum&gt;
-    &lt;count count="2"/&gt;
-    &lt;latency average="0.191528" last="0.25708" min="0.125977" max="0.25708" count="2"/&gt;
-    &lt;not_found count="1"/&gt;
-  &lt;/sum&gt;
-&lt;/get&gt;
-</pre>
-</p>
-
-
-<h2 id="combine-values-in-indexing-statements">Combine values in indexing statements</h2>
-<p>
-Vespa allows flexibility in how documents are turned into index structure
-data through <em>indexing statements</em>. Using indexing statements, multiple
-document fields can be used to produce one index structure field. For example,
-the index statement
-<pre>
-input field1 . input field2 | attribute field2;
-</pre>
-will combine the document fields <em>field1</em> and <em>field2</em>
-into the attribute named <em>field2</em>.
-When partially updating document which contains indexing statement which
-combines multiple fields the following rules apply:
-<ul>
-  <li>Only attributes where <em>all</em> the source values are available in
-    the source document update will be updated</li>
-  <li>The document update will fail when indexed (only) if <em>no</em>
-    attributes end up being updated when applying the rule above</li>
-</ul>
-</p><p>
-Example: If a search definition has the indexing statements
-<pre>
-input field1 | attribute field1;
-input field1 . input field2 | attribute field2;
-</pre>
-the following will happen for various partial updates.
-<table class="table">
-  <thead>
-  <tr><th>Partial update contains</th><th>Result</th></tr>
-  </thead></tbody>
-  <tr><td>field1</td><td>field1 is updated</td></tr>
-  <tr><td>field2</td><td>The update fails</td></tr>
-  <tr><td>field1 and field2</td><td>field1 and field2 is updated</td></tr>
-  </tbody>
-</table>
-</p>
-
-
-
-<h2 id="examples">Examples</h2>
-<table class="table">
-  <thead></thead><tbody>
-    <tr>
-      <th>put, remove, update</th>
-      <td>
-<pre>
-[
-    {
-        "put": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
-        "fields": {
-            "popularity": {
-                "0": 3,
-                "1": 5,
-                "2": 30
-            },
-            "songs": "Knockin on Heaven's Door; Mr. Tambourine Man",
-            "title": "Best of Bob Dylan",
-            "tracks": [
-                "Mr. Tambourine Man",
-                "Someday Baby",
-                "Blowin' In The Wind"
-            ],
-            "url": "http://music.yahoo.com/bobdylan/BestOf"
-        }
-    },
-    {
-        "remove": "id:music:music::http://music.yahoo.com/BritneySpears/HitMe"
-    },
-    {
-        "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
-        "fields": {
-            "title": {
-                "assign": "The Best of Bob Dylan"
-            },
-            "tracks": {
-                "add": [
-                    "Man Of Constant Sorrow"
-                ]
-            }
-        }
-    }
-]
-</pre>
-      </td>
-    </tr><tr>
-      <th>update tags</th>
-      <td>
-        This example adds a set of tags to a set of music documents and then updates these tags.
-        Clone the
-        <a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search">music</a>
-        sample application. Edit <em>music.sd</em> and add:
-<pre>
-field tags type weightedset&lt;string&gt; {
-  indexing: attribute | summary
-}
-</pre>
-        Then deploy the application.
-        Use the <em>music-data-1.json</em> example feed as starting point
-        and add a few tags to both documents.
-        One of the documents will look something like this:
-<pre>
-{
-    "put": "id:music:music::docid1",
-    "fields": {
-        "album": "Bad",
-        "artist": "Michael Jackson",
-        "title": "Bad",
-        "year": 1987,
-        "duration": 247,
-        "tags": {
-            "album": 3,
-            "legend": 7
-        }
-    }
-}
-</pre>
-        Feed the put using the <a href="vespa-http-client.html">Vespa HTTP client</a>.
-        Verify that it has been indexed by searching for <em>tags:legend</em>.
-        Then, create an update feed, adding a new tag to the tags field:
-<pre>
-{
-    "update": "id:music:music::docid1",
-    "fields": {
-        "tags": {
-            "add": {
-                "michael": 10
-            }
-        }
-    }
-}
-</pre>
-        Feed the update feed using the <a href="vespa-http-client.html">Vespa HTTP client</a>.
-        Verify that the update is visible and searchable by searching for <em>tags:michael</em>.
-      </td>
-    </tr>
-  </tbody>
-</table>
