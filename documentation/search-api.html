@@ -4,89 +4,158 @@ title: "Search API"
 ---
 
 <p>
-Search with Vespa using HTTP GET requests. HTTP keepalive is supported.
-<!-- ToDo check is POST supported? -->
-Refer to the <a href="reference/search-api-reference.html">search API reference</a>.
-The general form of a search request is:
+This is the Vespa Search API guide - refer to the
+<a href="reference/search-api-reference.html">search API reference</a> for details.
+
+<h2 id="http">HTTP</h2>
+<ul>
+  <li>
+    The <em>host:port</em> endpoint is the <a href="querying-vespa.html">QRS</a> - Query Result Server.
+    The general form of a search request is:
 <pre>
-http://&lt;host&gt;:&lt;port&gt;/search/?&lt;param1=value1&gt;&amp;&lt;param2=value2&gt;&hellip;
+  http://host:port/search/?param1=value1&amp;param2=value2&amp;...
 </pre>
-QRS (Query Result Server) is the service accepting Vespa search requests.
-The only mandatory parameter is <code>query</code> or <code>yql</code> - examples:
+  </li><li>
+    The only mandatory parameter is <em>yql</em>
+  </li><li>
+    Use GET or POST - these are equivalent:
 <pre>
-http://host:port/search/?query=rose
-http://host:port/search/?query=kanoo%20bathing&amp;hits=10
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22%3B
+$ curl --data yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22%3B http://localhost:8080/search/
 </pre>
-The last query has a query string consisting of multiple words. In
-cases where the parameter values contains non-alphanumeric characters,
-the values must be encoded according to standard URL encoding
-rules. Thus, space is encoded as %20, + as %2b and so on -
-see <a href="http://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>.
-</p>
+  </li><li>
+    HTTP keepalive is supported
+  </li><li>
+    Values must be encoded according to standard URL encoding.
+    Thus, space is encoded as +, + as %2b and so on -
+    see <a href="http://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>
+  </li>
+</ul>
 
 
-<!-- ToDo: move the legacy simple query language out of here -->
 
-<h2 id="query-strings">Query Strings</h2>
+
+
+<h2 id="features">Features</h2>
 <p>
-The most important piece of the query request is the query string.
 The query string contains the specification of which results the search should return,
 typically some words which should be present in matching documents.
-Queries are formulated in <a href="query-language.html">YQL</a>.</p>
+Queries are formulated in <em>YQL</em>.
 Note: Also find the legacy
-<a href="reference/simple-query-language-reference.html">simple query language reference</a>.
+<a href="reference/simple-query-language-reference.html">simple query language</a> reference.
 </p><p>
-If Vespa cannot determine a valid search expression from the query string,
+If Vespa cannot generate a valid search expression from the query string,
 it will issue the error message <em>Null query</em>.
-To troubleshoot, add <a href="reference/search-api-reference.html#tracelevel">&amp;tracelevel=2</a>
-to the GET request. A missing yql parameter will also lead to this error message.
+To troubleshoot, add <a href="reference/search-api-reference.html#tracelevel">&amp;tracelevel=2</a> to the request.
+A missing <em>yql</em> parameter will also lead to this error message.
+</p><p>
+Examples - refer to <a href="query-language.html">YQL</a>, <a href="grouping.html">grouping</a> and the
+<a href="reference/sorting.html">sorting reference</a> for details:
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th>Ordering</th>
+      <td>
+<pre>
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22\
+<span style="background-color: yellow;">+order+by+year+desc</span>%3B
+</pre>
+      </td>
+    </tr><tr>
+      <th>Grouping</th>
+      <td>
+<pre>
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22\
+<span style="background-color: yellow;">+%7Call%28group%28year%29+each%28output%28sum%28duration%29%29%29%29</span>%3B
+</pre>
+      </td>
+    </tr><tr>
+      <th>Pagination</th>
+      <td>
+<pre>
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22\
+<span style="background-color: yellow;">+limit+2+offset+1</span>%3B
+</pre>
+      </td>
+    </tr><tr>
+      <th>Numeric</th>
+      <td>
+<pre>
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+<span style="background-color: yellow;">year+%3E+2000</span>%3B
+</pre>
+      </td>
+    </tr><tr>
+      <th>Timeout</th>
+      <td>
+<pre>
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22\
+<span style="background-color: yellow;">+timeout+100</span>%3B
+</pre>
+      </td>
+    </tr><tr>
+      <th>Regexp</th>
+      <td>
+<pre>
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+title+<span style="background-color: yellow;">matches+%22mado%5Bn%5D%2Ba%22</span>%3B
+</pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
 </p>
 
 
 
-<h2 id="other-query-params">Other Query Parameters</h2>
-<p>
-In addition to the query string itself, Vespa accepts a number of
-parameters which describes how to match documents, order results,
-present results and how to provide additional information about the
-hits. The following lists the most important parameters, a full
-listing is found in the
-<a href="reference/search-api-reference.html">search API reference</a>,
-including information on search chains and query profiles.
-It is also possible to use locations for <a href="geo-search.html">Geo search</a>.
+<h3 id="query-params">Query parameters</h3>
+Below is a list of query parameters to control aspects of queries -
+refer to the <a href="reference/search-api-reference.html">search API reference</a>
+for the full list.
 <table class="table">
-<thead>
-<tr>
-  <th>Parameter</th><th>Description</th>
-  </tr>
-</thead>
-<tbody>
-<tr><td><code>yql</code></td>
-  <td>the query, described above</td></tr>
-<tr><td><code>offset</code></td>
-  <td>the (0-base) offset into the results, used for paging through a
-      set of hits</td></tr>
-<tr><td><code>hits</code></td>
-  <td>the (max) number of hits to return</td></tr>
-<tr><td><code>filter</code></td>
-  <td>an additional <em>any</em> type query string used to limit or
-      modify the query. This is typically used to add machine
-      generated query terms or preset preferences to a user query,
-      without having to do any string combination in the front
-      end</td></tr>
-<tr><td><code>tracelevel</code></td>
-  <td>set to a positive integer to see tracing information in the
-      query result. Higher numbers produce more tracing
-      output.</td></tr>
-<tr><td><code>sorting</code></td>
-  <td>specifies result sorting, if sort by relevancy is not
-      desired. See <a href="reference/sorting.html">sorting
-      reference</a>.</td></tr>
-<tr><td><code>timeout</code></td>
-  <td>A floating point number giving number of seconds to wait for
-      this query to finish. This overrides any default values set in query profiles,
-      and any provider(backend) timeouts.</td></tr>
-</tbody>
+  <thead></thead><tbody>
+    </tr><tr>
+      <th>ranking</th>
+      <td>
+        Unless ordering is specified, results are ranked using the default rank profile
+        <a href="nativerank.html">nativerank</a>.
+        Vespa has a rich ranking framework, read more in <a href="ranking.html">ranking</a>.
+        Control result ranking using <a href="reference/search-api-reference.html#ranking.profile">rank profiles</a>
+      </td>
+    </tr><tr>
+      <th>searchChain</th>
+      <td>
+        Use <a href="reference/search-api-reference.html#searchChain">search chains</a>
+        to implement query processing.
+        Set <em>&amp;tracelevel=2</em> to inspect the search chain components.
+        Refer to <a href="chained-components.html">chained components</a>
+      </td>
+    </tr><tr>
+      <th>sources</th>
+      <td>
+        An application can have multiple content clusters - Vespa searches in all by default.
+        <a href="federation.html">Federation</a> controls how to query the clusters,
+        <a href="reference/search-api-reference.html#model.sources">sources</a> names the clusters
+      </td>
+    </tr><tr>
+      <th>pos.ll</th>
+      <td>
+        Specify position using latitude and longitude to implement <a href="geo-search.html">geo search</a>
+      </td>
+    </tr><tr>
+      <th>queryProfile</th>
+      <td>
+        Use <a href="reference/search-api-reference.html#queryProfile">query profiles</a> to store
+        query parameters in configuration.
+        This makes query strings shorter, and makes it easy to modify queries by modifying configuration only.
+        Use cases are setting query properties for different markets, parameters that do not change, and so on.
+        Query profiles can be nested, versioned and use inheritance
+      </td>
+      <tr><th>tracelevel</th>
+      <td>
+        Set to a positive integer to see query <a href="reference/search-api-reference.html#tracelevel">tracing</a>.
+        Higher numbers produce more tracing output
+      </td>
+    </tr>
+  </tbody>
 </table>
 </p>
 
