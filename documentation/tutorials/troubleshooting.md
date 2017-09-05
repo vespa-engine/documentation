@@ -8,9 +8,14 @@ title: "Vespa tutorial troubleshooting"
 
 ## Deployment of a new application
 
-If you've already had an application deployed and want to deploy a different one, you need to remove all the old documents, since they probably won't be relevant anymore. To do that, stop the vespa service and run
+If you've already had an application deployed and want to deploy a different one,
+remove all the old documents using
+[vespa-remove-index](../reference/vespa-cmdline-tools.html#vespa-remove-index):
 
-	$ vespa-remove-index
+    $ vespa-stop-services
+    $ vespa-remove-index
+    $ vespa-start-services
 
-Next you will need to manually remove zookeeper files created by vespa, in `$VESPA_HOME/var/zookeeper`. Now you should be able to deploy the new application without error.
+Next remove zookeeper files created by vespa, in `$VESPA_HOME/var/zookeeper`.
+Now you should be able to deploy the new application without error.
 

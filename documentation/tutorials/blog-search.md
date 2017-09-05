@@ -99,10 +99,10 @@ We used similar settings as described in the
 As in the guide we assume that the $VESPA_SAMPLE_APPS env variable points
 to the directory with your local clone of the
 [vespa sample apps](https://github.com/vespa-engine/sample-apps).
-```bash
+``bash
 $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial --privileged \
   --volume $VESPA_SAMPLE_APPS:/vespa-sample-apps --publish 8080:8080 vespaengine/vespa
-```
+``
 
 
 ## Searching blog posts
@@ -157,6 +157,7 @@ package is found in
 
 [services.xml](../reference/services.html) defines the services that make up the Vespa application — which
 services to run and how many nodes per service:
+
 ```xml
 <?xml version='1.0' encoding='UTF-8'?>
 <services version='1.0'>
@@ -189,6 +190,7 @@ services to run and how many nodes per service:
 
 </services>
 ```
+
 `<container>` defines the [container](../jdisc/index.html) cluster for document, query and result processing:  
 `<search>` sets up the _search_ endpoint for Vespa queries. The default port for both is 8080.  
 `<document-api>` sets up the _document_ endpoint for feeding.  
@@ -828,11 +830,12 @@ attributes depends on the application, in general the following applies:
 
 ## Clean environment by removing all documents
 
-This will remove all documents from Vespa:
+[vespa-remove-index](../reference/vespa-cmdline-tools.html#vespa-remove-index)
+removes all documents:
 
-    $ $VESPA_HOME/bin/vespa-stop-services
+    $ vespa-stop-services
     $ vespa-remove-index
-    $ $VESPA_HOME/bin/vespa-start-services
+    $ vespa-start-services
 
 
 ## Conclusion
