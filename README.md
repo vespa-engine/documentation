@@ -75,4 +75,10 @@ Example:
 &lt;h2 id=&quot;my-nice-heading&quot;&gt;My nice Heading&lt;/h2&gt;
 If this algorithmic transformation is followed it is possible to link to this section using &lt;a href=&quot;doc.html#my-nice-heading&quot;&gt; without having to consult the html source of the page to find the right id.
 
+### Link to Javadoc
+
+* Link to javadoc for an artifact: http://javadoc.io/doc/com.yahoo.vespa/container-search
+* Link to javadoc for a package: http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/federation/vespa/package-summary.html
+* Link to javadoc for a class: http://javadoc.io/page/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/config/ConnectionParams.Builder.html
+
 *By Jon Bratseth in June 2016*
