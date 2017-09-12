@@ -3,8 +3,6 @@
 title: "Securing your Vespa installation"
 ---
 
-Version 1.0
- 
 It is critical that you understand the security requirements and limitations
 of any networked system. Vespa is no exception. This document gives the most
 important information related to security at the network and physical host levels.
@@ -70,11 +68,4 @@ your application.
  
 Vespa does not have support for encryption of on-disk document stores or indexes.
 
-## Future work
-This document is likely to change several times in the near future as we make
-improvements and enhancements to open source Vespa security. Please check back
-regularly.
-
-## Changelog
-* 30 Jun 2017 - version 1.0. Initial document version.
 
