@@ -47,7 +47,7 @@ updated document. For these read operations, writes behave as if they are atomic
 
 Searches may observe partial updates, as updates are not atomic across index
 structures. This can only happen _after_ a write has started, but _before_ it's
-complete. Once a write is complete, all indexes updates are visible.
+complete. Once a write is complete, all index updates are visible.
 
 Searches may observe transient loss of coverage when nodes go down. Vespa will
 restore coverage automatically when this happens. How fast this happens depends
