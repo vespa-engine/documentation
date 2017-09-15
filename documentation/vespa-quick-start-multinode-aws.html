@@ -16,18 +16,21 @@ The tasks involved are similar to setting up a single-node system on CentOS.
 There is also a guide on <a href="vespa-quick-start-multinode-aws-ecs.html">using ECS to set up a multinode docker based system</a>.
 </p>
 
-<h2 id="launch-instances">Launch instances on <a href="aws.amazon.com/ec2">AWS EC2</a> </h2>
+<h2 id="launch-instances">Launch instances on <a href="https://aws.amazon.com/ec2">AWS EC2</a> </h2>
 <ol>
 	<li><strong>Configure an AWS security group</strong>
-	<p>First we'll need to configure an <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html">AWS security group</a>
+	<p>Configure an <a href="http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-network-security.html">AWS security group</a>
 	 which will limit access to the installation and allow our launced EC2 instances to talk to each other without restrictions. 
          See <a href="securing-your-vespa-installation.html">more about securing Vespa installations</a>.</p> 
 	 <ul>
 	<li><p>Allow access to inbound TCP port <samp>8080</samp> (feed &amp; search port) from your source IP range.</p> </li>
-	<li><p>Allow access tp inbound for all TCP traffic on port range <samp>0 - 65535</samp> for members of the security group. 
-	This is done by first creating the security group with basic access from your source IP range to port <samp>8080</samp> for search and feed then once saved edit it with an 
-	additional inbound rule which uses the security group name as source.</p>
+	<li><p>Allow access to inbound for all TCP traffic on port range <samp>0 - 65535</samp> for members of the security group.
+	This is done by first creating the security group with basic access from your source IP range to port <samp>8080</samp> for search and feed.
+  Once saved, edit it with an additional inbound rule which uses the security group id as source.</p>
 	</li>
+  <li>
+    <p>The security group must allow inbound ssh connections</p>
+  </li>
 	</ul>
 	</li>
 	<li><strong>Chose Amazon Machine image (AMI) </strong>:
@@ -35,17 +38,25 @@ There is also a guide on <a href="vespa-quick-start-multinode-aws-ecs.html">usin
 	</li>
 	<li><strong>Chose instance type and launch 4 instances</strong></li>
 	<p>For getting through this start guide the <i>t2.medium</i> will do the job. 
-        For production setups see our <a href="performance/sizing-search.html">sizing guide</a>.</p> 
+        For production setups see the <a href="performance/sizing-search.html">sizing guide</a>.</p>
 	</li>
 </ol>
 
 
 <h2 id="install-vespa">Install and run Vespa</h2>
-
-<p> Create a hostfile listing the hosts in the system
-(<samp>hosts.txt</samp>) to simplify the multinode install process.
+<p>
+In this example we'll use the <samp>ip-172-1-1-1.us-east-2.compute.internal</samp> 
+instance as our administration node and all commands below are run from that node. First log on to the adminstration instance from your computer using the Public DNS record name
+(E.g <samp>ec2-18-1-1-1.us-east-2.compute.amazonaws.com</samp>). Using ssh agent forwarding will simplify the process described in the next section, given your  aws identify key file <samp>my-aws-key.pem</samp> and assuming the chosen AMI uses <samp>centos</samp> as primary login user :
+<pre>
+$ ssh-add my-aws-key.pem
+$ ssh -A centos@ec2-18-1-1-1.us-east-2.compute.amazonaws.com
+</pre> 
+<p>
+Now we are inside the AWS EC2 cloud and we can start boostraping the system.
+Create <samp>hosts.txt</samp> based on your EC2 instances to be used in this example:
 </p>
-<pre class="brush: cli">
+<pre>
 $ cat hosts.txt
 ip-172-1-1-1.us-east-2.compute.internal
 ip-172-1-1-2.us-east-2.compute.internal
@@ -53,28 +64,26 @@ ip-172-1-1-3.us-east-2.compute.internal
 ip-172-1-1-4.us-east-2.compute.internal
 </pre>
 <p>
-
-In this example we'll use the <samp>ip-172-1-1-1.us-east-2.compute.internal</samp> 
-instance as our administration node and all commands below are run from that node. First log on to the adminstration instance from your computer using the Public DNS record name
-(E.g <samp>ec2-18-1-1-1.us-east-2.compute.amazonaws.com</samp>). Using ssh agent forwarding will simplify the process described in the next section, given your  aws identify key file <samp>my-aws-key.pem</samp> and assuming the chosen AMI uses <samp>centos</samp> as primary login user :
-<pre>
-$ ssh-agent add my-aws-key.pem
-$ ssh -A centos@ec2-18-1-1-1.us-east-2.compute.amazonaws.com
-</pre> 
-<p>Now we are inside the AWS EC2 cloud and we can start boostraping our system install by downloading the saws bootstrap script which will install vespa and do basic system configuration for you:</p>
+Download the aws bootstrap script which will install vespa and do basic system configuration for you:</p>
 <pre>
 $ curl -s https://raw.githubusercontent.com/vespa-engine/sample-apps/bergum/aws-bootstrap/aws_bootstrap.sh  > aws_bootstrap.sh 
-$ for host in $(cat hosts.txt); do scp -o StrictHostKeyChecking=no aws_bootstrap.sh $host:.; done
+$ for host in $(cat hosts.txt); do \
+scp -o StrictHostKeyChecking=no aws_bootstrap.sh $host:.; done
 </pre>
 <p>Now we are ready to install and start vespa, the script expects a single hostname as argument which should be the name of the administration/configuration server, in 
 our case we chose to use <samp>ip-172-1-1-1.us-east-2.compute.internal</samp></p>
 <pre>
-$ for host in $(cat hosts.txt); do ssh -f $host "sudo bash aws_bootstrap.sh ip-172-1-1-1.us-east-2.compute.internal"; done  
+$ for host in $(cat hosts.txt); do \
+ssh -f $host "sudo bash aws_bootstrap.sh $(localhost)"; done
 </pre>
 <p>The last step might take some time to complete.</p>
 
 <h2 id="configure-vespa">Configure and deploy your Vespa application</h2>
-<p>Now we have bootstraped our instances and it's time to configure Vespa using an example <a href="cloudconfig/application-packages.html">application package</a> as starting point.</p>
+<p>
+Now we have bootstraped our instances and it's time to configure Vespa using an example
+<a href="cloudconfig/application-packages.html">application package</a> as starting point.
+Log in to the admin node for next steps.
+</p>
 <p><strong>Configure the multi-node application:</strong> An example application is found at
 <a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search">github.com/vespa-engine/sample-apps/basic-search</a>.
 <pre>
@@ -109,8 +118,8 @@ Modify <samp>src/main/application/hosts.xml</samp> so the resulting file looks l
 
 <p>The <a href="reference/hosts.html"><samp>hosts.xml</samp></a> file describes our hosts
 that we want to deploy vespa on and we give each node a set of role names using aliases which we'll use in our <samp>services.xml</samp> configuration file. 
-Now we can configure which services should run where, modify the <samp>src/main/application/services.xml</samp> so the resulting file look like this</p>
-Now modify the <em>src/main/application/services.xml</em> to:
+Now we can configure which services should run where, modify <samp>src/main/application/services.xml</samp> to:
+</p>
 <pre>
 &lt;?xml version="1.0" encoding="utf-8" ?&gt;
 &lt;!-- Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. --&gt;
@@ -146,15 +155,22 @@ Now modify the <em>src/main/application/services.xml</em> to:
 <p>The <a href="reference/services.html"><samp>services.xml</samp></a> maps services to node aliases. 
 We have one <samp>configserver</samp>, two stateless jdisc search &amp; feed and two content nodes storing our data with a configured redundancy of 2.</p>
 
+<p><strong>Start the config server:</strong>
+<pre>
+$ $VESPA_HOME/bin/vespa-start-configserver
+</pre>
+</p>
 <p><strong>Deploy the application :</strong></p>
 <pre>
-vespa-deploy prepare src/main/application &amp;&amp; vespa-deploy activate 
+$ vespa-deploy prepare src/main/application &amp;&amp; vespa-deploy activate
 </pre>
-<p>Our instances running vespa will subscribe to configuration and once the applicaiton is 
+<p>
+Our instances running vespa will subscribe to configuration and once the application is
 deployed the set of services configured will start, no need to re-start vespa or the configuration server.
-When you change your application just deploy again and the system will make the change.</p>
+When you change your application just deploy again and the system will make the change.
+</p>
 
-<p><strong>Inspect & Verify</strong>: You can inspect the system state by the <a href="content/admin-states.html"><samp>vespa-get-cluster-state</samp></a> tool, make sure services are 'up' as below:
+<p><strong>Inspect &amp; Verify</strong>: You can inspect the system state using <a href="content/admin-states.html"><samp>vespa-get-cluster-state</samp></a>, make sure services are 'up':
 
 <pre>
 $ vespa-get-cluster-state 
@@ -177,8 +193,8 @@ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar \
 <p><strong>Run a query against the search containers</strong></p>
 <p>Replace hostnames with your hostnames for which you have configured <samp>jdisc</samp> to run</p>
 <pre>
-$ curl -s http://ip-172-1-1-1.us-east-2.compute.internal:8080/search/?query=bad | python -m json.tool
-$ curl -s http://ip-172-1-1-2.us-east-2.compute.internal:8080/search/?query=bad | python -m json.tool
+$ curl -s http://stateless0:8080/search/?query=bad | python -m json.tool
+$ curl -s http://stateless1:8080/search/?query=bad | python -m json.tool
 </pre>
 <p>
   Read more in the
@@ -208,5 +224,3 @@ $ curl -s http://ip-172-1-1-2.us-east-2.compute.internal:8080/search/?query=bad 
     How to <a href="securing-your-vespa-installation.html">secure a Vespa installation</a>
   </li>
 </ul>
-
-
