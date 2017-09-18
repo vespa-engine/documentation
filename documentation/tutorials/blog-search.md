@@ -432,13 +432,13 @@ which can also be written in YQL as:
 
 Once more a search for the single term "music", but this time with the explicit
 field `title`. This means that we only want to match documents that contain the
-word "music" in the field `title`. If you try this query right now you will see
-that the number of documents returned will be different from the previous query.
+word "music" in the field `title`. As expected, you will see fewer hits for this
+query, than for the previous one. 
 
     yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22%3B
 
-A query for the two terms "music" and "festival", combined with an `AND`
-operation. So it will find documents that match both terms, but not just one of them.
+This is a query for the two terms "music" and "festival", combined with an `AND`
+operation; it finds documents that match both terms — but not just one of them.
 
     yql=select+*+from+sources+*+where+sddocname+contains+%22blog_post%22%3B
 
@@ -556,7 +556,7 @@ Since attributes are kept in memory, they are excellent for fields which
 require fast access, e.g., fields used for sorting or grouping query results.
 The downside is that they make Vespa use more memory per document.
 Thus, by default, no index is generated for attributes, and search over
-these defaults to a linear scan. To build and index for an attribute field,
+these defaults to a linear scan. To build an index for an attribute field,
 include `attribute:fast-search` in the field definition.
 
 ### Defining an attribute field
@@ -569,58 +569,57 @@ fast access; an example is found in `blog_post.sd`:
     }
 
 The data has format YYYYMMDD. And since the field is an `int`, it can be used for
-[range searches](#range-searches).
+[_range searches_](#range-searches).
 
 ### Example queries using attribute field
 
     yql=select+*+from+sources+*+where+default+contains+%2220120426%22%3B
 
-A single-term query for the term _20120426_ in the _default_ field set.
-Inspecting the search definition, the field `date` is not included in the `default` field set.
-As such, this query will has 0 results:
+This is a single-term query for the term _20120426_ in the `default` field set.
+(The strings `%22` and `%3B` are URL encodings for `"` and `;`.)
+In the search definition, the field `date` is not included in the `default` field set.
+Nevertheless, the string "20120426" is found in the content of many posts, which
+are returned then as results.
 
     yql=select+*+from+sources+*+where+date+contains+%2220120426%22%3B
 
-Another single-term query for the term _20120426_, but this time restricted to
-the field named `date`. This query will find all documents in the document
-corpus that have the field `date` set to the value _20120426_, that is,
-all documents from April 26th of 2012.
+To get documents that were created 26 April 2012, and whose `date` field is _20120426_,
+replace `default` with `date` in the YQL query string.
 Note that since `date` has not been defined with `attribute:fast-search`,
-searching will be done by scanning *all* documents.
+searching will be done by scanning _all_ documents.
 
-    yql=select+*+from+sources+*+where+default+contains+%22recipe%22+AND+date+contains+%2220120416%22%3B
+    yql=select+*+from+sources+*+where+default+contains+%22recipe%22+AND+date+contains+%2220120426%22%3B
 
 A query with two terms; a search in the `default` field set for the term
-"recipe" combined with a search in the `date` field for the term _20120416_.
-There's a lot of recipes in the test data.
-This query will return only the one posted on April 16. 2012.
-This search will be faster than the previous example as the query term _recipe_
-is using a field which has an index and the search core will try to evaluate that query term first.
+"recipe" combined with a search in the `date` field for the value _20120426_.
+This search will be faster than the previous example, as the term "recipe"
+is for a field for which there is an index, and for which the search core will 
+evaluate the query first. (This speedup is only noticeable with the full data set!)
 
 ### Range searches
 
-The examples above searched `date` just as  any other field, and
-requested documents where the value was exactly _20120426_ or exactly _20120416_.
-But since the field is defined as being of type int,
-Vespa is aware that any value found here is an integer.
-We can use this to our advantage and do range searches using the less than and greater than operators
-(these symbols have been URL encoded into %3C and %3E, respectively):
+The examples above searched over `date` just as any other field, and
+requested documents where the value was exactly _20120426_.
+Since the field is of type _int_, however, we can use it for _range searches_
+as well, using the "less than" and "greater than" operators
+(`<` and `>`, or `%3C` and `%3E` URL encoded). The query
 
     yql=select+*+from+sources+*+where+date+%3C+20120401%3B
 
-Find all documents where the value of `date` is less than _20120401_; all
-documents from before April of 2012:
+finds all documents where the value of `date` is less than _20120401_, i.e., all
+documents from before April 2012, while 
 
-    yql=select+*+from+sources+*+where+date+%3E+20120401%3B
+    yql=select+*+from+sources+*+where+date+%3C+20120401+AND+date+%3E+20120229%3B
 
-Find all documents where the value of `date` is greater than _20120401_; all
-documents submitted after April 1st 2012.
+finds all documents exactly from March 2012.
 
 ### Sorting
 
 The first feature we will look at is how an attribute can be used to change the
-order of the hits that are returned when you do a query. Remember our original
-query for "music AND festival"? We got seven document hits, and — only considering
+order of the hits that are returned when you do a query. By now, you have 
+probably noticed that hits are returned in order of descending relevance. 
+(If not, take a moment to verify this.)
+With our original query for "music AND festival"? We got seven document hits, and — only considering
 date and relevance for each document — the output and order looks like this:
 
     {...
