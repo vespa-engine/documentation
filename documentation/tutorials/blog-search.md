@@ -617,84 +617,38 @@ finds all documents exactly from March 2012.
 
 The first feature we will look at is how an attribute can be used to change the
 order of the hits that are returned when you do a query. By now, you have 
-probably noticed that hits are returned in order of descending relevance. 
-(If not, take a moment to verify this.)
-With our original query for "music AND festival"? We got seven document hits, and — only considering
-date and relevance for each document — the output and order looks like this:
+probably noticed that hits are returned in order of descending relevance, i.e., 
+how well the document matches the query — if not, take a moment to verify this. 
 
-    {...
-        "relevance": 0.261262217185,
-        "fields": {...
-            "date": **20120409**
-        }
-    },
-    {...
-        "relevance": 0.126084565522,
-        "fields": {...
-            "date": **20120410**
-        }
-    },
-    {...
-        "relevance": 0.0871006875725,
-        "fields": {...
-            "date": **20120417**
-        }
-    },
-    {...
-        "relevance": 0.0864373902049,
-        "fields": {...
-            "date": **20120409**
-        }
-    },
-    {...
-        "relevance": 0.0864092913995,
-        "fields": {...
-            "date": **20120326**
-        }
-    },
-    {...
-        "relevance": 0.0560099448101,
-        "fields": {...
-            "date": **20120406**
-        }
-    },
-    {...
-        "relevance": 0.055545350117,
-        "fields": {...
-            "date": **20120424**
-        }
-    }
-
-The hits are sorted by relevance; the better the document matched our query,
-the higher the relevance, and the higher up in the list of hits.
-Now try to send the following query to Vespa and look at the order of the hits:
+Now try to send the following query to Vespa, and look at the order of the hits:
 
     $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date%3B' | python -m json.tool
 
-Adding the keyword `desc` after the attribute name leads to sorting in
-descending order, while omitting the keyword (or using `asc`) sorts the results
-in ascending order.
+By default, sorting is done in ascending order. This can also be specified by
+appending `asc` after the sort attribute name.
+To sort the result in descending order, add the keyword `desc` after the sort
+attribute name.
 
     $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date+desc%3B' | python -m json.tool
 
 ### Query time data grouping
 
-*Grouping* is the concept of looking through all matching documents at
-query-time and then performing a set of operations on the data in specific
-fields across all the documents — some common use cases include:
+_Grouping_ is the concept of looking through all matching documents at
+query-time and then performing operations with specified fields across all
+the documents — some common use cases include:
 
 - Find all the unique values for a given field, make **one group per unique
-  value**, and return the count of documents per group
+  value**, and return the count of documents per group.
 - **Group documents by time and date** in fixed-width or custom-width buckets.
   An example of fixed-width buckets could be to group all documents by year,
   while an example of custom buckets could be to sort bug tickets by date of
-  creation into the buckets *Today*, *Past Week*, *Past Month*, *Past Year*,
-  and *Everything else*
-- Calculate the **minimum/maximum/average value** for a given field
+  creation into the buckets _Today_, _Past Week_, _Past Month_, _Past Year_,
+  and _Everything else_.
+- Calculate the **minimum/maximum/average value** for a given field.
 
-Displaying such groups and their size (in terms of matching documents per
-group) on a search result page (SERP), is a common way to let end-users refine
-and narrow down their search by clicking on a single link.
+Displaying such groups and their sizes (in terms of matching documents per
+group) on a search result page, with a link to each such group, is a common
+way to let end-users refine and narrow down their search.
 
 For now we will only do a very simple grouping query to get a list of unique
 values for `date` ordered by the number of documents they occur in and top 3 is
@@ -702,7 +656,7 @@ shown:
 
     curl -s 'http://localhost:8080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B' | python -m json.tool
 
-You then get the following output:
+With the full data set, you will get the following output:
 
     {
         "root": {
@@ -770,20 +724,20 @@ You then get the following output:
 As you can see, the three most common unique values of `date` are listed, along
 with their respective counts.
 
-Try to change the filter part of the YQL+ expression to text match of "recipe"
-or numeric match of `date` to less than 20120401 and see how the list of unique
-values changes as the set of matching documents for your query changes. Try to
-search for the single-term "Verizon" as well — a word we know is *not* present
-in our document set, and as such will not match any documents — and you will
+Try to change the filter part of the YQL+ expression — the `where` clause — to a text
+match of "recipe", or restrict `date` to be less than 20120401, and see how the list
+of unique values changes as the set of matching documents for your query changes.
+Try to search for the single term "Verizon" as well — a word we know is *not* present
+in our document set, and as such will match no documents — and you will
 see that the list of groups is empty.
 
 ### Attribute limitations
 
 #### Memory usage
 
-The attributes are kept in memory at all time —
+Attributes are kept in memory at all time,
 as opposed to normal indexes where the data is mostly kept on disk.
-So even with large search nodes, one will notice that it is not
+Even with large search nodes, one will notice that it is not
 practical to define all the search definition fields as attributes,
 as it will heavily restrict the number of documents per search node.
 Some Vespa installations have more than 1 billion documents per node —
@@ -791,14 +745,14 @@ having megabytes of text in memory per document is not an option.
 
 #### Matching
 
-Another limitation is the way so-called *matching* is done for attributes.
+Another limitation is the way *matching* is done for attributes.
 Consider the field `blogname` from our search definition, and the document for
 the blog called "Thinking about museums". In our original input, the value for
 `blogname` is a string built of up the three words "Thinking", "about", and
 "museums", with a single whitespace character between them. How should we be
 able to search this field?
 
-For normal index fields, Vespa does something called tokenization on the
+For normal index fields, Vespa does something called _tokenization_ on the
 string. In our case this means that the string above is split into the three
 tokens "Thinking", "about" and "museums", enabling Vespa to match this document
 both for the single-term queries "Thinking", "about" and "museums", the exact
@@ -806,23 +760,24 @@ phrase query "Thinking about museums", and a query with two or more tokens in
 either order (e.g. "museums thinking"). This is how we all have come to expect
 normal free text search to work.
 
-As mentioned there is however a limitation in Vespa when it comes to attribute
-fields and matching. Attributes do not support normal token-based matching,
-only *exact matching* or *prefix matching*. Exact matching is the default, and
-as the name implies it requires you to search for the exact contents of the
+However, there is a limitation in Vespa when it comes to attribute
+fields and matching; attributes do not support normal token-based matching —
+only *exact matching* or *prefix matching*. Exact matching is the default, and,
+as the name implies, it requires you to search for the exact contents of the
 field in order to get a match.
 
 ### When to use attributes
 
 There are both advantages and drawbacks of using attributes —
-it enables sorting and grouping, but uses
-more memory and has limited matching capabilities. When to use
-attributes depends on the application, in general the following applies:
+it enables sorting and grouping, but requires
+more memory and gives limited matching capabilities. When to use
+attributes depends on the application; in general, use attributes for:
 
-- When sorting the results by a field, e.g. a last update timestamp
-- A field included in grouping
-- If the fields are not very long string fields
-- All numeric type fields must always be attributes
+- fields used for sorting, e.g., a last-update timestamp,
+- fields used for grouping, e.g., problem severity, and
+- fields that are not long string fields.
+
+Finally, all numeric fields should always be attributes.
 
 
 ## Clean environment by removing all documents
