@@ -55,20 +55,23 @@ Also read <a href="vespa-quick-start-multinode-aws-ecs.html">using ECS to set up
 
 <h2 id="install-and-start">Install and start</h2>
 <p>
-In this example uses <samp>ip-172-1-1-1.us-east-2.compute.internal</samp>
+This example uses <samp>ip-172-1-1-1.us-east-2.compute.internal</samp>
 as the administration node and all commands below are run from that host.
-First log on to this host using the Public DNS record name
-(E.g <samp>ec2-18-1-1-1.us-east-2.compute.amazonaws.com</samp>).
+Locate the Public DNS record for that instance in
+<strong>EC2 Dashboard -> Instances</strong>,
+and log on to that host (e.g <samp>ec2-18-1-1-1.us-east-2.compute.amazonaws.com</samp>).
 Using ssh agent forwarding simplifies, given your aws identify key file <samp>my-aws-key.pem</samp>
 and assuming the AMI uses <samp>centos</samp> as login user:
 <pre>
 $ ssh-add my-aws-key.pem
-$ ssh -A centos@ec2-18-1-1-1.us-east-2.compute.amazonaws.com
+$ ssh -A centos@&lt;administration-node-public-dns&gt;
 </pre>
 Inside the AWS EC2 cloud, boostrap the system:
 <ol>
   <li>
-    Create <samp>hosts.txt</samp> with the EC2 instances allocated above - example:
+    Create <samp>hosts.txt</samp> with the Private DNS records for the EC2 instances allocated above.
+    These are located in <strong>EC2 Dashboard -> Instances</strong>.
+    Let the administation node be the first entry. Example:
 <pre>
 $ cat hosts.txt
 ip-172-1-1-1.us-east-2.compute.internal
@@ -77,7 +80,7 @@ ip-172-1-1-3.us-east-2.compute.internal
 ip-172-1-1-4.us-east-2.compute.internal
 </pre>
   </li><li>
-    Download and distribute the aws <a href="https://github.com/vespa-engine/sample-apps/blob/master/aws_bootstrap.sh">bootstrap</a> script:
+    Download and distribute the aws <a href="https://github.com/vespa-engine/sample-apps/blob/master/aws_bootstrap.sh">bootstrap</a> script to all instances:
 <pre>
 $ curl -s https://raw.githubusercontent.com/vespa-engine/sample-apps/master/aws_bootstrap.sh \
   > aws_bootstrap.sh
@@ -86,14 +89,13 @@ $ for host in $(cat hosts.txt); do \
 </pre>
   </li><li>
     The bootstrap script installs vespa and git, does basic system configuration
-    and starts vespa and the configuration server on the admin node.
+    and starts vespa and the configuration server on the administration node.
     The script expects a single hostname as argument
-    which should be the name of the administration/configuration server,
-    in this case <samp>ip-172-1-1-1.us-east-2.compute.internal</samp>.
+    which should be the Private DNS record of the administration node (first entry in hosts.txt).
     The last step might take some time to complete:
 <pre>
 $ for host in $(cat hosts.txt); do \
-  ssh -f $host "sudo bash aws_bootstrap.sh ip-172-1-1-1.us-east-2.compute.internal"; done
+  ssh -f $host "sudo bash aws_bootstrap.sh $(head -1 hosts.txt)"; done
 </pre>
   </li>
 </ol>
@@ -102,7 +104,7 @@ $ for host in $(cat hosts.txt); do \
 
 <h2 id="configure-and-deploy">Configure and deploy</h2>
 <p>
-The instances now run, next step is to configure Vespa using an example
+The instances are now up and running. The next step is to configure Vespa using an example
 <a href="cloudconfig/application-packages.html">application package</a> - on the admin node, do:
 </p>
 <ol>
@@ -118,7 +120,8 @@ $ git clone https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps/basic-search
 </pre>
     Add host aliases in
-    <a href="reference/hosts.html"><samp>src/main/application/hosts.xml</samp></a> (replace hostnames):
+    <a href="reference/hosts.html"><samp>src/main/application/hosts.xml</samp></a>
+    (replace hostnames with Private DNS records):
 <pre>
 &lt;?xml version="1.0" encoding="utf-8" ?&gt;
 &lt;!-- Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. --&gt;
@@ -186,10 +189,17 @@ $ cd sample-apps/basic-search
 $ vespa-deploy prepare src/main/application &amp;&amp; vespa-deploy activate
 </pre>
     The Vespa instances subscribes to configuration and once the application is deployed
-    the set of services configured will start - no need to re-start Vespa or the config server.
+    the set of services configured will start - no need to re-start Vespa or the configserver.
     When changing the application, just deploy again and the system will make the change.
     </p>
-  </li><li>
+  </li>
+  <li>
+    <strong>Ensure the application is active - wait for a 200 OK response:</strong>
+<pre>
+$ curl -s --head http://localhost:8080/ApplicationStatus
+</pre>
+  </li>
+  <li>
     <p><strong>Inspect &amp; Verify</strong>:</p>
     <p>
     Inspect the system state using <a href="content/admin-states.html"><samp>vespa-get-cluster-state</samp></a>,
@@ -215,27 +225,21 @@ music/storage/1: up
     <p>
     Feed sample documents:
 <pre>
-java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-  --file music-data-feed.json --host localhost --port 8080
+$ curl -s -X POST --data-binary music-data-1.json \
+    http://localhost:8080/document/v1/music/music/docid/1 | python -m json.tool
+$ curl -s -X POST --data-binary music-data-2.json \
+    http://localhost:8080/document/v1/music/music/docid/2 | python -m json.tool
 </pre>
     </p>
   </li><li>
     <p><strong>Run queries:</strong></p>
-    <p>Replace with <samp>stateless</samp> hosts in <samp>hosts.xml</samp>:
+    <p>Replace with Public DNS record of <samp>stateless</samp> hosts in <samp>hosts.xml</samp>
+    and run queries from outside the EC2 instances:
 <pre>
 $ curl -s http://stateless0:8080/search/?query=bad | python -m json.tool
 $ curl -s http://stateless1:8080/search/?query=bad | python -m json.tool
 </pre>
     Read more in the <a href="search-api.html">Search API</a>
-    </p>
-  </li><li>
-    <p><strong>(Optional) Configure AWS EC2 Load Balancer:</strong></p>
-    <p>
-    Configure a load balancer using the same security group
-    which forwards requests to the two serving containers listening on port 8080 mentioned above,
-    using </em>/status.html</em> as health check.
-    Access both endpoints through a DNS A record,
-    e.g <em>vespa-multinode-12345678910.us-east-2.elb.amazonaws.com:8080</em>.
     </p>
   </li>
 </ol>
