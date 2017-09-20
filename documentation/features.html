@@ -3,145 +3,125 @@
 title: "Features"
 ---
 
-<p>
-Vespa is a complete platform for developing stateless and stateful low latency scalable backend services. Its main features are listed here, also see the <a href="overview.html">overview</a> document. Vespa is
+<h2>What is Vespa?</h2>
+
+<p>Vespa is an engine for executing and serving computations over large data sets in real time.
+It allows you to write and persist any amount of data, and execute high volumes of queries over 
+the data which typically complete in tens of milliseconds.</p>
+
+<p>Queries can use both structured filters and unstructured text search to select data.
+All the matching data is then ranked according to a ranking function - typically machine learned -
+to implement such use cases as search relevance, recommendation, targeting and personalization.</p>
+
+<p>All the matching data can also be grouped into groups and subgroups where data is aggregated
+for each group to implement features like graphs, tag clouds, navigational tools, result
+diversity and so on.</p>
+
+<p>Application specific behavior can be included by adding Java components for processing
+queries, results and writes to the application package.</p>
+
+<p>Vespa is real time. It is architected to maintain constant response times with any data volume by
+executing queries in parallel over many data shards and cores, and with added query volume
+by executing queries in parallel over many copies of the same data (groups). It is optimized
+to return responses in tens of milliseconds. Writes to data becomes visible in a few milliseconds
+and can be handled at a rate of thousands to tens of thousands per node per second.</p>
+
+<p>A lot of work has gone into making Vespa easy to set up and operate.
+Any Vespa application - from single node systems to systems running on hundreds of nodes in data centers -
+are fully configured by a single artifact called an <i>application package</i>. Low level configuration of
+nodes, processes and components is done by the system itself based on the desired traits specified in the
+application package.</p>
+
+<p>Vespa is scalable. System sizes up to hundreds of nodes handling tens of billions of documents 
+are not uncommon, and no harder to set up and modify than single node systems. Since 
+all system components, as well as stored data is redundant and self-correcting, hardware
+failures are not operational emergencies and can be handled by re-adding capacity when convenient.</p>
+
+<p>Vespa is self-repairing and dynamic. When machines are lost or new ones added, data is automatically
+redistributed over the machines, while continuing serving and accepting writes to the data.
+Changes to configuration and Java components can be made while serving by deploying a changed
+application package - no down time or restarts required.</p>
+
+
+<h2>Features</h2>
+
+This section provides an overview of the main features of Vespa.
+The remainder of the documentation goes into full detail.
+
+<h3>Data and writes</h3>
+
 <ul>
-<li><strong>Scalable:</strong> Data is distributed over the available hardware resources.
-When hardware is added or removed the data is automatically redistributed.
-All operations are distributed to avoid non-scalable bottlenecks.</li>
-<li><strong>Robust:</strong> All services are replicated so there are no single points of failure.
-The system automatically routes around failures.
-Data is replicated as desired and automatically recovered to the desired redundancy level
-when there is a data/node loss.</li>
-<li><strong>Easy to use:</strong> Everything can be installed on one node
-by creating a single small configuration file.
-The same application can be deployed to a large collection of hardware with minimal changes.
-The stateless clusters of an application can be run in an IDE to develop stateless components.</li>
-<li><strong>A platform:</strong> Vespa is not a set of executables which you
-    must piece together into a working application yourself, but a complete system
-which manages its internals automatically to provide a robust
-production quality service.</li>
+	<li>Documents in Vespa may be added, replaced, modified (single fields or any subset) and removed.
+	<li>Writes are acknowledged back to the client issuing them when they are durable and (by default) visible in queries.
+	<li>Writes can be issued at a sustained volume of thousands to tens of thousands per node per second while serving queries.
+	<li>Data is replicated with a configurable redundancy.
+	<li>An even data distribution, with the desired redundancy is automatically maintained when nodes are added, removed or lost unexpectedly.
+	<li>Data corruption is automatically repaired from an uncorrupted replica of the data.
+	<li>Data is wrtten over a simple HTTP API, or (for high volume) using a small, standalone Java client.
+	<li>Document data schemas allow fields of any of the usual primitive types as well as collections, structs and tensors.
+	<li>Any number of data schemas can be used at the same time.
+	<li>Documents may reference each other and field from referenced documents may be used in queries without performance penalty.
+	<li>Write operations can be processed by adding custom Java components.
+	<li>Data can be streamed out of the system for batch reprocessing.
 </ul>
 
-
-<h1 id="application_logic_container">Application logic container</h1>
+<h3>Queries</h3>
 
 <ul>
-
-<li><b>Logic container</b>: Vespa features a Java Container - jDisc - which can run the stateless ("middleware") logic of applications.
-
-<li><b>Multiple protocols</b>: jDisc supports HTTP out of the box and allows other client/server protocols to be plugged in as components.
-
-<li><b>Components</b>: Various component types may be deployed - general request handlers, general chain-able request/response handlers, HTTP filters,
-response renderers, search specific chain-able request/response processors ("searchers"), and chain-able write operation processors ("docprocs").
-
-<li><b>Response streaming</b>: Responses can start streaming back to users before they are completely received/processed for lower latency to first byte.
-
-<li><b>Federation, query rewriting and document text annotation processing</b>: Complex queries and Components and APIs are available out of the box for federating to multiple content clusters as well as external services,
-work programmatically with complex queries and process unstructured data by adding hierarchical annotations to text.
-
-<li><b>OSGi</b>: Components are packaged as OSGi bundles and may be redeployed and redeployed remotely at runtime without restarts.
-
-<li><b>Dependency injection</b>: A dependency injection framework allows components to declare arbitrary dependencies on configuration and other components in the constructor.
-
-<li><b>Query profiles</b>: Sets of request specific properties can be configured for various buckets, regions, use cases, devices etc.
-
+	<li>Queries may contain any combination of structured filters and unstructured search operators.
+	<li>Queries may contain large tensors and vectors (to represent e.g a user).
+	<li>Queries specify how results should be ranked and organized (see sections below).
+	<li>Queries and results may be processed by adding custom Java components - or any HTTP request may be
+		turned into a query by custom request handlers.
+	<li>Query response times are typically in tens of milliseconds and can be maintained given any load
+		and data size by adding more hardware.
+	<li>A <i>streaming search</i> mode is available where search/selection is only supported on predefined
+		groups of documents (e.g a users document). In this mode each node can store and serve billions of 
+		documents while maintaining low response times.
 </ul>
 
-
-<h1 id="content">Content</h1>
+<h3>Ranking</h3>
 
 <ul>
-
-<li><b>Multiple schemas and clusters</b>: Any number of schemas may be added to an application and assigned many to many to content clusters holding data of those schemas.
-
-<li><b>Realtime</b>: Schema instances (documents) may be read and written with a few milliseconds latency. Documents are retrieved based on id only.
-
-<li><b>Data streaming</b>: Data may be streamed out of content clusters for reprocessing, backup etc.
-
-<li><b>Garbage collection</b>: Content clusters may only keep data which matches an expression and automatically garbage collect	non-matching data.
-  Typically used to store only a window of data and have old data automatically expire.
-
-<li><b>Data background integrity checking</b>: Data is checksummed and auto-repaired as necessary in the background.
-
-<li><b>Mutable data</b>: Existing documents may be removed, replaced or partially modified.
-
-<li><b>Guaranteed delivery</b>: Writes are guaranteed to either succeed and be globally visible and durable at that point or to produce and error response within a time limit.
-
-<li><b>Searches and selects</b>: Searches over unstructured document data and selects over structured data can be executed over entire document sets of any size with low latency.
-
-<li><b>Grouping and aggregation</b>: Matching sets from such searches/selects can be grouped/bucketed in multilevel hierarchies and values aggregated over groups to perform complex calculations
-and organization of data. These operations are performed distributed and works with any data sets with low latency.
-
-<li><b>Ranking</b>: Matches to search/select queries can be ordered by relevance. Complex, multiphase ranking using complex ranking features and complex ranking expressions implementing
-business logic or machine learned models are supported. Multiple ranking expressions may be in use at the same time and are selected per query.
-
-<li><b>Dynamic snippets</b>: Matches in unstructured text fields may be highlighted in dynamic summaries in responses.
-
-<li><b>Large queries</b>: Queries containing thousands of terms - typically expressing personal/social data - can be executed with low latency.
-
+	<li>All results are ranked using a configured ranking function, selected in the query.
+	<li>A ranking function may be any mathematical function over scalars or tensors (multi-dimensional arrays).
+	<li>Scalar functions include an "if" function to ezpress business logic and decision trees.
+	<li>Tensor functions include a powerfuul set of primitives and composite functions which
+		allows expression of most advanced machine-learned ranking functions such as e.g deep neural nets.
+	<li>Multiple ranking phases are supported to allocate more cpu to ranking promising candidates.
+	<li>A powerful set of text ranking features using positional information from the documents is provided out of the box.
+	<li>Other ranking features include 2d distance and freshness.
 </ul>
 
-
-<h1 id="developer_support">Developer support</h1>
+<h3>Organizing and presenting results</h3>
 
 <ul>
-
-<li><b>SDK</b>: Packaging of components and application packages are supported by maven plugins.
-Application packages can be "deployed" within a single vm for testing and development in an IDE (stateless clusters only).
-
-<li><b>Validation</b>: Application packages are validated prior to deployment.
-
-<li><b>Schema agility</b>: Most schema changes are handled in live systems without requiring changes to existing data.
-
+	<li>Matches to a query can be grouped and aggregated according to a specification in the query.
+	<li>All the matches are included, even though they reside on multiple machines executing in parallel.
+	<li>Matches can be grouped by a unique value or by a numerical bucket.
+	<li>Any level of groups and subgroups are supported, and multiple parallel groupings can be specified in one query.
+	<li>Data can be aggregated (counted, averaged etc.) and selected within each group and subgroup.
+	<li>Any selection of data from documents can be included with the final result returned to the client.
+	<li>Search engine style keyword highlighting in matching fields is supported.
 </ul>
 
-<h1 id="operations">Operations</h1>
+<h2>Configuration and operations</h2>
 
 <ul>
-
-<li><strong>Installation size:</strong> System instances may run on a single host or over hundreds.</li>
-
-<li><strong>Data size:</strong> Handles storing, indexing of and operations over web scale data sets.</li>
-
-<li><strong>Load:</strong> Scales to hundreds of thousands of read and write request per second.</li>
-
-<li><strong>Performance:</strong> Heavily optimized for low latency and high concurrency of both data read/write operations and queries/selects over large data sets.</li>
-
-<li><strong>Failover:</strong> All functions are redundant and fails over automatically.</li>
-
-<li><strong>Recovery:</strong> The system will auto-recover partial data losses automatically.</li>
-
-<li><strong>Realtimeness:</strong> Data operations complete in a few milliseconds.</li>
-
-<li><strong>Elasticity:</strong> Nodes can be added or removed to both stateless and stateful clusters without downtime.</li>
-
-</ul>
-
-
-
-<h1 id="administration">Administration</h1>
-
-<ul>
-<li><strong>Unified system setup:</strong> A system of any size is set up
-by an <i>application package</i> containing configuration and application components.
-Application packages are deployed to the central configuration subsystem as a single operation.</li>
-
-<li>Any number of clusters containing different or the same nodes may be defined as part of a system instance.</li>
-
-<li><strong>Unified schemas:</strong> Each kind of data to be
-handled by a system is described completely in one file in the application package -
-the content of the data, and how to index, search, rank and present it.</li>
-
-<li><strong>Centralized configuration:</strong> Any change to the configuration or
-application components is done simply by redeploying the application package.</li>
-
-<li><strong>Hot reconfiguration:</strong> Most changes can be done
-instantly without the need for restarting nodes.</li>
-
-<li><strong>Centralized monitoring and logging:</strong> Logs are collected in real time to the
-       administration server.</li>
-
+	<li>Vespa can be installed as rpm's or a Docker image - on personal laptops, owned datacenters or in AWS.
+	<li>An application of Vespa is fully specified as a separate buildable artifact: An <i>application package</i> -
+		individual machines or processes need never be configured individually.
+	<li>Systems may contain multiple clusters of each type (stateless and stateful), each containing any number of nodes.
+	<li>Systems of any size may be specified by two short configuration files in the application package.
+	<li>Document schemas, Java components and ranking functions/models are also configured in the application package.
+	<li>An application pacage is deployed as a single unit to Vespa to realizes the system desired by the application.
+	<li>Most application changes (including Java component changes) can be performed by deploying
+		a changed application package - the system will manage its own change process while serving and handling writes.
+	<li>Most document schema changes (excluding field type changes) can be made while the system is live.
+	<li>Application package changes are validated on deployment to prevent destructive changes to live systems.
+	<li>Vespa has no single-point-of-failures and automatically routes around failing nodes.
+	<li>System logs are collected to a central server in real time.
+	<li>Selected metricts may be emitted to a third-party metrics/alerting system from all the nodes.
 </ul>
 
 
