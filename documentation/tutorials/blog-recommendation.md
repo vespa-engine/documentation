@@ -711,5 +711,6 @@ percentile ranking as described in section [Evaluation metrics](#evaluation-metr
 TODO: add a summary here of what we accomplished and way forward from here.
 {% endcomment %}
 
-You can now move on to the [blog-recommendation-nn.html](next part of the
-tutorial) where we improve accuracy using a simple neural network.
+You can now move on to the [next part of the
+tutorial](blog-recommendation-nn.html) where we improve accuracy using a simple
+neural network.
