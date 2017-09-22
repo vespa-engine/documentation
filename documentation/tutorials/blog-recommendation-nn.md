@@ -164,10 +164,9 @@ search node.
 
 ### Constant Tensor files
 
-Once our model has been trained in TensorFlow, we need to export the model
-parameters $$(W_1, W_2, b_1, b_2)$$ to our application folder as Tensors
-according to the [Vespa Document JSON
-format](../reference/document-json-format.html#tensor).
+Once the model has been trained in TensorFlow, export the model
+parameters $$(W_1, W_2, b_1, b_2)$$ to the application folder as Tensors
+according to the [Vespa Document JSON format](../reference/document-json-format.html).
 
 The complete code to serialize the model parameters using Vespa Tensor format
 can be found  in the [utility
