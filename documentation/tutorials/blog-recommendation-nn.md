@@ -136,7 +136,7 @@ best candidate hits.
 
 The reranking phase, if specified, will by default be run on the 100 best hits
 on each search node, after matching and before information is returned upwards
-to the Qrs. The number of hits to rerank can be turned up or down as needed.
+to the search container. The number of hits to rerank can be turned up or down as needed.
 Below is a toy example showing how to configure first and second phase ranking
 expressions in the rank profile section of search definitions where the second
 phase rank expression is run on the 200 best hits from first phase on each
