@@ -3,9 +3,6 @@
 title: "Vespa tutorial troubleshooting"
 ---
 
-* TOC
-{:toc}
-
 ## Deployment of a new application
 
 If you've already had an application deployed and want to deploy a different one,

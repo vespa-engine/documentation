@@ -3,10 +3,6 @@
 title: "Vespa tutorial pt. 1: Blog searching"
 ---
 
-* TOC
-{:toc}
-
-
 ## Introduction
 
 This is the first of a series of tutorials where data from WordPress.com (WP)
