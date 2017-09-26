@@ -3,10 +3,6 @@
 title: "Vespa tutorial pt. 2: Blog recommendation"
 ---
 
-* TOC
-{:toc}
-
-
 ## Introduction
 
 In this tutorial we will build upon the [blog searching tutorial](blog-search.html)

@@ -3,10 +3,6 @@
 title: "Vespa tutorial pt. 3: Blog recommendation with Neural Network models"
 ---
 
-* TOC
-{:toc}
-
-
 ## Introduction
 
 The main objective of this tutorial is to show how to deploy neural network
