@@ -348,7 +348,7 @@ but feel free to load all 1,1M entries if you prefer:
 With Vespa-compatible data, send this to Vespa using one of the tools Vespa
 provides for feeding.  In this part of the tutorial, the [Java feeding
 API](../vespa-http-client.html) is used, which is suitable for most
-applications requiring high thoughput.
+applications requiring high throughput.
 
     $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --verbose --file tutorial_feed.json --host localhost --port 8080
 
