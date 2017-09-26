@@ -1,20 +1,20 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Elastic Vespa"
+title: "Vespa elasticity"
 ---
 
-<!--
- This document is linked to from the front page, one of the first Vespa docs users might read.
- So should have a good intro section
- -->
+<p>Vespa allows applications to grow (and shrink) their hardware while serving queries and accepting writes
+as normal. Data is automatically redistributed in the background using the minimal amount of data movement
+required to reestablish an even data distribution. No restarts or other operations are needed,
+just change the hardware listed in the configuration and redeploy the application.</p>
 
-<p>
-Elasticity is a major Vespa feature.
-It allows applications to grow with data size and read/write load with minimal, automatic data redistribution.
-Change capacity while the service is running, with no restarts.
-Increase request rates by adding more nodes, as this reduces number of documents per node.
-This allows application owners to easily right-size the instances with minimal risk and effort.
-This article details three subjects:
+<p>The same mechanism is used to automatically recover from an unexpected loss of a machine -
+new copies of the data are created automatically to reestablish the configured data redundancy.
+Hence, faulty nodes is not a problem which requires immediate attention in Vespa.
+As long as the system has enough capacity in total to deal with the data and traffic it
+will self-heal from any hardware failure.</p>
+
+<p>This article details three subjects:
 <ul>
   <li><a href="#storage-and-retrieval">storage and retrieval of documents</a></li>
   <li><a href="#search">search in the stored documents</a></li>
@@ -25,8 +25,8 @@ This article details three subjects:
 
 
 <h2 id="storage-and-retrieval">Storage and retrieval</h2>
-<p>
-The elastic system consists of two main components: distributors and storage nodes.
+
+<p>The data distribution system in Vespa consists of two main components: distributors and storage nodes.
 The storage nodes provide a <em>Service Provider Interface</em> (SPI) that abstracts
 how documents are stored in the elastic system.
 Documents are both written to and read from the system through a <a href="distributor.html">distributor</a>.
@@ -41,16 +41,13 @@ If bucket replicas are out of sync, a bucket merge operation is run to re-sync t
 Buckets are split when they grow too large, and joined when they shrink.
 A bucket contains <a href="#data-retention-vs-size">tombstones</a> of recently removed documents.
 Read more about document expiry and batch removes in
-<a href="search-definitions.html#document-expiry">document expiry</a>.
-</p>
-
+<a href="search-definitions.html#document-expiry">document expiry</a>.</p>
 
 
 <h3 id="writing-documents">Writing documents</h3>
-<p>
-Documents enter Vespa using the <a href="api.html">Document API</a>,
-using
-<a href="reference/vespa-feeder.html">vespa-feeder</a>, <a href="document-api.html">Document API</a>,
+
+<p>Documents enter Vespa using the <a href="api.html">Document API</a>,
+using <a href="reference/vespa-feeder.html">vespa-feeder</a>, <a href="document-api.html">Document API</a>,
 the <a href="vespa-http-client.html">Vespa HTTP Client</a> or <a href="document-api-guide.html">Java Document API</a>
 (all binaries use the Java Document API).
 If no <a href="routing.html">route</a> is set, clients feed to the <em>default</em> route.
@@ -218,23 +215,24 @@ which in turn keeps track of all search nodes and relays queries to them:
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th id="qr-server">QR-server</th>
+      <th id="container">Container</th>
       <td>
-        The QR-server knows all the document types and rewrites queries as a
+        The Container knows all the document types and rewrites queries as a
         collection of queries, one for each type.
         Queries may have a <a href="reference/search-api-reference.html#model.restrict">restrict</a> parameter,
-        in which case the QR-server will send the query only to the specified document types.
+        in which case the container will send the query only to the specified document types.
       </td>
     </tr><tr>
       <th id="top-level-dispatcher">Top level dispatcher</th>
       <td>
-        The top level dispatcher sends each query to every search node.
-        It pings all search nodes every second to know whether they are alive,
+        The top level dispatcher is a small process by default running on each container node,
+		which is responsible for sending the query to each content node and collecting partial results.
+        It pings all content nodes every second to know whether they are alive,
         and keeps open TCP connections to each one.
         If a node goes down, the elastic system will make the documents available on other nodes.
       </td>
     </tr><tr>
-      <th id="Search-node-matching">Search node matching</th>
+      <th id="content-node-matching">Content node matching</th>
       <td>
         The <em>match engine</em> <!-- link here to design doc / move it -->
         receives queries and routes them to the right document
