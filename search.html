@@ -4,27 +4,55 @@ title: ""
 index: false
 ---
 
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-<script src="{{ site.github.url }}/tipuesearch/tipuesearch_content.js"></script>
-<script src="{{ site.github.url }}/tipuesearch/tipuesearch_set.js"></script>
-<script src="{{ site.github.url }}/tipuesearch/tipuesearch.min.js"></script>
+<!-- Number of hits -->
+<div id="hits"></div>
 
-<link rel="stylesheet" href="{{ site.github.url }}/tipuesearch/css/tipuesearch_modified.css">
-
-<div id="tipue_search_content"></div>
-
-<!-- remove this when switching search provider -->
-<input id="tipue_search_input" name="q" hidden/>
+<!-- result div -->
+<div id="result"></div>
 
 <script>
-$(document).ready(function() {
-    $('#tipue_search_input').tipuesearch({
-        'mode':'static',
-        'debug':false,
-        'show':200,
-        'showTitleCount':false
-    });
-});
+(function() {
+    var params = {};
+    decodeURIComponent(window.location.search.substr(1)).split("&").forEach( function(item) { var key = item.split("=")[0]; var val = item.split("=")[1]; params[key] = val; });
+    var query = params["q"];
+    if (query) {
+        query = decodeURI(query).replace(/\+/g, " ");
+    }
+
+    if (query && query.length > 0) {
+        $("#search").attr("value", query);
+        $("#result").html("<p>Searching for '" + query + "' ...</p>");
+
+        var url = "{{site.search.endpoint}}/search/?jsoncallback=?"
+        $.getJSON(url, {
+            query: query,
+            hits: 400,
+            ranking: "documentation"
+        })
+        .done(function( data ) {
+            $("#result").html("");
+            var hits = data.root.children;
+            if (hits && hits.length > 0) {
+                $("<p>").text(hits.length + " hit(s)").appendTo("#hits");
+
+                var ul = $("<ul>").addClass("media-list").appendTo("#result");
+
+                $.each( data.root.children, function( i, item ) {
+                    var modified_url = item.fields.path;
+                    var modified_content = item.fields.content.replace("<sep />", " ... ").replace("<hi>", "<mark>").replace("</hi>", "</mark>");
+                    var modified_title = item.fields.title == "null" ? "No title" : item.fields.title;
+                    var link = "<h4><a href=\"" + modified_url + "\">" + modified_title + "</a></h4>";
+                    var content = "<p>" + modified_content + "<br /><small class=\"text-success\">" + item.fields.path + "</small></p>";
+                    $("<li>").addClass("media").html(link+content).appendTo(ul);
+                });
+
+            } else {
+                $("<p>").text("No hits found!").appendTo("#result");
+            }
+        });
+    }
+
+})();
 </script>
 
 </body>
