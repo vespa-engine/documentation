@@ -16,7 +16,7 @@ network is just a popular example. In addition, we will introduce the
 multi-phase ranking model available in Vespa that can be used to run more
 expensive models in a phase based on a reduced number of documents returned by
 previous phases. This feature allow us to run models that would be
-prohibitively expensive to use if we had to run them at query-time accross all
+prohibitively expensive to use if we had to run them at query-time across all
 the documents indexed in Vespa.
 
 This tutorial builds upon [Vespa tutorial pt. 2](blog-recommendation.html), and
@@ -177,7 +177,7 @@ $$W_1$$:
 	serializer.serialize_to_disk(variable_name = "W_hidden", dimension_names = ['input', 'hidden'])
 
 Note that Vespa currently requires dimension names for all the Tensor
-dimentions (in this case $$W_1$$ is a matrix, therefore dimension is 2).
+dimensions (in this case $$W_1$$ is a matrix, therefore dimension is 2).
 
 In the following section, we will use the following code in the ```blog_post```
 search definition in order to be able to use the constant tensor ```W_hidden```
@@ -339,7 +339,7 @@ regarding the Tensor operations used in the code below.
 
 We will now query Vespa and obtain 100 blog post recommendations for each ```user_id```
 in our test set. Below, we query Vespa using the ```tensor``` ranking function which
-contain the simpler ranking expression envolving the dot-product between user and
+contain the simpler ranking expression involving the dot-product between user and
 document latent factors.
 
 	pig -x local -f tutorial_compute_metric.pig \
