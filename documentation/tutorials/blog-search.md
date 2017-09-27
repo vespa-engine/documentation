@@ -143,7 +143,7 @@ processed during feeding and indexing.
 A _search definition_, e.g., `blog_post.md`, is a required part of an application package —
 the other required files are `services.xml` and `hosts.xml`.
 
-The sample application [blog search](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-search)
+The sample application [blog search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
 creates a simple but functional blog post search engine. The application
 package is found in
 [src/main/application](https://github.com/vespa-engine/sample-apps/tree/master/blog-search/src/main/application).
