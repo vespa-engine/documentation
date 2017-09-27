@@ -140,7 +140,7 @@ is the set of configuration files and Java plugins that together
 define the behavior of a Vespa system: what functionality to use, the
 available document types, how ranking will be done and how data will be
 processed during feeding and indexing.
-A _search definition_, e.g., `blog_post.md`, is a required part of an application package —
+A _search definition_, e.g., `blog_post.sd`, is a required part of an application package —
 the other required files are `services.xml` and `hosts.xml`.
 
 The sample application [blog search](https://github.com/vespa-engine/vespa/tree/master/sample-apps/blog-search)
