@@ -486,11 +486,12 @@ its own search chain for ease of testing. Add the following to `services.xml`
 inside the `services/jdisc/search` section:
 
     <chain id='blog' inherits='vespa'>
-        <searcher bundle='recommendation' id='com.yahoo.example.BlogTensorSearcher' />
+        <searcher bundle='blog-recommendation' id='com.yahoo.example.BlogTensorSearcher' />
     </chain>
 
-With this you should now be ready to deploy your application. Try out the
-following query:
+With this you should now be ready to deploy your application. See [Developing applications](jdisc/developing-applications.html) for how to deploy the application. 
+
+Try out the following query:
 
     http://<host>:<port>/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D
 
