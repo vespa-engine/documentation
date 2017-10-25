@@ -180,7 +180,7 @@ def parse_file(pre, attrs):
     stop("File fields are not implemented yet")
 
 
-def process_page(html):
+def process_page(html, source_name = ""):
     global script
     script["before"] = []
     script["steps"]  = []
@@ -201,7 +201,7 @@ def process_page(html):
         if pre.attrs["data-test"] == "after":
             script["after"].extend(parse_cmds(pre.string, pre.attrs))
 
-    print_cmd_header("Script to execute")
+    print_cmd_header("Script to execute", extra = source_name)
     print(json.dumps(script, indent=2))
 
     exec_script()
@@ -219,7 +219,7 @@ def create_work_dir():
 
 def run_url(url):
     html = urllib2.urlopen(url).read()
-    process_page(html)
+    process_page(html, url)
 
 
 def run_config():
@@ -239,10 +239,10 @@ def run_file(file_name):
     if file_name.startswith("http"):
         run_url(file_name)
     elif file_name == "-":
-        process_page(sys.stdin.read())
+        process_page(sys.stdin.read(), "stdin")
     else:
         with open(file_name) as f:
-            process_page(f.read())
+            process_page(f.read(), file_name)
 
 
 def main():
