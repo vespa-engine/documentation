@@ -182,6 +182,9 @@ def parse_file(pre, attrs):
 
 def process_page(html):
     global script
+    script["before"] = []
+    script["steps"]  = []
+    script["after"]  = []
 
     soup = BeautifulSoup(html, "html.parser")
 
