@@ -328,7 +328,8 @@ The following is the Pig command used to feed these latent factors to Vespa:
 		-param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
 		-param BLOG_POST_FACTORS=blog-job/user_item_cf/product_features \
 		-param USER_FACTORS=blog-job/user_item_cf/user_features \
-		-param ENDPOINT=$(hostname):8080
+		-param ENDPOINT=$(hostname)
+		-D vespa.feed.defaultport=8080
 
 * the "tutorial_feed_content_and_tensor_vespa.pig" script can be found
   [at our code repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig)
@@ -489,7 +490,7 @@ inside the `services/jdisc/search` section:
         <searcher bundle='blog-recommendation' id='com.yahoo.example.BlogTensorSearcher' />
     </chain>
 
-With this you should now be ready to deploy your application. See [Developing applications](jdisc/developing-applications.html) for how to deploy the application. 
+With this you should now be ready to deploy your application. See [Developing applications](jdisc/developing-applications.html) for how to deploy the application.
 
 Try out the following query:
 
