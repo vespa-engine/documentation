@@ -1,0 +1,93 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa quick start using Docker"
+---
+
+<p>
+This guide describes how to install and run Vespa on a single machine using Docker on Microsoft Windows 10.
+</p><p>
+<strong>Prerequisites</strong>:
+<ul>
+	<li><a href="https://docs.docker.com/engine/installation/">Docker</a> installed.</li>
+	<li><a href="http://cmder.net/">Cmder</a> full version installed.</li>
+	<li>Operating system: Microsoft Windows 10</li>
+	<li>Architecture: x86_64</li>
+	<li>At least 2GB of memory dedicated to your container instance.</li>
+</ul>
+</p>
+
+<strong>All the steps below should be executed in a cmder console window.</strong>
+
+<ol>
+<li>
+<strong>Clone the Vespa sample apps from <a href="https://github.com/vespa-engine/sample-apps">github</a>:</strong>
+<pre data-test="exec">
+$ git clone https://github.com/vespa-engine/sample-apps.git
+$ set VESPA_SAMPLE_APPS="%CD%\sample-apps"
+</pre>
+</li>
+
+<li>
+<strong>Start a Vespa Docker container:</strong>
+<pre data-test="exec">
+$ docker run --detach --name vespa --hostname vespa-container --privileged --volume %VESPA_SAMPLE_APPS%:/vespa-sample-apps --publish 8080:8080 vespaengine/vespa
+</pre>
+</li>
+
+<li>
+<strong>Wait for configuration server to start - wait for a 200 OK response:</strong>
+<pre data-test="exec" data-test-wait-for="200 OK">
+$ docker exec vespa bash -c "curl -s --head http://localhost:19071/ApplicationStatus"
+</pre>
+</li>
+
+<li>
+<strong>Deploy and activate a sample application:</strong>
+<pre data-test="exec">
+$ docker exec vespa bash -c "/opt/vespa/bin/vespa-deploy prepare /vespa-sample-apps/basic-search/src/main/application"
+$ docker exec vespa bash -c "/opt/vespa/bin/vespa-deploy activate"
+</pre>
+</li>
+
+<li>
+<strong>Ensure the application is active - wait for a 200 OK response:</strong>
+<pre data-test="exec" data-test-wait-for="200 OK">
+$ curl -s --head "http://localhost:8080/ApplicationStatus"
+</pre>
+</li>
+
+<li>
+<strong>Feed documents:</strong>
+<pre data-test="exec">
+$ cat %VESPA_SAMPLE_APPS%/basic-search/music-data-1.json | curl -s -X POST --data-binary @- "http://localhost:8080/document/v1/music/music/docid/1"
+$ cat %VESPA_SAMPLE_APPS%/basic-search/music-data-2.json | curl -s -X POST --data-binary @- "http://localhost:8080/document/v1/music/music/docid/2"
+</pre>
+</li>
+
+<li>
+<strong>Run a query and a document get request :</strong>
+<pre data-test="exec" data-test-assert-contains="Michael Jackson">
+$ curl -s "http://localhost:8080/search/?query=bad"
+</pre>
+<pre data-test="exec" data-test-assert-contains="Eminem">
+$ curl -s "http://localhost:8080/document/v1/music/music/docid/2"
+</pre>
+    View the results in a browser at
+    <a href="http://localhost:8080/search/?query=bad">http://localhost:8080/search/?query=bad</a>.
+    Read more in the <a href="search-api.html">Search API</a>.
+</li>
+
+<li>
+    <p><strong>Clean up when you're done</strong></p>
+    <p>Stop the running container when you no longer need it:</p>
+<pre data-test="after">
+$ docker stop vespa
+</pre>
+    <p>Optionally, remove the stopped container entirely:</p>
+<pre data-test="after">
+$ docker rm vespa
+</pre>
+</li>
+</ol>
+
+
