@@ -1,0 +1,164 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa quick start using Kubernetes"
+---
+
+<p>
+This guide describes how to install and run Vespa on a single machine using Kubernetes.
+</p><p>
+<strong>Prerequisites</strong>:
+<ul>
+	<li><a href="https://kubernetes.io/docs/getting-started-guides/minikube/">Minikube</a> installed with xhyve driver.</li>
+	<li><a href="https://git-scm.com/downloads">Git</a> installed.</li>
+	<li>Operating system: macOS</li>
+	<li>Architecture: x86_64</li>
+	<li>At least 4GB of memory dedicated to your container instance.</li>
+</ul>
+</p>
+
+<ol>
+<li>
+<strong>Start Kubernetes cluster with minicube:</strong>
+<pre>
+$ minikube start --vm-driver xhyve --memory 4096
+</pre>
+</li>
+
+<li>
+<strong>Clone the Vespa sample apps from
+<a href="https://github.com/vespa-engine/sample-apps">github</a>:</strong>
+<pre>
+$ git clone https://github.com/vespa-engine/sample-apps.git
+$ export VESPA_SAMPLE_APPS=`pwd`/sample-apps
+</pre>
+</li>
+
+<li>
+<strong>Create Kubernetes configuration files</strong><br/>
+service.yml:
+<pre>
+apiVersion: v1
+kind: Service
+metadata:
+  name: vespa
+  labels:
+    app: vespa
+spec:
+  selector:
+    app: vespa
+  type: NodePort
+  ports:
+  - name: container
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: config
+    port: 19071
+    targetPort: 19071
+    protocol: TCP
+</pre>
+statefulset.yml:
+<pre>
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: vespa
+  labels:
+    app: vespa
+spec:
+  replicas: 1
+  serviceName: vespa
+  template:
+    metadata:
+      labels:
+        app: vespa
+    spec:
+      containers:
+      - name: vespa
+        image: vespaengine/vespa
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /ApplicationStatus
+            port: 19071
+            scheme: HTTP
+        volumeMounts:
+        - name: vespa-sample-apps
+          mountPath: /vespa-sample-apps
+      volumes:
+      - name: vespa-sample-apps
+        hostPath:
+          path: PATH_TO_CLONED/sample-apps
+</pre>
+Replace the <strong>PATH_TO_CLONED</strong> with the current path.
+</li>
+
+<li>
+<strong>Wait for the service to enter a running state</strong>
+<pre>
+$ kubectl get pods --watch
+</pre>
+</li>
+
+<li>
+<strong>Deploy and activate a sample application:</strong>
+<pre>
+$ kubectl exec vespa-0 -- bash -c '/opt/vespa/bin/vespa-deploy prepare /vespa-sample-apps/basic-search/src/main/application/ &amp;&amp; \
+  /opt/vespa/bin/vespa-deploy activate'
+</pre>
+</li>
+
+<li>
+<strong>Start port forwarding from localhost to pod</strong>
+<pre>
+$ kubectl port-forward vespa-0 8080 &
+</pre>
+</li>
+
+<li>
+<strong>Ensure the application is active - wait for a 200 OK response:</strong>
+<pre>
+$ curl -s --head http://localhost:8080/ApplicationStatus
+</pre>
+</li>
+
+<li>
+<strong>Feed documents:</strong>
+<pre data-test="exec">
+$ curl -s -X POST --data-binary @${VESPA_SAMPLE_APPS}/basic-search/music-data-1.json \
+    http://localhost:8080/document/v1/music/music/docid/1 | python -m json.tool
+$ curl -s -X POST --data-binary @${VESPA_SAMPLE_APPS}/basic-search/music-data-2.json \
+    http://localhost:8080/document/v1/music/music/docid/2 | python -m json.tool
+</pre>
+</li>
+
+<li>
+<strong>Run a query and a document get request :</strong>
+<pre data-test="exec" data-test-assert-contains="Michael Jackson">
+$ curl -s http://localhost:8080/search/?query=bad | python -m json.tool
+</pre>
+<pre data-test="exec" data-test-assert-contains="Eminem">
+$ curl -s http://localhost:8080/document/v1/music/music/docid/2 | python -m json.tool
+</pre>
+View the results in a browser at
+<a href="http://localhost:8080/search/?query=bad">http://localhost:8080/search/?query=bad</a>.
+Read more in the <a href="search-api.html">Search API</a>.
+</li>
+
+<li>
+<p><strong>Clean up when you're done</strong></p>
+<p>Stop the running container when you no longer need it:</p>
+<pre>
+$ kubectl delete service,statefulsets vespa
+</pre>
+<p>Stop minikube:</p>
+<pre>
+$ minikube stop
+</pre>
+</li>
+</ol>
