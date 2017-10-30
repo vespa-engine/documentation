@@ -761,23 +761,46 @@ A mid-level dispatcher will also be located on the host of the content/search no
 
 <h2 id="bucket-splitting">bucket-splitting</h2>
 <p>Contained in <a href="#tuning"><code>tuning</code></a>.
-The optimal bucket size depends on indexing type and use cases.
-One would normally prefer larger buckets,
-but use cases like streaming search will benefit from capping the maximum size to keep query latency down.
+The <a href="../content/buckets.html">bucket</a> is the fundamental unit of distribution
+and management in a content cluster. To ensure that each bucket is of a size that can
+be processed with reasonable resource usage, the system will automatically
+split oversized buckets once they hit configured thresholds.
 </p>
 <p>
-Having buckets with too few documents will impact visiting performance,
-and can also cause a system to merge slower.
-Distributors will have larger in-memory bucket databases.
-Check a distributor's status page to inspect your cluster's buckets. Attributes:
+The default settings have been chosen to be a good fit for most practical applications.
+If you are using streaming search you might want to experiment with changing split limits
+to get buckets down to a size that can be processed fully within a desired latency window.
+</p>
+<p>
+If you change the bucket splitting parameters, you should be aware of the following caveats:
+</p>
+<ul>
+  <li>Smaller buckets are faster to reconcile and to move across nodes.</li>
+  <li>Smaller buckets means that there are <em>more</em> buckets, so the total amount
+      of buckets to reconcile and move across nodes goes up proportionally.</li>
+  <li>Larger buckets reduce the amount of metadata the content cluster must keep track of.</li>
+  <li>Certain operations have a time and space complexity that is linear in the document count
+      and/or the size of the bucket.
+      Streaming search over a bucket is one example of such an operation.</li>
+  <li>A very large number of buckets (more than 1 million per node) may cause non-trivial
+      metadata processing overhead when node availability changes happen in the cluster
+      (such as when a node goes down).</li>
+  <li>Never choose a maximum bucket size that is too large to comfortably be kept in memory
+      and sent across the network (i.e. prefer sizes in tens of megabytes, not in hundreds
+      of megabytes or above).</li>
+</ul>
+<p>
+Attributes:
 <ul>
   <li><strong>max-documents (optional)</strong>:
     Maximum number of documents per content bucket.
-    Split buckets in two if they have more documents than this.
+    Buckets are split in two if they have more documents than this. Default is 1024.
+    You should keep this value below 16K.
   </li>
   <li><strong>max-size (optional)</strong>:
-    Maximum size (in bytes) of a bucket.
-    Split buckets in two if they are larger than this.
+    Maximum size (in bytes) of a bucket. This is the sum of the serialized size of all documents kept in the bucket.
+    Buckets are split in two if they have a larger size than this. Default is 32MiB.
+    You should keep this value below 100MiB.
   </li>
   <li><strong>minimum-bits (optional)</strong>:
     Override the ideal distribution bit count configured for this cluster.
@@ -832,18 +855,18 @@ This configuration can be changed live as the system is running and altered limi
 <p>Contained in <a href="#tuning"><code>tuning</code></a>.
 Lets you tune the distribution algorithm used in the cluster. Attributes:
 <ul>
-  <li><strong>type (optional)</strong>: loose | strict | legacy
-    Sets a mode for how many distribution bits should be used given a
-    number of nodes. Many buckets give you an even distribution.
-    Few buckets let you have large buckets if you want,
-    and have less buckets to keep metadata about and manage.
-    Legacy mode keeps equal to 5.0, which means optimizing for less than 0.5 % waste,
-    and changing bits used often to optimize for current node count.
-    Strict mode optimize for less than 1 % waste,
-    and try to change bits less seldom upon cluster resizing,
-    allowing some more buckets per node for smaller clusters to handle this.
-    Loose tries to optimize for less than 10% waste,
-    and very seldom change based on cluster size.
+  <li>
+    <p><strong>type (optional)</strong>: loose | strict | legacy. Defaults to <code>loose</code>.</p>
+    <p>When the number of a nodes configured in a system changes over certain limits, the system will
+       automatically trigger major redistributions of documents. This is to ensure that
+       the number of buckets is appropriate for the number of nodes in the cluster. This enum
+       value speficies how aggressive the system should be in triggering such distribution changes.</p>
+    <p>The default of <code>loose</code> strikes a balance between rarely altering the distribution
+       of the cluster and keeping the skew in document distribution low. It is recommended that you
+       use the default mode unless you have empirically observed that it causes too much skew in load
+       or document distribution.</p>
+    <p>Note that specifying <code>minimum-bits</code> under <a href="bucket-splitting">bucket-splitting</a>
+       overrides this setting and effectively "locks" the distribution in place.</p>
   </li>
 </ul>
 </p>
