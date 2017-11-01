@@ -32,11 +32,6 @@ def print_cmd_header(cmd, extra="", print_header=True):
     print("*" * 80)
 
 
-def stop(msg):
-    sys.stderr.write("ERROR: {0}\n".format(msg))
-    sys.exit(-1)
-
-
 def exec_wait(cmd, pty):
     command = cmd["$"]
     expect = cmd["wait-for"]
@@ -55,7 +50,7 @@ def exec_wait(cmd, pty):
             print("Waited for {0}/{1} seconds...".format(waited, max_wait))
 
     if waited >= max_wait:
-        stop("Expected output '{0}' not found in command '{1}'. Waited for {2} seconds.".format(expect, command, max_wait))
+        raise RuntimeError("Expected output '{0}' not found in command '{1}'. Waited for {2} seconds.".format(expect, command, max_wait))
 
 
 def exec_assert(cmd, pty):
@@ -65,7 +60,7 @@ def exec_assert(cmd, pty):
 
     _, output = pty.run(command)
     if output.find(expect) == -1:
-        stop("Expected output '{0}' not found in command '{1}'".format(expect, command))
+        raise RuntimeError("Expected output '{0}' not found in command '{1}'".format(expect, command))
 
 
 def exec_default(cmd, pty):
@@ -74,7 +69,7 @@ def exec_default(cmd, pty):
 
     exit_code, _ = pty.run(command)
     if exit_code != 0:
-        stop("Command '{0}' returned code {1}".format(command, exit_code))
+        raise RuntimeError("Command '{0}' returned code {1}".format(command, exit_code))
 
 
 def exec_step(cmd, pty):
@@ -85,6 +80,8 @@ def exec_script(script):
     tmpdir = tempfile.mkdtemp(dir=work_dir)
     os.chdir(tmpdir)
 
+    failed = False
+
     with PseudoTerminal() as pty:
         try:
             for cmd in script["before"]:
@@ -92,13 +89,18 @@ def exec_script(script):
             for cmd in script["steps"]:
                 exec_step(cmd, pty)
         except Exception as e:
-            print(e)
+            sys.stderr.write("ERROR: {0}\n".format(e))
+            failed = True
         finally:
             for cmd in script["after"]:
                 try:
                     exec_step(cmd, pty)
                 except Exception as e:
-                    print(e)
+                    sys.stderr.write("ERROR: {0}\n".format(e))
+                    failed = True
+
+    if failed:
+        raise RuntimeError("One or more commands failed")
 
 
 ################################################################################
@@ -139,10 +141,10 @@ def parse_cmds(pre, attrs):
 
 
 def parse_file(pre, attrs):
-    stop("File fields are not implemented yet")
+    raise NotImplementedError("File fields are not implemented yet")
 
 
-def process_page(html, source_name = ""):
+def parse_page(html):
     script = {
         "before": [],
         "steps": [],
@@ -163,6 +165,12 @@ def process_page(html, source_name = ""):
 
         if pre.attrs["data-test"] == "after":
             script["after"].extend(parse_cmds(pre.string, pre.attrs))
+
+    return script
+
+
+def process_page(html, source_name=""):
+    script = parse_page(html)
 
     print_cmd_header("Script to execute", extra=source_name)
     print(json.dumps(script, indent=2))
@@ -186,16 +194,23 @@ def run_url(url):
 
 
 def run_config():
+    num_failed = 0
     config_file = "_test_config.yml"
     if not os.path.isfile(config_file):
         config_file = os.path.join("test",config_file)
     if not os.path.isfile(config_file):
-        stop("Could not find configuration file")
+        raise RuntimeError("Could not find configuration file")
 
     with open(config_file, "r") as f:
         config = yaml.load(f)
         for url in config["urls"]:
-            run_url(url)
+            try:
+                run_url(url)
+            except RuntimeError:
+                num_failed += 1
+
+    if num_failed > 0:
+        raise RuntimeError("One or more files failed")
 
 
 def run_file(file_name):
@@ -211,11 +226,14 @@ def run_file(file_name):
 def main():
     create_work_dir()
 
-    if len(sys.argv) > 1:
-        run_file(sys.argv[1])
-    else:
-        run_config()
-
+    try:
+        if len(sys.argv) > 1:
+            run_file(sys.argv[1])
+        else:
+            run_config()
+    except Exception as e:
+        sys.stderr.write("ERROR: {0}\n".format(e))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
