@@ -2,17 +2,16 @@
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 
 import os
-import re
 import sys
 import json
 import time
 import yaml
-import shutil
 import urllib2
 import tempfile
-import subprocess
 
 from bs4 import BeautifulSoup
+
+from pseudo_terminal import PseudoTerminal
 
 ################################################################################
 # Execution
@@ -20,12 +19,6 @@ from bs4 import BeautifulSoup
 
 project_root = os.getcwd()
 work_dir = os.path.join(project_root, "_work")
-
-script = {
-    "before" : [],
-    "steps" : [],
-    "after" : []
-}
 
 
 def print_cmd_header(cmd, extra="", print_header=True):
@@ -44,46 +37,17 @@ def stop(msg):
     sys.exit(-1)
 
 
-def shell_cmd(cmd):
-    retcode = subprocess.call(cmd, shell=True)
-    return retcode
-
-
-def shell_cmd_output(cmd, print_output=True):
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = p.communicate()
-    retcode = p.returncode
-    if print_output:
-        print stdout.strip()
-        print stderr.strip()
-    return retcode, stdout, stderr
-
-
-def exec_export(cmd):
-    command = cmd["$"]
-    print_cmd_header(command)
-
-    m = re.match("^export ([_A-Za-z]+)\s*=\s*(.+)$", command)
-    if m != None:
-        name = m.group(1)
-        _,value,_ = shell_cmd_output("echo {0}".format(m.group(2)), print_output=False)
-        os.putenv(name, value.strip())
-        print("{0}={1}".format(name, value.strip()))
-    else:
-        stop("Could not parse export command '{0}'".format(command))
-
-
-def exec_wait(cmd):
+def exec_wait(cmd, pty):
     command = cmd["$"]
     expect = cmd["wait-for"]
-    max_wait = 300 # todo: max this configurable
-    try_interval = 5 # todo: max this configurable too
+    max_wait = 300  # todo: max this configurable
+    try_interval = 5  # todo: max this configurable too
     print_cmd_header(command, "Waiting for '{0}'".format(expect))
 
     waited = 0
     while waited < max_wait:
-        retcode,stdout,stderr = shell_cmd_output(command, print_output=False)
-        if stdout.find(expect) >= 0:
+        exit_code, output = pty.run(command)
+        if output.find(expect) >= 0:
             return
         else:
             time.sleep(try_interval)
@@ -94,46 +58,47 @@ def exec_wait(cmd):
         stop("Expected output '{0}' not found in command '{1}'. Waited for {2} seconds.".format(expect, command, max_wait))
 
 
-def exec_assert(cmd):
+def exec_assert(cmd, pty):
     command = cmd["$"]
     expect = cmd["contains"]
     print_cmd_header(command, "Expecting '{0}'".format(expect))
 
-    retcode,stdout,stderr = shell_cmd_output(command, print_output=True)
-    if stdout.find(expect) == -1:
+    _, output = pty.run(command)
+    if output.find(expect) == -1:
         stop("Expected output '{0}' not found in command '{1}'".format(expect, command))
 
 
-def exec_default(cmd):
+def exec_default(cmd, pty):
     command = cmd["$"]
     print_cmd_header(command)
 
-    retcode = shell_cmd(command)
-    if retcode != 0:
-        stop("Command '{0}' returned code {1}".format(command, retcode))
+    exit_code, _ = pty.run(command)
+    if exit_code != 0:
+        stop("Command '{0}' returned code {1}".format(command, exit_code))
 
 
-def exec_step(cmd):
-    globals()["exec_" + cmd["type"]](cmd)
+def exec_step(cmd, pty):
+    globals()["exec_" + cmd["type"]](cmd, pty)
 
 
-def exec_script():
+def exec_script(script):
     tmpdir = tempfile.mkdtemp(dir=work_dir)
     os.chdir(tmpdir)
 
-    try:
-        for cmd in script["before"]:
-            exec_step(cmd)
-        for cmd in script["steps"]:
-            exec_step(cmd)
-    except Exception as e:
-        print(e)
-    finally:
-        for cmd in script["after"]:
-            try:
-                exec_step(cmd)
-            except:
-                pass
+    with PseudoTerminal() as pty:
+        try:
+            for cmd in script["before"]:
+                exec_step(cmd, pty)
+            for cmd in script["steps"]:
+                exec_step(cmd, pty)
+        except Exception as e:
+            print(e)
+        finally:
+            for cmd in script["after"]:
+                try:
+                    exec_step(cmd, pty)
+                except Exception as e:
+                    print(e)
 
 
 ################################################################################
@@ -150,8 +115,6 @@ def parse_cmd(cmd, attrs):
     if len(cmd) == 0:
         return None
 
-    if cmd.startswith("export"):
-        return { "$" : cmd, "type":"export" }
     if attrs.has_key("data-test-wait-for"):
         return { "$" : cmd, "type":"wait", "wait-for":attrs["data-test-wait-for"] }
     if attrs.has_key("data-test-assert-contains"):
@@ -180,10 +143,11 @@ def parse_file(pre, attrs):
 
 
 def process_page(html, source_name = ""):
-    global script
-    script["before"] = []
-    script["steps"]  = []
-    script["after"]  = []
+    script = {
+        "before": [],
+        "steps": [],
+        "after": []
+    }
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -200,10 +164,10 @@ def process_page(html, source_name = ""):
         if pre.attrs["data-test"] == "after":
             script["after"].extend(parse_cmds(pre.string, pre.attrs))
 
-    print_cmd_header("Script to execute", extra = source_name)
+    print_cmd_header("Script to execute", extra=source_name)
     print(json.dumps(script, indent=2))
 
-    exec_script()
+    exec_script(script)
 
 
 ################################################################################
