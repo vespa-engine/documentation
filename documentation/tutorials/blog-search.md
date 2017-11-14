@@ -376,7 +376,7 @@ Given the above search definition, where the fields `title` and `content` are pa
 `fieldset default`, any document containing the word "music" in one or more of these two
 fields matches our query below:
 
-    $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' | python -m json.tool | python -m json.tool
+    $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' | python -m json.tool
 
 Looking at the output, please note:
 
