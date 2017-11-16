@@ -5,70 +5,27 @@ title: "Vespa tutorial pt. 2: Blog recommendation"
 
 ## Introduction
 
-In this tutorial we will build upon the [blog searching tutorial](blog-search.html)
-and extend our basic search engine to include machine learned models to help us
-recommend blog posts to users that arrive at our application.  Assume that once
-a user arrives, we obtain his user identification number, denoted in this
-tutorial by `user_id`, and that we will send this information down to Vespa and
-expect to obtain a blog post recommendation list containing 100 blog posts
-tailored for that specific user.
+This tutorial builds upon the [blog searching tutorial](blog-search.html)
+and extends the basic search engine to include machine learned models to help us
+recommend blog posts to users that arrive at our application.
+Assume that once a user arrives, we obtain his user identification number,
+denoted in this tutorial by `user_id`, and that we will send this information down to Vespa
+and expect to obtain a blog post recommendation list containing 100 blog posts tailored for that specific user.
 
-Code source and build instructions related to the code used throughout this
-tutorial can be found at our tutorial supporting [code
-repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared).
-
-## Vespa and Hadoop
-
-Vespa was designed to keep low-latency performance even at Yahoo-like web
-scale.  This means supporting a large number of concurrent requests as well as
-a very large number of documents. In the previous tutorial we used a data set
-that was approximately 5Gb. Data sets of this size do not require a distributed
-file system for data manipulation. However, we assume that most Vespa users
-would like at some point to scale their applications up.  Therefore, in this
-section we will start using tools such as [Apache
-Hadoop](https://hadoop.apache.org), [Apache Pig](https://pig.apache.org) and
-[Apache Spark](http://spark.apache.org/) when manipulating the data. These can
-be run locally on your laptop in case you do not have access to a cluster.
-
-We will still assume throughout this tutorial that the data is stored locally
-on your laptop, but in case you would like to use HDFS (Hadoop Distributed
-File System) for storing the data, it is just a matter of uploading it to HDFS
-with the following command:
-
-    $ hadoop fs -put trainPosts.json blog-app/trainPosts.json
-
-If you go with this approach, you need to replace the local file paths with the
-equivalent HDFS file paths throughout the rest of the tutorial.
-
-Vespa has [a set of tools](../feed-using-hadoop-pig-oozie.html) to facilitate the interaction
-between Vespa and the Hadoop ecosystem. These can also be used locally. An example
-of feeding to Vespa using Pig is conceptually as simple as the following example:
-
-    REGISTER vespa-hadoop.jar
-
-    DEFINE VespaStorage com.yahoo.vespa.hadoop.pig.VespaStorage();
-
-    A = LOAD '<path>' [USING <storage>] [AS <schema>];
-
-    -- apply any transformations
-
-    STORE A INTO '$ENDPOINT' USING VespaStorage();
-
-To feed a file into Vespa you call this script using Pig:
-
-    pig -x local -f feed.pig -p ENDPOINT=endpoint-1,endpoint-2
-
-Here, the -x local option is added to specify that this script is run locally,
-and will not attempt to retrieve scripts and data from HDFS. You need both Pig
-and Hadoop libraries installed on your machine to run this locally, but you
-don't need to install and start a running instance of Hadoop. More examples of
-feeding to Vespa from Pig can be found in the [sample apps
-directory](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig).
+Prerequisites:
+- Code source and build instructions for sbt and Spark is found at
+  [Vespa Tutorial pt. 2](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#vespa-tutorial-pt-2) - install and build files.
+- Install [Pig](#vespa-and-hadoop)
+- trainPosts.json is found in $VESPA_SAMPLE_APPS, the directory with the clone of
+  [vespa sample apps](https://github.com/vespa-engine/sample-apps)
+- [vespa-hadoop.jar](search.maven.org/#search%7Cga%7C1%7Cvespa-hadoop)
+  is found in $VESPA_SAMPLE_APPS
 
 
-## Vespa Evaluation Framework
 
-### Training and test sets
+## Evaluation Framework
+
+### Generate training and test sets
 
 In order to evaluate the gains obtained by our recommendation system when we
 start to improve it with more accurate algorithms, we will split the dataset we
@@ -90,21 +47,17 @@ the training and test sets in such a way that:
 - There will be blog posts that had been liked in the training set by a set of
   users and that had also been liked in the test set by another set of users,
   even though this information will be hidden in the test set.
-
   Those cases are interesting to evaluate if the exploitation (as opposed to
   exploration) component of the system is working well. That is, if we are able
   to identify high quality blog posts based on the available information during
   training and exploit this knowledge by recommending those high quality blog
   posts to another set of users that might like them as well.
 
-- There will be blog posts in the test set that had never been seen in the
-  training set.
-
+- There will be blog posts in the test set that had never been seen in the training set.
   Those cases are interesting in order to evaluate how the system deals with
   the cold-start problem. Systems that are too biased towards exploitation will
   fail to recommend new and unexplored blog posts, leading to a feedback loop
-  that will cause the system to focus into a small share of the available
-  content.
+  that will cause the system to focus into a small share of the available content.
 
 A key challenge faced by recommender system designers is how to balance the
 exploitation/exploration components of their system, and our training/test set
@@ -119,13 +72,12 @@ The Spark job below will use the "input_file" and create two folders in the
 information about the ``post_id`` and ``user_id`` pairs that were assigned
 to the training set and test set, respectively.
 
-	spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
-		--master local[4] blog-support.jar \
-		--task split_set --input_file trainPosts.json \
-		--test_perc_stage1 0.05 --test_perc_stage2 0.20 --seed 123 \
-		--output_path blog-job/training_and_test_indices
-
-Find blog-support.jar at target/scala\*/blog-support\*.jar. Other parameters:
+    $ cd blog-recommendation; export SPARK_LOCAL_IP="127.0.0.1"
+    $ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
+      --master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
+      --task split_set --input_file ../trainPosts.json \
+      --test_perc_stage1 0.05 --test_perc_stage2 0.20 --seed 123 \
+      --output_path blog-job/training_and_test_indices
 
 - test_perc_stage1: The percentage of the blog posts that will be located only on the test set (exploration component).
 - test_perc_stage2: The percentage of the remaining (post_id, user_id) pairs that should be moved to the test set (exploitation component).
@@ -175,24 +127,6 @@ illustrates how to compute the expected percentile ranking with the following in
 
 {% endcomment %}
 
-## Tensor framework
-
-Modern machine learning applications often make use of large, multidimensional
-feature spaces and perform complex operations on those features, such as in
-large logistic regression and deep learning models. It is therefore necessary
-to have an expressive framework to define and evaluate ranking expressions of
-such complexity at scale.
-
-Vespa comes with a Tensor framework, which unify and generalize scalar, vector
-and matrix operations, handles the sparseness inherent to most machine learning
-application (most cases evaluated by the model is lacking values for most of
-the features) and allow for models to be continuously updated.
-
-{%comment%} Should we mention this before it is ready? {%endcomment%}
-
-We will cover the usage of tensors in Vespa as needed when walking through this
-tutorial. Additional information about the Tensor framework can be found in the
-[tensor user guide](../tensor-user-guide.html).
 
 ## Collaborative Filtering
 
@@ -227,7 +161,24 @@ This is what is called a cold start problem and will be addressed with
 content-based techniques described in future tutorials.
 
 
-## Updating search definitions
+## Updates to search definitions - tensors
+
+Modern machine learning applications often make use of large, multidimensional
+feature spaces and perform complex operations on those features, such as in
+large logistic regression and deep learning models. It is therefore necessary
+to have an expressive framework to define and evaluate ranking expressions of
+such complexity at scale.
+
+Vespa comes with a Tensor framework, which unify and generalize scalar, vector
+and matrix operations, handles the sparseness inherent to most machine learning
+application (most cases evaluated by the model is lacking values for most of
+the features) and allow for models to be continuously updated.
+
+{%comment%} Should we mention this before it is ready? {%endcomment%}
+
+We will cover the usage of tensors in Vespa as needed when walking through this
+tutorial. Additional information about the Tensor framework can be found in the
+[tensor user guide](../tensor-user-guide.html).
 
 As mentioned above, after training the model we obtain one latent factor vector
 for each user and one for each document available in the training set. We want
@@ -238,8 +189,8 @@ blog post search definition `blog_post.sd` and create a new document type
 
 ### blog_post.sd
 
-We will update the search definition `blog_post.sd` to include a field of type
-tensor named `user_item_cf` to hold the document latent factor.
+`blog_post.sd`  is updated to include a field of type
+tensor named `user_item_cf` to hold the document latent factor:
 
 	field user_item_cf type tensor(user_item_cf[10]) {
 		indexing: summary | attribute
@@ -258,9 +209,7 @@ we have a field has_user_item_cf for now.
 
 ### user.sd
 
-We will create a new search definition named `user.sd` that defines a new
-document type named `user` to hold information related to the users. For now,
-`user.sd` will contain the following fields
+A new search definition  `user.sd`  defines a  document type named `user` to hold information related to the users:
 
 	search user {
 		document user {
@@ -287,48 +236,51 @@ document type named `user` to hold information related to the users. For now,
 		}
 	}
 
-where
+Where:
 
 - user_id: unique identifier for the user
 - user_item_cf: tensor that will hold the user latent factor
-- has_user_item_cf
+- has_user_item_cf: ToDo FIXME
+
+Deploy the application:
+
+    $ cd /vespa-sample-apps/blog-recommendation
+    $ vespa-deploy prepare src/main/application && vespa-deploy activate
 
 {% comment %}
 TODO: Comment Tensor spec
 {% endcomment %}
 
-## Computing user and item latent factors
 
-In this section we will use the complete training set to compute user and item
-latent factors. We will leave the discussion about tuning and performance
+## Compute user and item latent factors
+
+Use the complete training set to compute user and item latent factors.
+We will leave the discussion about tuning and performance
 improvement of the model used to the section about [model tuning and offline
-evaluation](#model-tuning-and-offline-evaluation). If you [submit the following
-Spark job](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#building-and-running-the-spark-script-for-calculating-latent-factors)
+evaluation](#model-tuning-and-offline-evaluation).
+Submit the [Spark job](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#building-and-running-the-spark-script-for-calculating-latent-factors)
+to compute the user and item latent factors:
 
-	spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
-		--master local[4] blog-support.jar \
-		--task collaborative_filtering
+	$ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
+		--master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
+		--task collaborative_filtering \
 		--input_file blog-job/training_and_test_indices/training_set_ids \
 		--rank 10 --numIterations 10 --lambda 0.01 \
 		--output_path blog-job/user_item_cf
 
-you will compute the user and item latent factors and store them on the file
-system, which will be HDFS in case you are running Spark on a cluster or your
-regular file system in case you are running Spark locally. Once we have the
-latent factors available, we need to send them to the running instance of your
-Vespa application.
 
-## Feeding tensors to Vespa
+
+## Feed tensors to Vespa
 
 The following is the Pig command used to feed these latent factors to Vespa:
 
-	pig -x local -f tutorial_feed_content_and_tensor_vespa.pig \
-		-param VESPA_HADOOP_JAR=vespa-hadoop.jar \
-		-param DATA_PATH=trainPosts.json \
+	$ pig -x local -f tutorial_feed_content_and_tensor_vespa.pig \
+		-param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
+		-param DATA_PATH=../trainPosts.json \
 		-param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
 		-param BLOG_POST_FACTORS=blog-job/user_item_cf/product_features \
 		-param USER_FACTORS=blog-job/user_item_cf/user_features \
-		-param ENDPOINT=$(hostname)
+		-param ENDPOINT=$(hostname) \
 		-D vespa.feed.defaultport=8080
 
 * the "tutorial_feed_content_and_tensor_vespa.pig" script can be found
@@ -668,8 +620,8 @@ We will now optimize the latent factors using the training set instead of
 manually picking hyperparameter values as was done in the [Computing user and
 item latent factors](#computing-user-and-item-latent-factors) section.
 
-	spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
-		--master local[4] blog-support.jar \
+	$ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
+		--master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
 		--task collaborative_filtering_cv \
 		--input_file blog-job/training_and_test_indices/training_set_ids \
 		--numIterations 10 --output_path blog-job/user_item_cf_cv
@@ -681,9 +633,9 @@ user and item latent factors](#computing-user-and-item-latent-factors) section
 but our cross-validation algorithm above tries different values for rank (10,
 50, 100).
 
-	pig -x local -f tutorial_feed_content_and_tensor_vespa.pig \
-		-param VESPA_HADOOP_JAR=vespa-hadoop.jar \
-		-param DATA_PATH=trainPosts.json \
+	$ pig -x local -f tutorial_feed_content_and_tensor_vespa.pig \
+		-param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
+		-param DATA_PATH=../trainPosts.json \
 		-param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
 		-param BLOG_POST_FACTORS=blog-job/user_item_cf_cv/product_features \
 		-param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
@@ -696,13 +648,13 @@ list of recommendation for each user, we can then compute the expected
 percentile ranking as described in section [Evaluation metrics](#evaluation-metrics).
 
 	pig -x local -f tutorial_compute_metric.pig \
-		-param VESPA_HADOOP_JAR=vespa-hadoop.jar \
-		-param DATA_PATH=trainPosts.json \
+		-param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
+		-param DATA_PATH=../trainPosts.json \
 		-param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
 		-param BLOG_POST_FACTORS=blog-job/user_item_cf_cv/product_features \
 		-param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
-		-param ENDPOINT=$(hostname):8080
-		-param NUMBER_RECOMMENDATIONS=100
+		-param ENDPOINT=$(hostname):8080 \
+		-param NUMBER_RECOMMENDATIONS=100 \
 		-param OUTPUT=blog-job/metric
 
 {% comment %}
@@ -711,3 +663,52 @@ TODO: add a summary here of what we accomplished and way forward from here.
 
 You can now move on to the [next part of the tutorial](blog-recommendation-nn.html)
 where we improve accuracy using a simple neural network.
+
+
+## Vespa and Hadoop
+
+Vespa was designed to keep low-latency performance even at Yahoo-like web
+scale.  This means supporting a large number of concurrent requests as well as
+a very large number of documents. In the previous tutorial we used a data set
+that was approximately 5Gb. Data sets of this size do not require a distributed
+file system for data manipulation. However, we assume that most Vespa users
+would like at some point to scale their applications up.  Therefore, in this
+section we will start using tools such as [Apache
+Hadoop](https://hadoop.apache.org), [Apache Pig](https://pig.apache.org) and
+[Apache Spark](http://spark.apache.org/) when manipulating the data. These can
+be run locally on your laptop in case you do not have access to a cluster.
+
+We will still assume throughout this tutorial that the data is stored locally
+on your laptop, but in case you would like to use HDFS (Hadoop Distributed
+File System) for storing the data, it is just a matter of uploading it to HDFS
+with the following command:
+
+    $ hadoop fs -put trainPosts.json blog-app/trainPosts.json
+
+If you go with this approach, you need to replace the local file paths with the
+equivalent HDFS file paths throughout the rest of the tutorial.
+
+Vespa has [a set of tools](../feed-using-hadoop-pig-oozie.html) to facilitate the interaction
+between Vespa and the Hadoop ecosystem. These can also be used locally. An example
+of feeding to Vespa using Pig is conceptually as simple as the following example:
+
+    REGISTER vespa-hadoop.jar
+
+    DEFINE VespaStorage com.yahoo.vespa.hadoop.pig.VespaStorage();
+
+    A = LOAD '<path>' [USING <storage>] [AS <schema>];
+
+    -- apply any transformations
+
+    STORE A INTO '$ENDPOINT' USING VespaStorage();
+
+To feed a file into Vespa you call this script using Pig:
+
+    $ pig -x local -f feed.pig -p ENDPOINT=endpoint-1,endpoint-2
+
+Here, the -x local option is added to specify that this script is run locally,
+and will not attempt to retrieve scripts and data from HDFS. You need both Pig
+and Hadoop libraries installed on your machine to run this locally, but you
+don't need to install and start a running instance of Hadoop. More examples of
+feeding to Vespa from Pig can be found in the [sample apps
+directory](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig).
