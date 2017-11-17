@@ -734,9 +734,7 @@ Finally, all numeric fields should always be attributes.
 [vespa-remove-index](../reference/vespa-cmdline-tools.html#vespa-remove-index)
 removes all documents:
 
-    $ vespa-stop-services
-    $ vespa-remove-index
-    $ vespa-start-services
+    $ vespa-stop-services && vespa-remove-index && vespa-start-services
 
 
 ## Conclusion

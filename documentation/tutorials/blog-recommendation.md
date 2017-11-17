@@ -242,11 +242,6 @@ Where:
 - user_item_cf: tensor that will hold the user latent factor
 - has_user_item_cf: ToDo FIXME
 
-Deploy the application:
-
-    $ cd /vespa-sample-apps/blog-recommendation
-    $ vespa-deploy prepare src/main/application && vespa-deploy activate
-
 {% comment %}
 TODO: Comment Tensor spec
 {% endcomment %}
@@ -270,44 +265,16 @@ to compute the user and item latent factors:
 
 
 
-## Feed tensors to Vespa
-
-The following is the Pig command used to feed these latent factors to Vespa:
-
-	$ pig -x local -f tutorial_feed_content_and_tensor_vespa.pig \
-		-param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
-		-param DATA_PATH=../trainPosts.json \
-		-param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
-		-param BLOG_POST_FACTORS=blog-job/user_item_cf/product_features \
-		-param USER_FACTORS=blog-job/user_item_cf/user_features \
-		-param ENDPOINT=$(hostname) \
-		-D vespa.feed.defaultport=8080
-
-* the "tutorial_feed_content_and_tensor_vespa.pig" script can be found
-  [at our code repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig)
-* ``VESPA_HADOOP_JAR`` is the vespa-hadoop library jar file that is part of
-  [the Vespa code](https://github.com/vespa-engine/vespa/tree/master/vespa-hadoop)
-* ``DATA_PATH`` is the JSON file containing the information about the blog
-  posts
-* ``BLOG_POST_FACTORS`` and ``USER_FACTORS`` are the two subdirectories in
-  the user_item_cf directory created by the Spark script above
-* ``ENDPOINT`` is the hostname of your Vespa instance.
-
-For now, we need to re-feed the blog post contents when feeding the blog post
-latent factors because Vespa does not allow partial updates of tensor fields.
-
 ## Query Vespa with tensor content
 
-So now that we have fed our latent vectors to Vespa, we need to set up a rank
-function to return the best matching blog posts given some user latent factor.
-In order to do this, we need to tell Vespa how to interpret a query that
-includes a specific latent factor. In order words, we need to programmatically
-create a query based on a specific latent factor that will be sent to the Vespa
-backend.
+Set up a rank function to return the best matching blog posts given some user latent factor.
+In order to do this, configure Vespa to interpret a query that includes a specific latent factor.
+In order words, we need to programmatically create a query based on a specific latent factor
+that will be sent to the Vespa backend.
 
-This type of query (and result) manipulation happens in the Vespa Search
-Container, which is the home for all global processing of queries and their
-results. The components of the search container are called Searchers.
+This type of query (and result) manipulation happens in the Vespa Search Container,
+which is the home for all global processing of queries and their results.
+The components of the search container are called [Searchers](../searcher-development.html).
 
 ### Searcher introduction
 
@@ -442,14 +409,40 @@ inside the `services/jdisc/search` section:
         <searcher bundle='blog-recommendation' id='com.yahoo.example.BlogTensorSearcher' />
     </chain>
 
-With this you should now be ready to deploy your application. See [Developing applications](jdisc/developing-applications.html) for how to deploy the application.
+With this you should now be ready to build and deploy the application:
 
-Try out the following query:
+    $ mvn install
 
-    http://<host>:<port>/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D
+Deploy the application:
 
-where the query property `user_item_cf` here is the URL encoded representation
-of the following tensor string:
+    $ cd /vespa-sample-apps/blog-recommendation
+    $ vespa-deploy prepare target/application && vespa-deploy activate
+
+Wait for app to activate:
+
+    $ curl -s --head http://localhost:8080/ApplicationStatus
+
+The following is the Pig command used to feed these latent factors to Vespa (full re-feed):
+
+    $ pig -Dvespa.feed.defaultport=8080 -Dvespa.feed.random.startup.sleep.ms=0 \
+      -x local \
+      -f ../blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig \
+      -param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
+      -param DATA_PATH=../trainPosts.json \
+      -param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
+      -param BLOG_POST_FACTORS=blog-job/user_item_cf/product_features \
+      -param USER_FACTORS=blog-job/user_item_cf/user_features \
+      -param ENDPOINT=localhost
+
+* ``BLOG_POST_FACTORS`` and ``USER_FACTORS`` are the two subdirectories in
+the user_item_cf directory created by the Spark script above
+
+
+Run the query:
+
+    http://localhost:8080/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D
+
+where the query property `user_item_cf` here is the URL encoded representation of the tensor string:
 
     {
         {user_item_cf:0}:0.1,
@@ -464,7 +457,8 @@ of the following tensor string:
         {user_item_cf:9}:0.1
     }
 
-The result should be a list of blog posts ranked according to the input tensor.
+The result is a list of blog posts ranked according to the input tensor.
+
 
 ## Query Vespa with user id
 
@@ -633,13 +627,15 @@ user and item latent factors](#computing-user-and-item-latent-factors) section
 but our cross-validation algorithm above tries different values for rank (10,
 50, 100).
 
-	$ pig -x local -f tutorial_feed_content_and_tensor_vespa.pig \
-		-param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
-		-param DATA_PATH=../trainPosts.json \
-		-param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
-		-param BLOG_POST_FACTORS=blog-job/user_item_cf_cv/product_features \
-		-param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
-		-param ENDPOINT=$(hostname):8080
+	$ pig -Dvespa.feed.defaultport=8080 -Dvespa.feed.random.startup.sleep.ms=0 \
+      -x local \
+      -f ../blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig \
+      -param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
+      -param DATA_PATH=../trainPosts.json \
+      -param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
+      -param BLOG_POST_FACTORS=blog-job/user_item_cf_cv/product_features \
+      -param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
+      -param ENDPOINT=localhost
 
 Once Vespa is properly fed we can run the following script that will use Java
 UDF VespaQuery from the vespa-hadoop library to query Vespa for a specific
@@ -647,15 +643,17 @@ number of blog post recommendations for each user_id in our test set. With the
 list of recommendation for each user, we can then compute the expected
 percentile ranking as described in section [Evaluation metrics](#evaluation-metrics).
 
-	pig -x local -f tutorial_compute_metric.pig \
-		-param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
-		-param DATA_PATH=../trainPosts.json \
-		-param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
-		-param BLOG_POST_FACTORS=blog-job/user_item_cf_cv/product_features \
-		-param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
-		-param ENDPOINT=$(hostname):8080 \
-		-param NUMBER_RECOMMENDATIONS=100 \
-		-param OUTPUT=blog-job/metric
+	$ pig -Dvespa.feed.defaultport=8080 -Dvespa.feed.random.startup.sleep.ms=0 \
+      -x local \
+      -f ../blog-tutorial-shared/src/main/pig/tutorial_compute_metric.pig \
+      -param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
+      -param DATA_PATH=../trainPosts.json \
+      -param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
+      -param BLOG_POST_FACTORS=blog-job/user_item_cf_cv/product_features \
+      -param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
+      -param NUMBER_RECOMMENDATIONS=100 \
+      -param OUTPUT=blog-job/metric \
+      -param ENDPOINT=localhost
 
 {% comment %}
 TODO: add a summary here of what we accomplished and way forward from here.
