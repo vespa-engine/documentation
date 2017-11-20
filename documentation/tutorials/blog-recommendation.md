@@ -13,14 +13,13 @@ denoted in this tutorial by `user_id`, and that we will send this information do
 and expect to obtain a blog post recommendation list containing 100 blog posts tailored for that specific user.
 
 Prerequisites:
-- Code source and build instructions for sbt and Spark is found at
-  [Vespa Tutorial pt. 2](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#vespa-tutorial-pt-2) - install and build files.
+- Install and build files - code source and build instructions for sbt and Spark is found at
+  [Vespa Tutorial pt. 2](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#vespa-tutorial-pt-2)
 - Install [Pig](#vespa-and-hadoop)
-- trainPosts.json is found in $VESPA_SAMPLE_APPS, the directory with the clone of
+- Put trainPosts.json in $VESPA_SAMPLE_APPS, the directory with the clone of
   [vespa sample apps](https://github.com/vespa-engine/sample-apps)
-- [vespa-hadoop.jar](search.maven.org/#search%7Cga%7C1%7Cvespa-hadoop)
-  is found in $VESPA_SAMPLE_APPS
-
+- Put [vespa-hadoop.jar](search.maven.org/#search%7Cga%7C1%7Cvespa-hadoop) in $VESPA_SAMPLE_APPS
+- docker as in the [blog search tutorial](blog-search.html)
 
 
 ## Evaluation Framework
@@ -403,7 +402,7 @@ constructs a tensor from this string.
 
 The final step is telling Vespa about this searcher. We set up this searcher in
 its own search chain for ease of testing. Add the following to `services.xml`
-inside the `services/jdisc/search` section:
+inside the `services/container/search` section:
 
     <chain id='blog' inherits='vespa'>
         <searcher bundle='blog-recommendation' id='com.yahoo.example.BlogTensorSearcher' />
@@ -413,12 +412,12 @@ With this you should now be ready to build and deploy the application:
 
     $ mvn install
 
-Deploy the application:
+Deploy the application (in the Docker container):
 
-    $ cd /vespa-sample-apps/blog-recommendation
-    $ vespa-deploy prepare target/application && vespa-deploy activate
+    $ vespa-deploy prepare /vespa-sample-apps/blog-recommendation/target/application && \
+      vespa-deploy activate
 
-Wait for app to activate:
+Wait for app to activate (200 OK):
 
     $ curl -s --head http://localhost:8080/ApplicationStatus
 
@@ -588,7 +587,7 @@ property which is subsequently picked up by the BlogTensorSearcher and used to
 query blog posts.
 
 Let us chain together these two searchers in the default search chain. Add the
-following in the `services/jdisc/search` section of the services.xml file:
+following in the `services/container/search` section of the services.xml file:
 
     <chain id='default' inherits='vespa'>
         <searcher bundle='recommendation' id='com.yahoo.example.UserProfileSearcher' />
@@ -597,13 +596,13 @@ following in the `services/jdisc/search` section of the services.xml file:
 
 After deploying, you should be able to execute queries such as the following:
 
-    http://<host>:<port>/search/?user_id=14344185
+    http://localhost:8080/search/?user_id=14344185
 
 This will return all the blog post recommended for that user given the
 rank expression we set up. In addition, you can modify the query to match
 specific documents:
 
-    http://<host>:<port>/search/?user_id=14344185&query=music
+    http://localhost:8080/search/?user_id=14344185&query=music
 
 This should return documents containing the term 'music', but still ranked according
 to the users profile.
