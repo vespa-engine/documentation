@@ -4,7 +4,6 @@ title: "Vespa tutorial pt. 2: Blog recommendation"
 ---
 
 ## Introduction
-
 This tutorial builds upon the [blog searching tutorial](blog-search.html)
 and extends the basic search engine to include machine learned models to help us
 recommend blog posts to users that arrive at our application.
@@ -15,15 +14,15 @@ and expect to obtain a blog post recommendation list containing 100 blog posts t
 Prerequisites:
 - Install and build files - code source and build instructions for sbt and Spark is found at
   [Vespa Tutorial pt. 2](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#vespa-tutorial-pt-2)
-- Install [Pig](#vespa-and-hadoop)
-- Put trainPosts.json in $VESPA_SAMPLE_APPS, the directory with the clone of
+- Install [Pig and Hadoop](#vespa-and-hadoop)
+- Put `trainPosts.json` in $VESPA_SAMPLE_APPS, the directory with the clone of
   [vespa sample apps](https://github.com/vespa-engine/sample-apps)
 - Put [vespa-hadoop.jar](search.maven.org/#search%7Cga%7C1%7Cvespa-hadoop) in $VESPA_SAMPLE_APPS
 - docker as in the [blog search tutorial](blog-search.html)
 
 
-## Collaborative Filtering
 
+## Collaborative Filtering
 We will start our recommendation system by implementing the collaborative
 filtering algorithm for implicit feedback described in (Hu et. al. 2008).
 The data is said to be implicit because the users did not explicitly rate each blog
@@ -55,10 +54,9 @@ This is what is called a cold start problem and will be addressed with
 content-based techniques described in future tutorials.
 
 
-## Evaluation metrics
 
-The evaluation metric used by
-[Kaggle](https://www.kaggle.com/c/predict-wordpress-likes/details/evaluation)
+## Evaluation metrics
+The evaluation metric used by [Kaggle](https://www.kaggle.com/c/predict-wordpress-likes/details/evaluation)
 for this challenge was the Mean Average Precision at 100 (MAP@100).  However,
 since we do not have information about which blog posts the users did not like
 (that is, we have only positive feedback) and our inability to obtain user
@@ -96,10 +94,11 @@ illustrates how to compute the expected percentile ranking with the following in
 {% endcomment %}
 
 
+
 ## Evaluation Framework
 
-### Generate training and test sets
 
+### Generate training and test sets
 In order to evaluate the gains obtained by the recommendation system when we
 start to improve it with more accurate algorithms, we will split the dataset we
 have available into training and test sets. The training set will contain
@@ -161,7 +160,6 @@ TODO: Include file samples for those that do not want to generate their own
 
 
 ### Compute user and item latent factors
-
 Use the complete training set to compute user and item latent factors.
 We will leave the discussion about tuning and performance
 improvement of the model used to the section about [model tuning and offline
@@ -170,11 +168,11 @@ Submit the [Spark job](https://github.com/vespa-engine/sample-apps/tree/master/b
 to compute the user and item latent factors:
 
 	$ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
-		--master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
-		--task collaborative_filtering \
-		--input_file blog-job/training_and_test_indices/training_set_ids \
-		--rank 10 --numIterations 10 --lambda 0.01 \
-		--output_path blog-job/user_item_cf
+      --master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
+      --task collaborative_filtering \
+      --input_file blog-job/training_and_test_indices/training_set_ids \
+      --rank 10 --numIterations 10 --lambda 0.01 \
+      --output_path blog-job/user_item_cf
 
 Verify the vectors for the latent factors for users and posts:
 
@@ -214,13 +212,13 @@ Verify the vectors for the latent factors for users and posts:
 At this point, the vectors with latent factors can be added to posts and users.
 
 
-## Add vectors to search definitions using tensors
 
+## Add vectors to search definitions using tensors
 Modern machine learning applications often make use of large, multidimensional
-feature spaces and perform complex operations on those features, such as in
-large logistic regression and deep learning models. It is therefore necessary
-to have an expressive framework to define and evaluate ranking expressions of
-such complexity at scale.
+feature spaces and perform complex operations on those features,
+such as in large logistic regression and deep learning models.
+It is therefore necessary to have an expressive framework
+to define and evaluate ranking expressions of such complexity at scale.
 
 Vespa comes with a Tensor framework, which unify and generalize scalar, vector
 and matrix operations, handles the sparseness inherent to most machine learning
@@ -249,44 +247,42 @@ we have a field has_user_item_cf for now.
 
 A new search definition  `user.sd`  defines a  document type named `user` to hold information for users:
 
-	search user {
-		document user {
+    search user {
+        document user {
+            field user_id type string {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
 
-			field user_id type string {
-				indexing: summary | attribute
-				attribute: fast-search
-			}
+            field has_read_items type array<string> {
+                indexing: summary | attribute
+            }
 
-			field has_read_items type array<string> {
-				indexing: summary | attribute
-			}
+            field user_item_cf type tensor(user_item_cf[10]) {
+                indexing: summary | attribute
+                attribute: tensor(user_item_cf[10])
+            }
 
-			field user_item_cf type tensor(user_item_cf[10]) {
-				indexing: summary | attribute
-				attribute: tensor(user_item_cf[10])
-			}
-
-			field has_user_item_cf type byte {
-				indexing: summary | attribute
-				attribute: fast-search
-			}
-
-		}
-	}
+            field has_user_item_cf type byte {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+        }
+    }
 
 Where:
 
 - user_id: unique identifier for the user
 - user_item_cf: tensor that will hold the user latent factor
-- has_user_item_cf: ToDo FIXME
+- has_user_item_cf: flag to indicate the user has a latent factor
 
 {% comment %}
 TODO: Comment Tensor spec
 {% endcomment %}
 
 
-## Join and feed data
 
+## Join and feed data
 Build and deploy the application:
 
     $ mvn install
@@ -325,13 +321,13 @@ A successful data join and feed will output:
     Output(s):
     Successfully stored 286237 records in: "localhost"
 
-Dump a user: http://localhost:8080/document/v1/blog-recommendation/user/docid/22702951
+Sample blog post and user:
+- [localhost:8080/document/v1/blog-recommendation/user/docid/22702951](http://localhost:8080/document/v1/blog-recommendation/user/docid/22702951)
+- [localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008](http://localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008)
 
-Dump a post: http://localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008
 
 
 ## Ranking
-
 Set up a rank function to return the best matching blog posts given some user latent factor.
 Rank the documents using a dot product between a query tensor and the blog post tensor - see `blog_post.sd`:
 
@@ -344,9 +340,8 @@ Rank the documents using a dot product between a query tensor and the blog post 
     }
 
 The ranking of a document is given by the dot product, which is a sum between the product of the two tensors:
-
-- `query(user_item_cf)`, from the query.
-- `attribute(user_item_cf)`, which is the document field previously fed to.
+- `query(user_item_cf)`, from the query
+- `attribute(user_item_cf)`, in the document
 
 Configure the ranking framework to expect that `query(user_item_cf)` is a tensor,
 and that it is compatible with the attribute in a [query profile type](../query-profiles.html#query-profile-types) -
@@ -362,30 +357,29 @@ As the blog post document attribute is also defined similarly,
 the ranking framework can effectively compile an expression that computes the tensor product.
 
 
-## Query Vespa with tensor content
 
+## Query Vespa with tensor content
 Program Vespa to interpret a query with a specific latent factor as a tensor.
 This type of query (and result) manipulation happens in the [Vespa Container](../container-intro.html),
 which is the home for all global processing of queries and their results.
 The components of the search container are called [Searchers](../searcher-development.html).
 
-### Searcher introduction
 
+### Searcher introduction
 A searcher is a component which extends the class `com.yahoo.search.Searcher`.
 All Searchers must implement `search()`:
 
 	public Result search(Query query, Execution execution);
 
 When the container receives a request, it will create a `Query` representing it
-and execute a configured list of such Searcher components, called a search
-chain.  The `query` object contains all the information needed to create a
-result to the request while the `Result` encapsulates all the data generated
-from a `Query`. The `Execution` object keeps track of the call state for an
-execution of the searchers of a search chain.
+and execute a configured list of such Searcher components, called a search chain.
+The `query` object contains all the information needed to create a result to the request
+while the `Result` encapsulates all the data generated from a `Query`.
+The `Execution` object keeps track of the call state for an execution of the searchers of a search chain.
+
 
 
 ## The blog post searcher
-
 In this section we  set up a custom search chain with the blog post searcher.
 If the searcher encounters a query parameter called `user_item_cf`,
 it creates a tensor from the contents in this field and adds it to the query:
@@ -460,37 +454,30 @@ it creates a tensor from the contents in this field and adds it to the query:
     }
 
 
-There are two parts to this code. The first part modifies which documents are
-matched, and the second part modifies how these documents are ranked.
+There are two parts to this code. The first part modifies which documents are matched,
+and the second part modifies how these documents are ranked.
 
-First we restrict the results to blog posts. Then we AND the query root with an IntItem
-which specifies that the `has_user_item_cf` field must be 1. This effectively
-limits the search to documents that have their latent factors set. Note that we
-do not explicitly set the query here, we just add to the query in case the user
-wants to perform more elaborate queries.
+First we restrict the results to blog posts.
+Then we AND the query root with an IntItem which specifies that the `has_user_item_cf` field must be 1.
+This effectively limits the search to documents that have their latent factors set.
+Note that we do not explicitly set the query here,
+we just add to the query in case the user wants to perform more elaborate queries.
 
-The code goes on to modify the ranking by explicitly setting the rank profile
-to the one we defined above. The most important part is where the ranking
-feature `query(user_item_cf)` is set. Here we set this feature to the tensor
-that is sent in the query parameter `user_item_cf`. In the `toTensor` method,
-we check to see if it already is of type `Tensor`. We will see in the next
-section how to add another searcher that retrieves a user profile and add that
-tensor to this field. For now however, we expect that the content of this query
-property is a string following the standard tensor format.  Vespa takes care of
-URL decoding the string while the method `Tensor.from(String tensor)`
-constructs a tensor from this string.
+The code goes on to modify the ranking by explicitly setting the rank profile to the one we defined above.
+The most important part is where the ranking feature `query(user_item_cf)` is set.
+Here we set this feature to the tensor that is sent in the query parameter `user_item_cf`.
+In the `toTensor` method, we check to see if it already is of type `Tensor`.
+We will see in the next section how to add another searcher that retrieves a user profile and add that tensor to this field.
+For now however, we expect that the content of this query property is a string with tensor data.
 
-In  `services.xml` this searcher is configured the the `blog` chain:
+The searcher is configured in the `blog` chain in `services.xml` :
 
     <chain id='blog' inherits='vespa'>
         <searcher bundle='blog-recommendation' id='com.yahoo.example.BlogTensorSearcher' />
     </chain>
 
-Run the query:
-
-    http://localhost:8080/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D
-
-where the query property `user_item_cf` here is the URL encoded representation of the tensor string:
+Run the query [http://localhost:8080/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D](http://localhost:8080/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D)
+, where the query property `user_item_cf` is the tensor:
 
     {
         {user_item_cf:0}:0.1,
@@ -505,23 +492,19 @@ where the query property `user_item_cf` here is the URL encoded representation o
         {user_item_cf:9}:0.1
     }
 
-The result is a list of blog posts ranked according to the input tensor.
+The result is a list of blog posts ranked by the input tensor.
 
 
 ## Query Vespa with user id
+Now that we have successfully queried blog posts given a tensor,
+we would now like to retrieve a user profile and use that to recommend blog posts.
+The user profiles has previously been fed to Vespa in the `user_item_cf` field of the `user` document type.
+We would like to query Vespa with a single `user_id`, return a single hit matching the user if it exists,
+and extract the tensor from that hit.
 
-Now that we have successfully queried blog posts given a tensor, we would now
-like to retrieve a user profile and use that to recommend blog posts. The user
-profiles has previously been fed to Vespa in the `user_item_cf` field of the
-`user` document type. We would like to query Vespa with a single `user_id` and
-have it return a single hit matching the user if it exists, and extract the
-tensor from that hit.
-
-Let us start with setting up a searcher to retrieve the user profile. The input
-would be a user id, and we set up a query to Vespa for this user id. If we find
-the user, we will add the tensor to the query so it can be picked up by the
-BlogTensorSearcher in its `toTensor` method. Here is one way we can set this
-up:
+Let us start with setting up a searcher to retrieve the user profile.
+The input would be a user id, and we set up a query to Vespa for this user id.
+If user is found, add the tensor to the query so it can be picked up by the BlogTensorSearcher in its `toTensor` method:
 
     package com.yahoo.example;
 
@@ -588,61 +571,53 @@ up:
 TODO: Update with the new code that also all already read articles
 {% endcomment %}
 
-Basically what this code does is that if a query property named `user_id`
-exists, it sets up a new query which restricts the search to the `user`
-document type and sets up a query with a single match instruction to the user
-id. After setting up this query, we execute a separate query chain and wait for
-the response.
+Basically what this code does is that if a query property named `user_id` exists,
+it sets up a new query which restricts the search to the `user` document type
+and sets up a query with a single match instruction to the user id.
+After setting up this query, we execute a separate query chain and wait for the response.
 
-We do it this way for two reasons. The first is that normally the user profile
-might exist on a different system set up for key/value persistent storage such
-as Redis, and we would normally have to set up a RPC or HTTP call for request
-it from there. The other reason is that this query has different
-characteristics than a Vespa search and we programmatically set up everything
-we need here.
+We do it this way for two reasons.
+The first is that normally the user profile might exist on a different system
+set up for key/value persistent storage such as Redis,
+and we would normally have to set up a RPC or HTTP call for request it from there.
+The other reason is that this query has different characteristics than a Vespa search
+and we programmatically set up everything we need here.
 
-After the hit is returned, we extract the tensor from the hit and construct an
-object of Tensor type. This object is added to the `user_item_cf` query
-property which is subsequently picked up by the BlogTensorSearcher and used to
-query blog posts.
+After the hit is returned, extract the tensor from the hit and construct an object of Tensor type.
+This object is added to the `user_item_cf` query property
+which is subsequently picked up by the BlogTensorSearcher and used to query blog posts.
 
-Let us chain together these two searchers in the default search chain. Add the
-following in the `services/container/search` section of the services.xml file:
+The two searchers are configured in the `default` search chain in `services.xml`:
 
     <chain id='default' inherits='vespa'>
         <searcher bundle='recommendation' id='com.yahoo.example.UserProfileSearcher' />
         <searcher bundle='recommendation' id='com.yahoo.example.BlogTensorSearcher' />
     </chain>
 
-After deploying, you should be able to execute queries such as the following:
+After deploying, query a user: [localhost:8080/search/?user_id=14344185](http://localhost:8080/search/?user_id=14344185)
 
-    http://localhost:8080/search/?user_id=14344185
+This returns recommended blog post for the user given the rank expression.
+Modify the query to match specific documents: [localhost:8080/search/?user_id=14344185&query=music](http://localhost:8080/search/?user_id=14344185&query=music)
 
-This will return all the blog post recommended for that user given the
-rank expression we set up. In addition, you can modify the query to match
-specific documents:
+This returns documents with the term "music", still ranked according to the users' profile.
 
-    http://localhost:8080/search/?user_id=14344185&query=music
 
-This should return documents containing the term 'music', but still ranked according
-to the users profile.
 
 ## Model tuning and offline evaluation
+We will now optimize the latent factors using the training set
+instead of manually picking hyperparameter values as was done in
+[Compute user and item latent factors](#compute-user-and-item-latent-factors):
 
-We will now optimize the latent factors using the training set instead of
-manually picking hyperparameter values as was done in the [Computing user and
-item latent factors](#computing-user-and-item-latent-factors) section.
+    $ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
+      --master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
+      --task collaborative_filtering_cv \
+      --input_file blog-job/training_and_test_indices/training_set_ids \
+      --numIterations 10 --output_path blog-job/user_item_cf_cv
 
-	$ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
-		--master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
-		--task collaborative_filtering_cv \
-		--input_file blog-job/training_and_test_indices/training_set_ids \
-		--numIterations 10 --output_path blog-job/user_item_cf_cv
-
-Feed the newly computed latent factors to Vespa as before. Note that we need to
+FIXME: Feed the newly computed latent factors to Vespa as before. Note that we need to
 update the tensor specification in the search definition in case the size of
-the latent vectors change. We have used size 10 (rank = 10) in the [Computing
-user and item latent factors](#computing-user-and-item-latent-factors) section
+the latent vectors change. We have used size 10 (rank = 10) in the [Compute
+user and item latent factors](#compute-user-and-item-latent-factors) section
 but our cross-validation algorithm above tries different values for rank (10,
 50, 100).
 
@@ -656,23 +631,29 @@ but our cross-validation algorithm above tries different values for rank (10,
       -param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
       -param ENDPOINT=localhost
 
-Once Vespa is properly fed we can run the following script that will use Java
-UDF VespaQuery from the vespa-hadoop library to query Vespa for a specific
-number of blog post recommendations for each user_id in our test set. With the
-list of recommendation for each user, we can then compute the expected
-percentile ranking as described in section [Evaluation metrics](#evaluation-metrics).
+Run the following script that will use Java UDF VespaQuery from the `vespa-hadoop`
+to query Vespa for a specific number of blog post recommendations for each user_id in our test set.
+With the list of recommendation for each user, we can then compute the expected
+percentile ranking as described in section [Evaluation metrics](#evaluation-metrics):
 
-	$ pig -Dvespa.feed.defaultport=8080 -Dvespa.feed.random.startup.sleep.ms=0 \
+	$ pig \
       -x local \
       -f ../blog-tutorial-shared/src/main/pig/tutorial_compute_metric.pig \
       -param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
-      -param DATA_PATH=../trainPosts.json \
       -param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
       -param BLOG_POST_FACTORS=blog-job/user_item_cf_cv/product_features \
       -param USER_FACTORS=blog-job/user_item_cf_cv/user_features \
       -param NUMBER_RECOMMENDATIONS=100 \
+      -param RANKING_NAME=tensor \
       -param OUTPUT=blog-job/metric \
-      -param ENDPOINT=localhost
+      -param ENDPOINT=localhost:8080
+
+At completion, observe:
+
+    Input(s):
+    Successfully read 341416 records from: "file:/sample-apps/blog-recommendation/blog-job/training_and_test_indices/testing_set_ids"
+    Output(s):
+    Successfully stored 5174 records in: "file:/sample-apps/blog-recommendation/blog-job/metric"
 
 {% comment %}
 TODO: add a summary here of what we accomplished and way forward from here.
@@ -682,32 +663,28 @@ You can now move on to the [next part of the tutorial](blog-recommendation-nn.ht
 where we improve accuracy using a simple neural network.
 
 
+
 ## Vespa and Hadoop
-
-Vespa was designed to keep low-latency performance even at Yahoo-like web
-scale.  This means supporting a large number of concurrent requests as well as
-a very large number of documents. In the previous tutorial we used a data set
-that was approximately 5Gb. Data sets of this size do not require a distributed
-file system for data manipulation. However, we assume that most Vespa users
-would like at some point to scale their applications up.  Therefore, in this
-section we will start using tools such as [Apache
-Hadoop](https://hadoop.apache.org), [Apache Pig](https://pig.apache.org) and
-[Apache Spark](http://spark.apache.org/) when manipulating the data. These can
-be run locally on your laptop in case you do not have access to a cluster.
-
-We will still assume throughout this tutorial that the data is stored locally
-on your laptop, but in case you would like to use HDFS (Hadoop Distributed
-File System) for storing the data, it is just a matter of uploading it to HDFS
-with the following command:
+Vespa was designed to keep low-latency performance even at Yahoo-like web scale.
+This means supporting a large number of concurrent requests
+as well as a very large number of documents.
+In the previous tutorial we used a data set that was approximately 5Gb.
+Data sets of this size do not require a distributed file system for data manipulation.
+However, we assume that most Vespa users would like at some point to scale their applications up.
+Therefore, this tutorial uses tools such as [Apache Hadoop](https://hadoop.apache.org),
+[Apache Pig](https://pig.apache.org) and [Apache Spark](http://spark.apache.org/).
+These can be run locally on a laptop, like in this tutorial.
+In case you would like to use HDFS (Hadoop Distributed File System) for storing the data,
+it is just a matter of uploading it to HDFS with the following command:
 
     $ hadoop fs -put trainPosts.json blog-app/trainPosts.json
 
 If you go with this approach, you need to replace the local file paths with the
-equivalent HDFS file paths throughout the rest of the tutorial.
+equivalent HDFS file paths in this tutorial.
 
 Vespa has [a set of tools](../feed-using-hadoop-pig-oozie.html) to facilitate the interaction
-between Vespa and the Hadoop ecosystem. These can also be used locally. An example
-of feeding to Vespa using Pig is conceptually as simple as the following example:
+between Vespa and the Hadoop ecosystem. These can also be used locally.
+A Pig script example of feeding to Vespa is as simple as:
 
     REGISTER vespa-hadoop.jar
 
@@ -719,13 +696,13 @@ of feeding to Vespa using Pig is conceptually as simple as the following example
 
     STORE A INTO '$ENDPOINT' USING VespaStorage();
 
-To feed a file into Vespa you call this script using Pig:
+Use Pig to feed a file into Vespa:
 
     $ pig -x local -f feed.pig -p ENDPOINT=endpoint-1,endpoint-2
 
 Here, the -x local option is added to specify that this script is run locally,
-and will not attempt to retrieve scripts and data from HDFS. You need both Pig
-and Hadoop libraries installed on your machine to run this locally, but you
-don't need to install and start a running instance of Hadoop. More examples of
-feeding to Vespa from Pig can be found in the [sample apps
-directory](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig).
+and will not attempt to retrieve scripts and data from HDFS.
+You need both Pig and Hadoop libraries installed on your machine to run this locally,
+but you don't need to install and start a running instance of Hadoop.
+More examples of feeding to Vespa from Pig is found in
+[sample apps](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig).
