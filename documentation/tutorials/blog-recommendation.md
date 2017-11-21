@@ -22,71 +22,40 @@ Prerequisites:
 - docker as in the [blog search tutorial](blog-search.html)
 
 
-## Evaluation Framework
+## Collaborative Filtering
 
-### Generate training and test sets
+We will start our recommendation system by implementing the collaborative
+filtering algorithm for implicit feedback described in (Hu et. al. 2008).
+The data is said to be implicit because the users did not explicitly rate each blog
+post they have read. Instead, the have "liked" blog posts they have likely
+enjoyed (positive feedback) but did not have the chance to "dislike" blog posts
+they did not enjoy (absence of negative feedback). Because of that, implicit
+feedback is said to be inherently noisy and the fact that a user did not "like"
+a blog post might have many different reasons not related with his negative
+feelings about that blog post.
 
-In order to evaluate the gains obtained by our recommendation system when we
-start to improve it with more accurate algorithms, we will split the dataset we
-have available into training and test sets. The training set will contain
-document (blog post) and user action (likes) pairs as well as any information
-available about the documents contained in the training set. There is no
-additional information about the users besides the blog posts they have liked.
-The test set will be formed by a series of documents available to be
-recommended and a set of users to whom we need to make recommendations. This
-list of test set documents constitutes the Vespa content pool, which is the set
-of documents stored in Vespa that are available to be served to users. The user
-actions will be hidden from the test set and used later to evaluate the
-recommendations made by Vespa.
+In terms of modeling, a big difference between explicit and implicit feedback
+datasets is that the ratings for the explicit feedback are typically unknown
+for the majority of user-item pairs and are treated as missing values and
+ignored by the training algorithm. For an implicit dataset, we would assume a
+rating of zero in case the user has not liked a blog post. To encode the fact
+that a value of zero could come from different reasons we will use the concept
+of confidence as introduced by (Hu et. al. 2008), which causes the positive
+feedback to have a higher weight than a negative feedback.
 
-To create an application that more closely resembles the challenges faced by
-companies when building their recommendation systems, we decided to construct
-the training and test sets in such a way that:
+{%comment%} references {%endcomment%}
 
-- There will be blog posts that had been liked in the training set by a set of
-  users and that had also been liked in the test set by another set of users,
-  even though this information will be hidden in the test set.
-  Those cases are interesting to evaluate if the exploitation (as opposed to
-  exploration) component of the system is working well. That is, if we are able
-  to identify high quality blog posts based on the available information during
-  training and exploit this knowledge by recommending those high quality blog
-  posts to another set of users that might like them as well.
+Once we train the collaborative filtering model, we will have one vector
+representing a latent factor for each user and item contained in the training
+set. Those vectors will later be used in the Vespa ranking framework to make
+recommendations to a user based on the dot product between the user and
+documents latent factors. An obvious problem with this approach is that new
+users and new documents will not have those latent factors available to them.
+This is what is called a cold start problem and will be addressed with
+content-based techniques described in future tutorials.
 
-- There will be blog posts in the test set that had never been seen in the training set.
-  Those cases are interesting in order to evaluate how the system deals with
-  the cold-start problem. Systems that are too biased towards exploitation will
-  fail to recommend new and unexplored blog posts, leading to a feedback loop
-  that will cause the system to focus into a small share of the available content.
 
-A key challenge faced by recommender system designers is how to balance the
-exploitation/exploration components of their system, and our training/test set
-split outlined above will try to replicate this challenge in our tutorial.
-Notice that this split is different from the approach taken by the [Kaggle
-competition](https://www.kaggle.com/c/predict-wordpress-likes) where the blog
-posts available in the test set had never been seen in the training set, which
-removes the exploitation component of the equation.
-
-The Spark job below will use the "input_file" and create two folders in the
-"output_path" named "training_set_ids" and "test_set_ids" containing files with
-information about the ``post_id`` and ``user_id`` pairs that were assigned
-to the training set and test set, respectively.
-
-    $ cd blog-recommendation; export SPARK_LOCAL_IP="127.0.0.1"
-    $ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
-      --master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
-      --task split_set --input_file ../trainPosts.json \
-      --test_perc_stage1 0.05 --test_perc_stage2 0.20 --seed 123 \
-      --output_path blog-job/training_and_test_indices
-
-- test_perc_stage1: The percentage of the blog posts that will be located only on the test set (exploration component).
-- test_perc_stage2: The percentage of the remaining (post_id, user_id) pairs that should be moved to the test set (exploitation component).
-- seed: seed value used in order to replicate results if required.
-
-{% comment %}
-TODO: Include file samples for those that do not want to generate their own
-{% endcomment %}
-
-### Evaluation metrics
+## Evaluation metrics
 
 The evaluation metric used by
 [Kaggle](https://www.kaggle.com/c/predict-wordpress-likes/details/evaluation)
@@ -127,40 +96,125 @@ illustrates how to compute the expected percentile ranking with the following in
 {% endcomment %}
 
 
-## Collaborative Filtering
+## Evaluation Framework
 
-We will start our recommendation system by implementing the collaborative
-filtering algorithm for implicit feedback described in (Hu et. al. 2008). Our
-data is said to be implicit because the users did not explicitly rate each blog
-post they have read. Instead, the have "liked" blog posts they have likely
-enjoyed (positive feedback) but did not have the chance to "dislike" blog posts
-they did not enjoy (absence of negative feedback). Because of that, implicit
-feedback is said to be inherently noisy and the fact that a user did not "like"
-a blog post might have many different reasons not related with his negative
-feelings about that blog post.
+### Generate training and test sets
 
-In terms of modeling, a big difference between explicit and implicit feedback
-datasets is that the ratings for the explicit feedback are typically unknown
-for the majority of user-item pairs and are treated as missing values and
-ignored by the training algorithm. For an implicit dataset, we would assume a
-rating of zero in case the user has not liked a blog post. To encode the fact
-that a value of zero could come from different reasons we will use the concept
-of confidence as introduced by (Hu et. al. 2008), which causes the positive
-feedback to have a higher weight than a negative feedback.
+In order to evaluate the gains obtained by the recommendation system when we
+start to improve it with more accurate algorithms, we will split the dataset we
+have available into training and test sets. The training set will contain
+document (blog post) and user action (likes) pairs as well as any information
+available about the documents contained in the training set. There is no
+additional information about the users besides the blog posts they have liked.
+The test set will be formed by a series of documents available to be
+recommended and a set of users to whom we need to make recommendations. This
+list of test set documents constitutes the Vespa content pool, which is the set
+of documents stored in Vespa that are available to be served to users. The user
+actions will be hidden from the test set and used later to evaluate the
+recommendations made by Vespa.
 
-{%comment%} references {%endcomment%}
+To create an application that more closely resembles the challenges faced by
+companies when building their recommendation systems, we decided to construct
+the training and test sets in such a way that:
 
-Once we train the collaborative filtering model, we will have one vector
-representing a latent factor for each user and item contained in the training
-set. Those vectors will later be used in the Vespa ranking framework to make
-recommendations to a user based on the dot product between the user and
-documents latent factors. An obvious problem with this approach is that new
-users and new documents will not have those latent factors available to them.
-This is what is called a cold start problem and will be addressed with
-content-based techniques described in future tutorials.
+- There will be blog posts that had been liked in the training set by a set of
+  users and that had also been liked in the test set by another set of users,
+  even though this information will be hidden in the test set.
+  Those cases are interesting to evaluate if the exploitation (as opposed to
+  exploration) component of the system is working well. That is, if we are able
+  to identify high quality blog posts based on the available information during
+  training and exploit this knowledge by recommending those high quality blog
+  posts to another set of users that might like them as well.
+
+- There will be blog posts in the test set that had never been seen in the training set.
+  Those cases are interesting in order to evaluate how the system deals with
+  the cold-start problem. Systems that are too biased towards exploitation will
+  fail to recommend new and unexplored blog posts, leading to a feedback loop
+  that will cause the system to focus into a small share of the available content.
+
+A key challenge faced by recommender system designers is how to balance the
+exploitation/exploration components of their system, and our training/test set
+split outlined above will try to replicate this challenge in our tutorial.
+Notice that this split is different from the approach taken by the [Kaggle
+competition](https://www.kaggle.com/c/predict-wordpress-likes) where the blog
+posts available in the test set had never been seen in the training set, which
+removes the exploitation component of the equation.
+
+The Spark job uses `trainPosts.json` and creates the folders
+`blog-job/training_set_ids` and  `blog-job/test_set_ids`
+containing files with `post_id` and `user_id` pairs:
+
+    $ cd blog-recommendation; export SPARK_LOCAL_IP="127.0.0.1"
+    $ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
+      --master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
+      --task split_set --input_file ../trainPosts.json \
+      --test_perc_stage1 0.05 --test_perc_stage2 0.20 --seed 123 \
+      --output_path blog-job/training_and_test_indices
+
+- test_perc_stage1: The percentage of the blog posts that will be located only on the test set (exploration component).
+- test_perc_stage2: The percentage of the remaining (post_id, user_id) pairs that should be moved to the test set (exploitation component).
+- seed: seed value used in order to replicate results if required.
+
+{% comment %}
+TODO: Include file samples for those that do not want to generate their own
+{% endcomment %}
 
 
-## Updates to search definitions - tensors
+### Compute user and item latent factors
+
+Use the complete training set to compute user and item latent factors.
+We will leave the discussion about tuning and performance
+improvement of the model used to the section about [model tuning and offline
+evaluation](#model-tuning-and-offline-evaluation).
+Submit the [Spark job](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#building-and-running-the-spark-script-for-calculating-latent-factors)
+to compute the user and item latent factors:
+
+	$ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
+		--master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
+		--task collaborative_filtering \
+		--input_file blog-job/training_and_test_indices/training_set_ids \
+		--rank 10 --numIterations 10 --lambda 0.01 \
+		--output_path blog-job/user_item_cf
+
+Verify the vectors for the latent factors for users and posts:
+
+    $ head -1 blog-job/user_item_cf/user_features/part-00000 | python -m json.tool
+    {
+        "user_id": 270,
+        "user_item_cf": {
+            "user_item_cf:0": -1.750116e-05,
+            "user_item_cf:1": 9.730623e-05,
+            "user_item_cf:2": 8.515047e-05,
+            "user_item_cf:3": 6.9297894e-05,
+            "user_item_cf:4": 7.343942e-05,
+            "user_item_cf:5": -0.00017635927,
+            "user_item_cf:6": 5.7642872e-05,
+            "user_item_cf:7": -6.6685796e-05,
+            "user_item_cf:8": 8.5506894e-05,
+            "user_item_cf:9": -1.7209566e-05
+        }
+    }
+    $ head -1 blog-job/user_item_cf/product_features/part-00000 | python -m json.tool
+    {
+        "post_id": 20,
+        "user_item_cf": {
+            "user_item_cf:0": 0.0019320602,
+            "user_item_cf:1": -0.004728486,
+            "user_item_cf:2": 0.0032499845,
+            "user_item_cf:3": -0.006453364,
+            "user_item_cf:4": 0.0015929453,
+            "user_item_cf:5": -0.00420313,
+            "user_item_cf:6": 0.009350027,
+            "user_item_cf:7": -0.0015649397,
+            "user_item_cf:8": 0.009262732,
+            "user_item_cf:9": -0.0030964287
+        }
+    }
+
+At this point, the vectors with latent factors can be added to posts and users.
+
+
+## Add vectors to search definitions using tensors
 
 Modern machine learning applications often make use of large, multidimensional
 feature spaces and perform complex operations on those features, such as in
@@ -172,24 +226,11 @@ Vespa comes with a Tensor framework, which unify and generalize scalar, vector
 and matrix operations, handles the sparseness inherent to most machine learning
 application (most cases evaluated by the model is lacking values for most of
 the features) and allow for models to be continuously updated.
-
-{%comment%} Should we mention this before it is ready? {%endcomment%}
-
-We will cover the usage of tensors in Vespa as needed when walking through this
-tutorial. Additional information about the Tensor framework can be found in the
+Additional information about the Tensor framework can be found in the
 [tensor user guide](../tensor-user-guide.html).
 
-As mentioned above, after training the model we obtain one latent factor vector
-for each user and one for each document available in the training set. We want
-to have those latent factors available in a Tensor representation to be used
-during ranking by the Tensor framework. To accomplish this we will update the
-blog post search definition `blog_post.sd` and create a new document type
-`user` by specifying a new search definition named `user.sd`.
-
-### blog_post.sd
-
-`blog_post.sd`  is updated to include a field of type
-tensor named `user_item_cf` to hold the document latent factor:
+We want to have those latent factors available in a Tensor representation to be used during ranking by the Tensor framework.
+A tensor field `user_item_cf` is added to `blog_post.sd` to hold the blog post latent factor:
 
 	field user_item_cf type tensor(user_item_cf[10]) {
 		indexing: summary | attribute
@@ -206,9 +247,7 @@ TODO: Explain the indexing and attribute spec for the tensor type ... and explai
 we have a field has_user_item_cf for now.
 {% endcomment %}
 
-### user.sd
-
-A new search definition  `user.sd`  defines a  document type named `user` to hold information related to the users:
+A new search definition  `user.sd`  defines a  document type named `user` to hold information for users:
 
 	search user {
 		document user {
@@ -246,39 +285,94 @@ TODO: Comment Tensor spec
 {% endcomment %}
 
 
-## Compute user and item latent factors
+## Join and feed data
 
-Use the complete training set to compute user and item latent factors.
-We will leave the discussion about tuning and performance
-improvement of the model used to the section about [model tuning and offline
-evaluation](#model-tuning-and-offline-evaluation).
-Submit the [Spark job](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#building-and-running-the-spark-script-for-calculating-latent-factors)
-to compute the user and item latent factors:
+Build and deploy the application:
 
-	$ spark-submit --class "com.yahoo.example.blog.BlogRecommendationApp" \
-		--master local[4] ../blog-tutorial-shared/target/scala-*/blog-support*.jar \
-		--task collaborative_filtering \
-		--input_file blog-job/training_and_test_indices/training_set_ids \
-		--rank 10 --numIterations 10 --lambda 0.01 \
-		--output_path blog-job/user_item_cf
+    $ mvn install
 
+Deploy the application (in the Docker container):
+
+    $ vespa-deploy prepare /vespa-sample-apps/blog-recommendation/target/application && \
+      vespa-deploy activate
+
+Wait for app to activate (200 OK):
+
+    $ curl -s --head http://localhost:8080/ApplicationStatus
+
+The code to join the latent factors in `blog-job/user_item_cf` into blog_post and user documents is implemented in
+[tutorial_feed_content_and_tensor_vespa.pig](https://github.com/vespa-engine/sample-apps/blob/master/blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig).
+After joining in the new fields, a Vespa feed is generated and fed to Vespa directly from Pig :
+
+    $ pig -Dvespa.feed.defaultport=8080 -Dvespa.feed.random.startup.sleep.ms=0 \
+      -x local \
+      -f ../blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig \
+      -param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
+      -param DATA_PATH=../trainPosts.json \
+      -param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
+      -param BLOG_POST_FACTORS=blog-job/user_item_cf/product_features \
+      -param USER_FACTORS=blog-job/user_item_cf/user_features \
+      -param ENDPOINT=localhost
+
+A successful data join and feed will output:
+
+    Input(s):
+    Successfully read 1196111 records from: "file:///Users/kraune/github/vespa-engine/sample-apps/trainPosts.json"
+    Successfully read 341416 records from: "file:///Users/kraune/github/vespa-engine/sample-apps/blog-recommendation/blog-job/training_and_test_indices/testing_set_ids"
+    Successfully read 323727 records from: "file:///Users/kraune/github/vespa-engine/sample-apps/blog-recommendation/blog-job/user_item_cf/product_features"
+    Successfully read 6290 records from: "file:///Users/kraune/github/vespa-engine/sample-apps/blog-recommendation/blog-job/user_item_cf/user_features"
+    
+    Output(s):
+    Successfully stored 286237 records in: "localhost"
+
+Dump a user: http://localhost:8080/document/v1/blog-recommendation/user/docid/22702951
+
+Dump a post: http://localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008
+
+
+## Ranking
+
+Set up a rank function to return the best matching blog posts given some user latent factor.
+Rank the documents using a dot product between a query tensor and the blog post tensor - see `blog_post.sd`:
+
+    rank-profile tensor {
+        first-phase {
+            expression {
+                sum(query(user_item_cf) * attribute(user_item_cf))
+            }
+        }
+    }
+
+The ranking of a document is given by the dot product, which is a sum between the product of the two tensors:
+
+- `query(user_item_cf)`, from the query.
+- `attribute(user_item_cf)`, which is the document field previously fed to.
+
+Configure the ranking framework to expect that `query(user_item_cf)` is a tensor,
+and that it is compatible with the attribute in a [query profile type](../query-profiles.html#query-profile-types) -
+see `search/query-profiles/types/root.xml`:
+
+    <query-profile-type id="root" inherits="native">
+        <field name="ranking.features.query(user_item_cf)" type="tensor(user_item_cf[10])" />
+    </query-profile-type>
+
+This configures a ranking feature named `query(user_item_cf)` with type `tensor(user_item_cf[10])`,
+which defines it as an indexed tensor with 10 elements.
+As the blog post document attribute is also defined similarly,
+the ranking framework can effectively compile an expression that computes the tensor product.
 
 
 ## Query Vespa with tensor content
 
-Set up a rank function to return the best matching blog posts given some user latent factor.
-In order to do this, configure Vespa to interpret a query that includes a specific latent factor.
-In order words, we need to programmatically create a query based on a specific latent factor
-that will be sent to the Vespa backend.
-
-This type of query (and result) manipulation happens in the Vespa Search Container,
+Program Vespa to interpret a query with a specific latent factor as a tensor.
+This type of query (and result) manipulation happens in the [Vespa Container](../container-intro.html),
 which is the home for all global processing of queries and their results.
 The components of the search container are called [Searchers](../searcher-development.html).
 
 ### Searcher introduction
 
-A searcher is a component which extends the class `com.yahoo.search.Searcher`
-All Searchers must implement a single method:
+A searcher is a component which extends the class `com.yahoo.search.Searcher`.
+All Searchers must implement `search()`:
 
 	public Result search(Query query, Execution execution);
 
@@ -289,55 +383,20 @@ result to the request while the `Result` encapsulates all the data generated
 from a `Query`. The `Execution` object keeps track of the call state for an
 execution of the searchers of a search chain.
 
-### Adding a rank-profile to rank blog posts
-
-For now we will rank the documents by a simple dot product between a query
-tensor and the blog post tensor. We add the following rank-profile to
-`blog_post.sd`:
-
-    rank-profile tensor {
-        first-phase {
-            expression {
-                sum(query(user_item_cf) * attribute(user_item_cf))
-            }
-        }
-    }
-
-The entire ranking of a document is given by this dot product, which is
-a sum between the product of the two tensors:
-
-- `query(user_item_cf)`, which is sent along with the query.
-- `attribute(user_item_cf)`, which is the document field previously fed to.
-
-How does the ranking framework know to expect that `query(user_item_cf)` is a
-tensor, and that it is compatible with the attribute? We define that through a
-[query profile type](../query-profiles.html#query-profile-types).  As explained
-there, we create a new file `search/query-profiles/types/root.xml` in the
-application package with the following content:
-
-    <query-profile-type id="root" inherits="native">
-        <field name="ranking.features.query(user_item_cf)" type="tensor(user_item_cf[10])" />
-    </query-profile-type>
-
-This tells the ranking backend that the ranking feature named
-`query(user_item_cf)` will have type `tensor(user_item_cf[10])`, which defines
-it as an indexed tensor with 10 elements. As the blog post document attribute
-is also defined similarly, the ranking framework can effectively compile an
-expression that computes the tensor product.
 
 ## The blog post searcher
 
-Now that we have set up the backend to expect a tensor sent along with the
-query, we need to actually pass one down. In this section we will set up a
-custom search chain containing only the blog post searcher for easy testing
-before we move on. We will design this so that if the searcher encounters a
-query parameter called `user_item_cf`, it will construct a tensor from the
-contents in this field and add that to the query so it can be passed to the
-backend. The code for this is:
+In this section we  set up a custom search chain with the blog post searcher.
+If the searcher encounters a query parameter called `user_item_cf`,
+it creates a tensor from the contents in this field and adds it to the query:
 
     package com.yahoo.example;
 
+    import com.yahoo.data.access.Inspectable;
+    import com.yahoo.data.access.Inspector;
     import com.yahoo.prelude.query.IntItem;
+    import com.yahoo.prelude.query.NotItem;
+    import com.yahoo.prelude.query.WordItem;
     import com.yahoo.processing.request.CompoundName;
     import com.yahoo.search.Query;
     import com.yahoo.search.Result;
@@ -345,6 +404,9 @@ backend. The code for this is:
     import com.yahoo.search.querytransform.QueryTreeUtil;
     import com.yahoo.search.searchchain.Execution;
     import com.yahoo.tensor.Tensor;
+
+    import java.util.ArrayList;
+    import java.util.List;
 
     public class BlogTensorSearcher extends Searcher {
 
@@ -357,11 +419,18 @@ backend. The code for this is:
                 // Modify the query by restricting to blog_posts...
                 query.getModel().setRestrict("blog_post");
 
-                // ... that has a tensor field fed
-                QueryTreeUtil.andQueryItemWithRoot(query, new IntItem(1, "has_user_item_cf"));
+                // ... that has a tensor field fed and does not contain already read items.
+                NotItem notItem = new NotItem();
+                notItem.addItem(new IntItem(1, "has_user_item_cf"));
+                for (String item : getReadItems(query)) {
+                    notItem.addItem(new WordItem(item, "post_id"));
+                }
+                QueryTreeUtil.andQueryItemWithRoot(query, notItem);
 
                 // Modify the ranking by using the 'tensor' rank-profile (as defined in blog_post.sd)...
-                query.properties().set(new CompoundName("ranking"), "tensor");
+                if (query.properties().get("ranking") == null) {
+                    query.properties().set(new CompoundName("ranking"), "tensor");
+                }
 
                 // ... and setting 'query(user_item_cf)' used in that rank-profile
                 query.getRanking().getFeatures().put("query(user_item_cf)", toTensor(userItemCfProperty));
@@ -374,16 +443,27 @@ backend. The code for this is:
             if (tensor instanceof Tensor) {
                 return (Tensor) tensor;
             }
-            return Tensor.from("tensor(user_item_cf[10])", tensor.toString());
+            return Tensor.from(tensor.toString());
+        }
+
+        private List<String> getReadItems(Query query) {
+            List<String> items = new ArrayList<>();
+            Object readItems = query.properties().get("has_read_items");
+            if (readItems instanceof Inspectable) {
+                for (Inspector entry : ((Inspectable)readItems).inspect().entries()) {
+                    items.add(entry.asString());
+                }
+            }
+            return items;
         }
 
     }
 
+
 There are two parts to this code. The first part modifies which documents are
 matched, and the second part modifies how these documents are ranked.
 
-By modifying the query we change which which documents are selected. First we
-restrict the results to blog posts. Then we AND the query root with an IntItem
+First we restrict the results to blog posts. Then we AND the query root with an IntItem
 which specifies that the `has_user_item_cf` field must be 1. This effectively
 limits the search to documents that have their latent factors set. Note that we
 do not explicitly set the query here, we just add to the query in case the user
@@ -400,42 +480,11 @@ property is a string following the standard tensor format.  Vespa takes care of
 URL decoding the string while the method `Tensor.from(String tensor)`
 constructs a tensor from this string.
 
-The final step is telling Vespa about this searcher. We set up this searcher in
-its own search chain for ease of testing. Add the following to `services.xml`
-inside the `services/container/search` section:
+In  `services.xml` this searcher is configured the the `blog` chain:
 
     <chain id='blog' inherits='vespa'>
         <searcher bundle='blog-recommendation' id='com.yahoo.example.BlogTensorSearcher' />
     </chain>
-
-With this you should now be ready to build and deploy the application:
-
-    $ mvn install
-
-Deploy the application (in the Docker container):
-
-    $ vespa-deploy prepare /vespa-sample-apps/blog-recommendation/target/application && \
-      vespa-deploy activate
-
-Wait for app to activate (200 OK):
-
-    $ curl -s --head http://localhost:8080/ApplicationStatus
-
-The following is the Pig command used to feed these latent factors to Vespa (full re-feed):
-
-    $ pig -Dvespa.feed.defaultport=8080 -Dvespa.feed.random.startup.sleep.ms=0 \
-      -x local \
-      -f ../blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig \
-      -param VESPA_HADOOP_JAR=../vespa-hadoop*.jar \
-      -param DATA_PATH=../trainPosts.json \
-      -param TEST_INDICES=blog-job/training_and_test_indices/testing_set_ids \
-      -param BLOG_POST_FACTORS=blog-job/user_item_cf/product_features \
-      -param USER_FACTORS=blog-job/user_item_cf/user_features \
-      -param ENDPOINT=localhost
-
-* ``BLOG_POST_FACTORS`` and ``USER_FACTORS`` are the two subdirectories in
-the user_item_cf directory created by the Spark script above
-
 
 Run the query:
 
@@ -477,7 +526,6 @@ up:
     package com.yahoo.example;
 
     import com.yahoo.data.access.Inspectable;
-    import com.yahoo.data.access.Inspector;
     import com.yahoo.prelude.query.WordItem;
     import com.yahoo.processing.request.CompoundName;
     import com.yahoo.search.Query;
@@ -486,36 +534,26 @@ up:
     import com.yahoo.search.result.Hit;
     import com.yahoo.search.searchchain.Execution;
     import com.yahoo.search.searchchain.SearchChain;
-    import com.yahoo.tensor.IndexedTensor;
     import com.yahoo.tensor.Tensor;
 
     import java.util.Iterator;
-    import java.util.Map;
 
     public class UserProfileSearcher extends Searcher {
 
         public Result search(Query query, Execution execution) {
-
             Object userIdProperty = query.properties().get("user_id");
             if (userIdProperty != null) {
-
-                // Retrieve user profile...
-                Tensor userProfile = retrieveUserProfile(userIdProperty.toString(), execution);
-
-                // ... and add user profile to query properties so BlogTensorSearcher can pick it up
-                query.properties().set(new CompoundName("user_item_cf"), userProfile);
-
-                if (query.isTraceable(9)) {
-                    String tensorRepresentation = userProfile != null ? userProfile.toString() : "";
-                    query.trace("Setting user profile to :" + tensorRepresentation, 9);
+                Hit userProfile = retrieveUserProfile(userIdProperty.toString(), execution);
+                if (userProfile != null) {
+                    addUserProfileTensorToQuery(query, userProfile);
+                    addReadItemsToQuery(query, userProfile);
                 }
             }
-
             return execution.search(query);
         }
 
 
-        private Tensor retrieveUserProfile(String userId, Execution execution) {
+        private Hit retrieveUserProfile(String userId, Execution execution) {
             Query query = new Query();
             query.getModel().setRestrict("user");
             query.getModel().getQueryTree().setRoot(new WordItem(userId, "user_id"));
@@ -524,45 +562,27 @@ up:
             SearchChain vespaChain = execution.searchChainRegistry().getComponent("vespa");
             Result result = new Execution(vespaChain, execution.context()).search(query);
 
-            // This is needed to get the actual summary data
-            execution.fill(result);
+            execution.fill(result); // this is needed to get the actual summary data
 
-            Hit hit = getFirstHit(result);
-            if (hit != null) {
-                Object userItemCf = hit.getField("user_item_cf");
-                if (userItemCf instanceof Inspectable) {
-                    return convertTensor((Inspectable) userItemCf);
-                }
-            }
-            return null;
-        }
-
-        private Hit getFirstHit(Result result) {
             Iterator<Hit> hiterator = result.hits().deepIterator();
             return hiterator.hasNext() ? hiterator.next() : null;
         }
 
-        private Tensor convertTensor(Inspectable field) {
-            IndexedTensor.Builder tensorBuilder = IndexedTensor.Builder.of(TensorType.fromSpec("tensor(user_item_cf[10])"));
-
-            Inspector cells = field.inspect().field("cells");
-            for (Inspector cell : cells.entries()) {
-                Tensor.Builder.CellBuilder cellBuilder = tensorBuilder.cell();
-
-                Inspector address = cell.field("address");
-                for (Map.Entry<String, Inspector> entry : address.fields()) {
-                    String dim = entry.getKey();
-                    String label = entry.getValue().asString();
-                    cellBuilder.label(dim, label);
-                }
-
-                Inspector value = cell.field("value");
-                cellBuilder.value(value.asDouble());
+        private void addReadItemsToQuery(Query query, Hit userProfile) {
+            Object readItems = userProfile.getField("has_read_items");
+            if (readItems != null && readItems instanceof Inspectable) {
+                query.properties().set(new CompoundName("has_read_items"), readItems);
             }
-            return tensorBuilder.build();
         }
 
+        private void addUserProfileTensorToQuery(Query query, Hit userProfile) {
+            Object userItemCf = userProfile.getField("user_item_cf");
+            if (userItemCf != null && userItemCf instanceof Tensor) {
+                query.properties().set(new CompoundName("user_item_cf"), (Tensor)userItemCf);
+            }
+        }
     }
+
 
 {% comment %}
 TODO: Update with the new code that also all already read articles
