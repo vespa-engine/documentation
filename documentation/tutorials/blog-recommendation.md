@@ -329,7 +329,9 @@ Sample blog post and user:
 
 ## Ranking
 Set up a rank function to return the best matching blog posts given some user latent factor.
-Rank the documents using a dot product between a query tensor and the blog post tensor - see `blog_post.sd`:
+Rank the documents using a dot product between the user and blog post latent factors,
+i.e. the query tensor and blog post tensor dot product
+(sum of the product of the two tensors) - from `blog_post.sd`:
 
     rank-profile tensor {
         first-phase {
@@ -339,50 +341,60 @@ Rank the documents using a dot product between a query tensor and the blog post 
         }
     }
 
-The ranking of a document is given by the dot product, which is a sum between the product of the two tensors:
-- `query(user_item_cf)`, from the query
-- `attribute(user_item_cf)`, in the document
-
 Configure the ranking framework to expect that `query(user_item_cf)` is a tensor,
 and that it is compatible with the attribute in a [query profile type](../query-profiles.html#query-profile-types) -
-see `search/query-profiles/types/root.xml`:
+see `search/query-profiles/types/root.xml` and `search/query-profiles/default.xml`:
 
     <query-profile-type id="root" inherits="native">
         <field name="ranking.features.query(user_item_cf)" type="tensor(user_item_cf[10])" />
     </query-profile-type>
 
+    <query-profile id="default" type="root" />
+
 This configures a ranking feature named `query(user_item_cf)` with type `tensor(user_item_cf[10])`,
 which defines it as an indexed tensor with 10 elements.
-As the blog post document attribute is also defined similarly,
-the ranking framework can effectively compile an expression that computes the tensor product.
+This is the same as the attribute, hence the dot product can be computed.
 
 
 
-## Query Vespa with tensor content
-Program Vespa to interpret a query with a specific latent factor as a tensor.
-This type of query (and result) manipulation happens in the [Vespa Container](../container-intro.html),
-which is the home for all global processing of queries and their results.
-The components of the search container are called [Searchers](../searcher-development.html).
+## Query Vespa with a tensor
+Test recommendations by sending a tensor with latenct factors: [localhost:8080/search/?yql=select%20\*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D](http://localhost:8080/search/?yql=select%20*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D)
+
+The query string, decomposed:
+- yql=select * from sources blog_post where has_user_item_cf = 1 - this selects all documents of type blog_post
+  which has a latent factor tensor
+- restrict=blog_post - search only in `blog_post` documents
+- ranking=tensor - use the rank-profile `tensor` in `blog_post.sd`.
+- ranking.features.query(user_item_cf) - send the tensor as user_item_cf. As this tensor is defined in the query-profile-type,
+  the ranking framework knows its type (i.e. dimensions) and is able to do a dot product with the attribute of same type.
+  The tensor before URL-encoding:
+
+      {
+        {user_item_cf:0}:0.1,
+        {user_item_cf:1}:0.1,
+        {user_item_cf:2}:0.1,
+        {user_item_cf:3}:0.1,
+        {user_item_cf:4}:0.1,
+        {user_item_cf:5}:0.1,
+        {user_item_cf:6}:0.1,
+        {user_item_cf:7}:0.1,
+        {user_item_cf:8}:0.1,
+        {user_item_cf:9}:0.1
+      }
 
 
-### Searcher introduction
-A searcher is a component which extends the class `com.yahoo.search.Searcher`.
-All Searchers must implement `search()`:
 
-	public Result search(Query query, Execution execution);
+## Query Vespa with user id
+Next step is to query Vespa by user id, look up the user profile for the user, get the tensor from it
+and recommend documents based on this tensor (like the query in previous section).
+The user profiles is fed to Vespa in the `user_item_cf` field of the `user` document type.
 
-When the container receives a request, it will create a `Query` representing it
-and execute a configured list of such Searcher components, called a search chain.
+In short, set up a [searcher](../searcher-development.html) to retrieve the user profile by user id - then run the query.
+When the [Vespa Container](../container-intro.html) receives a request, it will create a `Query` representing it
+and execute a configured list of such Searcher components, called a [search chain](../chained-components.html).
 The `query` object contains all the information needed to create a result to the request
 while the `Result` encapsulates all the data generated from a `Query`.
-The `Execution` object keeps track of the call state for an execution of the searchers of a search chain.
-
-
-
-## The blog post searcher
-In this section we  set up a custom search chain with the blog post searcher.
-If the searcher encounters a query parameter called `user_item_cf`,
-it creates a tensor from the contents in this field and adds it to the query:
+The `Execution` object keeps track of the call state for an execution of the searchers of a search chain:
 
     package com.yahoo.example;
 
@@ -396,145 +408,45 @@ it creates a tensor from the contents in this field and adds it to the query:
     import com.yahoo.search.Result;
     import com.yahoo.search.Searcher;
     import com.yahoo.search.querytransform.QueryTreeUtil;
-    import com.yahoo.search.searchchain.Execution;
-    import com.yahoo.tensor.Tensor;
-
-    import java.util.ArrayList;
-    import java.util.List;
-
-    public class BlogTensorSearcher extends Searcher {
-
-        @Override
-        public Result search(Query query, Execution execution) {
-
-            Object userItemCfProperty = query.properties().get("user_item_cf");
-            if (userItemCfProperty != null) {
-
-                // Modify the query by restricting to blog_posts...
-                query.getModel().setRestrict("blog_post");
-
-                // ... that has a tensor field fed and does not contain already read items.
-                NotItem notItem = new NotItem();
-                notItem.addItem(new IntItem(1, "has_user_item_cf"));
-                for (String item : getReadItems(query)) {
-                    notItem.addItem(new WordItem(item, "post_id"));
-                }
-                QueryTreeUtil.andQueryItemWithRoot(query, notItem);
-
-                // Modify the ranking by using the 'tensor' rank-profile (as defined in blog_post.sd)...
-                if (query.properties().get("ranking") == null) {
-                    query.properties().set(new CompoundName("ranking"), "tensor");
-                }
-
-                // ... and setting 'query(user_item_cf)' used in that rank-profile
-                query.getRanking().getFeatures().put("query(user_item_cf)", toTensor(userItemCfProperty));
-            }
-
-            return execution.search(query);
-        }
-
-        private Tensor toTensor(Object tensor) {
-            if (tensor instanceof Tensor) {
-                return (Tensor) tensor;
-            }
-            return Tensor.from(tensor.toString());
-        }
-
-        private List<String> getReadItems(Query query) {
-            List<String> items = new ArrayList<>();
-            Object readItems = query.properties().get("has_read_items");
-            if (readItems instanceof Inspectable) {
-                for (Inspector entry : ((Inspectable)readItems).inspect().entries()) {
-                    items.add(entry.asString());
-                }
-            }
-            return items;
-        }
-
-    }
-
-
-There are two parts to this code. The first part modifies which documents are matched,
-and the second part modifies how these documents are ranked.
-
-First we restrict the results to blog posts.
-Then we AND the query root with an IntItem which specifies that the `has_user_item_cf` field must be 1.
-This effectively limits the search to documents that have their latent factors set.
-Note that we do not explicitly set the query here,
-we just add to the query in case the user wants to perform more elaborate queries.
-
-The code goes on to modify the ranking by explicitly setting the rank profile to the one we defined above.
-The most important part is where the ranking feature `query(user_item_cf)` is set.
-Here we set this feature to the tensor that is sent in the query parameter `user_item_cf`.
-In the `toTensor` method, we check to see if it already is of type `Tensor`.
-We will see in the next section how to add another searcher that retrieves a user profile and add that tensor to this field.
-For now however, we expect that the content of this query property is a string with tensor data.
-
-The searcher is configured in the `blog` chain in `services.xml` :
-
-    <chain id='blog' inherits='vespa'>
-        <searcher bundle='blog-recommendation' id='com.yahoo.example.BlogTensorSearcher' />
-    </chain>
-
-Run the query [http://localhost:8080/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D](http://localhost:8080/search/?searchChain=blog&user_item_cf=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D)
-, where the query property `user_item_cf` is the tensor:
-
-    {
-        {user_item_cf:0}:0.1,
-        {user_item_cf:1}:0.1,
-        {user_item_cf:2}:0.1,
-        {user_item_cf:3}:0.1,
-        {user_item_cf:4}:0.1,
-        {user_item_cf:5}:0.1,
-        {user_item_cf:6}:0.1,
-        {user_item_cf:7}:0.1,
-        {user_item_cf:8}:0.1,
-        {user_item_cf:9}:0.1
-    }
-
-The result is a list of blog posts ranked by the input tensor.
-
-
-## Query Vespa with user id
-Now that we have successfully queried blog posts given a tensor,
-we would now like to retrieve a user profile and use that to recommend blog posts.
-The user profiles has previously been fed to Vespa in the `user_item_cf` field of the `user` document type.
-We would like to query Vespa with a single `user_id`, return a single hit matching the user if it exists,
-and extract the tensor from that hit.
-
-Let us start with setting up a searcher to retrieve the user profile.
-The input would be a user id, and we set up a query to Vespa for this user id.
-If user is found, add the tensor to the query so it can be picked up by the BlogTensorSearcher in its `toTensor` method:
-
-    package com.yahoo.example;
-
-    import com.yahoo.data.access.Inspectable;
-    import com.yahoo.prelude.query.WordItem;
-    import com.yahoo.processing.request.CompoundName;
-    import com.yahoo.search.Query;
-    import com.yahoo.search.Result;
-    import com.yahoo.search.Searcher;
     import com.yahoo.search.result.Hit;
     import com.yahoo.search.searchchain.Execution;
     import com.yahoo.search.searchchain.SearchChain;
     import com.yahoo.tensor.Tensor;
 
+    import java.util.ArrayList;
     import java.util.Iterator;
+    import java.util.List;
 
     public class UserProfileSearcher extends Searcher {
 
         public Result search(Query query, Execution execution) {
+
+            // Get tensor and read items from user profile
             Object userIdProperty = query.properties().get("user_id");
             if (userIdProperty != null) {
                 Hit userProfile = retrieveUserProfile(userIdProperty.toString(), execution);
                 if (userProfile != null) {
                     addUserProfileTensorToQuery(query, userProfile);
-                    addReadItemsToQuery(query, userProfile);
+
+                    NotItem notItem = new NotItem();
+                    notItem.addItem(new IntItem(1, "has_user_item_cf"));
+                    for (String item : getReadItems(userProfile.getField("has_read_items"))){
+                        notItem.addItem(new WordItem(item, "post_id"));
+                    }
+                    QueryTreeUtil.andQueryItemWithRoot(query, notItem);
                 }
             }
+
+            // Restric to search in blog_posts
+            query.getModel().setRestrict("blog_post");
+
+            // Rank blog posts using tensor rank profile
+            if(query.properties().get("ranking") == null) {
+                query.properties().set(new CompoundName("ranking"), "tensor");
+            }
+
             return execution.search(query);
         }
-
 
         private Hit retrieveUserProfile(String userId, Execution execution) {
             Query query = new Query();
@@ -545,61 +457,46 @@ If user is found, add the tensor to the query so it can be picked up by the Blog
             SearchChain vespaChain = execution.searchChainRegistry().getComponent("vespa");
             Result result = new Execution(vespaChain, execution.context()).search(query);
 
-            execution.fill(result); // this is needed to get the actual summary data
+            execution.fill(result); // This is needed to get the actual summary data
 
             Iterator<Hit> hiterator = result.hits().deepIterator();
             return hiterator.hasNext() ? hiterator.next() : null;
         }
 
-        private void addReadItemsToQuery(Query query, Hit userProfile) {
-            Object readItems = userProfile.getField("has_read_items");
-            if (readItems != null && readItems instanceof Inspectable) {
-                query.properties().set(new CompoundName("has_read_items"), readItems);
+        private void addUserProfileTensorToQuery(Query query, Hit userProfile) {
+            Object userItemCf = userProfile.getField("user_item_cf");
+            if (userItemCf != null) {
+                if (userItemCf instanceof Tensor) {
+                    query.getRanking().getFeatures().put("query(user_item_cf)", (Tensor)userItemCf);
+                }
+                else {
+                    query.getRanking().getFeatures().put("query(user_item_cf)", Tensor.from(userItemCf.toString()));
+                }
             }
         }
 
-        private void addUserProfileTensorToQuery(Query query, Hit userProfile) {
-            Object userItemCf = userProfile.getField("user_item_cf");
-            if (userItemCf != null && userItemCf instanceof Tensor) {
-                query.properties().set(new CompoundName("user_item_cf"), (Tensor)userItemCf);
+        private List<String> getReadItems(Object readItems) {
+            List<String> items = new ArrayList<>();
+            if (readItems instanceof Inspectable) {
+                for (Inspector entry : ((Inspectable)readItems).inspect().entries()) {
+                    items.add(entry.asString());
+                }
             }
+            return items;
         }
     }
 
 
-{% comment %}
-TODO: Update with the new code that also all already read articles
-{% endcomment %}
 
-Basically what this code does is that if a query property named `user_id` exists,
-it sets up a new query which restricts the search to the `user` document type
-and sets up a query with a single match instruction to the user id.
-After setting up this query, we execute a separate query chain and wait for the response.
+The  searcher is configured in  in `services.xml`:
 
-We do it this way for two reasons.
-The first is that normally the user profile might exist on a different system
-set up for key/value persistent storage such as Redis,
-and we would normally have to set up a RPC or HTTP call for request it from there.
-The other reason is that this query has different characteristics than a Vespa search
-and we programmatically set up everything we need here.
-
-After the hit is returned, extract the tensor from the hit and construct an object of Tensor type.
-This object is added to the `user_item_cf` query property
-which is subsequently picked up by the BlogTensorSearcher and used to query blog posts.
-
-The two searchers are configured in the `default` search chain in `services.xml`:
-
-    <chain id='default' inherits='vespa'>
-        <searcher bundle='recommendation' id='com.yahoo.example.UserProfileSearcher' />
-        <searcher bundle='recommendation' id='com.yahoo.example.BlogTensorSearcher' />
+    <chain id='user' inherits='vespa'>
+        <searcher bundle='blog-recommendation' id='com.yahoo.example.UserProfileSearcher' />
     </chain>
 
-After deploying, query a user: [localhost:8080/search/?user_id=14344185](http://localhost:8080/search/?user_id=14344185)
+Deploy, then query a user to get blog recommendations: [localhost:8080/search/?user_id=34030991&searchChain=user](http://localhost:8080/search/?user_id=34030991&searchChain=user).
 
-This returns recommended blog post for the user given the rank expression.
-Modify the query to match specific documents: [localhost:8080/search/?user_id=14344185&query=music](http://localhost:8080/search/?user_id=14344185&query=music)
-
-This returns documents with the term "music", still ranked according to the users' profile.
+To refine recommendations, add query terms: [localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20\*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;](http://localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;)
 
 
 
@@ -614,7 +511,7 @@ instead of manually picking hyperparameter values as was done in
       --input_file blog-job/training_and_test_indices/training_set_ids \
       --numIterations 10 --output_path blog-job/user_item_cf_cv
 
-FIXME: Feed the newly computed latent factors to Vespa as before. Note that we need to
+Feed the newly computed latent factors to Vespa as before. Note that we need to
 update the tensor specification in the search definition in case the size of
 the latent vectors change. We have used size 10 (rank = 10) in the [Compute
 user and item latent factors](#compute-user-and-item-latent-factors) section
