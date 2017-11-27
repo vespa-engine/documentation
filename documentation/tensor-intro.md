@@ -3,62 +3,65 @@
 title: "Introduction to working with tensors in Vespa"
 ---
 
-Tensors allow Vespa to support more advanced ranking models such as large
-logistic regression models and neural networks. In this document tensors are
-introduced and some examples of their use are shown. For more detailed
-information, please refer to [the tensor user guide](tensor-user-guide.html)
-and [the tensor reference](reference/tensor.html).
+Tensors allow Vespa to support more advanced ranking models
+such as large logistic regression models and neural networks.
+In this document, tensors are introduced with some examples of use.
+For details, refer to the [tensor user guide](tensor-user-guide.html)
+and the [tensor reference](reference/tensor.html).
+Also try the [blog recommendation](tutorials/blog-recommendation.html) tutorial.
+
+
 
 ## Tensor concepts
+In Vespa, a tensor is a data structure which is a generalization of scalars, vectors and matrices.
+Tensors can have any order:
 
-In Vespa, we refer to tensors as a data structure which is a generalization of
-scalars, vectors and matrices:
+- A scalar is a tensor of order 0.
+- A vector is a tensor of order 1.
+- A matrix is a tensor of order 2.
 
-1. A scalar is a tensor of order 0.
-1. A vector is a tensor of order 1.
-1. A matrix is a tensor of order 2.
+Tensors consist of a set of double valued cells, with each cell having a unique address.
+A cell's address is specified by its index or label along all dimensions.
+The number of dimensions in a tensor is the _order_ of the tensor.
+Each dimension can be either _sparse_ or _dense_.
+Sparse dimensions have labels designating their address,
+while dense dimensions have indices.
 
-Tensors can have any order.
-
-Tensors consist of a set of double valued cells, with each cell having a unique
-address. A cells address is specified by its index or label along all
-dimensions. The number of dimensions in a tensor is the order of the tensor.
-Each dimension can be either sparse or dense. Sparse dimensions have labels
-designating their address, while dense dimensions have indices.
-
-For instance, using [literal form](reference/tensor.html), the tensor:
+Example: Using [literal form](reference/tensor.html), the tensor:
 
     {
         {x:2, y:1}:1.0,
         {x:0, y:2}:1.0
     }
 
-has two dimensions named `x` and `y`, and has two cells with defined values. A
-graphical representation is showed here:
+has two dimensions named `x` and `y`, and has two cells with defined values:
 
 ![Tensor graphical representation](img/tensor-guide.png)
 
-When tensors are defined you need to declare it's type. The following defines a
-sparse matrix:
+A type declaration is needed for tensors. This defines a sparse matrix:
 
     tensor(x{},y{})
 
-The following defines a dense matrix:
+This is a dense matrix:
 
     tensor(x[],y[])
+    
+Combination:
 
-Vespa needs to know the type of tensor to optimize the ranking pipeline.  As
-seen above, the dimensions themselves define if they are sparse or dense.
-However, mixed tensors (sparse along one dimension, but dense along another) is
-currently not supported.
+    tensor(x[],y{})
+
+Vespa uses the tensor type to optimize the ranking pipeline.
+As seen above, the dimensions themselves define if they are sparse or dense.
+
+
 
 ## Tensor examples
-
-In the following examples, we will use the tensor playground to visualize
-tensor operations. The playground can be started by deploying the [tensor sample
-app](https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor), and opening "http://[host]:[port]/playground/index.html". By clicking
-on the links below, a setup string will be copied to the clipboard. Paste
-this string into the setup input box in the playground and press enter.
+The following examples, uses the tensor playground to visualize tensor operations.
+The playground can be started by deploying the
+[tensor sample app](https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor)
+and opening "http://[host]:[port]/playground/index.html".
+By clicking on the links below, a setup string will be copied to the clipboard -
+paste the string into the setup input box in the playground and press enter.
 
 <script>
 function copyToClipboard(text) {
@@ -78,15 +81,7 @@ function copyToClipboard(text) {
 1. <a href="#tensor_generation" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJADEEsABVk9VCVhgA5vOQJGASxL0WYACZaGqHfTCx5SLfRVh49A2Br0q8IfXdnI7fAF9fPzYifg5ySkgRMktUU11WXwhObiQ+ROJPFAiAQQSBYiiYuPoIj0VYAAotbABmAF0ASiqGn3yAoiDfUOJw8UK0YryBZJ40-KTM5AiAISH8yOFoge9xMqUq7AAmRqqAahqW9Pb-YPxupN6oftjvU44uUaxzjKQp8QBhOeHrwfEXN0YFWyLGmLC0hzagTuBHSpAofUWRVusIeqSe6QmrwiXw4PxWUEskwq730Wn0wghAmOEGOdRAfiAA')">Tensor generation, dimension renaming and concatenation</a>
 1. <a href="#neural_network" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJAByyAK4IANmHrJGAdxKwA1mBFIyc5JHb4AvkeNsi-DuUqQAbtwCW8AEb7WRiJ25I+n4vRIBuKO9GTSzBYCXowAnmTBUEL0qOoAFKHhjNgAzAC6AJQe0V4OctKJkMDAmREYAAzGDQB0AIwsNWF1rU31bR21jBgATL1txobRpkTmRlbENuIOsM5uBlEcXDx+JVCBKLYqABaOACanyPTFJZBxCbbJqbAZXdn5LCfnl9gArIXX0Xs8HKlWqnwu9AaLEGDSaAFo+gB2VoADgAnMMOuDLhh2jDGrjmmi0a1hiisWcISNoa9YS16gAWBmoilfSE5GlZOkItoo4YMjnAbGQhmcuoEvr1fnE1lU+pioY9FoANhRiJRP1lOLxtKVcNazWV-J+5KFlJxmJhSr6wxyyplZrZGA5VrGyp+iMRosdVNFrpaPzR7tNwqhMNGGH1zR+TOV3tDOq5EZtaPqjK1kMttOTbWVytamp9OJd2aaBq9rRyIfNIoVIzGOVaAp+E380xMGwI-lIFCWTlc7k7Xi2viw8w4+0qLmFAIEt3ilUe6WFv3+Q+IZQqtjBNbpNpRUsRGdxYylHsLoZzafq+ePOTGw3zrXaRZF8L6rTz9TRramZk745QIsUDLKsg7diOvBjv4XiToc0ChMCs4cHci6XE8aQrn8LAIYEcjYK0a4wSBwJbuIO5OvKuHAtyyrNHyPyqse7TUXI3LPtGPzDOqx6Yqx3KSo2aJHq+zo4YhbEEjknGIo+x6ivxBI8naiI5Iiv4CO2ECzJY3bAUCKwDusEE+FBXa7JAcHiC4rHIYIC4POh6SsQRREWZuoLAIpp7uoiyqNJMmn-nMem9tQtAMJEJnbNBFlCKItgAGKOLAqCMGAcjwLEyCwGA8BUIwjgOIVJCQoFMzBbpgL6SIZCwGgqCOKVdneDF5k3FZUB2V4tX1agjXNeIqDSIgLxZGAABUYDHDWLBgIMBRgAA1GA041uVJiVfggE9rYvUNU1Vzrq1o7tYCnWQJl2WwK03VQPt-WHbY9XlGkw2jYMk3TcKc0Lctq3CkUbZbRAO01cIdUHc1x2QTsHVBLYwJCLAgSFXYyAAPpXTlt3rj1EN9QNVziC90hpMIKgY3o0ioBjLhjREc0zWyc1rSz82vAUQN-jMAGhbYNB0JcUWArDsU3PFYhQMleEZVlOV5QVRXwCVZXA7zIXVWFkAPUTLVi2dc4XXdOsE1DxNQO9aTYzdX0qKxc2A-9NkSRt2kg4bXjg5Dj3Q9Fp2AbBCPiDbwwm7rT1DY4ADmiAkGcb0jdb8u21N9sSY7NaLStLt4dzQUa1Vc76YLkX66ZcOApLSUSWACD0FoqA0PVGBu2AWnt3zWt7WbvtHf7ZmB3swddXj9293rQ1J6H+cVXPYB5CAxhAA')">Neural network</a>
 
-The neural network example is quite a bit more involved. Here, the network has
-3 input neurons, 5 hidden neurons and a single output neuron. An example of
-neural networks in action can be found in the [blog recommendation tutorial
-part 3](tutorials/blog-recommendation-nn.html).
-
-
-## Using tensors in Vespa
-
-Please refer to the [the tensor user guide](tensor-user-guide.html) and for
-details of using tensors in Vespa.  Also try the [blog
-recommendation](tutorials/blog-recommendation.html) tutorial.
-
+The neural network example is quite a bit more involved.
+Here, the network has 3 input neurons, 5 hidden neurons and a single output neuron.
+An example of neural networks in action can be found in the
+[blog recommendation tutorial part 3](tutorials/blog-recommendation-nn.html).
