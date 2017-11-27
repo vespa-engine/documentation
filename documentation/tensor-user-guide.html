@@ -4,9 +4,7 @@ title: "Tensor User Guide"
 ---
 
 <p>
-This user guide touches upon most of the common steps needed to work with tensors in Vespa, including the following:
-</p>
-
+This user guide touches upon most of the common steps needed to work with tensors in Vespa:
 <ul>
     <li>Setting up tensor fields in search definitions.</li>
     <li>Feeding tensors to Vespa.</li>
@@ -16,72 +14,45 @@ This user guide touches upon most of the common steps needed to work with tensor
     <li>Tensor Java API.</li>
     <li>Some common use cases.</li>
 </ul>
-
-<p>
-Most of the contents discussed here is demonstrated in the <a
-    href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor">tensor
-sample app</a>, and in the following relevant links will be provided into that application.
+Most of the contents discussed here is demonstrated in the
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor">tensor sample app</a>.
+For a quick introduction to tensors, refer to
+<a href="tensor-intro.html">working with tensors</a>
+and <a href="reference/tensor.html">the tensor reference guide</a>.
 </p>
 
-<p>
-For a quick introduction to what tensors are about, please refer to <a
-    href="tensor-intro.html">Introduction to working with tensors in Vespa</a>.
-Also refer to <a href="reference/tensor.html">the tensor reference guide</a> for more details.
-</p>
+
 
 <h2 id="tensor-document-fields">Tensor document fields</h2>
-
-<p> In typical use, each document would contain one or more tensor fields to be
-used during ranking. For example:</p>
-
+<p>
+In typical use, a document contains one or more
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L35-L37"> tensor fields</a> to be used for ranking -
+this example sets up a tensor field called <code>tensor_attribute</code>:
 <pre>
 field tensor_attribute type tensor(x{}) {
     indexing: attribute | summary
     attribute: tensor(x{})
 }
 </pre>
+A tensor requires a type - <code>x{}</code> means <em>sparse</em> dimension,
+where <code>x[]</code> means <em>indexed</em> dimension.
+For details on tensor fields, refer to the
+<a href="reference/search-definitions-reference.html#type:tensor">tensor field</a> in search definitions.
+For details on tensor types, refer to the
+<a href="reference/search-definitions-reference.html#tensor-type-spec">tensor type reference</a>.
+</p>
 
+
+
+<h2 id="feeding-tensors">Feeding tensors</h2>
 <p>
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L31-L34">Link to sample app</a>
-</p>
-
-<p>
-This sets up a tensor field called <code>tensor_attribute</code>. Each tensor
-requires a type, and here the type defines that the tensor contains one sparse
-dimensions, <code>x</code> (a sparse vector). Tensors can't be used
-in searching, only during ranking.
-</p>
-
-<p>For more details on setting up tensor fields, please refer to <a
-    href="reference/search-definitions-reference.html#type:tensor">
-the tensor field</a> in the search definition documentation. For more details
-on tensor types, refer to <a
-href="reference/search-definitions-reference.html#tensor-type-spec">
-the tensor type reference</a>.
-</p>
-
-
-<h2 id="feeding-tensors-to-vespa">Feeding tensors to Vespa</h2>
-
-<p>
-After setting up the tensor fields in the search definition, feeding tensors are fairly straight forward. Basically,
-you have two options.
-</p>
-
+There are two options when feeding tensors.
 <ul>
-    <li>Feed tensors directly using the tensor JSON format.</li>
-    <li>Convert some other field, for instance a vector of floats, to a tensor during document processing using the tensor Java API.</li>
-</ul>
-
-<p>
-To convert to tensors during document processing, please refer to <a
-    href="#tensor-java-api">the tensor Java API</a>.
-</p>
-
-<p>
-To feed to the <code>tensor_attribute</code> field we defined above, we use the JSON format:
-</p>
-
+  <li>Convert some other field, for instance a vector of floats,
+    to a tensor during document processing using the tensor Java API -
+    refer to the <a href="#tensor-java-api">tensor Java API</a>.</li>
+  <li>Feed tensors using the <a href="reference/document-json-put-format.html#tensor">
+    tensor JSON format - example:</a>:
 <pre>
 {
     "fields": {
@@ -96,63 +67,55 @@ To feed to the <code>tensor_attribute</code> field we defined above, we use the 
     }
 }
 </pre>
-
-<p>
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/music-data-1.json#L8-L15">Link to sample app</a>
-</p>
-
-<p>
-The field <code>x</code> is sparse, so the indices can be any
-textual value as can be seen in the JSON above. For dense dimensions, the
-indices are required to be numeric. For more details about the JSON format,
-please refer to
-    <a href="reference/document-json-put-format.html#tensor">
-    the tensor JSON format
-    </a>
-in the document JSON put format documentation.
-</p>
-
-
-<h2 id="querying-vespa-with-tensors">Querying Vespa with tensors</h2>
-
-<p>
-Typically, we would like to pass a tensor down with the query to be used during ranking. This tensor can either be supplied in the actual
-query string directly, or constructed from some other data or data source. In the latter case, please refer to <a
-    href="#tensor-java-api">the tensor Java API</a> for details on how to construct tensors programmatically.
-</p>
-
-<p>
-A tensor can be constructed directly from the tensor <a href="reference/tensor.html">literal form</a>. The corresponding literal form
-of the tensor above is:
-</p>
-
-{% raw %}
-<pre>
-{{x:0}: 1.0, {x:1}: 2.0, {x:2}: 3.0, {x:3}: 5.0}
-</pre>
-{% endraw %}
-
-<p>
-This can be used in a query string by url encoding it:
-</p>
-
-<pre>
-http://host:port/search/?query=sddocname:music&amp;tensor=%7B%7Bx%3A0%7D%3A1.0%2C%7Bx%3A1%7D%3A2.0%2C%7Bx%3A2%7D%3A3.0%2C%7Bx%3A3%7D%3A5.0%7D
-</pre>
-
-<p>
-To use this tensor to ranking, there are two things you need to do:
-</p>
-
-<ul>
-    <li>Add the tensor to the query as a rank feature.</li>
-    <li>Define the tensor type of the rank feature.</li>
+  </li>
 </ul>
-
-<p>
-To add the tensor to the query as a rank feature, you need to add some code to a custom searcher as follows:
+Here, the <code>x</code>-dimension is sparse, so the indices can be any textual value.
+For dense dimensions, indices must be numeric.
+See the <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/music-data-1.json#L8-L15">
+  sample app</a>.
 </p>
 
+
+
+<h2 id="querying-with-tensors">Querying with tensors</h2>
+<p>
+Tensors can not be used in searching, only for ranking.
+The tensor can either be supplied in the query string,
+or constructed from some other data or data source.
+In the latter case, please refer to <a href="#tensor-java-api">the tensor Java API</a>
+for details on how to construct tensors programmatically.
+</p><p>
+Set the type (indexed or sparse) of the <code>query(tensor)</code> for it to be used in ranking,
+using a <a href="query-profiles.html#query-profile-types">query profile type</a>.
+This configures the ranking backend that the rank feature named
+<code>query(tensor)</code> has type <code>tensor(x{})</code>,
+enabling it to effectively compile expressions that use this feature.
+Create a file <code>search/query-profiles/types/root.xml</code> in the application package:
+<pre>
+&lt;query-profile-type id="root" inherits="native"&gt;
+  &lt;field name="ranking.features.query(tensor)" type="tensor(x{})" /&gt;
+&lt;/query-profile-type&gt;
+</pre>
+Also, configure the default query profile to use this this (or other query profiles as needed):
+<pre>
+&lt;query-profile id="default" type="root" /&gt;
+</pre>
+A tensor can be constructed directly from the tensor <a href="reference/tensor.html">literal form</a>.
+The corresponding literal form of the tensor in the feeding section is:
+<pre>{% raw %}
+{{x:0}: 1.0, {x:1}: 2.0, {x:2}: 3.0, {x:3}: 5.0}
+{% endraw %}</pre>
+Example query (not url-encoded for readability),
+using rank profile <em>dot_product</em> and the tensor in <em>query(tensor)</em>:
+<pre>{% raw %}
+http://host:port/search/?ranking=dot_product&amp;ranking.features.query(tensor)={{x:0}:1.0,{x:1}:2.0,{x:3}:3.0,{x:4}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
+{% endraw %}</pre>
+</p><p>
+Alternatively, use a custom searcher, and send the tensor in a parameter, like:
+</p>
+<pre>{% raw %}
+http://host:port/search/?tensor={{x:0}:1.0,{x:1}:2.0,{x:3}:3.0,{x:4}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
+{% endraw %}</pre>
 <pre>
 public class ExampleTensorSearcher extends Searcher {
 
@@ -162,49 +125,23 @@ public class ExampleTensorSearcher extends Searcher {
         if (tensorProperty != null) {
             Tensor tensor = Tensor.from(tensorProperty.toString());
             query.getRanking().getFeatures().put("query(tensor)", tensor);
+            query.properties().set(new CompoundName("ranking"), "dot_product");
         }
         return execution.search(query);
     }
 }
 </pre>
-
-<p>
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/java/com/yahoo/example/ExampleTensorSearcher.java">Link to sample app</a>
-</p>
-
 <p>
 This grabs the value of the <code>tensor</code> query parameter, and constructs a
 <code>com.yahoo.tensor.Tensor</code> object directly from the value. It then adds this object
 to the query as a rank feature. You can also create the Tensor object programmatically.
-Please refer to <a href="#tensor-java-api">the tensor Java API</a> for details.
+Refer to <a href="#tensor-java-api">the tensor Java API</a> and the
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/java/com/yahoo/example/ExampleTensorSearcher.java">tensor sample app</a>.
 </p>
 
-<p>
-Vespa needs to know the type of the <code>query(tensor)</code> rank feature for
-it to be used in ranking. This is defined using a
-<a href="query-profiles.html#query-profile-types">query profile type</a>.
-As explained there, we create a new file <code>search/query-profiles/types/root.xml</code> in the
-application package with the following content:
-
-<pre>
-&lt;query-profile-type id="root" inherits="native"&gt;
-    &lt;field name="ranking.features.query(tensor)" type="tensor(x{})" /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-
-<p>
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/search/query-profiles/types/root.xml">Link to sample app</a>
-</p>
-
-<p>
-This tells the ranking backend that the rank feature named
-<code>query(tensor)</code> will have type <code>tensor(x{})</code>, enabling the backend to
-effectively compile expressions that use this feature.
-</p>
 
 
 <h2 id="ranking-with-tensors">Ranking with tensors</h2>
-
 <p>
 Tensors are used during ranking to modify a document's rank score given the
 query. Typical operations are dot products between tensors of order 1
