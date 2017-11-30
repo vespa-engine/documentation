@@ -6,13 +6,14 @@ title: "Tensor User Guide"
 <p>
 This user guide touches upon most of the common steps needed to work with tensors in Vespa:
 <ul>
-    <li>Setting up tensor fields in search definitions.</li>
-    <li>Feeding tensors to Vespa.</li>
-    <li>Querying Vespa with tensors.</li>
-    <li>Ranking with tensors.</li>
-    <li>Constant tensors.</li>
-    <li>Tensor Java API.</li>
-    <li>Some common use cases.</li>
+    <li>Setting up tensor fields in search definitions</li>
+    <li>Feeding tensors to Vespa</li>
+    <li>Querying Vespa with tensors</li>
+    <li>Ranking with tensors</li>
+    <li>Constant tensors</li>
+    <li>Tensor Java API -
+      <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">javadoc</a></li>
+    <li>Common use cases</li>
 </ul>
 Most of the contents discussed here is demonstrated in the
 <a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor">tensor sample app</a>.
@@ -112,7 +113,6 @@ http://host:port/search/?ranking=dot_product&amp;ranking.features.query(tensor)=
 {% endraw %}</pre>
 </p><p>
 Alternatively, use a custom searcher, and send the tensor in a parameter, like:
-</p>
 <pre>{% raw %}
 http://host:port/search/?tensor={{x:0}:1.0,{x:1}:2.0,{x:3}:3.0,{x:4}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
 {% endraw %}</pre>
@@ -131,7 +131,6 @@ public class ExampleTensorSearcher extends Searcher {
     }
 }
 </pre>
-<p>
 This grabs the value of the <code>tensor</code> query parameter, and constructs a
 <code>com.yahoo.tensor.Tensor</code> object directly from the value. It then adds this object
 to the query as a rank feature. You can also create the Tensor object programmatically.
@@ -143,24 +142,19 @@ Refer to <a href="#tensor-java-api">the tensor Java API</a> and the
 
 <h2 id="ranking-with-tensors">Ranking with tensors</h2>
 <p>
-Tensors are used during ranking to modify a document's rank score given the
-query. Typical operations are dot products between tensors of order 1
-(vectors), or matrix products between tensors of order 2 (matrices). Tensors
-are used in <a href="reference/ranking-expressions.html">rank expressions</a>
-as rank features. Above, we have defined two rank features:
-</p>
-
+Tensors are used during ranking to modify a document's rank score given the query.
+Typical operations are dot products between tensors of order 1 (vectors),
+or matrix products between tensors of order 2 (matrices).
+Tensors are used in <a href="reference/ranking-expressions.html">rank expressions</a> as rank features.
+Two rank features are defined above:
 <ul>
-    <li><code>attribute(tensor_attribute)</code>: the tensor associated with the document.</li>
-    <li><code>query(tensor)</code>: the tensor sent with the query.</li>
+    <li><code>attribute(tensor_attribute)</code>: the tensor associated with the document</li>
+    <li><code>query(tensor)</code>: the tensor sent with the query</li>
 </ul>
-
-<p>
-These can be used in rank expressions, with the caveat that the final rank
-score of a document must resolve into a single double value. An example is the
-following:
-</p>
-
+These can be used in rank expressions.
+Note that the final rank score of a document must resolve into a single double value -
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L49-L55">
+example</a>:
 <pre>
 rank-profile dot_product {
     first-phase {
@@ -168,36 +162,20 @@ rank-profile dot_product {
     }
 }
 </pre>
-
-<p>
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L43-L47">Link to sample app</a>
-</p>
-
-
-<p>
 This takes the product of the query tensor and the document tensor, and sums
 all fields thus resolving into a single value which is used as the rank score.
 In the case above, the value is <code>39.0</code>.
-</p>
-
-
-<p>
+</p><p>
 There are some <a href="reference/ranking-expressions.html#built-in-functions">ranking functions</a>
-that are specifically used for tensors:
-</p>
-
+that are specific for tensors:
 <table class="table">
   <thead></thead><tbody>
 <tr><td>map(tensor, f(x)(...))</td> <td>Returns a new tensor with the lambda function defined in <code>f(x)(...)</code> applied to each cell.</td></tr>
-<tr><td>reduce(tensor, aggregator, dim1, dim2, ...)</td> <td>Returns a new tensor with the <code>aggregator</code> applied across dimensions dim1, dim2, etc. If no dimensions are specified, reduce over all dimensions.</td></tr>
+<tr><td style="white-space:nowrap;">reduce(tensor, aggregator, dim1, dim2, ...)</td> <td>Returns a new tensor with the <code>aggregator</code> applied across dimensions dim1, dim2, etc. If no dimensions are specified, reduce over all dimensions.</td></tr>
 <tr><td>join(tensor1, tensor2, f(x,y)(...))</td> <td>Returns a new tensor constructed from the <em>natural join</em> between <code>tensor1</code> and <code>tensor2</code>, with the resulting cells having the value as calculated from <code>f(x,y)(...)</code>, where <code>x</code> is the cell value from <code>tensor1</code> and <code>y</code> from <code>tensor2</code>.</td></tr>
 </tbody>
 </table>
-
-<p>
 These primitives allow for a great deal of flexibility when combined. The above rank expression is equivalently:
-</p>
-
 <pre>
 rank-profile dot_product {
     first-phase {
@@ -214,49 +192,35 @@ rank-profile dot_product {
     }
 }
 </pre>
-
-<p>
-...and represents the general dot product for tensors of any order.  Details about tensor
-ranking functions including lambda expression and available aggregators can be found in
-the <a href="reference/tensor.html">tensor reference documentation</a>.
+...and represents the general dot product for tensors of any order.
+Details about tensor ranking functions including lambda expression and available aggregators
+can be found in the <a href="reference/tensor.html">tensor reference documentation</a>.
 More examples of tensor expression can be found in the <a href="tensor-intro.html">tensor introduction</a>.
-
 </p>
+
+
 
 <h2 id="constant-tensors">Constant tensors</h2>
-
 <p>
-In addition to document tensors and query tensors, Vespa has the feature of
-distributing tensors along with the application package. This is useful for the
-case when you have constant tensors to be used in ranking expressions, for
-instance when you have machine learned models.
-</p>
-
-<p>
-The following example shows how to define a constant tensor:
-</p>
-
+In addition to document tensors and query tensors,
+<a href="reference/search-definitions-reference.html#constant">constant tensors</a>
+can be put in the <a href="reference/application-packages-reference.html">application package</a>.
+This is useful when constant tensors are used in ranking expressions,
+for instance machine learned models. Example from the
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L43-L46">sample app</a>:
 <pre>
 constant tensor_constant {
     file: constants/constant_tensor_file.json
     type: tensor(x{})
 }
 </pre>
-
-<p>
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L38-L41">Link to sample app</a>
-</p>
-
-<p> This defines a new tensor rank feature with the type as defined and the
+This defines a new tensor rank feature with the type as defined and the
 contents distributed with the application package in the file
-<em>constants/constant_tensor_file.json</em>. The format of this file is
-<a href="reference/document-json-put-format.html#tensor"> the tensor JSON format</a>,
-see <a href="reference/search-definitions-reference.html#constant">example</a>.</p>
-
-<p>
-To use this tensor in a rank expression, encapsulate the constant name
-with <code>constant(...)</code>:
-</p>
+<em>constants/constant_tensor_file.json</em>. The format of this file is the
+<a href="reference/document-json-put-format.html#tensor">tensor JSON format</a>, it can be compressed,
+see the <a href="reference/search-definitions-reference.html#constant">reference</a> for examples.
+</p><p>
+To use this tensor in a rank expression, encapsulate the constant name with <code>constant(...)</code>:
 
 <pre>
 rank-profile use_constant_tensor {
@@ -265,37 +229,29 @@ rank-profile use_constant_tensor {
     }
 }
 </pre>
-
-<p>
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L49-L53">Link to sample app</a>
+The above expression combines three tensors: the query tensor, the document tensor and a constant tensor.
 </p>
 
+<!-- Consider having a section on the Java API here - links to javadoc in heading now
+<h2 id="tensor-java-api">Tensor Java API</h2> -->
+
+
+
+<h2 id="use-cases">Use cases</h2>
 <p>
-The above expression combines three tensors: the query tensor, the document
-tensor and a constant tensor. For more details, please refer to the <a
-    href="reference/search-definitions-reference.html#constant">tensor constant
-documentation</a> in the search definition documentation.
+In the following section, find common use cases that can be solved using tensor operations.
 </p>
 
-<h2 id="tensor-java-api">Tensor Java API</h2>
 
-The Tensor API <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">javadoc can be found here</a>.
-
-<h2>Common Use Cases</h2>
-In the following section we describe some common use cases that can be solved using tensor operations.
-
-<h4>Dot Product between query and document vectors</h4>
+<h3 id="dot-product-between-query-and-document-vectors">Dot Product between query and document vectors</h3>
 <p>
 Assume we have a set of documents where each document contains a vector of size 4.
 We want to calculate the dot product between the document vectors and a vector passed down with the query
 and rank the results according to the dot product score.
-</p>
-
-<p>
-The following sd-file defines an attribute tensor field with a tensor type that has one indexed dimension
-<code>x</code> of size 4. In addition we define a rank profile that calculates the dot product.
-</p>
-
+</p><p>
+The following sd-file defines an attribute tensor field
+with a tensor type that has one indexed dimension <code>x</code> of size 4.
+In addition we define a rank profile that calculates the dot product.
 <pre>
 search example {
   document example {
@@ -311,21 +267,13 @@ search example {
   }
 }
 </pre>
-
-<p>
 The tensor to pass down with query is defined in a query profile type with the same tensor type as the field in the document:
-</p>
-
 <pre>
 &lt;query-profile-type id="myProfileType"&gt;
   &lt;field name="ranking.features.query(query_vector)" type="tensor(x[4])" /&gt;
 &lt;/query-profile-type&gt;
 </pre>
-
-<p>
 Example document with the vector [1.0, 2.0, 3.0, 5.0]:
-</p>
-
 <pre>
 [
   { "put": "id:example:example::0", "fields": {
@@ -341,11 +289,7 @@ Example document with the vector [1.0, 2.0, 3.0, 5.0]:
   }
 ]
 </pre>
-
-<p>
 Example query set in a searcher with the vector [1.0, 2.0, 3.0, 5.0]:
-</p>
-
 <pre>
 public Result search(Query query, Execution execution) {
     query.getRanking().getFeatures().put("query(query_vector)",
@@ -357,9 +301,10 @@ public Result search(Query query, Execution execution) {
     return execution.search(query);
 }
 </pre>
+</p>
 
 
-<h4>Matrix Product between 1d vector and 2d matrix</h4>
+<h3 id="matrix-product-between-1d-vector-and-2d-matrix">Matrix Product between 1d vector and 2d matrix</h3>
 <p>
 Assume we have a 3x2 matrix represented in an attribute tensor field <code>document_matrix</code>
 with a tensor type <code>tensor(x[3],y[2])</code> with content:
