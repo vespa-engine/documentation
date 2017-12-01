@@ -17,7 +17,7 @@ Prerequisites:
 - Install [Pig and Hadoop](#vespa-and-hadoop)
 - Put `trainPosts.json` in $VESPA_SAMPLE_APPS, the directory with the clone of
   [vespa sample apps](https://github.com/vespa-engine/sample-apps)
-- Put [vespa-hadoop.jar](search.maven.org/#search%7Cga%7C1%7Cvespa-hadoop) in $VESPA_SAMPLE_APPS
+- Put [vespa-hadoop.jar](http://search.maven.org/#search%7Cga%7C1%7Cvespa-hadoop) in $VESPA_SAMPLE_APPS
 - docker as in the [blog search tutorial](blog-search.html)
 
 
