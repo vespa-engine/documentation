@@ -1,0 +1,83 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Caches in Vespa"
+---
+
+<h3 id="result"> Container Result Cache </h3>
+<p> This cache is caching first phase (hits) and second phase (summary) data and is enabled on a per content cluster basis by </p>
+<ul>
+<li>Cache time to live (TTL) is controlled by the <a href="../reference/services-content.html#visibility-delay">visibility-delay</a> setting on a per content cluster basis. Default is 0 seconds.</li>
+<li>Cache size is controlled by definining a type <a href="../reference/services-search.html#provider">local provider</a>. Default size is 1MB. </li>
+</ul>
+<p>This cache saves both cpu, network and IO as it caches both first phase result data and second phase summary data. Note that the container <a href="container-tuning.html">jvm heap size</a> might be adjusted as well for optimial performance. During run-time you can control wether the cache should be used or not by the <a href="../reference/search-api-reference.html#nocache">nocache</a> and <a href="../reference/search-api-reference.html#nocachewrite">nocachewrite</a> parameters.</p>
+
+<h3 id="summary">Content Node Summary Cache</h3>
+<p>The summary cache caches summary requests and is enabled by <a href="../content/setup-proton-tuning.html#summary">proton tuning configuration</a>. When enabling a proton summary cache you should also change the way proton reads summary data from mmap to directio as done below. The summary cache saves IO and cpu spent on decompressing of chunked blocks (default 64KB) of summary data. Note that the summary cache is shared across multiple document types.</p>
+
+<pre class="code">
+ &lt;content id="music" version="1.0"&gt;
+    &lt;search&gt;
+     &lt;visibility-delay&gt;30.0&lt;/visibility-delay&gt;
+    &lt;/search&gt;
+    &lt;engine&gt;
+      &lt;proton&gt;
+        &lt;tuning&gt;
+          &lt;searchnode&gt;  
+            &lt;summary&gt;           
+              &lt;io&gt;                      
+                &lt;read&gt;directio&lt;/read&gt;           
+              &lt;/io&gt;                     
+              &lt;store&gt;                   
+                &lt;cache&gt;
+                  &lt;maxsize&gt;1073741824&lt;/maxsize&gt;&lt;!--1GB --&gt;
+                &lt;/cache&gt;                        
+              &lt;/store&gt;
+            &lt;/summary&gt;
+          &lt;/searchnode&gt;
+        &lt;/tuning&gt;
+      &lt;/proton&gt;
+    &lt;/engine&gt;
+  ....
+  &lt;/content&gt;
+</pre>
+
+<h2>Complete Example</h2>
+<p>Example below will configure a 20 MB cache with TTL of max 30 seconds and a summary cache of 1GB. </p> 
+<pre class="code">
+&lt;container id="container" version="1.0"&gt;
+    &lt;search&gt;
+        &lt;provider id="music" type="local" cachesize="20M"  cluster="music"/&gt;
+    &lt;/search&gt;
+    ...
+  &lt;/container&gt;
+
+ &lt;content id="music" version="1.0"&gt;
+    &lt;search&gt;
+     &lt;visibility-delay&gt;30.0&lt;/visibility-delay&gt;
+    &lt;/search&gt;
+    &lt;engine&gt;
+      &lt;proton&gt;
+        &lt;tuning&gt;
+          &lt;searchnode&gt;  
+            &lt;summary&gt;           
+              &lt;io&gt;                      
+                &lt;read&gt;directio&lt;/read&gt;           
+              &lt;/io&gt;                     
+              &lt;store&gt;                   
+                &lt;cache&gt;
+                  &lt;maxsize&gt;1073741824&lt;/maxsize&gt;&lt;!--1GB --&gt;
+                &lt;/cache&gt;                        
+              &lt;/store&gt;
+            &lt;/summary&gt;
+          &lt;/searchnode&gt;
+        &lt;/tuning&gt;
+      &lt;/proton&gt;
+    &lt;/engine&gt;
+  ....
+  &lt;/content&gt;
+</pre>
+
+<h3>Protocol phases caches</h3>
+<p>The <em>ranking.queryCache</em> and <em>groupingSessionCache</em> described in the <a href="../reference/search-api-reference.html">search api reference</a> are only caching data in between phases for a given a query, hence other queries does not get any benefits but these caches saves container - content node(s) round-trips for a <em>given</em> query. </p>
+
+
