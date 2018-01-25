@@ -1,0 +1,60 @@
+---
+# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa Search Performance Tuning"
+---
+<p>This document describes how to tune your application for high performance while <a href="sizing-search.html">search sizing guide</a> discuss how to scale your application.</p>
+<h2 id="document-scheme">Document Model Schema and Performance</h2>
+
+<h3 id="attribute-vs-index">Attribute v.s index</h3>
+The <a href="../attributes.html">attribute</a> documentation summaries when to use <samp>attribute</samp> in the <a href="../reference/search-definitions-reference.html#indexing">indexing</a> statement. Search over fields with <samp>attribute</samp> is by default implemented as a linear scan over all documents and is rather slow and scales with the total document volume per cpu core. Adding <samp>attribute:fast-search</samp> will speed up searches over attribute fields by building an in-memory. </p> 
+
+<pre>
+field timestamp type long {
+  indexing: summary | attribute
+  attribute:fast-search
+  rank:filter
+}
+</pre>
+<p>If you configure both index and attribute for string type Vespa will do matching against the index with match text.</p>
+
+<h3 id="string">Indexing strings in Vespa: Matching & Performance</h3> 
+<p>When configuring <a href="../documentation/reference/search-definitions-reference.html#type:string">string</a> type fields with <samp>index</samp> the default <a href="../reference/search-definitions-reference.html#match">match</a> mode is <samp>text</samp> which means Vespa will tokenize the content and index the tokens. An example document definition is provided below where we have 3 fields, two string fields of type string and one double field represented as <samp>attribute</samp>.
+
+<pre>
+search foo {
+  document foo {
+    field title type string {
+      indexing:summary | index
+    }
+    field uuid type string {
+      indexing:summary | index
+    }
+    field popularity type double {
+      indexing: summary | attribute 
+    }
+  }
+}
+</pre>
+<p>The string representation of an <a href="https://en.wikipedia.org/wiki/Universally_unique_identifier">Universally unique identifiel (UUID)</a> is represented as 32 hexadecimal (base 16) digits, displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters (32 alphanumeric characters and four hyphens). For example <samp>123e4567-e89b-12d3-a456-426655440000</samp>. When indexed with the above document definition Vespa will tokenize <samp>123e4567-e89b-12d3-a456-426655440000</samp> into 5 tokens <samp>[123e4567,e89b,12d3,a456,426655440000]</samp>. When querying Vespa for the same UUID <samp>/search/?query=uuid:123e4567-e89b-12d3-a456-426655440000</samp> vespa will because of the hyphens treat the input as an implicit phrase query term with 5 tokens <samp>uuid:"123e4567 e89b12d3 a456 426655440000"</samp> which has a signifcant higher cost compared searching for a single word term. We can let Vespa know that we don't want any tokenization by changing the match mode to <samp>word</samp>. This change will avoid tokenization of the field and will store the entire input <samp>123e4567-e89b-12d3-a456-426655440000</samp> as one token/word</p>
+
+<pre>
+    field uuid type string {
+      indexing:summary | index
+      match:word
+      rank:filter
+    }
+</pre>
+<p>Notice that we also tell Vespa that the <samp>uuid</samp> field of type string should be treated as a <a href="../reference/search-definitions-reference.html#filter">rank:filter</a> field, this is a hint to Vespa that this string field should be represented as efficient as possible during search &amp; ranking. Please make sure to review all string fields in your application and ask yourself if you need tokenized matching or not and if the field should be used for ranking or not. The <samp>rank:filter</samp> behavior can also be triggered at query time on a per query item basis by the <samp>com.yahoo.prelude.query.Item.setRanked()</samp> in a <a href="../searcher-development.html">custom searcher</a> working on the parsed query tree.
+
+
+<h3 id="parent-child">Parent child relationships and Search Performance</h3>
+<p></p>
+
+
+<h2 id="ranking-performance">Ranking &amp; Performance</h2>
+
+
+
+
+<h2 id="grouping-performance">Grouping &amp; Performance</h2>
+
