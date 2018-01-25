@@ -307,11 +307,13 @@ Each part of the indexing pipeline is separated by the pipe character '|':
 ## Deploy the Application Package
 
 Once done with the application package, deploy the Vespa application —
-build and start Vespa as in the [quick start](../vespa-quick-start.html).
-Deploy the application:
+start Vespa as in the [quick start](../vespa-quick-start.html).
+Deploy the application e.g by running this in a shell inside your Docker container
 
     $ cd /vespa-sample-apps/blog-search
     $ vespa-deploy prepare src/main/application && vespa-deploy activate
+
+(or alternatively, run the eqivalent comamnds from outside it as in the quick-start).
 
 This prints that the application was activated successfully and also
 the checksum, timestamp and generation for this deployment (more on that later).
