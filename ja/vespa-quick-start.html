@@ -1,0 +1,130 @@
+---
+# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Dockerを使ったVespaのクイック・スタート"
+---
+
+<p>
+このガイドではDockerを使って1台のマシン上にVespaをインストールして起動する方法を説明します。
+<a href="vespa-quick-start-centos.html">CentOS / Vagrant</a>や
+<a href="vespa-quick-start-windows.html">Windows</a>のガイドも試してみてください。
+</p><p>
+<strong>必要条件</strong>:
+<ul>
+	<li><a href="https://docs.docker.com/engine/installation/">Docker</a>がインストールされていること。</li>
+	<li><a href="https://git-scm.com/downloads">Git</a>がインストールされていること。</li>
+	<li>オペレーティング・システム: macOSまたはLinux</li>
+	<li>アーキテクチャ: x86_64</li>
+	<li>少なくとも2GBのメモリがコンテナのインスタンスに割り当てられていること。</li>
+</ul>
+</p>
+
+<ol>
+<li>
+    <strong><a href="https://github.com/vespa-engine/sample-apps">GitHub</a>からVespaのサンプル・アプリケーションをcloneする:</strong>
+<pre data-test="exec">
+$ git clone https://github.com/vespa-engine/sample-apps.git
+$ export VESPA_SAMPLE_APPS=`pwd`/sample-apps
+</pre>
+</li>
+
+<li>
+    <strong>VespaのDockerコンテナを起動する:</strong>
+<pre data-test="exec">
+$ docker run --detach --name vespa --hostname vespa-container --privileged \
+  --volume $VESPA_SAMPLE_APPS:/vespa-sample-apps --publish 8080:8080 vespaengine/vespa
+</pre>
+<p>
+		<samp>volume</samp>オプションで、事前にダウンロードしたソースコードにDockerコンテナ内の<samp>/vespa-sample-apps</samp>としてアクセスできるようになります。
+    検索やフィード用のインタフェースにアクセスできるように、Dockerコンテナの外に<samp>8080</samp>ポートを公開します。
+		<samp>vespa</samp>の名前で同時に稼働できるDockerコンテナは1つまでです。必要あらば変更してください。
+</p>
+<p>
+		上記のコマンドの具体的なステップに興味がある場合は、<a href="https://github.com/vespa-engine/docker-image/blob/master/Dockerfile">Dockerfile</a> と<a href="https://github.com/vespa-engine/docker-image/blob/master/include/start-container.sh">起動スクリプト</a>を参照してください。
+</p>
+</li>
+
+<li>
+		<strong>設定サーバが起動するのを待つ - 200 OKのレスポンスを待つ:</strong>
+<pre data-test="exec" data-test-wait-for="200 OK">
+$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
+</pre>
+</li>
+
+<li>
+		<strong>サンプル・アプリケーションをデプロイしてアクティベートする:</strong>
+<pre data-test="exec">
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /vespa-sample-apps/basic-search/src/main/application/ &amp;&amp; \
+    /opt/vespa/bin/vespa-deploy activate'
+</pre>
+		さらなるサンプル・アプリケーションは<a href="https://github.com/vespa-engine/sample-apps/tree/master">sample-apps</a>で見つけることができます。
+    <a href="cloudconfig/application-packages.html">アプリケーション・パッケージ</a>のアプリケーションの項目を参照してください。
+</li>
+
+<li>
+		<strong>アプリケーションがアクティブであることを確認する - 200 OKのレスポンスを待つ:</strong>
+<pre data-test="exec" data-test-wait-for="200 OK">
+$ curl -s --head http://localhost:8080/ApplicationStatus
+</pre>
+</li>
+
+<li>
+    <strong>ドキュメントをフィードする:</strong>
+<pre data-test="exec">
+$ curl -s -X POST --data-binary @${VESPA_SAMPLE_APPS}/basic-search/music-data-1.json \
+    http://localhost:8080/document/v1/music/music/docid/1 | python -m json.tool
+$ curl -s -X POST --data-binary @${VESPA_SAMPLE_APPS}/basic-search/music-data-2.json \
+    http://localhost:8080/document/v1/music/music/docid/2 | python -m json.tool
+</pre>
+    この例では<a href="document-api.html">ドキュメントAPI</a>を使っています。
+    大規模なデータを高速にフィードするには<a href="vespa-http-client.html">Java Feeding API</a>を使ってください。
+</li>
+
+<li>
+    <strong>クエリーとドキュメント取得リクエストを実行する:</strong>
+<pre data-test="exec" data-test-assert-contains="Michael Jackson">
+$ curl -s http://localhost:8080/search/?query=bad | python -m json.tool
+</pre>
+<pre data-test="exec" data-test-assert-contains="Eminem">
+$ curl -s http://localhost:8080/document/v1/music/music/docid/2 | python -m json.tool
+</pre>
+    ブラウザで<a href="http://localhost:8080/search/?query=bad">http://localhost:8080/search/?query=bad</a>の結果を参照してください。
+    詳しくは<a href="search-api.html">Search API</a>を参照してください。
+</li>
+
+<li>
+    <p><strong>終わったらクリーンアップする</strong></p>
+    <p>必要なくなった稼働中のコンテナを停止する:</p>
+<pre data-test="after">
+$ docker stop vespa
+</pre>
+    <p>必要に応じて、停止したコンテナを完全に削除する:</p>
+<pre data-test="after">
+$ docker rm vespa
+</pre>
+</li>
+
+</ol>
+
+
+
+<h2 id="next-steps">次のステップ</h2>
+<ul>
+  <li>
+		このアプリケーションは完全に機能してプロダクションで使うことができますが、冗長性のために
+    <a href="multinode-systems.html">ノードを追加</a>した方がいいかもしれません。
+  <li>
+    Vespaの使い方についてさらに学ぶため、<a href="tutorials/blog-search.html">ブログ検索とレコメンデーションのチュートリアル</a>を試してみましょう。
+  <li>
+		Vespaアプリケーションにあなた独自のJavaコンポーネントを追加するには、
+		<a href="jdisc/developing-applications.html">アプリケーションの開発</a>
+    を参照してください。
+  <li>
+    <a href="api.html">Vespa API</a>はVespaのインタフェースの理解に役立つでしょう。
+  <li>
+    <a href="https://github.com/vespa-engine/sample-apps/tree/master">サンプル・アプリケーション</a>を眺めてみましょう。
+  <li>
+    <a href="securing-your-vespa-installation.html">Vespaのインストールをセキュア</a>にします。
+  <li>
+    AWSで稼働させるには、<a href="vespa-quick-start-multinode-aws.html">AWS EC2での複数ノードのクイック・スタート</a>または<a href="vespa-quick-start-multinode-aws-ecs.html">AWS ECSでの複数ノードのクイック・スタート</a>を参照してください。
+  </li>
+</ul>
