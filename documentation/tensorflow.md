@@ -179,7 +179,7 @@ of the Vespa name and type.
 ### 2. Create a global document containing the tensor variables as fields
 
 <ol>
-<li>Add a <a href="reference/services-content.html">global document type</a>:
+<li>Add a <a href="reference/services-content.html#document">global document type</a>:
 Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt; to
 the &lt;documents&gt; list in your services.xml.
 <li>Add attribute fields for your tensors in the document definition
