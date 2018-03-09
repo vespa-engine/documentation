@@ -93,12 +93,20 @@ input to the computation must be provided by a macro with the same
 name as the input variable. Consider the following example:
 
 ```
-rank-profile default inherits default {
-    macro input_tensor() {
-        expression: attribute(document_tensor)
+search tf {
+    document tf {
+        field document_tensor type tensor(d0[1],d1[784]) {
+            indexing: attribute | summary
+            attribute: tensor(d0[1],d1[784])
+        }
     }
-    first-phase {
-        expression: sum(tensorflow("my_model/saved", "serving_default", "output"))
+    rank-profile default inherits default {
+        macro input_tensor() {
+            expression: attribute(document_tensor)
+        }
+        first-phase {
+            expression: sum(tensorflow("my_model/saved", "serving_default", "output"))
+        }
     }
 }
 ```
@@ -124,6 +132,20 @@ type expected in the model. The input tensors must have dimension names
 starting with `"d0"` for the first dimension, and increasing for each dimension
 (i.e. `"d1"`, `"d2"`, etc). The result of the evaluation will likewise be
 a tensor with names `"d0"`, `"d1"`, etc.
+
+#### Batch dimensions
+
+When training your model you will typically have an input placeholder which
+contains a dimension for batches. In the example above, the `x` placeholder
+has size `[None, 784]`, which signifies that the first dimension (of unknown
+size) is the batch dimension. This allows control over the batch size during
+training, and it is common to use a batch size much smaller than the entire
+training set (i.e. mini-batches) during training.
+
+During run-time evaluation, Vespa typically does inference over a single
+exemplar. If this is the case in your network, take care to specifically
+set the batch dimension to size 1, as certain optimizations are done
+in Vespa to improve evaluation time. This is shown in the example above.
 
 ## Updating variables without redeploying the application
 
@@ -186,7 +208,7 @@ search mydocument {
     document mydocument {
         field myvariables_ref type reference<myvariables> {
             indexing: attribute
-        }    
+        }
     }
     import field myvariables_ref.my_tf_variable as my_tf_variable {}
 }
@@ -254,7 +276,7 @@ Where update.json follows the <a href="reference/document-json-format.html">docu
 As this is a global document, the new value will immediately be used when evaluating any document.
 </ul>
 
-### Limitations on model size and complexity
+## Limitations on model size and complexity
 
 Note that in the above rank profile example, the `tensorflow` model evaluation
 was put in the first phase ranking. In general, evaluating these models are
@@ -267,7 +289,7 @@ size and complexity of the models, particularly if the application has a large
 number of documents. However, effective use of the first and second phase can
 make running deep models feasible.
 
-### TensorFlow operation support
+## TensorFlow operation support
 
 Currently, not [all operations in TensorFlow](https://www.tensorflow.org/api_docs/cc/)
 are supported. Typical neural networks are supported, but convolutional and
