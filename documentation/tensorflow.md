@@ -125,6 +125,135 @@ starting with `"d0"` for the first dimension, and increasing for each dimension
 (i.e. `"d1"`, `"d2"`, etc). The result of the evaluation will likewise be
 a tensor with names `"d0"`, `"d1"`, etc.
 
+## Updating variables without redeploying the application
+
+Some times it is desirable to update the TensorFlow variables of a model frequently,
+e.g when a neural net with a fixed layout is retrained frequently to update weighths
+and biases in a reinforcement learning setup.
+
+It is possible to do this without redeploying the application by storing those
+tensors in a global document instead of as constants in the application package.
+This is explained in the following steps.
+
+### 1. Determine the Vespa name and type of the TensorFlow variable(s)
+
+Tensor dimensions in TensorFlow are implicitly named and ordered, while
+this is explicit in Vespa. Vespa will determine the dimension name and
+order which leads to the most efficient execution during import of your model.
+This exact type specification needs to be used in the steps below.
+
+In addition, Vespa will replace slashed in the TensorFlow variable name by underscore.
+
+When importing the TensorFlow model during deployment, Vespa will output
+the following INFO log message:
+
+```
+Importing TensorFlow variable [TensorFlow name] as [Vespa name] of type [Vespa type]
+```
+
+Find this log message for the variables you want to make updateable and take note
+of the Vespa name and type.
+
+### 2. Create a global document containing the tensor variables as fields
+
+<ol>
+<li>Add a <a href="reference/services-content.html">global document type</a>:
+Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt; to
+the &lt;documents&gt; list in your services.xml.
+<li>Add attribute fields for your tensors in the document definition
+(one per TensorFlow variable to make updateable), using the type spec found
+in step 1 and any name:
+
+```
+search myvariables {
+    document myvariables {
+        field my_tf_variable type tensor(y[10],x[20]) {
+	    indexing: attribute
+	}
+    }
+}
+```
+</ol>
+
+### 3. Refer to the global document from your regular document type
+
+<ol>
+<li>Add a <a href="search-definitions.html#document-references">reference</a>
+to the global document and import the fields:
+
+```
+search mydocument {
+    document mydocument {
+        field myvariables_ref type reference<myvariables> {
+            indexing: attribute
+        }    
+    }
+    import field myvariables_ref.my_tf_variable as my_tf_variable {}
+}
+```
+
+<li>Add a reference to the same global variable document from all your documents.
+All documents should contain the value "id:mynamespace:myvariables::1" in the
+myvariables_ref field. You can add this value to all documents by doing an
+<a href="document-api.html#update">update</a> on each document with the JSON
+
+```
+{
+    "fields": {
+        "myvariables_ref": {
+            "assign": "id:mynamespace:myvariables::1"
+        }
+    }
+}
+```
+
+### 4. Add a macro returning the value of the imported global field
+
+Create a macro with the exact Vespa name found in step 1.
+This macro will override the variable value found in the application package.
+
+```
+macro vespa_name_of_tf_variable {
+    expression: attribute(my_tf_variable)
+}
+```
+
+### 5. Convert and feed the variables whenever they are updated
+
+Whenever the TensorFlow model is retrained to produce new variable values,
+write them to Vespa as follows:
+
+<ol>
+
+<li>Convert the Variable value to the Vespa document format:
+Obtain <a href="http://mvnrepository.com/artifact/com.yahoo.vespa/searchlib">searchlib.jar</a>
+(with dependencies), and run
+
+```
+java -cp searchlib-jar-with-dependencies.jar com.yahoo.searchlib.rankingexpression.integration.tensorflow.VariableConverter \
+      [modelDirectory] [TensorFlowVariableName] [VespaType]
+```
+or, if you do this from Java, call com.yahoo.searchlib.rankingexpression.integration.tensorflow.VariableConverter.importVariable
+with the same arguments.
+
+<li>Update the global document. Use e.g the <a href="document-api.html">document API</a> to PUT a new value for your variable:
+```
+curl -X PUT --data-binary @update.json http://hostname:8080/document/v1/mynamespace/myvariables/docid/1
+```
+Where update.json follows the <a href="reference/document-json-format.html">document json format</a>:
+```
+{
+    "fields": {
+        "my_tf_variable": {
+            "assign": [The variable value output from the previous step]
+        }
+    }
+}
+```
+
+As this is a global document, the new value will immediately be used when evaluating any document.
+</ul>
+
 ### Limitations on model size and complexity
 
 Note that in the above rank profile example, the `tensorflow` model evaluation
@@ -143,4 +272,5 @@ make running deep models feasible.
 Currently, not [all operations in TensorFlow](https://www.tensorflow.org/api_docs/cc/)
 are supported. Typical neural networks are supported, but convolutional and
 recurrent neural networks are not yet supported.
+
 
