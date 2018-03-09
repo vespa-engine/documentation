@@ -3,7 +3,7 @@
 title: "Ranking with TensorFlow models in Vespa"
 ---
 
-<p class="alert">
+<p class="alert alert-info">
 Import of TensorFlow models is currently a BETA feature.
 </p>
 
