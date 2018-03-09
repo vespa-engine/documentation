@@ -3,9 +3,9 @@
 title: "Ranking with TensorFlow models in Vespa"
 ---
 
-<div style="background-color: #CD5C5C;">
+<p class="alert">
 Import of TensorFlow models is currently a BETA feature.
-</div>
+</p>
 
 Vespa has support for advanced ranking models through it's tensor API. If
 you have models that are trained in TensorFlow, Vespa can import the models
@@ -180,7 +180,7 @@ of the Vespa name and type.
 
 <ol>
 <li>Add a <a href="reference/services-content.html#document">global document type</a>:
-Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt; to
+Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt;</code> to
 the &lt;documents&gt; list in your services.xml.
 <li>Add attribute fields for your tensors in the document definition
 (one per TensorFlow variable to make updateable), using the type spec found
