@@ -178,31 +178,29 @@ of the Vespa name and type.
 
 ### 2. Create a global document containing the tensor variables as fields
 
-<ol>
-<li>Add a <a href="reference/services-content.html">global document type</a>:
+
+1. Add a <a href="reference/services-content.html">global document type</a>:
 Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt;</code> to
 the &lt;documents&gt; list in your services.xml.
-<li>Add attribute fields for your tensors in the document definition
+
+1. Add attribute fields for your tensors in the document definition
 (one per TensorFlow variable to make updateable), using the type spec found
 in step 1 and any name:
-
 ```
 search myvariables {
     document myvariables {
         field my_tf_variable type tensor(y[10],x[20]) {
-	    indexing: attribute
-	}
+            indexing: attribute
+        }
     }
 }
 ```
-</ol>
+
 
 ### 3. Refer to the global document from your regular document type
 
-<ol>
-<li>Add a <a href="search-definitions.html#document-references">reference</a>
+1. Add a <a href="search-definitions.html#document-references">reference</a>
 to the global document and import the fields:
-
 ```
 search mydocument {
     document mydocument {
@@ -214,11 +212,10 @@ search mydocument {
 }
 ```
 
-<li>Add a reference to the same global variable document from all your documents.
+1. Add a reference to the same global variable document from all your documents.
 All documents should contain the value "id:mynamespace:myvariables::1" in the
 myvariables_ref field. You can add this value to all documents by doing an
 <a href="document-api.html#update">update</a> on each document with the JSON
-
 ```
 {
     "fields": {
@@ -245,12 +242,9 @@ macro vespa_name_of_tf_variable {
 Whenever the TensorFlow model is retrained to produce new variable values,
 write them to Vespa as follows:
 
-<ol>
-
-<li>Convert the Variable value to the Vespa document format:
+1. Convert the Variable value to the Vespa document format:
 Obtain <a href="http://mvnrepository.com/artifact/com.yahoo.vespa/searchlib">searchlib.jar</a>
 (with dependencies), and run
-
 ```
 java -cp searchlib-jar-with-dependencies.jar com.yahoo.searchlib.rankingexpression.integration.tensorflow.VariableConverter \
       [modelDirectory] [TensorFlowVariableName] [VespaType]
@@ -258,7 +252,7 @@ java -cp searchlib-jar-with-dependencies.jar com.yahoo.searchlib.rankingexpressi
 or, if you do this from Java, call com.yahoo.searchlib.rankingexpression.integration.tensorflow.VariableConverter.importVariable
 with the same arguments.
 
-<li>Update the global document. Use e.g the <a href="document-api.html">document API</a> to PUT a new value for your variable:
+1. Update the global document. Use e.g the <a href="document-api.html">document API</a> to PUT a new value for your variable:
 ```
 curl -X PUT --data-binary @update.json http://hostname:8080/document/v1/mynamespace/myvariables/docid/1
 ```
@@ -274,7 +268,6 @@ Where update.json follows the <a href="reference/document-json-format.html">docu
 ```
 
 As this is a global document, the new value will immediately be used when evaluating any document.
-</ul>
 
 ## Limitations on model size and complexity
 
