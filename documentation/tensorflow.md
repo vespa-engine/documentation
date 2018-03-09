@@ -180,7 +180,7 @@ of the Vespa name and type.
 
 <ol>
 <li>Add a <a href="reference/services-content.html">global document type</a>:
-Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt; to
+Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt;</code> to
 the &lt;documents&gt; list in your services.xml.
 <li>Add attribute fields for your tensors in the document definition
 (one per TensorFlow variable to make updateable), using the type spec found
