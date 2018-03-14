@@ -160,7 +160,8 @@ this is explicit in Vespa. Vespa will determine the dimension name and
 order which leads to the most efficient execution during import of your model.
 This exact type specification needs to be used in the steps below.
 
-In addition, Vespa will replace slashed in the TensorFlow variable name by underscore.
+In addition, Vespa will prefix the variable name by the directory path under "models"
+and replace any slashes by underscore.
 
 When importing the TensorFlow model during deployment, Vespa will output
 the following INFO log message:
