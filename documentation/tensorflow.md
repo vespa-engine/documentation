@@ -251,7 +251,7 @@ with the same arguments.
 
 1. Update the global document. Use e.g the <a href="document-api.html">document API</a> to PUT a new value for your variable:
 ```
-curl -X PUT --data-binary @update.json http://hostname:8080/document/v1/mynamespace/myvariables/docid/1
+curl -X PUT -H "Content-Type:application/json" --data-binary @update.json http://hostname:8080/document/v1/mynamespace/myvariables/docid/1
 ```
 Where update.json follows the <a href="reference/document-json-format.html">document json format</a>:
 ```
