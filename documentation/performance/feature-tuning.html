@@ -6,7 +6,8 @@ title: "Vespa Search Performance Tuning"
 <h2 id="document-scheme">Document Model Schema and Performance</h2>
 
 <h3 id="attribute-vs-index">Attribute v.s index</h3>
-The <a href="../attributes.html">attribute</a> documentation summaries when to use <samp>attribute</samp> in the <a href="../reference/search-definitions-reference.html#indexing">indexing</a> statement. Search over fields with <samp>attribute</samp> is by default implemented as a linear scan over all documents and is rather slow and scales with the total document volume per cpu core. Adding <samp>attribute:fast-search</samp> will speed up searches over attribute fields by building an in-memory. </p> 
+The <a href="../attributes.html">attribute</a> documentation summaries when to use <samp>attribute</samp> in the <a href="../reference/search-definitions-reference.html#indexing">indexing</a> statement. 
+Adding <samp>attribute:fast-search</samp> will speed up searches over attribute fields by building an in-memory index over the values in the attribute field. </p> 
 
 <pre>
 field timestamp type long {
@@ -15,10 +16,10 @@ field timestamp type long {
   rank:filter
 }
 </pre>
-<p>If you configure both index and attribute for string type Vespa will do matching against the index with match text.</p>
+<p>If you configure both index and attribute for string type fields Vespa will do search and matching against the index with default match <samp>text</samp>.</p>
 
 <h3 id="string">Indexing strings in Vespa: Matching & Performance</h3> 
-<p>When configuring <a href="../documentation/reference/search-definitions-reference.html#type:string">string</a> type fields with <samp>index</samp> the default <a href="../reference/search-definitions-reference.html#match">match</a> mode is <samp>text</samp> which means Vespa will tokenize the content and index the tokens. An example document definition is provided below where we have 3 fields, two string fields of type string and one double field represented as <samp>attribute</samp>.
+<p>When configuring <a href="../reference/search-definitions-reference.html#type:string">string</a> type fields with <samp>index</samp> the default <a href="../reference/search-definitions-reference.html#match">match</a> mode is <samp>text</samp> which means Vespa will tokenize the content and index the tokens. An example document definition is provided below where there are 3 fields; two fields of type string and one double field.
 
 <pre>
 search foo {
@@ -44,17 +45,20 @@ search foo {
       rank:filter
     }
 </pre>
-<p>Notice that we also tell Vespa that the <samp>uuid</samp> field of type string should be treated as a <a href="../reference/search-definitions-reference.html#filter">rank:filter</a> field, this is a hint to Vespa that this string field should be represented as efficient as possible during search &amp; ranking. Please make sure to review all string fields in your application and ask yourself if you need tokenized matching or not and if the field should be used for ranking or not. The <samp>rank:filter</samp> behavior can also be triggered at query time on a per query item basis by the <samp>com.yahoo.prelude.query.Item.setRanked()</samp> in a <a href="../searcher-development.html">custom searcher</a> working on the parsed query tree.
+<p>Notice that also tell Vespa that the <samp>uuid</samp> field of type string should be treated as a <a href="../reference/search-definitions-reference.html#filter">rank:filter</a> field, this is a hint to Vespa that this string field should be represented as efficient as possible during search &amp; ranking. Please make sure to review all string fields in your application and ask yourself if you need tokenized matching or not and if the field should be used for ranking or not. The <samp>rank:filter</samp> behavior can also be triggered at query time on a per query item basis by the <samp>com.yahoo.prelude.query.Item.setRanked()</samp> in a <a href="../searcher-development.html">custom searcher</a> working on the parsed query tree.
 
 
 <h3 id="parent-child">Parent child relationships and Search Performance</h3>
-<p></p>
+<p>
+When searching imported attribute fields from parent document types there is an additional cost penalty which can be reduced significantly if the imported field is defined with <samp>rank:filter</samp> 
+and <a href="../reference/services-content.html#visibility-delay">visibility-delay</a> is configured to &gt; 0.</p> 
 
 
 <h2 id="ranking-performance">Ranking &amp; Performance</h2>
+<p>Generally <a href="sizing-search.html"> Vespa scales</a> with the number of hits the query recalls which needs to be ranked per node. The ranking cost per document recalled is determined by the complexity of the ranking expression in use and the rank feature complexity. </p>
 
 
 
-
-<h2 id="grouping-performance">Grouping &amp; Performance</h2>
+<h2 id="caches">Summary Performance</h2>
+<p>If your use case is requesting many hits from a few content nodes adding a <a href="caches-in-vespa.html">summary cache</a> will reduce cost, if your application can affort the additional memory footprint it's possible to configure <a href="../document-summaries.html">explicit document summaries</a> which could be used to fetch summaries only from memory by only referencing fields which have <samp>attribute</samp> in their indexing statement. If you believe you are bound by summary performance you can test using the internal reseved document summary which contains all single-valued attribute fields by benchmarking with <samp>&amp;summary=attributeprefetch</samp></p>
 
