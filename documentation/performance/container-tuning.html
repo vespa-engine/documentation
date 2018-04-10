@@ -190,6 +190,43 @@ Refer to <a href="../setting-vespa-variables.html">Setting Vespa variables</a>.
 
 
 
+<h2 id="warmup-queries">Warmup queries</h2>
+<p>
+Some applications observe that the first queries made to a freshly started container
+take a very long time to complete. This is typically due to some components performing
+lazy setup of data structures or connections. Lazy initialization should be avoided in
+favor of eager initialization in component constructor, but this is not always possible. 
+A way to avoid problems with the first queries in such cases is to perform warmup queries 
+at startup. This is done by issuing queries from the constructor of the Handler of
+regular queries. If you are using the default handler, com.yahoo.search.handler.SearchHandler,
+you need to subclass this and configure your subclass as the handler of query requests
+in services.xml.
+</p>
+
+<p>
+Add a call to a warmupQueries() method as the last line of your handler constructor.
+The method can look something like this:
+</p>
+
+<pre>
+    private void warmupQueries() {
+        String[] requestUris = new String[] {"warmupRequestUri1", "warmupRequestUri2"};
+        int warmupIterations = 50;
+
+        for (int i = 0; i < warmupIterations; i++) {
+            for (String requestUri : requestUris) {
+                handle(HttpRequest.createTestRequest(requestUri, com.yahoo.jdisc.http.HttpRequest.Method.GET));
+            }
+        }
+    }
+</pre>
+
+<p>
+Since these queries will be executed before the container starts accepting
+external queries, they will cause the first external queries to observe a warmed
+up container instance.
+</p>
+
 <h2 id="override-defaults">Override defaults</h2>
 <p>
 Sometimes it is necessary to turn off a Vespa default setting to make
