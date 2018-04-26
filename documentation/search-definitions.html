@@ -146,11 +146,12 @@ Read more in the <a href="ranking.html">ranking</a> documentation.
 
 
 
-<h2 id="document-references">Document references</h2>
+<h2 id="document-references">Document references and parent-child relationships</h2>
 <p>
 Documents can refer to other documents using
 <a href="reference/search-definitions-reference.html#type:reference">references</a>
-to <a href="/documentation/reference/services-content.html#document">global documents</a>.
+to <a href="reference/services-content.html#document">global documents</a>
+to model parent-child relationships.
 Using a reference, fields can be
 <a href="reference/search-definitions-reference.html#import-field">imported</a>
 from parent types into the child's search definition and used for matching, ranking, grouping and sorting.
@@ -159,23 +160,52 @@ from parent types into the child's search definition and used for matching, rank
 <p>
 Example:
 <pre>
-search campaign {
-    document campaign {
-        field budget type int { indexing : attribute }
+search advertiser {
+  document advertiser {
+    field name type string {
+      indexing : attribute
     }
+  }
 }
 </pre>
 <pre>
 [
-  { "put": "id:test:campaign::thebest", "fields": { "budget": 20 } },
-  { "put": "id:test:campaign::nextbest", "fields": { "budget": 10 } }
+  { "put": "id:test:advertiser::cool", "fields": { "name": "cool" } }
+]
+</pre>
+
+<pre>
+search campaign {
+  document campaign {
+    field advertiser_ref type <span style="background-color: yellow;">reference&lt;advertiser&gt;</span> {
+      indexing: attribute
+    }
+    field budget type int {
+      indexing : attribute
+    }
+  }
+  <span style="background-color: yellow;">import field advertiser_ref.name as advertiser_name</span> {}
+}
+</pre>
+<pre>
+[
+  { "put": "id:test:campaign::thebest", "fields": {
+      "advertiser_ref": "id:test:advertiser::cool",
+      "budget": 20 }
+  },
+  { "put": "id:test:campaign::nextbest", "fields": {
+      "advertiser_ref": "id:test:advertiser::cool",
+      "budget": 10 }
+  }
 ]
 </pre>
 <pre>
 search salesperson {
-    document salesperson {
-        field name type string { indexing: attribute }
+  document salesperson {
+    field name type string {
+      indexing: attribute
     }
+  }
 }
 </pre>
 <pre>
@@ -185,25 +215,27 @@ search salesperson {
 </pre>
 <pre>
 search ad {
-    document ad {
-        field campaign_ref type <span style="background-color: yellow;">reference&lt;campaign&gt;</span> {
-            indexing: attribute
-        }
-        field other_campaign_ref type reference&lt;campaign&gt; {
-            indexing: attribute
-        }
-        field salesperson_ref type reference&lt;salesperson&gt; {
-            indexing: attribute
-        }
+  document ad {
+    field campaign_ref type <span style="background-color: yellow;">reference&lt;campaign&gt;</span> {
+      indexing: attribute
     }
-        
-    <span style="background-color: yellow;">import field campaign_ref.budget as budget</span> {}
-    import field salesperson_ref.name as salesperson_name {}
+    field other_campaign_ref type reference&lt;campaign&gt; {
+      indexing: attribute
+    }
+    field salesperson_ref type reference&lt;salesperson&gt; {
+      indexing: attribute
+    }
+  }
 
-    document-summary my_summary {
-        summary budget type int {}
-        summary salesperson_name type string {}
-    }
+  <span style="background-color: yellow;">import field campaign_ref.budget as budget</span> {}
+  import field salesperson_ref.name as salesperson_name {}
+  import field campaign_ref.advertiser_name as advertiser_name {}
+
+  document-summary my_summary {
+    summary budget type int {}
+    summary salesperson_name type string {}
+    summary advertiser_name type string {}
+  }
 }
 </pre>
 <pre>
@@ -219,32 +251,31 @@ Document type <em>ad</em> has two references to <em>campaign</em> (via <em>campa
 and <em>other_campaign_ref</em>) and one reference to <em>salesperson</em> (via <em>salesperson_ref</em>).
 The <em>budget</em> field from <em>campaign</em> is imported into the <em>ad</em> search definition
 (via <em>campaign_ref</em>) and given the name <em>budget</em>. Similarly, the <em>name</em> of
-<em>salesperson</em> is imported as <em>salesperson_name</em>. To use the imported fields in summary
+<em>salesperson</em> is imported as <em>salesperson_name</em>.
+Document type <em>campaign</em> has a reference to <em>advertiser</em> and imports the field <em>name</em>
+as <em>advertiser_name</em>. This is also imported into <em>ad</em> via <em>campaign_ref</em> from its grandparent <em>advertiser</em>.
+To use the imported fields in summary
 we have created a document summary <em>my_summary</em> containing these fields.
 </p>
 <p>
-Using the parent-child relationship, data does not have to be normalized,
-as fields from parents are imported into children.
-Use this to update parent fields to limit number of updates if a field's value
-is shared beween many documents.
+When using parent-child relationships,
+data does not have to be normalized as fields from parents are imported into children.
+Use this to update parent fields to limit number of updates if a field's value is shared beween many documents.
 This also limits the resources (memory / disk) required to store and handle documents on content nodes.
 </p>
 </p>
-As all global documents are distributed to all nodes, node capacity will limit
-the number of such documents. Global documents are hence called parents -
-there are usually less parents than children. Note that parents can have parents.
+All document types which are referenced from other types must be
+<a href="reference/services-content.html#document">global documents</a>
+(parents) that are distributed to all content nodes.
+Node capacity will limit the number of such documents.
+There should usually be an order of magnitude fewer parent documents than child documents.
+Note that parents can have parents.
 </p>
 <p>
 The following type of references are not supported:
 <ul>
   <li>
     Self-reference.
-  </li>
-  <li>
-    Transitive reference.
-    A document type <em>child</em> cannot import fields from it's <em>grandparent</em>
-    via a reference to <em>parent</em> (and its reference to <em>grandparent</em>).
-    In this case <em>child</em> needs an explicit reference to <em>grandparent</em>.
   </li>
   <li>
     Cyclic reference.
