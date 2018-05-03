@@ -1,0 +1,93 @@
+---
+# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Node and Network setup - Concepts and Requirements"
+---
+
+<p>
+Vespa is composed of a large number of services that communicate and
+interact with each other.  These services can be partitioned onto any
+amount of actual hardware for scaling, or they can all coexist on a
+single environment for development.  To achive this flexibility, some
+requirements must be met for the environment where the services will
+run.
+</p>
+
+<h2 id="node-concept">The node concept</h2>
+<p>
+A <em>node</em> in this context is the environment where some Vespa
+services are running.  This can be an actual machine like a server in
+a datacenter, or a laptop for developement and testing of Vespa
+configuration.  It can also be a Virtual Machine or a Docker
+container, so you can run multiple nodes on a single piece of
+hardware.
+</p>
+<p>
+The different Vespa services that run on nodes will mostly communicate
+with each other via the network.  This means that all nodes must have
+an IP address and have network connectivity to all other nodes.  Both
+IPv4 and IPv6 is supported, but using a mix of IPv4 and IPv6 is not
+recommended.  Note that the same framework is used even when running
+the entire Vespa stack on a single node.
+</p>
+
+<h2 id="network-name">The host name</h2>
+<p>
+In order to find the IP address of a node and connect to it, the node
+must have a <em>host name</em> that uniquely identifies it and which
+maps to its IP address.  Actual machines on a network will usually have a
+<em>Fully Qualified Domain Name</em> (FQDN) in DNS which should be used
+as the host name for this purpose.
+</p>
+<p>
+Note that it is a <em>requirement</em> that the host name (configured
+in <code>hosts.xml</code> in the application package) can be used to
+look up the IP address of the node.  The configuration server use this
+host name to construct URLs that will be used to open network
+connections to Vespa services running on that node.  If your nodes use
+IP addresses which don't have DNS names, you <em>must</em> have <em>all</em>
+those IP addresses with corresponding unique host names in
+<code>/etc/hosts</code> on <em>all</em> nodes in your Vespa installation.
+We recommend that you use names that can be used as FQDNs also in this case.
+</p>
+
+<h2 id="node-id">Identifying the node for configuration</h2>
+<p>
+When Vespa services are started on a node, the node must identify
+itself to the configuration system to get the correct configuration
+(including which services to run).  This requires a unique identifier
+for the node in the config server.  Since it's already a requirement
+that the node has a unique <em>host name</em> that the config server
+must know, Vespa uses the same <em>host name</em> when a node
+identifies itself to get its configuration.
+</p>
+<p>
+This means that the node <em>must</em> know its own host name (FQDN),
+and be in agreement with the config server about what exactly the host
+name is.
+</p>
+
+<h2 id="find-hostname">Finding your own host name</h2>
+<p>
+As discussed above, a Vespa node needs to know its own host name when
+it starts.  Usually this is achieved by just running
+the <code>hostname</code> command.  If you can arrange so <code>hostname</code>
+is set to the FQDN of the node, then everything should Just Work (TM).
+</p>
+<p>
+But sometimes this doesn't work properly, either because that name
+can't be used to find an IP address which works for connecting to
+services running on the node, or it's just that the name doesn't agree
+with what the config server thinks the node's host name is.  In this case
+you can override by setting the <code>VESPA_HOSTNAME<code> environment variable,
+then that will be used instead of running the <code>hostname<code> command.
+</p>
+
+<h2 id="scenario-development">Simple single-node development environment</h2>
+<p>
+If you're just running unit tests or testing a Vespa configuration on
+a single-node setup, you can usually avoid some setup hassle by
+overriding the hostname with the value "localhost".  Try this command
+for that purpose:
+<code>echo "override VESPA_HOSTNAME localhost" >> /opt/vespa/conf/vespa/default-env.txt</code>
+</p>
+
