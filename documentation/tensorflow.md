@@ -121,6 +121,26 @@ have "/" in them, which is the case when using name scopes in TensorFlow, these
 will be replaced with "\_" during import as slashes are illegal in Vespa ranking
 expression names.
 
+If you are uncertain of which signatures, inputs, outputs and types a model
+contains, you can use the `saved_model_cli` command to view a saved model:
+
+    $ saved_model_cli show --dir saved --all
+
+    MetaGraphDef with tag-set: 'serve' contains the following SignatureDefs:
+
+    signature_def['serving_default']:
+      The given SavedModel SignatureDef contains the following input(s):
+        inputs['x'] tensor_info:
+            dtype: DT_FLOAT
+            shape: (-1, 784)
+            name: Placeholder:0
+      The given SavedModel SignatureDef contains the following output(s):
+        outputs['y'] tensor_info:
+            dtype: DT_FLOAT
+            shape: (-1, 10)
+            name: add:0
+      Method name is: tensorflow/serving/predict
+
 The input macro can retrieve the tensor value from any valid source: a document
 field as shown here, a value sent along with the query, a constant value or a
 parent value. However, the tensor type from the macro must match the tensor
