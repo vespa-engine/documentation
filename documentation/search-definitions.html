@@ -146,42 +146,65 @@ Read more in the <a href="ranking.html">ranking</a> documentation.
 
 
 
-<h2 id="document-references">Document references</h2>
+<h2 id="document-references">Document references and parent-child relationships</h2>
 <p>
-Documents can refer to other documents using
+Model parent-child relationships by using
 <a href="reference/search-definitions-reference.html#type:reference">references</a>
-to <a href="/documentation/reference/services-content.html#document">global documents</a>.
+to <a href="reference/services-content.html#document">global documents</a>.
 Using a reference, fields can be
 <a href="reference/search-definitions-reference.html#import-field">imported</a>
 from parent types into the child's search definition and used for matching, ranking, grouping and sorting.
 </p>
 
 <p>
-<strong>Note:</strong> This feature is ready for production for applications
-with a data distribution where all documents are on each node.
-<!-- ToDo: remove this when supporting distributed... -->
-</p>
-
-<p>
 Example:
 <pre>
-search campaign {
-    document campaign {
-        field budget type int { indexing : attribute }
+search advertiser {
+  document advertiser {
+    field name type string {
+      indexing : attribute
     }
+  }
 }
 </pre>
 <pre>
 [
-  { "put": "id:test:campaign::thebest", "fields": { "budget": 20 } },
-  { "put": "id:test:campaign::nextbest", "fields": { "budget": 10 } }
+  { "put": "id:test:advertiser::cool", "fields": { "name": "cool" } }
+]
+</pre>
+
+<pre>
+search campaign {
+  document campaign {
+    field advertiser_ref type <span style="background-color: yellow">reference&lt;advertiser&gt;</span> {
+      indexing: attribute
+    }
+    field budget type int {
+      indexing : attribute
+    }
+  }
+  <span style="background-color: yellow">import field advertiser_ref.name as advertiser_name</span> {}
+}
+</pre>
+<pre>
+[
+  { "put": "id:test:campaign::thebest", "fields": {
+      "advertiser_ref": "id:test:advertiser::cool",
+      "budget": 20 }
+  },
+  { "put": "id:test:campaign::nextbest", "fields": {
+      "advertiser_ref": "id:test:advertiser::cool",
+      "budget": 10 }
+  }
 ]
 </pre>
 <pre>
 search salesperson {
-    document salesperson {
-        field name type string { indexing: attribute }
+  document salesperson {
+    field name type string {
+      indexing: attribute
     }
+  }
 }
 </pre>
 <pre>
@@ -191,25 +214,27 @@ search salesperson {
 </pre>
 <pre>
 search ad {
-    document ad {
-        field campaign_ref type <span style="background-color: yellow;">reference&lt;campaign&gt;</span> {
-            indexing: attribute
-        }
-        field other_campaign_ref type reference&lt;campaign&gt; {
-            indexing: attribute
-        }
-        field salesperson_ref type reference&lt;salesperson&gt; {
-            indexing: attribute
-        }
+  document ad {
+    field campaign_ref type <span style="background-color: yellow">reference&lt;campaign&gt;</span> {
+      indexing: attribute
     }
-        
-    <span style="background-color: yellow;">import field campaign_ref.budget as budget</span> {}
-    import field salesperson_ref.name as salesperson_name {}
+    field other_campaign_ref type reference&lt;campaign&gt; {
+      indexing: attribute
+    }
+    field salesperson_ref type reference&lt;salesperson&gt; {
+      indexing: attribute
+    }
+  }
 
-    document-summary my_summary {
-        summary budget type int {}
-        summary salesperson_name type string {}
-    }
+  <span style="background-color: yellow">import field campaign_ref.budget as budget</span> {}
+  import field salesperson_ref.name as salesperson_name {}
+  import field campaign_ref.advertiser_name as advertiser_name {}
+
+  document-summary my_summary {
+    summary budget type int {}
+    summary salesperson_name type string {}
+    summary advertiser_name type string {}
+  }
 }
 </pre>
 <pre>
@@ -225,20 +250,25 @@ Document type <em>ad</em> has two references to <em>campaign</em> (via <em>campa
 and <em>other_campaign_ref</em>) and one reference to <em>salesperson</em> (via <em>salesperson_ref</em>).
 The <em>budget</em> field from <em>campaign</em> is imported into the <em>ad</em> search definition
 (via <em>campaign_ref</em>) and given the name <em>budget</em>. Similarly, the <em>name</em> of
-<em>salesperson</em> is imported as <em>salesperson_name</em>. To use the imported fields in summary
+<em>salesperson</em> is imported as <em>salesperson_name</em>.
+Document type <em>campaign</em> has a reference to <em>advertiser</em> and imports the field <em>name</em>
+as <em>advertiser_name</em>. This is also imported into <em>ad</em> via <em>campaign_ref</em> from its grandparent <em>advertiser</em>.
+To use the imported fields in summary
 we have created a document summary <em>my_summary</em> containing these fields.
 </p>
 <p>
-Using the parent-child relationship, data does not have to be normalized,
-as fields from parents are imported into children.
-Use this to update parent fields to limit number of updates if a field's value
-is shared beween many documents.
+When using parent-child relationships,
+data does not have to be denormalized as fields from parents are imported into children.
+Use this to update parent fields to limit number of updates if a field's value is shared beween many documents.
 This also limits the resources (memory / disk) required to store and handle documents on content nodes.
 </p>
 </p>
-As all global documents are distributed to all nodes, node capacity will limit
-the number of such documents. Global documents are hence called parents -
-there are usually less parents than children. Note that parents can have parents.
+All document types which are referenced from other types must be
+<a href="reference/services-content.html#document">global documents</a>
+(parents). Global documents are automatically distributed to all content nodes.
+Node capacity will limit the number of such documents.
+There should usually be an order of magnitude fewer parent documents than child documents.
+Note that parents can have parents.
 </p>
 <p>
 The following type of references are not supported:
@@ -247,17 +277,15 @@ The following type of references are not supported:
     Self-reference.
   </li>
   <li>
-    Transitive reference.
-    A document type <em>child</em> cannot import fields from it's <em>grandparent</em>
-    via a reference to <em>parent</em> (and its reference to <em>grandparent</em>).
-    In this case <em>child</em> needs an explicit reference to <em>grandparent</em>.
-  </li>
-  <li>
     Cyclic reference.
     If document type <em>foo</em> has a reference to <em>bar</em>,
     then <em>bar</em> cannot have a reference to <em>foo</em>.
   </li>
 </ul>
+</p>
+
+<p>
+NOTE: Reference and imported fields are not supported in streaming mode.
 </p>
 
 
@@ -544,13 +572,18 @@ When running <code>vespa-deploy prepare</code> on a new application package,
 the changes in the search definition files are compared with the files in the current active package.
 If some of the changes require restart or re-feed, the output from <code>vespa-deploy prepare</code>
 specifies which actions are needed.
-</p><p>
-Note: If there are changes to perform on a live
+The <a href="reference/services-content.html#document">document mode(s)</a> (<em>index</em>, <em>streaming</em>)
+for which a change is applicable is also listed in the categories below.
+Treat mode <em>store-only</em> the same as mode <em>streaming</em>.
+</p>
+<p>
+NOTE: If there are changes to perform on a live
 system that are not covered by this document and no output is given from <code>vespa-deploy prepare</code>,
 their impact is undefined and in no way guaranteed to allow a system to stay live until re-feeding.
 Changes not related to the search definition are discussed
 in <a href="operations/admin-procedures.html">admin procedures</a>.
-</p><p>
+</p>
+<p>
 It is best practise to try changes in a staging system first.
 </p>
 
@@ -564,8 +597,11 @@ Procedure:
 </ol>
 Changes:
 <table class="table">
-  <thead></thead><tbody>
-  <tr><th>Add a new document field</th>
+  <thead>
+  <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+  <tr><th>Add a new document field</th><th>index, streaming</th>
   <td>
   Add a new document field as index, attribute, summary or any combinations of these.
   Existing documents will implicitly get the new field with no content.
@@ -574,53 +610,73 @@ Changes:
   then old content <em>may or may not</em> reappear.
   </td></tr>
 
-  <tr><th>Remove a document field</th>
+  <tr><th>Remove a document field</th><th>index, streaming</th>
   <td>
   Existing documents will no longer see the removed field,
   but the field data is not completely removed from the search node.
   </td></tr>
 
-  <tr><th>Add or remove an existing document field from document summary</th>
+  <tr><th>Add or remove an existing document field from document summary</th><th>index, streaming</th>
   <td>
   Add an existing field to summary or any number of summary
   classes, and remove an existing field from summary or any
   number of summary classes.
   </td></tr>
 
-  <tr><th>Remove the attribute aspect from a field that is also an index field</th>
+  <tr><th>Remove the attribute aspect from a field that is also an index field</th><th>index</th>
   <td>
   This is the only scenario of changing the attribute aspect of a
   document field that is allowed without restart.
   </td></tr>
 
-  <tr><th>Add, change or remove field sets</th>
+  <tr><th>Change the attribute aspect of a document field</th><th>streaming</th>
+  <td>
+  Add or remove a field as attribute.
+  In mode <em>streaming</em> this only indicates that the field is used for grouping, sorting, ranking and matching.
+  No changes to underlying data structures.
+  </td></tr>
+
+  <tr><th>Change the index aspect of a document field</th><th>streaming</th>
+  <td>
+  Add or remove a field as index.
+  In mode <em>streaming</em> this only indicates that the field is used for matching.
+  No changes to underlying data structures.
+  </td></tr>
+
+  <tr><th>Add, change or remove match settings for a field</th><th>streaming</th>
+  <td>
+  In mode streaming such change does not effect the documents stored in the backend and can be done without restart and re-feed.
+  </td></tr>
+
+  <tr><th>Add, change or remove field sets</th><th>index, streaming</th>
   <td>
   Change <a href="reference/search-definitions-reference.html#fieldset">fieldsets</a>
   used to group fields together for searching.
   </td></tr>
 
-  <tr><th>Change the alias or sorting attribute settings for an attribute field</th>
+  <tr><th>Change the alias or sorting attribute settings for an attribute field</th><th>index, streaming</th>
   <td><!-- ToDo -->
   </td></tr>
 
-  <tr><th>Add, change or remove rank profiles</th>
+  <tr><th>Add, change or remove rank profiles</th><th>index, streaming</th>
   <td>
   </td></tr>
 
-  <tr><th>Change document field weights</th>
+  <tr><th>Change document field weights</th><th>index, streaming</th>
   <td><!-- ToDo -->
   </td></tr>
 
-  <tr><th>Add, change or remove field aliases</th>
+  <tr><th>Add, change or remove field aliases</th><th>index, streaming</th>
   <td><!-- ToDo -->
   </td></tr>
 
-  <tr><th>Add, change or remove rank settings for a field</th>
+  <tr><th>Add, change or remove rank settings for a field</th><th>index, streaming</th>
   <td>
-  Example: Adding <code>rank: filter</code> to a field.
+  Exception: Changing <code>rank: filter</code> on an attribute field in mode <em>index</em> requires restart.
+  See details in <a href="#changes-that-require-restart-but-not-re-feed">next section</a>.
   </td></tr>
 
-  <tr><th>Add or remove a search definition</th>
+  <tr><th>Add or remove a search definition</th><th>index, streaming</th>
   <td>
   Removing a search definition file will make <a href="proton.html">proton</a>
   drop all documents of that type - subsequently releasing memory and disk.
@@ -641,20 +697,32 @@ Procedure:
 </ol>
 Changes:
 <table class="table">
-  <thead></thead><tbody>
-    <tr><th>Change the attribute aspect of a document field</th>
-      <td>
-        Add or remove a field as attribute
-      </td></tr>
+  <thead>
+  <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+  <tr><th>Change the attribute aspect of a document field</th><th>index</th>
+  <td>
+  Add or remove a field as attribute. When adding, the attribute is populated based on the field value in stored documents during restart.
+  When removing, the field value in stored documents is updated based on the content in the attribute during restart.
+  </td></tr>
     
-    <tr><th>Change the attribute settings for an attribute field</th>
-      <td>
-        Change the following attribute settings:
-        <em>fast-search</em>, <em>fast-access</em>, <em>huge</em>
-      </td></tr>
+  <tr><th>Change the attribute settings for an attribute field</th><th>index, streaming</th>
+  <td>
+  For mode <em>index</em>: Change the following attribute settings:
+  <code>fast-search</code>, <code>fast-access</code>, <code>huge</code>.
+  <br>
+  For mode <em>streaming</em>: Change the following attribute settings:
+  <code>fast-access</code> (the other settings are not used).
+  </td></tr>
+
+  <tr><th>Change the rank filter setting for an attribute field</th><th>index</th>
+  <td>
+  Add or remove <code>rank: filter</code> on an attribute field.
+  </td></tr>
   </tbody>
 </table>
-Example: Given an indexed content cluster <em>search</em>:
+Example: Given a content cluster <em>mycluster</em> with mode <em>index</em>:
 <pre>
 search test {
   document test {
@@ -674,7 +742,7 @@ The following is output from <code>vespa-deploy prepare</code> -
 which restart actions are needed:
 <pre>
 WARNING: Change(s) between active and new application that require restart:
-In cluster 'basicsearch' of type 'search':
+In cluster 'mycluster' of type 'search':
     Restart services of type 'searchnode' because:
         1) Document type 'test': Field 'f1' changed: add attribute aspect
 </pre>
@@ -696,8 +764,11 @@ or have potentially wrong annotations not matching the query processing. Procedu
 </ol>
 Changes:
 <table class="table">
-  <thead></thead><tbody>
-    <tr><th>Change the data type or collection type of a document field</th>
+  <thead>
+  <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+      <tr><th>Change the data type or collection type of a document field</th><th>index, streaming</th>
       <td>
         Existing documents will no longer have any content for this field.
         To populate the field, re-feed the existing documents using the new type for this field.
@@ -707,7 +778,7 @@ Changes:
         but searching this field will not give any results.
       </td></tr>
     
-    <tr><th>Change index aspect of a document field</th>
+      <tr><th>Change index aspect of a document field</th><th>index</th>
       <td>
         This changes the document processing pipeline before documents arrive in the backend.
         Only documents fed after index aspect was added
@@ -716,11 +787,11 @@ Changes:
         will avoid disk bloat due to unneeded annotations.
       </td></tr>
     
-    <tr><th>Change fields from static to dynamic summary, or vice versa</th>
+      <tr><th>Change fields from static to dynamic summary, or vice versa</th><th>index</th>
       <td><!-- ToDo -->
       </td></tr>
     
-    <tr><th>Switch stemming/normalizing on or off</th>
+      <tr><th>Switch stemming/normalizing on or off</th><th>index</th>
       <td>
         This changes the document processing pipeline before documents
         arrive in the backend, and what annotations are made for an indexed field.
@@ -730,11 +801,11 @@ Changes:
         than the one used when doing stemming/normalizing of the query terms.
       </td></tr>
     
-    <tr><th>Switch bolding on or off</th>
+      <tr><th>Switch bolding on or off</th><th>index</th>
       <td><!-- ToDo -->
       </td></tr>
     
-    <tr><th>Add, change or remove match settings for a field</th>
+      <tr><th>Add, change or remove match settings for a field</th><th>index</th>
       <td>
         Example: Adding <code>match: word</code> to a field.
         <br>
@@ -746,13 +817,13 @@ Changes:
         while run-time is using a different match mode.
       </td></tr>
     
-    <tr><th>Change the tensor type of a tensor attribute</th>
+      <tr><th>Change the tensor type of a tensor attribute</th><th>index</th>
       <td><!-- ToDo -->
       </td></tr>
 
   </tbody>
 </table>
-Example: Given an indexed content cluster <em>search</em>:
+Example: Given a content cluster <em>mycluster</em> with mode <em>index</em>:
 <pre>
 search test {
   document test {
@@ -772,7 +843,7 @@ The following is output from <code>vespa-deploy prepare</code> -
 which re-feed actions are needed:
 <pre>
 WARNING: Change(s) between active and new application that require re-feed:
-Re-feed document type 'test' in cluster 'basicsearch' because:
+Re-feed document type 'test' in cluster 'mycluster' because:
     1) Document type 'test': Field 'f1' changed: add index aspect, indexing script: '{ input f1 | summary f1; }' -&gt; '{ input f1 | tokenize normalize stem:"SHORTEST" | index f1 | summary f1; }'
 </pre>
 </p>

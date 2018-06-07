@@ -1,0 +1,66 @@
+---
+# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa Search Performance Tuning"
+---
+<p>This document describes how to tune your application for high performance while <a href="sizing-search.html">search sizing guide</a> discuss how to scale your application.</p>
+<h2 id="document-scheme">Document Model Schema and Performance</h2>
+
+<h3 id="attribute-vs-index">Attribute v.s index</h3>
+The <a href="../attributes.html">attribute</a> documentation summaries when to use <samp>attribute</samp> in the <a href="../reference/search-definitions-reference.html#indexing">indexing</a> statement. 
+Adding <samp>attribute:fast-search</samp> will speed up searches over attribute fields by building an in-memory index over the values in the attribute field. </p> 
+
+<pre>
+field timestamp type long {
+  indexing: summary | attribute
+  attribute:fast-search
+  rank:filter
+}
+</pre>
+<p>If you configure both index and attribute for string type fields Vespa will do search and matching against the index with default match <samp>text</samp>.</p>
+
+<h3 id="string">Indexing strings in Vespa: Matching and Performance</h3> 
+<p>When configuring <a href="../reference/search-definitions-reference.html#type:string">string</a> type fields with <samp>index</samp> the default <a href="../reference/search-definitions-reference.html#match">match</a> mode is <samp>text</samp> which means Vespa will tokenize the content and index the tokens. An example document definition is provided below where there are 3 fields; two fields of type string and one double field.
+
+<pre>
+search foo {
+  document foo {
+    field title type string {
+      indexing:summary | index
+    }
+    field uuid type string {
+      indexing:summary | index
+    }
+    field popularity type double {
+      indexing: summary | attribute 
+    }
+  }
+}
+</pre>
+<p>The string representation of an <a href="https://en.wikipedia.org/wiki/Universally_unique_identifier">Universally unique identifiel (UUID)</a> is represented as 32 hexadecimal (base 16) digits, displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters (32 alphanumeric characters and four hyphens). An example string representation of an UUID is <samp>123e4567-e89b-12d3-a456-426655440000</samp>.<br>
+
+When indexed with the above document definition Vespa will tokenize <samp>123e4567-e89b-12d3-a456-426655440000</samp> into 5 tokens <samp>[123e4567,e89b,12d3,a456,426655440000]</samp>.<br> When querying Vespa for the same UUID <samp>/search/?query=uuid:123e4567-e89b-12d3-a456-426655440000</samp> Vespa will because of the hyphens treat the input as an implicit phrase query <samp>uuid:"123e4567 e89b12d3 a456 426655440000"</samp> which has a signifcant higher cost compared with searching for a single word term as phrase search is evaluated over positional indicies. We can let Vespa know that we don't want any tokenization by changing the match mode to <samp>word</samp>. This change will avoid tokenization of the field and will store the entire input <samp>123e4567-e89b-12d3-a456-426655440000</samp> as one token and avoid implicit phrase search triggering.</p>
+
+<pre>
+    field uuid type string {
+      indexing:summary | index
+      match:word
+      rank:filter
+    }
+</pre>
+<p>This tells Vespa that the <samp>uuid</samp> field of type string should be treated as a <a href="../reference/search-definitions-reference.html#filter">rank:filter</a> field, this is a hint to Vespa that this string field should be represented as efficient as possible during search and ranking. Please make sure to review all string fields in your application and ask yourself if you need tokenized matching or not and if the field should be used for ranking or not. The <samp>rank:filter</samp> behavior can also be triggered at query time on a per query item basis by the <samp>com.yahoo.prelude.query.Item.setRanked()</samp> in a <a href="../searcher-development.html">custom searcher</a> working on the parsed query tree.
+
+
+<h3 id="parent-child">Parent child relationships and Search Performance</h3>
+<p>
+When searching imported attribute fields from parent document types there is an additional cost penalty which can be reduced significantly if the imported field is defined with <samp>rank:filter</samp> 
+and <a href="../reference/services-content.html#visibility-delay">visibility-delay</a> is configured to &gt; 0.</p> 
+
+
+<h2 id="ranking-performance">Ranking &amp; Performance</h2>
+<p>Generally <a href="sizing-search.html"> Vespa scales</a> with the number of hits the query recalls which needs to be ranked per node. The ranking cost per document recalled is determined by the complexity of the ranking expression in use and the rank feature complexity. </p>
+
+
+
+<h2 id="caches">Summary Performance</h2>
+<p>If your use case is requesting many hits from a few content nodes adding a <a href="caches-in-vespa.html">summary cache</a> will reduce cost. If your application can afford the additional memory footprint it's possible to configure <a href="../document-summaries.html">explicit document summaries</a> which could be used to fetch summaries only from memory by only referencing fields which have <samp>attribute</samp> in their indexing statement. If you believe you are bound by summary performance you can test using the internal reserved document summary which contains all single-valued attribute fields by benchmarking with <samp>&amp;summary=attributeprefetch</samp> which will avoid disk access entirely.</p>
+

@@ -194,7 +194,7 @@ def run_url(url):
 
 
 def run_config():
-    num_failed = 0
+    failed = []
     config_file = "_test_config.yml"
     if not os.path.isfile(config_file):
         config_file = os.path.join("test",config_file)
@@ -207,10 +207,10 @@ def run_config():
             try:
                 run_url(url)
             except RuntimeError:
-                num_failed += 1
+                failed.append(url)
 
-    if num_failed > 0:
-        raise RuntimeError("One or more files failed")
+    if len(failed) > 0:
+        raise RuntimeError("One or more files failed: " + ", ".join(failed))
 
 
 def run_file(file_name):

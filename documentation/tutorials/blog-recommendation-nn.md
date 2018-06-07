@@ -116,8 +116,8 @@ the query, document attributes defined in search definitions and global
 parameters not directly linked to query or document parameters. One example of
 rank score is the output of the neural network model defined in this tutorial.
 The model takes the latent factor $$u$$ associated with a specific
-```user_id``` (query parameter), the latent factor $$d$$ associated with
-document ```post_id``` (document attribute) and learned model parameters
+`user_id` (query parameter), the latent factor $$d$$ associated with
+document `post_id` (document attribute) and learned model parameters
 (global parameters not related to a specific query nor document) and returns
 the probability of user $$u$$ to like document $$d$$.
 
@@ -139,9 +139,7 @@ phase rank expression is run on the 200 best hits from first phase on each
 search node.
 
 	search myapp {
-
-	    …
-
+	    ...
 	    rank-profile default inherits default {
 
 	        first-phase {
@@ -158,183 +156,115 @@ search node.
 	    }
 	}
 
-### Constant Tensor files
-
-Once the model has been trained in TensorFlow, export the model
-parameters $$(W_1, W_2, b_1, b_2)$$ to the application folder as Tensors
-according to the [Vespa Document JSON format](../reference/document-json-format.html).
-
-The complete code to serialize the model parameters using Vespa Tensor format
-can be found  in the [utility
-scripts](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#export-model-parameters-to-tensor-vespa-format)
-but the following code snipped shows how to serialize the hidden layer weights
-$$W_1$$:
-
-	serializer.serialize_to_disk(variable_name = "W_hidden", dimension_names = ['input', 'hidden'])
-
-Note that Vespa currently requires dimension names for all the Tensor
-dimensions (in this case $$W_1$$ is a matrix, therefore dimension is 2).
-
-In the following section, we will use the following code in the ```blog_post```
-search definition in order to be able to use the constant tensor ```W_hidden```
-in our ranking expression.
-
-	    constant W_hidden {
-	        file: constants/W_hidden.json
-	        type: tensor(input[20],hidden[40])
-	    }
-
-A constant tensor is data that is not specific to a given document type. In the
-case above we define ```W_hidden``` to be a tensor with two dimensions
-(matrix), where the first dimension is named input and has size 20 and second
-dimension is named hidden and has size 40. The data were serialized to a JSON
-file located at ```constants/W_hidden.json``` relative to the application
-package folder.
-
-### Vespa ranking expression
+### Vespa ranking expressions
 
 In order to evaluate the neural network model trained with TensorFlow in the
-previous section, we need to translate the model structure to a Vespa ranking
-expression to be defined in the ```blog_post``` search definition. To honor a
-low-latency response, we will take advantage of the Two Phase Ranking available
-in Vespa and define the first phase ranking to be the same ranking function
-used in the Vespa tutorial pt. 2, which is a dot-product between the user and
-latent factors. After the documents have been sorted by the first phase ranking
-function, we will rerank the top 200 document from each search node using the
-second phase ranking given by the neural network model presented above.
+previous section, we need to import the TensorFlow model and use it in the
+`blog_post` search definition. To honor a low-latency response, we will take
+advantage of the two phase ranking available in Vespa and define the first
+phase ranking to be the same ranking function used in the Vespa tutorial pt. 2,
+which is a dot-product between the user and latent factors. After the documents
+have been sorted by the first phase ranking function, we will rerank the top
+200 document from each search node using the second phase ranking given by the
+neural network model presented above.
 
 Note that we define two ranking profiles in the search definition below. This
-allow us to decide which ranking profile to use at query time. We defined a
-ranking profile named ```tensor``` which only applies the dot-product between
+allow us to decide which ranking profile to use at query time. We define a
+ranking profile named `tensor` which only applies the dot-product between
 user and document latent factors for all matching documents and a ranking
-profile named ```nn_tensor```, which rerank the top 200 documents using the
+profile named `nn_tensor`, which rerank the top 200 documents using the
 neural network model discussed in the previous section.
 
-We will walk through each part of the ```blog_post``` search definition, see
+We will walk through each part of the `blog_post` search definition, see
 [blog_post.sd](https://github.com/vespa-engine/sample-apps/tree/master/blog-recommendation/src/main/application/searchdefinitions/blog_post.sd).
 
-As always, we start the a search definition with the following line
-
-	search blog_post {
-
-We define the document type ```blog_post``` the same way we have done in the
-previous tutorial.
-
-	    document blog_post {
-
-	      # Field definitions
-	      # Examples:
-
-	      field date_gmt type string {
-	          indexing: summary
-	      }
-	      field language type string {
-	          indexing: summary
-	      }
-
-	      # Remaining fields as found in previous tutorial
-
-	    }
-
-We define a ranking profile named ```tensor``` which rank all the matching
+We define a ranking profile named `tensor` which ranks all the matching
 documents by the dot-product between the document latent factor and the user
 latent factor. This is the same ranking expression used in the previous
-tutorial, which include code to retrieve the user latent factor based on the
-```user_id``` sent by the query to Vespa.
+tutorial, which includes code to retrieve the user latent factor based on the
+`user_id` sent by the query to Vespa.
 
-	    # Simpler ranking profile without
-	    # second-phase ranking
-	    rank-profile tensor {
-	      first-phase {
-	          expression {
-	              sum(query(user_item_cf) * attribute(user_item_cf))
-	          }
-	      }
-	    }
+    # Simpler ranking profile without second-phase ranking
+    rank-profile tensor {
+        first-phase {
+            expression {
+                sum(query(user_item_cf) * attribute(user_item_cf))
+            }
+        }
+    }
 
-Since we want to evaluate the neural network model we have trained, we need to
-define where to find the model parameters $$(W_1, W_2, b_1, b_2)$$. See
-previous section for how to write the TensorFlow model parameters to Vespa
-Tensor format.
+Now we specify a second rank-profile called `nn_tensor` that will use the same
+first phase as the rank-profile `tensor` but will rerank the top 200 documents
+using the TensorFlow model as second phase. We refer to [Ranking with
+TensorFlow models in Vespa](../tensorflow.html) for more information regarding
+the TensorFlow import and other operations used in the code below.
 
-	    # We need to specify the type and the location
-	    # of the files storing tensor values for each
-	    # Variable in our TensorFlow model. In this case,
-	    # W_hidden, b_hidden, W_final, b_final
+    # rank profile with neural network model as second phase
+    rank-profile nn_tensor {
 
-	    constant W_hidden {
-	        file: constants/W_hidden.json
-	        type: tensor(input[20],hidden[40])
-	    }
+        # This defines where to get the user latent factor from
+        macro input_u() {
+            expression: query(user_item_cf)
+        }
 
-	    constant b_hidden {
-	        file: constants/b_hidden.json
-	        type: tensor(hidden[40])
-	    }
+        # This defines where to get the blog latent factor from
+        macro input_d() {
+            expression: attribute(user_item_cf)
+        }
 
-	    constant W_final {
-	        file: constants/W_final.json
-	        type: tensor(hidden[40], final[1])
-	    }
+        # First phase ranking: dot product between latent factors
+        first-phase {
+            expression: sum(query(user_item_cf) * attribute(user_item_cf))
+        }
 
-	    constant b_final {
-	        file: constants/b_final.json
-	        type: tensor(final[1])
-	    }
+        # Second phase ranking: neural network based on latent factors
+        second-phase {
+            rerank-count: 200
+            expression: sum(tensorflow("blog/saved"))
+        }
+    }
 
-Now, we specify a second rank-profile called ```nn_tensor``` that will use the
-same first phase as the rank-profile ```tensor``` but will rerank the top 200
-documents using the neural network model as second phase. We refer to the
-[Tensor Reference document](../reference/tensor.html) for more information
-regarding the Tensor operations used in the code below.
+The first part to notice is the `second-phase` ranking. Here we use the
+`tensorflow` rank feature to load the model trained using the script above.
+Once the model has been trained in TensorFlow, the following code saves
+the model to a directory `saved`:
 
-	    # rank profile with neural network model as
-	    # second phase
-	    rank-profile nn_tensor {
+    export_path = "saved"
+    builder = tf.saved_model.builder.SavedModelBuilder(export_path)
+    signature = tf.saved_model.signature_def_utils.predict_signature_def(
+                inputs = {'input_u':vespa_model.input_u, 'input_d':vespa_model.input_d},
+                outputs = {'y':vespa_model.y})
+    builder.add_meta_graph_and_variables(sess,
+                [tf.saved_model.tag_constants.SERVING],
+                signature_def_map={'serving_default':signature})
+    builder.save(as_text=True)
 
-	        # The input to the neural network is the
-	        # concatenation of the document and query vectors.
+This model can be copied into the application package under the `models`
+directory, and it will be deployed along with the application. I.e. the ranking
+expression above, `tensorflow("blog/saved")`, expects the model to be under the
+directory `models/blog/saved`.
 
-	        macro nn_input() {
-	            expression: concat(attribute(user_item_cf), query(user_item_cf), input)
-	        }
+An important part of the model-saving code above is the definition of the
+inputs and outputs. These are defined in the signature of the saved model. The
+inputs to the model are the latent factor vectors for the user (`input_u`) and
+the blog post (`input_d`). Vespa expects to find user-defined macros of
+the same name, which returns the values to use as inputs. This can be
+seen in the rank profile above which defines `input_u` to retrieve the
+value from the query and 'input_d' to retrieve the value from the document.
 
-	        # Computes the hidden layer
+The signature also defines the output value to be the output of the `y`
+operation. This output is typically a tensor itself, and we use the `sum`
+ranking feature to reduce the tensor to a single scalar value that can
+be ranked with.
 
-	        macro hidden_layer() {
-	            expression: relu(sum(nn_input * constant(W_hidden), input) + constant(b_hidden))
-	        }
-
-	        # Computes the output layer
-
-	        macro final_layer() {
-	            expression: sigmoid(sum(hidden_layer * constant(W_final), hidden) + constant(b_final))
-	        }
-
-
-	        # First-phase ranking:
-	        # Dot-product between user and document latent factors
-
-	        first-phase {
-	            expression: sum(query(user_item_cf) * attribute(user_item_cf))
-	        }
-
-	        # Second-phase ranking:
-	        # Neural network model based on the user and latent factors
-
-	        second-phase {
-	            rerank-count: 200
-	            expression: sum(final_layer)
-	        }
-
-	    }
-
-	}
+This is typically all that is needed to import TensorFlow models. For more
+information, please see [Ranking with TensorFlow models in
+Vespa](http://docs.vespa.ai/documentation/tensorflow.html).
 
 ## Offline evaluation
 
-We will now query Vespa and obtain 100 blog post recommendations for each ```user_id```
-in our test set. Below, we query Vespa using the ```tensor``` ranking function which
+We will now query Vespa and obtain 100 blog post recommendations for each `user_id`
+in our test set. Below, we query Vespa using the `tensor` ranking function which
 contain the simpler ranking expression involving the dot-product between user and
 document latent factors.
 
@@ -346,7 +276,7 @@ document latent factors.
 	  -param RANKING_NAME=tensor
 	  -param OUTPUT=blog-job/cf-metric
 
-We perform the same query routine below, but now using the ranking-profile ```nn_tensor```
+We perform the same query routine below, but now using the ranking-profile `nn_tensor`
 which reranks the top 200 documents using the neural network model.
 
 	pig -x local -f tutorial_compute_metric.pig \
@@ -357,7 +287,7 @@ which reranks the top 200 documents using the neural network model.
 	  -param RANKING_NAME=nn_tensor
 	  -param OUTPUT=blog-job/cf-metric
 
-The ```tutorial_compute_metric.pig``` script can be found [in our
+The `tutorial_compute_metric.pig` script can be found [in our
 repo](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#offline-evaluation).
 
 Comparing the recommendations obtained by those two ranking profiles and our
