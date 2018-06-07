@@ -195,8 +195,7 @@ of the Vespa name and type.
 
 ### 2. Create a global document containing the tensor variables as fields
 
-
-1. Add a <a href="reference/services-content.html">global document type</a>:
+1. Add a <a href="reference/services-content.html#document">global document type</a>:
 Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt;</code> to
 the &lt;documents&gt; list in your services.xml.
 
