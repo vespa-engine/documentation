@@ -149,6 +149,20 @@ starting with `"d0"` for the first dimension, and increasing for each dimension
 (i.e. `"d1"`, `"d2"`, etc). The result of the evaluation will likewise be
 a tensor with names `"d0"`, `"d1"`, etc.
 
+The types of document tensors are specified in the search definition as shown above.
+If you specify the types of query tensors in the
+[query profile types](query-profiles.html#query-profile-types"),
+you can pass tensors in HTTP requests by using the HTTP parameter
+"ranking.features.query(myQueryTensor)" (assuming the ranking expression contains
+"query(myQueryTensor)". To do this specify a
+[query profile](query-profiles.html) of a type containing
+
+    <field name="ranking.features.query(tensor)" type="tensor(x{})" />
+
+<a href="query-profiles.html#query-profile-types">query profile types</a>.
+See the tensor sampler application at 
+[https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor](https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor).
+
 #### Batch dimensions
 
 When training your model you will typically have an input placeholder which
