@@ -33,23 +33,33 @@ The following operations are supported:
     </tr><tr>
         <td><strong>Composite types</strong></td>
         <td><ul>
-            <li><code><a href="#add">add</a></code> (works for array and weighted set. To put into a map, see assign section)</li>
-            <li><code><a href="#removecomposite">remove</a></code></li>
+            <li><code><a href="#add">add</a></code> (works for array. To put into a map or weighted set, see the <a href="#assign">assign</a> section)</li>
+            <li><code><a href="#remove">remove</a></code></li>
             <li><code><a href="#match">match</a></code> (pick element from collection, then apply given operation to matched element) </li>
-            <li><a href="#fieldpath">accessing elements within a composite using fieldpaths. NB: For Map and Struct types, this feature only works for streaming content cluster.</a></li>
+            <li><a href="#fieldpath">accessing elements within a composite field using fieldpaths.</a></li>
         </ul></td>
     </tr>
     </tbody>
 </table>
 
-
-<h3 id="assign">assign</h3>
+<h2 id="assign">assign</h2>
 <p>
-<code>assign</code> is used to completely replace the value of a field with a new value.
-The new value is specified as an "action" for the field in the set of fields. Example:
+<code>assign</code> is used to completely replace the value of a field (or an element of a collection) with a new value.
+When replacing an entire field's value you can generally use the same syntax and structure as you would when feeding that
+field's value in a <code>put</code> operation.
+</p>
+<p>
+<strong>Note:</strong> these examples are not exhaustive.
+</p>
+<h3 id="assign-single-field-value">Single value field</h3>
+<pre>
+field title type string {
+  indexing: summary
+}
+</pre>
 <pre>
 {
-    "update": "id:music:music::docid123",
+    "update": "id:mynamespace:music::example",
     "fields": {
         "title": {
             "assign": "The best of Bob Dylan"
@@ -57,11 +67,16 @@ The new value is specified as an "action" for the field in the set of fields. Ex
     }
 }
 </pre>
-If the field is to be cleared, assign <code>null</code> to it.
-Example assign update to a tensor field with tensor type <em>tensor(x{},y{})</em>:
+
+<h3 id="assign-tensor-field">Tensor field</h3>
+<pre>
+field tensorfield type tensor(x{},y{}) {
+  indexing: attribute | summary
+}
+</pre>
 <pre>
 {
-    "update": "id:tensordoctype:tensordoctype::example2",
+    "update": "id:mynamespace:tensordoctype::example",
     "fields": {
         "tensorfield": {
             "assign": {
@@ -74,52 +89,267 @@ Example assign update to a tensor field with tensor type <em>tensor(x{},y{})</em
     }
 }
 </pre>
-<code>assign</code> can use fieldpath syntax when used on composite types when they are not part of attribute or index.
-On a <code>map</code> it can be used as a put.
-In the following example a tuple (key1, value1) is inserted into the map
-regardless if there is an element with key "key1" before:
+<h3 id="assign-struct-field">Struct field</h3>
+<h5>Replacing all fields in a struct</h5>
+<p>
+Entire struct fields may be replaced by assigning a JSON object of struct key/value pairs.
+</p>
+<pre>
+struct person {
+  field first_name type string {}
+  field last_name type string {}
+}
+field contact type person {
+  indexing: summary
+}
+</pre>
 <pre>
 {
-    "update": "id:music:music::example2",
+    "update": "id:mynamespace:workers::example",
     "fields": {
-        "mapfield{key1}": {
-            "assign": "value1"
+        "contact": {
+            "assign": {
+                "first_name": "Bob",
+                "last_name": "The Plumber"
+            }
         }
     }
 }
 </pre>
-<code>assign</code> can be used on structs to set one field
-<strong>Note:</strong> does not work for <a href="services-content.html#document">index</a> mode:
+<h5>Individual struct fields</h5>
+<p>
+Individual struct fields may be updated using <a href="#fieldpath">field path</a> syntax.
+</p>
 <pre>
 {
-    "update": "id:music:music::example3",
+    "update": "id:mynamespace:workers::example",
     "fields": {
-        "structfieldperson.firstname": { "assign": "bob" },
-        "structfieldperson.lastname": { "assign": "the plumber" }
+        "contact.first_name": { "assign": "Bob" },
+        "contact.last_name": { "assign": "The Plumber" }
     }
 }
 </pre>
-<code>assign</code> can be used on array to set one element. In this example we have an array of strings:
-<pre>
-{
-    "update": "id:music:music::example4",
-    "fields": {
-        "arrayfield[34]": { "assign": "bob" },
-    }
-}
-</pre>
+<p>
+<strong>Note:</strong> this does not work for <em>attribute</em> struct fields.
 </p>
 
-
-<h3 id="add">add</h3>
+<h3 id="assign-map-field">Map field</h3>
 <p>
-<code>add</code> is used to add entries to multi-value fields: Arrays, tags, and weighted sets.
-Map does not support add - to put an element into a map type, see assign above.
-If the value is already present in the weighted set, the weight from the update will <em>replace</em> the old weight.
-Example:
+Individual map entries may be updated using <a href="document-field-path.html">field path</a> syntax.
+</p>
+<p>
+Assigning an element to a key in a map will insert the key/value mapping if it does not already exist, or
+overwrite it with the newly assigned value if it does exist.
+</p>
+<h5>Map to primitive value</h5>
+<pre>
+field my_food_scores type map&lt;string, string&gt; {
+  indexing: summary
+}
+</pre>
 <pre>
 {
-    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "update": "id:mynamespace:food::example",
+    "fields": {
+        "my_food_scores{Strawberries}": {
+            "assign": "Delicious!"
+        }
+    }
+}
+</pre>
+<h5>Map to struct</h5>
+<pre>
+struct contact_info {
+  field phone_number type string {}
+  field email type string {}
+}
+field contacts type map&lt;string, contact_info&gt; {
+  indexing: summary
+}
+</pre>
+<pre>
+{
+    "update": "id:mynamespace:people::d_duck",
+    "fields": {
+        "contacts{\"Uncle Scrooge\"}": {
+            "assign": {
+                "phone_number": "555-123-4567",
+                "email": "number_one_dime_luvr1877@example.com"
+            }
+        }
+    }
+}
+</pre>
+
+<h3 id="assign-array-field">Array field</h3>
+<p>
+Individual array elements may be updated using <a href="document-field-path.html">field path</a>
+or <a href="#match">match</a> syntax
+</p>
+<h5>Array of primitive values</h5>
+<pre>
+field ingredients type array&lt;string&gt; {
+  indexing: summary
+}
+</pre>
+<pre>
+{
+    "update": "id:mynamespace:cakes:tasty_chocolate_cake",
+    "fields": {
+        "ingredients[3]": {
+            "assign": "2 cups of flour (editor's update: NOT asbestos!)"
+        }
+    }
+}
+</pre>
+<p>
+Or alternatively:
+</p>
+<pre>
+{
+    "update": "id:mynamespace:cakes:tasty_chocolate_cake",
+    "fields": {
+        "ingredients": {
+            "match" {
+                "element": 3,
+                "assign": "2 cups of flour (editor's update: NOT asbestos!)"
+            }
+        }
+    }
+}
+</pre>
+<h5>Array of structs</h5>
+<pre>
+struct person {
+  field first_name type string {}
+  field last_name type string {}
+}
+field people type array&lt;person&gt; {
+  indexing: summary
+}
+</pre>
+<pre>
+{
+    "update": "id:mynamespace:students:example",
+    "fields": {
+        "people[34]": {
+            "assign": {
+                "first_name": "Bobby",
+                "last_name": "Tables"
+            }
+        }
+    }
+}
+</pre>
+<p>
+Or alternatively:
+</p>
+<pre>
+{
+    "update": "id:mynamespace:students:example",
+    "fields": {
+        "people": {
+            "match": {
+                "element": 34,
+                "assign": {
+                     "first_name": "Bobby",
+                     "last_name": "Tables"
+                }
+            }
+        }
+    }
+}
+</pre>
+
+<h3 id="assign-weighted-set-field">Weighted set field</h3>
+<p>
+You can assign weighted set elements using a JSON key/value syntax,
+where the value is the weight of the element.
+</p>
+<p>
+Assigning a weight to a key that already exists will overwrite the existing weight with the new one.
+</p>
+<pre>
+field int_weighted_set type weightedset&lt;int&gt; {
+  indexing: summary
+}
+field string_weighted_set type weightedset&lt;string&gt; {
+  indexing: summary
+}
+</pre>
+<pre>
+{
+    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "fields": {
+        "int_weighted_set":  {
+            "assign": {
+                "123": 123,
+                "456": 100
+            }
+        },
+        "string_weighted_set": {
+            "assign": {
+                "item 1": 144,
+                "item 2": 7
+            }
+        }
+    }
+}
+</pre>
+<p>
+Or alternatively, using the same syntax as map updates:
+</p>
+<pre>
+{
+    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "fields": {
+        "int_weighted_set{123}": {
+            "assign": 123
+        },
+        "int_weighted_set{456}": {
+            "assign": 100
+        },
+        "string_weighted_set{\"item 1\"}": {
+            "assign": 144
+        },
+        "string_weighted_set{\"item 2\"}": {
+            "assign": 7
+        }
+    }
+}
+</pre>
+<p>
+This may not be as efficient as updates using the JSON key/value syntax.
+</p>
+
+<h3 id="assign-clearing-a-field">Clearing a field</h3>
+<p>
+To clear a field, assign a <code>null</code> value to it.
+</p>
+<pre>
+{
+    "update": "id:mynamespace:music::example",
+    "fields": {
+        "title": {
+            "assign": null
+        }
+    }
+}
+</pre>
+
+<h2 id="add">add</h2>
+<p>
+<code>add</code> is used to add entries to arrays. The added entries are appended to
+the end of the array in the order specified.
+</p>
+<pre>
+field tracks type array&lt;string&gt; {
+  indexing: summary
+}
+</pre>
+<pre>
+{
+    "update": "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf",
     "fields": {
        "tracks": {
             "add": [
@@ -130,66 +360,62 @@ Example:
     }
 }
 </pre>
-In other words, for the array field "tracks", we add the values from the
-<code>add</code> array.
-Example of adding an element to a weighted set:
-<pre>
-{
-    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
-    "fields":  {
-        "weightedsetfield": {
-            "add": {
-                "britney":12
-            }
-        }
-    }
-}
-</pre>
-Note that if the element already exist the value will be overwritten.
-Example of an assign to a weighted set:
-<pre>
-{
-    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
-    "fields": {
-        "intweightedsetfield":  {
-            "assign": {
-                "123": 123,
-                "456": 100
-            }
-        },
-        "stringweightedsetfield": {
-            "assign": {
-                "item 1": 144,
-                "item 2": 7
-            }
-        }
-    }
-}
-</pre>
-</p>
 
-
-<h3 id="removecomposite">remove</h3>
-<p>Example of removing an element from a weighted set:</p>
-<pre>
-{
-    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
-    "fields":  {
-        "weightedsetfield": {
-            "remove": {
-                "britney": 0
-            }
-        }
-    }
-}
-</pre>
-
-
-<h3 id="arithmetic">increment, decrement, multiply, divide</h3>
+<h2 id="remove">remove</h2>
 <p>
-The four arithmetic operators increment, decrement, multiply and divide are
-used to modify single value numeric values without having to look up the current
+You can remove elements from weighted sets and maps with <code>remove</code>.
+</p>
+<p>
+<strong>Note:</strong> due to historical reasons, the syntax of the update differs slightly between the two.
+</p>
+<h5>Weighted set field</h5>
+<pre>
+field string_weighted_set type weightedset&lt;string&gt; {
+  indexing: summary
+}
+</pre>
+<pre>
+{
+    "update":"id:mynamespace:weightedsetdoctype::example1",
+    "fields":  {
+        "string_weighted_set": {
+            "remove": {
+                "item 2": 0
+            }
+        }
+    }
+}
+</pre>
+
+<h5>Map field</h5>
+<pre>
+field string_map type map&lt;string, string&gt; {
+  indexing: summary
+}
+</pre>
+<pre>
+{
+    "update":"id:mynamespace:mapdoctype::example1",
+    "fields":  {
+        "string_map{item 2}": {
+            "remove": 0
+        }
+    }
+}
+</pre>
+
+<h2 id="arithmetic">increment, decrement, multiply, divide</h2>
+<p>
+The four arithmetic operators <code>increment</code>, <code>decrement</code>,
+<code>multiply</code> and <code>divide</code> are used to modify <em>single
+value</em> numeric values without having to look up the current
 value before applying the update. Example:
+</p>
+<pre>
+field sales type int {
+  indexing: summary | attribute
+}
+</pre>
 <pre>
 {
     "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
@@ -200,18 +426,21 @@ value before applying the update. Example:
     }
 }
 </pre>
-</p>
 
-
-<h3 id="match">match</h3>
+<h2 id="match">match</h2>
 <p>
-If an action, like an arithmetic operation, is to be done for a specific key
+If an arithmetic operation is to be done for a specific key
 in a <em>weighted set or array</em>, use the <code>match</code> operation:
+<pre>
+field track_popularity type weightedset<string> {
+  indexing: summary | attribute
+}
+</pre>
 <pre>
 {
     "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
     "fields": {
-        "trackPopularity": {
+        "track_popularity": {
             "match": {
                 "element": "Lay Lady Lay",
                 "increment": 1
@@ -220,21 +449,25 @@ in a <em>weighted set or array</em>, use the <code>match</code> operation:
     }
 }
 </pre>
-In other words, for the weighted set "trackPopularity", <code>match</code>
+<p>
+In other words, for the weighted set "track_popularity", <code>match</code>
 the element "Lay Lady Lay", then <code>increment</code> its weight by 1.
-</p><p>
-<strong>Note:</strong> Only <em>one</em> element in a weighted set can be matched per update.
+</p>
+<p>
+If the updated field were an array, the <code>element</code> value would be a positive integer.
+</p>
+<p>
+<strong>Note:</strong> only <em>one</em> element can be matched per operation.
 </p>
 
-
-<h3 id="create">create (create if nonexistent)</h3>
+<h2 id="create">create (create if nonexistent)</h2>
 <p>
-Updates to nonexistent documents are supported using the <em>create</em> field -
-an empty document is created on the content node before the update is applied.
+Updates to nonexistent documents are supported using the <em>create</em> field.
+An empty document is created on the content nodes before the update is applied.
 This simplifies client code in the case of multiple writers:
 <pre>
 {
-    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "update": "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf",
     <span style="background-color: yellow;">"create": true,</span>
     "fields": {
         "title": {
@@ -243,20 +476,21 @@ This simplifies client code in the case of multiple writers:
     }
 }
 </pre>
-Java example:
+Java example using the <a href="../document-api-guide.html">Document API</a>:
 <pre>
 public DocumentUpdate createUpdate(DocumentType musicType) {
-  DocumentUpdate update = new DocumentUpdate(musicType, "id:music:music::0");
+  DocumentUpdate update = new DocumentUpdate(musicType, "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf");
   update.setCreateIfNonExistent(true);
+  return update;
 }
 </pre>
 <strong>Note:</strong> <a href="document-json-update-format.html#create">create</a> cannot be used
 in combination with <a href="document-json-format.html#conditional-updates-test-and-set">condition</a>.
-This is due to the Vespa consistency model and use of timestamps on the document level for eventual consistency.
+This is because a condition can never match a document that does not exist, and since Vespa's eventual
+consistency model cannot safely make the decision to ignore this restriction on a per-replica level.
 </p>
 
-
-<h3 id="fieldpath">fieldpath</h3>
+<h2 id="fieldpath">fieldpath</h2>
 <p>
 Fieldpath is for accessing fields within composite structures -
 for structures that are not part of index or attribute, it is possible to access elements directly using fieldpaths.
@@ -271,18 +505,19 @@ Arrays can be accessed as well (see <a href="#assign">details</a>).
 myarray[3]
 </pre>
 And this is also true for structs (see <a href="#assign">details</a>).
-<strong>Note:</strong> Struct updates does not work for
+<strong>Note:</strong> Struct updates do not work for
 <a href="services-content.html#document">index</a> mode:
 <pre>
 mystruct.value1
 </pre>
-This also works for nested structures, e.g. a map of map to array of struct:
+This also works for nested structures, e.g. a <code>map</code> of <code>map</code>
+to <code>array</code> of <code>struct</code>:
 <pre>
 {
-    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "update": "id:mynamespace:complexdoctype::foo",
     "fields": {
-        "nestedstructure{firstMapKey}{secondMapKey}[4].title": {
-            "assign": "The best of Bob Dylan"
+        "nested_structure{firstMapKey}{secondMapKey}[4].title": {
+            "assign": "Look at me, mom! I'm hiding deep in a nested type!"
         }
     }
 }
