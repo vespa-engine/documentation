@@ -330,7 +330,9 @@ select%20%2A%20from%20sources%20%2A%20where%20description%20contains%20%28%5B%20
 
 
 <h3 id="sameElement">Search within same struct element</h3>
-<p> <em>sameElement()</em> is an operator that requires the terms to match within the same struct element in an array or a map.</p>
+<p>
+<em>sameElement()</em> is an operator that requires the terms to match within the same struct element in an array or a map field. Example:
+</p>
 <pre>
 ...
 struct person {
@@ -339,25 +341,45 @@ struct person {
   field year_of_birth type int {}
 }
 
-fields persons type array<person> {}
-fields identities type map<string, person> {}
+field persons type array&lt;person&gt; {
+  indexing: summary
+  struct-field first_name { indexing: attribute }
+  struct-field last_name { indexing: attribute }
+  struct-field year_of_birth { indexing: attribute }
+}
+field identities type map&lt;string, person&gt; {
+  indexing: summary
+  struct-field key { indexing: attribute }
+  struct-field value.first_name { indexing: attribute }
+  struct-field value.last_name { indexing: attribute }
+  struct-field value.year_of_birth { indexing: attribute }
+}
 ...
 </pre>
-<p>With normal <em>AND</em> the query <pre>persons.first_name AND persons.second_name</pre> will normally not give you what you want.
-It will match if a document has <em>persons</em> record that has a matching <em>first_name</em> <em>AND</em> any record with a matching <em>second_name</em>.
-So you will get a lot of false positives since there is nothing limiting them to the same record. However that is what <em>sameElement</em> will do for you.
+<p>
+With normal <em>AND</em> the query <pre>persons.first_name AND persons.last_name</pre> will normally not give you what you want.
+It will match if a document has a <em>persons</em> element with a matching <em>first_name</em>
+<em>AND</em> any element with a matching <em>last_name</em>.
+So you will get a lot of false positives since there is nothing limiting them to the same element.
+However, that is what <em>sameElement</em> ensures.
 </p>
 <pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20persons%20contains%20sameElement%28first_name%20contains 'Joe', second_name%20contains%20'Smith',%20year_of_birth%20<%201940%29%3B
+select%20%2A%20from%20sources%20%2A%20where%20persons%20contains%20sameElement%28first_name%20contains%20'Joe',%20last_name%20contains%20'Smith',%20year_of_birth%20&lt;%201940%29%3B
 </pre>
-<p>The above will find all documents containing Joe Smith born before 1940 in the <em>persons</em> array.</p>
-<p>Searching in a map is similar to searching in an array of struct. The difference is that you have an extra synthetic struct with the members <em>key</em> and <em>value</em>.
-The above example with the <em>identities</em> map where you have person will might like this.
+<p>
+The above returns all documents containing Joe Smith born before 1940 in the <em>persons</em> array.
+</p>
+<p>
+Searching in a map is similar to searching in an array of struct.
+The difference is that you have an extra synthetic struct with the field members <em>key</em> and <em>value</em>.
+The above example with the <em>identities</em> map looks like this:
 <pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20persons%20contains%20sameElement%28key%20contains%20'father',value.first_name%20contains%20'Joe',value.second_name%20contains%20'Smith',value.year_of_birth%20<%201940%29%3B
+select%20%2A%20from%20sources%20%2A%20where%20persons%20contains%20sameElement%28key%20contains%20'father',%20value.first_name%20contains%20'Joe',%20value.last_name%20contains%20'Smith',%20value.year_of_birth%20&lt;%201940%29%3B
 </pre>
-<p>The above will find any documents that has tagged Joe Smith born before 1945 as a 'father'. The importance here is using the indirection of <em>key</em> and <em>value</em>
-to adress the keys and the values of the map./p>
+<p>
+The above returns all documents that have tagged Joe Smith born before 1940 as a 'father'.
+The importance here is using the indirection of <em>key</em> and <em>value</em> to address the keys and the values of the map.
+</p>
 
 <h3 id="equiv">Term Equivalence</h3>
 <p>
