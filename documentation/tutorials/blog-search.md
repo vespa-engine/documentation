@@ -387,8 +387,8 @@ $ curl -s "http://localhost:19112/state/v1/metrics" | tr "," "\n" | grep -A 2 pr
 
 You can also inspect the search node state by:
 
-<pre data-test="exec" data-test-assert-contains="\"onlineDocs\", \"1196\"">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState
+<pre data-test="exec" data-test-assert-contains='"onlineDocs", "998"'>
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'
 </pre>
 
 
@@ -594,7 +594,7 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/applicatio
 </pre>
 
 <pre style="display:none" data-test="exec">
-$ sleep 20
+$ sleep 10
 </pre>
 
 Use
