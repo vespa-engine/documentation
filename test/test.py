@@ -63,6 +63,20 @@ def exec_assert(cmd, pty):
         raise RuntimeError("Expected output '{0}' not found in command '{1}'".format(expect, command))
 
 
+def exec_file(cmd, pty):
+    path = cmd["path"]
+    print_cmd_header(path)
+    path_array = []
+    for dir in path.split(os.path.sep)[:-1]:
+        path_array.append(dir)
+        if not os.path.isdir(os.path.sep.join(path_array)):
+            os.makedirs(os.path.sep.join(path_array))
+    with open(str(path), "w") as f:
+        f.write(str(cmd["content"]))
+
+    print("Wrote " + str(len(cmd["content"])) + " chars to " + path)
+
+
 def exec_default(cmd, pty):
     command = cmd["$"]
     print_cmd_header(command)
@@ -131,7 +145,7 @@ def parse_cmds(pre, attrs):
     for line in pre.split("\n"):
         cmd = "{0} {1}".format(line_continuation, line.strip())
         if cmd.endswith(line_continuation_delimiter):
-            line_continuation += cmd[:-len(line_continuation_delimiter)]
+            line_continuation = cmd[:-len(line_continuation_delimiter)]
         else:
             cmd = parse_cmd(cmd, attrs)
             if cmd != None:
@@ -141,7 +155,21 @@ def parse_cmds(pre, attrs):
 
 
 def parse_file(pre, attrs):
-    raise NotImplementedError("File fields are not implemented yet")
+    if not "data-path" in attrs:
+        raise ValueError("File element does not have required 'data-path' attribute.")
+    path = attrs["data-path"]
+    if path[0] == "/":
+        raise ValueError("Absolute file paths are not permitted")
+    if ".." in path:
+        raise ValueError("'..' not permitted in file paths")
+    content = ""
+    for line in pre:
+        if "ProcessingInstruction" in str(type(line)):  # xml: <? ... ?>
+            content += "<?" + str(line) + ">"
+        else:
+            content += str(line)
+    content = content[1:] if content[0] == "\n" else content
+    return { "type":"file", "content":content, "path":path }
 
 
 def parse_page(html):
@@ -161,7 +189,7 @@ def parse_page(html):
             script["steps"].extend(parse_cmds(pre.string, pre.attrs))
 
         if pre.attrs["data-test"] == "file":
-            script["steps"].extend(parse_file(pre.string, pre.attrs))
+            script["steps"].append(parse_file(pre.contents, pre.attrs))
 
         if pre.attrs["data-test"] == "after":
             script["after"].extend(parse_cmds(pre.string, pre.attrs))

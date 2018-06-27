@@ -6,11 +6,13 @@ title: "Vespa tutorial pt. 1: Blog searching"
 ## Introduction
 
 This is the first of a series of tutorials where data from WordPress.com (WP)
-is used to highlight how Vespa can be used to store, search and recommend blog posts.
-The data was made available during a [Kaggle challenge](https://www.kaggle.com/c/predict-wordpress-likes)
-to predict which blog posts someone would like based on their past behavior.
-It contains many ingredients that are necessary to showcase needs, challenges and possible
-solutions that are useful for those interested in building and deploying such applications in production.
+is used to highlight how Vespa can be used to store, search and recommend blog
+posts.  The data was made available during a [Kaggle
+challenge](https://www.kaggle.com/c/predict-wordpress-likes) to predict which
+blog posts someone would like based on their past behavior.  It contains many
+ingredients that are necessary to showcase needs, challenges and possible
+solutions that are useful for those interested in building and deploying such
+applications in production.
 
 The end goal with these tutorials is to build an application where:
 
@@ -31,12 +33,13 @@ with machine learned models to create a blog recommendation engine.
 
 ## Dataset
 
-The dataset contains blog posts written by WP bloggers and actions, in this case 'likes',
-performed by WP readers in blog posts they have interacted with.
-The dataset is [publicly available at Kaggle](https://www.kaggle.com/c/predict-wordpress-likes/data)
-and was released during a challenge to develop algorithms to help predict which blog
-posts users would most likely 'like' if they were exposed to them.
-The data includes these fields per blog post:
+The dataset contains blog posts written by WP bloggers and actions, in this
+case 'likes', performed by WP readers in blog posts they have interacted with.
+The dataset is [publicly available at
+Kaggle](https://www.kaggle.com/c/predict-wordpress-likes/data) and was released
+during a challenge to develop algorithms to help predict which blog posts users
+would most likely 'like' if they were exposed to them.  The data includes these
+fields per blog post:
 
 <table class="table">
 <thead></thead><tbody>
@@ -70,24 +73,41 @@ training data that consists of 5 weeks of posts as well as all the 'like'
 actions that occurred during those 5 weeks.
 
 [This first release of training data is available
-here](https://www.kaggle.com/c/predict-wordpress-likes/download/trainPosts.zip) -
-once downloaded, unzip it. The 1,196,111 line
-trainPosts.json will be our practice document data. This file is around 5GB in size.
+here](https://www.kaggle.com/c/predict-wordpress-likes/download/trainPosts.zip)
+- once downloaded, unzip it. The 1,196,111 line trainPosts.json will be our
+practice document data. This file is around 5GB in size.
 
 
 ### Requirements
 
-Indexing the full data set requires 23GB disk space.
-These tutorials have been tested with a Docker container with 10GB RAM.
-We used similar settings as described in the
-[vespa quick start guide](../vespa-quick-start.html).
-As in the guide we assume that the $VESPA_SAMPLE_APPS env variable points
-to the directory with your local clone of the
-[vespa sample apps](https://github.com/vespa-engine/sample-apps):
+Indexing the full data set requires 23GB disk space.  These tutorials have been
+tested with a Docker container with 10GB RAM.  We used similar settings as
+described in the [vespa quick start guide](../vespa-quick-start.html).
 
-    $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial --privileged --volume $VESPA_SAMPLE_APPS:/vespa-sample-apps --publish 8080:8080 vespaengine/vespa
+In the following, we will assume you run all the commands from an empty
+directory, i.e. the `pwd` directory is empty. We will map the this directory
+into the `/app` directory inside the Docker container. Now, to start the Vespa
+container:
 
+<pre data-test="exec">
+$ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
+    --privileged --volume `pwd`:/app \
+    --publish 8080:8080 --publish 19112:19112 vespaengine/vespa
+</pre>
 
+Make sure that the configuration server is running:
+
+<pre data-test="exec" data-test-wait-for="200 OK">
+$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
+</pre>
+
+We will also use some code from the [sample app
+repository](https://github.com/vespa-engine/sample-apps). Lets clone that into a
+`sample-apps` directory in your working directory:
+
+<pre data-test="exec">
+$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
+</pre>
 
 ## Searching blog posts
 
@@ -97,15 +117,16 @@ Functional specification:
 - Allow blog posts to be sorted by both relevance and date
 - Allow grouping of search results by tag or category
 
-In terms of data, Vespa operates with the notion of [documents](../documents.html).
-A document represents a single, searchable item in your system, e.g., a blog post, a
-photo, or a news article. Each document type must be defined in
-the Vespa configuration through a [search definition](../search-definitions.html).
-Think of a search definition as being similar to a table definition in a relational database;
-it consists of a set of fields, each with a given name, a specific type, and some optional properties.
+In terms of data, Vespa operates with the notion of
+[documents](../documents.html).  A document represents a single, searchable
+item in your system, e.g., a blog post, a photo, or a news article. Each
+document type must be defined in the Vespa configuration through a [search
+definition](../search-definitions.html).  Think of a search definition as being
+similar to a table definition in a relational database; it consists of a set of
+fields, each with a given name, a specific type, and some optional properties.
 
-As an example, for this simple blog post search application, we could create the document
-type `blog_post` with the following fields:
+As an example, for this simple blog post search application, we could create
+the document type `blog_post` with the following fields:
 
 <table class="table">
 <thead></thead><tbody>
@@ -121,21 +142,22 @@ type `blog_post` with the following fields:
 </tbody>
 </table>
 
-The data fed into Vespa must match the structure of the search definition,
-and the hits returned when searching will be on this format as well.
+The data fed into Vespa must match the structure of the search definition, and
+the hits returned when searching will be on this format as well.
 
 
 ## Application Packages
 
-A Vespa [application package](../cloudconfig/application-packages.html)
-is the set of configuration files and Java plugins that together
-define the behavior of a Vespa system: what functionality to use, the
-available document types, how ranking will be done and how data will be
-processed during feeding and indexing.
-The search definition, e.g., `blog_post.sd`, is a required part of an application package —
-the other required files are `services.xml` and `hosts.xml`.
+A Vespa [application package](../cloudconfig/application-packages.html) is the
+set of configuration files and Java plugins that together define the behavior
+of a Vespa system: what functionality to use, the available document types, how
+ranking will be done and how data will be processed during feeding and
+indexing.  The search definition, e.g., `blog_post.sd`, is a required part of
+an application package — the other required files are `services.xml` and
+`hosts.xml`.
 
-The sample application [blog search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
+The sample application [blog
+search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
 creates a simple but functional blog post search engine. The application
 package is found in
 [src/main/application](https://github.com/vespa-engine/sample-apps/tree/master/blog-search/src/main/application).
@@ -143,10 +165,10 @@ package is found in
 
 ### Services Specification
 
-[services.xml](../reference/services.html) defines the services that make up the Vespa application — which
-services to run and how many nodes per service:
+[services.xml](../reference/services.html) defines the services that make up
+the Vespa application — which services to run and how many nodes per service:
 
-```xml
+<pre data-test="file" data-path="application/services.xml">
 <?xml version='1.0' encoding='UTF-8'?>
 <services version='1.0'>
 
@@ -159,15 +181,15 @@ services to run and how many nodes per service:
   </container>
 
   <content id='blog_post' version='1.0'>
+    <redundancy>1</redundancy>
     <search>
       <visibility-delay>1.0</visibility-delay>
     </search>
-    <redundancy>1</redundancy>
     <documents>
       <document mode='index' type='blog_post'/>
     </documents>
     <nodes>
-      <node hostalias='node1'/>
+      <node hostalias='node1' distribution-key='0'/>
     </nodes>
     <engine>
       <proton>
@@ -177,124 +199,113 @@ services to run and how many nodes per service:
   </content>
 
 </services>
-```
+</pre>
 
-`<container>` defines the [container](../jdisc/index.html) cluster for document, query and result processing
+`<container>` defines the [container](../jdisc/index.html) cluster for
+document, query and result processing
 
-`<search>` sets up the [search](../search-api.html) endpoint for Vespa queries. The default port is 8080.
+`<search>` sets up the [search](../search-api.html) endpoint for Vespa queries.
+The default port is 8080.
 
-`<document-api>` sets up the [document](../document-api.html) endpoint for feeding.
+`<document-api>` sets up the [document](../document-api.html) endpoint for
+feeding.
 
-`<nodes>` defines the nodes required per service.
-(See the [reference](../reference/services-container.html) for more on container cluster setup.)
+`<nodes>` defines the nodes required per service.  (See the
+[reference](../reference/services-container.html) for more on container cluster
+setup.)
 
 `<content>` defines how documents are stored and searched
 
 `<redundancy>` denotes how many copies to keep of each document.
 
-`<documents>` assigns the document types in the _search definition_ —
-the content cluster capacity can be increased by adding node elements — see
-[elastic Vespa](../elastic-vespa.html). (See also the [reference](../reference/services-content.html) for more on content cluster setup.)
+`<documents>` assigns the document types in the _search definition_ — the
+content cluster capacity can be increased by adding node elements — see
+[elastic Vespa](../elastic-vespa.html). (See also the
+[reference](../reference/services-content.html) for more on content cluster
+setup.)
 
 `<nodes>` defines the hosts for the content cluster.
 
 ### Deployment Specification
 
-[hosts.xml](../reference/hosts.html) contains a list of all the hosts/nodes that is part of
-the application, with an alias for each of them. This tutorial uses a single node:
+[hosts.xml](../reference/hosts.html) contains a list of all the hosts/nodes
+that is part of the application, with an alias for each of them. This tutorial
+uses a single node:
 
-```xml
+<pre data-test="file" data-path="application/hosts.xml">
 <?xml version="1.0" encoding="utf-8" ?>
 <hosts>
   <host name="localhost">
     <alias>node1</alias>
   </host>
 </hosts>
-```
+</pre>
 
 ### Search Definition
 
-The `blog_post` document type mentioned in `src/main/application/service.xml` is defined in the
-search definition. `src/main/application/searchdefinitions/blog_post.sd`
-contains the search definition for a document of type `blog_post`:
+The `blog_post` document type mentioned in `src/main/application/service.xml`
+is defined in the search definition.
+`src/main/application/searchdefinitions/blog_post.sd` contains the search
+definition for a document of type `blog_post`:
 
-    search blog_post {
-
-        document blog_post {
-
-            field date_gmt type string {
-                indexing: summary
-            }
-
-            field language type string {
-                indexing: summary
-            }
-
-            field author type string {
-                indexing: summary
-            }
-
-            field url type string {
-                indexing: summary
-            }
-
-            field title type string {
-                indexing: summary | index
-            }
-
-            field blog type string {
-                indexing: summary
-            }
-
-            field post_id type string {
-                indexing: summary
-            }
-
-            field tags type array<string> {
-                indexing: summary
-            }
-
-            field blogname type string {
-                indexing: summary
-            }
-
-            field content type string {
-                indexing: summary | index
-            }
-
-            field categories type array<string> {
-                indexing: summary
-            }
-
-            field date type int {
-                indexing: summary | attribute
-            }
-
+<pre data-test="file" data-path="application/searchdefinitions/blog_post.sd">
+search blog_post {
+    document blog_post {
+        field date_gmt type string {
+            indexing: summary
         }
-
-
-        fieldset default {
-            fields: title, content
+        field language type string {
+            indexing: summary
         }
-
-
-        rank-profile post inherits default {
-
-            first-phase {
-                expression:nativeRank(title, content)
-            }
-
+        field author type string {
+            indexing: summary
         }
-
+        field url type string {
+            indexing: summary
+        }
+        field title type string {
+            indexing: summary | index
+        }
+        field blog type string {
+            indexing: summary
+        }
+        field post_id type string {
+            indexing: summary
+        }
+        field tags type array&lt;string&gt; {
+            indexing: summary
+        }
+        field blogname type string {
+            indexing: summary
+        }
+        field content type string {
+            indexing: summary | index
+        }
+        field categories type array&lt;string&gt; {
+            indexing: summary
+        }
+        field date type int {
+            indexing: summary | attribute
+        }
     }
+    fieldset default {
+        fields: title, content
+    }
+    rank-profile post inherits default {
+        first-phase {
+            expression:nativeRank(title, content)
+        }
+    }
+}
+</pre>
 
-`document` is wrapped inside another element called `search`.
-The name following these elements, here `blog_post`, must be exactly the same for both.
+`document` is wrapped inside another element called `search`.  The name
+following these elements, here `blog_post`, must be exactly the same for both.
 
 The field property `indexing` configures the _indexing pipeline_ for a field,
-which defines how Vespa will treat input during indexing — see
-[indexing language](../reference/advanced-indexing-language.html).
-Each part of the indexing pipeline is separated by the pipe character '|':
+which defines how Vespa will treat input during indexing — see [indexing
+language](../reference/advanced-indexing-language.html).  Each part of the
+indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field
 - `attribute:` Store this field in memory as an [attribute](../attributes.html)
@@ -306,63 +317,88 @@ Each part of the indexing pipeline is separated by the pipe character '|':
 
 ## Deploy the Application Package
 
-Once done with the application package, deploy the Vespa application —
-start Vespa as in the [quick start](../vespa-quick-start.html).
-Deploy the application e.g by running this in a shell inside your Docker container
+Once done with the application package, deploy the Vespa application — start
+Vespa as in the [quick start](../vespa-quick-start.html). To deploy the
+application:
 
-    $ cd /vespa-sample-apps/blog-search
-    $ vespa-deploy prepare src/main/application && vespa-deploy activate
+<pre data-test="exec">
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/application && \
+    /opt/vespa/bin/vespa-deploy activate'
+</pre>
 
-(or alternatively, run the eqivalent commands from outside it as in the quick-start).
+(or alternatively, run the eqivalent commands inside the docker container).
 
-This prints that the application was activated successfully and also
-the checksum, timestamp and generation for this deployment (more on that later).
-Pointing a browser to
+This prints that the application was activated successfully and also the
+checksum, timestamp and generation for this deployment (more on that later).
+
+After a short while, pointing a browser to
 [http://localhost:8080/ApplicationStatus](http://localhost:8080/ApplicationStatus)
-returns JSON-formatted information about the active application, including its checksum,
-timestamp and generation (and should be the same as the values when `vespa-deploy activate` was run).
-The generation will increase by 1 each time a new application is successfully deployed,
-and is the easiest way to verify that the correct version is active.
+returns JSON-formatted information about the active application, including its
+checksum, timestamp and generation (and should be the same as the values when
+`vespa-deploy activate` was run).  The generation will increase by 1 each time
+a new application is successfully deployed, and is the easiest way to verify
+that the correct version is active.
 
 The Vespa node is now configured and ready for use.
 
+<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
+$ curl -s --head http://localhost:8080/ApplicationStatus
+</pre>
 
-## Feeding Data
+## Feeding data
 
 The data fed to Vespa must match the search definition for the document type.
-The data downloaded from Kaggle, contained in <em>trainPosts.json</em>,
-must be converted to a valid Vespa document format before it can be fed to Vespa.
-Find a parser in the [utility repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared)
-for this tutorial. Since the full data set is unnecessarily large for the purposes
-of this first part of the tutorial, we use only the first 10,000 lines of it, but feel free to load all 1,1M entries:
+The data downloaded from Kaggle, contained in <em>trainPosts.json</em>, must be
+converted to a valid Vespa document format before it can be fed to Vespa.  Find
+a parser in the [utility
+repository](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared)
+for this tutorial. Since the full data set is unnecessarily large for the
+purposes of this first part of the tutorial, we use only the first 10,000 lines
+of it, but feel free to load all 1,1M entries:
 
     $ head -10000 trainPosts.json > trainPostsSmall.json
-    $ python parse.py trainPostsSmall.json > tutorial_feed.json
+    $ python sample-apps/blog-tutorial-shared/src/python/parse.py trainPostsSmall.json > tutorial_feed.json
 
-Send this to Vespa using one of the tools Vespa provides for feeding.
-In this part of the tutorial, the [Java feeding API](../vespa-http-client.html) is used:
+Alternatively, a small sample set can be found in the `blog-tutorial-shared`
+sample app repository:
 
-    $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --verbose --file tutorial_feed.json --host localhost --port 8080
+<pre data-test="exec" >
+$ python sample-apps/blog-tutorial-shared/src/python/parse.py \
+    sample-apps/blog-tutorial-shared/sample_posts.json > tutorial_feed.json
+</pre>
 
-Note that in the sample-apps/blog-search directory, there is a file with sample data. You
-may also feed this file using this method.
+Send this to Vespa using one of the tools Vespa provides for feeding.  In this
+part of the tutorial, the [Java feeding API](../vespa-http-client.html) is
+used:
+
+<pre data-test="exec" >
+$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
+    --verbose --file /app/tutorial_feed.json --host localhost --port 8080'
+</pre>
 
 ### Track feeding progress
 
-Use the [Metrics API](../reference/metrics-health-format.html) to track
-number of documents indexed:
+Use the [Metrics API](../reference/metrics-health-format.html) to track number
+of documents indexed:
 
-    $ curl -s 'http://localhost:19112/state/v1/metrics' | tr ',' '\n' | grep -A 2 proton.doctypes.blog_post.numdocs
+<pre data-test="exec" data-test-assert-contains="proton.doctypes.blog_post.numdocs">
+$ curl -s "http://localhost:19112/state/v1/metrics" | tr "," "\n" | grep -A 2 proton.doctypes.blog_post.numdocs
+</pre>
 
-You can also inspect the search node state by 
- 
-    $ vespa-proton-cmd --local getState  
+You can also inspect the search node state by:
+
+<pre data-test="exec" data-test-assert-contains="\"onlineDocs\", \"1196\"">
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState
+</pre>
+
 
 ### Fetch documents
 
 Fetch documents by document id using the [Document API](../api.html):
 
-    $ curl -s 'http://localhost:8080/document/v1/blog-search/blog_post/docid/1750271' | python -m json.tool
+<pre data-test="exec" data-test-assert-contains="id:blog-search:blog_post::1750271">
+$ curl -s 'http://localhost:8080/document/v1/blog-search/blog_post/docid/1750271' | python -m json.tool
+</pre>
 
 
 ## The first query
@@ -371,14 +407,16 @@ Searching with Vespa is done using a HTTP GET requests, like:
 
     <host:port>/<search>?<yql=value1>&<param2=value2>...
 
-The only mandatory parameter is the query, using `yql=<yql query>`.
-More details can be found in the [Search API](../search-api.html).
+The only mandatory parameter is the query, using `yql=<yql query>`.  More
+details can be found in the [Search API](../search-api.html).
 
-Given the above search definition, where the fields `title` and `content` are part of the
-`fieldset default`, any document containing the word "music" in one or more of these two
-fields matches our query below:
+Given the above search definition, where the fields `title` and `content` are
+part of the `fieldset default`, any document containing the word "music" in one
+or more of these two fields matches our query below:
 
-    $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' | python -m json.tool
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' | python -m json.tool
+</pre>
 
 Looking at the output, please note:
 
@@ -399,71 +437,130 @@ Looking at the output, please note:
 
 Once more a search for the single term "music", but this time with the explicit
 field `title`. This means that we only want to match documents that contain the
-word "music" in the field `title`. As expected, you will see fewer hits for this
-query, than for the previous one. 
+word "music" in the field `title`. As expected, you will see fewer hits for
+this query, than for the previous one.
 
     yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22%3B
 
-This is a query for the two terms "music" and "festival", combined with an `AND`
-operation; it finds documents that match both terms — but not just one of them.
+This is a query for the two terms "music" and "festival", combined with an
+`AND` operation; it finds documents that match both terms — but not just one of
+them.
 
     yql=select+*+from+sources+*+where+sddocname+contains+%22blog_post%22%3B
 
-This is a single-term query in the special field `sddocname` for the value "blog_post".
-This is a common and useful Vespa trick to get the number of
-indexed documents for a certain document type (search definition): 
-`sddocname` is a special and reserved field which is always set to the name of
-the document type for a given document. The documents are all of type `blog_post`,
-and will therefore automatically have the field sddocname set to that value.
+This is a single-term query in the special field `sddocname` for the value
+"blog_post".  This is a common and useful Vespa trick to get the number of
+indexed documents for a certain document type (search definition): `sddocname`
+is a special and reserved field which is always set to the name of the document
+type for a given document. The documents are all of type `blog_post`, and will
+therefore automatically have the field sddocname set to that value.
 
-This means that the query above really means "Return all documents of type blog_post",
-and as such all documents in the index are returned.
+This means that the query above really means "Return all documents of type
+blog_post", and as such all documents in the index are returned.
 
 
 ## Relevance and Ranking
 
-[Ranking](../ranking.html) and relevance were briefly mentioned above;
-what is really the relevance of a hit,
-and how can one change the relevance calculations?
-It is time to introduce _rank profiles_ and _rank expressions_ —
+[Ranking](../ranking.html) and relevance were briefly mentioned above; what is
+really the relevance of a hit, and how can one change the relevance
+calculations?  It is time to introduce _rank profiles_ and _rank expressions_ —
 simple, yet powerful methods for tuning the relevance.
 
-Relevance is a measure of how well a given document matches a query.
-The default relevance is calculated by a formula that takes several factors into consideration,
-but it computes, in essence, how well the document matches the terms in the query.
-Sample use cases for tweaking the relevance calculations:
+Relevance is a measure of how well a given document matches a query.  The
+default relevance is calculated by a formula that takes several factors into
+consideration, but it computes, in essence, how well the document matches the
+terms in the query.  Sample use cases for tweaking the relevance calculations:
 
 - Personalize search results based on some property; age, nationality,
   language, friends and friends of friends.
 - Rank fresh (age) documents higher, while still considering other relevance measures.
 - Rank documents by geographical location, searching for relevant resources nearby.
 
-Vespa allows creating any number of _rank profiles_:
-named collections of ranking and relevance calculations that one can choose from at query time.
-A number of built-in functions and expressions are available to create highly specialized rank expressions.
+Vespa allows creating any number of _rank profiles_: named collections of
+ranking and relevance calculations that one can choose from at query time.  A
+number of built-in functions and expressions are available to create highly
+specialized rank expressions.
 
 ### Blog popularity signal
 
 It is time to include the notion of blog popularity into the ranking function.
 Do this by including the `post_popularity` rank profile below at the bottom of
-`src/main/application/searchdefinitions/blog_post.sd`, just below the `post` rank profile.
+`src/main/application/searchdefinitions/blog_post.sd`, just below the `post`
+rank profile.
 
-        rank-profile post_popularity inherits default {
-
-            first-phase {
-                expression: nativeRank(title, content) + 10 * if(isNan(attribute(popularity)), 0, attribute(popularity))
-            }
-
+    rank-profile post_popularity inherits default {
+        first-phase {
+            expression: nativeRank(title, content) + 10 * if(isNan(attribute(popularity)), 0, attribute(popularity))
         }
+    }
 
 Also, add a `popularity` field at the end of the `document` definition:
 
-            field popularity type double {
-                indexing: summary | attribute
-            }
+        field popularity type double {
+            indexing: summary | attribute
+        }
 
-Notes (more information can be found in the
-[search definition reference](../reference/search-definitions-reference.html#rank-profile)):
+<pre style="display:none" data-test="file" data-path="application/searchdefinitions/blog_post.sd">
+search blog_post {
+    document blog_post {
+        field date_gmt type string {
+            indexing: summary
+        }
+        field language type string {
+            indexing: summary
+        }
+        field author type string {
+            indexing: summary
+        }
+        field url type string {
+            indexing: summary
+        }
+        field title type string {
+            indexing: summary | index
+        }
+        field blog type string {
+            indexing: summary
+        }
+        field post_id type string {
+            indexing: summary
+        }
+        field tags type array&lt;string&gt; {
+            indexing: summary
+        }
+        field blogname type string {
+            indexing: summary
+        }
+        field content type string {
+            indexing: summary | index
+        }
+        field categories type array&lt;string&gt; {
+            indexing: summary
+        }
+        field date type int {
+            indexing: summary | attribute
+        }
+        field popularity type double {
+            indexing: summary | attribute
+        }
+    }
+    fieldset default {
+        fields: title, content
+    }
+    rank-profile post inherits default {
+        first-phase {
+            expression:nativeRank(title, content)
+        }
+    }
+    rank-profile post_popularity inherits default {
+        first-phase {
+            expression: nativeRank(title, content) + 10 * if(isNan(attribute(popularity)), 0, attribute(popularity))
+        }
+    }
+}
+</pre>
+
+Notes (more information can be found in the [search definition
+reference](../reference/search-definitions-reference.html#rank-profile)):
 
 - `rank-profile post_popularity inherits default`
 
@@ -486,22 +583,38 @@ Notes (more information can be found in the
 
   This expression is used to rank documents. Here, the default ranking expression —
   the `nativeRank` of the `default` field set — is included to make the query
-  relevant, while the custom, second term includes the document value `attribute(popularity)`, 
+  relevant, while the custom, second term includes the document value `attribute(popularity)`,
   if this is set. The weighted sum of these two terms is the final relevance for each document.
 
 Deploy the configuration:
 
-    $ vespa-deploy prepare src/main/application && vespa-deploy activate
+<pre data-test="exec">
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/application && \
+    /opt/vespa/bin/vespa-deploy activate'
+</pre>
 
-Use [parse.py](https://github.com/vespa-engine/sample-apps/blob/master/blog-tutorial-shared/src/python/parse.py) —
-which has a `-p` option to calculate and add a `popularity` field — and then feed the parsed data:
+<pre style="display:none" data-test="exec">
+$ sleep 20
+</pre>
 
-    $ python parse.py -p trainPostsSmall.json > tutorial_feed_with_popularity.json
-    $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file tutorial_feed_with_popularity.json --host localhost --port 8080
+Use
+[parse.py](https://github.com/vespa-engine/sample-apps/blob/master/blog-tutorial-shared/src/python/parse.py)
+— which has a `-p` option to calculate and add a `popularity` field — and then
+feed the parsed data:
+
+<pre data-test="exec">
+$ python sample-apps/blog-tutorial-shared/src/python/parse.py \
+    -p sample-apps/blog-tutorial-shared/sample_posts.json > tutorial_feed_with_popularity.json
+
+$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
+    --verbose --file /app/tutorial_feed_with_popularity.json --host localhost --port 8080'
+</pre>
 
 After feeding, query
 
-    $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B&ranking=post_popularity' | python -m json.tool
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B&ranking=post_popularity' | python -m json.tool
+</pre>
 
 and find documents with high `popularity` values at the top.
 
@@ -510,14 +623,14 @@ and find documents with high `popularity` values at the top.
 
 ### What is an attribute?
 
-An [_attribute_](../attributes.html) is an in-memory field -
-this is different from  _index_ fields,
-which may be moved to a disk-based index as more documents are added and the index grows. 
-Since attributes are kept in memory, they are excellent for fields which
-require fast access, e.g., fields used for sorting or grouping query results.
-The downside is higher memory usage.
-By default, no index is generated for attributes, and search over these defaults to a linear scan -
-to build an index for an attribute field, include `attribute:fast-search` in the field definition.
+An [_attribute_](../attributes.html) is an in-memory field - this is different
+from  _index_ fields, which may be moved to a disk-based index as more
+documents are added and the index grows.  Since attributes are kept in memory,
+they are excellent for fields which require fast access, e.g., fields used for
+sorting or grouping query results.  The downside is higher memory usage.  By
+default, no index is generated for attributes, and search over these defaults
+to a linear scan - to build an index for an attribute field, include
+`attribute:fast-search` in the field definition.
 
 ### Defining an attribute field
 
@@ -535,38 +648,39 @@ The data has format YYYYMMDD. And since the field is an `int`, it can be used fo
     yql=select+*+from+sources+*+where+default+contains+%2220120426%22%3B
 
 This is a single-term query for the term _20120426_ in the `default` field set.
-(The strings `%22` and `%3B` are URL encodings for `"` and `;`.)
-In the search definition, the field `date` is not included in the `default` field set.
-Nevertheless, the string "20120426" is found in the content of many posts, which
-are returned then as results.
+(The strings `%22` and `%3B` are URL encodings for `"` and `;`.) In the search
+definition, the field `date` is not included in the `default` field set.
+Nevertheless, the string "20120426" is found in the content of many posts,
+which are returned then as results.
 
     yql=select+*+from+sources+*+where+date+contains+%2220120426%22%3B
 
-To get documents that were created 26 April 2012, and whose `date` field is _20120426_,
-replace `default` with `date` in the YQL query string.
-Note that since `date` has not been defined with `attribute:fast-search`,
-searching will be done by scanning _all_ documents.
+To get documents that were created 26 April 2012, and whose `date` field is
+_20120426_, replace `default` with `date` in the YQL query string.  Note that
+since `date` has not been defined with `attribute:fast-search`, searching will
+be done by scanning _all_ documents.
 
     yql=select+*+from+sources+*+where+default+contains+%22recipe%22+AND+date+contains+%2220120426%22%3B
 
 A query with two terms; a search in the `default` field set for the term
 "recipe" combined with a search in the `date` field for the value _20120426_.
-This search will be faster than the previous example, as the term "recipe"
-is for a field for which there is an index, and for which the search core will 
-evaluate the query first. (This speedup is only noticeable with the full data set!)
+This search will be faster than the previous example, as the term "recipe" is
+for a field for which there is an index, and for which the search core will
+evaluate the query first. (This speedup is only noticeable with the full data
+set!)
 
 ### Range searches
 
-The examples above searched over `date` just as any other field, and
-requested documents where the value was exactly _20120426_.
-Since the field is of type _int_, however, we can use it for _range searches_
-as well, using the "less than" and "greater than" operators
-(`<` and `>`, or `%3C` and `%3E` URL encoded). The query
+The examples above searched over `date` just as any other field, and requested
+documents where the value was exactly _20120426_.  Since the field is of type
+_int_, however, we can use it for _range searches_ as well, using the "less
+than" and "greater than" operators (`<` and `>`, or `%3C` and `%3E` URL
+encoded). The query
 
     yql=select+*+from+sources+*+where+date+%3C+20120401%3B
 
-finds all documents where the value of `date` is less than _20120401_, i.e., all
-documents from before April 2012, while 
+finds all documents where the value of `date` is less than _20120401_, i.e.,
+all documents from before April 2012, while
 
     yql=select+*+from+sources+*+where+date+%3C+20120401+AND+date+%3E+20120229%3B
 
@@ -574,24 +688,29 @@ finds all documents exactly from March 2012.
 
 ### Sorting
 
-The first feature we will look at is how an attribute can be used to change the hit order.
-By now, you have probably noticed that hits are returned in order of descending relevance, i.e.,
-how well the document matches the query — if not, take a moment to verify this. 
+The first feature we will look at is how an attribute can be used to change the
+hit order.  By now, you have probably noticed that hits are returned in order
+of descending relevance, i.e., how well the document matches the query — if
+not, take a moment to verify this.
 
-Now try to send the following query to Vespa, and look at the order of the hits:
+Now try to send the following query to Vespa, and look at the order of the
+hits:
 
-    $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date%3B' | python -m json.tool
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date%3B' | python -m json.tool
+</pre>
 
 By default, sorting is done in ascending order. This can also be specified by
-appending `asc` after the sort attribute name. Use `desc` to sort the  in descending order:
+appending `asc` after the sort attribute name. Use `desc` to sort the  in
+descending order:
 
     $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date+desc%3B' | python -m json.tool
 
 ### Query time data grouping
 
 _Grouping_ is the concept of looking through all matching documents at
-query-time and then performing operations with specified fields across all
-the documents — some common use cases include:
+query-time and then performing operations with specified fields across all the
+documents — some common use cases include:
 
 - Find all the unique values for a given field, make **one group per unique
   value**, and return the count of documents per group.
@@ -602,14 +721,17 @@ the documents — some common use cases include:
   and _Everything else_.
 - Calculate the **minimum/maximum/average value** for a given field.
 
-Displaying such groups and their sizes (in terms of matching documents per group)
-on a search result page, with a link to each such group, is a common way to let users refine searches.
-For now we will only do a very simple grouping query to get a list of unique
-values for `date` ordered by the number of documents they occur in and top 3 is shown:
+Displaying such groups and their sizes (in terms of matching documents per
+group) on a search result page, with a link to each such group, is a common way
+to let users refine searches.  For now we will only do a very simple grouping
+query to get a list of unique values for `date` ordered by the number of
+documents they occur in and top 3 is shown:
 
-    $ curl -s 'http://localhost:8080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B' | python -m json.tool
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ curl -s 'http://localhost:8080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B' | python -m json.tool
+</pre>
 
-With the full data set, you will get the following output:
+With the full data set, you will get something like the following output:
 
     {
         "root": {
@@ -674,31 +796,32 @@ With the full data set, you will get the following output:
         }
     }
 
-The three most common unique values of `date` are listed, along with their respective counts.
+The three most common unique values of `date` are listed, along with their
+respective counts.
 
-Try to change the filter part of the YQL+ expression — the `where` clause — to a text
-match of "recipe", or restrict `date` to be less than 20120401, and see how the list
-of unique values changes as the set of matching documents for your query changes.
-Try to search for the single term "Verizon" as well — a word we know is *not* present
-in the document set, and as such will match no documents — and you will see that the list of groups is empty.
+Try to change the filter part of the YQL+ expression — the `where` clause — to
+a text match of "recipe", or restrict `date` to be less than 20120401, and see
+how the list of unique values changes as the set of matching documents for your
+query changes.  Try to search for the single term "Verizon" as well — a word we
+know is *not* present in the document set, and as such will match no documents
+— and you will see that the list of groups is empty.
 
 ### Attribute limitations
 
 #### Memory usage
 
-Attributes are kept in memory at all time,
-as opposed to normal indexes where the data is mostly kept on disk.
-Even with large search nodes, one will notice that it is not
-practical to define all the search definition fields as attributes,
-as it will heavily restrict the number of documents per search node.
-Some Vespa installations have more than 1 billion documents per node —
+Attributes are kept in memory at all time, as opposed to normal indexes where
+the data is mostly kept on disk.  Even with large search nodes, one will notice
+that it is not practical to define all the search definition fields as
+attributes, as it will heavily restrict the number of documents per search
+node.  Some Vespa installations have more than 1 billion documents per node —
 having megabytes of text in memory per document is not an option.
 
 #### Matching
 
-Another limitation is the way *matching* is done for attributes.
-Consider the field `blogname` from our search definition, and the document for
-the blog called "Thinking about museums". In the original input, the value for
+Another limitation is the way *matching* is done for attributes.  Consider the
+field `blogname` from our search definition, and the document for the blog
+called "Thinking about museums". In the original input, the value for
 `blogname` is a string built of up the three words "Thinking", "about", and
 "museums", with a single whitespace character between them. How should we be
 able to search this field?
@@ -711,25 +834,24 @@ phrase query "Thinking about museums", and a query with two or more tokens in
 either order (e.g. "museums thinking"). This is how we all have come to expect
 normal free text search to work.
 
-However, there is a limitation in Vespa when it comes to attribute
-fields and matching; attributes do not support normal token-based matching —
-only *exact matching* or *prefix matching*. Exact matching is the default, and,
-as the name implies, it requires you to search for the exact contents of the
-field in order to get a match.
+However, there is a limitation in Vespa when it comes to attribute fields and
+matching; attributes do not support normal token-based matching — only *exact
+matching* or *prefix matching*. Exact matching is the default, and, as the name
+implies, it requires you to search for the exact contents of the field in order
+to get a match.
 
 ### When to use attributes
 
-There are both advantages and drawbacks of using attributes —
-it enables sorting and grouping, but requires
-more memory and gives limited matching capabilities. When to use
-attributes depends on the application; in general, use attributes for:
+There are both advantages and drawbacks of using attributes — it enables
+sorting and grouping, but requires more memory and gives limited matching
+capabilities. When to use attributes depends on the application; in general,
+use attributes for:
 
 - fields used for sorting, e.g., a last-update timestamp,
 - fields used for grouping, e.g., problem severity, and
 - fields that are not long string fields.
 
 Finally, all numeric fields should always be attributes.
-
 
 ## Clean environment by removing all documents
 
@@ -746,3 +868,32 @@ understanding of how Vespa can help build your application.
 In the [next part of the tutorial](blog-recommendation.html)
 we will proceed to show how can we use Statistics and Machine Learning
 to extend a basic search application into a recommendation system.
+
+<pre style="display:none" data-test="after">
+$ docker stop vespa && docker rm -f vespa
+</pre>
+
+<script>
+function processFilePREs() {
+    var tags = document.getElementsByTagName("pre");
+
+    // copy elements, because the list above is mutated by the insert html below
+    var elems = [];
+    for (i = 0; i < tags.length; i++) {
+        elems.push(tags[i]);
+    }
+
+    for (i = 0; i < elems.length; i++) {
+        var elem = elems[i];
+        if (elem.getAttribute("data-test") === "file") {
+            var html = elem.innerHTML;
+            elem.innerHTML = html.replace(/<!--\?/g, "<?").replace(/\?-->/g, "?>").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            elem.insertAdjacentHTML("beforebegin", "<pre class=\"filepath\">file: " + elem.getAttribute("data-path") + "</pre>");
+        }
+    }
+};
+
+processFilePREs();
+
+</script>
+
