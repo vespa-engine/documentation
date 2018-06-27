@@ -11,7 +11,7 @@ without arguments will test each URL in that file in sequence.
 
 To run this locally:
 
-    $ python -r requirements.txt
+    $ pip install -r requirements.txt
     $ python test.py [URL | FILE]
 
 If you want to run a test that is not in the above file, you can add the file
