@@ -240,13 +240,16 @@ struct [name] {
 }
 </pre>
 The struct name should not contain any underscores.
-</p><p>
-Please note that struct types is not supported by indexed search and
-the behavior of operations over struct fields is undefined.
-<!--  ToDo Rewrite: struct fields in summary is OK - i.e. use structs in document store -->
-Searching in struct elements is  supported by
-<a href="../streaming-search.html">streaming search</a>.
-</p><p>
+</p>
+<p>
+Note that struct types are supported differently in indexed search and
+<a href="../streaming-search.html">streaming search</a> mode.
+Take a look at
+<a href="#type:struct">struct type</a>,
+<a href="#type:array-struct">struct array type</a> and
+<a href="#type:map">map type</a> for more details.
+</p>
+<p>
 The body of a struct is optional and may contain:
 <table class="table">
 <thead>
@@ -475,31 +478,43 @@ Contained in <code><a href="#field">field</a></code> or
 Defines how this struct field (a subfield of a struct) should be stored,
 indexed, searched, presented and how it should influence ranking.
 The field in which this struct field is contained must be of
-type struct, which has defined this struct field.
-Note that struct fields are only available for streaming search.
+type struct or a collection of type struct.
+Note that struct fields are supported differently in indexed search and
+<a href="../streaming-search.html">streaming search</a>:
 <pre>
-field [name] {
+struct-field [name] {
     [body]
 }
 </pre>
 The body of a struct field is optional and may contain the following elements:
 <table class="table">
 <thead>
-<tr><th>Name</th><th>Description</th><th>Occurrence</th></tr>
+    <tr><th>Name</th><th>Description</th><th>Supported in</th><th>Occurrence</th></tr>
 </thead><tbody>
 <tr><td><a href="#indexing">indexing</a></td>
-<td>The indexing statements used to create index structure additions
-from this field.</td>
+<td>The indexing statements used to create index structure additions from this field.
+For indexed search only <code>attribute</code> is supported, which makes the struct field a searchable in-memory attribute.
+For streaming search only <code>index</code> and <code>summary</code> is supported.
+</td>
+<td>Indexed and streaming</td>
 <td>Zero to one</td>
+</tr>
+
+<tr><td><a href="#attribute">attribute</a></td>
+<td>Specifies an attribute setting.</td>
+<td>Indexed</td>
+<td>Zero to many</td>
 </tr>
 
 <tr><td><a href="#match">match</a></td>
 <td>Set the matching type to use for this field.</td>
+<td>Streaming</td>
 <td>Zero to one</td>
 </tr>
 
 <tr><td><a href="#query-command">query-command</a></td>
 <td>Specifies a command which can be received by a plugin searcher in the Search Container.</td>
+<td>Streaming</td>
 <td>Zero to many</td>
 </tr>
 
@@ -508,17 +523,20 @@ from this field.</td>
 contain this subfield in the struct definition. If you want the subfield to
 be handled differently from the rest of the struct, you may specify it within
 the body of the struct-field.</td>
+<td>Streaming</td>
 <td>Zero to many.</td>
 </tr>
 
 <tr><td><a href="#summary">summary</a></td>
 <td>Sets a summary setting of this field, set to <code>dynamic</code>
 to make a dynamic summary.</td>
+<td>Streaming</td>
 <td>Zero to many</td>
 </tr>
 
 <tr><td><a href="#summary-to">summary-to</a></td>
 <td>The list of document summary names this should be included in.</td>
+<td>Streaming</td>
 <td>Zero to one</td>
 </tr>
 </tbody>
@@ -1183,7 +1201,8 @@ used. Alias names can be any name string, dots are allowed as well.
 
 
 <h2 id="attribute">attribute</h2>
-<p>Contained in <code><a href="#field">field</a></code>.
+<p>Contained in <code><a href="#field">field</a></code> or
+<code><a href="#struct-field">struct-field</a></code>.
 Specifies a property of an index structure attribute:</em>
 <pre>
 attribute [attribute-name]: [property]
@@ -1510,7 +1529,7 @@ Supported expressions for fields are:
 <thead></thead><tbody>
 <tr><th>attribute</th>
 <td>
-  <a href="../attributes.html">Attribute</a> is used to make a field available for sorting and grouping.
+  <a href="../attributes.html">Attribute</a> is used to make a field available for sorting, grouping, ranking and searching.
   <!-- ToDo check: All strings are lower-cased before stored in the attribute.
    or lowercased when searching? -->
 </td></tr>
@@ -2303,8 +2322,8 @@ while "surl.hostname" or "site" will search the hostname.
 
 <tr><th id="type:array">array&lt;element-type&gt;</th>
 <td>
-Use to create a multi-value field of the element type.
-The element type can be any single value type, but not a nested array or weighted set.
+Use to create an array field of the element type.
+The element type can be of any single value type.
 <table class="table">
   <thead></thead><tbody>
     <tr>
@@ -2312,10 +2331,62 @@ The element type can be any single value type, but not a nested array or weighte
       <td>Each element is indexed separately.</td>
     </tr><tr>
       <th>Attribute</th>
-      <td>Added as a multi-value attribute.</td>
+      <td>Added as an array attribute.</td>
     </tr><tr>
       <th>Summary</th>
-      <td>Added as a multi-value summary field.</td>
+      <td>Added as an array summary field.</td>
+    </tr>
+  </tbody>
+</table>
+</td></tr>
+
+<tr><th id="type:array-struct">array&lt;struct-type&gt;</th>
+<td>
+<p>
+Use to create an array field of the given <a href="#struct">struct type</a>.
+The struct type must be defined separately.
+</p>
+<p>
+Example:
+<pre>
+struct person {
+  field first_name type string {}
+  field last_name type string {}
+}
+
+field people type array&lt;person&gt; {
+  indexing: summary
+  struct-field first_name { indexing: attribute }
+  struct-field last_name { indexing: attribute }
+}
+</pre>
+The entire <em>people</em> field is part of document summary,
+and the struct fields <em>first_name</em> and <em>last_name</em> are attributes available for searching using the
+<a href="../query-language.html#same-element">sameElement</a> operator.
+</p>
+<p>
+Restrictions:
+<ul>
+  <li>All struct arrays can be searched in <a href="../streaming-search.html">streaming search</a> mode.</li>
+  <li>Some struct arrays can be searched in indexed search. See table below for supported cases.</li>
+  <li>All struct arrays can be fed, retrieved and used in document summaries in both indexed and streaming search.</li>
+</ul>
+</p>
+
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th style="width:100px">Indexing</th>
+      <td>Not supported.</td>
+    </tr><tr>
+      <th>Attribute</th>
+      <td>
+          Only supported in indexed search for struct types with primitive fields only (string, int, long, byte, float, double).
+          Any <a href="#struct-field">struct field</a> must be defined as an attribute to be used for searching.
+      </td>
+    </tr><tr>
+        <th>Summary</th>
+        <td>Added as an array summary field.</td>
     </tr>
   </tbody>
 </table>
@@ -2325,7 +2396,7 @@ The element type can be any single value type, but not a nested array or weighte
 <td><p>
 Use to create a multi-value field of the element type,
 where each element is assigned a signed 32-bit integer weight.
-The element type can be any single value type, but not a nested array or weighted set.
+The element type can be any single value type.
 The weights may be assigned any semantics by the application. Two main use cases:
 <ol>
 	<li>The weight symbolizes the number of occurrences</li>
@@ -2399,24 +2470,45 @@ for the JSON feed format for tensors.
 
 <tr><th id="type:struct">struct</th>
 <td>
+<p>
 Use to define a field with a struct datatype.
-To define a struct field, first create a <a href="#struct">struct definition</a>.
-The <a href="#struct">struct</a> must be defined inside the document definition.
-To declare a struct field in a document or struct, use the struct name to identify the field type:
+Create a <a href="#struct">struct type</a> inside the document definition and
+declare the struct field in a document or struct using the struct type name as the field type.
+</p>
+<p>
+Example:
 <pre>
-field foo type address {}
+struct person {
+  field first_name type string {}
+  field last_name type string {}
+}
+field my_person type person {
+  indexing: summary
+}
 </pre>
+</p>
+<p>
+Restrictions:
+<ul>
+  <li>Struct fields can <strong>only</strong> be searched in <a href="../streaming-search.html">streaming search</a> mode,
+      <strong>not</strong> in indexed search.</li>
+  <li>Struct fields can be fed, retrieved and used in document summaries in both indexed and streaming search.</li>
+</ul>
+See <a href="#type:array-struct">struct array type</a> and
+<a href="#type:map">map type</a> for restrictions when using collections of structs.
+</p>
+
 <table class="table">
   <thead></thead><tbody>
     <tr>
       <th style="width:100px">Indexing</th>
-      <td>Structs have the same <a href="#type:map">indexing restrictions</a> as maps.</td>
+      <td>Not supported.</td>
     </tr><tr>
       <th>Attribute</th>
-      <td>Each field may or may not be an attribute according to its configuration.</td>
+      <td>Not supported.</td>
     </tr><tr>
       <th>Summary</th>
-      <td>Each field in the struct has its own summary configuration</td>
+      <td>Added as a struct. In streaming search each field in the struct can have its own summary configuration.</td>
     </tr>
   </tbody>
 </table>
@@ -2424,43 +2516,75 @@ field foo type address {}
 
 <tr><th id="type:map">map&lt;key-type,value-type&gt;</th>
 <td>
-Use to create a map of values. Use any other Vespa type as both key and value.
-These configurations are identical:
+<p>
+Use to create a map where each unique key is mapped to a single value.
+Any primitive type is used as <em>key-type</em> and any Vespa type as <em>value-type</em>.
+A map entry is handled as a struct with a <em>key</em> and <em>value</em> field with <em>key-type</em> and <em>value-type</em> as types.
+</p>
+<p>
+Example:
 <pre>
-field mymap type map&lt;string, string&gt; {
+struct person {
+  field first_name type string {}
+  field last_name type string {}
 }
-
-struct mystruct {
-    field key type string { }
-    field value type string { }
-}
-field mymap type array&lt;mystruct&gt; {
+field identities type map&lt;string, person&gt; {
+  indexing: summary
+  struct-field key { indexing: attribute }
+  struct-field value.last_name { indexing: attribute }
 }
 </pre>
+The entire <em>identities</em> field is part of document summary,
+and the struct fields <em>key</em> and <em>value.last_name</em> are attributes available for searching using the
+<a href="../query-language.html#same-element">sameElement</a> operator.
+</p>
+<p>
+The next example shows a map of primitive types, where the <em>key</em> and <em>value</em> struct fields are specified as attributes:
+<pre>
+field my_map type map&lt;string, int&gt; {
+  indexing: summary
+  struct-field key { indexing: attribute }
+  struct-field value { indexing: attribute }
+}
+</pre>
+Note that the previous example is similar to the following,
+the difference being that an array can contain the same element multiple times and maintains order.
+<pre>
+struct mystruct {
+  field key type string { }
+  field value type int { }
+}
+field my_array type array&lt;mystruct&gt; {
+  indexing: summary
+  struct-field key { indexing: attribute }
+  struct-field value { indexing: attribute }
+}
+</pre>
+</p>
+<p>
+Restrictions:
+<ul>
+  <li>All map types can be searched in <a href="../streaming-search.html">streaming search</a> mode.</li>
+  <li>Some map types can be searched in indexed search. See table below for supported cases.</li>
+  <li>All map types can be fed, retrieved and used in document summaries in both indexed and streaming search.</li>
+</ul>
+</p>
+
 <table class="table">
   <thead></thead><tbody>
     <tr>
       <th style="width:100px">Indexing</th>
-      <td>
-        A map is handled as a struct with a key and value field with key-type and value-type as types,
-        respectively - see below. Indexing restrictions:
-        <ul>
-          <li>Structs and maps can only be stored in the document summary store
-            and hence can be used in search result summaries.</li>
-          <li>Structs and maps fields cannot be indexed.</li>
-          <li>Structs and maps can only be searched in
-            <a href="../streaming-search.html">streaming search</a> mode.</li>
-          <li>Structs and maps cannot be <a href="../attributes.html">attributes</a>.</li>
-        </ul>
-      </td>
-    </tr><tr>
+      <td>Not supported.</td>
+      </tr><tr>
       <th>Attribute</th>
       <td>
-        <strong>ToDo</strong>
+          Only supported in indexed search where <em>key-type</em> is a primitive type (string, int, long, byte, float, double)
+          and <em>value-type</em> is either a primitive type or a struct type with primitive fields only.
+          Any <a href="#struct-field">struct field</a> must be defined as an attribute to be used for searching.
       </td>
     </tr><tr>
       <th>Summary</th>
-      <td>Both key and value have their own summary configuration.</td>
+      <td>Added as a map. In streaming search both key and value can have their own summary configuration.</td>
     </tr>
   </tbody>
 </table>
