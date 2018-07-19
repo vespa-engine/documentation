@@ -168,7 +168,7 @@ package is found in
 [services.xml](../reference/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service:
 
-<pre data-test="file" data-path="application/services.xml">
+<pre data-test="file" data-path="sample-apps/blog-search/src/main/application/services.xml">
 <?xml version='1.0' encoding='UTF-8'?>
 <services version='1.0'>
 
@@ -232,7 +232,7 @@ setup.)
 that is part of the application, with an alias for each of them. This tutorial
 uses a single node:
 
-<pre data-test="file" data-path="application/hosts.xml">
+<pre data-test="file" data-path="sample-apps/blog-search/src/main/application/hosts.xml">
 <?xml version="1.0" encoding="utf-8" ?>
 <hosts>
   <host name="localhost">
@@ -248,7 +248,7 @@ is defined in the search definition.
 `src/main/application/searchdefinitions/blog_post.sd` contains the search
 definition for a document of type `blog_post`:
 
-<pre data-test="file" data-path="application/searchdefinitions/blog_post.sd">
+<pre data-test="file" data-path="sample-apps/blog-search/src/main/application/searchdefinitions/blog_post.sd">
 search blog_post {
     document blog_post {
         field date_gmt type string {
@@ -322,7 +322,7 @@ Vespa as in the [quick start](../vespa-quick-start.html). To deploy the
 application:
 
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/application && \
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/sample-apps/blog-search/src/main/application && \
     /opt/vespa/bin/vespa-deploy activate'
 </pre>
 
@@ -431,7 +431,8 @@ Please copy the JSON-query below and paste it in the GUI for building queries at
 or run one of the lines below. 
 
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\";"}' http://localhost:8080/search/
+$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\";"}' \
+http://localhost:8080/search/ | python -m json.tool
 </pre>
 
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
@@ -455,8 +456,6 @@ Looking at the output, please note:
 - Add `&tracelevel=9` to dump query parsing details
 
 ### Other examples
-
-    yql=select+title+from+sources+*+where+title+contains+%22music%22%3B
      
     {"yql" : "select title from sources * where title contains \"music\";"}
 
@@ -465,16 +464,12 @@ field `title`. This means that we only want to match documents that contain the
 word "music" in the field `title`. As expected, you will see fewer hits for
 this query, than for the previous one.
 
-    yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22%3B
-    
     {"yql" : "select * from sources * where title contains \"music\" AND default contains \"festival\";"}
 
 This is a query for the two terms "music" and "festival", combined with an
 `AND` operation; it finds documents that match both terms — but not just one of
 them.
 
-    yql=select+*+from+sources+*+where+sddocname+contains+%22blog_post%22%3B
-    
     {"yql" : "select * from sources * where sddocname contains \"blog_post\";}
 
 This is a single-term query in the special field `sddocname` for the value
@@ -529,7 +524,7 @@ Also, add a `popularity` field at the end of the `document` definition:
             indexing: summary | attribute
         }
 
-<pre style="display:none" data-test="file" data-path="application/searchdefinitions/blog_post.sd">
+<pre style="display:none" data-test="file" data-path="sample-apps/blog-search/src/main/application/searchdefinitions/blog_post.sd">
 search blog_post {
     document blog_post {
         field date_gmt type string {
@@ -618,7 +613,7 @@ reference](../reference/search-definitions-reference.html#rank-profile)):
 Deploy the configuration:
 
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/application && \
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/sample-apps/blog-search/src/main/application && \
     /opt/vespa/bin/vespa-deploy activate'
 </pre>
 
@@ -642,11 +637,8 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 After feeding, run one of the equivalent queries below:
 
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B&ranking=post_popularity' | python -m json.tool
-</pre>
-
-<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\";", "ranking" : "post_popularity"}' http://localhost:8080/search/
+$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\";", "ranking" : "post_popularity"}' \
+http://localhost:8080/search/ | python -m json.tool
 </pre>
 
 and find documents with high `popularity` values at the top.
@@ -678,8 +670,6 @@ The data has format YYYYMMDD. And since the field is an `int`, it can be used fo
 
 ### Example queries using attribute field
 
-    yql=select+*+from+sources+*+where+default+contains+%2220120426%22%3B
-    
     {"yql" : "select * from sources * where default contains \"20120426\";"}
 
 This is a single-term query for the term _20120426_ in the `default` field set.
@@ -688,8 +678,6 @@ definition, the field `date` is not included in the `default` field set.
 Nevertheless, the string "20120426" is found in the content of many posts,
 which are returned then as results.
 
-    yql=select+*+from+sources+*+where+date+contains+%2220120426%22%3B
-    
     {"yql" : "select * from sources * where date contains \"20120426\";"}
 
 To get documents that were created 26 April 2012, and whose `date` field is
@@ -697,8 +685,6 @@ _20120426_, replace `default` with `date` in the YQL query string.  Note that
 since `date` has not been defined with `attribute:fast-search`, searching will
 be done by scanning _all_ documents.
 
-    yql=select+*+from+sources+*+where+default+contains+%22recipe%22+AND+date+contains+%2220120426%22%3B
-    
     {"yql" : "select * from sources * where default contains \"recipe\" AND date contains \"20120426\";"}
 
 A query with two terms; a search in the `default` field set for the term
@@ -714,17 +700,13 @@ The examples above searched over `date` just as any other field, and requested
 documents where the value was exactly _20120426_.  Since the field is of type
 _int_, however, we can use it for _range searches_ as well, using the "less
 than" and "greater than" operators (`<` and `>`, or `%3C` and `%3E` URL
-encoded). The query
+encoded if using GET-queries). The query
 
-    yql=select+*+from+sources+*+where+date+%3C+20120401%3B
-    
     {"yql" : "select * from sources * where date < 20120401;"}
 
 finds all documents where the value of `date` is less than _20120401_, i.e.,
 all documents from before April 2012, while
 
-    yql=select+*+from+sources+*+where+date+%3C+20120401+AND+date+%3E+20120229%3B
-    
     {"yql" : "select * from sources * where date < 20120401 AND date > 20120229;"}
 
 finds all documents exactly from March 2012.
@@ -740,19 +722,16 @@ Now try to send the following query to Vespa, and look at the order of the
 hits:
 
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date%3B' | python -m json.tool
-</pre>
-
-<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains "music" AND default contains "festival" order by date;"}' http://localhost:8080/search/
+$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date;"}' \
+http://localhost:8080/search/ | python -m json.tool
 </pre>
 
 By default, sorting is done in ascending order. This can also be specified by
 appending `asc` after the sort attribute name. Use `desc` to sort the  in
 descending order:
 
-    $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22+AND+default+contains+%22festival%22+order+by+date+desc%3B' | python -m json.tool
-    $ curl -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains "music" AND default contains "festival" order by date desc;"}' http://localhost:8080/search/
+    $ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date desc;"}' \
+    http://localhost:8080/search/ | python -m json.tool
     
 
 ### Query time data grouping
@@ -777,10 +756,8 @@ query to get a list of unique values for `date` ordered by the number of
 documents they occur in and top 3 is shown:
 
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s 'http://localhost:8080/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22blog_post%22%20limit%200%20%7C%20all(group(date)%20max(3)%20order(-count())each(output(count())))%3B' | python -m json.tool
-</pre>
-<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where sddocname contains "blog_post" limit 0 | all(group(date) max(3) order(-count())each(output(count())));"}' http://localhost:8080/search/
+$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where sddocname contains \"blog_post\" limit 0 | all(group(date) max(3) order(-count())each(output(count())));"}' \
+http://localhost:8080/search/ | python -m json.tool
 </pre>
 
 With the full data set, you will get something like the following output:
