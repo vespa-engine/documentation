@@ -87,7 +87,7 @@ slashes are illegal in Vespa ranking expression names.
 
 The types of document tensors are specified in the search definition as shown above.
 If you specify the types of query tensors in the
-[query profile types](query-profiles.html#query-profile-types"),
+[query profile types](query-profiles.html#query-profile-types),
 you can pass tensors in HTTP requests by using the HTTP parameter
 "ranking.features.query(myTensor)" (assuming the ranking expression contains
 "query(myTensor)". To do this specify a

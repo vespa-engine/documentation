@@ -61,7 +61,7 @@ parameters of the model are represented by $$\theta = (W_1, W_2, b_1, b_2)$$.
 
 For the training dataset, we will start with the (user_id, post_id) rows from
 the "training_set_ids" generated in the section [Training and test
-sets](blog-recommendation.html#training-and-test-sets) of the previous
+sets](blog-recommendation.html#generate-training-and-test-sets) of the previous
 tutorial. Then, we remove every row for which there is no latent factors for
 the user_id or post_id contained in that row. This gives us a dataset with only
 positive feedback (label = 1), since each row represents one instance of a
