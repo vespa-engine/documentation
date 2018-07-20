@@ -9,7 +9,7 @@ and use them in ranking functions directly.
 
 ## Exporting models from TensorFlow
 
-Vespa supports TensorFlow's [SavedModel](https://www.tensorflow.org/programmers_guide/saved_model#overview_of_saving_and_restoring_models)
+Vespa supports TensorFlow's [SavedModel](https://www.tensorflow.org/programmers_guide/saved_model#save_and_restore_models)
 for importing models. `SavedModel` is a hermetic serialization format
 that stores the model and primarily contains a `meta graph` which holds
 the dataflow graph, variables, assets and signatures. Signatures defines
@@ -151,7 +151,7 @@ a tensor with names `"d0"`, `"d1"`, etc.
 
 The types of document tensors are specified in the search definition as shown above.
 If you specify the types of query tensors in the
-[query profile types](query-profiles.html#query-profile-types"),
+[query profile types](query-profiles.html#query-profile-types),
 you can pass tensors in HTTP requests by using the HTTP parameter
 "ranking.features.query(myTensor)" (assuming the ranking expression contains
 "query(myTensor)". To do this specify a
