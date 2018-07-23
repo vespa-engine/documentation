@@ -101,9 +101,10 @@ Make sure that the configuration server is running:
 $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
 </pre>
 
-We will also use some code from the [sample app
-repository](https://github.com/vespa-engine/sample-apps). Lets clone that into a
-`sample-apps` directory in your working directory:
+In the following we will create a Vespa application from scratch, but to feed
+the data above we will use some code from the [sample app
+repository](https://github.com/vespa-engine/sample-apps). Lets clone that into
+a `sample-apps` directory in your working directory:
 
 <pre data-test="exec">
 $ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
@@ -156,19 +157,21 @@ indexing.  The search definition, e.g., `blog_post.sd`, is a required part of
 an application package — the other required files are `services.xml` and
 `hosts.xml`.
 
-The sample application [blog
+As an example, the sample application [blog
 search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
 creates a simple but functional blog post search engine. The application
 package is found in
 [src/main/application](https://github.com/vespa-engine/sample-apps/tree/master/blog-search/src/main/application).
+In the following tutorial we will recreate this application from scratch.
 
 
 ### Services Specification
 
 [services.xml](../reference/services.html) defines the services that make up
-the Vespa application — which services to run and how many nodes per service:
+the Vespa application — which services to run and how many nodes per service.
+Write the following to `application/services.xml`:
 
-<pre data-test="file" data-path="sample-apps/blog-search/src/main/application/services.xml">
+<pre data-test="file" data-path="application/services.xml">
 <?xml version='1.0' encoding='UTF-8'?>
 <services version='1.0'>
 
@@ -232,7 +235,7 @@ setup.)
 that is part of the application, with an alias for each of them. This tutorial
 uses a single node:
 
-<pre data-test="file" data-path="sample-apps/blog-search/src/main/application/hosts.xml">
+<pre data-test="file" data-path="application/hosts.xml">
 <?xml version="1.0" encoding="utf-8" ?>
 <hosts>
   <host name="localhost">
@@ -241,14 +244,16 @@ uses a single node:
 </hosts>
 </pre>
 
+This file goes in `application/hosts.xml`.
+
 ### Search Definition
 
-The `blog_post` document type mentioned in `src/main/application/service.xml`
-is defined in the search definition.
-`src/main/application/searchdefinitions/blog_post.sd` contains the search
+The `blog_post` document type mentioned in the `services.xml` file above is
+defined in the search definition.  Write the following to
+`application/searchdefinitions/blog_post.sd`, as it contains the search
 definition for a document of type `blog_post`:
 
-<pre data-test="file" data-path="sample-apps/blog-search/src/main/application/searchdefinitions/blog_post.sd">
+<pre data-test="file" data-path="application/searchdefinitions/blog_post.sd">
 search blog_post {
     document blog_post {
         field date_gmt type string {
@@ -317,16 +322,17 @@ indexing pipeline is separated by the pipe character '|':
 
 ## Deploy the Application Package
 
-Once done with the application package, deploy the Vespa application — start
+We've written the three necessary files to the `application` folder, and we are
+done with the application package. Now, deploy the Vespa application — start
 Vespa as in the [quick start](../vespa-quick-start.html). To deploy the
 application:
 
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/sample-apps/blog-search/src/main/application && \
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/application && \
     /opt/vespa/bin/vespa-deploy activate'
 </pre>
 
-(or alternatively, run the eqivalent commands inside the docker container).
+(or alternatively, run the equivalent commands inside the docker container).
 
 This prints that the application was activated successfully and also the
 checksum, timestamp and generation for this deployment (more on that later).
@@ -406,7 +412,7 @@ $ curl -s 'http://localhost:8080/document/v1/blog-search/blog_post/docid/1750271
 Searching with Vespa is done using HTTP GET or HTTP POST requests, like:
 
     <host:port>/<search>?<yql=value1>&<param2=value2>...
-    
+
 or with a JSON-query, which documentation can be found in the [Search API](../search-api.html) <br/>
 
     {
@@ -428,7 +434,7 @@ Please copy the JSON-query below and paste it in the GUI for building queries at
 
 	{ "yql" : "select * from sources * where default contains \"music\";" }
 
-or run one of the lines below. 
+or run one of the lines below.
 
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\";"}' \
@@ -456,7 +462,7 @@ Looking at the output, please note:
 - Add `&tracelevel=9` to dump query parsing details
 
 ### Other examples
-     
+
     {"yql" : "select title from sources * where title contains \"music\";"}
 
 Once more a search for the single term "music", but this time with the explicit
@@ -524,7 +530,7 @@ Also, add a `popularity` field at the end of the `document` definition:
             indexing: summary | attribute
         }
 
-<pre style="display:none" data-test="file" data-path="sample-apps/blog-search/src/main/application/searchdefinitions/blog_post.sd">
+<pre style="display:none" data-test="file" data-path="application/searchdefinitions/blog_post.sd">
 search blog_post {
     document blog_post {
         field date_gmt type string {
@@ -613,7 +619,7 @@ reference](../reference/search-definitions-reference.html#rank-profile)):
 Deploy the configuration:
 
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/sample-apps/blog-search/src/main/application && \
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/application && \
     /opt/vespa/bin/vespa-deploy activate'
 </pre>
 
@@ -732,7 +738,7 @@ descending order:
 
     $ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date desc;"}' \
     http://localhost:8080/search/ | python -m json.tool
-    
+
 
 ### Query time data grouping
 
