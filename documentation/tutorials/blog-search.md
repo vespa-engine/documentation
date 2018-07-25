@@ -176,10 +176,10 @@ Write the following to `application/services.xml`:
 <services version='1.0'>
 
   <container id='default' version='1.0'>
-    <search/>
-    <document-api/>
+    <search></search>
+    <document-api></document-api>
     <nodes>
-      <node hostalias='node1'/>
+      <node hostalias='node1'></node>
     </nodes>
   </container>
 
@@ -189,10 +189,10 @@ Write the following to `application/services.xml`:
       <visibility-delay>1.0</visibility-delay>
     </search>
     <documents>
-      <document mode='index' type='blog_post'/>
+      <document mode='index' type='blog_post'></document>
     </documents>
     <nodes>
-      <node hostalias='node1' distribution-key='0'/>
+      <node hostalias='node1' distribution-key="0"></node>
     </nodes>
     <engine>
       <proton>
