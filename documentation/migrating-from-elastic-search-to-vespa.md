@@ -197,14 +197,14 @@ We will generate a deployable application package [here](#Moving_documents_from_
 
 ## Step by step: Migrate from Elastic Search to Vespa
 
-It is possible to use [ElasticDump](https://github.com/taskrabbit/elasticsearch-dump) to get all documents from Elastic Search in a JSON-file. Assuming starting in a empty directory.
+It is possible to use [ElasticDump](https://github.com/taskrabbit/elasticsearch-dump) to get all documents from Elastic Search in a JSON-file. Assuming starting in a empty folder.
 
 <a id="Moving_documents_from_ES_to_Vespa"></a>
-1. **Get all documents from Elastic Search with ElasticDump**
+#### 1. **Get all documents from Elastic Search with ElasticDump**
 
  ```
 $ git clone --depth 1 https://github.com/taskrabbit/elasticsearch-dump.git
-```
+ ```
 
 
  Then get all documents and mapping from your cluster(s) with:
@@ -220,20 +220,34 @@ $ `pwd`/elasticsearch-dump/bin/elasticdump \
   --input=http://localhost:9200/my_index \
   --output=/path/to/empty/folder/my_index_mapping.json \
   --type=mapping
- ```
+ ``` 
+ 
+ * `--input` should be the url to your Elastic Search index
+ * `--output` should be the path to your intially empty folder
 
 <a id="parsing"></a>
-2. **Parse the ES-documents to Vespa-documents and generate an Application Package**
+#### 2. **Parse the ES-documents to Vespa-documents and generate an Application Package**
 
- Download ElasticSearchParser.py [here](), and place it in your directory with your documents and their mappings.
-
- Run this command to parse your documents, so that it can be feeded to Vespa:
+ Download ElasticSearchParser.py [here](), and place it in your intitially empty directory.
+ 
+ **Usage:**
+ 
+ ```
+$ ES_Vespa_parser.py [-h] [--application_name APPLICATION_NAME] documents_path mappings_path
+ ```
+ 
+Run this command in your folder to parse the documents, so that it can be feeded to Vespa:
 
  ```
 $ python ES_Vespa_parser.py my_index.json my_index_mapping.json
  ```
 
- The directory now has a folder `application`:
+* `--application_name` defaults to "application_name" - just change if you want
+	* The document ids will become *id:`application_name`:`doc_name`::`elasticsearch_id`*
+
+
+
+The directory has now a folder `application`:
 
 
  ```
@@ -249,7 +263,7 @@ $ python ES_Vespa_parser.py my_index.json my_index_mapping.json
  Which contains your converted documents, their search definitions, a hosts.xml and a services.xml.
 
 <a id="deploy"></a>
-3. **Deploying Vespa:**
+#### 3. **Deploying Vespa:**
 
  Go into your initially empty folder. This tutorial have been tested with a Docker container with 10GB RAM.
  We will map the this directory into the /app directory inside the Docker container. Now, to start the Vespa container:
@@ -279,7 +293,7 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/applicatio
 
 
  <a id="feeding_vespa"></a>
-4. **Feeding the parsed documents to Vespa:**
+#### 4. **Feeding the parsed documents to Vespa:**
 	
  Send this to Vespa using one of the tools Vespa provides for feeding. In this part of the tutorial, the [Java feeding API](https://docs.vespa.ai/documentation/vespa-http-client.html) is used:
  
@@ -293,14 +307,15 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
  >`$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'`
 
 <a id="querying"></a>
-5. **Fetching the documents:**
+#### 5. **Fetching the documents:**
 
- Fetch documents by document id using the Document API:
+ Fetch documents by document id using the [Document API](https://docs.vespa.ai/documentation/document-api-guide.html):
+ 
  ```bash
-$ curl -s http://localhost:8080/document/v1/application_name/doc_name/docid/1
+$ curl -s http://localhost:8080/document/v1/application_name/doc_name/docid/elasticsearch_id
  ```
  
-6. **The first query:**
+#### 6. **The first query:**
 
  Feel free to use our GUI for building queries at [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/) (with Vespa-container running) which can help you building queries with e.g. autocompletion of YQL. Also take a look at Vespa's [Search API](https://docs.vespa.ai/documentation/search-api.html).
  
