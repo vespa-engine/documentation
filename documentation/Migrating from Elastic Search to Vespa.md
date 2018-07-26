@@ -1,5 +1,9 @@
 # Migrating from Elastic Search to Vespa
 
+In this document we will take a look at the main differences between Elastic Search and Vespa, explain some of the basic concepts of Vepsa, and show you step by step how to move your data from Elastic Search to Vespa in addition to generating a deployable Vepsa application package.
+
+
+
 #### List of contents
 
 * [Overview of Vespa](#Overview_of_Vespa)
@@ -10,13 +14,18 @@
 	* [Basic consepts](#Important_differences_from_ES_to_Vespa)
 		* [Queries](#queries)
 		* [YQL](#yql)
-		* [Realtime](#real_time)
+		* [Real Time](#real_time)
+		* [The node concept](#the_node_concept)
 		* [Documents](#documents)
 		* [Application Package](#application_package)
-* [Configuring Vespa](#Moving_documents_from_ES_to_Vespa)
-	* [Moving documents from ES to Vespa](#Moving_documents_from_ES_to_Vespa)
-	* [Feeding](#feeding)
-	* [How to scale / Get a hosted service](#how_to_scale)
+* [Step by step: Migrate from Elastic Search to Vespa](#Migrate)
+	1. [Moving documents from ES to Vespa](#Moving_documents_from_ES_to_Vespa)
+	2. [Parsing the documents and generating an application package](#parsing)
+	3. [Deploying Vespa](#deploy)
+	3. [Feeding](#feeding_vespa)
+	4. [Querying](#querying)
+* [Feeding](#feeding)
+* [How to scale / Get a hosted service](#how_to_scale)
 * [Tutorials](#tutorials)
 * [Help](#help)
 
@@ -48,7 +57,7 @@ For who will Vespa serve better?
 #### The different use cases
 
 
-![](VespavsES.png)
+![VespavsES.png](img/VespavsES.png)
 
 With focus on big data serving, Vespa is optimized for **low millisec response**, **high write and query load**, **Machine Learning integration** and **automated high availability operations**. Vespa support true realtime writes, and true partial updates, and is also easy to operate at large scale. Here can you read about Vespa's [features](https://docs.vespa.ai/documentation/features.html).
 
@@ -123,10 +132,21 @@ See [here](https://docs.vespa.ai/documentation/query-language.html) for more inf
 #### Real Time
 Vespa is an engine for executing and serving computations over large data sets in real time. It allows you to write and persist any amount of data, and execute high volumes of queries over the data which typically complete in **tens of milliseconds**. This real time serving gives UI friendly response times and instant writes at high volume.
 
+
+<a id="the_node_concept"></a>
+####The node concept
+A node in this context is the environment where some Vespa services are running. This can be an actual machine like a server in a datacenter, or a laptop for developement and testing of Vespa configuration. It can also be a Virtual Machine or a Docker container, so you can run multiple nodes on a single piece of hardware.
+
+The different Vespa services that run on nodes will mostly communicate with each other via the network. This means that all nodes must have an IP address and have network connectivity to all other nodes. Both IPv4 and IPv6 protocols are supported. Note that the same framework is used even when running the entire Vespa stack on a single node.
+
+
+
+
+
 <a id="documents"></a>
 #### Documents
 
-Vespa models data as *documents*. A document have a string identifier, set by the application, unique across all documents. A document is a set of key-value pairs. A document has a schema (i.e. type), defined in the [search definition](https://docs.vespa.ai/documentation/search-definitions.html). Which e.g. can be:
+Vespa models data as *documents*. A document have a string identifier, set by the application, unique across all documents. A document is a set of key-value pairs. A document has a schema (i.e. type), defined in the [search definition](https://docs.vespa.ai/documentation/search-definitions.html). Which e.g. can look like this:
 
 ```
 search music {
@@ -142,7 +162,7 @@ search music {
 }
 ```
 
-When configuring clusters (in [services.xml](https://docs.vespa.ai/documentation/reference/services.html)), a `<documents>` element set what document types a cluster is to store.
+When configuring clusters (in [services.xml](https://docs.vespa.ai/documentation/reference/services.html)), a `<documents>`-element set what document types a cluster is to store.
 
 
 
@@ -173,12 +193,13 @@ We will generate a deployable application package [here](#Moving_documents_from_
 
 
 
-<a id="Moving_documents_from_ES_to_Vespa"></a>
+<a id="Migrate"></a>
 
-## Moving documents from ES to Vespa
+## Step by step: Migrate from Elastic Search to Vespa
 
 It is possible to use [ElasticDump](https://github.com/taskrabbit/elasticsearch-dump) to get all documents from Elastic Search in a JSON-file. Assuming starting in a empty directory.
 
+<a id="Moving_documents_from_ES_to_Vespa"></a>
 1. **Get all documents from Elastic Search with ElasticDump**
 
  ```
@@ -201,8 +222,8 @@ $ `pwd`/elasticsearch-dump/bin/elasticdump \
   --type=mapping
  ```
 
-
-2. **Get all documents from Elastic Search**
+<a id="parsing"></a>
+2. **Parse the ES-documents to Vespa-documents and generate an Application Package**
 
  Download ElasticSearchParser.py [here](), and place it in your directory with your documents and their mappings.
 
@@ -212,11 +233,11 @@ $ `pwd`/elasticsearch-dump/bin/elasticdump \
 $ python ES_Vespa_parser.py my_index.json my_index_mapping.json
  ```
 
- The directory now has a folder `documents_and_document_definitions`:
+ The directory now has a folder `application`:
 
 
  ```
-/documents_and_document_definitions
+/application
       │     
       ├── documents.json
       ├── hosts.xml
@@ -227,7 +248,7 @@ $ python ES_Vespa_parser.py my_index.json my_index_mapping.json
  ``` 
  Which contains your converted documents, their search definitions, a hosts.xml and a services.xml.
 
-
+<a id="deploy"></a>
 3. **Deploying Vespa:**
 
  Go into your initially empty folder. This tutorial have been tested with a Docker container with 10GB RAM.
@@ -245,10 +266,10 @@ $ python ES_Vespa_parser.py my_index.json my_index_mapping.json
  $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
  ```
  
- **Deploy the `documents_and_document_definitions` package:**
+ **Deploy the `application` package:**
  
  ```bash
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/documents_and_document_definitions && \
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/application && \
     /opt/vespa/bin/vespa-deploy activate'
  ``` 
 
@@ -256,22 +277,22 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/documents_
  
  For more detailed explanation of deploying application packages read [this](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html#deploy).
 
- 
- 
+
+ <a id="feeding_vespa"></a>
 4. **Feeding the parsed documents to Vespa:**
 	
  Send this to Vespa using one of the tools Vespa provides for feeding. In this part of the tutorial, the [Java feeding API](https://docs.vespa.ai/documentation/vespa-http-client.html) is used:
  
  ```bash
 $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --verbose --file /app/documents_and_document_definitions/documents.json --host localhost --port 8080'
+    --verbose --file /app/application/documents.json --host localhost --port 8080'
  ```
  
  > You can also inspect the search node state by:
  >
  >`$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'`
 
-
+<a id="querying"></a>
 5. **Fetching the documents:**
 
  Fetch documents by document id using the Document API:
@@ -284,8 +305,9 @@ $ curl -s http://localhost:8080/document/v1/application_name/doc_name/docid/1
  Feel free to use our GUI for building queries at [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/) (with Vespa-container running) which can help you building queries with e.g. autocompletion of YQL. Also take a look at Vespa's [Search API](https://docs.vespa.ai/documentation/search-api.html).
  
 </br>
-Click for more information about [developing applications](https://docs.vespa.ai/documentation/jdisc/developing-applications.html) and [application packages](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html) like `documents_and_document_definitions`.
+Click for more information about [developing applications](https://docs.vespa.ai/documentation/jdisc/developing-applications.html) and [application packages](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html) like `application`.
 
+Please take a look at [how to secure your Vespa installation](https://docs.vespa.ai/documentation/securing-your-vespa-installation.html)
 
 <a id="feeding"></a>
 ## Feeding
@@ -326,6 +348,10 @@ $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --f
 ## How to scale with Vespa
 
 ####MISSING####
+
+Mulige kilder:
+
+* [https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html](https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html)
 
 <a id="tutorials"></a>
 ## Tutorials
