@@ -228,7 +228,7 @@ $ `pwd`/elasticsearch-dump/bin/elasticdump \
 <a id="parsing"></a>
 #### 2. **Parse the ES-documents to Vespa-documents and generate an Application Package**
 
- Download ElasticSearchParser.py [here](), and place it in your intitially empty directory.
+ Download ES_Vespa_parser.py [here](https://github.com/vespa-engine/vespa/tree/master/config-model/src/main/python), and place it in your intitially empty directory.
  
  **Usage:**
  
@@ -260,7 +260,7 @@ The directory has now a folder `application`:
             ├── sd1.sd
             └── ... 
  ``` 
- Which contains your converted documents, their search definitions, a hosts.xml and a services.xml.
+ Which contains your converted documents, their search definitions, a hosts.xml and a services.xml - a whole application package.
 
 <a id="deploy"></a>
 #### 3. **Deploying Vespa:**
@@ -362,9 +362,9 @@ $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --f
 <a id="how_to_scale"></a>
 ## How to scale with Vespa
 
-####MISSING####
+####MISSING - TBA####
 
-Mulige kilder:
+Possible sources for information:
 
 * [https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html](https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html)
 
