@@ -1,4 +1,8 @@
-# Migrating from Elastic Search to Vespa
+---
+# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Migrating from Elastic Search to Vespa"
+---
+
 
 In this document we will take a look at the main differences between Elastic Search and Vespa, explain some of the basic concepts of Vepsa, and show you step by step how to move your data from Elastic Search to Vespa in addition to generating a deployable Vepsa application package.
 
@@ -43,21 +47,14 @@ For who will Vespa serve better?
 <a id="Analytics_vs_Big_Data_Serving"></a>
 #### Analytics vs. Big Data Serving
 
-|                    Analytics                    |             Big data serving            |
-|:-----------------------------------------------:|:---------------------------------------:|
-|           Response time in low seconds          |    Response time in low milliseconds    |
-| Low query rate                                  | High query rate                         |
-| Time series, append only                        | Random writes                           |
-| Down time, data loss acceptable                 | HA, no data loss, online redistribution |
-| Massive data sets (trillions of docs) are cheap | Massive data sets are more expensive    |
-| Analytics GUI integration                       | Machine learning integration            |
+<div style="text-align:left"><img src="img/vespa-es-table.png" style="width: 40%; margin-right: 1%; margin-bottom: 0.8em;"></div>
 
 
 <a id="use_cases"></a>
 #### The different use cases
 
+<div style="text-align:left"><img src="img/VespavsES.png" style="width: 50%; margin-right: 1%; margin-bottom: 0.8em;"></div>
 
-![VespavsES.png](img/VespavsES.png)
 
 With focus on big data serving, Vespa is optimized for **low millisec response**, **high write and query load**, **Machine Learning integration** and **automated high availability operations**. Vespa support true realtime writes, and true partial updates, and is also easy to operate at large scale. Here can you read about Vespa's [features](https://docs.vespa.ai/documentation/features.html).
 
@@ -90,7 +87,7 @@ The general form of a search GET-request is:
 http://host:port/search/?param1=value1&param2=value2&...
 ```
 
-> Note that the URL must be URL-quoted.
+* Note that the GET-query must be URL-quoted.
 
 As for an example of the format:
 
@@ -134,7 +131,7 @@ Vespa is an engine for executing and serving computations over large data sets i
 
 
 <a id="the_node_concept"></a>
-####The node concept
+#### The node concept
 A node in this context is the environment where some Vespa services are running. This can be an actual machine like a server in a datacenter, or a laptop for developement and testing of Vespa configuration. It can also be a Virtual Machine or a Docker container, so you can run multiple nodes on a single piece of hardware.
 
 The different Vespa services that run on nodes will mostly communicate with each other via the network. This means that all nodes must have an IP address and have network connectivity to all other nodes. Both IPv4 and IPv6 protocols are supported. Note that the same framework is used even when running the entire Vespa stack on a single node.
@@ -199,6 +196,8 @@ We will generate a deployable application package [here](#Moving_documents_from_
 
 It is possible to use [ElasticDump](https://github.com/taskrabbit/elasticsearch-dump) to get all documents from Elastic Search in a JSON-file. Assuming starting in a empty folder.
 
+
+
 <a id="Moving_documents_from_ES_to_Vespa"></a>
 #### 1. **Get all documents from Elastic Search with ElasticDump**
 
@@ -224,6 +223,8 @@ $ `pwd`/elasticsearch-dump/bin/elasticdump \
  
  * `--input` should be the url to your Elastic Search index
  * `--output` should be the path to your intially empty folder
+
+
 
 <a id="parsing"></a>
 #### 2. **Parse the ES-documents to Vespa-documents and generate an Application Package**
@@ -262,6 +263,8 @@ The directory has now a folder `application`:
  ``` 
  Which contains your converted documents, their search definitions, a hosts.xml and a services.xml - a whole application package.
 
+
+
 <a id="deploy"></a>
 #### 3. **Deploying Vespa:**
 
@@ -292,6 +295,7 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/applicatio
  For more detailed explanation of deploying application packages read [this](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html#deploy).
 
 
+
  <a id="feeding_vespa"></a>
 #### 4. **Feeding the parsed documents to Vespa:**
 	
@@ -302,9 +306,8 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
     --verbose --file /app/application/documents.json --host localhost --port 8080'
  ```
  
- > You can also inspect the search node state by:
- >
- >`$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'`
+  You can also inspect the search node state by: `$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'`
+
 
 <a id="querying"></a>
 #### 5. **Fetching the documents:**
@@ -315,11 +318,12 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 $ curl -s http://localhost:8080/document/v1/application_name/doc_name/docid/elasticsearch_id
  ```
  
+ 
 #### 6. **The first query:**
 
  Feel free to use our GUI for building queries at [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/) (with Vespa-container running) which can help you building queries with e.g. autocompletion of YQL. Also take a look at Vespa's [Search API](https://docs.vespa.ai/documentation/search-api.html).
  
-</br>
+
 Click for more information about [developing applications](https://docs.vespa.ai/documentation/jdisc/developing-applications.html) and [application packages](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html) like `application`.
 
 Please take a look at [how to secure your Vespa installation](https://docs.vespa.ai/documentation/securing-your-vespa-installation.html)
@@ -344,7 +348,6 @@ Add the `<document-api>` to a container cluster to enable it to receive document
   </container>
 
 </services>
-
 ```
 
 #### Using from the command line
