@@ -124,7 +124,7 @@ A grouping, that will group first by year and then by month, can be written as s
 }
 ```
 
-<br></br>
+
 ---
 ### Examples with the different functions
 
