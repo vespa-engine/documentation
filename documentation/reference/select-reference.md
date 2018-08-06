@@ -100,27 +100,27 @@ A grouping, that will group first by year and then by month, can be written as s
 
 ```
 {
-    "select" : {
-    	"where" : {
-    		"and" : {
-    			"children" : [
-    				{"title" : "music"},
-    				{"default" : "festival"}
-    			]
-			}
-    	},
-		"grouping" : [ {
-			 "all" : {
-					"group" : "time.year(a)",
-					"each" : { "output" : "count()" }
-			 }		
-		} ]
-	 },
-    "offset" : 5,
-    "presentation" : {
-        "bolding" : false,
-        "format" : "json"
-    }
+  "select" : {
+    "where" : {
+      "and" : {
+        "children" : [
+          {"title" : "music"},
+          {"default" : "festival"}
+        ]
+      }
+     },
+    "grouping" : [ {
+      "all" : {
+	      "group" : "time.year(a)",
+          "each" : { "output" : "count()" }
+      }		
+    } ]
+  },
+  "offset" : 5,
+  "presentation" : {
+    "bolding" : false,
+    "format" : "json"
+  }
 }
 ```
 
@@ -136,7 +136,7 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"contains" : [ "title", "a" ]
+  "contains" : [ "title", "a" ]
 }
 ```
 
@@ -149,8 +149,8 @@ Format of this in JSON:
 
 ```
 "range" : [
-	"date",
-	{ ">=" : 10}
+  "date",
+  { ">=" : 10}
 ]
 ```
 
@@ -173,10 +173,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"range" : [
-		"field",
-		{ ">=" : 0, "<=" : 500}
-	]
+  "range" : [
+    "field",
+    { ">=" : 0, "<=" : 500}
+  ]
 }
 ```
 
@@ -188,10 +188,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"or" : [
-		{ "contains" : [ "title", "a" ] },
-		{ "contains" : [ "title", "b" ] }
-	]
+  "or" : [
+    { "contains" : [ "title", "a" ] },
+    { "contains" : [ "title", "b" ] }
+  ]
 }
 ```
 
@@ -203,10 +203,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"and" : [
-		{"contains" : [ "title" : "a" ] },
-		{"contains" : [ "title" : "b" ] }
-	]
+  "and" : [
+    {"contains" : [ "title" : "a" ] },
+  {"contains" : [ "title" : "b" ] }
+  ]
 }
 ```
 
@@ -218,10 +218,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"and_not" : [
-		{"contains" : [ "title" : "a" ] },
-		{"contains" : [ "title" : "b" ] }
-	]
+  "and_not" : [
+    {"contains" : [ "title" : "a" ] },
+    {"contains" : [ "title" : "b" ] }
+  ]
 }
 ```
 
@@ -229,11 +229,11 @@ Formal structure:
 
 ```
 "where" : {
-	"and_not" : [
-		 <Statement>,
-		 <!Statement>,
-		 ..
-	]
+  "and_not" : [
+    <Statement>,
+    <!Statement>,
+    ..
+  ]
 }
 ```
 
@@ -246,10 +246,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"matches" : [
-		"title",
-		"madonna"
-	]
+  "matches" : [
+    "title",
+    "madonna"
+  ]
 }
 ```
 Another example:
@@ -258,10 +258,10 @@ YQL: `where title matches "mado[n]+a"`
 
 ```
 "where" : {
-	"matches" : [
-		"title",
-		"mado[n]+a"
-	]
+  "matches" : [
+    "title",
+    "mado[n]+a"
+  ]
 }
 ```
 
@@ -274,9 +274,9 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"contains" : [ 
-		"phrase" : ["st", "louis", "blues"]
-	]
+  "contains" : [ 
+    "phrase" : ["st", "louis", "blues"]
+  ]
 }
 ```
 
@@ -288,14 +288,14 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"contains" : [ 
-		"description",
-		{ "onear" : {
-			 "children" : ["a", "b"],
-			 "attributes" : {"distance" : 100} 
-		  }
-		}
-	]
+  "contains" : [ 
+    "description",
+    { "onear" : {
+      "children" : ["a", "b"],
+      "attributes" : {"distance" : 100} 
+      }
+    }
+  ]
 }
 ```
 
@@ -307,19 +307,19 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"contains" : [
-		"persons",
-		{ "sameElement" : [
-		  	 {"first_name" : "Joe",
-		  	  "last_name" : "Smith",
-		  	  "range" : [
-		  	  	 "year_of_birth",
-		  	  	 { "<" : 1940}
-  		  	  ]
-		  	 }
-		 ]
-	   }
-	]
+  "contains" : [
+    "persons",
+    { "sameElement" : [
+      {"first_name" : "Joe",
+      "last_name" : "Smith",
+      "range" : [
+        "year_of_birth",
+        { "<" : 1940}
+      ]
+      }
+    ]
+    }
+  ]
 }
 ```
 
@@ -331,10 +331,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"contains" : [
-		"fieldName",
-		{ "equiv" : ["A", "B"] }
-	]
+  "contains" : [
+    "fieldName",
+    { "equiv" : ["A", "B"] }
+  ]
 }
 ```
 
@@ -346,10 +346,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"rank" : [
-		{ "contains" : [ "a", "A" ] },
-		{ "contains" : [ "b", "B" ] }
-	]
+  "rank" : [
+    { "contains" : [ "a", "A" ] },
+    { "contains" : [ "b", "B" ] }
+  ]
 }
 ```
 
@@ -364,7 +364,7 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"wand" : [ "description", {"a" : 1, "b":2} ]
+  "wand" : [ "description", {"a" : 1, "b":2} ]
 }
 ```
 
@@ -376,10 +376,10 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"wand" : {
-		"children" : [ "description", {"a" : 1, "b":2} ],
-		"attributes" : {"scoreThreshold": 13, "targetNumHits": 7}
-	}
+  "wand" : {
+    "children" : [ "description", {"a" : 1, "b":2} ],
+    "attributes" : {"scoreThreshold": 13, "targetNumHits": 7}
+  }
 }
 ```
 
@@ -390,7 +390,7 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"dotProduct" : [ "description", {"a" : 1, "b":2} ]
+  "dotProduct" : [ "description", {"a" : 1, "b":2} ]
 }
 ```
 
@@ -401,7 +401,7 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"weightedSet" : [ "description", {"a" : 1, "b":2} ]
+  "weightedSet" : [ "description", {"a" : 1, "b":2} ]
 }
 ```
 
@@ -412,9 +412,9 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"weakAnd" : {
-		"children" : [ { "contains" : ["a", "A"] }, { "contains" : ["b", "B"] } ],
-		"attributes" : {"scoreThreshold": 41, "targetNumHits": 7}
+  "weakAnd" : {
+    "children" : [ { "contains" : ["a", "A"] }, { "contains" : ["b", "B"] } ],
+    "attributes" : {"scoreThreshold": 41, "targetNumHits": 7}
 	}
 }
 ```
@@ -428,11 +428,11 @@ Format of this in JSON:
 
 ```
 "where" : {
-	"predicate" : [
-			"predicate_field",
-			{"gender" : "Female"},
-			{"age" : 20L}
-	]
+  "predicate" : [
+    "predicate_field",
+    {"gender" : "Female"},
+    {"age" : 20L}
+  ]
 }
 ```
 
