@@ -6,7 +6,7 @@ title: "Select Reference"
 
 This document describes what the `SELECT` parameter is and gives a few examples on how to use it. Refer to the [Search API](../search-api.html) for how to write POST queries.
 
-The parameter is in JSON, and can be used with POST queries. The `SELECT`-parameter is equivalent with YQL, and can be used instead, but not together. The `query`-parameter will overwrite `SELECT`, and decide the query's querytree. 
+The parameter is in JSON, and can be used with POST queries. The `SELECT`-parameter is equivalent with YQL, and can be used instead, but not together. Nor can it be used together with the `QUERY`-parameter.
 
 ## Structure
 
