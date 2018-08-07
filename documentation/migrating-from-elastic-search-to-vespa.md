@@ -47,7 +47,16 @@ For who will Vespa serve better?
 <a id="Analytics_vs_Big_Data_Serving"></a>
 #### Analytics vs. Big Data Serving
 
-<div style="text-align:left"><img src="img/vespa-es-table.png" style="width: 40%; margin-right: 1%; margin-bottom: 0.8em;"></div>
+
+<table class="table table-striped" style="text-align:center">
+<tr><td><b>Analytics</b></td><td><b>Big data serving</b></td></tr>
+<tr><td>Response time in low seconds</td><td>Response time in low milliseconds</td></tr>
+<tr><td>Low query rate</td><td>High query rate</td></tr>
+<tr><td>Time series, append only</td><td>Random writes</td></tr>
+<tr><td>Down time, data loss acceptable</td><td>HA, no data loss, online redistribution</td></tr>
+<tr><td>Massive data sets (trillion of docs) are cheap</td><td>Massive data sets are more expensive</td></tr>
+<tr><td>Analytics GUI integration</td><td>Machine learning integration</td></tr>
+</table>
 
 
 <a id="use_cases"></a>
@@ -365,11 +374,22 @@ $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --f
 <a id="how_to_scale"></a>
 ## How to scale with Vespa
 
-####MISSING - TBA####
+The fundamental unit of scale in Elasticsearch is the shard. Sharding allows scale out by partitioning the data into smaller chunks that can be distributed across a cluster of nodes. The challenge is to figure out the right number of shards, because you only get to make the decision once per index. And it impacts both performance, storage and scale, since queries are sent to all shards. So how many shards are the right number of shards?
 
-Possible sources for information:
+In Vespa you do not have to worry about the number of shards and re-sharding. Vespa will take care of that. You have a cluster of nodes, and you can add or remove nodes without resharding, which means no downtime for resharding. 
 
-* [https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html](https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html)
+Vespa allows applications to grow (and shrink) their hardware while serving queries and accepting writes as normal. Data is automatically redistributed in the background using the minimal amount of data movement required to reestablish an even data distribution. No restarts or other operations are needed, just change the hardware listed in the configuration and redeploy the application.
+
+
+For a detailed guide on how to set up a multinode Vespa system see [Multi-Node Quick Start](https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html).
+
+
+Other relevant sources:
+
+* [Vespa Elasticity](https://docs.vespa.ai/documentation/elastic-vespa.html)
+* [Vespa sizing guide](https://docs.vespa.ai/documentation/performance/sizing-search.html)
+* [QPS Scaling in an Indexed Content Cluster](https://docs.vespa.ai/documentation/qps-scaling-content-cluster.html)
+
 
 <a id="tutorials"></a>
 ## Tutorials
