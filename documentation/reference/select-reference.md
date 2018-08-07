@@ -3,6 +3,7 @@
 title: "Select Reference"
 ---
 
+
 This document describes what the `SELECT` parameter is and gives a few examples on how to use it. Refer to the [Search API](../search-api.html) for how to write POST queries.
 
 ## Structure
@@ -10,8 +11,8 @@ This document describes what the `SELECT` parameter is and gives a few examples 
 
 ```
 "select" : {
-	"where" : {...},
-	"grouping" : {...}
+  "where" : {...},
+  "grouping" : {...}
 }
 ```
 
@@ -26,8 +27,8 @@ Functions are nested like this:
 
 ```
 FUNCTION : {
-	"children" : [ argument, argument,..],
-	"attributes" : {annotations}
+  "children" : [ argument, argument,..],
+  "attributes" : {annotations}
 {
 ```
 
@@ -35,9 +36,9 @@ or like this, by moving the `children`-key up, if attributes are not in use with
 
 ```
 FUNCTION : [
-	argument,
-	argument,
-	...
+  argument,
+  argument,
+  ...
 ]
 ```
 
@@ -53,13 +54,13 @@ The tree above can be written with the where-parameter, like this:
 
 ```
 {
-	"and" :  [
-		{ "contains" : ["default", "foo"] },
-   		{ "rank" : [
-	 		{ "contains" : ["a", "A"] },
-	 		{ "contains" : ["b", "B"] }
-   		]}
- 	]
+  "and" :  [
+    { "contains" : ["default", "foo"] },
+    { "rank" : [
+      { "contains" : ["a", "A"] },
+      { "contains" : ["b", "B"] }
+    ]}
+  ]
 }
 ```
 Which is equivalent with the YQL.
@@ -74,22 +75,22 @@ A grouping, that will group first by year and then by month, can be written as s
 
 ```
 | all(group(time.year(a)) each(output(count())
-	     all(group(time.monthofyear(a)) each(output(count())))
+    all(group(time.monthofyear(a)) each(output(count())))
 ```
 , and equivalent written with the `GROUPING`-parameter.
 
 ```
 "grouping" : [
-	{
-		"all" : {
-			"group" : "time.year(a)",
-			"each" : { "output" : "count()" },
-			"all" : {
-				"group" : "time.monthofyear(a)",
-				"each" : { "output" : "count()" },
-			}
-		}
-	}
+  {
+    "all" : {
+      "group" : "time.year(a)",
+      "each" : { "output" : "count()" },
+      "all" : {
+        "group" : "time.monthofyear(a)",
+        "each" : { "output" : "count()" },
+      }
+    }
+  }
 ]
 ```
 
