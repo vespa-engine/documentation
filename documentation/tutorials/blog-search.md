@@ -476,7 +476,7 @@ This is a query for the two terms "music" and "festival", combined with an
 `AND` operation; it finds documents that match both terms — but not just one of
 them.
 
-    {"yql" : "select * from sources * where sddocname contains \"blog_post\";}
+    {"yql" : "select * from sources * where sddocname contains \"blog_post\";"}
 
 This is a single-term query in the special field `sddocname` for the value
 "blog_post".  This is a common and useful Vespa trick to get the number of
