@@ -1,10 +1,10 @@
 ---
 # Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Migrating from Elastic Search to Vespa"
+title: "Migrating from Elasticsearch to Vespa"
 ---
 
 
-In this document we will take a look at the main differences between Elastic Search and Vespa, explain some of the basic concepts of Vepsa, and show you step by step how to move your data from Elastic Search to Vespa in addition to generating a deployable Vepsa application package.
+In this document we will take a look at the main differences between Elasticsearch and Vespa, explain some of the basic concepts of Vepsa, and show you step by step how to move your data from Elasticsearch to Vespa in addition to generating a deployable Vepsa application package.
 
 
 
@@ -22,7 +22,7 @@ In this document we will take a look at the main differences between Elastic Sea
 		* [The node concept](#the_node_concept)
 		* [Documents](#documents)
 		* [Application Package](#application_package)
-* [Step by step: Migrate from Elastic Search to Vespa](#Migrate)
+* [Step by step: Migrate from Elasticsearch to Vespa](#Migrate)
 	1. [Moving documents from ES to Vespa](#Moving_documents_from_ES_to_Vespa)
 	2. [Parsing the documents and generating an application package](#parsing)
 	3. [Deploying Vespa](#deploy)
@@ -78,7 +78,7 @@ Vespa is the only open source platform optimized for such big data serving.
 <a id="queries"></a>
 #### Queries
 
-Like Elastic Search, Vespa supports both queries with POST- and with GET-requests.
+Like Elasticsearch, Vespa supports both queries with POST- and with GET-requests.
 
 The general form of search requests with JSON-queries is:
 
@@ -194,21 +194,21 @@ application/search/query-profiles/ - Vespa query profiles; named collections of 
 
 Read more [here](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html)
 
-We will generate a deployable application package [here](#Moving_documents_from_ES_to_Vespa) from your existing Elastic Search cluster.
+We will generate a deployable application package [here](#Moving_documents_from_ES_to_Vespa) from your existing Elasticsearch cluster.
 
 
 
 
 <a id="Migrate"></a>
 
-## Step by step: Migrate from Elastic Search to Vespa
+## Step by step: Migrate from Elasticsearch to Vespa
 
-It is possible to use [ElasticDump](https://github.com/taskrabbit/elasticsearch-dump) to get all documents from Elastic Search in a JSON-file. Assuming starting in a empty folder.
+It is possible to use [ElasticDump](https://github.com/taskrabbit/elasticsearch-dump) to get all documents from Elasticsearch in a JSON-file. Assuming starting in a empty folder.
 
 
 
 <a id="Moving_documents_from_ES_to_Vespa"></a>
-#### 1. **Get all documents from Elastic Search with ElasticDump**
+#### 1. **Get all documents from Elasticsearch with ElasticDump**
 
  ```
 $ git clone --depth 1 https://github.com/taskrabbit/elasticsearch-dump.git
@@ -230,7 +230,7 @@ $ `pwd`/elasticsearch-dump/bin/elasticdump \
   --type=mapping
  ``` 
  
- * `--input` should be the url to your Elastic Search index
+ * `--input` should be the url to your Elasticsearch index
  * `--output` should be the path to your intially empty folder
 
 
