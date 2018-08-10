@@ -4,7 +4,7 @@ title: "Migrating from Elasticsearch to Vespa"
 ---
 
 
-In this document we will take a look at the main differences between Elasticsearch and Vespa, explain some of the basic concepts of Vepsa, and show you step by step how to move your data from Elasticsearch to Vespa in addition to generating a deployable Vepsa application package.
+In this document we will take a look at the main differences between Elasticsearch and Vespa, explain some of the basic concepts of Vespa, and show you step by step how to move your data from Elasticsearch to Vespa in addition to generating a deployable Vespa application package.
 
 
 
