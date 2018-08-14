@@ -1,6 +1,6 @@
 ---
 # Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Ranking with TensorFlow models in Vespa"
+title: "Ranking with TensorFlow Models"
 ---
 
 Vespa has support for advanced ranking models through it's tensor API. If
