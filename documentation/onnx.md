@@ -54,7 +54,7 @@ search onnx {
 ```
 
 Here, we specify that the model `my_model.onnx` should be run, using the
-`output` output. The output is optional if the model only contains a single
+`add` output. The output is optional if the model only contains a single
 output.
 
 ONNX models contain a computational graph. In the following, assume that
