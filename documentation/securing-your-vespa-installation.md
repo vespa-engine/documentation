@@ -1,6 +1,6 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Securing your Vespa installation"
+title: "Securing a Vespa Installation"
 ---
 
 It is critical that you understand the security requirements and limitations
