@@ -4,29 +4,27 @@ title: "Querying Vespa"
 ---
 
 <p>
-This is an overview of the components and data flow for Vespa queries.
-</p><p>
-Queries are sent to Vespa using the <a href="search-api.html">Search API</a>.
-Query strings are written in <a href="query-language.html">YQL</a>.
+Queries are sent to the Vespa <a href="search-api.html">Search API</a> and written in 
+<a href="query-language.html">YQL</a>. The following diagram illustrates the components and data flow for typical Vespa queries.
 </p>
+<img src="img/query-to-response.svg" style="padding: 16px" />
 
-
-<h2 id="query-flow">Query flow</h2>
+<h2 id="query-flow">Query Flow</h2>
 <ol>
   <li>
     A query is sent from a front-end application to a Search Container node,
     implemented using the <a href="jdisc/index.html">Vespa container</a>.
-    Find search endpoints using
-    <a href="reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect service container</a>
+    You can find specific search endpoints with
+    <code><a href="reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect service container</a></code>
   </li><li>
     Query processing, like stemming and geo-tagging,
     is done in <a href="chained-components.html">search chains</a>
   </li><li>
     The query is sent from the container to all content clusters in the system -
-    see <a href="federation.html">federation</a>.
+    see <a href="federation.html">federation</a> for more details.
     Content clusters have top-level <a href="#dispatch">dispatchers</a> (TLDs),
-    which dispatches queries to <a href="proton.html">proton</a> search nodes.
-    For better caching, queries have affinity to TLDs
+    which dispatch queries to <a href="proton.html">proton</a> search nodes.
+    For better caching, queries have affinity to TLDs.
   </li>
 </ol>
 <p>
@@ -34,21 +32,19 @@ Query strings are written in <a href="query-language.html">YQL</a>.
 </p><p>
 At this point the query enters one or more <a href="reference/services-content.html">content clusters</a>:
 </p>
-<ol>
-
-      <li>
-        The query arrives at each content node's mid-level dispatcher (MLD - binary is the same as for TLD).
-        An exception to this is <a href="content/data-placement.html">grouped clusters</a>,
-        in this case a subset of content nodes are queried.
-        MLD forwards the query to vespa-proton.
-      </li><li>
-        vespa-proton searches its index and returns its results  to the MLD.
-      </li><li>
-    When all MLDs have responded to the TLD,
-    it merges their partial results and responds to the search container.
+<ol start="4">
+  <li>
+    The query arrives at each content node's mid-level dispatcher (MLD), which is the same software as the TLD.
+    <a href="content/data-placement.html">Grouped clusters</a> are an exception to this,
+    where only a subset of content nodes are queried. The MLD forwards the query to <em>vespa-proton</em>.
   </li><li>
-    The search container performs processing of the results in search chains,
-    requerying data if needed, before it  returns these to the querying entity.
+    <em>vespa-proton</em> searches its index and returns its results to the MLD.
+  </li><li>
+    When all MLDs have responded to the TLD,
+    it merges the partial results and responds to the search container.
+  </li><li>
+    The search container performs processing of the results in search chains
+    making further queries if needed before it returns the results to the querying entity.
   </li>
 </ol>
 <p>
@@ -58,18 +54,17 @@ At this point the query enters one or more <a href="reference/services-content.h
 
 <h2 id="dispatch">Dispatch</h2>
 <p>
-The vespa-dispatch service's primary task is to dispatch queries
-such that it covers the entire document base,
-with the lowest possible maximum load on its relevant search nodes.
-The TLD knows what queries are being processed and at which nodes,
-and load balancing is done by dispatching to the node (MLD) with the lowest number of running queries.
+The primary task of the <em>vespa-dispatch</em> service is to dispatch queries
+so that they cover the entire document base
+with the lowest possible maximum load on the relevant search nodes.
+The TLD knows what queries are being processed at each node
+and the load is balanced by dispatching queries to the MLD with the lowest number of running queries.
 </p>
 
 
 <h3 id="tld-and-mld">TLD and MLD</h3>
 <p>
-The two dispatch modes are separable in the log files by their entry;
-the MLD writes:
+The two dispatch modes are separable in the log files by their entry. The MLD writes:
 <pre>
 (...) searchnode.dispatch0.dispatch
 vespa-dispatch (...)
