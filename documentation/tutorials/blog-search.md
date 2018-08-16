@@ -85,7 +85,7 @@ tested with a Docker container with 10GB RAM.  We used similar settings as
 described in the [vespa quick start guide](../vespa-quick-start.html).
 
 In the following, we will assume you run all the commands from an empty
-directory, i.e. the `pwd` directory is empty. We will map the this directory
+directory, i.e. the `pwd` directory is empty. We will map this directory
 into the `/app` directory inside the Docker container. Now, to start the Vespa
 container:
 
@@ -95,7 +95,7 @@ $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
     --publish 8080:8080 --publish 19112:19112 vespaengine/vespa
 </pre>
 
-Make sure that the configuration server is running:
+Make sure that the configuration server is running - signified by a 200 OK response:
 
 <pre data-test="exec" data-test-wait-for="200 OK">
 $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
@@ -162,8 +162,12 @@ search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
 creates a simple but functional blog post search engine. The application
 package is found in
 [src/main/application](https://github.com/vespa-engine/sample-apps/tree/master/blog-search/src/main/application).
-In the following tutorial we will recreate this application from scratch.
+In the following tutorial we will recreate this application from scratch. 
+Create a new folder where we will place our application package:
 
+<pre data-test="exec">
+$ mkdir application
+</pre>
 
 ### Services Specification
 
@@ -233,7 +237,7 @@ setup.)
 
 [hosts.xml](../reference/hosts.html) contains a list of all the hosts/nodes
 that is part of the application, with an alias for each of them. This tutorial
-uses a single node:
+uses a single node. Write the following to `application/hosts.xml`:
 
 <pre data-test="file" data-path="application/hosts.xml">
 <?xml version="1.0" encoding="utf-8" ?>
@@ -243,8 +247,6 @@ uses a single node:
   </host>
 </hosts>
 </pre>
-
-This file goes in `application/hosts.xml`.
 
 ### Search Definition
 
@@ -428,11 +430,11 @@ Given the above search definition, where the fields `title` and `content` are
 part of the `fieldset default`, any document containing the word "music" in one
 or more of these two fields matches the queries below:
 
-Please copy the JSON-query below and paste it in the GUI for building queries at [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/), which can help you building queries with e.g. autocompletion of YQL:
-
-<div style="text-align:center"><img src="images/query-builder.png" style="width: 50%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+Please copy the JSON-query below and paste it in the GUI for building queries at [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/), which can help you build queries with e.g. autocompletion of YQL:
 
 	{ "yql" : "select * from sources * where default contains \"music\";" }
+
+<div style="text-align:center"><img src="images/query-builder.png" style="width: 50%; margin-right: 1%; margin-bottom: 1.0em; margin-top: 1.0em;"></div>
 
 or run one of the lines below.
 
