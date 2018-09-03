@@ -3,22 +3,23 @@
 title: "Elastic Vespa"
 ---
 
-<p>Vespa allows applications to grow (and shrink) their hardware while serving queries and accepting writes
-as normal. Data is automatically redistributed in the background using the minimal amount of data movement
-required to reestablish an even data distribution. No restarts or other operations are needed,
-just change the hardware listed in the configuration and redeploy the application.</p>
+<p>Vespa allows application instances to grow (and shrink) while serving queries and accepting writes.
+To maintain a uniform data distribution, documents are automatically redistributed in the background,
+using minimal data movement.
+Change the configured <a href="/documentation/reference/services-content.html#nodes">nodes</a>
+and redeploy the application - no restarts needed.</p>
 
-<p>The same mechanism is used to automatically recover from an unexpected loss of a machine -
-new copies of the data are created automatically to reestablish the configured data redundancy.
-Hence, faulty nodes is not a problem which requires immediate attention in Vespa.
-As long as the system has enough capacity in total to deal with the data and traffic it
-will self-heal from any hardware failure.</p>
+<p>The elasticity mechanism is also used to recover from a node loss -
+new copies of documents are auto-created to maintain redundancy.
+Failed nodes is hence not a problem that requires immediate attention -
+as long as the instance has sufficient capacity to handle the data and load,
+it self-heals from node failures.</p>
 
-<p>This article details three subjects:
+<p>This article covers:
 <ul>
-  <li><a href="#storage-and-retrieval">storage and retrieval of documents</a></li>
-  <li><a href="#search">search in the stored documents</a></li>
-  <li><a href="#resizing">resizing the installation</a></li>
+  <li><a href="#storage-and-retrieval">storage and retrieval</a></li>
+  <li><a href="#search">search</a></li>
+  <li><a href="#resizing">resizing the instance</a></li>
 </ul>
 </p>
 
@@ -26,36 +27,40 @@ will self-heal from any hardware failure.</p>
 
 <h2 id="storage-and-retrieval">Storage and retrieval</h2>
 
-<p>The data distribution system in Vespa consists of two main components: distributors and storage nodes.
-The storage nodes provide a <em>Service Provider Interface</em> (SPI) that abstracts
-how documents are stored in the elastic system.
-Documents are both written to and read from the system through a <a href="distributor.html">distributor</a>.
-</p><p>
+<p>The document distribution system in Vespa consists of two main components:
+<a href="distributor.html">distributors</a> and content nodes.
+Documents are accessed through a distributor.
 To handle a large number of documents, Vespa groups them in <a href="content/buckets.html">buckets</a>,
-either through hashing or through hints located in the <a href="documents.html">document id</a>.
-The SPI is the link between the elastic bucket management system and the documents storage.
-In Vespa, the SPI is implemented by <a href="proton.html">proton</a> nodes.
+using hashing or hints in the <a href="documents.html">document id</a>.
 </p><p>
-At feeding, a document is sent to all replicas of the bucket.
+The content nodes provide a <em>Service Provider Interface</em> (SPI)
+that abstracts how documents are stored in the elastic system.
+The SPI is the link between the elastic bucket management system and the storage.
+The SPI is implemented by <a href="proton.html">proton</a> -
+<em>proton</em> and <em>content node</em> is used interchangeably in this documentation.
+</p><p>
+A document Put or Update is sent to all replicas of the bucket keeping the document.
 If bucket replicas are out of sync, a bucket merge operation is run to re-sync the bucket.
-Buckets are split when they grow too large, and joined when they shrink.
 A bucket contains <a href="#data-retention-vs-size">tombstones</a> of recently removed documents.
 Read more about document expiry and batch removes in
-<a href="search-definitions.html#document-expiry">document expiry</a>.</p>
+<a href="search-definitions.html#document-expiry">document expiry</a>.
+</p><p>
+Buckets are split when they grow too large, and joined when they shrink.
+<em>This is a key feature for high performance in very small to very large instances,
+and eliminates need for downtime or manual operations when scaling.</em>
+</p>
 
 
 <h3 id="writing-documents">Writing documents</h3>
 
 <p>Documents enter Vespa using the <a href="api.html">Document API</a>,
 using <a href="reference/vespa-feeder.html">vespa-feeder</a>, <a href="document-api.html">Document API</a>,
-the <a href="vespa-http-client.html">Vespa HTTP Client</a> or <a href="document-api-guide.html">Java Document API</a>
+the <a href="vespa-http-client.html">Vespa Feeding Client API</a> or <a href="document-api-guide.html">Java Document API</a>
 (all binaries use the Java Document API).
 If no <a href="routing.html">route</a> is set, clients feed to the <em>default</em> route.
-Next, they enter <a href="document-processing-overview.html">document processing</a> (round-robin)
-where the documents are prepared for indexing, before
-entering the <em>distributor</em>. The distributor determines which
-bucket should hold each document, and sends them to
-<em>content nodes</em>:
+Next is <a href="document-processing-overview.html">document processing</a> (round-robin)
+where documents are prepared for indexing, before entering the <em>distributor</em>.
+The distributor maps the document to bucket, and sends it to <em>content nodes</em>:
 </p><img src="content/img/elastic_feed.png"/><p>
 </p>
 <table class="table">
@@ -67,46 +72,43 @@ bucket should hold each document, and sends them to
         is a chain of processors that manipulate documents before they are stored.
         Document processors can be user defined.
         When using indexed search, the final step in the chain prepares documents for indexing.
-        The document processing chain calculates a bucket id for each document,
-        which is used to select the correct distributor, using the Document API.
         The Document API forwards requests to distributors.
-        It calculates correct distributors to talk to using
-        the distribution algorithm and knowledge of the cluster state.
-        With no known cluster state, the client library will send requests to random
-        nodes, which will reply with the updated state if the node was not the correct one.
-        Cluster states are versioned, such that clients hitting outdated distributors does not override
+        It calculates the correct distributor using
+        the distribution algorithm and the <em>cluster state</em>.
+        With no known cluster state, the client library will send requests to a random node,
+        which replies with the updated cluster state if the node was incorrect.
+        Cluster states are versioned, such that clients hitting outdated distributors do not override
         updated states with old states.
       </td>
     </tr><tr>
       <th id="distributor">Distributor</th>
       <td>
         The <a href="distributor.html">distributor</a> keeps track of
-        which search nodes should hold which copy of each bucket,
-        based on the <em>redundancy</em> setting and information from the <em>cluster controller</em>.
-        Distributors are responsible for keeping track of metadata for a non-overlapping subset of the data in the cluster.
-        The distributors each keep a bucket database containing metadata of buckets it is responsible for.
-        This metadata indicates what content nodes store copies of the buckets,
+        which content nodes that stores replicas of each bucket,
+        based on the <em>redundancy</em> and information from the <em>cluster controller</em>.
+        A bucket maps to one distributor only.
+        A distributor keeps a bucket database with bucket metadata.
+        The metadata holds which content nodes store replicas of the buckets,
         the checksum of the bucket content and the number of documents and meta entries within the bucket.
-        Each incoming document is assigned to a bucket and forwarded to the right search nodes.
-        All requests related to these buckets are sent through the distributors.
+        Each document is algorithmically mapped to a bucket and forwarded to the correct content nodes.
         <a href="distributor.html">Read more</a>.
       </td>
     </tr><tr>
       <th id="cluster-controller">Cluster controller</th>
       <td>
         The <a href="clustercontroller.html">cluster controller</a>
-        keeps track of the state of the nodes in the installation.
-        This cluster state is used by the document processing chains
+        manages the state of the distributor and content nodes.
+        This <em>cluster state</em> is used by the document processing chains
         to know which distributor to send documents to,
-        as well as by the distributor to know which search nodes should have which bucket.
+        as well as by the distributor to know which content nodes should have which bucket.
         <a href="clustercontroller.html">Read more</a>.
       </td>
     </tr><tr>
-      <th id="search-node">Search node</th>
+      <th id="content-node">Content node</th>
       <td>
-        The search node consists of a <em>bucket management system</em> which
-        sends requests to a set of <em>document databases</em>, which each
-        consists of three <em>sub-databases</em>.
+        The content node has a <em>bucket management system</em>,
+        which sends requests to a set of <em>document databases</em>,
+        which each consists of three <em>sub-databases</em>.
         In short, this node activates and deactivates buckets for search.
         Refer to <a href="proton.html">proton</a> for details.
       </td>
@@ -121,39 +123,42 @@ Other aspects of feeding:
     <tr>
       <th id="redundancy">Redundancy</th>
       <td>
-        <a href="reference/services-content.html#redundancy">redundancy</a>
-        sets how many backend instances stores replicas of the same data.
-        <a href="reference/services-content.html#searchable-copies">searchable-copies</a> configures
-        how many replicas to keep in the <em>Ready</em> sub-database.
-        Redundancy is handled at the bucket level, by maintaining <em>redundancy</em>
-        replicas of each bucket. No node may store more than one replica of a bucket.
+        <p>
+        <a href="reference/services-content.html#redundancy">Redundancy</a>
+        configures how many content nodes stores replicas of the same bucket.
+        No node may store more than one replica of a bucket.
         The distributors detect whether there are enough bucket replicas on the
         content nodes and add/remove as needed.
         Write operations wait for replies from every replica
         and fail if less than redundancy are persisted within timeout.
         Replica placement is found in
         <a href="content/data-placement.html">document distribution</a>.
+        </p><p>
+        <a href="reference/services-content.html#searchable-copies">Searchable-copies</a>
+        configures how many replicas to keep in the
+        <a href="/documentation/proton.html#sub-databases">Ready sub-database</a>.
+        </p>
       </td>
     </tr><tr>
       <th id="consistency">Consistency</th>
       <td>
+        <p>
         Consistency is maintained at bucket level.
         Content nodes calculate checksums based on the bucket contents,
-        and the distributors compare checksums among the bucket copies.
-        If inconsistencies are detected, a merge is issued to resolve inconsistency.
-        While there are inconsistent bucket replicas, the distributors try to route
-        external operations to the best replica.
-        <br/><br/>
-        As buckets are split and joined, it is possible for replicas of a bucket to
-        be split at different levels. A node may have been down while its buckets
-        have been split or joined. This is called inconsistent bucket splitting.
-        Bucket checksums can not be compared across buckets with different split
-        levels. Consequently, distributors do not know whether all documents exist in
-        enough replicas in this state. Due to this, inconsistent splitting is one of the
-        highest maintenance priorities. After all buckets are split or joined back to
-        the same level, the distributors can verify that all the replicas are consistent
-        and fix any detected issues with a merge.
+        and the distributors compare checksums among the bucket replicas.
+        A <em>bucket merge</em> is issued to resolve inconsistency, when detected.
+        While there are inconsistent bucket replicas, the distributors route operations to the "best" replica.
+        </p><p>
+        As buckets are split and joined, it is possible for replicas of a bucket to be split at different levels.
+        A node may have been down while its buckets have been split or joined.
+        This is called <em>inconsistent bucket splitting</em>.
+        Bucket checksums can not be compared across buckets with different split levels.
+        Consequently, distributors do not know whether all documents exist in enough replicas in this state.
+        Due to this, inconsistent splitting is one of the highest maintenance priorities.
+        After all buckets are split or joined back to the same level,
+        the distributors can verify that all the replicas are consistent and fix any detected issues with a merge.
         <a href="content/consistency.html">Read more</a>.
+        </p>
       </td>
     </tr>
   </tbody>
