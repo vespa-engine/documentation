@@ -10,7 +10,7 @@ Change the configured <a href="/documentation/reference/services-content.html#no
 and redeploy the application - no restarts needed.</p>
 
 <p>The elasticity mechanism is also used to recover from a node loss -
-new copies of documents are auto-created to maintain redundancy.
+new replicas of documents are auto-created to maintain redundancy.
 Failed nodes is hence not a problem that requires immediate attention -
 as long as the instance has sufficient capacity to handle the data and load,
 it self-heals from node failures.</p>
@@ -176,7 +176,7 @@ Content node expanded:
 
 <h3 id="retrieving-documents">Retrieving documents</h3>
 <p>
-Retrieving documents is done either by specifying a single id to <em>get</em>,
+Retrieving documents is done by specifying an id to <em>get</em>,
 or use a <a href="reference/document-select-language.html">selection expression</a>
 to <em>visit</em> a range of documents - refer to the <a href="api.html">Document API</a>.
 Overview:
@@ -186,12 +186,12 @@ Overview:
     <tr>
       <th id="get">Get</th>
       <td>
-        When the persistence engine receives a get request,
+        When the content node receives a get request,
         it scans through all the document databases,
         and for each one it checks all three sub-databases.
         Once the document is found, the scan is stopped and the document returned.
         If the document is found in a Ready sub-database,
-        the document retriever will patch in any changes that is stored in the
+        the document retriever will apply any changes that is stored in the
         <a href="attributes.html">attributes</a> before returning the document.
       </td>
     </tr><tr>
@@ -199,7 +199,7 @@ Overview:
       <td>
         A visit request creates an iterator over each candidate bucket.
         This iterator will retrieve matching documents from all sub-databases of all document databases.
-        As for get, attributes are patched into documents in the Ready sub-database.
+        As for get, attributes values are applied to document fields in the Ready sub-database.
       </td>
     </tr>
   </tbody>
@@ -214,7 +214,8 @@ It does not use the distributor, nor has it anything to do with the SPI.
 It is orthogonal to the elasticity set up by the storage and retrieval described above.
 How queries move through the system:
 </p><img src="content/img/elastic_query.png"/><p>
-A query enters the system through the <em>QR-server</em> (query rewrite server).
+A query enters the system through the <em>QR-server (query rewrite server)</em>
+in the <a href="container-intro.html">Vespa Container</a>.
 The QR-server issues one query per document type to the <em>top level dispatcher</em>,
 which in turn keeps track of all search nodes and relays queries to them:
 <table class="table">
@@ -240,12 +241,10 @@ which in turn keeps track of all search nodes and relays queries to them:
       <th id="content-node-matching">Content node matching</th>
       <td>
         The <em>match engine</em> <!-- link here to design doc / move it -->
-        receives queries and routes them to the right document
-        database based on the document type.
-        In the document database the query is passed straight to the <em>Ready</em> sub-database,
-        where the searchable documents are.
+        receives queries and routes them to the right document database based on the document type.
+        The query is passed to the <em>Ready</em> sub-database, where the searchable documents are.
         Based on information stored in the document meta store,
-        the query is augmented with a blacklist that ensures only <em>active</em> documents can get a match.
+        the query is augmented with a blacklist that ensures only <em>active</em> documents are matched.
       </td>
     </tr>
   </tbody>
@@ -258,15 +257,13 @@ which in turn keeps track of all search nodes and relays queries to them:
 <p>
 Resizing is orchestrated by the distributor, and happens gradually in the background.
 It uses a variation of the <em>RUSH algorithms</em> to distribute documents.
-Under normal circumstances it makes a minimal number of documents move when nodes are added or removed.
+Under normal circumstances, it makes a minimal number of documents move when nodes are added or removed.
 </p><p>
 Modify the configuration to add/remove nodes,
 then <a href="cloudconfig/application-packages.html#deploy">deploy</a>.
 Add an elastic content cluster to the application by adding a
 <a href="reference/services-content.html">content</a> element
 in <a href="reference/services.html">services.xml</a>.
-Documents are distributed over nodes with a configured
-<a href="reference/services-content.html#redundancy">redundancy</a>.
 </p>
 
 
@@ -278,11 +275,9 @@ The illustration shows how each bucket uses a pseudo-random sequence
 of numbers to derive the node sequence.
 The pseudo-random generator is seeded with the bucket id, so each bucket will always get the same sequence:
 </p><img src="content/img/BucketNodeSequence.png"/><p>
-Each node is assigned a <em>distribution-key</em>, which is an
-index in the number sequence. The set of number/index pairs is sorted
-on descending numbers, and this new sequence of indexes determines
-which nodes the copies are placed on, with the first node being host
-to the primary copy, i.e. the <em>active</em> copy.
+Each node is assigned a <em>distribution-key</em>, which is an index in the number sequence.
+The set of number/index pairs is sorted on descending numbers, and this new sequence of indexes determines
+which nodes the replicas are placed on, with the first node being host to the primary replica, i.e. the <em>active</em> replica.
 This specification of where to place a bucket is called the bucket's <em>ideal state</em>.
 </p>
 
@@ -290,18 +285,15 @@ This specification of where to place a bucket is called the bucket's <em>ideal s
 <h3 id="adding-nodes">Adding nodes</h3>
 <p>
 When adding a new node, new ideal states are calculated for all buckets.
-The buckets that should have a copy on the new node are moved,
-while the superfluous copies are removed. Redistribution example -
-add a new node to the system, with redundancy 2:
+The buckets that should have a replica on the new node are moved, while the superfluous are removed.
+Redistribution example - add a new node to the system, with redundancy 2:
 </p><img src="content/img/AddNodeMoveBuckets.png"/><p>
-The distribution algorithm generates a random node sequence for each
-bucket. In this example with redundancy of two, the two copies sorted
-first will store copies of the data. The figure shows how random
-placement onto two nodes changes as a third node is introduced. The new
-node introduced takes over as primary copy for the buckets where it got
-sorted first in order, and as secondary copy for the buckets where it got
-sorted second. This ensures minimal data movement when nodes come or go,
-and allows capacity to be changed easily.
+The distribution algorithm generates a random node sequence for each bucket.
+In this example with redundancy of two, the two nodes sorted first will store replicas of the data.
+The figure shows how random placement onto two nodes changes as a third node is introduced.
+The new node introduced takes over as primary for the buckets where it got sorted first in order,
+and as secondary for the buckets where it got sorted second.
+This ensures minimal data movement when nodes come or go, and allows capacity to be changed easily.
 </p><p>
 No buckets are moved between the existing nodes when a new node is added.
 Based on the pseudo-random sequences, some buckets change from primary to secondary, or are removed.
@@ -322,8 +314,7 @@ bucket redistribution, but increases the time to get to the <em>ideal state</em>
   </li><li>
     <strong>Deploy</strong>: <a href="operations/admin-procedures.html#monitor-distance-to-ideal-state">
     Observe metrics</a> to track progress as the cluster redistributes documents.
-    Use the <a href="#cluster-controller">cluster controller</a>
-    to monitor the state of the cluster.
+    Use the <a href="#cluster-controller">cluster controller</a> to monitor the state of the cluster.
   </li><li>
     <strong>Restart dispatch nodes?:</strong> ToDo check this.
   </li><li>
@@ -347,12 +338,12 @@ Whether a node fails or is deliberately removed, the same redistribution happens
 If the remove is planned, the node remains up until it has been drained.
 Example of redistribution after node failure, redundancy 2:
 </p><img src="content/img/LoseNodeMoveBuckets.png"/><p>
-In the figure, node 2 fails. This node held the active copies of bucket 2 and 6.
-Once the node fails the secondary copies are set active.
+In the figure, node 2 fails. This node held the active replicas of bucket 2 and 6.
+Once the node fails the secondary replicas are set active.
 If they were already in a <em>ready</em> state, they can start serving queries immediately.
 Otherwise they will have to index their data.
-All buckets that no longer have secondary copies
-are copied to the remaining nodes according to their pseudo-random sequence.
+All buckets that no longer have secondary replicas
+are merged to the remaining nodes according to their pseudo-random sequence.
 It is important that the nodes retain their original index;
 otherwise the buckets would all have to move to regain their ideal states.
 </p><p>
@@ -369,8 +360,7 @@ Again, track <em>idealstate.merge_bucket.pending</em> to know when done.
 Use the <a href="content/api-state-rest-api.html">State API</a> or
 <em>vespa-set-node-state</em><!-- ToDo: this tool should be documented somewhere -->
 to set a node to <em>retired</em>.
-The <a href="#cluster-controller">cluster controller's</a>
-status page lists node states.
+The <a href="#cluster-controller">cluster controller's</a> status page lists node states.
 </p>
 
 
@@ -398,84 +388,84 @@ This is supported using <a href="content/visiting.html#data-export-import">visit
 <table class="table">
 <thead></thead></tbody>
 <tr><th id="availability-vs-resources">Availability vs resources</th>
-<td><p>
-Keeping index structures costs resources. Not all replicas of buckets are
-necessarily searchable, unless configured using
-<a href="reference/services-content.html#searchable-copies">searchable-copies</a>.
-As Vespa indexes buckets on-demand, the most cost-efficient setting is 1,
-if one can tolerate temporary coverage loss during node failures.
-Note that <em>searchable-copies</em> does not apply to <a href="streaming-search.html">streaming search</a>
-as this does not use index structures.
-</p><p>
-Distributing buckets using a <a href="content/data-placement.html">hierarchy</a>
-helps implement policies for availability and
-<a href="qps-scaling-content-cluster.html#hierarchical-distribution">query performance</a>.
-</p></td>
+    <td><p>
+    Keeping index structures costs resources. Not all replicas of buckets are
+    necessarily searchable, unless configured using
+    <a href="reference/services-content.html#searchable-copies">searchable-copies</a>.
+    As Vespa indexes buckets on-demand, the most cost-efficient setting is 1,
+    if one can tolerate temporary coverage loss during node failures.
+    Note that <em>searchable-copies</em> does not apply to <a href="streaming-search.html">streaming search</a>
+    as this does not use index structures.
+    </p><p>
+    Distributing buckets using a <a href="content/data-placement.html">hierarchy</a>
+    helps implement policies for availability and
+    <a href="qps-scaling-content-cluster.html#hierarchical-distribution">query performance</a>.
+    </p></td>
 </tr>
 <tr><th id="data-retention-vs-size">Data retention vs size</th>
-<td><p>
-When a document is removed, the document data is not immediately purged.
-Instead, a content cluster keeps <em>remove-entries</em> (tombstones of removed documents)
-for a configurable amount of time. The default is two weeks, refer to
-<a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
-pruneremoveddocumentsage</a>.
-This ensures that removed documents stay removed in a distributed system where nodes change state.
-Entries are removed periodically after expiry.
-Hence, if a node comes back up after being down for a week,
-removed documents are available again, unless the data on the node is wiped first.
-A larger <em>pruneremoveddocumentsage</em> will hence grow the storage size as this keeps
-document and tombstones longer.
-</p><p>
-<strong>Note:</strong> The backend does not store remove-entries for nonexistent documents.
-This to prevent clients sending wrong document identifiers from
-filling a cluster with invalid remove-entries.
-A side-effect is that if a problem has caused all replicas of a bucket to be unavailable,
-documents in this bucket cannot be marked removed until at least one copy is available again.
-Documents are written in new bucket replicas while the others are down -
-if these are removed, then older versions of these will not re-emerge,
-as the most recent change wins.
-</p></td>
+    <td><p>
+    When a document is removed, the document data is not immediately purged.
+    Instead, proton keeps <em>remove-entries</em> (tombstones of removed documents)
+    for a configurable amount of time. The default is two weeks, refer to
+    <a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+    pruneremoveddocumentsage</a>.
+    This ensures that removed documents stay removed in a distributed system where nodes change state.
+    Entries are removed periodically after expiry.
+    Hence, if a node comes back up after being down for more than two weeks,
+    removed documents are available again, unless the data on the node is wiped first.
+    A larger <em>pruneremoveddocumentsage</em> will hence grow the storage size as this keeps
+    document and tombstones longer.
+    </p><p>
+    <strong>Note:</strong> The backend does not store remove-entries for nonexistent documents.
+    This to prevent clients sending wrong document identifiers from
+    filling a cluster with invalid remove-entries.
+    A side-effect is that if a problem has caused all replicas of a bucket to be unavailable,
+    documents in this bucket cannot be marked removed until at least one replica is available again.
+    Documents are written in new bucket replicas while the others are down -
+    if these are removed, then older versions of these will not re-emerge,
+    as the most recent change wins.
+    </p></td>
 </tr>
 <tr><th id="transition-time" style="white-space:nowrap;">Transition time</th>
-<td>
-See <a href="reference/services-content.html#transition-time">transition-time</a>
-for tradeoffs for how quickly nodes are set down vs. system stability.
-</td>
+    <td>
+    See <a href="reference/services-content.html#transition-time">transition-time</a>
+    for tradeoffs for how quickly nodes are set down vs. system stability.
+    </td>
 </tr>
 <tr><th id="removing-unstable-nodes">Removing unstable nodes</th>
-<td>
-One can configure how many times a node is allowed to crash before it will automatically be removed.
-The crash count is reset if the node has been up or down continuously for more than the
-<a href="reference/services-content.html#stable-state-period">stable state period</a>.
-If the crash count exceeds
-<a href="reference/services-content.html#max-premature-crashes">max premature crashes</a>, the node will be disabled.
-Refer to <a href="operations/admin-procedures.html#troubleshooting">troubleshooting</a>.
-</td>
+    <td>
+    One can configure how many times a node is allowed to crash before it will automatically be removed.
+    The crash count is reset if the node has been up or down continuously for more than the
+    <a href="reference/services-content.html#stable-state-period">stable state period</a>.
+    If the crash count exceeds
+    <a href="reference/services-content.html#max-premature-crashes">max premature crashes</a>, the node will be disabled.
+    Refer to <a href="operations/admin-procedures.html#troubleshooting">troubleshooting</a>.
+    </td>
 </tr>
 <tr><th id="minimal-amount-of-nodes-required-to-be-available">Minimal amount of nodes required to be available</th>
-<td>
-A cluster is typically sized to handle a given amount of load.
-A given percentage of the cluster resources are required for normal operations,
-and the remainder is the available resources that can be used if some of the nodes are no longer usable.
-If the cluster loses enough hardware, it will be overloaded:
-</p>
-<ul>
-  <li>Remaining nodes may create disk full situation.
-    This will likely fail a lot of write operations, and if disk is shared with OS,
-    it may also stop the node from functioning.</li>
-  <li>Partition queues will grow to maximum size.
-    As queues are processed in FIFO order, operations are likely to get long latencies.</li>
-  <li>Many operations may time out while being processed,
-    causing the operation to be resent, adding more load to the cluster.</li>
-  <li>When new hardware is added, it cannot serve any requests
-    before data is moved to the new nodes from the already overloaded nodes.
-    Moving data puts even more load on the existing nodes,
-    and as moving data is typically not high priority this may never actually happen.</li>
-</ul>
-To configure what the minimal cluster size is, use
-<a href="reference/services-content.html#min-distributor-up-ratio">min-distributor-up-ratio</a> and
-<a href="reference/services-content.html#min-storage-up-ratio">min-storage-up-ratio</a>.
-</p></td>
+    <td>
+    A cluster is typically sized to handle a given load.
+    A given percentage of the cluster resources are required for normal operations,
+    and the remainder is the available resources that can be used if some of the nodes are no longer usable.
+    If the cluster loses enough nodes, it will be overloaded:
+    </p>
+    <ul>
+      <li>Remaining nodes may create disk full situation.
+        This will likely fail a lot of write operations, and if disk is shared with OS,
+        it may also stop the node from functioning.</li>
+      <li>Partition queues will grow to maximum size.
+        As queues are processed in FIFO order, operations are likely to get long latencies.</li>
+      <li>Many operations may time out while being processed,
+        causing the operation to be resent, adding more load to the cluster.</li>
+      <li>When new nodes are added, they cannot serve requests
+        before data is moved to the new nodes from the already overloaded nodes.
+        Moving data puts even more load on the existing nodes,
+        and as moving data is typically not high priority this may never actually happen.</li>
+    </ul>
+    To configure what the minimal cluster size is, use
+    <a href="reference/services-content.html#min-distributor-up-ratio">min-distributor-up-ratio</a> and
+    <a href="reference/services-content.html#min-storage-up-ratio">min-storage-up-ratio</a>.
+    </p></td>
 </tr>
 </tbody>
 </table>
