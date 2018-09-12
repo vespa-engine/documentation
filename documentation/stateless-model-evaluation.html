@@ -1,0 +1,70 @@
+---
+# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Stateless Model Evaluation"
+---
+
+Vespas speciality is evaluating machine-learned models quickly over large numbers of data points.
+However, it can also be used to evaluate models once on request in stateless containers.
+All machine-learned models (see e.g <a href="tensorflow.html">TensorFlow</a> and <a href="onnx.html">Onnx</a>) 
+added to the <code>models/</code> directory of the <a href="reference/application-packages-reference.html">application package</a>,
+can be used to compute inferences from Java code using the following step.
+
+
+<h2 id="add-the-model-evaluation-tag">1. Add the model evaluation tag</h2>
+	
+Add the model-evaluation tag inside the <a href="container-intro.html">container (/jdisc)</a>
+clusters where it is needed in <a href="reference/services.html">services.xml</a>:
+
+<pre>
+&lt;container&gt;
+    ...
+    <strong style="background-color: yellow;">&lt;model-evaluation/&gt;</strong>
+    ...
+&lt;/container&gt;
+</pre>
+
+
+<h2 id="add-a-model-evaluation-dependency">2. Add a model-evaluation dependency</h2>
+
+Add the following dependency in your <code>pom.xml</code>:
+
+<code><pre>
+        &lt;dependency&gt;
+            &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+            &lt;artifactId&gt;container&lt;/artifactId&gt;
+            &lt;scope&gt;provided&lt;/scope&gt;
+        &lt;/dependency&gt;
+</pre></code>
+
+(Or, if you want the minimal dependency, depend on <code>model-evaluation</code> instead of <code>container</code>.)
+
+
+<h2 id="have-models-evaluator-injected">3. Have ModelsEvaluator injected</h2>
+
+Have the Java component which should evaluate models take a <code>ai.vespa.models.evaluation.ModelsEvaluator</code> 
+instance as a constructor argument
+(Vespa will <a href="jdisc/injecting-components.html">automatically inject it</a>).
+
+
+<h2 id="use-models-evaluator-to-make-evaluation">4. Use ModelsEvaluator to make evaluations</h2>
+
+Use the <code>ModelsEvaluator</code> API (from any thread) to make inferences. Sample code:
+
+<code><pre>
+import ai.vespa.models.evaluation.ModelsEvaluator;
+import ai.vespa.models.evaluation.FunctionEvaluator;
+import com.yahoo.tensor.Tensor;
+
+... 
+
+FunctionEvaluator evaluator = modelsEvaluator.evaluatorOf("myModel", "mySignature", "myOutput"); // Unambiguous args may be skipped
+
+Tensor.Builder b = Tensor.Builder.of(new TensorType.Builder().indexed("d0", 3));
+b.cell(0.1, 0);
+b.cell(0.2, 0);
+b.cell(0.3, 0);
+Tensor input = b.build();
+
+evaluator.bind("myInput", input);
+Tensor result = evaluator.evaluate()); // Note: Evaluator must be discarded after a single use
+</pre></code>
