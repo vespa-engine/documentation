@@ -203,12 +203,12 @@ the TensorFlow import and other operations used in the code below.
     rank-profile nn_tensor {
 
         # This defines where to get the user latent factor from
-        macro input_u() {
+        function input_u() {
             expression: query(user_item_cf)
         }
 
         # This defines where to get the blog latent factor from
-        macro input_d() {
+        function input_d() {
             expression: attribute(user_item_cf)
         }
 
@@ -247,7 +247,7 @@ directory `models/blog/saved`.
 An important part of the model-saving code above is the definition of the
 inputs and outputs. These are defined in the signature of the saved model. The
 inputs to the model are the latent factor vectors for the user (`input_u`) and
-the blog post (`input_d`). Vespa expects to find user-defined macros of
+the blog post (`input_d`). Vespa expects to find user-defined functions of
 the same name, which returns the values to use as inputs. This can be
 seen in the rank profile above which defines `input_u` to retrieve the
 value from the query and 'input_d' to retrieve the value from the document.
