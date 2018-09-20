@@ -85,7 +85,7 @@ own directories.
 Vespa has a special [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
 called `tensorflow`. This ranking feature specifies the model,
 the signature and the output to use in a ranking expression. The
-input to the computation must be provided by a macro with the same
+input to the computation must be provided by a function with the same
 name as the input variable. Consider the following example:
 
 ```
@@ -97,7 +97,7 @@ search tf {
         }
     }
     rank-profile default inherits default {
-        macro input_tensor() {
+        function input_tensor() {
             expression: attribute(document_tensor)
         }
         first-phase {
@@ -114,7 +114,7 @@ if the model only contains a single output.
 
 The input to the model was specified in the signature above as the Python variable
 `x`. This was a placeholder given the name `input_tensor`. Vespa expects a
-macro to be specified for each input tensor having the same name as the input. Note
+function to be specified for each input tensor having the same name as the input. Note
 that if a name has not been specified in TensorFlow, placeholder will be given
 the default names 'Placeholder', 'Placeholder_1' etc. Also note that if names
 have "/" in them, which is the case when using name scopes in TensorFlow, these
@@ -141,9 +141,9 @@ contains, you can use the `saved_model_cli` command to view a saved model:
             name: add:0
       Method name is: tensorflow/serving/predict
 
-The input macro can retrieve the tensor value from any valid source: a document
+The input function can retrieve the tensor value from any valid source: a document
 field as shown here, a value sent along with the query, a constant value or a
-parent value. However, the tensor type from the macro must match the tensor
+parent value. However, the tensor type from the function must match the tensor
 type expected in the model. The input tensors must have dimension names
 starting with `"d0"` for the first dimension, and increasing for each dimension
 (i.e. `"d1"`, `"d2"`, etc). The result of the evaluation will likewise be
@@ -254,13 +254,13 @@ myvariables_ref field. You can add this value to all documents by doing an
 }
 ```
 
-### 4. Add a macro returning the value of the imported global field
+### 4. Add a function returning the value of the imported global field
 
-Create a macro with the exact Vespa name found in step 1.
-This macro will override the variable value found in the application package.
+Create a function with the exact Vespa name found in step 1.
+This function will override the variable value found in the application package.
 
 ```
-macro vespa_name_of_tf_variable {
+function vespa_name_of_tf_variable {
     expression: attribute(my_tf_variable)
 }
 ```

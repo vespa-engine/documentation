@@ -31,7 +31,7 @@ Vespa has a special [ranking
 feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
 called `ONNX`. This ranking feature specifies the model and optionally the
 output to use in a ranking expression. The input to the computation must be
-provided by a macro with the same name as the input variable. Consider the
+provided by a function with the same name as the input variable. Consider the
 following example:
 
 ```
@@ -43,7 +43,7 @@ search onnx {
         }
     }
     rank-profile default inherits default {
-        macro Placeholder() {
+        function Placeholder() {
             expression: attribute(document_tensor)
         }
         first-phase {
@@ -70,12 +70,12 @@ the `B` inputs to the MatMul and Add nodes. For Vespa to calculate the
 value of the output, it requires the user to specify where to retrieve
 the input tensors.
 
-Vespa expects a macro to be specified for each input tensor, and the name of
-the macro should be the same as as the input name. In this case, the name of
-the macro should be `Placeholder`, which is illustrated in the example search
-definition above. The input macro can retrieve the tensor value from any valid
+Vespa expects a function to be specified for each input tensor, and the name of
+the function should be the same as as the input name. In this case, the name of
+the function should be `Placeholder`, which is illustrated in the example search
+definition above. The input function can retrieve the tensor value from any valid
 source: a document field as shown here, a value sent along with the query, a
-constant value or a parent value. However, the tensor type from the macro must
+constant value or a parent value. However, the tensor type from the function must
 match the tensor type expected in the model.  The input tensors must have
 dimension names starting with `"d0"` for the first dimension, and increasing
 for each dimension (i.e. `"d1"`, `"d2"`, etc). The result of the evaluation
