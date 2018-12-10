@@ -237,7 +237,7 @@ Result:
 </tbody>
 </table>
 <p>
-Example: <em>Sum price of purchases <a href="reference/grouping-syntax.html#time-and-date">per date</a></em>:
+Example: <em>Sum price of purchases <a href="#time-and-date">per date</a></em>:
 </p>
 <pre>
 select (&hellip;) | all(group(time.date(date)) each(output(sum(price))));
@@ -1392,4 +1392,256 @@ Include the sum price for each customer, both as a grand total and broken down o
   </tr>
 </tbody>
 </table>
+</p>
+
+
+
+<h2 id="examples">Examples</h2>
+
+
+<h3 id="topn-full-corpus">TopN / Full corpus</h3>
+<p>
+Simple grouping, count the number of documents in each group:
+<pre>/search/?yql=select (&hellip;) | all(group(a) each(output(count())));</pre>
+</p><p>
+Two parallel groupings:
+<pre>/search/?yql=select (&hellip;) | all(all(group(a) each(output(count())))
+                          all(group(b) each(output(count()))));</pre>
+</p><p>
+Only the 1000 best hits will be grouped at each content node. Lower accuracy, but higher speed:
+<pre>/search/?yql=select (&hellip;) | all(max(1000) all(group(a) each(output(count()))));</pre>
+</p><p>
+<!-- ToDo: check - only for streaming? -->
+In <a href="streaming-search.html">streaming search</a>
+one can group all searched documents by adding a <code>where(true)</code> clause:
+<pre>/search/?yql=select (&hellip;) | all(group(a) each(output(count()))) where(true);</pre>
+</p>
+
+
+<h3 id="selecting-groups">Selecting groups</h3>
+<p>
+Do a modulo 5 operation before selecting the group:
+<pre>/search/?yql=select (&hellip;) | all(group(a % 5) each(output(count())));</pre>
+</p><p>
+Do <code>a + b * c</code> before selecting the group:
+<pre>/search/?yql=select (&hellip;) | all(group(a + b * c) each(output(count())));</pre>
+</p>
+
+
+<h3 id="grouping-on-maps">Grouping on maps</h3>
+<p>
+The following syntax can be used when grouping on
+<a href="reference/search-definitions-reference.html#type:map">map</a> attribute fields.
+It creates a group for values whose keys match the specified key.
+The key can either be specified directly or indirectly via a key source attribute.
+</p><p>
+Direct key on a primitive map:
+<pre>/search/?yql=select (&hellip;) | all(group(my_map{"my_key"}) each(output(count())));</pre>
+</p><p>
+Direct key on a map of struct:
+<pre>/search/?yql=select (&hellip;) | all(group(my_map{"my_key"}.my_field) each(output(count())));</pre>
+</p><p>
+Indirect key via a key source attribute:
+<pre>/search/?yql=select (&hellip;) | all(group(my_map{attribute(my_key_source)}) each(output(count())));</pre>
+</p><p>
+The key is retrieved from the key source attribute for each document.
+Note that the key source attribute must be single value and have the same data type as the key type of the map.
+Using a key source attribute is not supported for streaming search.
+</p>
+
+
+<h3 id="locale-aware-sorting">Locale aware sorting</h3>
+<p>
+Groups are sorted using locale aware sorting, with the default and primary strength values, respectively:
+<pre>/search/?yql=select (&hellip;) | all(group(s) order(max(uca(s, "sv")))
+                          each(output(count())));</pre>
+<pre>/search/?yql=select (&hellip;) | all(group(s) order(max(uca(s, "sv", "PRIMARY")))
+                          each(output(count())));</pre>
+</p>
+
+
+<h3 id="ordering-groups">Ordering groups</h3>
+<p>
+Do a modulo 5 operation before selecting the group -
+the groups are then ordered by their aggregated sum of attribute "b":
+<pre>/search/?yql=select (&hellip;) | all(group(a % 5) order(sum(b))
+                          each(output(count())));</pre>
+</p><p>
+Do <code>a + b * c</code> before selecting the group.
+Ordering is given by the maximum value of attribute "d" in each group:
+<pre>/search/?yql=select (&hellip;) | all(group(a + b * c) order(max(d))
+                          each(output(count())));</pre>
+</p><p>
+Take the average relevance of the groups and multiply it with
+the number of groups to get a cumulative count:
+<pre>/search/?yql=select (&hellip;) | all(group(a) order(avg(relevance()) * count())
+                          each(output(count())));</pre>
+</p><p>
+One can not directly reference an attribute in the order clause, as this:
+<pre>/search/?yql=select (&hellip;) | all(group(a) order(attr * count())
+                          each(output(count())));</pre>
+</p><p>
+However, one can do this:
+<pre>/search/?yql=select (&hellip;) | all(group(a) order(max(attr) * count())
+                          each(output(count())));</pre>
+</p>
+
+
+<h3 id="collecting-aggregates">Collecting aggregates</h3>
+<p>
+Simple grouping to count number of documents in each group and return the best hit in each group:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) each(max(1) each(output(summary()))));</pre>
+</p><p>
+Also return the sum of attribute "b":
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) each(max(1) output(count(), sum(b))
+                           each(output(summary()))));</pre>
+</p><p>
+Also return an XOR of the 64 most significant bits of an MD5 over the concatenation of attributes "a", "b" and "c":
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) each(max(1) output(count(), sum(b), xor(md5(cat(a, b, c), 64)))
+                           each(output(summary()))));</pre>
+</p>
+
+
+<h3 id="predefined-buckets">Predefined buckets</h3>
+<p>Group on predefined buckets for raw attribute and use infinity
+to make sure the buckets cover the whole possible range:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(predefined(r, bucket(-inf, {0, 'a', 3}), bucket({1, 'u', 4}, inf)))
+             each(output(count())));</pre>
+</p><p>
+Standard mathematical start and end specifiers may be used to define the width of a bucket.
+The "(" and ")" evaluates to "[" and "&gt;" by default.
+Here, make a bucket that can only with one exact group, and use different width specifiers:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(predefined(r, bucket[-inf, "bar"&gt;, bucket["bar"], bucket&lt;"bar", inf]))
+             each(output(count())));</pre>
+</p>
+
+
+<h3 id="grouping">Grouping</h3>
+<p>Single level grouping on "a" attribute, returning at most 5 groups with full hit count as well as the 69 best hits.
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(5) each(max(69) output(count())
+             each(output(summary()))));</pre>
+</p><p>
+Two level grouping on "a" and "b" attribute:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(5) each(output(count())
+             all(group(b) max(5) each(max(69) output(count())
+                 each(output(summary()))))));</pre>
+</p><p>
+Three level grouping on "a", "b" and "c" attribute:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(5) each(output(count())
+             all(group(b) max(5) each(output(count())
+                 all(group(c) max(5) each(max(69) output(count())
+                     each(output(summary()))))));</pre>
+</p><p>
+As above example, but also collect best hit in level 2:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(5) each(output(count())
+             all(group(b) max(5) each(output(count())
+                 all(max(1) each(output(summary())))
+                 all(group(c) max(5) each(max(69) output(count())
+                     each(output(summary()))))));</pre>
+</p><p>
+As above example, but also collect best hit in level 1:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(5) each(output(count())
+             all(max(1) each(output(summary())))
+             all(group(b) max(5) each(output(count())
+                 all(max(1) each(output(summary())))
+                 all(group(c) max(5) each(max(69) output(count())
+                     each(output(summary()))))));</pre>
+</p><p>
+As above example, but using different document summaries on each level:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(5) each(output(count())
+             all(max(1) each(output(summary(complexsummary))))
+             all(group(b) max(5) each(output(count())
+                 all(max(1) each(output(summary(simplesummary))))
+                 all(group(c) max(5) each(max(69) output(count())
+                     each(output(summary(fastsummary)))))));</pre>
+</p><p>
+Group on fixed width buckets for numeric attribute, then on "a" attribute, count hits in leaf nodes:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(fixedwidth(n, 3)) each(group(a) max(2) each(output(count()))));</pre>
+</p><p>
+As above example, but limiting groups in level 1, and returning hits from level 2:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(fixedwidth(n, 3)) max(5) each(group(a) max(2) each(output(count())
+             each(output(summary())))));</pre>
+</p><p>
+Deep grouping with counting and hit collection on all levels:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(5) each(output(count())
+             all(max(1) each(output(summary())))
+             all(group(b) each(output(count())
+                 all(max(1) each(output(summary())))
+                 all(group(c) each(output(count())
+                     all(max(1) each(output(summary())))))))));</pre>
+</p>
+
+
+<h3 id="time-and-date">Time and date</h3>
+<p>
+Group by year:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(time.year(a)) each(output(count())));</pre>
+</p><p>
+Group by year, then by month:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(time.year(a)) each(output(count())
+             all(group(time.month(a)) each(output(count())))));</pre>
+</p><p>
+Group by year, then by month, then day, then by hour:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(time.year(a)) each(output(count())
+             all(group(time.monthofyear(a)) each(output(count())
+                 all(group(time.dayofmonth(a)) each(output(count())
+                     all(group(time.hourofday(a)) each(output(count())))))))));</pre>
+</p><p>
+Groups <em>today</em>, <em>yesterday</em>, <em>lastweek</em>, and <em>lastmonth</em>
+using <code>predefined</code> aggregator, and groups each day within each of these separately:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(predefined((now() - a) / (60 * 60 * 24),
+                              bucket(0,1), bucket(1,2),
+                              bucket(3,7), bucket(8,31))) each(output(count())
+             all(max(2) each(output(summary())))
+                 all(group((now() - a) / (60 * 60 * 24)) each(output(count())
+                     all(max(2) each(output(summary())))))));</pre>
+</p>
+
+
+<h3 id="counting-unique-groups">Counting unique groups</h3>
+<p>
+The <code>count</code> aggregator can be applied on list of groups to determine the number of unique groups
+without having to explicitly retrieve all groups.
+Another use case for this aggregator is counting the number of unique instances matching a given expression.
+</p><p>
+Output the number of groups, which is equivalent to the number of unique values for attribute "a":
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) output(count()))</pre>
+</p><p>
+Output the number of unique string lengths for the attribute "name":
+<pre>/search/?yql=select (&hellip;) |
+         all(group(strlen(name)) output(count()))</pre>
+</p><p>
+Output the sum of the "b" attribute for each group in addition to the overall group count:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) output(count()) each(output(sum(b))))</pre>
+</p><p>
+The <code>max</code> clause is used to restrict the number of groups returned.
+The query outputs the sum for the 3 best groups. The <code>count</code> clause
+outputs the actual number of groups (potentially &gt;3):
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(3) output(count()) each(output(sum(b))))</pre>
+</p><p>
+Output the number of top level groups, and for the 10 best groups,
+output the number of unique values for attribute "b":
+<pre>/search/?yql=select (&hellip;) |
+         all(group(a) max(10) output(count()) each(group(b) output(count())))</pre>
 </p>
