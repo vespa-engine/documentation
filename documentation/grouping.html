@@ -6,8 +6,8 @@ title: "Grouping Information in Results"
 <p>
 This document describes what grouping is and gives a few examples on how to use it.
 Refer to the <a href="reference/search-api-reference.html#select">Search API</a>
-for how to set the <em>select</em> parameter, and the
-<a href="reference/grouping-syntax.html">grouping reference</a>.
+for how to set the <em>select</em> parameter,
+and the <a href="reference/grouping-syntax.html">grouping reference</a>.
 </p><p>
 The advanced grouping feature of Vespa offers a flexible language in
 which to describe how your query hits should be grouped, aggregated
@@ -16,21 +16,17 @@ a high-level program. The core operations are <code>all</code>
 (process a list of elements as a whole), <code>each</code> (process
 each element in a list separately), <code>group</code> (group the
 elements of a list into sub-lists) and <code>output</code> (present
-something to the user). These operations may be nested to describe a
-great variety of behavior.
+something to the user). These operations may be nested to describe a great variety of behavior.
 </p><p>
-The engine will carry out the desired program by a distributed
-execution against the nodes containing the data.  As realizing such
-programs over a distributed data set requires more network roundtrips
-than a regular search query, these queries are more expensive than
-regular queries. However, executing such programs are always much more
-efficient than achieving the same end result by issuing multiple
-independent queries to the engine.
+The engine will carry out the desired program by a distributed execution against the nodes containing the data.
+As realizing such programs over a distributed data set requires more network roundtrips than a regular search query,
+these queries are more expensive than regular queries.
+However, executing such programs are always much more efficient
+than achieving the same end result by issuing multiple independent queries to the engine.
 </p><p>
-For the entirety of this document, we assume that you have an index of
-engine part purchases that contains the following data:
+For the entirety of this document, assume an index of engine part purchases:
 </p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>Date</th>
@@ -186,38 +182,31 @@ engine part purchases that contains the following data:
 
 
 
-<h1 id="basic-grouping">Basic Grouping</h1>
+<h2 id="basic-grouping">Basic Grouping</h2>
 <p>
-Say you wanted to return the sum price of purchases that have been recorded on a
-per-customer basis. First of all you would need to include every document
-available, so you query by document
-type <code>/search/?yql=select * from sources * where sddocname contains 'purchase';</code>. Note
-that you can (and should) swap <code>sddocname contains "purchase"</code> for a valid Vespa
-query - we are only querying all of the documents for the sake of completeness
-in this
-example. E.g. <code>/search/?yql=select * from sources * where customer contains 'smith';</code>
-would only produce groups related to Mr. Smith (and it would also be a faster
-query, because there would be fewer hits to process).
+Example: <em>Return the total sum of purchases per customer</em> - steps:
 </p><p>
-Second, you need to specify an expression on which to perform
-grouping. In our case, we would use <code>group(customer)</code>.
+Select all documents, query by document type <em>purchase</em>:
 </p><p>
-Next, you need to specify what to present to the user. If you wanted
-to present the sum of the purchase price for each customer, you would
-add an <code>each(output(sum(price)))</code>
-clause. The <code>each</code> in this case would refer to each of the
-groups produced by <code>group(customer)</code>.
+<code>/search/?yql=select * from sources * where sddocname contains "purchase"</code>.
 </p><p>
-Finally, seeing that you do not need the regular hits returned, you
-may append <code>hits=0</code> to reduce latency. This amounts to the
-following complete query:
+Specify the grouping expression:
+</p><p>
+<code>group(customer)</code>
+</p><p>
+Specify output - return the sum of the purchase price for each customer.
+<code>each</code> refers to each of the groups produced by <code>group(customer)</code>:
+</p><p>
+<code>each(output(sum(price)))</code>
+</p><p>
+Set <code>hits=0</code> to reduce latency and data in result set - the documents need not be returned - final query:
 </p>
 <pre>
-/search/?hits=0&amp;yql=select * from sources * where sddocname contains 'purchase' |
+/search/?hits=0&amp;yql=select * from sources * where sddocname contains "purchase" |
                     all(group(customer) each(output(sum(price))));
 </pre>
 <p>
-In order to execute this query it needs to have all its special characters escaped. For the sake of readability, our queries are left unescaped in this article. For your reference, however, this is how the above query comes out when escaped:<br/>
+URL encoded equivalent:<br/>
 <code>
 /search/?hits=0&amp; yql=select%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20%27purchase%27%20%7C%20
 all(group(customer)%20each(output(sum(price))))%3B
@@ -225,7 +214,7 @@ all(group(customer)%20each(output(sum(price))))%3B
 </p><p>
 Result:
 </p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -248,16 +237,12 @@ Result:
 </tbody>
 </table>
 <p>
-Or you may choose to query for the sum price of purchases on a
-per-date basis;
+Example: <em>Sum price of purchases <a href="reference/grouping-syntax.html#time-and-date">per date</a></em>:
 </p>
 <pre>
 select (&hellip;) | all(group(time.date(date)) each(output(sum(price))));
 </pre>
-<p>
-which produces:
-</p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -291,16 +276,22 @@ which produces:
   </tr>
 </tbody>
 </table>
-
-
-<h2 id="searcherapi">Search Container API</h2>
-<p>
-As well as adding a pipeline step to your YQL+ query, you can use the
-programmatic API to construct and run a grouping request. This allows multiple
-grouping requests to run in parallel, and does not collide with
-the <code>yql</code> parameter.  To programmatically run a grouping request,
-do:
 </p>
+Note: in examples above, <em>all</em> documents are evaluated.
+Modify the query to add filters, like
+</p><p>
+<code>/search/?yql=select * from sources * where customer contains "smith";</code>
+</p><p>
+This also cuts latency.
+<p>
+
+
+<h3 id="search-container-api">Search Container API</h3>
+<p>
+As well as adding a pipeline step to the query (above),
+one can use the programmatic API to execute grouping requests.
+This allows multiple grouping requests to run in parallel, and does not collide with
+the <code>yql</code> parameter - example:
 <pre>
 @Override
 public Result search(Query query, Execution execution) {
@@ -327,41 +318,32 @@ public Result search(Query query, Execution execution) {
     return result;
 }
 </pre>
-<p>
-Please see the
+Refer to the
 <a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/package-summary.html">
-API documentation</a> for the complete reference on this.
+API documentation</a> for the complete reference.
 </p>
 
 
 
-<h1 id="items">Expressions</h1>
+<h2 id="expressions">Expressions</h2>
 <p>
-Instead of just grouping on some attribute value, the
-<code>group</code> clause may contain arbitrarily complex expressions -
+Instead of just grouping on some attribute value,
+the <code>group</code> clause may contain arbitrarily complex expressions -
 see <code>group</code> in the
-<a href="reference/grouping-syntax.html">syntax reference</a> for an exhaustive list.
-You may do things like:
-</p>
+<a href="reference/grouping-syntax.html">grouping reference</a> for an exhaustive list.
+Examples:
 <ul>
-<li>Selecting the minimum or maximum of sub-expressions,</li>
-<li>addition, subtraction, multiplication, division, and even modulo
-    of sub-expressions,</li>
-<li>bitwise operations on sub-expressions,</li>
-<li>concatenation of the results of sub-expressions,</li>
-<li>and more.</li>
+    <li>Select the minimum or maximum of sub-expressions</li>
+    <li>Addition, subtraction, multiplication, division, and even modulo of sub-expressions</li>
+    <li>Bitwise operations on sub-expressions</li>
+    <li>Concatenation of the results of sub-expressions</li>
 </ul>
-<p>
-If you wanted to sum the prices of purchases on per-hour-of-day basis,
-do:
+Sum the prices of purchases on per-hour-of-day basis:
 </p>
 <pre>
 select (&hellip;) | all(group(mod(div(date,mul(60,60)),24)) each(output(sum(price))));
 </pre>
-<p>
-which produces:
-</p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -392,18 +374,14 @@ which produces:
 </tbody>
 </table>
 <p>
-These types of expressions may also be used inside <code>output</code>
-operations, so instead of simply calculating the sum price of the
-grouped purchases, you could calculate the sum income after taxes per
-customer by doing:
+These types of expressions may also be used inside <code>output</code> operations,
+so instead of simply calculating the sum price of the grouped purchases,
+calculate the sum income after taxes per customer:
 </p>
 <pre>
 select (&hellip;) | all(group(customer) each(output(sum(mul(price,sub(1,tax))))));
 </pre>
-<p>
-which produces:
-</p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -426,54 +404,47 @@ which produces:
 </tbody>
 </table>
 <p>
-Note that the validity of an expression depends on the current level
-of nesting. For example; while <code>sum(price)</code> would be a
-valid expression for a group of hits, <code>price</code> would not. As
-a general rule, each operator within an expression either applies to a
-single hit or aggregates values across a group.
+Note that the validity of an expression depends on the current nesting level.
+E.g. while <code>sum(price)</code> would be a valid expression for a group of hits, <code>price</code> would not.
+As a general rule, each operator within an expression either applies to a single hit or aggregates values across a group.
 </p>
 
 
 
-<h1 id="order">Ordering and Limiting Groups</h1>
+<h2 id="ordering-and-limiting-groups">Ordering and Limiting Groups</h2>
 <p>
-In most realistic scenarios you may be producing a large collection of
-groups, perhaps even too large to display or process. This is handled
-by ordering your groups according to some criteria, and then limiting
-the number of groups to return. However, these are decoupled features,
-and you may of course choose to do only one or the other.
+In many scenarios, a large collection of groups is produced, possibly too large to display or process.
+This is handled by ordering groups, then limiting, the number of groups to return.
 </p><p>
-The <code>order</code> clause accepts a list of one or more
-expressions. Each of the arguments to <code>order</code> is prefixed
-by either a plus for ascending order, or a minus for descending order.
+The <code>order</code> clause accepts a list of one or more expressions.
+Each of the arguments to <code>order</code> is prefixed by either a plus/minus for ascending/descending order.
 </p><p>
-Limiting the number of groups is done by using a constraint. The one
-used here is <code>max</code> which represent an upper limit for the
-number of groups presented in the result. However <code>max</code> can not be
-mentioned without its ugly brother <code>precision</code>. As finding a correct
-global maximum would require us to fetch all groups from all nodes and merging
-them together. This would result in a huge network bandwidth usage and will not
-scale. As a compromise <code>precision</code> was introduced. In most cases the
-groups that are the best on one node would be among the best on another node too.
-If you want the 2 globally best groups you should make an educated guess on how
-many samples you need to fetch from each node in order to get a correct answer.
-This educated guess you should use as <code>precision</code>. An initial factor
-of 3 has proven to be quite good in most usecases. However there is one important
-exception. If you do not give an explicit <code>order</code> constraint you do
-not need <code>precision</code>. Then local ordering will be the same as global
-ordering. Ordering will not change after a merge operation.
+Limiting the number of groups using <code>max</code> and <code>precision</code> - the latter is the number of groups
+returned per content node to be merged to the global result.
+Larger document distribution skews hence require a higher <code>precision</code> for accurate results.
 </p><p>
-Say you wanted to see the two customers who had the most number of
-purchases, presenting the sum price for each customer;
+Example: To find the 2 globally best groups, make an educated guess on how
+many samples are needed to fetch from each node in order to get the right groups.
+This is the <code>precision</code>.
+An initial factor of 3 has proven to be quite good in most usecases.
+If however the data for customer 'Jones' was spread on 3 different content nodes.
+'Jones' might be among the 2 best on only one node.  But based on the distribution
+of the data we have concluded by earlier tests that if we fetch 5.67 as many groups
+as we need we will have a correct answer with at least 99.999% confidence. So then
+we just use 6 times as much groups when doing the merge.
+</p><p>
+However there is one exception.
+Without an <code>order</code> constraint, <code>precision</code> is not required.
+Then local ordering will be the same as global ordering.
+Ordering will not change after a merge operation.
+</p><p>
+Example: The two customers with most purchases, returning the sum for each;
 </p>
 <pre>
-select (&hellip;) | all(group(customer) max(2) order(-count())
-                 each(output(sum(price))));
+select (&hellip;) | all(group(customer) max(2) precision(12) order(-count())
+    each(output(sum(price))));
 </pre>
-<p>
-which produces:
-</p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -491,56 +462,38 @@ which produces:
   </tr>
 </tbody>
 </table>
-<p>
-If however the data for customer 'Jones' was spread on 3 different backend nodes.
-'Jones' might be among the 2 best on only one node.  But based on the distribution
-of the data we have concluded by earlier tests that if we fetch 5.67 as many groups
-as we need we will have a correct answer with at least 99.999% confidence. So then
-we just use 6 times as much groups when doing the merge. And that would look like this.
-</p>
-<pre>
-select (&hellip;) | all(group(customer) max(2) precision(12) order(-count())
-                 each(output(sum(price))));
-</pre>
 
 
-<h2 id="max-and-precision-rules">Important rules for <code>max</code> and <code>precision</code></h2>
-<p>
-As <code>max</code> and <code>precision</code> are not intuitive right
-away we will give a few simple guidelines:
-</p>
+<h3 id="rules-for-max-and-precision">Rules for <code>max</code> and <code>precision</code></h3>
 <ul>
-<li><code>order</code> clause changes ordering of groups after a merge
-    operation for the following
-    aggregators: <code>count</code>, <code>avg</code> and <code>
-    sum</code>.</li>
-<li><code>order</code> clause <strong>will not</strong> change ordering of
-    groups after a merge operation when <code>max</code>
-    or <code>min</code> is used.</li>
-<li>default order, which is <code>max(relevancy())</code>, <strong>does
-    not</strong> require the use of <code>precision</code>.</li>
+<li>
+    <code>order</code> changes ordering of groups after a merge operation for the following
+    aggregators: <code>count</code>, <code>avg</code> and <code> sum</code>
+</li><li>
+    <code>order</code> <strong>will not</strong> change ordering of groups after a merge operation
+    when <code>max</code> or <code>min</code> is used
+</li><li>
+    Default order, <code>max(relevancy())</code>, <strong>does not</strong> require use of <code>precision</code>
+</li>
 </ul>
 
 
-<h2 id="pagination">Limiting and pagination</h2>
+<h3 id="limiting-and-pagination">Limiting and pagination</h3>
 <p>
-Instead of offering an <code>offset</code> clause to accompany
-the <code>max</code> clause to support pagination, grouping supports
-cookie-esque "continuation" objects that are passed as annotations to the
-grouping statement. The "continuations" annotation is a list of zero or more
-continuation strings.  These strings can be found inside the grouping result
-itself;
-</p>
+Grouping supports <em>continuation</em> objects that are passed as annotations to the grouping statement.
+The <em>continuations</em> annotation is a list of zero or more continuation strings, returned in the grouping result:
 <ul>
-<li>A single "this" continuation per <code>select</code>. This can be regarded
-as the session identifier, as submitting this will reproduce the exact same
-result from which it was taken.</li>
-<li>Zero or one "prev" continuation per group- and hit list. Submit any number
-of these to retrieve the next pages of the corresponding lists.</li>
-<li>Zero or one "next" continuation per group- and hit list. Submit any number
-of these to retrieve the previous pages of the corresponding lists.</li>
+<li>
+    A single <em>this</em> continuation per <code>select</code>.
+    This can be regarded as the session identifier,
+    as submitting this will reproduce the exact same result from which it was taken
+</li><li>
+    Zero or one <em>prev</em> continuation per group- and hit list.
+    Submit any number of these to retrieve the next pages of the corresponding lists
+</li><li>
+    Zero or one <em>next</em> continuation per group- and hit list.
+    Submit any number of these to retrieve the previous pages of the corresponding lists</li>
 </ul>
-<p>
 For example, given the result:
 </p>
 <pre>
@@ -585,56 +538,39 @@ For example, given the result:
 }
 </pre>
 <p>
-One may now reproduce the same result by passing the "this" continuation along
-the orginal select:
-</p>
+one may now reproduce the same result by passing the <em>this</em> continuation along the orginal select:
 <pre>
 select (&hellip;) | [{ 'continuations':['BGAAABEBCA'] }]all(&hellip;);
 </pre>
-<p>
-To display the next page of customers, pass the "this" continuation of the root
-group, and the "next" continuation of the customer list:
-</p>
+To display the next page of customers, pass the <em>this</em> continuation of the root
+group, and the <em>next</em> continuation of the customer list:
 <pre>
 select (&hellip;) | [{ 'continuations':['BGAAABEBCA', 'BGAAABEBEBC'] }]all(&hellip;);
 </pre>
-<p>
-And finally, to display the previous page of customers, pass the "this"
-continuation of the root group, and the "prev" continuation of the customer
-list:
-</p>
+To display the previous page of customers, pass the <em>this</em>
+continuation of the root group, and the <em>prev</em> continuation of the customer list:
 <pre>
 select (&hellip;) | [{ 'continuations':['BGAAABEBCA', BGAAABEABC'] }]all(&hellip;);
 </pre>
-<p class="alert alert-success">
-The "continuations" annotation is an ordered list of
-continuation strings. These are combined by replacement, so that a continuation
-given later will replace any shared state with a continuation given
-before. Also, when using the "continuations" annotation, one must always
-pass the "this" continuation as its first element.
+The <em>continuations</em> annotation is an ordered list of continuation strings.
+These are combined by replacement,
+so that a continuation given later will replace any shared state with a continuation given before.
+Also, when using the <em>continuations</em> annotation, always pass the <em>this</em> continuation as its first element.
 </p>
 
 
 
-<h1 id="hits">Presenting Hits per Group</h1>
+<h2 id="presenting-hits-per-group">Presenting Hits per Group</h2>
 <p>
-A special expression that can only be used inside the
-<code>output</code> operation is <code>summary</code>. This will
-result in the presentation of actual hits within the
-group. Constraints may be used to limit the number of hits presented.
-</p><p>
-To see the three most expensive parts sold to each registered
-customer, do:
-</p>
+Use <code>summary</code> to print the fields for a hit,
+and <code>max</code> to limit the number of hits per group.
+Example: Return the three most expensive parts per customer:
 <pre>
-/search/?yql=select * from sources * where sddocname contains 'purchase' |
+/search/?yql=select * from sources * where sddocname contains "purchase" |
              all(group(customer) each(max(3) each(output(summary()))));
         &amp;ranking=pricerank
 </pre>
-<p>
-which produces:
-</p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -768,40 +704,38 @@ which produces:
   </tr>
 </tbody>
 </table>
-<p>
-Notice how we must append a <code>ranking=pricerank</code> parameter to the
-query in order to get ordering of the hits. The ranking parameter points a <a
-href="ranking.html">rank profile</a> that is used for ranking the hits. The
-following ranking expression will rank the hits by their price attribute:
-</p>
-
-<pre>
+Notes on ordering in the example above:
+<ul>
+<li>
+    The <code>order</code> clause is a directive for <em>group</em> ordering, not <em>hit</em> ordering.
+    Here, there is no order clause on the groups, hence default ordering <code>max(relevancy())</code> is used.
+    In this case, the query is "all documents", hence all groups are equally relevant and the group order is random.
+</li><li>
+    To order hits inside groups, use ranking. Add <code>ranking=pricerank</code> to the query
+    to use the pricerank <a href="ranking.html">rank profile</a> to rank by price:
+    </p>
+    <pre>
 rank-profile pricerank inherits default {
     first-phase {
         expression: attribute(price)
     }
-}
-</pre>
-<p>
-The <code>order</code> clause available in the <code>select</code> parameter is
-a directive for <em>group</em> ordering, not <em>hit</em> ordering.
+}</pre>
+</li>
+</ul>
 </p>
 
 
 
-<h1 id="subselect">Nested Groups</h1>
+<h2 id="nested-groups">Nested Groups</h2>
 <p>
-One of the greatest features that advanced grouping offers, is the
-ability to do nested groups. This offers unprecedented drilling
-capabilities, because there are no limits to nesting depth or
-presented information on any level.
-</p><p>
-To find out how much each customer has spent per day, do
+Groups can be nested. This offers great drilling capabilities,
+as there are no limits to nesting depth or presented information on any level.
+Example: How much each customer has spent per day by grouping on customer, then date:
 </p>
 <pre>
 select (&hellip;) | all(group(customer) each(group(time.date(date)) each(output(sum(price)))));
 </pre>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -908,26 +842,20 @@ select (&hellip;) | all(group(customer) each(group(time.date(date)) each(output(
 </tbody>
 </table>
 <p>
-The <code>summary</code> expression described
-<a href="#hits">earlier</a> may be used to present hits inside any
-group at any nesting level. Let us use this to query for all items on
-a per-customer basis, displaying the most expensive hit for each
-customer, with subgroups of purchases on a per-date basis. We also
-want to include the sum price for each customer, both as a grand total
-and broken down on a per-day basis. The query
-</p>
+Use this to query for all items on a per-customer basis, displaying the most expensive hit for each customer,
+with subgroups of purchases on a per-date basis.
+Use the <code><a href="#presenting-hits-per-group">summary</a></code> clause
+to show hits inside any group at any nesting level.
+Include the sum price for each customer, both as a grand total and broken down on a per-day basis:
 <pre>
-/search/?yql=select * from sources * where sddocname contains 'purchase' |
+/search/?yql=select * from sources * where sddocname contains "purchase" |
              all(group(customer)
                  each(max(1) output(sum(price)) each(output(summary())))
                       each(group(time.date(date))
                       each(max(10) output(sum(price)) each(output(summary())))));
         &amp;ranking=pricerank
 </pre>
-<p>
-produces the following:
-</p>
-<table class="table table-striped">
+<table class="table">
 <thead>
 <tr>
   <th>GroupId</th>
@@ -1464,5 +1392,4 @@ produces the following:
   </tr>
 </tbody>
 </table>
-
-
+</p>
