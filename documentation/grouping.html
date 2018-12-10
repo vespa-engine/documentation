@@ -7,22 +7,24 @@ title: "Grouping Information in Results"
 This document describes what grouping is and gives a few examples on how to use it.
 Refer to the <a href="reference/search-api-reference.html#select">Search API</a>
 for how to set the <em>select</em> parameter,
-and the <a href="reference/grouping-syntax.html">grouping reference</a>.
+and the <a href="reference/grouping-syntax.html">grouping reference</a> for details.
 </p><p>
-The advanced grouping feature of Vespa offers a flexible language in
-which to describe how your query hits should be grouped, aggregated
-and presented to the user. The grouping parameter can be thought of as
-a high-level program. The core operations are <code>all</code>
-(process a list of elements as a whole), <code>each</code> (process
-each element in a list separately), <code>group</code> (group the
-elements of a list into sub-lists) and <code>output</code> (present
-something to the user). These operations may be nested to describe a great variety of behavior.
+Vespa grouping has a flexible language in
+which to describe how the query hits should be grouped, aggregated and presented in results.
+The grouping parameter can be thought of as a high-level program.
+The core operations are <code>all</code> (process a list of elements as a whole),
+<code>each</code> (process each element in a list separately),
+<code>group</code> (group the elements of a list into sub-lists) and
+<code>output</code> (output result).
 </p><p>
-The engine will carry out the desired program by a distributed execution against the nodes containing the data.
+The operations can be nested.
+</p><p>
+Vespa distributes and executes the grouping program on content nodes, and merges results on container nodes -
+in multiple phases, as needed.
 As realizing such programs over a distributed data set requires more network roundtrips than a regular search query,
 these queries are more expensive than regular queries.
-However, executing such programs are always much more efficient
-than achieving the same end result by issuing multiple independent queries to the engine.
+However, executing such programs are more efficient
+than achieving the same end result by issuing multiple independent queries to Vespa.
 </p><p>
 For the entirety of this document, assume an index of engine part purchases:
 </p>
@@ -237,7 +239,7 @@ Result:
 </tbody>
 </table>
 <p>
-Example: <em>Sum price of purchases <a href="#time-and-date">per date</a></em>:
+Example: <em>Sum price of purchases <a href="#time-and-date">per date</a>:</em>
 </p>
 <pre>
 select (&hellip;) | all(group(time.date(date)) each(output(sum(price))));
@@ -286,130 +288,6 @@ This also cuts latency.
 <p>
 
 
-<h3 id="search-container-api">Search Container API</h3>
-<p>
-As well as adding a pipeline step to the query (above),
-one can use the programmatic API to execute grouping requests.
-This allows multiple grouping requests to run in parallel, and does not collide with
-the <code>yql</code> parameter - example:
-<pre>
-@Override
-public Result search(Query query, Execution execution) {
-    // Create grouping request.
-    GroupingRequest request = GroupingRequest.newInstance(query);
-    request.setRootOperation(new AllOperation()
-            .setGroupBy(new AttributeValue(&quot;foo&quot;))
-            .addChild(new EachOperation()
-                .addOutput(new CountAggregator().setLabel(&quot;count&quot;))));
-
-    // Perform grouping request.
-    Result result = execution.search(query);
-
-    // Process grouping result.
-    Group root = request.getResultGroup(result);
-    GroupList foo = root.getGroupList(&quot;foo&quot;);
-    for (Hit hit : foo) {
-        Group group = (Group)hit;
-        Long count = (Long)group.getField(&quot;count&quot;);
-        // TODO: Process group and count.
-    }
-
-    // Pass results back to calling searcher.
-    return result;
-}
-</pre>
-Refer to the
-<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/package-summary.html">
-API documentation</a> for the complete reference.
-</p>
-
-
-
-<h2 id="expressions">Expressions</h2>
-<p>
-Instead of just grouping on some attribute value,
-the <code>group</code> clause may contain arbitrarily complex expressions -
-see <code>group</code> in the
-<a href="reference/grouping-syntax.html">grouping reference</a> for an exhaustive list.
-Examples:
-<ul>
-    <li>Select the minimum or maximum of sub-expressions</li>
-    <li>Addition, subtraction, multiplication, division, and even modulo of sub-expressions</li>
-    <li>Bitwise operations on sub-expressions</li>
-    <li>Concatenation of the results of sub-expressions</li>
-</ul>
-Sum the prices of purchases on per-hour-of-day basis:
-</p>
-<pre>
-select (&hellip;) | all(group(mod(div(date,mul(60,60)),24)) each(output(sum(price))));
-</pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th>sum(price)</th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>09:00</td>
-  <td>$1 000</td>
-  </tr>
-<tr>
-  <td>10:00</td>
-  <td>$22 367</td>
-  </tr>
-<tr>
-  <td>11:00</td>
-  <td>$23 524</td>
-  </tr>
-<tr>
-  <td>12:00</td>
-  <td>$26 181</td>
-  </tr>
-<tr>
-  <td>13:00</td>
-  <td>$6 765</td>
-  </tr>
-</tbody>
-</table>
-<p>
-These types of expressions may also be used inside <code>output</code> operations,
-so instead of simply calculating the sum price of the grouped purchases,
-calculate the sum income after taxes per customer:
-</p>
-<pre>
-select (&hellip;) | all(group(customer) each(output(sum(mul(price,sub(1,tax))))));
-</pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th>sum(mul(price,sub(1,tax)))</th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>Brown</td>
-  <td>$17 193</td>
-  </tr>
-<tr>
-  <td>Jones</td>
-  <td>$32 868</td>
-  </tr>
-<tr>
-  <td>Smith</td>
-  <td>$15 897</td>
-  </tr>
-</tbody>
-</table>
-<p>
-Note that the validity of an expression depends on the current nesting level.
-E.g. while <code>sum(price)</code> would be a valid expression for a group of hits, <code>price</code> would not.
-As a general rule, each operator within an expression either applies to a single hit or aggregates values across a group.
-</p>
-
-
 
 <h2 id="ordering-and-limiting-groups">Ordering and Limiting Groups</h2>
 <p>
@@ -419,8 +297,8 @@ This is handled by ordering groups, then limiting, the number of groups to retur
 The <code>order</code> clause accepts a list of one or more expressions.
 Each of the arguments to <code>order</code> is prefixed by either a plus/minus for ascending/descending order.
 </p><p>
-Limiting the number of groups using <code>max</code> and <code>precision</code> - the latter is the number of groups
-returned per content node to be merged to the global result.
+Limit the number of groups using <code>max</code> and <code>precision</code> -
+the latter is the number of groups returned per content node to be merged to the global result.
 Larger document distribution skews hence require a higher <code>precision</code> for accurate results.
 </p><p>
 Example: To find the 2 globally best groups, make an educated guess on how
@@ -438,7 +316,7 @@ Without an <code>order</code> constraint, <code>precision</code> is not required
 Then local ordering will be the same as global ordering.
 Ordering will not change after a merge operation.
 </p><p>
-Example: The two customers with most purchases, returning the sum for each;
+Example: <em>The two customers with most purchases, returning the sum for each:</em>
 </p>
 <pre>
 select (&hellip;) | all(group(customer) max(2) precision(12) order(-count())
@@ -464,89 +342,8 @@ select (&hellip;) | all(group(customer) max(2) precision(12) order(-count())
 </table>
 
 
-<h3 id="limiting-and-pagination">Limiting and pagination</h3>
-<p>
-Grouping supports <em>continuation</em> objects that are passed as annotations to the grouping statement.
-The <em>continuations</em> annotation is a list of zero or more continuation strings, returned in the grouping result:
-<ul>
-<li>
-    A single <em>this</em> continuation per <code>select</code>.
-    This can be regarded as the session identifier,
-    as submitting this will reproduce the exact same result from which it was taken
-</li><li>
-    Zero or one <em>prev</em> continuation per group- and hit list.
-    Submit any number of these to retrieve the next pages of the corresponding lists
-</li><li>
-    Zero or one <em>next</em> continuation per group- and hit list.
-    Submit any number of these to retrieve the previous pages of the corresponding lists</li>
-</ul>
-For example, given the result:
-</p>
-<pre>
-{
-    "root": {
-        "children": [
-            {
-                "children": [
-                    {
-                        "children": [
-                            {
-                                "fields": {
-                                    "count()": 7
-                                },
-                                "value": "Jones",
-                                "id": "group:string:Jones",
-                                "relevance": 1.0
-                            }
-                        ],
-                        "continuation": {
-                            "next": "BGAAABEBEBC",
-                            "prev": "BGAAABEABC"
-                        },
-                        "id": "grouplist:customer",
-                        "label": "customer",
-                        "relevance": 1.0
-                    }
-                ],
-                "continuation": {
-                    "this": "BGAAABEBCA"
-                },
-                "id": "group:root:0",
-                "relevance": 1.0
-            }
-        ],
-        "fields": {
-            "totalCount": 20
-        },
-        "id": "toplevel",
-        "relevance": 1.0
-    }
-}
-</pre>
-<p>
-one may now reproduce the same result by passing the <em>this</em> continuation along the orginal select:
-<pre>
-select (&hellip;) | [{ 'continuations':['BGAAABEBCA'] }]all(&hellip;);
-</pre>
-To display the next page of customers, pass the <em>this</em> continuation of the root
-group, and the <em>next</em> continuation of the customer list:
-<pre>
-select (&hellip;) | [{ 'continuations':['BGAAABEBCA', 'BGAAABEBEBC'] }]all(&hellip;);
-</pre>
-To display the previous page of customers, pass the <em>this</em>
-continuation of the root group, and the <em>prev</em> continuation of the customer list:
-<pre>
-select (&hellip;) | [{ 'continuations':['BGAAABEBCA', BGAAABEABC'] }]all(&hellip;);
-</pre>
-The <em>continuations</em> annotation is an ordered list of continuation strings.
-These are combined by replacement,
-so that a continuation given later will replace any shared state with a continuation given before.
-Also, when using the <em>continuations</em> annotation, always pass the <em>this</em> continuation as its first element.
-</p>
 
-
-
-<h2 id="presenting-hits-per-group">Presenting Hits per Group</h2>
+<h2 id="hits-per-group">Hits per Group</h2>
 <p>
 Use <code>summary</code> to print the fields for a hit,
 and <code>max</code> to limit the number of hits per group.
@@ -830,7 +627,7 @@ select (&hellip;) | all(group(customer) each(group(time.date(date)) each(output(
 <p>
 Use this to query for all items on a per-customer basis, displaying the most expensive hit for each customer,
 with subgroups of purchases on a per-date basis.
-Use the <code><a href="#presenting-hits-per-group">summary</a></code> clause
+Use the <code><a href="#hits-per-group">summary</a></code> clause
 to show hits inside any group at any nesting level.
 Include the sum price for each customer, both as a grand total and broken down on a per-day basis:
 <pre>
@@ -1382,7 +1179,212 @@ Include the sum price for each customer, both as a grand total and broken down o
 
 
 
-<h2 id="examples">Examples</h2>
+<h2 id="pagination">Pagination</h2>
+<p>
+Grouping supports <em>continuation</em> objects that are passed as annotations to the grouping statement.
+The <em>continuations</em> annotation is a list of zero or more continuation strings, returned in the grouping result:
+<ul>
+<li>
+    A single <em>this</em> continuation per <code>select</code>.
+    This can be regarded as the session identifier,
+    as submitting this will reproduce the exact same result from which it was taken
+</li><li>
+    Zero or one <em>prev</em>/<em>next</em> continuation per group- and hit list.
+    Submit any number of these to retrieve the next/previous pages of the corresponding lists
+</li>
+</ul>
+For example, given the result:
+</p>
+<pre>
+{
+    "root": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "children": [
+                            {
+                                "fields": {
+                                    "count()": 7
+                                },
+                                "value": "Jones",
+                                "id": "group:string:Jones",
+                                "relevance": 1.0
+                            }
+                        ],
+                        "continuation": {
+                            "next": "BGAAABEBEBC",
+                            "prev": "BGAAABEABC"
+                        },
+                        "id": "grouplist:customer",
+                        "label": "customer",
+                        "relevance": 1.0
+                    }
+                ],
+                "continuation": {
+                    "this": "BGAAABEBCA"
+                },
+                "id": "group:root:0",
+                "relevance": 1.0
+            }
+        ],
+        "fields": {
+            "totalCount": 20
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+</pre>
+<p>
+one may now reproduce the same result by passing the <em>this</em> continuation along the orginal select:
+<pre>
+select (&hellip;) | [{ 'continuations':['BGAAABEBCA'] }]all(&hellip;);
+</pre>
+To display the next page of customers, pass the <em>this</em> continuation of the root
+group, and the <em>next</em> continuation of the customer list:
+<pre>
+select (&hellip;) | [{ 'continuations':['BGAAABEBCA', 'BGAAABEBEBC'] }]all(&hellip;);
+</pre>
+To display the previous page of customers, pass the <em>this</em>
+continuation of the root group, and the <em>prev</em> continuation of the customer list:
+<pre>
+select (&hellip;) | [{ 'continuations':['BGAAABEBCA', BGAAABEABC'] }]all(&hellip;);
+</pre>
+The <em>continuations</em> annotation is an ordered list of continuation strings.
+These are combined by replacement,
+so that a continuation given later will replace any shared state with a continuation given before.
+Also, when using the <em>continuations</em> annotation, always pass the <em>this</em> continuation as its first element.
+</p>
+
+
+
+<h2 id="expressions">Expressions</h2>
+<p>
+Instead of just grouping on some attribute value,
+the <code>group</code> clause may contain arbitrarily complex expressions -
+see <code>group</code> in the
+<a href="reference/grouping-syntax.html">grouping reference</a> for an exhaustive list.
+Examples:
+<ul>
+    <li>Select the minimum or maximum of sub-expressions</li>
+    <li>Addition, subtraction, multiplication, division, and even modulo of sub-expressions</li>
+    <li>Bitwise operations on sub-expressions</li>
+    <li>Concatenation of the results of sub-expressions</li>
+</ul>
+Sum the prices of purchases on per-hour-of-day basis:
+</p>
+<pre>
+select (&hellip;) | all(group(mod(div(date,mul(60,60)),24)) each(output(sum(price))));
+</pre>
+<table class="table">
+<thead>
+<tr>
+  <th>GroupId</th>
+  <th>sum(price)</th>
+  </tr>
+</thead>
+<tbody>
+<tr>
+  <td>09:00</td>
+  <td>$1 000</td>
+  </tr>
+<tr>
+  <td>10:00</td>
+  <td>$22 367</td>
+  </tr>
+<tr>
+  <td>11:00</td>
+  <td>$23 524</td>
+  </tr>
+<tr>
+  <td>12:00</td>
+  <td>$26 181</td>
+  </tr>
+<tr>
+  <td>13:00</td>
+  <td>$6 765</td>
+  </tr>
+</tbody>
+</table>
+<p>
+These types of expressions may also be used inside <code>output</code> operations,
+so instead of simply calculating the sum price of the grouped purchases,
+calculate the sum income after taxes per customer:
+</p>
+<pre>
+select (&hellip;) | all(group(customer) each(output(sum(mul(price,sub(1,tax))))));
+</pre>
+<table class="table">
+<thead>
+<tr>
+  <th>GroupId</th>
+  <th>sum(mul(price,sub(1,tax)))</th>
+  </tr>
+</thead>
+<tbody>
+<tr>
+  <td>Brown</td>
+  <td>$17 193</td>
+  </tr>
+<tr>
+  <td>Jones</td>
+  <td>$32 868</td>
+  </tr>
+<tr>
+  <td>Smith</td>
+  <td>$15 897</td>
+  </tr>
+</tbody>
+</table>
+<p>
+Note that the validity of an expression depends on the current nesting level.
+E.g. while <code>sum(price)</code> would be a valid expression for a group of hits, <code>price</code> would not.
+As a general rule, each operator within an expression either applies to a single hit or aggregates values across a group.
+</p>
+
+
+
+<h2 id="search-container-api">Search Container API</h2>
+<p>
+As an alternative to a textual representation,
+one can use the programmatic API to execute grouping requests.
+This allows multiple grouping requests to run in parallel,
+and does not collide with the <code>yql</code> parameter - example:
+<pre>
+@Override
+public Result search(Query query, Execution execution) {
+    // Create grouping request.
+    GroupingRequest request = GroupingRequest.newInstance(query);
+    request.setRootOperation(new AllOperation()
+            .setGroupBy(new AttributeValue(&quot;foo&quot;))
+            .addChild(new EachOperation()
+                .addOutput(new CountAggregator().setLabel(&quot;count&quot;))));
+
+    // Perform grouping request.
+    Result result = execution.search(query);
+
+    // Process grouping result.
+    Group root = request.getResultGroup(result);
+    GroupList foo = root.getGroupList(&quot;foo&quot;);
+    for (Hit hit : foo) {
+        Group group = (Group)hit;
+        Long count = (Long)group.getField(&quot;count&quot;);
+        // TODO: Process group and count.
+    }
+
+    // Pass results back to calling searcher.
+    return result;
+}
+</pre>
+Refer to the
+<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/package-summary.html">
+API documentation</a> for the complete reference.
+</p>
+
+
+
+<h2 id="more-examples">More examples</h2>
 
 
 <h3 id="topn-full-corpus">TopN / Full corpus</h3>
@@ -1397,7 +1399,7 @@ Two parallel groupings:
 Only the 1000 best hits will be grouped at each content node. Lower accuracy, but higher speed:
 <pre>/search/?yql=select (&hellip;) | all(max(1000) all(group(a) each(output(count()))));</pre>
 </p><p>
-<!-- ToDo: check - only for streaming? -->
+<!-- ToDo: check - only for streaming? what is this ... -->
 In <a href="streaming-search.html">streaming search</a>
 one can group all searched documents by adding a <code>where(true)</code> clause:
 <pre>/search/?yql=select (&hellip;) | all(group(a) each(output(count()))) where(true);</pre>
@@ -1411,38 +1413,6 @@ Do a modulo 5 operation before selecting the group:
 </p><p>
 Do <code>a + b * c</code> before selecting the group:
 <pre>/search/?yql=select (&hellip;) | all(group(a + b * c) each(output(count())));</pre>
-</p>
-
-
-<h3 id="grouping-on-maps">Grouping on maps</h3>
-<p>
-The following syntax can be used when grouping on
-<a href="reference/search-definitions-reference.html#type:map">map</a> attribute fields.
-It creates a group for values whose keys match the specified key.
-The key can either be specified directly or indirectly via a key source attribute.
-</p><p>
-Direct key on a primitive map:
-<pre>/search/?yql=select (&hellip;) | all(group(my_map{"my_key"}) each(output(count())));</pre>
-</p><p>
-Direct key on a map of struct:
-<pre>/search/?yql=select (&hellip;) | all(group(my_map{"my_key"}.my_field) each(output(count())));</pre>
-</p><p>
-Indirect key via a key source attribute:
-<pre>/search/?yql=select (&hellip;) | all(group(my_map{attribute(my_key_source)}) each(output(count())));</pre>
-</p><p>
-The key is retrieved from the key source attribute for each document.
-Note that the key source attribute must be single value and have the same data type as the key type of the map.
-Using a key source attribute is not supported for streaming search.
-</p>
-
-
-<h3 id="locale-aware-sorting">Locale aware sorting</h3>
-<p>
-Groups are sorted using locale aware sorting, with the default and primary strength values, respectively:
-<pre>/search/?yql=select (&hellip;) | all(group(s) order(max(uca(s, "sv")))
-                              each(output(count())));</pre>
-<pre>/search/?yql=select (&hellip;) | all(group(s) order(max(uca(s, "sv", "PRIMARY")))
-                              each(output(count())));</pre>
 </p>
 
 
@@ -1491,22 +1461,6 @@ Also return an XOR of the 64 most significant bits of an MD5 over the concatenat
 </p>
 
 
-<h3 id="predefined-buckets">Predefined buckets</h3>
-<p>Group on predefined buckets for raw attribute and use infinity
-to make sure the buckets cover the whole possible range:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(predefined(r, bucket(-inf, {0, 'a', 3}), bucket({1, 'u', 4}, inf)))
-             each(output(count())));</pre>
-</p><p>
-Standard mathematical start and end specifiers may be used to define the width of a bucket.
-The "(" and ")" evaluates to "[" and "&gt;" by default.
-Here, make a bucket that can only with one exact group, and use different width specifiers:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(predefined(r, bucket[-inf, "bar"&gt;, bucket["bar"], bucket&lt;"bar", inf]))
-             each(output(count())));</pre>
-</p>
-
-
 <h3 id="grouping">Grouping</h3>
 <p>Single level grouping on "a" attribute, returning at most 5 groups with full hit count as well as the 69 best hits.
 <pre>/search/?yql=select (&hellip;) |
@@ -1551,15 +1505,6 @@ As above example, but using different document summaries on each level:
                  all(max(1) each(output(summary(simplesummary))))
                  all(group(c) max(5) each(max(69) output(count())
                      each(output(summary(fastsummary)))))));</pre>
-</p><p>
-Group on fixed width buckets for numeric attribute, then on "a" attribute, count hits in leaf nodes:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(fixedwidth(n, 3)) each(group(a) max(2) each(output(count()))));</pre>
-</p><p>
-As above example, but limiting groups in level 1, and returning hits from level 2:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(fixedwidth(n, 3)) max(5) each(group(a) max(2) each(output(count())
-             each(output(summary())))));</pre>
 </p><p>
 Deep grouping with counting and hit collection on all levels:
 <pre>/search/?yql=select (&hellip;) |
@@ -1630,4 +1575,30 @@ Output the number of top level groups, and for the 10 best groups,
 output the number of unique values for attribute "b":
 <pre>/search/?yql=select (&hellip;) |
          all(group(a) max(10) output(count()) each(group(b) output(count())))</pre>
+</p>
+
+
+<h3 id="bucket-expressions">Bucket expressions</h3>
+<!-- ToDo make this clearer. Motivation, what is it for ... -->
+<p>Group on predefined buckets for raw attribute and use infinity
+to make sure the buckets cover the whole possible range:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(predefined(r, bucket(-inf, {0, 'a', 3}), bucket({1, 'u', 4}, inf)))
+             each(output(count())));</pre>
+</p><p>
+Standard mathematical start and end specifiers may be used to define the width of a bucket.
+The "(" and ")" evaluates to "[" and "&gt;" by default.
+Here, make a bucket that can only with one exact group, and use different width specifiers:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(predefined(r, bucket[-inf, "bar"&gt;, bucket["bar"], bucket&lt;"bar", inf]))
+             each(output(count())));</pre>
+</p><p>
+Group on fixed width buckets for numeric attribute, then on "a" attribute, count hits in leaf nodes:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(fixedwidth(n, 3)) each(group(a) max(2) each(output(count()))));</pre>
+</p><p>
+As above example, but limiting groups in level 1, and returning hits from level 2:
+<pre>/search/?yql=select (&hellip;) |
+         all(group(fixedwidth(n, 3)) max(5) each(group(a) max(2) each(output(count())
+             each(output(summary())))));</pre>
 </p>
