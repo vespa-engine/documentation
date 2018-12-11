@@ -1179,6 +1179,41 @@ Include the sum price for each customer, both as a grand total and broken down o
 
 
 
+<h2 id="range-grouping">Range grouping</h2>
+<p>
+In examples above, results are grouped on distinct values, like customer or date.
+To group on price:
+<pre>
+select (&hellip;) | all(group(price) each(each(output(summary()))));
+</pre>
+This gives one group per price. To group on price <em>ranges</em>, one could compress the price range.
+This gives prices in $0 - $999 in bucket 0, $1 000 - $2 000 in bucket 1 and so on:
+<pre>
+select (&hellip;) | all(group(price/1000) each(each(output(summary()))));
+</pre>
+An alternative is using <a href="reference/grouping-syntax.html#bucket-expressions">bucket expressions</a> -
+think of a bucket as the range per group.
+Group on price, make groups have a width of 1000:
+<pre>
+select (&hellip;) | all(group(fixedwidth(price,1000)) each(each(output(summary()))));
+</pre>
+Use <code>predefined</code> to configure group sizes individually (the two below are equivalent):
+<pre>
+select (&hellip;) | all(group(predefined(price, bucket(0,1000), bucket(1000,2000), bucket(2000,5000), bucket(5000,inf))) each(each(output(summary()))));
+select (&hellip;) | all(group(predefined(price, bucket[0,1000&gt;, bucket[1000,2000&gt;, bucket[2000,5000&gt;, bucket[5000,inf&gt;)) each(each(output(summary()))));
+</pre>
+This works with strings as well - put Jones and Smith in the second group:
+<pre>
+select (&hellip;) | all(group(predefined(customer, bucket(-inf,"Jones"), bucket("Jones", inf))) each(each(output(summary()))));
+</pre>
+... or have Jones in his own group:
+<pre>
+select (&hellip;) | all(group(predefined(customer, bucket&lt;-inf,"Jones"&gt;, bucket["Jones"], bucket&lt;"Jones", inf&gt;)) each(each(output(summary()))));
+</pre>
+</p>
+
+
+
 <h2 id="pagination">Pagination</h2>
 <p>
 Grouping supports <em>continuation</em> objects that are passed as annotations to the grouping statement.
@@ -1575,30 +1610,4 @@ Output the number of top level groups, and for the 10 best groups,
 output the number of unique values for attribute "b":
 <pre>/search/?yql=select (&hellip;) |
          all(group(a) max(10) output(count()) each(group(b) output(count())))</pre>
-</p>
-
-
-<h3 id="bucket-expressions">Bucket expressions</h3>
-<!-- ToDo make this clearer. Motivation, what is it for ... -->
-<p>Group on predefined buckets for raw attribute and use infinity
-to make sure the buckets cover the whole possible range:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(predefined(r, bucket(-inf, {0, 'a', 3}), bucket({1, 'u', 4}, inf)))
-             each(output(count())));</pre>
-</p><p>
-Standard mathematical start and end specifiers may be used to define the width of a bucket.
-The "(" and ")" evaluates to "[" and "&gt;" by default.
-Here, make a bucket that can only with one exact group, and use different width specifiers:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(predefined(r, bucket[-inf, "bar"&gt;, bucket["bar"], bucket&lt;"bar", inf]))
-             each(output(count())));</pre>
-</p><p>
-Group on fixed width buckets for numeric attribute, then on "a" attribute, count hits in leaf nodes:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(fixedwidth(n, 3)) each(group(a) max(2) each(output(count()))));</pre>
-</p><p>
-As above example, but limiting groups in level 1, and returning hits from level 2:
-<pre>/search/?yql=select (&hellip;) |
-         all(group(fixedwidth(n, 3)) max(5) each(group(a) max(2) each(output(count())
-             each(output(summary())))));</pre>
 </p>
