@@ -6,6 +6,13 @@ title: "Grouping Reference"
 Read the <a href="../grouping.html">Vespa grouping guide</a> first, for examples and an introduction to grouping -
 this is the Vespa grouping reference.
 </p><p>
+Refer to <a href="search-api-reference.html#groupingSessionCache">groupingSessionCache</a> for grouping performance.
+</p>
+
+
+
+<h2 id="group">group</h2>
+<p>
 Group query results using a custom expression (using the <code>group</code> clause):
 <ul>
   <li>A numerical constant</li>
@@ -33,16 +40,21 @@ Groups can contain subgroups (by using <code>each</code> and <code>group</code> 
 and may be nested to any level.
 </p><p>
 Multiple sub-groupings or outputs can be created under the same group level, using multiple parallel <code>each</code>
-or <code>all</code> clauses, and each one may be labelled using the <code><a href="#labels">as(mylabel)</a></code> construct.
+or <code>all</code> clauses, and each one may be labelled using <code><a href="#labels">as(mylabel)</a></code>.
 </p><p>
-Each level of grouping specifies a set of <a href="#aggregation">aggregates</a> to collect for all documents that belong to that
-group (using the <code>output</code> operation):
-<ul>
-  <li>The documents in a group, retrieved using a specified summary class</li>
-  <li>The count of documents in a group</li>
-  <li>The sum, average, min, max, xor or standard deviation of an expression</li>
-</ul>
+When grouping results, <em>groups</em> that contain <em>outputs</em>,
+<em>group lists</em> and <em>hit lists</em> are generated.
+Group lists contain sub-groups, and hit lists contain hits that are part of the owning group.
 </p><p>
+The identity of a group is held by its <em>id</em>.
+Scalar identities such as long, double and string, are directly available from the <em>id</em>,
+whereas range identities used for bucket aggregation are separated into the sub-nodes <em>from</em> and <em>to</em>.
+Refer to the <a href="default-result-format.html">result format reference</a>.
+</p>
+
+
+<h2 id="order">order</h2>
+<p>
 Each level of grouping may specify how to order its groups (using <code>order</code>):
 <ul>
   <li>Ordering can be done using any of the available aggregates</li>
@@ -68,129 +80,24 @@ returning only first <em>n</em> groups as specified by <code>order</code>:
 </li><li>
     Default order, <code>max(relevancy())</code>, <strong>does not</strong> require use of <code>precision</code>
 </li></ul>
-</p><p>
-Count the <a href="../grouping.html#counting-unique-groups">number of unique groups</a>
-for a level using the <code>count</code> aggregator.
-Note that <code>count</code> operates independently of the <code>max</code> clause.
-</p><p>
-Paginate through group- and hit-lists using the "<a href="#continue-parameter">continuations</a>" query parameter.
-</p><p>
-Group on <a href="#grouping-of-multivalue-attributes">multivalued attributes</a>.
-Most grouping functions will just handle the elements of
-multivalued attributes separately, as if they were all individual values in separate documents.
-</p><p>
-The <code><a href="#interpolated-lookup">interpolatedlookup</a></code> function
-counts elements in a sorted array that are less than an expression,
-with linear interpolation if the expression is between element values.
 </p>
 
 
 
-
-<h2 id="select-parameter-language-grammar">Select parameter language grammar</h2>
-<pre>
-request    ::= group [ "where" "(" ( "true" | "$query" ) ")" ]
-group      ::= ( "all" | "each") "(" operations ")" [ "as" "(" identifier ")" ]
-operations ::= [ "group" "(" expression ")" ]
-               ( ( "alias" "(" identifier "," expression ")" ) |
-                 ( "max"   "(" number ")" ) |
-                 ( "order" "(" expList | aggrList ")" ) |
-                 ( "output" "(" aggrList ")" ) |
-                 ( "precision" "(" number ")" ) )*
-               group*
-aggrList   ::= aggr ( "," aggr )*
-aggr       ::= ( ( "count" "(" ")" ) |
-                 ( "sum" "(" exp ")" ) |
-                 ( "avg" "(" exp ")" ) |
-                 ( "max" "(" exp ")" ) |
-                 ( "min" "(" exp ")" ) |
-                 ( "xor" "(" exp ")" ) |
-                 ( "stddev" "(" exp ")" ) |
-                 ( "summary" "(" [ identifier ] ")" ) )
-               [ "as" "(" identifier ")" ]
-expList    ::= exp ( "," exp )*
-exp        ::= ( "+" | "-") ( "$" identifier [ "=" math ] ) | ( math ) | ( aggr )
-math       ::= value [ ( "+" | "-" | "*" | "/" | "%" ) value ]
-value      ::= ( "(" exp ")" ) |
-               ( "add" "(" expList ")" ) |
-               ( "and" "(" expList ")" ) |
-               ( "cat" "(" expList ")" ) |
-               ( "div" "(" expList ")" ) |
-               ( "docidnsspecific" "(" ")" ) |
-               ( "fixedwidth" "(" exp "," number ")" ) |
-               ( "interpolatedlookup" "(" attributeName "," exp ")") |
-               ( "math" "." (
-                              (
-                                "exp" | "log" | "log1p" | "log10" | "sqrt" | "cbrt" |
-                                "sin" | "cos" | "tan" | "asin" | "acos" | "atan" |
-                                "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh"
-                              ) "(" exp ")" |
-                              ( "pow" | "hypot" ) "(" exp "," exp ")"
-                            )) |
-               ( "max" "(" expList ")" ) |
-               ( "md5" "(" exp "," number "," number ")" ) |
-               ( "min" "(" expList ")" ) |
-               ( "mod" "(" expList ")" ) |
-               ( "mul" "(" expList ")" ) |
-               ( "or" "(" expList ")" ) |
-               ( "predefined" "(" exp "," "(" bucket ( "," bucket )* ")" ")" ) |
-               ( "reverse" "(" exp ")" ) |
-               ( "relevance" "(" ")" ) |
-               ( "sort" "(" exp ")" ) |
-               ( "strcat" "(" expList ")" ) |
-               ( "strlen" "(" exp ")" ) |
-               ( "size" "(" exp")" ) |
-               ( "sub" "(" expList ")" ) |
-               ( "time" "." ( "date" | "year" | "monthofyear" | "dayofmonth" | "dayofyear" | "dayofweek" |
-                              "hourofday" | "minuteofhour" | "secondofminute" ) "(" exp ")" ) |
-               ( "todouble" "(" exp ")" ) |
-               ( "tolong" "(" exp ")" ) |
-               ( "tostring" "(" exp ")" ) |
-               ( "toraw" "(" exp ")" ) |
-               ( "uca" "(" exp "," string [ "," string ] ")" ) |
-               ( "xor" "(" expList ")" ) |
-               ( "xorbit" "(" exp "," number ")" ) |
-               ( "ymum" "(" ")" ) |
-               ( "zcurve" "." ( "x" | "y" ) "(" exp ")" ) |
-               ( attributeName "." "at" "(" number ")") |
-               ( attributeName )
-bucket     ::= "bucket" ( "(" | "[" | "&lt;" )
-                        ( "-inf" | rawvalue | number | string )
-                        [ "," ( "inf" | rawvalue | number | string ) ]
-                        ( ")" | "]" | "&gt;" )
-rawvalue   ::= "{" ( ( string | number ) "," )* "}"
-</pre>
-
-
-
-<h2 id="output-format">Output format</h2>
+<h2 id="continuations">continuations</h2>
 <p>
-When grouping results, <strong>groups</strong> that contain <strong>outputs</strong>, <strong>group lists</strong>,
-and <strong>hit lists</strong> are generated.
-Group lists contain sub-groups, and hit lists contain hits that are part of the owning group.
-</p><p>
-The identity of a group is held by its <em>id</em>.
-Scalar identities such as long, double and string, are directly available from the <em>id</em>,
-whereas range identities used for bucket aggregation are separated into the sub-nodes <em>from</em> and <em>to</em>.
-Refer to the <a href="default-result-format.html">result format reference</a>.
-</p>
-
-
-
-<h2 id="continue-parameter">Continue parameter</h2>
-<p>
-Pagination of grouping results are managed by "continuations".
-These are opaque objects that can be combined and re-submitted using the "continuations" annotation
+Pagination of grouping results are managed by <code>continuations</code>.
+These are opaque objects that can be combined and re-submitted using the <code>continuations</code> annotation
 on the grouping step of the query to move to the previous or next page in a result list.
 </p><p>
-All root groups contain a single "this" continuation.
+All root groups contain a single <em>this</em> continuation per <code>select</code>.
 That continuation represents the current view, and if submitted as the sole continuation,
 it will reproduce the exact same result as the one that contained it.
-Other named continuations are available in the result,
-and these can be appended to the "this" continuation to perform the corresponding pagination operation.
-E.g. the "next" continuation of a group list can be used to move to the next page of groups in that list.
 </p><p>
-Any number of continuations can be combined in a query, but the first must always be the "this" continuation.
+There are zero or one <em>prev</em>/<em>next</em> continuation per group- and hit list.
+Submit any number of these to retrieve the next/previous pages of the corresponding lists
+</p><p>
+Any number of continuations can be combined in a query, but the first must always be the <em>this</em> continuation.
 E.g. one may simultaneously move both to the next page of one list, and the previous page of another.
 </p><p>
 <strong>Note:</strong> If more than one continuation object are provided for the same group- or hit-list,
@@ -208,9 +115,8 @@ result objects. These can then be added back into the continuation list of the
 <code><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/GroupingRequest.html">GroupingRequest</a></code>
 to paginate.
 </p><p>
-Example of a query that provides a continuation to the grouping statement:
+Refer to the <a href="../grouping.html#pagination">grouping guide</a> for an example.
 </p>
-<pre>/search/?yql=select (&hellip;) | [{ 'continuations':['BGAAABEBCA'] }]all(&hellip;);</pre>
 
 
 
@@ -223,11 +129,27 @@ The outputs created by that each clause will be identified by this label.
 
 
 
-<h2 id="aggregation">Aggregators</h2>
+<h2 id="aggregators">Aggregators</h2>
+<p>
+Each level of grouping specifies a set of aggregates to collect for all documents
+that belong to that group (using the <code>output</code> operation):
+<ul>
+  <li>The documents in a group, retrieved using a specified summary class</li>
+  <li>The count of documents in a group</li>
+  <li>The sum, average, min, max, xor or standard deviation of an expression</li>
+</ul>
+When all arguments are numeric, the result type is resolved by looking at the argument types.
+If all arguments are longs, the result is a long.
+If at least one argument is a double, the result is a double.
+</p><p>
+When using <code>order</code>, aggregators can also be used in expressions in order to get increased control over group sorting.
+This does not work with expressions that takes attributes as an argument, unless the expression is enclosed within an aggregator.
+</p>
 <table class="table">
   <tr><td colspan="4"><h3 id="group-list-aggregators">Group list aggregators</h3></td></tr>
   <tr><th>Name</th><th>Description</th><th>Arguments</th><th>Result</th></tr>
-  <tr><td>count</td><td>Counts the number of unique groups (As produced by the <code>group</code> clause)</td><td>None</td><td>Long</td></tr>
+  <tr><td>count</td><td>Counts the number of unique groups (as produced by <code>group</code>).
+    Note that <code>count</code> operates independently of <code>max</code></td><td>None</td><td>Long</td></tr>
 
   <tr><td colspan="4"><h3 id="group-aggregators">Group aggregators</h3></td></tr>
   <tr><th>Name</th><th>Description</th><th>Arguments</th><th>Result</th></tr>
@@ -243,14 +165,6 @@ The outputs created by that each clause will be identified by this label.
   <tr><th>Name</th><th>Description</th><th>Arguments</th><th>Result</th></tr>
   <tr><td>summary</td><td>Produces a summary of the requested summary class</td><td>Name of summary class</td><td>Summary</td></tr>
 </table>
-<p>
-When all arguments are numeric, the result type is resolved by looking at the argument types.
-If all arguments are longs, the result is a long.
-If at least one argument is a double, the result is a double.
-</p><p>
-When using order(), aggregators can also be used in expressions in order to get increased control over group sorting.
-This does not work with expressions that takes attributes as an argument, unless the expression is enclosed within an aggregator.
-</p>
 
 
 
@@ -383,27 +297,11 @@ This does not work with expressions that takes attributes as an argument, unless
 
 
 
-<h2 id="grouping-session-cache">Grouping session cache</h2>
-<p>
-When having multi-level grouping expressions, the search query is normally re-run for each level.
-The drawback of this is, with an expensive ranking function,
-the query will take more time than strictly necessary.
-</p><p>
-To avoid this, set the <a
-href="search-api-reference.html#groupingSessionCache"><code>groupingSessionCache</code></a>query flag.
-This causes the query and grouping expression to be run only once.
-</p><p>
-Note: The flag is <strong>only useful if</strong> the grouping expression does not have a <code>order()</code> clause.
-The <strong>drawback</strong> of using this flag is that when <code>max()</code> is specified in the grouping expression,
-it might cause inaccuracies in aggregated values such as <code>count()</code>.
-It is hence recommended to test whether or not this is an issue,
-and if so, adjust the <code>precision</code> parameter to still get correct counts.
-</p>
-
-
-
 <h2 id="grouping-of-multivalue-attributes">Grouping of multivalue attributes</h2>
 <p>
+Most grouping functions will just handle the elements of
+multivalued attributes separately, as if they were all individual values in separate documents.
+</p><p>
 Some grouping operators may be used with multivalue attributes.
 Note that using a multivalued attribute (such as an array of doubles) in a grouping expression
 is likely to have a large, adverse impact on performance, particularly if the set of hits to be processed is large,
@@ -472,6 +370,8 @@ which will sum the first element in the array of each document.
 
 <h2 id="interpolated-lookup">Interpolated lookup</h2>
 <p>
+<code>interpolatedlookup</code> counts elements in a sorted array that are less than an expression,
+with linear interpolation if the expression is between element values.
 The operation <code>interpolatedlookup(myarray, expr)</code> is intended for generic graph/function lookup.
 The data in <code>myarray</code> should be numerical values sorted in ascending order.
 The operation will then scan from the start of the array to find the position
@@ -550,3 +450,79 @@ but it gives more information that may be used as a forecast.
 Summing this across many different users may then be used to forecast
 the total of future impressions for the advertisement.
 </p>
+
+
+
+<h2 id="select-parameter-language-grammar">Select parameter language grammar</h2>
+<pre>
+request    ::= group [ "where" "(" ( "true" | "$query" ) ")" ]
+group      ::= ( "all" | "each") "(" operations ")" [ "as" "(" identifier ")" ]
+operations ::= [ "group" "(" expression ")" ]
+               ( ( "alias" "(" identifier "," expression ")" ) |
+                 ( "max"   "(" number ")" ) |
+                 ( "order" "(" expList | aggrList ")" ) |
+                 ( "output" "(" aggrList ")" ) |
+                 ( "precision" "(" number ")" ) )*
+               group*
+aggrList   ::= aggr ( "," aggr )*
+aggr       ::= ( ( "count" "(" ")" ) |
+                 ( "sum" "(" exp ")" ) |
+                 ( "avg" "(" exp ")" ) |
+                 ( "max" "(" exp ")" ) |
+                 ( "min" "(" exp ")" ) |
+                 ( "xor" "(" exp ")" ) |
+                 ( "stddev" "(" exp ")" ) |
+                 ( "summary" "(" [ identifier ] ")" ) )
+               [ "as" "(" identifier ")" ]
+expList    ::= exp ( "," exp )*
+exp        ::= ( "+" | "-") ( "$" identifier [ "=" math ] ) | ( math ) | ( aggr )
+math       ::= value [ ( "+" | "-" | "*" | "/" | "%" ) value ]
+value      ::= ( "(" exp ")" ) |
+               ( "add" "(" expList ")" ) |
+               ( "and" "(" expList ")" ) |
+               ( "cat" "(" expList ")" ) |
+               ( "div" "(" expList ")" ) |
+               ( "docidnsspecific" "(" ")" ) |
+               ( "fixedwidth" "(" exp "," number ")" ) |
+               ( "interpolatedlookup" "(" attributeName "," exp ")") |
+               ( "math" "." (
+                              (
+                                "exp" | "log" | "log1p" | "log10" | "sqrt" | "cbrt" |
+                                "sin" | "cos" | "tan" | "asin" | "acos" | "atan" |
+                                "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh"
+                              ) "(" exp ")" |
+                              ( "pow" | "hypot" ) "(" exp "," exp ")"
+                            )) |
+               ( "max" "(" expList ")" ) |
+               ( "md5" "(" exp "," number "," number ")" ) |
+               ( "min" "(" expList ")" ) |
+               ( "mod" "(" expList ")" ) |
+               ( "mul" "(" expList ")" ) |
+               ( "or" "(" expList ")" ) |
+               ( "predefined" "(" exp "," "(" bucket ( "," bucket )* ")" ")" ) |
+               ( "reverse" "(" exp ")" ) |
+               ( "relevance" "(" ")" ) |
+               ( "sort" "(" exp ")" ) |
+               ( "strcat" "(" expList ")" ) |
+               ( "strlen" "(" exp ")" ) |
+               ( "size" "(" exp")" ) |
+               ( "sub" "(" expList ")" ) |
+               ( "time" "." ( "date" | "year" | "monthofyear" | "dayofmonth" | "dayofyear" | "dayofweek" |
+                              "hourofday" | "minuteofhour" | "secondofminute" ) "(" exp ")" ) |
+               ( "todouble" "(" exp ")" ) |
+               ( "tolong" "(" exp ")" ) |
+               ( "tostring" "(" exp ")" ) |
+               ( "toraw" "(" exp ")" ) |
+               ( "uca" "(" exp "," string [ "," string ] ")" ) |
+               ( "xor" "(" expList ")" ) |
+               ( "xorbit" "(" exp "," number ")" ) |
+               ( "ymum" "(" ")" ) |
+               ( "zcurve" "." ( "x" | "y" ) "(" exp ")" ) |
+               ( attributeName "." "at" "(" number ")") |
+               ( attributeName )
+bucket     ::= "bucket" ( "(" | "[" | "&lt;" )
+                        ( "-inf" | rawvalue | number | string )
+                        [ "," ( "inf" | rawvalue | number | string ) ]
+                        ( ")" | "]" | "&gt;" )
+rawvalue   ::= "{" ( ( string | number ) "," )* "}"
+</pre>
