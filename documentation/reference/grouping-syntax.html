@@ -268,42 +268,7 @@ It is still, however, possible to run the following expression to get the sum of
         <li>If &gt; array size, the last element is returned</li>
         <li>If &lt; 0, the first element is returned</li>
       </ul>
-  </td><td>Array, Numeric</td><td>Any</td></tr>
-  <tr id="interpolatedlookup"><td>interpolatedlookup</td><td>
-    <p>
-    Counts elements in a sorted array that are less than an expression,
-    with linear interpolation if the expression is between element values.
-    The operation <code>interpolatedlookup(myarray, expr)</code> is intended for generic graph/function lookup.
-    The data in <code>myarray</code> should be numerical values sorted in ascending order.
-    The operation will then scan from the start of the array to find the position
-    where the element values become equal to (or greater than) the value of the <code>expr</code> lookup argument,
-    and return the index of that position.
-    </p><p>
-    When the lookup argument's value is between two consecutive array element values,
-    the returned position will be a linear interpolation between their respective indexes.
-    The return value is always in the range <code>[0, size(myarray)-1]</code> of the valid index values for an array.
-    </p><p>
-    Details: Assume <code>myarray</code> is a sorted array of type <code>array&lt;double&gt;</code> in each document.
-    The expression <code>interpolatedlookup(myarray, 4.2)</code> is now a per-document expression
-    that first evaluates the lookup argument, here a constant expression 4.2,
-    and then looks at the contents of <code>myarray</code> in the document.
-    The scan starts at the first element and proceeds until it hits an element value greater than 4.2 in the array.
-    This means that:
-    <ul>
-      <li>If the first element in the array is greater than 4.2, the expression returns 0</li>
-      <li>If the first element in the array is exactly 4.2, the expression still returns 0</li>
-      <li>If the first element in the array is 1.7 while the <strong>second</strong> element value is exactly 4.2,
-        the expression return 1.0 - the index of the second element</li>
-      <li>If <strong>all</strong> the elements in the array are less than 4.2,
-        the last valid array index <code>size(myarray)-1</code> is returned</li>
-      <li>If the 5 first elements in the array have values smaller than the lookup argument,
-        and the lookup argument is halfway between the fifth and sixth element,
-        a value of 4.5 is returned - halfway between the array indexes of the fifth and sixth elements</li>
-      <li>Similarly, if the elements in the array are <code>{0, 1, 2, 4, 8}</code>
-        then passing a lookup argument of "5" would return 3.25 (linear interpolation between
-        <code>indexOf(4)==3</code> and <code>indexOf(8)==4</code>)</li>
-    </ul></p>
-  </td><td>Array, Numeric</td><td>Numeric</td></tr>
+  </td><td>Array, index</td><td>Any</td></tr>
 
   <tr><td colspan="4"><h3 id="bucket-expressions">Bucket expressions</h3></td></tr>
   <tr><th>Name</th><th>Description</th><th>Arguments</th><th>Result</th></tr>
@@ -383,6 +348,91 @@ It is still, however, possible to run the following expression to get the sum of
   <tr><td>math.pow</td><td>Return X^Y.</td><td>Double, Double</td><td>Double</td></tr>
   <tr><td>math.hypot</td><td>Return length of hypotenuse given X and Y sqrt(X^2 + Y^2)</td><td>Double, Double</td><td>Double</td></tr>
 </table>
+
+
+
+<h2 id="interpolated-lookup">Interpolated lookup</h2>
+<p>
+<code>interpolatedlookup</code> counts elements in a sorted array that are less than an expression,
+with linear interpolation if the expression is between element values.
+The operation <code>interpolatedlookup(myarray, expr)</code> is intended for generic graph/function lookup.
+The data in <code>myarray</code> should be numerical values sorted in ascending order.
+The operation will then scan from the start of the array to find the position
+where the element values become equal to (or greater than) the value of the <code>expr</code> lookup argument,
+and return the index of that position.
+</p><p>
+When the lookup argument's value is between two consecutive array element values,
+the returned position will be a linear interpolation between their respective indexes.
+The return value is always in the range <code>[0, size(myarray)-1]</code> of the valid index values for an array.
+</p>
+
+<!-- ToDo: move examples to guide -->
+<h3 id="example">Example</h3>
+<p>
+<code>myarray</code> is a sorted array of type <code>array&lt;double&gt;</code> in each document.
+The expression <code>interpolatedlookup(myarray, 4.2)</code> is now a per-document expression
+that first evaluates the lookup argument, here a constant expression 4.2,
+and then looks at the contents of <code>myarray</code> in the document.
+The scan starts at the first element and proceeds until it hits an element value greater than 4.2 in the array.
+This means that:
+<ul>
+  <li>
+    If the first element in the array is greater than 4.2, the expression returns 0.
+  </li><li>
+    If the first element in the array is exactly 4.2, the expression still returns 0.
+  </li><li>
+    If the first element in the array is 1.7 while the <strong>second</strong> element value is exactly 4.2,
+    the expression return 1.0 - the index of the second element.
+  </li><li>
+    If <strong>all</strong> the elements in the array are less than 4.2,
+    the last valid array index <code>size(myarray)-1</code> is returned.
+  </li><li>
+    If the 5 first elements in the array have values smaller than the lookup argument,
+    and the lookup argument is halfway between the fifth and sixth element,
+    a value of 4.5 is returned - halfway between the array indexes of the fifth and sixth elements.
+  </li><li>
+  Similarly, if the elements in the array are <code>{0, 1, 2, 4, 8}</code>
+  then passing a lookup argument of "5" would return 3.25 (linear interpolation between
+  <code>indexOf(4)==3</code> and <code>indexOf(8)==4</code>).
+  </li>
+</ul>
+</p>
+
+
+<h3 id="example-impression-forecasting">Example: Impression forecasting</h3>
+<p>
+Using impression logs for a given user,
+one can make a function that maps from rank score to the number of impressions an advertisement would get - example:
+<pre>
+Score   Integer (# impressions for this user)
+0.200   0
+0.210   1
+0.220   2
+0.240   3
+0.320   4
+0.420   5
+0.560   6
+0.700   7
+0.800   8
+0.880   9
+0.920  10
+0.940  11
+0.950  12
+</pre>
+Storing just the first column (the rank scores, including a rank score for 0 impressions)
+in an array attribute named "impressions",
+the grouping operation <code>interpolatedlookup(impressions, relevance())</code> can be used
+to figure out how many times a given advertisement would have been shown to this particular user.
+</p><p>
+So if the rank score is 0.420 for a specific user/ad/bid combination,
+then <code>interpolatedlookup(impressions,relevance())</code> would return 5.0.
+If the the bid is increased so the rankscore gets to 0.490 it would get 5.5 as the return value instead.
+</p><p>
+In this context a count of 5.5 isn't meaningful for the past of a single user,
+but it gives more information that may be used as a forecast.
+Summing this across many different users may then be used to forecast
+the total of future impressions for the advertisement.
+</p>
 
 
 
