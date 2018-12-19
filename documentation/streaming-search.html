@@ -213,6 +213,159 @@ When redundancy = searchable copies, all documents are found in the <em>0.ready<
 
 
 
+<h2 id="grouping">Grouping</h2>
+<p>
+<a href="grouping.html">Grouping</a> works for streaming search just as indexed search.
+In streaming search, <span style="text-decoration: underline;">all</span> documents
+matching the <a href="services-content.html#documents.selection">selection string</a> are streamed.
+Streaming search hence has one grouping extension as document data is in memory already during search:
+<em>Also group documents that are not hits</em> when using <code>where(true)</code>.
+See the <a href="reference/grouping-syntax.html#where-true">grouping reference</a> for details.
+Example queries (urldecoded) - the first query results to the left, without <code>where(true)</code>:
+<pre>
+/search/?&amp;streaming.selection=true&amp;hits=0&amp;yql=select * from sources * where a contains "a1" |
+  all(group(a) each(output(count())));
+
+/search/?&amp;streaming.selection=true&amp;hits=0&amp;yql=select * from sources * where a contains "a1" |
+  <span style="background-color: yellow;">all(where(true)</span> all(group(a) each(output(count())))<span style="background-color: yellow;">)</span>;
+</pre>
+<table>
+    <tr><td>
+<pre>
+{
+  "root": {
+    "id": "toplevel",
+    "relevance": 1,
+    "fields": {
+      "totalCount": 10
+    },
+    "coverage": {
+      "coverage": 100,
+      "documents": 28,
+      "full": true,
+      "nodes": 1,
+      "results": 1,
+      "resultsFull": 1
+    },
+    "children": [
+      {
+        "id": "group:root:0",
+        "relevance": 1,
+        "continuation": {
+          "this": ""
+        },
+        "children": [
+          {
+            "id": "grouplist:a",
+            "relevance": 1,
+            "label": "a",
+            "children": [
+              {
+                "id": "group:string:a1",
+                "relevance": 123.4,
+                "value": "a1",
+                "fields": {
+                  "count()": 10
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+  </td><td>
+<pre>
+{
+  "root": {
+    "id": "toplevel",
+    "relevance": 1,
+    "fields": {
+      "totalCount": 10
+    },
+    "coverage": {
+      "coverage": 100,
+      "documents": 28,
+      "full": true,
+      "nodes": 0,
+      "results": 1,
+      "resultsFull": 1
+    },
+    "children": [
+      {
+        "id": "group:root:0",
+        "relevance": 1,
+        "continuation": {
+          "this": ""
+        },
+        "children": [
+          {
+            "id": "grouplist:a",
+            "relevance": 1,
+            "label": "a",
+            "children": [
+              {
+                "id": "group:string:a1",
+                "relevance": 0,
+                "value": "a1",
+                "fields": {
+                  "count()": 10
+                }
+              },
+              {
+                "id": "group:string:a2",
+                "relevance": 0,
+                "value": "a2",
+                "fields": {
+                  "count()": 9
+                }
+              },
+              {
+                "id": "group:string:a3",
+                "relevance": 0,
+                "value": "a3",
+                "fields": {
+                  "count()": 9
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+</pre>
+  </td></tr>
+</table>
+Oberserve:
+<ul>
+  <li><code>where(true)</code> includes groups for <em>a2</em> and <em>a3</em> even though these do not match the query</li>
+  <li>there is no relevance score for groups when using <code>where(true)</code></li>
+</ul>
+This kind of grouping is useful when using grouping to evaluate the corpus in the selection string.
+One example is computing a checksum of all documents to validate correctness during search.
+</p>
+
+
 <!--
 A query is a visit.
 
