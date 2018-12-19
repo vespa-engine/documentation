@@ -28,7 +28,8 @@ Please do not add custom style sheets, as it is harder to maintain.
 
 ## Writing good documentation
 
-Please read the following guide to writing good documentation before writing some.
+Learn how to [contribute](https://github.com/vespa-engine/vespa/blob/master/CONTRIBUTING.md) to documentation, 
+then read the following guide before writing some.
 
 ### Guides and references
 
