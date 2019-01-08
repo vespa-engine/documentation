@@ -12,7 +12,7 @@ Documents adhere strictly to a configured <em>document type</em>.
 A Vespa system can have multiple document types and each document type
 is defined in a <em>search definition</em>.
 The values in each field have an associated data type like string, long,
-array - see the <a href="reference/search-definitions-reference.html#field_types">
+array - see the <a href="reference/search-definitions-reference.html#field-types">
 search definitions reference</a> for a complete list.
 </p><p>
 Some commonly used field properties are described in this document -
@@ -27,8 +27,8 @@ Vespa applications must have at least one search definition in the
 <a href="cloudconfig/application-packages.html">application package</a> -
 the search definition is a required file.
 </p><p>
-A document has a unique <em>Document Id</em>.
-Documents can have relations - read more about <a href="#document-references">document references</a>.
+A document has a unique <em>Document Id</em>. Documents can have relations -
+read more about parent/child document <a href="parent-child.html">references</a>.
 </p><p>
 Search definitions can be <a href="#modify-search-definitions">modified without restarts</a>.
 </p><p>
@@ -146,149 +146,6 @@ by hand or using machine learning.
 Read more in the <a href="ranking.html">ranking</a> documentation.
 </p>
 
-
-
-<h2 id="document-references">Document references and parent-child relationships</h2>
-<p>
-Model parent-child relationships by using
-<a href="reference/search-definitions-reference.html#type:reference">references</a>
-to <a href="reference/services-content.html#document">global documents</a>.
-Using a reference, fields can be
-<a href="reference/search-definitions-reference.html#import-field">imported</a>
-from parent types into the child's search definition and used for matching, ranking, grouping and sorting.
-</p>
-
-<p>
-Example:
-<pre>
-search advertiser {
-  document advertiser {
-    field name type string {
-      indexing : attribute
-    }
-  }
-}
-</pre>
-<pre>
-[
-  { "put": "id:test:advertiser::cool", "fields": { "name": "cool" } }
-]
-</pre>
-
-<pre>
-search campaign {
-  document campaign {
-    field advertiser_ref type <span style="background-color: yellow">reference&lt;advertiser&gt;</span> {
-      indexing: attribute
-    }
-    field budget type int {
-      indexing : attribute
-    }
-  }
-  <span style="background-color: yellow">import field advertiser_ref.name as advertiser_name</span> {}
-}
-</pre>
-<pre>
-[
-  { "put": "id:test:campaign::thebest", "fields": {
-      "advertiser_ref": "id:test:advertiser::cool",
-      "budget": 20 }
-  },
-  { "put": "id:test:campaign::nextbest", "fields": {
-      "advertiser_ref": "id:test:advertiser::cool",
-      "budget": 10 }
-  }
-]
-</pre>
-<pre>
-search salesperson {
-  document salesperson {
-    field name type string {
-      indexing: attribute
-    }
-  }
-}
-</pre>
-<pre>
-[
-  { "put": "id:test:salesperson::johndoe", "fields": { "name": "John Doe" } }
-]
-</pre>
-<pre>
-search ad {
-  document ad {
-    field campaign_ref type <span style="background-color: yellow">reference&lt;campaign&gt;</span> {
-      indexing: attribute
-    }
-    field other_campaign_ref type reference&lt;campaign&gt; {
-      indexing: attribute
-    }
-    field salesperson_ref type reference&lt;salesperson&gt; {
-      indexing: attribute
-    }
-  }
-
-  <span style="background-color: yellow">import field campaign_ref.budget as budget</span> {}
-  import field salesperson_ref.name as salesperson_name {}
-  import field campaign_ref.advertiser_name as advertiser_name {}
-
-  document-summary my_summary {
-    summary budget type int {}
-    summary salesperson_name type string {}
-    summary advertiser_name type string {}
-  }
-}
-</pre>
-<pre>
-[
-  { "put": "id:test:ad::1", "fields": {
-      "campaign_ref": "id:test:campaign::thebest",
-      "other_campaign_ref": "id:test:campaign::nextbest",
-      "salesperson_ref": "id:test:salesperson::johndoe" }
-  }
-]
-</pre>
-Document type <em>ad</em> has two references to <em>campaign</em> (via <em>campaign_ref</em>
-and <em>other_campaign_ref</em>) and one reference to <em>salesperson</em> (via <em>salesperson_ref</em>).
-The <em>budget</em> field from <em>campaign</em> is imported into the <em>ad</em> search definition
-(via <em>campaign_ref</em>) and given the name <em>budget</em>. Similarly, the <em>name</em> of
-<em>salesperson</em> is imported as <em>salesperson_name</em>.
-Document type <em>campaign</em> has a reference to <em>advertiser</em> and imports the field <em>name</em>
-as <em>advertiser_name</em>. This is also imported into <em>ad</em> via <em>campaign_ref</em> from its grandparent <em>advertiser</em>.
-To use the imported fields in summary
-we have created a document summary <em>my_summary</em> containing these fields.
-</p>
-<p>
-When using parent-child relationships,
-data does not have to be denormalized as fields from parents are imported into children.
-Use this to update parent fields to limit number of updates if a field's value is shared beween many documents.
-This also limits the resources (memory / disk) required to store and handle documents on content nodes.
-</p>
-</p>
-All document types which are referenced from other types must be
-<a href="reference/services-content.html#document">global documents</a>
-(parents). Global documents are automatically distributed to all content nodes.
-Node capacity will limit the number of such documents.
-There should usually be an order of magnitude fewer parent documents than child documents.
-Note that parents can have parents.
-</p>
-<p>
-The following type of references are not supported:
-<ul>
-  <li>
-    Self-reference.
-  </li>
-  <li>
-    Cyclic reference.
-    If document type <em>foo</em> has a reference to <em>bar</em>,
-    then <em>bar</em> cannot have a reference to <em>foo</em>.
-  </li>
-</ul>
-</p>
-
-<p>
-NOTE: Reference and imported fields are not supported in streaming mode.
-</p>
 
 
 <h2 id="document-expiry">Document expiry</h2>
