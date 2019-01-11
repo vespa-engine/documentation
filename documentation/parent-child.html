@@ -4,8 +4,10 @@ title: "Parent/Child"
 ---
 
 <p>
-Using document references, documents can have parent/child relationships.
-Use this to join data - features
+Using <a href="reference/search-definitions-reference.html#type:reference">document references</a>,
+documents can have parent/child relationships.
+Use this to join data by <a href="reference/search-definitions-reference.html#import-field">importing</a>
+fields from parent documents. Features:
 <ul>
   <li>simplify document operations - one write to update one value</li>
   <li>no de-normalization needed - simplifies data updates and atomic update into all children</li>
@@ -21,27 +23,19 @@ High-level overview of documents, imported fields and array fields:
 <img src="img/parent-child-1.svg" height="500" width="500" />
 </p>
 
-<p>
-Model parent-child relationships by using
-<a href="reference/search-definitions-reference.html#type:reference">references</a>
-to <a href="reference/services-content.html#document">global documents</a>.
-Using a reference, fields can be
-<a href="reference/search-definitions-reference.html#import-field">imported</a>
-from parent types into the child's search definition and used for matching, ranking, grouping and sorting.
-</p>
-<p>
-When using parent-child relationships,
-data does not have to be denormalized as fields from parents are imported into children.
-Use this to update parent fields to limit number of updates if a field's value is shared beween many documents.
-This also limits the resources (memory / disk) required to store and handle documents on content nodes.
-</p>
 
 
 <h2 id="parent-documents">Parent documents</h2>
 <p>
-Documents can have references to parent documents (like foreign keys in a relational database),
-in multiple levels - parents can have parents (grandparents).
-Parent documents must be <a href="reference/services-content.html#document.global">global documents</a>.
+Model parent-child relationships by using <em>references</em>
+to <a href="reference/services-content.html#document">global documents</a>.
+This is like foreign keys in a relational database.
+Parents can have parents - there are some restrictions on grandparent fields and complex types,
+ref <a href="https://github.com/vespa-engine/vespa/issues/7930">#7930</a>. <!-- ToDo remove when 7930 is fixed -->
+A document can have references to multiple parents - the parents can be of same or different types.
+</p><p>
+Using a reference, fields can be imported from parent types into the child's
+<a href="search-definitions.html">search definition</a> and used for matching, ranking, grouping and sorting.
 A reference is a string <a href="attributes.html">attribute</a> with the parent's document ID as value.
 References are hence weak:
 <ul>
@@ -49,56 +43,51 @@ References are hence weak:
   <li>a referenced document can be non-existent - imported fields do not have values in this case</li>
 </ul>
 </p><p>
-Documents can import field values into own fields from parent documents.
-
-Some restrictions on grandparent fields and complex types, ref <a href="https://github.com/vespa-engine/vespa/issues/7930">#7930</a>
+When using parent-child relationships,
+data does not have to be denormalized as fields from parents are imported into children.
+Use this to update parent fields to limit number of updates if a field's value is shared beween many documents.
+This also limits the resources (memory / disk) required to store and handle documents on content nodes.
 </p><p>
 At cluster changes, global documents are merged to new nodes before regular documents.
-A content node is not serving queries before <span style="text-decoration: underline;">all</span>
+For consistency, a content node is not serving queries before <span style="text-decoration: underline;">all</span>
 global documents are synchronized - refer to <a href="elastic-vespa.html">elastic Vespa</a> for details.
 </p><p>
-
-</p>
-
-
-<h3 id="performance">Performance</h3>
-<p>
-As parent documents are global,
-a PUT or UPDATE will execute on <span style="text-decoration: underline;">all</span> content nodes.
-Node capacity will limit the number of such documents -
-there should normally be an order of magnitude fewer parent documents than child documents.
+References and imported fields are not supported in <a href="streaming-search.html">streaming</a> mode.
 </p><p>
-Memory usage grows accordingly. A global document is otherwise equal to a regular document,
-but each content node must be sized to hold all global documents plus its share of regular documents.
-</p><p>
-NOTE: Reference and imported fields are not supported in streaming mode.
-</p><p>
-size of a reference
-</p><p>
-A document can have references to multiple parents - the parents can be of same or different types.
-</p><p>
-query performance - references fields add an indirection
-</p><p>
-</p><p>
-</p><p>
+Performance notes:
+<ul>
+  <li>As parent documents are global,
+    a PUT or UPDATE will execute on <span style="text-decoration: underline;">all</span> content nodes.
+    Node capacity will limit the number of such documents -
+    there should normally be an order of magnitude fewer parent documents than child documents</li>
+  <li>Memory usage grows accordingly. A global document is otherwise equal to a regular document,
+    but each content node must be sized to hold all global documents plus its share of regular documents</li>
+  <li>Reference fields add a memory indirection and does not impact query performance much</li>
+</ul>
 </p>
 
 
 
-<h2 id="multivalue-fields">Multivalue fields</h2>
+<h2 id="multi-value-fields">Multi-value fields</h2>
 <p>
-A document can have fields that are arrays of structs.
+A document can have <a href="search-definitions.html#field">fields</a> that are arrays or maps of struct.
 Structs and documents are similar - a set of field name/value pairs.
 One-to-many mappings can hence be implemented this way, as an alternative to using parent/child.
 </p><p>
 <a href="query-language.html#same-element">sameElement()</a> is a useful query operator
 to restrict matches to same struct element.
-</p><p>
-fieldpath to update?
-</p><p>
-</p><p>
-</p><p>
-</p><p>
+</p>
+
+
+
+<h2 id="parent-or-multi-values">Parent or multi-value?</h2>
+<p>
+As a rule of thumb, model the items searched for as the document - example products for sale.
+Shared properties, like vendor, can be model using a parent document, importing a vendor name field -
+assuming a vendor has many products, and the vendor list is limited.
+Use arrays of structs for properties documents might have, like shoesize or screen resolution -
+one can then have a struct field for property name and another for property value,
+giving a flexible structure for products with an unlimited set of possible properties.
 </p>
 
 
