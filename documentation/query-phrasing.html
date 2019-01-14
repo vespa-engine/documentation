@@ -4,74 +4,57 @@ title: "Query Phrasing With PhrasingSearcher"
 ---
 
 <p>
-This document describes what query phrasing is, and shows how to
-enable and use it in Vespa.
-</p><p>
-Often, users will search for phrases like e.g. <em>New York</em>, <em>Rolling Stones</em>,
+Users search for phrases like <em>New York</em>, <em>Rolling Stones</em>,
 <em>The Who</em>, or <em>daily horoscopes</em>.
 Considering the latter, most of the time the query string will look like this:
 <pre>
 /search/?query=daily horoscopes&amp;&hellip;
 </pre>
-This is actually a search for documents where both "daily" and "horoscopes" match,
-but not necessarily documents with the exact phrase "daily horoscopes".
-This is where PhrasingSearcher comes in.
+This is actually a search for documents where both <em>daily</em> and <em>horoscopes</em> match,
+but not necessarily documents with the exact phrase <em>"daily horoscopes"</em>.
 PhrasingSearcher is a Searcher that compares queries with a list of common phrases,
-and replaces two single search terms with a phrase. So the above query becomes:
+and replaces two search terms with a phrase.
+If <em>"daily horoscopes"</em> is a common phrase, the above query becomes:
 <pre>
 /search/?query="daily horoscopes"&amp;&hellip;
 </pre>
-if "daily horoscopes" is known to be a common phrase.
-</p><p>
-The PhrasingSearcher must be configured with a list of common phrases.
-This list has to be <em>compiled</em> into an FSA file,
-which is the file format that PhrasingSearcher uses.
-To use the compiled list, it has to be available on all container nodes
-and its location must be referenced in the container configuration.
-</p>
-
-
-
-<h2 id="compiling-list">Compiling the List of Phrases</h2>
-<p>
-The list of phrases must be:
+The PhrasingSearcher must be configured with a list of common phrases,
+compiled into a <em>finite state automation</em> (FSA). The phrase list must be:
 <ul>
   <li>all lowercase</li>
   <li>sorted alphabetically</li>
 </ul>
-To accomplish this, use:
+Example:
 <pre>
-$ perl -ne 'print lc' listofphrasestextfile.unsorted.mixedcase > listofphrasestextfile.unsorted
-$ sort listofphrasestextfile.unsorted > listofphrasestextfile
+$ perl -ne 'print lc' listofphrasestextfile.unsorted.mixedcase | sort &gt; listofphrasestextfile
 </pre>
 Note that the Perl command to convert the text file to lowercase does
-not handle non-ASCII characters very well.
+not handle non-ASCII characters well (this is just an example).
 If the list of phrases is e.g. UTF-8 encoded and/or contains non-English characters,
 double-check that the resulting file is correct.
 </p><p>
-The <em>vespa-makefsa</em> program is used to compile a list of common phrases into an FSA file.
-</p><p>
-The FSA can be compiled from the list of phrases:
+Use <a href="reference/vespa-cmdline-tools.html#vespa-makefsa">vespa-makefsa</a>
+to compile the list into an FSA file:
 <pre>
 $ vespa-makefsa listofphrasestextfile phrasefsa
 </pre>
-</p>
-
-
-
-<h2 id="configuration">Configuration</h2>
-<p>
-The compiled list of phrases must be available on all container nodes.
-When it is present on the same location in the file system on all nodes,
-add a <em>qr-searchers.cfg</em> file to the <em>configs/</em> directory of the
-<a href="cloudconfig/application-packages.html">application package</a>
-with the following:
-<!-- ToDo: such config files not supported anymore -->
+</p><p>
+Put the file on all container nodes, configure the location
+and <a href="cloudconfig/application-packages.html">deploy</a>:
 <pre>
-com.yahoo.prelude.querytransform.PhrasingSearcher.automatonfile "<span style="background-color: yellow;">/path/to/phrase/file</span>"
+&lt;container id="default" version="1.0"&gt;
+  &lt;config name="container.qr-searchers"&gt;
+    &lt;com&gt;
+      &lt;yahoo&gt;
+        &lt;prelude&gt;
+          &lt;querytransform&gt;
+            &lt;PhrasingSearcher&gt;
+              &lt;automatonfile&gt;<span style="background-color: yellow;">/path/phrasefsa</span>&lt;/automatonfile&gt;
+            &lt;/PhrasingSearcher&gt;
+          &lt;/querytransform&gt;
+        &lt;/prelude&gt;
+      &lt;/yahoo&gt;
+    &lt;/com&gt;
+  &lt;/config&gt;
 </pre>
-Replace the highlighted text with the path to your phrase file.
-If you already have a <em>qr-searchers.cfg</em> file in <em>configs/</em>, just add the line.
-Finally, <a href="cloudconfig/application-packages.html#deploy">deploy</a>
-the application.
 </p>
