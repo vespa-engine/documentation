@@ -2831,3 +2831,293 @@ search example {
 
 }
 </pre>
+
+
+
+<h2 id="modify-search-definitions">Modify Search Definitions</h2>
+<p>
+This section describes how a search definition in a live application can be modified - categories:
+<ol>
+  <li><a href="#valid-changes-without-restart-or-re-feed">
+    Valid changes without restart or re-feed</a></li>
+  <li><a href="#changes-that-require-restart-but-not-re-feed">
+    Changes that require restart but not re-feed</a></li>
+  <li><a href="#changes-that-require-re-feed">
+    Changes that require re-feed</a></li>
+</ol>
+When running <code>vespa-deploy prepare</code> on a new application package,
+the changes in the search definition files are compared with the files in the current active package.
+If some of the changes require restart or re-feed, the output from <code>vespa-deploy prepare</code>
+specifies which actions are needed.
+The <a href="services-content.html#document">document mode(s)</a> (<em>index</em>, <em>streaming</em>)
+for which a change is applicable is also listed in the categories below.
+Treat mode <em>store-only</em> the same as mode <em>streaming</em>.
+</p><p>
+NOTE: If there are changes to perform on a live
+system that are not covered by this document and no output is given from <code>vespa-deploy prepare</code>,
+their impact is undefined and in no way guaranteed to allow a system to stay live until re-feeding.
+Changes not related to the search definition are discussed
+in <a href="../operations/admin-procedures.html">admin procedures</a>.
+</p><p>
+It is best practice to try changes in a staging system first.
+</p>
+
+
+<h3 id="valid-changes-without-restart-or-re-feed">Valid changes without restart or re-feed</h3>
+<p>
+Procedure:
+<ol>
+  <li>Run <code>vespa-deploy prepare</code> on the changed application</li>
+  <li>Run <code>vespa-deploy activate</code>. The changes will take effect immediately</li>
+</ol>
+Changes:
+<table class="table">
+  <thead>
+  <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+  <tr><th>Add a new document field</th><th>index, streaming</th>
+  <td>
+  Add a new document field as index, attribute, summary or any combinations of these.
+  Existing documents will implicitly get the new field with no content.
+  Documents fed after the change can specify the new field.
+  If the field has existed with same type earlier,
+  then old content <em>may or may not</em> reappear
+  </td></tr>
+
+  <tr><th>Remove a document field</th><th>index, streaming</th>
+  <td>
+  Existing documents will no longer see the removed field,
+  but the field data is not completely removed from the search node
+  </td></tr>
+
+  <tr><th>Add or remove an existing document field from document summary</th><th>index, streaming</th>
+  <td>
+  Add an existing field to summary or any number of summary classes,
+  and remove an existing field from summary or any number of summary classes
+  </td></tr>
+
+  <tr><th>Remove the attribute aspect from a field that is also an index field</th><th>index</th>
+  <td>
+  This is the only scenario of changing the attribute aspect of a document field that is allowed without restart
+  </td></tr>
+
+  <tr><th>Change the attribute aspect of a document field</th><th>streaming</th>
+  <td>
+  Add or remove a field as attribute.
+  In mode <em>streaming</em> this only indicates that the field is used for grouping, sorting, ranking and matching.
+  No changes to underlying data structures
+  </td></tr>
+
+  <tr><th>Change the index aspect of a document field</th><th>streaming</th>
+  <td>
+  Add or remove a field as index.
+  In mode <em>streaming</em> this only indicates that the field is used for matching.
+  No changes to underlying data structures
+  </td></tr>
+
+  <tr><th>Add, change or remove match settings for a field</th><th>streaming</th>
+  <td>
+  In mode streaming such change does not effect the documents stored in the backend
+  and can be done without restart and re-feed
+  </td></tr>
+
+  <tr><th>Add, change or remove field sets</th><th>index, streaming</th>
+  <td>
+  Change <a href="#fieldset">fieldsets</a> used to group fields together for searching
+  </td></tr>
+
+  <tr><th>Change the alias or sorting attribute settings for an attribute field</th><th>index, streaming</th>
+  <td><!-- ToDo -->
+  </td></tr>
+
+  <tr><th>Add, change or remove rank profiles</th><th>index, streaming</th>
+  <td><!-- ToDo -->
+  </td></tr>
+
+  <tr><th>Change document field weights</th><th>index, streaming</th>
+  <td><!-- ToDo -->
+  </td></tr>
+
+  <tr><th>Add, change or remove field aliases</th><th>index, streaming</th>
+  <td><!-- ToDo -->
+  </td></tr>
+
+  <tr><th>Add, change or remove rank settings for a field</th><th>index, streaming</th>
+  <td>
+  Exception: Changing <code>rank: filter</code> on an attribute field in mode <em>index</em> requires restart.
+  See details in <a href="#changes-that-require-restart-but-not-re-feed">next section</a>
+  </td></tr>
+
+  <tr><th>Add or remove a search definition</th><th>index, streaming</th>
+  <td>
+  Removing a search definition file will make <a href="../proton.html">proton</a>
+  drop all documents of that type - subsequently releasing memory and disk.
+  </td></tr>
+  </tbody>
+</table>
+</p>
+
+
+<h3 id="changes-that-require-restart-but-not-re-feed">Changes that require restart but not re-feed</h3>
+<p>
+Procedure:
+<ol>
+  <li>Run <code>vespa-deploy prepare</code> on the changed application.
+    Output specifies which restart actions are needed
+  <li>Run <code>vespa-deploy activate</code></li>
+  <li>Restart <code>services</code> on the services specified in the prepare output
+</ol>
+Changes:
+<table class="table">
+  <thead>
+  <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+  <tr><th>Change the attribute aspect of a document field</th><th>index</th>
+  <td>
+  Add or remove a field as attribute.
+  When adding, the attribute is populated based on the field value in stored documents during restart.
+  When removing, the field value in stored documents is updated based on the content in the attribute during restart
+  </td></tr>
+
+  <tr><th>Change the attribute settings for an attribute field</th><th>index, streaming</th>
+  <td>
+  For mode <em>index</em>: Change the following attribute settings:
+  <code>fast-search</code>, <code>fast-access</code>, <code>huge</code>.
+  <br>
+  For mode <em>streaming</em>: Change the following attribute settings:
+  <code>fast-access</code> (the other settings are not used)
+  </td></tr>
+
+  <tr><th>Change the rank filter setting for an attribute field</th><th>index</th>
+  <td>
+  Add or remove <code>rank: filter</code> on an attribute field.
+  </td></tr>
+  </tbody>
+</table>
+Example: Given a content cluster <em>mycluster</em> with mode <em>index</em>:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: summary }
+  }
+}
+</pre>
+Then add field <code>f1</code> as an attribute:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: attribute | summary }
+  }
+}
+</pre>
+The following is output from <code>vespa-deploy prepare</code> -
+which restart actions are needed:
+<pre>
+WARNING: Change(s) between active and new application that require restart:
+In cluster 'mycluster' of type 'search':
+    Restart services of type 'searchnode' because:
+        1) Document type 'test': Field 'f1' changed: add attribute aspect
+</pre>
+</p>
+
+
+<h3 id="changes-that-require-re-feed">Changes that require re-feed</h3>
+<p>
+All of the changes listed below require re-feeding of all documents.
+Unless a change is listed in the above sections treat it as if it was listed here.
+Until re-feed is complete, affected fields will be empty
+or have potentially wrong annotations not matching the query processing. Procedure:
+<ol>
+  <li>Run <code>vespa-deploy prepare</code> on the changed application.
+    Output specifies which re-feed actions are needed
+  <li>Stop feeding, wait until done</li>
+  <li>Run <code>vespa-deploy activate</code></li>
+  <li>Re-feed all documents</li>
+</ol>
+Changes:
+<table class="table">
+  <thead>
+  <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+      <tr><th>Change the data type or collection type of a document field</th><th>index, streaming</th>
+      <td>
+        Existing documents will no longer have any content for this field.
+        To populate the field, re-feed the existing documents using the new type for this field.
+        There will be no automatic conversion from old to new field type.
+        <br>
+        NOTE: If not re-feeding after such a change, serving works,
+        but searching this field will not give any results
+      </td></tr>
+
+      <tr><th>Change index aspect of a document field</th><th>index</th>
+      <td>
+        This changes the document processing pipeline before documents arrive in the backend.
+        Only documents fed after index aspect was added
+        will have annotations and be present in the reverse index.
+        Only documents fed after index aspect was removed
+        will avoid disk bloat due to unneeded annotations
+      </td></tr>
+
+      <tr><th>Change fields from static to dynamic summary, or vice versa</th><th>index</th>
+      <td><!-- ToDo -->
+      </td></tr>
+
+      <tr><th>Switch stemming/normalizing on or off</th><th>index</th>
+      <td>
+        This changes the document processing pipeline before documents
+        arrive in the backend, and what annotations are made for an indexed field.
+        <br>
+        NOTE: If not re-feeding after such a change, serving works,
+        but recall is undefined as the index has been produced using a different setting
+        than the one used when doing stemming/normalizing of the query terms
+      </td></tr>
+
+      <tr><th>Switch bolding on or off</th><th>index</th>
+      <td><!-- ToDo -->
+      </td></tr>
+
+      <tr><th>Add, change or remove match settings for a field</th><th>index</th>
+      <td>
+        Example: Adding <code>match: word</code> to a field.
+        <br>
+        This changes the document processing pipeline before documents
+        arrive in the backend, and what annotations are made for an indexed field.
+        <br>
+        NOTE: If not re-feeding after such a change, serving works,
+        but recall is undefined as the index has been produced using one match mode
+        while run-time is using a different match mode
+      </td></tr>
+
+      <tr><th>Change the tensor type of a tensor attribute</th><th>index</th>
+      <td><!-- ToDo -->
+      </td></tr>
+
+  </tbody>
+</table>
+Example: Given a content cluster <em>mycluster</em> with mode <em>index</em>:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: summary }
+  }
+}
+</pre>
+Then add field <code>f1</code> as an index:
+<pre>
+search test {
+  document test {
+    field f1 type string { indexing: index | summary }
+  }
+}
+</pre>
+The following is output from <code>vespa-deploy prepare</code> -
+which re-feed actions are needed:
+<pre>
+WARNING: Change(s) between active and new application that require re-feed:
+Re-feed document type 'test' in cluster 'mycluster' because:
+    1) Document type 'test': Field 'f1' changed: add index aspect, indexing script: '{ input f1 | summary f1; }' -&gt; '{ input f1 | tokenize normalize stem:"SHORTEST" | index f1 | summary f1; }'
+</pre>
+</p>
