@@ -4,37 +4,32 @@ title: "Configuring Java components"
 ---
 
 <p>
-Any Java component might require some sort of configuration, be it simple strings or
-integers, or more complex structures.
+Any Java component might require some sort of configuration,
+be it simple strings or integers, or more complex structures.
 Because of all the boilerplate code that commonly goes into classes to hold such configuration,
-we often see this degenerate into a collection of key-value string pairs (e.g.
-<a href="http://docs.oracle.com/javaee/6/api/javax/servlet/FilterConfig.html">javax.servlet.FilterConfig</a>).
-To avoid this Vespa can deliver custom, type-safe configuration to all JDisc components.
-This configuration should be used for all state which is assumed to stay constant
-for the <em>lifetime of the component instance</em>. Read the document on
-<a href="jdisc/developing-applications.html">developing applications</a>
-to get started.
+this often degenerates into a collection of key-value string pairs
+(e.g. <a href="http://docs.oracle.com/javaee/6/api/javax/servlet/FilterConfig.html">javax.servlet.FilterConfig</a>).
+To avoid this, Vespa has custom, type-safe configuration to all <a href="jdisc/">Container</a> components.
+Get started with <a href="jdisc/developing-applications.html">developing applications</a>,
+try the <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search/">basic-search</a> sample application.
 </p><p>
-In a nutshell:
+Configurable components in short:
 <ul>
-  <li>The developer provides a config schema text file - .def</li>
-  <li>Use the Vespa maven plugin to generate a config class from .def</li>
-  <li>Inject config objects in your code</li>
+  <li>The developer creates a
+    <a href="reference/config-files.html#config-definition-files">config definition</a> file - .def</li>
+  <li>Use the Vespa <a href="bundle-plugin.html">bundle plugin</a>
+    to generate a config class from the definition</li>
+  <li>Inject config objects in the application code</li>
 </ul>
-The application code is interfacing with config through generated code -
-code and config is always in sync.
-(For details about how configuration works in Vespa, see
-<a href="cloudconfig/config-introduction.html">Cloud Config System</a>.)
-</p>
-<p>
-Note: the <a href="bundle-plugin.html">bundle plugin</a> simplifies these steps -
-refer to the
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search/">
-basic-search</a> sample application for an example.
+The application code is interfacing with config through the generated code - code and config is always in sync.
+This configuration should hence be used for all state which is assumed to stay constant
+for the <em>lifetime of the component instance</em>.
+Use <a href="cloudconfig/application-packages.html">deploy</a> to push and activate code and config changes.
 </p>
 
 
-<h2>Config definition - .def</h2>
+
+<h2 id="config-definition">Config definition</h2>
 <p>
 Write a <a href="reference/config-files.html#config-definition-files">config definition</a>
 file and place it in the application's <code>src/main/resources/configdefinitions/</code>
@@ -49,9 +44,9 @@ myMessage  string  default=""
 
 
 
-<h2>Generate config class</h2>
+<h2 id="generate-config-class">Generate config class</h2>
 <p>
-Generate Java config classes:
+This is done in the <em>bundle plugin</em>: Generate Java config classes:
 <pre>
 $ mvn generate-resources
 </pre>
@@ -67,11 +62,11 @@ It is a good idea to generate the config classes first,
 
 
 
-<h2>Use config in code</h2>
+<h2 id="use-config-in-code">Use config in code</h2>
 <p>
-The generated config class is now available for your component through
-<a href="jdisc/injecting-components.html">constructor injection</a>, which means that the
-component can declare the generated class as one of its constructor arguments:
+The generated config class is now available for the component through
+<a href="jdisc/injecting-components.html">constructor injection</a>,
+which means that the component can declare the generated class as one of its constructor arguments:
 <pre>
 package com.mydomain.mypackage;
 
@@ -87,10 +82,10 @@ public class MyComponent {
     }
 }
 </pre>
-The JDisc Container will take care of creating and injecting the config instance.
+The Container will create and inject the config instance.
 To override the default values of the config,
 <a href="reference/config-files.html#generic-configuration-in-services-xml">specify</a>
-  values in <code>src/main/application/services.xml</code>. Following the above example:
+  values in <code>src/main/application/services.xml</code>, like:
 <pre>
 &lt;container version="1.0"&gt;
     &lt;component id="com.mydomain.mypackage.MyComponent"&gt;
@@ -101,17 +96,17 @@ To override the default values of the config,
     &lt;/component&gt;
 &lt;/container&gt;
 </pre>
-and the deployed instance of <code>MyComponent</code> will be constructed using a
+and the deployed instance of <code>MyComponent</code> is constructed using a
 corresponding instance of <code>MyComponentConfig</code>.
 </p>
 
 
 
-<h2 id="unit-testing-configurable-components">Unit Testing a Configurable Component</h2>
+<h2 id="unit-testing-configurable-components">Unit testing configurable components</h2>
 <p>
-The generated config class provides a builder API that makes it easy to create
-config objects for unit testing. Below is an example that sets up a unit test for the
-<code>MyComponent</code> class from the previous example:
+The generated config class provides a builder API
+that makes it easy to create config objects for unit testing.
+Example that sets up a unit test for the <code>MyComponent</code> class from the example above:
 <pre>
 import static com.mydomain.mypackage.MyComponentConfig.*;
 
@@ -135,29 +130,25 @@ building a complex configuration object</a>.
 
 
 
-<h2 id="adding-files-to-the-component-configuration">Adding Files to the Component Configuration</h2>
+<h2 id="adding-files-to-the-component-configuration">Adding files to the component configuration</h2>
 <p>
-This section describes what to do if your component needs larger configuration objects that are stored in files,
+This section describes what to do if the component needs larger configuration objects that are stored in files,
 e.g. <a href="reference/vespa-cmdline-tools.html#vespa-makefsa">automata</a> or large tables.
 Before proceeding, take a look at how to create
-<a href="jdisc/injecting-components.html#implement-provider">provider components</a>.
-Instead of integrating large objects into e.g. a searcher or processor, you might be better off by
-splitting the resource-demanding part of your component's configuration into a separate
-provider component. The procedure described below can be applied to any component type.
-</p>
-
-<p>
-Files can be transferred using either <a href="cloudconfig/file-distribution.html">file distribution</a> or
-URL download. File distribution is used when the files are added to the application
-package. If for some reason this is not convenient, e.g. due to size, origin of file
-or update frequency, Vespa offers to download the file and make it available for
-the component. Both types are set up in the config def file. File distribution uses
-the <code>path</code> config type, and URL downloading the <code>url</code> type.
-See <a href="reference/config-files.html">the config file reference</a>
-for details.
-</p>
-
-<p>
+<a href="jdisc/injecting-components.html#implement-provider">provider components</a> -
+instead of integrating large objects into e.g. a searcher or processor, it might be better to
+split the resource-demanding part of the component's configuration into a separate provider component.
+The procedure described below can be applied to any component type.
+</p><p>
+Files can be transferred using either <a href="cloudconfig/file-distribution.html">file distribution</a>
+or URL download.
+File distribution is used when the files are added to the application package.
+If for some reason this is not convenient, e.g. due to size,
+origin of file or update frequency, Vespa can download the file and make it available for the component.
+Both types are set up in the config def file.
+File distribution uses the <code>path</code> config type, and URL downloading the <code>url</code> type.
+See <a href="reference/config-files.html">the config file reference</a> for details.
+</p><p>
 In the following example we will show the usage of both types.
 Assume this config definition, named <code>my-component.def</code>:
 <pre>
@@ -167,8 +158,7 @@ myFile path
 myUrl url
 </pre>
 The file must reside in the application package, and the path (relative to
-the application package root) must be given in the component's configuration in
-<code>services.xml</code>:
+the application package root) must be given in the component's configuration in <code>services.xml</code>:
 <pre>
 &lt;container version="1.0"&gt;
     &lt;component id="com.mydomain.mypackage.MyComponent"&gt;
@@ -179,7 +169,7 @@ the application package root) must be given in the component's configuration in
     &lt;/component&gt;
 &lt;/container&gt;
 </pre>
-An example component that uses the file:
+An example component that uses these files:
 <pre>
 package com.mydomain.mypackage;
 import java.io.File;
@@ -188,13 +178,12 @@ public class MyComponent {
     private final File fileFromFileDistribution;
     private final File fileFromUrlDownload;
 
-    public MyComponent(MyComponentConfig config) { fileFromFileDistribution = config.myFile().toFile();
-        fileFromUrlDownload = config.myUrl();
+    public MyComponent(MyComponentConfig config) {
+        fileFromFileDistribution = config.myFile().toFile();
+        fileFromUrlDownload      = config.myUrl();
     }
 }
 </pre>
-
-<p>
 The <code>myFile()</code> getter returns a <code>java.nio.Path</code> object, while
 the <code>myUrl()</code> getter returns a <code>java.io.File</code> object.
 The container framework guarantees that these files are fully transferred or
