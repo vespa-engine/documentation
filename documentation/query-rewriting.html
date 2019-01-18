@@ -189,3 +189,61 @@ so a rule base including another which uses an automaton
 must also declare to use the same automaton
 (or an automaton containing any desired changes from the automaton of the included base).
 </p>
+
+
+<h2 id="query-phrasing">Query phrasing</h2>
+<p>
+Users search for phrases like <em>New York</em>, <em>Rolling Stones</em>,
+<em>The Who</em>, or <em>daily horoscopes</em>.
+Considering the latter, most of the time the query string will look like this:
+<pre>
+/search/?query=daily horoscopes&amp;&hellip;
+</pre>
+This is actually a search for documents where both <em>daily</em> and <em>horoscopes</em> match,
+but not necessarily documents with the exact phrase <em>"daily horoscopes"</em>.
+PhrasingSearcher is a Searcher that compares queries with a list of common phrases,
+and replaces two search terms with a phrase.
+If <em>"daily horoscopes"</em> is a common phrase, the above query becomes:
+<pre>
+/search/?query="daily horoscopes"&amp;&hellip;
+</pre>
+The PhrasingSearcher must be configured with a list of common phrases,
+compiled into a <em>finite state automation</em> (FSA). The phrase list must be:
+<ul>
+  <li>all lowercase</li>
+  <li>sorted alphabetically</li>
+</ul>
+Example:
+<pre>
+$ perl -ne 'print lc' listofphrasestextfile.unsorted.mixedcase | sort &gt; listofphrasestextfile
+</pre>
+Note that the Perl command to convert the text file to lowercase does
+not handle non-ASCII characters well (this is just an example).
+If the list of phrases is e.g. UTF-8 encoded and/or contains non-English characters,
+double-check that the resulting file is correct.
+</p><p>
+Use <a href="reference/vespa-cmdline-tools.html#vespa-makefsa">vespa-makefsa</a>
+to compile the list into an FSA file:
+<pre>
+$ vespa-makefsa listofphrasestextfile phrasefsa
+</pre>
+</p><p>
+Put the file on all container nodes, configure the location
+and <a href="cloudconfig/application-packages.html">deploy</a>:
+<pre>
+&lt;container id="default" version="1.0"&gt;
+  &lt;config name="container.qr-searchers"&gt;
+    &lt;com&gt;
+      &lt;yahoo&gt;
+        &lt;prelude&gt;
+          &lt;querytransform&gt;
+            &lt;PhrasingSearcher&gt;
+              &lt;automatonfile&gt;<span style="background-color: yellow;">/path/phrasefsa</span>&lt;/automatonfile&gt;
+            &lt;/PhrasingSearcher&gt;
+          &lt;/querytransform&gt;
+        &lt;/prelude&gt;
+      &lt;/yahoo&gt;
+    &lt;/com&gt;
+  &lt;/config&gt;
+</pre>
+</p>
