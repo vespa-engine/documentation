@@ -4,11 +4,12 @@ title: "Application Package Reference"
 ---
 
 <p>
-This is the <em>application package</em> reference.
+This is the <a href="../cloudconfig/application-packages.html">application package</a> reference.
 An application package is the deployment unit in Vespa.
-To deploy an application, create an application package and <em>vespa-deploy</em> it -
-refer to <a href="../cloudconfig/application-packages.html">application packages</a>.
-The application package consists of a directory of files and subdirectories:
+To deploy an application, create an application package
+and <a href="vespa-cmdline-tools.html#vespa-deploy">vespa-deploy</a> or
+use the <a href="../cloudconfig/deploy-rest-api-v2.html">deploy API</a>.
+The application package is a directory of files and subdirectories:
 </p>
 <table class="table">
   <thead>
@@ -80,23 +81,99 @@ The application package consists of a directory of files and subdirectories:
   </tbody>
 </table>
 <p>
-Additional files and directories can be placed anywhere in the
-application package. These will be not be processed explicitly by
-Vespa when deploying the application package (i.e., they will only
-be considered if they are referred to from within the application
-package), but there is no guarantee to how these might be
-processed in a future release. To extend the application package
-in a way that is guaranteed to be ignored by Vespa in all future
-releases, use the <em>[application]/ext/</em> directory.
+Additional files and directories can be placed anywhere in the application package.
+These will be not be processed explicitly by Vespa when deploying the application package
+(i.e., they will only be considered if they are referred to from within the application package),
+but there is no guarantee to how these might be processed in a future release.
+To extend the application package in a way that is guaranteed
+to be ignored by Vespa in all future releases,
+use the <em>[application]/ext/</em> directory.
 </p>
 
 
 
-<h2 id="versioning_application_packages">Versioning application packages</h2>
+<h2 id="deploy">Deploy</h2>
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th>upload</th>
+      <td>
+        Uploads an application package to the config server.
+        Normally not used, as <em>prepare</em> includes <em>upload</em>
+      </td>
+    </tr><tr>
+      <th>prepare</th>
+      <td>
+        <ol>
+          <li>
+            Verifies that a configuration server is up and running
+          </li><li>
+            Uploads the application to the configuration server, which stores it in
+            <em>$VESPA_HOME/var/db/vespa/config_server/serverdb/tenants/[tenant]/sessions/[sessionid]</em>.
+            <em>[sessionid]</em> increases for each <em>prepare</em>-call.
+            <em>[tenant]</em> is <em>default</em> in a single-tenant system.
+            The config server also stores the application in a <a href="../cloudconfig/configuration-server.html">ZooKeeper</a>
+            instance at <em>/config/v2/tenants/default/sessions/[sessionid]</em> -
+            this distributes the application to all config servers <!-- ToDo: CHECK files ... -->
+          </li><li>
+            Creates metadata about the deployed the applications package (which user deployed it,
+            which directory was it deployed from and at what time was it deployed) and stores it in
+            <em>...sessions/[sessionid]/.applicationMetaData</em>
+          </li><li>
+            Verifies that the application package contains the required files and performs a consistency check
+          </li><li>
+            Validates the xml config files using the
+            <a href="https://github.com/vespa-engine/vespa/tree/master/config-model/src/main/resources/schema">schema</a>,
+            found in <em>$VESPA_HOME/share/vespa/schema</em>
+          </li><li>
+            Checks if there are config changes between the active application and this prepared application
+            that require actions like restart or re-feed (like changes to
+            <a href="../search-definitions.html">search definitions</a>).
+            These actions are returned as part of the prepare step in the
+            <a href="../cloudconfig/deploy-rest-api-v2.html#prepare-session">deployment API</a>.
+            This prevents breaking changes to production - also read about
+            <a href="validation-overrides.html">validation overrides</a>
+          </li><li>
+            Distributes constant tensors and bundles with <a href="../jdisc/container-components.html">components</a>
+            to nodes using <a href="../cloudconfig/application-packages.html#file-distribution">file-distribution</a>.
+            URL download starts.
+            Files are downloaded to <em>$VESPA_HOME/var/db/vespa/filedistribution</em>
+          </li>
+        </ol>
+      </td>
+    </tr><tr>
+      <th>activate</th>
+      <td>
+        <ol>
+          <li>
+            Waits for prepare to complete
+            <!-- ToDo write something about timeout, and how to force etc -->
+          </li><li>
+            Activates new configuration version
+          </li><li>
+            Signals to containers to load new bundles -
+            read more in <a href="jdisc/container-components.html">container components</a>
+            <!-- ToDo should add something on restart-on-deploy -->
+          </li>
+        </ol>
+      </td>
+    </tr><tr>
+      <th>fetch</th>
+      <td>
+        Use <em>fetch</em> to download the active application package
+      </td>
+    </tr>
+  </tbody>
+</table>
+</p>
+
+
+
+<h2 id="versioning-application-packages">Versioning application packages</h2>
 <p>
-  An application can be given a user-defined version, available at
-  <a href="../jdisc/container-components.html#monitoring-the-active-application">/ApplicationStatus</a> view.
-  Configure the version in <a href="services.html">services.xml</a> (at top level):
+An application can be given a user-defined version, available at
+<a href="../jdisc/container-components.html#monitoring-the-active-application">/ApplicationStatus</a>.
+Configure the version in <a href="services.html">services.xml</a> (at top level):
 <pre>
 &lt;services&gt;
   &lt;config name="container.handler.observability.application-userdata"&gt;
@@ -109,18 +186,18 @@ releases, use the <em>[application]/ext/</em> directory.
 
 
 
-<h2 id="preprocess">Preprocess directives</h2>
+<h2 id="preprocess-directives">Preprocess directives</h2>
 <p>
-Preprocess directives is used to:
+Use preprocess directives to:
 <ul>
   <li><em>preprocess:properties</em>:
     define properties that one can refer to everywhere in <em>services.xml</em></li>
   <li><em>preprocess:include</em>:
     split <em>services.xml</em> in smaller chunks</li>
 </ul>
-In the below example, <em>${container.port}</em> will be replaced by <em>4099</em>.
+Below, <em>${container.port}</em> is replaced by <em>4099</em>.
 The contents of <em>content.xml</em> is placed at the include point.
-This is applied recursively, one can use preprocess directives in included files
+This is applied recursively, one can use preprocess directives in included files,
 as long as namespaces are defined in the top level file:
 <pre>
 &lt;services version="1.0" <strong style="background-color: yellow;">xmlns:preprocess="properties"</strong>&gt;
