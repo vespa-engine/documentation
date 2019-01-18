@@ -259,8 +259,145 @@ Options:
 
 <h2 id="vespa-feeder">vespa-feeder</h2>
 <p>
-<a href="vespa-feeder.html">vespa-feeder</a> is a feeding client that parses JSON input
+<em>vespa-feeder</em> is a feeding client that parses
+<a href="http://docs.vespa.ai/documentation/reference/document-json-format.html">JSON</a> input
 as Vespa document operations and sends to a Vespa application.
+It parses the content of the input sequentially, and feeds each operation in order.
+However, since many operations will be pending at any time,
+and because the processing time of an operation varies,
+there is no guarantee as to which order operations reach the content nodes.
+As this can be important when it comes to operations that apply to the same document id,
+there is logic in place to not send an operation for a document id to which there is already a pending operation.
+</p><p>
+<em>vespa-feeder</em> prints a report at end of feed.
+To print this report once a minute, use <em>--verbose</em>:
+<pre>
+Messages sent to vespa (route default) :
+----------------------------------------
+PutDocument: ok: 999997 msgs/sec: 411.38 failed: 0 <span style="background-color: yellow;">ignored: 0</span> latency(min, max, avg): 2, 4360, 99
+</pre>
+<em>ignored</em> reports the number of documents that could not be
+routed to any <a href="services-content.html">content clusters</a> because they did not match any of the
+<a href="services-content.html#documents">configured document types</a> or selections - examples are:
+<ul>
+  <li>
+    A document type is removed from the application
+    and the feed file contains documents with this type
+  </li><li>
+    One or more selection expressions restrict the documents the cluster accepts,
+    and the feed file contains documents that are excluded.
+    An example is feeding <a href="../search-definitions.html#document-expiry">expired documents</a> -
+    a selection for documents that are less than 30 days old
+    and the feed file contains documents that are 30+ days old
+  </li>
+</ul>
+</p><p>
+Synopsis: <code>vespa-feeder [--abortondataerror true|false] [--abortonsenderror true|false] [--file arg] [--maxpending arg] [--maxpendingsize arg] [--maxfeedrate arg] [mode standard|benchmark] [--noretry] [--retrydelay arg] [--route arg] [--timeout arg] [--trace arg] [--validate] [--dumpDocuments filename] [priority arg] [--numthreads arg] [create-if-non-existent] [-v,--verbose] filename</code>
+</p><p>
+Example:
+<pre>
+$ vespa-feeder file.json
+</pre>
+Options:
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <th>--abortondataerror arg</th>
+      <td>
+        Abort if the input has errors (true|false) - default true.
+        Set to <em>false</em> in case the input has errors (e.g. invalid characters).
+        <em>vespa-feeder</em> notifies on parsing errors at the end of the feed, but it will not abort
+      </td>
+    </tr><tr>
+      <th>--abortonsenderror arg</th>
+      <td>
+        Abort if an error occured while sending operations to Vespa (true|false) - default true
+      </td>
+    </tr><tr>
+      <th>--file arg</th>
+      <td>
+        Input files to read. These can also be passed as arguments without the option prefix.
+        If none is given, this tool parses identifiers from stdin
+      </td>
+    </tr><tr>
+      <th>--maxpending arg</th>
+      <td>
+        Maximum number of pending operations. This disables dynamic throttling, use with care
+        <!-- ToDo link to dynamix throttling doc -->
+      </td>
+    </tr><tr>
+      <th>--maxpendingsize arg</th>
+      <td>
+        Maximum size (in bytes) of pending operations
+      </td>
+    </tr><tr>
+      <th>--maxfeedrate arg</th>
+      <td>
+        Limits the feed rate to the given number (operations/second)
+      </td>
+    </tr><tr>
+      <th>--mode</th>
+      <td>
+        The mode to run vespa-feeder in (standard|benchmark) - default standard
+      </td>
+    </tr><tr>
+      <th>--noretry</th>
+      <td>
+        Disables retries of recoverable failures
+      </td>
+    </tr><tr>
+      <th>--retrydelay arg</th>
+      <td>
+        The time (in seconds) to wait between retries of a failed operation. Default 1
+      </td>
+    </tr><tr>
+      <th>--route arg</th>
+      <td>
+        The <a href="../routing.html">route</a> to send the data to. Default the the <em>default</em> route
+      </td>
+    </tr><tr>
+      <th>--timeout arg</th>
+      <td>
+        Time (in seconds) allowed for sending operations. Default 180
+      </td>
+    </tr><tr>
+      <th>--trace arg</th>
+      <td>
+        Trace level of network traffic. Default 0
+      </td>
+    </tr><tr>
+      <th>--validate</th>
+      <td>
+        Run validation tool on input files - do not feed
+      </td>
+    </tr><tr>
+        <th>--dumpDocuments &lt;filename&gt;</th>
+      <td>
+        File where documents in the put are serialized
+      </td>
+    </tr><tr>
+        <th>--priority arg</th>
+      <td>
+        Set <a href="services.html#clients">priority</a> of sent messages
+      </td>
+    </tr><tr>
+        <th>--numthreads arg</th>
+      <td>
+        How many threads to use for sending. Default 1
+      </td>
+    </tr><tr>
+        <th>--create-if-non-existent</th>
+      <td>
+        Enable setting of create-if-non-existent to true on all document updates in the given feed
+      </td>
+    </tr><tr>
+        <th>-v, --verbose</th>
+      <td>
+        Enable verbose output of progress
+      </td>
+    </tr>
+  </tbody>
+</table>
 </p>
 
 
