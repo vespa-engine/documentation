@@ -162,7 +162,7 @@ search](https://github.com/vespa-engine/sample-apps/tree/master/blog-search)
 creates a simple but functional blog post search engine. The application
 package is found in
 [src/main/application](https://github.com/vespa-engine/sample-apps/tree/master/blog-search/src/main/application).
-In the following tutorial we will recreate this application from scratch. 
+In the following tutorial we will recreate this application from scratch.
 Create a new folder where we will place our application package:
 
 <pre data-test="exec">
@@ -389,8 +389,8 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 Use the [Metrics API](../reference/metrics-health-format.html) to track number
 of documents indexed:
 
-<pre data-test="exec" data-test-assert-contains="proton.doctypes.blog_post.numdocs">
-$ curl -s "http://localhost:19112/state/v1/metrics" | tr "," "\n" | grep -A 2 proton.doctypes.blog_post.numdocs
+<pre data-test="exec" data-test-assert-contains="content.proton.documentdb.documents.active">
+$ curl -s "http://localhost:19112/state/v1/metrics" | tr "," "\n" | grep -A 2 content.proton.documentdb.documents.active
 </pre>
 
 You can also inspect the search node state by:
