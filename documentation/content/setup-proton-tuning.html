@@ -35,6 +35,7 @@ content
                 <a href="#flushstrategy-native-conservative-disk-limit-factor">disk-limit-factor</a>
           <a href="#resizing">resizing</a>
             <a href="#resizing-initialdocumentcount">initialdocumentcount</a>
+            <a href="#resizing-amortize-count">amortize-count</a>
           <a href="#initialize">initialize</a>
             <a href="#initialize-threads">threads</a>
           <a href="#feeding">feeding</a>
@@ -43,10 +44,16 @@ content
             <a href="#index-io">io</a>
               <a href="#index-io-write">write</a>
               <a href="#index-io-read">read</a>
-              <a href="#index-io-search">search</a>
+            <a href="#index-warmup">warmup</a>
+              <a href="#index-warmup-time">time</a>
+              <a href="#index-warmup-unpack">unpack</a>
           <a href="#attribute">attribute</a>
             <a href="#attribute-io">io</a>
               <a href="#attribute-io-write">write</a>
+          <a href="#remove-db">remove-db</a>
+            <a href="#remove-db-prune">prune</a>
+              <a href="#remove-db-prune-age">age</a>
+              <a href="#remove-db-prune-interval">interval</a>
           <a href="#summary">summary</a>
             <a href="#summary-io">io</a>
               <a href="#summary-io-write">write</a>
@@ -319,10 +326,16 @@ Optional sub-elements:
     maximum number of documents per node will prevent a resize,
     which is useful if memory is the limiting sizing factor.
     </li>
+    <li id="resizing-amortize-count"><code>amortize-count</code>:
+    When growing the number of documents on a node the expansion of attributes
+    will be spread out over N documents - default 1024. This is to spread the memory spikes out in time.
+    You will not have to tune this. The default is good for all usecases. Documented for reference.
+    </li>
 </ul>
 <pre>
 &lt;resizing&gt;
     &lt;initialdocumentcount&gt;1024&lt;/initialdocumentcount&gt;
+    &lt;amortize-count&gt;1024&lt;/amortize-count&gt;
 &lt;/resizing&gt;
 </pre>
 </p>
@@ -409,6 +422,21 @@ Tune various aspect with the handling of disk and memory indexes. Optional sub-e
         </li>
     </ul>
     </li>
+    <li id="index-warmup"><code>warmup</code>
+    <ul>
+        <li id="index-warmup-time"><code>time</code>:
+        Specifies in seconds how long the index shall be warmed up before being switch in for serving.
+        During warmup it will receive queries and posting lists will be iterated, but results ignored
+        as they are duplicates of the live index. This will pull in the most important ones in the cache.
+        However as warming up an index will occupy more memory do not turn it on unless you suspect you need it.
+        And always benchmark to see if it is worth it.
+        </li>
+        <li id="index-warmup-unpack"><code>unpack</code>:
+        Controls whether all posting features are pulled in to the cache, or only the most important.
+        values={true, false}, default false.
+        </li>
+    </ul>
+    </li>
 </ul>
 <pre>
 &lt;index&gt;
@@ -417,6 +445,10 @@ Tune various aspect with the handling of disk and memory indexes. Optional sub-e
         &lt;read&gt;directio&lt;/read&gt;
         &lt;search&gt;mmap&lt;/search&gt;
     &lt;/io&gt;
+    &lt;warmup&gt;
+        &lt;time&gt;60&lt;/time&gt;
+        &lt;unpack&gt;true&lt;/unpack&gt;
+    &lt;/warmup&gt;
 &lt;/index&gt;
 </pre>
 </p>
@@ -449,6 +481,41 @@ Tune various aspect with the handling of attribute vectors. Optional sub-element
         &lt;write&gt;directio&lt;/write&gt;
     &lt;/io&gt;
 &lt;/attribute&gt;
+</pre>
+</p>
+
+<h2 id="removed-db">removed-db</h2>
+<p>
+<table class="table">
+    <tr>
+        <td>Contained in:</td><td><a href="#searchnode"><code>searchnode</code></a></td>
+    </tr><tr>
+        <td>Required:</td><td>No</td>
+    </tr>
+</table>
+Tune various aspect of the db of removed documents. Optional sub-elements:
+<ul>
+    <li id="removed-db-prune"><code>prune</code>
+    <ul>
+        <li id="removed-db-prune-age"><code>age</code>:
+        Specifes how long (in seconds) we must remember removed documents before we can prune them away.
+        Default is 2 weeks. This sets the upper limit on long a node can be down and still be accepted back
+        in the system without having the index wiped. There is no point in having this any higher than the age of
+        your documents. If you refeed your corpus every day there is no point in having this longer than 24 hours.
+        </li>
+        <li id="removed-db-prune-interval"><code>interval</code>:
+        Specifies how often (in seconds) to prune old documents. Default is 600 which is 10 minutes. No need to change default.
+        Exposed here for reference and for testing.
+        </li>
+    </ul>
+    </li>
+</ul>
+<pre>
+&lt;removed-db&gt;
+    &lt;prune&gt;
+        &lt;age&gt;86400&lt;/age&gt;
+    &lt;/prune&gt;
+&lt;/removed-db&gt;
 </pre>
 </p>
 
