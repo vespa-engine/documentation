@@ -14,7 +14,7 @@ search local {
         field title type string {
             indexing: index
         }
-        field latlong type <span style="background-color: yellow;">position</span> {
+        field location type <span style="background-color: yellow;">position</span> {
             indexing: attribute
         }
     }
@@ -23,36 +23,31 @@ search local {
     }
 }
 </pre><pre>
-&lt;document documenttype=&quot;local&quot; documentid=&quot;id:local:local::abc123&quot;&gt;
-    &lt;title&gt;some random pizza place&lt;/title&gt;
-    &lt;latlong&gt;<span style="background-color: yellow;">N37.401;W121.996</span>&lt;/latlong&gt;
-&lt;/document&gt;
+[
+    {
+        "put": "id:localnamespace:local::business-1",
+        "fields": {
+            "title" :    "Random pizza place",
+            "location" : "N37.401;W121.996"
+        }
+    }
+]
 </pre>
-To <a href="reference/search-api-reference.html#geographical-searches">search for a geographical position</a>,
-use <a href="reference/search-api-reference.html#pos.ll">pos.ll</a>
+Restrict search results to a <a href="reference/search-api-reference.html#geographical-searches">geographical position</a>,
+using <a href="reference/search-api-reference.html#pos.ll">pos.ll</a>:
 <pre>
-search/?query=pizza&amp;pos.ll=N37.416383%3BW122.024683
+$ curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
+  http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683
 </pre>
-By default, this will limit the hits otherwise returned by the given
-query to those having a position within 50km of the Yahoo office in Sunnyvale.
-Since 50km is probably too far to go just to get some pizza,
-a more realistic example would add a radius of e.g. 5 miles:
+Alter the <a href="reference/search-api-reference.html#pos.radius">pos.radius</a> from the default:
 <pre>
-search/?query=pizza&amp;pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5mi
+$ curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
+  http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5km
 </pre>
-The <a href="reference/search-api-reference.html#pos.radius">pos.radius</a>
-parameter accepts distances in kilometers (km), miles (mi), and meters (m).
-</p><p>
-Each search result will have an additional summary entry that contains
-the distance from the given geographical position, in millionths of a
-degree - about 10 cm. The new entry gets the name of the search
-definition field and the suffix &ldquo;distance&rdquo;:
-<code>&lt;fieldname&gt;.distance</code>. In the examples above, the
-name would be <code>latlong.distance</code>. For documents with multiple
-positions in the attribute, the distance to the nearest position will be returned.
-</p><p>
-The corresponding rank features for this example would
-be <a href="reference/rank-features.html#distance(name)">distance(latlong)</a> or
+The corresponding rank features for this example are
+<a href="reference/rank-features.html#distance(name)">distance(latlong)</a> or
 <a href="reference/rank-features.html#closeness(name)">closeness(latlong)</a> or
 <a href="reference/rank-features.html#closeness(name).logscale">closeness(latlong).logscale</a> -
 the last is probably the most useful when combining distance ranking with textual relevance ranking.
@@ -62,52 +57,68 @@ the last is probably the most useful when combining distance ranking with textua
 
 <h2 id="summary-fields">Summary fields</h2>
 <p>
-2017-01-20: if using summary | attribute instead of attribute,
+Position fields configured as:
 <pre>
-"mypos": {
-  "x": -123988700,
-  "y": -22453200
-},
-</pre>
-is returned.
-</p><p>
-When querying with a position, one can get up to three summary fields.
-If the searchdefinition looks like:
-<pre>
-field mygeo type position {
-    indexing: attribute | summary
+field location type position {
+    indexing: attribute
 }
 </pre>
-the output with default rendering looks like:
+is rendered as:
 <pre>
-&lt;field name="mygeo"&gt;
-  &lt;struct-field name="y"&gt;37374821&lt;/struct-field&gt;
-  &lt;struct-field name="x"&gt;-122057174&lt;/struct-field&gt;
-&lt;/field&gt;
-&lt;field name="mygeo.position"&gt;&lt;position x="-122057174" y="37374821" latlong="N37.374821;W122.057174" /&gt;&lt;/field&gt;
-&lt;field name="mygeo.distance"&gt;48921&lt;/field&gt;
+"location.position": {
+  "x": -121996000,
+  "y": 37401000,
+  "latlong": "N37.401000;W121.996000"
+},
+"location.distance": 27488
 </pre>
-The first summary field here ("latlong") is only generated if you
-specify "summary" in the indexing statement.  It is mostly intended for
-programmatic use in a result processor (a Searcher).
+Adding <em>summary</em>:
+<pre>
+field location type position {
+    indexing: summary | attribute
+}
+</pre>
+will render it as:
+<pre>
+"location": {
+  "x": -121996000,
+  "y": 37401000
+},
+"location.position": {
+  "x": -121996000,
+  "y": 37401000,
+  "latlong": "N37.401000;W121.996000"
+},
+"location.distance": 27488
+</pre>
+
+
+<h3 id="distance">Distance</h3>
+<p>
+Note that search results has an additional <em>distrance</em> entry
+with the distance from the position, in millionths of a degree - about 10 cm.
+The new entry gets the name of the search definition field and the suffix <em>distance</em>:
+<code>&lt;fieldname&gt;.distance</code>. In the example above, the name is <code>location.distance</code>.
 </p><p>
-The second summary field is generated as XML in the back-end, with XML
-attributes for x/y and also a "latlong" attribute with the same format
-as the input (feeding) format.
+<em>The distance is only calculated and rendered for queries with position</em>
 </p><p>
-Note that the numbers used for "x" and "y" in the above two fields are
-integers - it's a direct representation of the internal x/y struct used
-for position.  These are in millionths of a degree, so it's quite easy
-to convert.  Also note which is which of "x" and "y":
+For documents with multiple positions in the attribute, the distance to the nearest position will be returned.
+</p>
+
+
+<h3 id="x-y">X/Y</h3>
+<p>
+Note that the numbers used for "x" and "y" in the above two fields are integers -
+it's a direct representation of the internal x/y struct used for position.
+These are in millionths of a degree.
+Also note which is which of "x" and "y":
 </p><img src="img/Mercator_projection.jpg" height="407" width="480"><p>
 It's just putting a normal coordinate system on top of the world map,
 so "x" is the longitude (east-west) and "y" the latitude (north-south).
 </p><p>
-The third summary field is the distance, also as an integer, and also in
-millionths of degrees.  When converting to internal units (millionths
-of degrees), the Earth polar radius is used, so
-<code>degrees = 180.0 * meters / (Math.PI * 6356752.0);</code>
-is the basic conversion formula.
+The third summary field is the distance, also as an integer, and also in millionths of degrees.
+When converting to internal units (millionths of degrees), the Earth polar radius is used,
+so <code>degrees = 180.0 * meters / (Math.PI * 6356752.0);</code> is the basic conversion formula.
 </p>
 
 
@@ -184,7 +195,7 @@ search address {
 </pre>
 Here we assume that the home fields will contain the address and position of your house,
 the work fields the address and position of your workplace,
-while the "bothlatlong" field is assumed to be filled with
+while the <em>bothlatlong</em> field is assumed to be filled with
 the positions of both house and workplace somehow.
 In a query it's then possible to say
 <pre>
@@ -259,7 +270,7 @@ As noted in the the <a href="reference/rank-features.html#distanceToPath(name).d
 rank features reference</a>,
 the path is supplied as a query parameter by name of the feature and the <code>path</code> keyword:
 <pre>
-query=(&hellip;)&amp;rankproperty.distanceToPath(<em>name</em>).path=(x1,y1,x2,y2,&hellip;,xN,yN)
+yql=(&hellip;)&amp;rankproperty.distanceToPath(<em>name</em>).path=(x1,y1,x2,y2,&hellip;,xN,yN)
 </pre>
 Here <code>name</code> has to match the name of the position attribute that holds the positions data.
 </p><p>
@@ -337,9 +348,9 @@ There are then two more parameters that must be supplied
 by the user; <code>$distance</code> and <code>$traveled</code>. Vespa
 expects these parameters to be supplied in a scale compatible with the
 feature's output, and should probably also be mapped by the container  
-plugin. The feature's &ldquo;distance&rdquo; output is given in
+plugin. The feature's <em>distance</em> output is given in
 Vespa's internal resolution, which is approximately 10 units per
-meter. The &ldquo;traveled&rdquo; output is a normalized number
+meter. The <em>traveled</em> output is a normalized number
 between 0 and 1, where 0 represents the beginning of the path, and 1
 is the end of the path.
 </p><p>
@@ -348,8 +359,10 @@ the most appropriate hits for our scenario. Note that the figures only
 show the top hit for each query:
 <img src="img/geo/path4.png" />
 <img src="img/geo/path5.png" />
-a) Searching for restaurants with the DistanceToPath
-feature. <code>$distance = 1000, $traveled = 0.1</code>
-b) Searching for gas stations with the DistanceToPath
-feature. <code>$distance = 1000, $traveled = 0.9</code>
 </p>
+<ol>
+  <li>Searching for restaurants with the DistanceToPath feature.
+    <code>$distance = 1000, $traveled = 0.1</code></li>
+  <li>Searching for gas stations with the DistanceToPath feature.
+    <code>$distance = 1000, $traveled = 0.9</code></li>
+</ol>
