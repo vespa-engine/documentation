@@ -4,9 +4,9 @@ title: "Geo Search"
 ---
 
 <p>
-A field can have type <a href="reference/search-definitions-reference.html#type:position">position</a>.
-This enables users to limit hits to within an area,
-or use the distance from a particular point as a criteria for relevancy calculation.
+To model position(s) in documents, use field(s) of type
+<a href="reference/search-definitions-reference.html#type:position">position</a>.
+Use this to limit hits to within an area, or use the distance from a position in rank functions.
 Sample search definition and document:
 <pre>
 search local {
@@ -33,19 +33,36 @@ search local {
     }
 ]
 </pre>
-Restrict search results to a <a href="reference/search-api-reference.html#geographical-searches">geographical position</a>,
-using <a href="reference/search-api-reference.html#pos.ll">pos.ll</a>:
+
+
+<h2 id="restrict">Restrict</h2>
+<p>
+To <a href="reference/search-api-reference.html#geographical-searches">restrict search results</a>,
+define the area using a position + radius or a bounding box.
+</p><p>
+Restrict search results using <a href="reference/search-api-reference.html#pos.ll">pos.ll</a> and default radius (50km):
 <pre>
 $ curl -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
   http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683
 </pre>
-Alter the <a href="reference/search-api-reference.html#pos.radius">pos.radius</a> from the default:
+Set a different <a href="reference/search-api-reference.html#pos.radius">pos.radius</a>:
 <pre>
 $ curl -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
   http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5km
 </pre>
+Restrict search results using <a href="reference/search-api-reference.html#pos.bb">pos.bb</a> bounding box:
+<pre>
+    $ curl -H "Content-Type: application/json" \
+    --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
+    http://localhost:8080/search/?pos.bb=n=37.44899,s=37.3323,e=-121.98241,w=-122.06566
+</pre>
+</p>
+
+
+<h2 id="rank">Rank</h2>
+<p>
 The corresponding rank features for this example are
 <a href="reference/rank-features.html#distance(name)">distance(latlong)</a> or
 <a href="reference/rank-features.html#closeness(name)">closeness(latlong)</a> or
@@ -57,13 +74,7 @@ the last is probably the most useful when combining distance ranking with textua
 
 <h2 id="summary-fields">Summary fields</h2>
 <p>
-A position field configured as:
-<pre>
-field location type position {
-    indexing: attribute
-}
-</pre>
-is rendered as:
+A summary field is normally rendered like:
 <pre>
 "location.position": {
   "x": -121996000,
@@ -72,29 +83,9 @@ is rendered as:
 },
 "location.distance": 27488
 </pre>
-Adding <em>summary</em>:
-<pre>
-field location type position {
-    indexing: summary | attribute
-}
-</pre>
-will render it as:
-<pre>
-"location": {
-  "x": -121996000,
-  "y": 37401000
-},
-"location.position": {
-  "x": -121996000,
-  "y": 37401000,
-  "latlong": "N37.401000;W121.996000"
-},
-"location.distance": 27488
-</pre>
-
-
-<h3 id="distance">Distance</h3>
-<p>
+See the <a href="reference/search-definitions-reference.html#type:position">reference</a>
+for rendering options.
+</p><p>
 Note that search results has an additional <em>distrance</em> entry
 with the distance from the position, in millionths of a degree - about 10 cm.
 The new entry gets the name of the search definition field and the suffix <em>distance</em>:
@@ -108,8 +99,7 @@ For documents with multiple positions in the attribute, the distance to the near
 
 <h3 id="x-y">X/Y</h3>
 <p>
-Note that the numbers used for "x" and "y" in the above two fields are integers -
-it's a direct representation of the internal x/y struct used for position.
+The numbers used for "x" and "y" in the above two fields are integers.
 These are in millionths of a degree.
 Also note which is which of "x" and "y":
 </p><img src="img/Mercator_projection.jpg" height="407" width="480"><p>
@@ -119,39 +109,6 @@ so "x" is the longitude (east-west) and "y" the latitude (north-south).
 The third summary field is the distance, also as an integer, and also in millionths of degrees.
 When converting to internal units (millionths of degrees), the Earth polar radius is used,
 so <code>degrees = 180.0 * meters / (Math.PI * 6356752.0);</code> is the basic conversion formula.
-</p>
-
-
-
-<h2>Bounding box</h2>
-<p>
-When searching for all documents that has a location in a given map view,
-it is most convenient to specify a bounding box instead
-of searching for all documents within a radius from a point.
-This can be achieved using the <a href="reference/search-api-reference.html#pos.bb">pos.bb</a>
-parameter in the query:
-<pre>
-search/?query=pizza&amp;pos.bb=n=37.44899,s=37.3323,e=-121.98241,w=-122.06566
-</pre>
-Example result:
-<pre>
-&lt;boundingBox&gt;
-  &lt;southWest&gt;
-    &lt;latitude&gt;40.183868&lt;/latitude&gt;
-    &lt;longitude&gt;-74.819519&lt;/longitude&gt;
-  &lt;/southWest&gt;
-  &lt;northEast&gt;
-    &lt;latitude&gt;40.248291&lt;/latitude&gt;
-    &lt;longitude&gt;-74.728798&lt;/longitude&gt;
-  &lt;/northEast&gt;
-&lt;/boundingBox&gt;
-</pre>
-here you have (in order) south/west corner, north/east corner, which is simple to use in a query like this:
-<pre>
-search/?query=pizza&amp;pos.bb=s=40.183868,w=-74.819519,n=40.248291,e=-74.728798
-</pre>
-The directions S/W/N/E can appear in any order, and be specified in lower or upper case,
-but you must have N>=S and E>=W.
 </p>
 
 
