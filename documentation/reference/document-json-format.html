@@ -6,17 +6,180 @@ title: "Document JSON Format"
 This document describes the JSON format used for sending document operations to Vespa.
 Field names and types are defined in the
 <a href="search-definitions-reference.html#field-types">search definition reference</a>.
+Use proper JSON - a common error is not stripping ASCII control characters from feed data.
+See <a href="https://github.com/vespa-engine/vespa/blob/master/vespajlib/src/main/java/com/yahoo/text/Text.java">
+stripInvalidCharacters</a> for a utility function.
+Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshooting</a>.
+</p>
+
+
+
+<h2 id="field-types">Field types</h2>
+<table class="table">
+  <tr>
+    <th>string</th>
+    <td></td>
+  </tr><tr>
+    <th>int</th>
+    <td></td>
+  </tr><tr>
+    <th>long</th>
+    <td></td>
+  </tr><tr>
+    <th>bool</th>
+    <td></td>
+  </tr><tr>
+    <th>byte</th>
+    <td></td>
+  </tr><tr>
+    <th>float</th>
+    <td></td>
+  </tr><tr>
+    <th>double</th>
+    <td></td>
+  </tr><tr>
+    <th>position</th>
+    <td></td>
+  </tr><tr>
+    <th>predicate</th>
+    <td></td>
+  </tr><tr id="raw">
+    <th>raw</th>
+    <td>
+      <p>
+      Feeding <a href="search-definitions-reference.html#type:raw">raw</a> fields
+      are done by feeding the input data as a base64-encoded string
+<pre>
+"rawfield": "VW5rbm93biBhcnRpc3QgZnJvbSB0aGUgbW9vbg=="
+</pre>
+      </p>
+    </td>
+  </tr><tr>
+    <th>uri</th>
+    <td></td>
+  </tr><tr id="array">
+    <th>array</th>
+    <td>
+      <p>
+      Arrays are represented as JSON arrays.
+<pre>
+"int_array_field": [
+    123,
+    456,
+    789
+]
+
+"string_array_field": [
+    "item 1",
+    "item 2",
+    "item 3"
+]
+</pre>
+    </p>
+    </td>
+  </tr><tr id="weightedset">
+    <th>weightedset</th>
+    <td>
+      <p>
+      Weighted sets are represented as maps where the value is the weight.
+      Note, even if the key is not a string as such, it will be represented as a string in the JSON format.
+      Default weight is 1.
+<pre>
+"int_weighted_set": {
+    "123": 2,
+    "456": 78
+}
+
+"string_weighted_set": {
+    "item 1": 143,
+    "item 2": 6
+}
+</pre>
+      </p>
+    </td>
+  </tr><tr id="tensor">
+    <th>tensor</th>
+    <td>
+<p>
+Feeding a <a href="search-definitions-reference.html#type:tensor">tensor</a> field
+is done by specifying the cells of the tensor as follows:
+</p>
+<pre>
+"tensorfield": {
+    "cells": [
+        { "address": { "x": "a", "y": "b" }, "value": 2.0 },
+        { "address": { "x": "c", "y": "d" }, "value": 3.0 }
+    ]
+}
+</pre>
+<p>
+In this case we have a tensor with two mapped dimensions <em>x</em> and <em>y</em>.
+</p><p>
+In the next example we have a tensor with two indexed dimensions <em>x</em> and <em>y</em>
+representing a 2x2 matrix.
+</p>
+<pre>
+"tensorfield": {
+    "cells": [
+        { "address": { "x": "0", "y": "0" }, "value": 2.0 },
+        { "address": { "x": "0", "y": "1" }, "value": 3.0 },
+        { "address": { "x": "1", "y": "0" }, "value": 5.0 },
+        { "address": { "x": "1", "y": "1" }, "value": 7.0 }
+    ]
+}
+</pre>
+
+    </td>
+  </tr><tr id="struct">
+    <th>struct</th>
+    <td>
+      <p>
+      Structs are more or less directly represented as JSON objects, declared by their field name.
+<pre>
+"mystruct": {
+    "intfield": 123,
+    "stringfield": "foo"
+}
+</pre>
+      Refer to the reference for restrictions using <a href="search-definitions-reference.html#type:struct">structs</a>.
+      </p>
+    </td>
+  </tr><tr id="map">
+    <th>map</th>
+    <td>
+      <p>
+      Maps are represented as JSON dictionaries. The JSON dictionary key must be a string,
+      even if the map key type in the search definition is not a string (see below for an example of this).
+<pre>
+"int_to_string_map": {
+    "123": "foo",
+    "456": "bar",
+    "789": "foobar"
+}
+</pre>
+      Refer to the reference for restrictions using <a href="search-definitions-reference.html#type:map">maps</a>
+      </p>
+    </td>
+  </tr><tr>
+    <th>annotationreference</th>
+    <td></td>
+  </tr><tr>
+    <th>reference</th>
+    <td></td>
+  </tr><tr>
+  </tr>
+</table>
+
+
+
+<h2 id="operations">Operations</h2>
+<p>
 There are three types of operations:
 <ul>
     <li>Put - for submitting full document, will insert and overwrite any old document with same ID</li>
     <li>Remove - for removing a document with a given ID</li>
     <li>Update - for updating fields in a document with a specified ID</li>
 </ul>
-Use proper JSON - a common error is not stripping ASCII control characters from feed data.
-See <a href="https://github.com/vespa-engine/vespa/blob/master/vespajlib/src/main/java/com/yahoo/text/Text.java">
-stripInvalidCharacters</a> for a utility function.
-Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshooting</a>.
-</p><p>
 The are two channels for sending document operations, with a slightly different format:
 </p>
 <table class="table">
@@ -29,9 +192,7 @@ The are two channels for sending document operations, with a slightly different 
     </tr>
 </table>
 
-
-
-<h2 id="put">Put</h2>
+<h3 id="put">Put</h3>
 <p>
 Writing a document to Vespa looks like:
 <table class="table">
@@ -58,13 +219,12 @@ http <span style="background-color: yellow;">post</span> /document/v1/music/musi
 </table>
 Values for the document fields may be set using elements as shown above in the <em>fields</em> object.
 In this example, <em>title</em> field is specified in the document type.
-See examples using <a href="document-json-put-format.html">
-arrays, maps, structs, raw, tensor, and weighted sets</a>.
+See examples using arrays, maps, structs, raw, tensor, and weighted sets below.
 </p>
 
 
 
-<h2 id="update">Update</h2>
+<h3 id="update">Update</h3>
 <p>
 Updates make changes to documents without submitting the entire document - great for efficiency.
 If the document does not exist, Vespa creates creates a new document if
@@ -113,7 +273,7 @@ If greater consistency is needed, use a <a href="#conditional-updates-test-and-s
 
 
 
-<h2 id="remove">Remove</h2>
+<h3 id="remove">Remove</h3>
 <table class="table">
     <tr>
         <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
@@ -135,7 +295,7 @@ http <span style="background-color: yellow;">delete</span> /document/v1/music/mu
 
 
 
-<h2 id="conditional-updates-test-and-set">Conditional execution - test and set</h2>
+<h3 id="conditional-updates-test-and-set">Conditional execution - test and set</h3>
 <p>
 An optional <em>condition</em> can be added to operations to specify a <em>test and set</em> condition.
 The value of the condition is a <a href="document-select-language.html">document selection</a> encoded as a string.
