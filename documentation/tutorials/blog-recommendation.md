@@ -232,7 +232,6 @@ A tensor field `user_item_cf` is added to `blog_post.sd` to hold the blog post l
 
 	field user_item_cf type tensor(user_item_cf[10]) {
 		indexing: summary | attribute
-		attribute: tensor(user_item_cf[10])
 	}
 
 	field has_user_item_cf type byte {
@@ -260,7 +259,6 @@ A new search definition  `user.sd`  defines a  document type named `user` to hol
 
             field user_item_cf type tensor(user_item_cf[10]) {
                 indexing: summary | attribute
-                attribute: tensor(user_item_cf[10])
             }
 
             field has_user_item_cf type byte {
