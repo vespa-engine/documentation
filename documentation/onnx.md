@@ -39,7 +39,6 @@ search onnx {
     document onnx {
         field document_tensor type tensor(d0[1],d1[784]) {
             indexing: attribute | summary
-            attribute: tensor(d0[1],d1[784])
         }
     }
     rank-profile default inherits default {
