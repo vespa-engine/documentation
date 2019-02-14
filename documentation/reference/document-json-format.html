@@ -121,9 +121,9 @@ field location type position { indexing: attribute }
       is rendered as:
 <pre>
 "location.position": {
-  "x": -121996000,
-  "y": 37401000,
-  "latlong": "N37.401000;W121.996000"
+    "x": -121996000,
+    "y": 37401000,
+    "latlong": "N37.401000;W121.996000"
 }
 </pre>
       Adding <em>summary</em>:
@@ -133,13 +133,13 @@ field location type position { indexing: summary | attribute }
       will render it as:
  <pre>
 "location": {
-  "x": -121996000,
-  "y": 37401000
+    "x": -121996000,
+    "y": 37401000
 },
 "location.position": {
-  "x": -121996000,
-  "y": 37401000,
-  "latlong": "N37.401000;W121.996000"
+    "x": -121996000,
+    "y": 37401000,
+    "latlong": "N37.401000;W121.996000"
 }
 </pre>
       </p><p>
@@ -148,9 +148,9 @@ field location type position { indexing: summary | attribute }
       Find details in <a href="../geo-search.html">Geo search</a>:
 <pre>
 "location.position": {
-  "x": -121996000,
-  "y": 37401000,
-  "latlong": "N37.401000;W121.996000"
+    "x": -121996000,
+    "y": 37401000,
+    "latlong": "N37.401000;W121.996000"
 },
 "location.distance": 27488
 </pre>
@@ -308,70 +308,98 @@ representing a 2x2 matrix.
 
 
 
-<h2 id="operations">Operations</h2>
+<h2 id="document-operations">Document operations</h2>
 <p>
-There are three types of operations:
+Manage documents using:
 <ul>
-    <li>Put - for submitting full document, will insert and overwrite any old document with same ID</li>
-    <li>Remove - for removing a document with a given ID</li>
-    <li>Update - for updating fields in a document with a specified ID</li>
+  <li>Put - insert / overwrite document with same ID</li>
+  <li>Get - get a document by ID</li>
+  <li>Remove - remove a document by ID</li>
+  <li>Update - update fields in a document by ID.
+    Updates are partial, submit new values for fields to update.
+    If the document does not exist, a new is created document if
+    <a href="#create">create if nonexistent</a> is used - otherwise, returns error.
+    There are three basic operation on <em>field</em> level:
+    <ul>
+      <li><em>Assign</em>: Replace the content of the field,
+        by value or by using arithmetic operations</li>
+      <li><em>Add</em>: Add a new value to a field (array, weightedset etc).
+        <strong>Note:</strong> Messages can be re-sent by Vespa's Message Bus.
+        This can cause unexpected results for all operations except <em>assign</em> and <em>remove</em>!
+        If greater consistency is needed,
+        use a <a href="#conditional-updates-test-and-set">conditional update</a> instead.</li>
+      <li><em>Remove</em>: Remove a value from a field</li>
+    </ul>
+  </li>
 </ul>
-The are two channels for sending document operations, with a slightly different format:
-</p>
+The are two methods for document operations:
+<ul>
+  <li>
+    <a href="../vespa-http-client.html">Vespa HTTP client</a>:
+    This is a Java API / command line tool to feed asynchronous document operations to Vespa.
+    Input is JSON with one or more document operations (for high throughput, batch operations).
+    The document ID is hence in the JSON feed.
+  </li><li>
+    <a href="../document-api.html">Document API</a>:
+    This synchronous API accepts one operation per request - the document ID is encoded in the URL
+  </li>
+</ul>
 <table class="table">
-    <tr>
-        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
-        <th width="50%"><a href="../document-api.html">RESTified Document Operation API</a></th>
-    </tr><tr>
-        <td>This is a Java API and command line tool to feed asynchronous document operations to Vespa content clusters (for high performance operations)</td>
-        <td>This channel accepts one operation per request and is synchronous (not for high performance operations)</td>
-    </tr>
-</table>
-
-<h3 id="put">Put</h3>
-<p>
-Writing a document to Vespa looks like:
-<table class="table">
-        <tr>
-            <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
-            <th width="50%"> <a href="../document-api.html">RESTified Document Operation API</a></th>
-        </tr><tr>
-            <td><pre>
+  <tr>
+    <td colspan="2"><h3>PUT</h3>
+  </tr><tr>
+    <td>Vespa HTTP client:
+<pre>
 {
     "put": "id:music:music::123",
     "fields": {
         "title": "Best of Bob Dylan"
     }
 }
-</pre></td><td><pre>
-http <span style="background-color: yellow;">post</span> /document/v1/music/music/docid/123
+</pre>
+    </td><td>Document API:
+<pre>
+http <span style="background-color: yellow;">POST</span> /document/v1/music/music/docid/123
 {
     "fields": {
         "title": "Best of Bob Dylan"
     }
 }
-</pre></td>
-        </tr>
-</table>
-Values for the document fields may be set using elements as shown above in the <em>fields</em> object.
-In this example, <em>title</em> field is specified in the document type.
-See examples using arrays, maps, structs, raw, tensor, and weighted sets below.
-</p>
+</pre>
+    </td>
+  </tr><tr>
+    <td colspan="2"><h3>GET</h3>
+  </tr><tr>
+    <td>Vespa HTTP client:
+<pre>
+# not supported - use vespa-get
+</pre>
+    </td><td>Document API:
+<pre>
+http <span style="background-color: yellow;">GET</span> /document/v1/music/music/docid/123
+</pre>
+    </td>
+  </tr><tr>
+    <td colspan="2"><h3>REMOVE</h3>
+  </tr><tr>
+    <td>Vespa HTTP client:
+<pre>
+{
+    "remove": "id:music:music::HitMe"
+}
+</pre>
+    </td><td>Document API:
+<pre>
+http <span style="background-color: yellow;">DELETE</span> /document/v1/music/music/docid/123
 
 
-
-<h3 id="update">Update</h3>
-<p>
-Updates make changes to documents without submitting the entire document - great for efficiency.
-If the document does not exist, Vespa creates creates a new document if
-<a href="document-json-update-format.html#create">create if nonexistent</a> is used -
-otherwise, returns error.
-<table class="table">
-    <tr>
-        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
-        <th width="50%"><a href="../document-api.html">RESTified Document Operation API</a></th>
-    </tr><tr>
-        <td><pre>
+</pre>
+    </td>
+  </tr><tr>
+    <td colspan="2"><h3>UPDATE</h3>
+  </tr><tr>
+    <td>Vespa HTTP client:
+<pre>
 {
     "update": "id:music:music::123",
     "fields": {
@@ -380,9 +408,10 @@ otherwise, returns error.
         }
     }
 }
-</pre></td>
-        <td><pre>
-http <span style="background-color: yellow;">put</span> /document/v1/music/music/docid/123
+</pre>
+    </td><td>Document API:
+<pre>
+http <span style="background-color: yellow;">PUT</span> /document/v1/music/music/docid/123
 {
     "fields": {
         "title": {
@@ -390,59 +419,25 @@ http <span style="background-color: yellow;">put</span> /document/v1/music/music
         }
     }
 }
-</pre></td>
-    </tr>
+</pre>
+    </td>
+  </tr>
 </table>
-There are three basic operation on <em>field</em> level:
-<ul>
-  <li><em>Assign</em>: Replace the content of the field</li>
-  <li><em>Add</em>: Add a new value to a field (array, weightedset etc)</li>
-  <li><em>Remove</em>: Remove a value from a field</li>
-</ul>
-Find more examples of <a href="document-json-update-format.html">
-arithmetic updates and updating composite fields</a>.
-</p><p>
-<strong>Note:</strong> Messages can be re-sent by Vespa's Message Bus.
-This can cause unexpected results for all operations except <em>assign</em> and <em>remove</em>!
-If greater consistency is needed, use a <a href="#conditional-updates-test-and-set">conditional update</a> instead.
 </p>
 
 
 
-<h3 id="remove">Remove</h3>
-<table class="table">
-    <tr>
-        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
-        <th width="50%"> <a href="../document-api.html">RESTified Document Operation API</a></th>
-    </tr>
-    <tr>
-        <td><pre>
-{
-    "remove": "id:music:music::HitMe"
-}
-</pre></td>
-        <td><pre>
-http <span style="background-color: yellow;">delete</span> /document/v1/music/music/docid/HitMe
-
-
-</pre></td>
-    </tr>
-</table>
-
-
-
-<h3 id="conditional-updates-test-and-set">Conditional execution - test and set</h3>
+<h2 id="conditional-updates-test-and-set">Conditional execution - test and set</h2>
 <p>
 An optional <em>condition</em> can be added to operations to specify a <em>test and set</em> condition.
 The value of the condition is a <a href="document-select-language.html">document selection</a> encoded as a string.
-The <em>put/update/remove</em> operation is only applied if the condition matches an already existing document with that id.
+The <em>put/update/remove</em> operation is only applied
+if the condition matches an already existing document with that id.
 Example: Increment the <em>sales</em> field only if it is already equal to 999:
 <table class="table">
-    <tr>
-        <th width="50%"><a href="../vespa-http-client.html">The Vespa HTTP Client</a></th>
-        <th width="50%"> <a href="../document-api.html">RESTified Document Operation API</a></th>
-    </tr><tr>
-        <td><pre>
+  <tr>
+    <td>Vespa HTTP client:
+<pre>
 {
     "update": "id:music:music::BestOf",
         "condition": "music.sales==999",
@@ -452,9 +447,10 @@ Example: Increment the <em>sales</em> field only if it is already equal to 999:
             }
     }
 }
-</pre></td>
-        <td><pre>
-http put /document/v1/music/music/docid/BestOf?condition=music.sales=='999'
+</pre>
+    </td><td>Document API:
+<pre>
+http PUT /document/v1/music/music/docid/BestOf?condition=music.sales=='999'
 {
    "fields": {
        "sales": {
@@ -463,8 +459,9 @@ http put /document/v1/music/music/docid/BestOf?condition=music.sales=='999'
     }
 }
 
-</pre></td>
-    </tr>
+</pre>
+    </td>
+  </tr>
 </table>
 <strong>Note:</strong> Use <em>documenttype.fieldname</em> in the condition,
 not only <em>fieldname</em>.
@@ -472,4 +469,563 @@ not only <em>fieldname</em>.
 <strong>Note:</strong> If the condition is not met, an error is returned.
 <strong>ToDo:</strong> There is a discussion whether to change to not return error,
 and instead return a <em>condition-not-met</em> in the response.
+</p>
+
+
+
+<h2 id="update">Update</h2>
+<p>
+Vespa supports making changes to an existing document without submitting the full document.
+This is called <em>partial update</em>.
+A partial update consists of the id of the existing document to update,
+and the operation(s) to execute on the fields.
+</p><p>
+Documents can be auto-created on updates using <a href="#create">create if nonexistent</a>.
+All data structures (<a href="../attributes.html">attribute</a>,
+<em>index</em> and <a href="../document-summaries.html">summary</a>) are updatable.
+The following operations are supported:
+</p>
+<table class="table">
+    <thead></thead><tbody>
+    <tr>
+        <td><strong>All field types</strong></td>
+        <td><ul>
+            <li><code><a href="#assign">assign</a></code> (may also be used to clear fields)</li>
+        </ul></td>
+    </tr><tr>
+        <td><strong>Numeric field types</strong></td>
+        <td><ul>
+            <li><code><a href="#arithmetic">increment</a></code></li>
+            <li><code><a href="#arithmetic">decrement</a></code></li>
+            <li><code><a href="#arithmetic">multiply</a></code></li>
+            <li><code><a href="#arithmetic">divide</a></code></li>
+        </ul></td>
+    </tr><tr>
+        <td><strong>Composite types</strong></td>
+        <td><ul>
+            <li><code><a href="#add">add</a></code> (works for array and weighted set.
+                To put into a map, see the <a href="#assign">assign</a> section)</li>
+            <li><code><a href="#remove">remove</a></code></li>
+            <li><code><a href="#match">match</a></code> (pick element from collection,
+                then apply given operation to matched element) </li>
+            <li><a href="#fieldpath">accessing elements within a composite field using fieldpaths</a></li>
+        </ul></td>
+    </tr>
+    </tbody>
+</table>
+
+
+
+<h2 id="assign">assign</h2>
+<p>
+<code>assign</code> is used to replace the value of a field (or an element of a collection) with a new value.
+When assigning, one can generally use the same syntax and structure
+as when feeding that field's value in a <code>put</code> operation.
+</p>
+
+
+<h3 id="single-field-value">Single value field</h3>
+<pre>
+field title type string {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:music::example",
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre>
+
+
+<h3 id="tensor-field">Tensor field</h3>
+<pre>
+field tensorfield type tensor(x{},y{}) {
+    indexing: attribute | summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "assign": {
+                "cells": [
+                    { "address": { "x": "a", "y": "b" }, "value": 2.0 },
+                    { "address": { "x": "c", "y": "d" }, "value": 3.0 }
+                ]
+            }
+        }
+    }
+}
+</pre>
+
+
+<h3 id="<struct-field">Struct field</h3>
+
+<h4>Replacing all fields in a struct</h4>
+<p>
+A full struct is replaced by assigning an object of struct key/value pairs.
+<pre>
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+}
+field contact type person {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:workers::example",
+    "fields": {
+        "contact": {
+            "assign": {
+                "first_name": "Bob",
+                "last_name": "The Plumber"
+            }
+        }
+    }
+}
+</pre>
+</p>
+
+<h4>Individual struct fields</h4>
+<p>
+Individual struct fields are updated using <a href="#fieldpath">field path</a> syntax.
+Refer to the <a href="search-definitions-reference.html#type:struct">reference</a>
+for restrictions using structs.
+<pre>
+{
+    "update": "id:mynamespace:workers::example",
+    "fields": {
+        "contact.first_name": { "assign": "Bob" },
+        "contact.last_name":  { "assign": "The Plumber" }
+    }
+}
+</pre>
+</p>
+
+
+<h3 id="assign-map-field">Map field</h3>
+<p>
+Individual map entries are updated using <a href="document-field-path.html">field path</a> syntax.
+Assigning an element to a key in a map will insert the key/value mapping if it does not already exist,
+or overwrite it with the new value if it does exist.
+Refer to the <a href="search-definitions-reference.html#type:map">reference</a>
+for restrictions using maps.
+</p>
+
+<h4>Map to primitive value</h4>
+<p>
+<pre>
+field my_food_scores type map&lt;string, string&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:food::example",
+    "fields": {
+        "my_food_scores{Strawberries}": {
+            "assign": "Delicious!"
+        }
+    }
+}
+</pre>
+
+<h4>Map to struct</h4>
+<pre>
+struct contact_info {
+    field phone_number type string {}
+    field email type string {}
+}
+field contacts type map&lt;string, contact_info&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:people::d_duck",
+    "fields": {
+        "contacts{\"Uncle Scrooge\"}": {
+            "assign": {
+                "phone_number": "555-123-4567",
+                "email": "number_one_dime_luvr1877@example.com"
+            }
+        }
+    }
+}
+</pre>
+</p>
+
+
+<h3 id="array-field">Array field</h3>
+<p>
+Individual array elements may be updated using <a href="document-field-path.html">field path</a>
+or <a href="#match">match</a> syntax
+</p>
+
+<h4>Array of primitive values</h4>
+<p>
+<pre>
+field ingredients type array&lt;string&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:cakes:tasty_chocolate_cake",
+    "fields": {
+        "ingredients[3]": {
+            "assign": "2 cups of flour (editor's update: NOT asbestos!)"
+        }
+    }
+}
+</pre>
+Alternatively:
+<pre>
+{
+    "update": "id:mynamespace:cakes:tasty_chocolate_cake",
+    "fields": {
+        "ingredients": {
+            "match" {
+                "element": 3,
+                "assign": "2 cups of flour (editor's update: NOT asbestos!)"
+            }
+        }
+    }
+}
+</pre>
+</p>
+
+<h4>Array of struct</h4>
+<p>
+Refer to the reference for restrictions using
+<a href="search-definitions-reference.html#type:array">array of structs</a>.
+<pre>
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+}
+field people type array&lt;person&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:students:example",
+    "fields": {
+        "people[34]": {
+            "assign": {
+                "first_name": "Bobby",
+                "last_name": "Tables"
+            }
+        }
+    }
+}
+</pre>
+Alternatively:
+<pre>
+{
+    "update": "id:mynamespace:students:example",
+    "fields": {
+        "people": {
+            "match": {
+                "element": 34,
+                "assign": {
+                     "first_name": "Bobby",
+                     "last_name": "Tables"
+                }
+            }
+        }
+    }
+}
+</pre>
+</p>
+
+<h3 id="weighted-set-field">Weighted set field</h3>
+<p>
+Adding new elements to a weighted set can be done using <a href="#add-weighted-set">add</a>, or
+by assigning with <code>field{key}</code> syntax. Example of the latter:
+<pre>
+field int_weighted_set type weightedset&lt;int&gt; {
+    indexing: summary
+}
+field string_weighted_set type weightedset&lt;string&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "fields": {
+        "int_weighted_set{123}": {
+            "assign": 123
+        },
+        "int_weighted_set{456}": {
+            "assign": 100
+        },
+        "string_weighted_set{\"item 1\"}": {
+            "assign": 144
+        },
+        "string_weighted_set{\"item 2\"}": {
+            "assign": 7
+        }
+    }
+}
+</pre>
+Note that using the <code>field{key}</code> syntax for weighted sets <em>may</em> be
+less efficient than using <a href="#add-weighted-set">add</a>.
+</p>
+
+
+<h3 id="clearing-a-field">Clearing a field</h3>
+<p>
+To clear a field, assign a <code>null</code> value to it.
+<pre>
+{
+    "update": "id:mynamespace:music::example",
+    "fields": {
+        "title": {
+            "assign": null
+        }
+    }
+}
+</pre>
+</p>
+
+
+
+<h2 id="add">add</h2>
+<p>
+<code>add</code> is used to add entries to arrays or weighted sets.
+</p>
+
+<h3 id="add-array-elements">Adding array elements</h3>
+<p>
+The added entries are appended to the end of the array in the order specified.
+<pre>
+field tracks type array&lt;string&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update": "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+       "tracks": {
+            "add": [
+                "Lay Lady Lay",
+                "Every Grain of Sand"
+            ]
+        }
+    }
+}
+</pre>
+</p>
+
+
+<h3 id="add-weighted-set">Add weighted set entries</h3>
+<p>
+Add weighted set elements by using a JSON key/value syntax,
+where the value is the weight of the element.
+</p><p>
+Adding a key/weight mapping that already exists will overwrite the existing weight with the new one.
+<pre>
+field int_weighted_set type weightedset&lt;int&gt; {
+    indexing: summary
+}
+field string_weighted_set type weightedset&lt;string&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "fields": {
+        "int_weighted_set":  {
+            "add": {
+                "123": 123,
+                "456": 100
+            }
+        },
+        "string_weighted_set": {
+            "add": {
+                "item 1": 144,
+                "item 2": 7
+            }
+        }
+    }
+}
+</pre>
+</p>
+
+
+
+<h2 id="remove">remove</h2>
+<p>
+Remove elements from weighted sets and maps with <code>remove</code>.
+</p>
+
+<h4>Weighted set field</h4>
+<pre>
+field string_weighted_set type weightedset&lt;string&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update":"id:mynamespace:weightedsetdoctype::example1",
+    "fields":  {
+        "string_weighted_set": {
+            "remove": {
+                "item 2": 0
+            }
+        }
+    }
+}
+</pre>
+
+<h4>Map field</h4>
+<pre>
+field string_map type map&lt;string, string&gt; {
+    indexing: summary
+}
+</pre><pre>
+{
+    "update":"id:mynamespace:mapdoctype::example1",
+    "fields":  {
+        "string_map{item 2}": {
+            "remove": 0
+        }
+    }
+}
+</pre>
+
+
+
+<h2 id="arithmetic">Arithmetic</h2>
+<p>
+The four arithmetic operators <code>increment</code>, <code>decrement</code>,
+<code>multiply</code> and <code>divide</code> are used to modify <em>single
+value</em> numeric values without having to look up the current
+value before applying the update. Example:
+</p>
+<pre>
+field sales type int {
+    indexing: summary | attribute
+}
+</pre>
+<pre>
+{
+    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+        "sales": {
+            "increment": 1
+        }
+    }
+}
+</pre>
+
+
+
+<h2 id="match">match</h2>
+<p>
+If an arithmetic operation is to be done for a specific key
+in a <em>weighted set or array</em>, use the <code>match</code> operation:
+<pre>
+field track_popularity type weightedset&lt;string&gt; {
+    indexing: summary | attribute
+}
+</pre><pre>
+{
+    "update": "id:music:music::http://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+        "track_popularity": {
+            "match": {
+                "element": "Lay Lady Lay",
+                "increment": 1
+            }
+        }
+    }
+}
+</pre>
+In other words, for the weighted set "track_popularity",
+<code>match</code> the element "Lay Lady Lay", then <code>increment</code> its weight by 1.
+</p><p>
+If the updated field were an array, the <code>element</code> value would be a positive integer.
+</p><p>
+<strong>Note:</strong> only <em>one</em> element can be matched per operation.
+</p>
+
+
+
+<h2 id="create">create (create if nonexistent)</h2>
+<p>
+Updates to nonexistent documents are supported using the <em>create</em> field.
+An empty document is created on the content nodes before the update is applied.
+This simplifies client code in the case of multiple writers:
+<pre>
+{
+    "update": "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf",
+    <span style="background-color: yellow;">"create": true,</span>
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre>
+Java example using the <a href="../document-api-guide.html">Document API</a>:
+<pre>
+public DocumentUpdate createUpdate(DocumentType musicType) {
+    DocumentUpdate update = new DocumentUpdate(musicType, "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf");
+    update.setCreateIfNonExistent(true);
+    return update;
+}
+</pre>
+<a href="#create">create</a> may be used in combination with
+<a href="#conditional-updates-test-and-set">condition</a>.
+If the document does not exist, the condition will be ignored
+and a new document with the update applied is automatically created.
+Otherwise, the condition must match for the update to take place.
+</p>
+<p class="alert alert-warning">
+<strong>Caution:</strong> if all existing replicas of a document are missing
+when an update with <code>create: true</code> is executed,
+a new document will always be created.
+This happens even if a condition has been given.
+If the existing replicas become available later,
+their version of the document will be overwritten by the newest update since it has a higher timestamp.
+</p>
+
+
+
+<h2 id="fieldpath">fieldpath</h2>
+<p>
+Fieldpath is for accessing fields within composite structures -
+for structures that are not part of index or attribute,
+it is possible to access elements directly using fieldpaths.
+This is done by adding more information to the field value.
+For map structures, specify the key (see <a href="#assign">example</a>).
+<pre>
+mymap{mykey}
+</pre>
+and then do operation on the element which is keyed by "mykey".
+Arrays can be accessed as well (see <a href="#assign">details</a>).
+<pre>
+myarray[3]
+</pre>
+And this is also true for structs (see <a href="#assign">details</a>).
+<strong>Note:</strong> Struct updates do not work for
+<a href="services-content.html#document">index</a> mode:
+<pre>
+mystruct.value1
+</pre>
+This also works for nested structures,
+e.g. a <code>map</code> of <code>map</code> to <code>array</code> of <code>struct</code>:
+<pre>
+{
+    "update": "id:mynamespace:complexdoctype::foo",
+    "fields": {
+        "nested_structure{firstMapKey}{secondMapKey}[4].title": {
+            "assign": "Look at me, mom! I'm hiding deep in a nested type!"
+        }
+    }
+}
+</pre>
 </p>
