@@ -348,12 +348,13 @@ Manage documents using:
     <ul>
       <li><em>Assign</em>: Replace the content of the field,
         by value or by using arithmetic operations</li>
-      <li><em>Add</em>: Add a new value to a field (array, weightedset etc).
+      <li><em>Add</em>: Add a new value to a field (array, weightedset, tensor etc).
         <strong>Note:</strong> Messages can be re-sent by Vespa's Message Bus.
         This can cause unexpected results for all operations except <em>assign</em> and <em>remove</em>!
         If greater consistency is needed,
         use a <a href="#conditional-updates-test-and-set">conditional update</a> instead.</li>
-      <li><em>Remove</em>: Remove a value from a field</li>
+      <li><em>Remove</em>: Remove a value from a field.</li>
+      <li><em>Modify</em>: Modify cells in tensor.s</li>
     </ul>
   </li>
 </ul>
@@ -534,6 +535,14 @@ The following operations are supported:
             <li><code><a href="#match">match</a></code> (pick element from collection,
                 then apply given operation to matched element) </li>
             <li><a href="#fieldpath">accessing elements within a composite field using fieldpaths</a></li>
+        </ul></td>
+    </tr><tr>
+        <td><strong>Tensor types</strong></td>
+        <td><ul>
+            <li><code><a href="#tensor-modify">modify</a></code> Modify individual cells in a
+            tensor. Can either replace, add or multiply cell values.</li>
+            <li><code><a href="#tensor-add">add</a></code> Add cells to the mapped dimensions of a tensor</li>
+            <li><code><a href="#tensor-remove">remove</a></code> Remove cells from the mapped dimensions of a tensor</li>
         </ul></td>
     </tr>
     </tbody>
@@ -845,7 +854,8 @@ To clear a field, assign a <code>null</code> value to it.
 
 <h2 id="add">add</h2>
 <p>
-<code>add</code> is used to add entries to arrays or weighted sets.
+<code>add</code> is used to add entries to arrays, weighted sets or to the mapped dimensions of
+tensors.
 </p>
 
 <h3 id="add-array-elements">Adding array elements</h3>
@@ -905,11 +915,40 @@ field string_weighted_set type weightedset&lt;string&gt; {
 </pre>
 </p>
 
+<h3 id="tensor-add">Add tensor cells</h3>
+<p>
+Add cells to the mapped dimension of tensors. Invalid for tensors with only indexed
+dimensions. Adding a cell that already exists will overwrite the cell value with the new value.
+
+<pre>
+field tensorfield type tensor(x{},y[3]) {
+    indexing: attribute | summary
+}
+</pre>
+
+<pre>
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "add": {
+                "cells": [
+                    { "address": { "x": "b", "y": "0" }, "value": 2.0 },
+                    { "address": { "x": "b", "y": "1" }, "value": 3.0 }
+                ]
+            }
+        }
+    }
+}
+</pre>
+
+</p>
+
 
 
 <h2 id="remove">remove</h2>
 <p>
-Remove elements from weighted sets and maps with <code>remove</code>.
+Remove elements from weighted sets, maps and tensors with <code>remove</code>.
 </p>
 
 <h4>Weighted set field</h4>
@@ -946,6 +985,41 @@ field string_map type map&lt;string, string&gt; {
 }
 </pre>
 
+<h4 id="tensor-remove">Tensor field</h4>
+<p>
+Removes cells from the mapped dimensions of a tensor.
+Invalid for tensors with only indexed dimensions.
+Only mapped dimensions should be specified for tensors with both
+mapped and indexed dimensions, as all indexed cells the mapped
+dimensions point to will be removed implicitly.
+</p>
+
+<pre>
+field tensorfield type tensor(x{},y[2]) {
+    indexing: attribute | summary
+}
+</pre>
+
+<pre>
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "remove": {
+                "addresses": [
+                    {"x": "b"},
+                    {"x": "c"}
+                ]
+            }
+        }
+    }
+}
+</pre>
+
+<p>
+In this example, cells <code>{x:b,y:0},{x:b,y:1},{x:c,y:0},{x:c,y:1}</code>
+will be removed.
+</p>
 
 
 <h2 id="arithmetic">Arithmetic</h2>
@@ -1002,6 +1076,46 @@ If the updated field were an array, the <code>element</code> value would be a po
 <strong>Note:</strong> only <em>one</em> element can be matched per operation.
 </p>
 
+
+<h2 id="tensor-modify">Modify tensors</h2>
+<p>
+Individual cells in tensors can be modified using the <code>modify</code> update.
+The cells are modified according to the given operation:
+</p>
+
+<ul>
+    <li><code>replace</code> - replaces cell values</li>
+    <li><code>add</code> - adds a value to the cell</li>
+    <li><code>multiply</code> - multiples a value with the cell</li>
+</ul>
+
+<p>
+Cells must be fully specified. If the cell does not exist, the update for that
+cell will be ignored.
+</p>
+
+<pre>
+field tensorfield type tensor(x[3]) {
+    indexing: attribute | summary
+}
+</pre>
+
+<pre>
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "modify": {
+                "operation": "replace",
+                "addresses": [
+                    { "address": { "x": "1" }, "value": 7.0 },
+                    { "address": { "x": "2" }, "value": 8.0 }
+                ]
+            }
+        }
+    }
+}
+</pre>
 
 
 <h2 id="create">create (create if nonexistent)</h2>
