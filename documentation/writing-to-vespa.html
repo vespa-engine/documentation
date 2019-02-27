@@ -104,23 +104,53 @@ will have a timestamp assigned to them going through the <em>distributor</em>.
 This timestamp is guaranteed to be unique within the
 <a href="content/buckets.html">bucket</a> where it is stored.
 This timestamp is used by the content layer to decide which operation is newest.
-These timestamps may be used when
-<a href="content/visiting.html">visiting</a>, to only process/retrieve
-documents within a given timeframe.
-To guarantee unique timestamps, they are given in microseconds, and the
-microsecond part may be generated or altered to avoid conflicts with other
-documents.
+These timestamps may be used when <a href="content/visiting.html">visiting</a>,
+to only process/retrieve documents within a given timeframe.
+To guarantee unique timestamps, they are given in microseconds,
+and the microsecond part may be generated or altered to avoid conflicts with other documents.
+</p><p>
+The internal timestamp is often referred to as the last modified time.
+This is the time of the last write operation going through the <a href="distributor.html">distributor</a>.
+If documents are migrated from cluster to cluster,
+the target cluster will have new timestamps for their entries,
+and when reprocessing documents within a cluster,
+documents will have new timestamps even if not modified.
 </p>
 
 
-<h3 id="last-modified-time">Last modified time</h3>
+
+<h2 id="performance">Performance</h2>
 <p>
-The internal timestamp is often referred to as the last modified time.
-This is the time of the last write operation going through the <a href="distributor.html">distributor</a>.
-If documents are migrated from cluster to
-cluster, the target cluster will have new timestamps for their entries, and
-when reprocessing documents within a cluster, documents will have new
-timestamps even if not modified.
+When updating the data (put/update/remove), consider:
+<ul>
+  <li><a href="proton.html#transaction-log">transaction log</a></li>
+  <li><a href="document-summaries.html#document-store">document store</a></li>
+  <li><a href="attributes.html">attributes</a></li>
+  <li><a href="proton.html#index">indexes</a></li>
+</ul>
+These data structures might or might not be updated depending on the <a href="search-definitions.html">search definition</a>.
+The transaction log is always written.
+</p><p>
+<em>Putting</em> a document will always update the document store, a file append.
+</p><p>
+A partial update on an <em>indexed</em> field will read the document from the document store,
+change the field, and write it back to the store - and also update the memory index.
+</p><p>
+A partial update on an <em>attribute</em> field is a memory-only operation (except for the transaction log).
+There are some performance tradeoffs described in <a href="attributes.html">attribute update</a>:
+Speed of partial updates and garbage collection is reduced if
+<a href="reference/services-content.html#searchable-copies">
+searchable copies</a> is lower than <a href="reference/services-content.html#redundancy">redundancy</a>.
+This is caused by no <a href="attributes.html">attributes</a> for the non-searchable copies.
+Set <a href="reference/search-definitions-reference.html#attribute">fast-access</a> on the attributes to
+update to ensure they exist for the non-searchable copies as well.
+</p><p>
+To improve feed throughput, trading off freshness, increase
+<a href="reference/services-content.html#visibility-delay">visibility-delay</a>
+to batch writes on the content nodes for higher write performance.
+This trades off latency -
+writes will take effect in search results after <em>visibility-delay</em> seconds.
+This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
 </p>
 
 
@@ -152,26 +182,3 @@ Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
 }'
 </pre>
 </p>
-
-
-<!-- ToDo: Fix the below later, migrated from partial-update.html - rewrite / move this elsewhere -->
-
-
-<h2 id="performance">Performance</h2>
-<p>
-To improve feed throughput, increase
-<a href="reference/services-content.html#visibility-delay">visibility-delay</a>
-to batch writes on the content nodes for higher write performance.
-This trades off latency -
-writes will take effect in search results after <em>visibility-delay</em> seconds.
-This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
-</p><p>
-Speed of partial updates and garbage collection is reduced if
-<a href="reference/services-content.html#searchable-copies">
-searchable copies</a> is lower than <a href="reference/services-content.html#redundancy">redundancy</a>.
-This is caused by no <a href="attributes.html">attributes</a> for the non-searchable copies.
-Set <a href="reference/search-definitions-reference.html#attribute">fast-access</a> on the attributes to
-update to ensure they exist for the non-searchable copies as well.
-</p>
-
-
