@@ -139,10 +139,12 @@ like attribute vectors and memory index on shutdown, for quicker startup.
 
 <h2 id="index">Index</h2>
 <p>
-For each <a href="reference/search-definitions-reference.html#indexing">indexed field</a>,
+For all <a href="reference/search-definitions-reference.html#index">indexed fields</a>,
 proton has a memory index for the recent changes, which is flushed to a disk-based index -
 see <a href="#memory-index-flush">memory-index-flush</a>.
 Disk-based indexes are subsequently merged by <a href="#disk-index-fusion">disk index fusion</a>.
+Index fields are string fields and are used for text search.
+Other field types are <a href="attributes.html">attributes</a>.
 </p><p>
 When updating an indexed field, the document is read from the
 <a href="document-summaries.html#document-store">document store</a>, the field is updated,
@@ -150,26 +152,28 @@ and the full document is written back to the store.
 Also, the memory index structures are updated.
 At this point, the change is searchable, and an ACK is returned to the client.
 </p><p>
-Use <a href="attributes.html">attributes</a> to avoid disk accesses and hence increase performance for partial updates,
+Use <a href="attributes.html">attributes</a> (if you don't need text search) to avoid disk accesses and hence increase performance for partial updates,
 find more details in <a href="writing-to-vespa.html#performance">writing to Vespa</a>.
 </p><p>
-Indexes are <em>text</em> indexes - other field types are <a href="attributes.html">attributes</a>.
-</p>
-<!-- ToDo - let Geir fix this
-<p>
-The index is implemented using b-trees.
-It supports position (phrases, proximity) ...
-(something here to refer to nativerank etc vs <a href="https://en.wikipedia.org/wiki/Okapi_BM25">BM25</a>
-and out of the box performance).
-Something here on the different files in the index / when they are used
+The memory index has a dictionary per index field.
+This contains all unique words in that field with mapping to posting lists with position information.
+The dictionary and posting lists are implemented using b-trees with copy-on-write semantics, thus updating these structures are lock-free.
+The position information is used during ranking, see
+<a href="nativerank.html">nativeRank</a> for details on how a text match score is calculated.
 </p><p>
-Updating the memory index is lock free and implemented by freezing etc.
-optimized for (... - )
+The disk index stores the content of each index field in separate folders.
+Each folder contains:
+<ul>
+    <li>Dictionary. Files: <em>dictionary.pdat</em>, <em>dictionary.spdat</em>, <em>dictionary.ssdat</em>.</li>
+    <li>Compresssed posting lists with position information. File: <em>posocc.dat.compressed</em>.</li>
+    <li>Posting lists with only occurrence information (bitvector). These are generated for common words.
+        Files: <em>boolocc.bdat</em>, <em>boolocc.idx</em>.</li>
+</ul>
+Example: <em>$VESPA_HOME/var/db/vespa/search/cluster.name/n1/documents/doc/0.ready/index/index.flush.1/my_index_field</em>
 </p><p>
 To increase write throughput, writes to the memory index can be batched using
 <a href="reference/services-content.html#visibility-delay">visibility-delay</a>.
 </p>
--->
 
 
 <h2 id="proton-maintenance-jobs">Proton maintenance jobs</h2>
