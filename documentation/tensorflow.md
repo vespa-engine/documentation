@@ -177,7 +177,7 @@ in Vespa to improve evaluation time. This is shown in the example above.
 ## Updating variables without redeploying the application
 
 Some times it is desirable to update the TensorFlow variables of a model frequently,
-e.g when a neural net with a fixed layout is retrained frequently to update weighths
+e.g when a neural net with a fixed layout is retrained frequently to update weights
 and biases in a reinforcement learning setup.
 
 It is possible to do this without redeploying the application by storing those
@@ -270,13 +270,13 @@ Whenever the TensorFlow model is retrained to produce new variable values,
 write them to Vespa as follows:
 
 1. Convert the Variable value to the Vespa document format:
-Obtain <a href="http://mvnrepository.com/artifact/com.yahoo.vespa/searchlib">searchlib.jar</a>
+Obtain <a href="http://mvnrepository.com/artifact/com.yahoo.vespa/model-integration">model-integration.jar</a>
 (with dependencies), and run
 ```
-java -cp searchlib-jar-with-dependencies.jar com.yahoo.searchlib.rankingexpression.integration.tensorflow.VariableConverter \
+java -cp model-integration-jar-with-dependencies.jar ai.vespa.rankingexpression.importer.tensorflow.VariableConverter \
       [modelDirectory] [TensorFlowVariableName] [VespaType]
 ```
-or, if you do this from Java, call com.yahoo.searchlib.rankingexpression.integration.tensorflow.VariableConverter.importVariable
+or, if you do this from Java, call ai.vespa.rankingexpression.importer.tensorflow.VariableConverter.importVariable
 with the same arguments.
 
 1. Update the global document. Use e.g the <a href="document-api.html">document API</a> to PUT a new value for your variable:
