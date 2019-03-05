@@ -4,150 +4,275 @@ title: "Container Component Types"
 ---
 
 <p>
-  The container has a large number of different types of plug-ins available
-  to a developer, this is an outline of when and why to use the different
-  kinds. To start creating components, see
-  <a href="jdisc/developing-applications.html">developing applications</a>.
+The container has a large number of different types of plug-ins available to a developer,
+this is an outline of when and why to use the different kinds.
+To start creating components,
+see <a href="jdisc/developing-applications.html">developing applications</a>.
 </p>
-
-
-
-<h2 id="overview">30000 feet perspective</h2>
-
 <img src="img/container_components.svg">
-
 <p>
-  Starting at the top of the diagram, <a href="#server">server</a> instances are
-  used for supporting external clients (if no suitable implementations of
-  com.yahoo.jdisc.service.ServerProvider are available. A client may or may not
-  be a network client, so it is related to the network layer. The network layer
-  associates a Request with a <a href="#responsehandler">response handler</a>
-  and routes it to the correct type of <a href="#requesthandler">request
-  handler</a> (typically based on URI binding patterns).
+Starting at the top of the diagram,
+<a href="#server">server</a> instances are used for supporting external clients
+(if no suitable implementations of com.yahoo.jdisc.service.ServerProvider are available.
+A client may or may not be a network client, so it is related to the network layer.
+The network layer associates a Request with a <a href="#response-handlers">response handler</a>
+and routes it to the correct type of <a href="#request-handlers">request handler</a>
+(typically based on URI binding patterns).
+</p><p>
+If an application needs lightweight request-response processing
+using decomposition by a series of chained logical units,
+the <a href="jdisc/processing.html">processing framework</a>
+is the correct family of components to use.
+The request will be routed from ProcessingHandler through one or more chains of
+<a href="#processor-instances">Processor</a> instances.
+The exact format of the output is customizable using a <a href="#renderers">Renderer</a>.
+</p><p>
+If doing search queries, SearchHandler will create a Query object,
+route that to the pertinent chain of <a href="#searchers">Searcher</a> instances,
+and associate the returned Result with the correct <a href="#renderers">Renderer</a> instance
+for optional customization of the output format.
+</p><p>
+The DocumentProcessingHandler is usually invoked from messagebus,
+and used for feeding documents into an index or storage.
+The incoming data is used to build a Document object,
+and this is then feed through a chain of <a href="#document-processors">DocumentProcessor</a> instances.
+</p><p>
+If building an application with custom HTTP APIs, for instance arbitrary REST APIs,
+the easiest way is building a custom <a href="#request-handlers">RequestHandler</a>.
+This gets the Request, which is basically a set of key-value pairs,
+and returns a stream of arbitrary data back to the network.
+</p><p>
+<a href="#components">Component</a> is the basic building block in the container.
+A component may be injected into other components,
+including all the different request handlers, document processors and so on mentioned above,
+and will get a destructor like method invoked when no other component is using it any more.
 </p>
 
-<p>
-  If an application needs lightweight request-response processing using
-  decomposition by a series of chained logical units,
-  the <a href="jdisc/processing.html">processing framework</a>
-  is the correct family of components to use. The request will be routed from
-  ProcessingHandler through one or more chains of <a
-  href="#processor">Processor</a> instances. The exact format of the output is
-  customizable using a <a href="#renderer">Renderer</a>.
-</p>
-
-<p>
-  If doing search queries, SearchHandler will create a Query object, route that
-  to the pertinent chain of <a href="#searcher">Searcher</a> instances, and
-  associate the returned Result with the correct <a href="#renderer">Renderer</a>
-  instance for optional customization of the output format.
-</p>
-
-<p>
-  The DocumentProcessingHandler is usually invoked from messagebus, and used for
-  feeding documents into an index or storage. The incoming data is used to build
-  a Document object, and this is then feed through a chain of <a
-  href="#docproc">DocumentProcessor</a> instances.
-</p>
-
-<p>
-  If building an application with custom HTTP APIs, for instance arbitrary REST
-  APIs, the easiest way is building a custom <a
-  href="#requesthandler">RequestHandler</a>. This gets the Request, which is
-  basically a set of key-value pairs, and returns a stream of arbitrary data
-  back to the network.
-</p>
-
-<p>
-  <a href="#component">Component</a> is the basic building block in the
-  container. A component may be injected into other components, including all
-  the different request handlers, document processors and so on mentioned above,
-  and will get a destructor like method invoked when no other component is using
-  it any more.
-</p>
 
 
 <h2 id="server">Server</h2>
 <p>
-  Servers are components implementing the com.yahoo.jdisc.service.ServerProvider
-  interface, usually by subclassing
-  com.yahoo.jdisc.service.AbstractServerProvider. Use this if developing support
-  for a new type of clients, e.g. an unsupported network protocol.
-</ul>
-
-<h2 id="responsehandler">Response handlers</h2>
-
-<p>
-  Response handlers are invoked by the request handlers after the client
-  response is created. The correct response handler is chosen from URI
-  pattern bindings. A Response is a more or less opaque data structure,
-  so a response handler is more suited to e.g. tracking return codes
-  than doing deep result inspections.
+Servers are components implementing the com.yahoo.jdisc.service.ServerProvider interface,
+usually by subclassing com.yahoo.jdisc.service.AbstractServerProvider.
+Use this if developing support for a new type of clients, e.g. an unsupported network protocol.
+</p><p>
+A server, or server provider, in JDisc Context is a server protocol implementation.
+A server will usually be bound to some network port,
+and has the responsibility of creating JDisc requests from the incoming data
+and also transmitting the JDisc response back to the client in a pertinent manner.
+A server does not fetch content, that is the responsibility of a
+<a href="#processor-instances">processor</a> or <a href="#request-handlers">request handler</a>.
 </p>
 
-<h2 id="requesthandler">Request handlers</h2>
 
+
+<h2 id="request-handlers">Request handlers</h2>
 <p>
-  Request handlers are the easiest way to implement arbitrary REST services. The
-  incoming request is a set of key-value pairs and protocol specific
-  information. A request handler my fire off a request to e.g. the search
-  handler, but what it will get back is opaque. If context sensitive result
-  transformations are necessary, the request handler must be paired with one or
-  more <a href="#searcher">searchers</a>, and if the output from the search
-  needs to be customized, a <a href="#renderer">renderer</a> for the search
-  result is the correct way of doing it (as opposed to trying to transform the
-  search response in the request handler).
+Request handlers are the easiest way to implement arbitrary REST services.
+The incoming request is a set of key-value pairs and protocol specific information.
+A request handler my fire off a request to e.g. the search handler,
+but what it will get back is opaque.
+If context sensitive result transformations are necessary,
+the request handler must be paired with one or more <a href="#searchers">searchers</a>,
+and if the output from the search needs to be customized,
+a <a href="#renderers">renderer</a> for the search result is the correct way of doing it
+(as opposed to trying to transform the search response in the request handler).
+</p><p>
+A request handler accepts a request, and returns a response.
+All applications will use a request handler, either by implementing their own,
+or indirectly by using the <a href="#processor-instances">processing framework</a>,
+as the processing handler is a request handler as well.
+A client provider is-a request handler.
+</p><p>Requests are modelled as key-value stores, as in many other systems,
+while responses are meta information (like HTTP status)
+and a binary stream of content (the <em>ContentChannel</em> API).
+</p><p>
+A content channel is the basic I/O building block of JDisc.
+It is conceptually similar to a stream,
+but the basic unit is the ByteBuffer instead of the native byte.
+A content channel will take ownership of a ByteBuffer written to it.
 </p>
 
-<h2 id="processor">Processor instances</h2>
 
+
+<h2 id="response-handlers">Response handlers</h2>
 <p>
-  The <a href="jdisc/processing.html">processing framework</a> is to be used for light-weight solutions where
-  decomposition of the problem by partitioning the implementation into
-  (a) chain(s) of processors is useful. Processors are invoked synchronously
-  and the response is a tree of arbitrary data elements. Custom output
-  formats is achieved by adding <a href="#renderer">renderers</a>.
+Response handlers are invoked by the request handlers after the client response is created.
+The correct response handler is chosen from URI pattern bindings.
+A Response is a more or less opaque data structure,
+so a response handler is more suited to e.g. tracking return codes
+than doing deep result inspections.
+</p><p>
+The response handler is passed along with the request,
+it is <em>the link back to the external client</em>,
+as it contains the infrastructure for passing binary data back to the network.
 </p>
 
-<h2 id="renderer">Renderers</h2>
 
+
+<h2 id="processor-instances">Processor instances</h2>
 <p>
-  Renderers are result formatters for the processing and search frameworks
-  in the container. They usually render responses as JSON or XML, but
-  arbitrary MIME types may be used, including binary formats. Renderers
-  are subclasses of com.yahoo.processing.rendering.Renderer.
+The <a href="jdisc/processing.html">processing framework</a> is to be used for light-weight solutions
+where decomposition of the problem by partitioning the implementation into
+(a) chain(s) of processors is useful.
+Processors are invoked synchronously and the response is a tree of arbitrary data elements.
+Custom output formats is achieved by adding <a href="#renderers">renderers</a>.
+</p><p>
+Processing is a light-weight, low latency request-response framework
+built on decomposition by chaining.
+It is a multi-threaded API, each processor must be written thread safe.
+</p><p>
+As a request handler, a processor accepts a response and returns a response.
+There are two central differences in the processor API from request handler API.
+First of all, a processor may invoke other processors directly,
+as processors are organized in chains, like filters.
+Second, processing responses are structured trees, as opposed to a binary stream.
+This makes processors suited to both request and response transformation,
+as working on both the request and response is possible.
 </p>
 
-<h2 id="searcher">Searchers</h2>
 
+
+<h2 id="renderers">Renderers</h2>
 <p>
-  Searchers are the only supported way of doing <i>structured</i> query
-  and result transforms in a search context. If an application is performing
-  searches and needs to look at single result documents (hits) or needs
-  to add terms to the parsed query, searchers are the only way to do this
-  robustly.
+Renderers are result formatters for the processing and search frameworks in the container.
+They usually render responses as JSON or XML, but arbitrary MIME types may be used,
+including binary formats.
+Renderers are subclasses of com.yahoo.processing.rendering.Renderer.
+</p><p>
+As a processing response is a tree, there must be some way to transform that to a binary representation.
+To support multiple output formats, the marshalling work is placed in the plug-in type Renderer.
+A default JSON renderer is available.
 </p>
 
-<h2 id="docproc">Document processors</h2>
 
+
+<h2 id="searchers">Searchers</h2>
 <p>
-  Document processors are for documents what searchers are for queries, they
-  can access and transform documents robustly and structured. If documents
-  need some kind of transformations or annotations before reaching an
-  index or storage, custom document processors are usually a better solution
-  than manipulating the document feed.
+Searchers are the only supported way of doing <em>structured</em> query
+and result transforms in a search context.
+If an application is performing searches and needs to look at single result documents (hits)
+or needs to add terms to the parsed query, searchers are the only way to do this robustly.
 </p>
 
-<h2 id="component">Components</h2>
 
+
+<h2 id="document-processors">Document processors</h2>
 <p>
-  Usually, any container plug-in is a component. A component is usually a
-  subclass of com.yahoo.component.AbstractComponent, though
-  com.yahoo.component.Component is an interface. Components are the low-level
-  wirings for using composition with injection in the container. If building
-  complex searchers or document processors, shared resources or simply
-  partitioning the code, is often needed. The Component is an object with
-  a controlled lifecycle which may be injected into other components, such
-  as searchers, renderers, document processors, request handlers and so on
-  an so forth.
+Document processors are for documents what searchers are for queries.
+They can access and transform documents robustly and structured.
+If documents need some kind of transformations or annotations
+before reaching an index or storage,
+custom document processors are usually a better solution than manipulating the document feed.
 </p>
+
+
+
+<h2 id="components">Components</h2>
+<p>
+Usually, any container plug-in is a component.
+A component is usually a subclass of com.yahoo.component.AbstractComponent,
+though com.yahoo.component.Component is an interface.
+Components are the low-level wirings for using composition with injection in the container.
+If building complex searchers or document processors,
+shared resources or simply partitioning the code, is often needed.
+The Component is an object with a controlled lifecycle which may be injected into other components,
+such as searchers, renderers, document processors and request handlers
+</p>
+
+
+
+<h2 id="binding">Binding</h2>
+<p>
+A binding is a pattern, or rule,
+matching a URI which is used to route incoming requests
+to the correct <a href="#filter">filter chain</a> or <a href="#requesthandler">request handler</a>,
+and route outgoing requests to the correct <a href="#client">client</a>.
+For instance, the binding <em>http://*/*</em> would match any HTTP request,
+while <em>http://*/processing</em> would only match that specific path.
+If several bindings match, the most specific one is chosen.
+</p>
+<table class="table">
+<thead></thead><tbody>
+  <tr id="server-binding">
+    <th>Server binding</th>
+    <td>
+    A server binding is a rule for matching incoming requests to the correct request handler,
+    basically the JDisc building block for implementing RESTful APIs
+    </td>
+  </tr>
+  <tr id="client-binding">
+    <th>Client binding</th>
+    <td>
+    A client binding is a pattern which is used to match requests originating inside the container,
+    e.g. when doing federation, to a client provider.
+    That is, it is a rule which determines what code should handle a given outgoing request
+    </td>
+  </tr>
+</tbody>
+</table>
+
+
+
+<h2 id="filter">Filter</h2>
+<p>
+A filter is a lightweight request checker.
+It may set some specific request property,
+or it may do security checking and simply block requests missing some mandatory property or header.
+</p>
+
+
+
+<h2 id="client">Client</h2>
+<p>
+Clients, or client providers, are implementations of clients for different protocols,
+or special rules for given protocols.
+When a JDisc application acts as a client, e.g. fetches a web page from another host,
+it is a client provider that handles the transaction.
+Bindings are used, as with request handlers and filters, to choose the correct client,
+matching protocol, server, etc, and then hands off the request to the client provider.
+There is no problem in using arbitrary other types of clients
+for external services in processors and request handlers.
+</p>
+
+
+
+<h2 id="details">Details</h2>
+<p>
+Clickable illustration:
+</p>
+<IMG SRC="jdisc/img/jdisc_overview.png" alt="DFD for JDisc container" USEMAP="#jdisc_overview">
+<MAP NAME="jdisc_overview">
+<AREA COORDS="522,89,579,111" href="#binding" alt="binding">
+<AREA COORDS="527,39,574,64" href="#client" alt="client">
+<AREA COORDS="396,89,453,111" href="#binding" alt="binding">
+<AREA COORDS="401,39,448,64" href="#client" alt="client">
+<AREA COORDS="231,483,391,628" href="#request-handlers" alt="custom request handler">
+<AREA COORDS="13,483,212,628" href="#processor-instances" alt="processing">
+<AREA COORDS="46,700,97,722" href="#processor-instances" alt="processing request">
+<AREA COORDS="113,700,179,722" href="#processor-instances" alt="processing response">
+<AREA COORDS="83,801,143,823" href="#processor-instances" alt="processor">
+<AREA COORDS="83,747,143,769" href="#processor-instances" alt="processor">
+<AREA COORDS="83,653,143,675" href="#processor-instances" alt="processor">
+<AREA COORDS="218,382,413,417" href="#request-handlers" alt="JDisc request and response">
+<AREA COORDS="111,426,306,461" href="#request-handlers" alt="JDisc request and response">
+<AREA COORDS="7,382,202,417" href="#request-handlers" alt="JDisc request and response">
+<AREA COORDS="231,344,287,366" href="#binding" alt="binding">
+<AREA COORDS="147,344,204,366" href="#binding" alt="binding">
+<AREA COORDS="64,344,121,366" href="#binding" alt="binding">
+<AREA COORDS="67,177,108,199" href="#filter" alt="filter">
+<AREA COORDS="67,218,108,240" href="#filter" alt="filter">
+<AREA COORDS="67,259,108,281" href="#filter" alt="filter">
+<AREA COORDS="152,177,193,199" href="#filter" alt="filter">
+<AREA COORDS="152,218,193,240" href="#filter" alt="filter">
+<AREA COORDS="152,259,193,281" href="#filter" alt="filter">
+<AREA COORDS="237,177,278,199" href="#filter" alt="filter">
+<AREA COORDS="237,218,278,240" href="#filter" alt="filter">
+<AREA COORDS="237,259,278,281" href="#filter" alt="filter">
+<AREA COORDS="228,136,284,158" href="#binding" alt="binding">
+<AREA COORDS="144,136,201,158" href="#binding" alt="binding">
+<AREA COORDS="61,136,117,158" href="#binding" alt="binding">
+<AREA COORDS="18,43,75,65" href="#server" alt="server">
+<AREA COORDS="267,43,324,65" href="#server" alt="server">
+<AREA COORDS="143,43,199,65" href="#server" alt="server">
+</MAP>
