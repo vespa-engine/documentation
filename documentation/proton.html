@@ -123,41 +123,74 @@ Hence, only <em>active</em> documents in <em>Ready</em> are searchable:
 
 <h2 id="transaction-log">Transaction log</h2>
 <p>
-Content nodes have a transaction log to persist mutating operations immediately.
-ToDo: When synced to file system?
+Content nodes have a transaction log to persist mutating operations.
+The transaction log persists operations by file append.
+Having a transaction log simplifies proton's in-memory index structures
+and enables steady-state high performance, read more below.
 </p><p>
 Operations are written immediately,
 irrespective of <a href="reference/services-content.html#visibility-delay">visibility-delay</a>.
+Operations are not <em>sync'ed</em> to the file system -
+hence, writes are <em>not guaranteed</em> to exist in the transaction log.
+Flush jobs (below) sync the transaction log, for consistency.
 </p><p>
 Default, proton will
 <a href="reference/services-content.html#flush-on-shutdown">flush components</a>
 like attribute vectors and memory index on shutdown, for quicker startup.
-</p><p>
 </p>
 
 
 
 <h2 id="index">Index</h2>
 <p>
-For all <a href="reference/search-definitions-reference.html#index">indexed fields</a>,
-proton has a memory index for the recent changes, which is flushed to a disk-based index -
-see <a href="#memory-index-flush">memory-index-flush</a>.
-Disk-based indexes are subsequently merged by <a href="#disk-index-fusion">disk index fusion</a>.
-Index fields are string fields and are used for text search.
+Index fields are string fields, used for text search.
 Other field types are <a href="attributes.html">attributes</a>.
+</p>
+
+
+<h3 id="updates">Updates</h3>
+<p>
+For all <a href="reference/search-definitions-reference.html#index">indexed fields</a>,
+proton has a memory index for the recent changes, implemented using B-trees.
+This is periodically <a href="#memory-index-flush">flushed</a> to a disk-based posting list index.
+Disk-based indexes are subsequently <a href="#disk-index-fusion">merged</a>.
+</p><p>
+Updating the in-memory B-trees is lock-free, implemented using copy-on-write semantics.
+This gives high performance, with a predictable steady-state CPU/memory use.
+The driver for this design is the requirement for a sustained, high change rate,
+with stable, predictable read latencies and small temporary increases in CPU/memory.
+This compared to index hierarchies, merging smaller real-time indices into larger,
+causing temporary hot-spots.
 </p><p>
 When updating an indexed field, the document is read from the
 <a href="document-summaries.html#document-store">document store</a>, the field is updated,
 and the full document is written back to the store.
-Also, the memory index structures are updated.
 At this point, the change is searchable, and an ACK is returned to the client.
+Use <a href="attributes.html">attributes</a> to avoid such document disk accesses
+and hence increase performance for partial updates.
+Find more details in <a href="writing-to-vespa.html#performance">writing to Vespa</a>.
 </p><p>
-Use <a href="attributes.html">attributes</a> (if you don't need text search) to avoid disk accesses and hence increase performance for partial updates,
-find more details in <a href="writing-to-vespa.html#performance">writing to Vespa</a>.
+To increase write throughput, writes to the memory index can be batched using
+<a href="reference/services-content.html#visibility-delay">visibility-delay</a>.
+</p>
+
+
+<h3 id="relevance">Relevance</h3>
+<p>
+Proton stores position information in text indices by default, for proximity relevance -
+<em>posocc</em> (below).
+All the occurrences of a term is stored in the posting list, with its position.
+This provides superior ranking features,
+but is somewhat more expensive than just storing a single occurrence per document.
+For most applications it is the correct tradeoff,
+since most of the cost is usually elsewhere and relevance is valuable.
+</p><p>
+Applications that only need occurrence information for filtering
+can use <a href="reference/search-definitions-reference.html#rank">rank: filter</a>
+to optimize performance, using only <em>boolocc</em>-files (below).
 </p><p>
 The memory index has a dictionary per index field.
 This contains all unique words in that field with mapping to posting lists with position information.
-The dictionary and posting lists are implemented using b-trees with copy-on-write semantics, thus updating these structures are lock-free.
 The position information is used during ranking, see
 <a href="nativerank.html">nativeRank</a> for details on how a text match score is calculated.
 </p><p>
@@ -170,10 +203,8 @@ Each folder contains:
         Files: <em>boolocc.bdat</em>, <em>boolocc.idx</em>.</li>
 </ul>
 Example: <em>$VESPA_HOME/var/db/vespa/search/cluster.name/n1/documents/doc/0.ready/index/index.flush.1/my_index_field</em>
-</p><p>
-To increase write throughput, writes to the memory index can be batched using
-<a href="reference/services-content.html#visibility-delay">visibility-delay</a>.
 </p>
+
 
 
 <h2 id="proton-maintenance-jobs">Proton maintenance jobs</h2>
