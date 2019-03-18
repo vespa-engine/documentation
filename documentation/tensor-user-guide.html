@@ -33,13 +33,12 @@ In typical use, a document contains one or more
 <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L35-L37"> tensor fields</a> to be used for ranking -
 this example sets up a tensor field called <code>tensor_attribute</code>:
 <pre>
-field tensor_attribute type tensor(x{}) {
+field tensor_attribute type tensor(x[4]) {
     indexing: attribute | summary
 }
 </pre>
-A tensor requires a type - <code>x{}</code> means <em>sparse</em> dimension,
-where <code>x[]</code> means <em>indexed</em> dimension.
-For details on tensor fields, refer to the
+A tensor requires a type - <code>x[4]</code> means <em>indexed</em> dimension of size 4,
+where <code>x{}</code> means <em>mapped</em> dimension.
 <a href="reference/search-definitions-reference.html#type:tensor">tensor field</a> in search definitions.
 For details on tensor types, refer to the
 <a href="reference/search-definitions-reference.html#tensor-type-spec">tensor type reference</a>.
@@ -72,15 +71,17 @@ There are two options when feeding tensors.
 </pre>
   </li>
 </ul>
-Here, the <code>x</code>-dimension is sparse, so the indices can be any textual value.
-For dense dimensions, indices must be numeric.
+Here, the <code>x</code>-dimension is indexed, so the indices must be numeric.
+For mapped dimensions, indices can be any textual value.
 See the <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/music-data-1.json#L8-L15">
   sample app</a>.
 </p><p>
 Tensors can be updated - one can
 <a href="https://docs.vespa.ai/documentation/reference/document-json-format.html#tensor-add">add</a>,
 <a href="https://docs.vespa.ai/documentation/reference/document-json-format.html#tensor-remove">remove</a> and
-<a href="https://docs.vespa.ai/documentation/reference/document-json-format.html#tensor-modify">modify</a> tensor cells.
+<a href="https://docs.vespa.ai/documentation/reference/document-json-format.html#tensor-modify">modify</a> tensor cells, or
+<a href="https://docs.vespa.ai/documentation/reference/document-json-format.html#tensor-field">assign</a>
+a completely new tensor value.
 </p>
 
 
@@ -93,15 +94,15 @@ or constructed from some other data or data source.
 In the latter case, please refer to <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">the tensor Java API</a>
 for details on how to construct tensors programmatically.
 </p><p>
-Set the type (indexed or sparse) of the <code>query(tensor)</code> for it to be used in ranking,
+Set the type (indexed or mapped) of the <code>query(tensor)</code> for it to be used in ranking,
 using a <a href="query-profiles.html#query-profile-types">query profile type</a>.
 This configures the ranking backend that the rank feature named
-<code>query(tensor)</code> has type <code>tensor(x{})</code>,
+<code>query(tensor)</code> has type <code>tensor(x[4])</code>,
 enabling it to effectively compile expressions that use this feature.
 Create a file <code>search/query-profiles/types/root.xml</code> in the application package:
 <pre>
 &lt;query-profile-type id="root" inherits="native"&gt;
-  &lt;field name="ranking.features.query(tensor)" type="tensor(x{})" /&gt;
+  &lt;field name="ranking.features.query(tensor)" type="tensor(x[4])" /&gt;
 &lt;/query-profile-type&gt;
 </pre>
 Also, configure the default query profile to use this this (or other query profiles as needed):
@@ -116,12 +117,12 @@ The corresponding literal form of the tensor in the feeding section is:
 Example query (not url-encoded for readability),
 using rank profile <em>dot_product</em> and the tensor in <em>query(tensor)</em>:
 <pre>{% raw %}
-http://host:port/search/?ranking=dot_product&amp;ranking.features.query(tensor)={{x:0}:1.0,{x:1}:2.0,{x:3}:3.0,{x:4}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
+http://host:port/search/?ranking=dot_product&amp;ranking.features.query(tensor)={{x:0}:1.0,{x:1}:2.0,{x:2}:3.0,{x:3}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
 {% endraw %}</pre>
 </p><p>
 Alternatively, use a custom searcher, and send the tensor in a parameter, like:
 <pre>{% raw %}
-http://host:port/search/?tensor={{x:0}:1.0,{x:1}:2.0,{x:3}:3.0,{x:4}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
+http://host:port/search/?tensor={{x:0}:1.0,{x:1}:2.0,{x:2}:3.0,{x:3}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
 {% endraw %}</pre>
 <pre>
 public class ExampleTensorSearcher extends Searcher {
@@ -171,7 +172,7 @@ rank-profile dot_product {
 </pre>
 This takes the product of the query tensor and the document tensor, and sums
 all fields thus resolving into a single value which is used as the rank score.
-In the case above, the value is <code>39.0</code>.
+In the case above, the value is <code>39.0</code> (1*1 + 2*2 + 3*3 + 5*5).
 </p><p>
 There are some <a href="reference/ranking-expressions.html#built-in-functions">ranking functions</a>
 that are specific for tensors:
@@ -247,11 +248,11 @@ In addition to document tensors and query tensors,
 can be put in the <a href="reference/application-packages-reference.html">application package</a>.
 This is useful when constant tensors are used in ranking expressions,
 for instance machine learned models. Example from the
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L43-L46">sample app</a>:
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L43-L46">sample app</a> (with a slightly changed tensor type):
 <pre>
 constant tensor_constant {
     file: constants/constant_tensor_file.json
-    type: tensor(x{})
+    type: tensor(x[4])
 }
 </pre>
 This defines a new tensor rank feature with the type as defined and the
