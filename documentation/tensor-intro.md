@@ -23,9 +23,9 @@ Tensors can have any order:
 Tensors consist of a set of double valued cells, with each cell having a unique address.
 A cell's address is specified by its index or label along all dimensions.
 The number of dimensions in a tensor is the _order_ of the tensor.
-Each dimension can be either _sparse_ or _dense_.
-Sparse dimensions have labels designating their address,
-while dense dimensions have indices.
+Each dimension can be either _mapped_ or _indexed_.
+Mapped dimensions have labels designating their address,
+while indexed dimensions have indices.
 
 Example: Using [literal form](reference/tensor.html), the tensor:
 
@@ -38,20 +38,21 @@ has two dimensions named `x` and `y`, and has two cells with defined values:
 
 ![Tensor graphical representation](img/tensor-guide.png)
 
-A type declaration is needed for tensors. This defines a sparse matrix:
+A type declaration is needed for tensors. This defines a 2-dimensional mapped tensor (matrix):
 
     tensor(x{},y{})
 
-This is a dense matrix:
+This is a 2-dimensional indexed tensor (a 2x3 matrix):
 
-    tensor(x[],y[])
+    tensor(x[2],y[3])
     
-Combination:
+A combination of mapped and indexed dimensions is a mixed tensor:
 
-    tensor(x[],y{})
+    tensor(x{},y[3])
 
 Vespa uses the tensor type to optimize the ranking pipeline.
-As seen above, the dimensions themselves define if they are sparse or dense.
+Best performance is currently achieved when using only indexed dimensions.
+As seen above, the dimensions themselves define if they are mapped or indexed.
 
 
 
