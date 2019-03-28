@@ -863,8 +863,8 @@ called "Thinking about museums". In the original input, the value for
 "museums", with a single whitespace character between them. How should we be
 able to search this field?
 
-For normal index fields, Vespa does something called _tokenization_ on the
-string. In our case this means that the string above is split into the three
+For normal index fields, Vespa  [tokenizes](../linguistics.html#tokenization) the string.
+In our case this means that the string above is split into the three
 tokens "Thinking", "about" and "museums", enabling Vespa to match this document
 both for the single-term queries "Thinking", "about" and "museums", the exact
 phrase query "Thinking about museums", and a query with two or more tokens in
