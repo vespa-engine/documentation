@@ -159,3 +159,89 @@ By default, there is no knowledge anywhere that captures what
 languages are used to generate the content of an index.
 The language parameter only affects the transformation of query terms that hit tokenized indexes.
 </p>
+
+
+
+<h2 id="stemming">Stemming</h2>
+<p>
+Stemming means <em>translate a word to its base form</em>
+(singular forms for nouns, infinitive for verbs),
+using a <a href="http://en.wikipedia.org/wiki/Stemming">stemmer</a>.
+Use of stemming increases search recall,
+because the searcher is usually interested in documents containing query words
+regardless of the word form used.
+Stemming in Vespa is symmetric,
+i.e. words are converted to stems both when indexing and searching.
+</p><p>
+Examples of this is when text is indexed,
+the stemmer will convert the noun <em>reports</em> (plural) to <em>report</em>,
+and the latter will be stored in the index.
+Likewise, before searching, <em>reports</em> will be stemmed to <em>report</em>.
+Another example is that <em>am</em>, <em>are</em> and <em>was</em>
+will be stemmed to <em>be</em> both in queries and indexes.
+</p><p>
+When <a href="reference/search-definitions-reference.html#bolding">bolding</a> is enabled,
+all forms of the query term will be bolded.
+I.e. when searching for <em>reports</em>,
+both <em>report</em>, <em>reported</em> and <em>reports</em> will be bolded.
+</p>
+
+
+<h3 id="theory">Theory</h3>
+<p>
+From a matching point of view,
+stemming takes all possible token strings and maps them into equivalence classes.
+So in the example above, the set of tokens
+{ <em>report</em>, <em>reports</em>, <em>reported</em> } are in an equivalence class.
+To represent the class,
+the linguistics library should pick the <span style="text-decoration: underline;">best</span> element in the class.
+At query time, the text typed by a user will be tokenized,
+and then each token should be mapped to the most likely equivalence class,
+again represented by the shortest element that belongs to the class.
+</p><p>
+While the theory sounds pretty simple,
+in practice it is not always possible to figure out which equivalence class a token should belong to.
+A typical example is the string <em>number</em>.
+In most cases we would guess this to mean a numerical entity of some kind,
+and the equivalence class would be { <em>number</em>, <em>numbers</em> } - but it could also be a verb,
+with a different equivalence class { <em>number</em>, <em>numbered</em>, <em>numbering</em> }.
+These are of course closely related, and in practice they will be merged,
+so we'll have a slightly larger equivalence class
+{ <em>number</em>, <em>numbers</em>, <em>numbered</em>, <em>numbering</em> }
+and be happy with that.
+However, in a sentence such as <em>my legs keep getting number every day</em>,
+the <em>number</em> token clearly does not have the semantics of a numerical entity,
+but should be in the equivalence class
+{ <em>numb</em>, <em>number</em>, <em>numbest</em>, <em>numbness</em> } instead.
+But blindly assigning <em>number</em> to the equivalence class <em>numb</em> is clearly not right,
+since the <em>more numb</em> meaning is much less likely than the <em>numerical entity</em> meaning.
+</p><p>
+The approach currently taken by the low-level linguistics library
+will often lead to problems in the <em>number</em>-like cases as described above.
+To give better recall, Vespa has implemented a <em>multiple</em> stemming option.
+</p>
+
+
+<h3 id="languages">Languages</h3>
+<p>
+Stemming is currently available for English, other languages needs user contribution.
+</p>
+
+
+<h3 id="configuration">Configuration</h3>
+<p>
+By default, all words are stemmed to their <em>best</em> form.
+Refer to the <a href="reference/search-definitions-reference.html#stemming">
+stemming reference</a> for other stemming types. To change type, add:
+<pre>
+stemming: [stemming-type]
+</pre>
+Stemming can be set either for a field, a fieldset or as a default for all fields.
+Example: Disable stemming for the field <em>title</em>:
+<pre>
+field title type string {
+    indexing: summary | index
+    stemming: none
+}
+</pre>
+</p>
