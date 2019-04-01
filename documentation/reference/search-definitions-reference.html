@@ -1613,7 +1613,8 @@ match {
 }
 </pre>
 Whether the match type is <code>text</code>, <code>word</code> or <code>exact</code>,
-all term matching will be done after NFKC normalization and locale independent lowercasing (in that order).
+all term matching will be done after <a href="../linguistics.html#normalization">normalization</a>
+and locale independent lowercasing (in that order).
 </p>
 <table class="table">
 <thead>
@@ -1623,17 +1624,59 @@ all term matching will be done after NFKC normalization and locale independent l
 <td>Indexes, streaming</td>
 <td><p>
   Default for indexes. Can not be combined with exact matching.
+  The field is matched per <a href="../linguistics.html#tokenization">token</a>.
+</p></td>
+</tr>
+
+<tr id="exact"><td><code>exact</code></td>
+<td>Indexes, attributes, streaming</td>
+<td><p>
+  Can not be combined with <em>text</em> matching.
   </p><p>
-  This field is matched per token. Tokens are created by splitting on whitespace and non-letter characters,
-  as well as by segmentation for CJK. All characters which are not letters or digits are ignored using text matching.
-  Previously also known as "token" matching
+  The field is matched <em>exactly</em>:
+  Strings containing any characters whatsoever will be indexed and matched as-is.
+  In queries, the exact match string ends at the exact match terminator (below).
+  </p><p>
+  A field with <code>match: exact</code> is considered to be
+  a <a href="#filter">filter field</a>, just as if <code>rank: filter</code> was specified.
+  This is because there is only one word per field
+  (or per item in the case of multivalued types such as <code>array&lt;string&gt;</code>),
+  so there little ranking information.
+  Turn off the implicit <code>rank: filter</code> by adding <code>rank: normal</code>.
+</p></td>
+</tr>
+
+<tr><td style="white-space:nowrap;"><code>exact-terminator</code></td>
+<td>Indexes, attributes, streaming</td>
+<td><p>
+  Only valid for <code>match: exact</code>. Default is <code>@@</code>.
+  Use to specify terminator in query strings.
+  If the query strings can contain <code>@@</code>, set a different terminator,
+  or use <code>match: word</code>, see below. Example - use:
+<pre>
+match {
+    exact
+    exact-terminator: "@%"
+}
+</pre>
+  on a field called <code>tag</code> to make query <code>tag:a b c!@%</code>
+  match documents with the string <em>a b c!</em>
+</p><p>
+  Example using the deafult terminator: If <code>tag</code> is an exact match field, the query:
+<pre>
+someword AND (tag:!*!@@ OR tag:(kanoo)@@)
+</pre>
+  matches documents with <code>someword</code>
+  and either <code>!*!</code> or <code>(kanoo)</code> as a tag.
+  Note that without the <code>@@</code> terminating the second tag string,
+  the second tag value would be <code>(kanoo))</code>.
 </p></td>
 </tr>
 
 <tr><td><code>word</code></td>
 <td>Indexes, attributes</td>
 <td><p>
-  Default for attributes. Can not be combined with text (token) matching.
+  Default for attributes. Can not be combined with <em>text</em> matching.
   </p><p>
   A single word is formed from the field input
   (or each item in the field input if it is an array or a weighted set).
@@ -1655,54 +1698,6 @@ foo AND (artist:"'N Sync" OR artist:"*NSYNC" OR artist:A*teens OR artist:"Wham!"
   and would result in a search for just <code>'N</code>,
   similarly the <code>!</code> would mean to increase the weight of a <code>Wham</code> term if not quoted.
   <a href="../performance/feature-tuning.html#indexing-strings">Example</a>.
-</p></td>
-</tr>
-
-<tr id="exact"><td><code>exact</code></td>
-<td>Indexes, attributes, streaming</td>
-<td><p>
-  Can not be combined with text (token) matching.
-  </p><p>
-  This field is matched <em>exactly</em>:
-  Strings containing any characters whatsoever will be indexed and matched as-is.
-  In queries, the exact match string ends at the exact match terminator,
-  which is <code>@@</code> per default.
-  As a side effect, a field with <code>match: exact</code> is considered to be
-  a <a href="#filter">filter field</a>, just as if <code>rank: filter</code> was specified.
-  This is because you will only get one word per field (or per item in the
-  case of multivalued types such as <code>array&lt;string&gt;</code>),
-  so there isn't much ranking information that you could get anyway.
-  You can turn off the implicit <code>rank: filter</code> by adding an
-  explicit <code>rank: normal</code>.
-  </p><p>
-  Example: If <code>tag</code> is an exact match field, this query:
-<pre>
-someword AND (tag:!*!@@ OR tag:(kanoo)@@)
-</pre>
-  will match documents containing <code>someword</code>
-  and either <code>!*!</code> or <code>(kanoo)</code> as a tag.
-  </p><p>Note that without the <code>@@</code> terminating the second tag string,
-  the second tag value would be <code>(kanoo))</code>.
-</p></td>
-</tr>
-
-<tr><td style="white-space:nowrap;"><code>exact-terminator</code></td>
-<td>Indexes, attributes, streaming</td>
-<td><p>
-  Only valid if exact matching is chosen.
-  </p><p>
-  When using exact match, a terminator for use in queries should be specified.
-  The default is <code>@@</code>, but if the strings to match can contain two at-signs in a row,
-  a different terminator must be used.
-  Alternatively, the "word match" feature can be used, see above. Example:
-<pre>
-match {
-    exact
-    exact-terminator: "@@"
-}
-</pre>
-  on the <code>tag</code> field will cause the query <code>tag:a b c!@@</code>
-  to match documents containing the exact string <code>a b c!</code>
 </p></td>
 </tr>
 
