@@ -1601,7 +1601,6 @@ to use this. This statement must be placed somewhere below the
 <p>Contained in <code><a href="#field">field</a></code>, <code><a href="#fieldset">fieldset</a></code> or
 <code><a href="#struct-field">struct-field</a></code>.
 Sets the matching method to use for this field to something else than the default token matching.
-Note the restrictions found in the column named <em>Valid with</em>.
 <pre>
 match: [property]
 </pre>
@@ -1614,152 +1613,168 @@ match {
 }
 </pre>
 Whether the match type is <code>text</code>, <code>word</code> or <code>exact</code>,
-all term matching will be done after NFKC normalization and locale independent lowercasing (in that order).
+all term matching will be done after <a href="../linguistics.html#normalization">normalization</a>
+and locale independent lowercasing (in that order).
+</p><p>
+Also see search using <a href="../query-language.html#regular-expressions">regular expressions</a>.
 </p>
 <table class="table">
 <thead>
-<tr><th>Property</th><th>Description</th><th>Valid with</th><th>Remarks</th></tr>
+<tr><th>Property</th><th>Valid with</th><th>Description</th></tr>
 </thead><tbody>
 <tr><td><code>text</code></td>
-<td>This field is matched per token. Tokens are created by splitting on whitespace and non-letter characters, as
-well as by segmentation for CJK. All characters which are not letters or digits are ignored using text matching.
-Previously also known as "token" matching.
-</td>
 <td>Indexes, streaming</td>
-<td>Default for indexes. Can not be combined with exact matching.</td>
+<td><p>
+  Default for indexes. Can not be combined with exact matching.
+  The field is matched per <a href="../linguistics.html#tokenization">token</a>.
+</p></td>
 </tr>
-
-<tr><td><code>word</code></td>
-<td><p>A single word is formed from the field input (or each item in the field input
-if it is an array or a weighted set).
-This word is matched <em>exactly</em>:
-Strings containing any characters whatsoever will be indexed and matched as-is.
-In queries, the word to match is heuristically parsed taking into account some usual query syntax characters;
-one can also use double quotes to include space, star, or exclamation marks.
-This is the default matching mode for string attributes.</p>
-
-<p>Example: If <code>artist</code> is a string attribute, this (advanced syntax) query:
-<pre>
-foo AND (artist:"'N Sync" OR artist:"*NSYNC" OR artist:A*teens OR artist:"Wham!")
-</pre>
-will match documents containing <code>foo</code> and at least one of
-<code>'N Sync</code> or <code>*NSYNC</code> or <code>A*teens</code> or <code>Wham!</code>
-as the artist field.</p>
-
-<p>Note that without the quotes, the space in <code>'N Sync</code> would end that word
-and would result in a search for just <code>'N</code>,
-similarly the <code>!</code> would mean to increase the weight of a <code>Wham</code> term if not quoted.
-<a href="../performance/feature-tuning.html#indexing-strings">Example</a>.
-</p>
-</td>
-<td>Indexes, attributes</td>
-<td>Default for attributes. Can not be combined with text (token) matching.</td>
-</tr>
-
 
 <tr id="exact"><td><code>exact</code></td>
-<td><p>This field is matched <em>exactly</em>: Strings containing any characters whatsoever will be
-indexed and matched as-is. In queries, the exact match string ends at
-the exact match terminator, which is <code>@@</code> per default.
-As a side effect, a field with <code>match: exact</code> is considered to be
-a <a href="#filter">filter field</a>, just as if <code>rank: filter</code> was specified.
-This is because you will only get one word per field (or per item in the
-case of multivalued types such as <code>array&lt;string&gt;</code>),
-so there isn't much ranking information that you could get anyway.
-You can turn off the implicit <code>rank: filter</code> by adding an
-explicit <code>rank: normal</code>.
-</p>
+<td>Indexes, attributes, streaming</td>
+<td><p>
+  Can not be combined with <em>text</em> matching.
+  </p><p>
+  The field is matched <em>exactly</em>:
+  Strings containing any characters whatsoever will be indexed and matched as-is.
+  In queries, the exact match string ends at the exact match terminator (below).
+  </p><p>
+  A field with <code>match: exact</code> is considered to be
+  a <a href="#filter">filter field</a>, just as if <code>rank: filter</code> was specified.
+  This is because there is only one word per field
+  (or per item in the case of multivalued types such as <code>array&lt;string&gt;</code>),
+  so there little ranking information.
+  Turn off the implicit <code>rank: filter</code> by adding <code>rank: normal</code>.
+</p></td>
+</tr>
 
-<p>Example: If <code>tag</code> is an exact match field, this
-(advanced syntax) query:
+<tr id="exact-terminator"><td style="white-space:nowrap;"><code>exact-terminator</code></td>
+<td>Indexes, attributes, streaming</td>
+<td><p>
+  Only valid for <code>match: exact</code>. Default is <code>@@</code>.
+  Use to specify terminator in query strings.
+  If the query strings can contain <code>@@</code>, set a different terminator,
+  or use <code>match: word</code>, see below. Example - use:
+<pre>
+match {
+    exact
+    exact-terminator: "@%"
+}
+</pre>
+  on a field called <code>tag</code> to make query <code>tag:a b c!@%</code>
+  match documents with the string <em>a b c!</em>
+</p><p>
+  Example using the deafult terminator: If <code>tag</code> is an exact match field, the query:
 <pre>
 someword AND (tag:!*!@@ OR tag:(kanoo)@@)
 </pre>
-will match documents containing <code>someword</code>
-and either <code>!*!</code> or <code>(kanoo)</code> as a tag.</p>
-
-<p>Note that without the <code>@@</code> terminating the
-second tag string, the second tag value would be <code>(kanoo))</code>.</p>
-</td>
-<td>Indexes, attributes, streaming</td>
-<td>Can not be combined with text (token) matching.</td>
+  matches documents with <code>someword</code>
+  and either <code>!*!</code> or <code>(kanoo)</code> as a tag.
+  Note that without the <code>@@</code> terminating the second tag string,
+  the second tag value would be <code>(kanoo))</code>.
+</p></td>
 </tr>
 
-<tr><td><code>exact-terminator</code></td>
+<tr id="word"><td><code>word</code></td>
+<td>Indexes, attributes</td>
 <td><p>
-When using exact match, a terminator for use in queries should be
-specified.
-The default is <code>@@</code>, but if the strings to match can contain two
-at-signs in a row, a different terminator must be used.  Alternately
-the "word match" feature can be used, see above.
-</p>
-
-<p>Example
+  This is the default matching mode for <a href="../attributes.html">string attributes</a>.
+  Can not be combined with <em>text</em> matching.
+  </p><p>
+  Word matching is like exact matching, but with more advanced query parsing.
+  The query terms is heuristically parsed taking into account some usual query syntax characters;
+  one can also use double quotes to include space, star, or exclamation marks.
+  </p><p>
+  Example: If <code>artist</code> is a string attribute, the query:
 <pre>
-    match {
-        exact
-        exact-terminator: "@@"
-    }
+foo AND (artist:"'N Sync" OR artist:"*NSYNC" OR artist:A*teens OR artist:"Wham!")
 </pre>
-on the <code>tag</code> field will cause the query <code>tag:a b c!@@</code>
-to match documents containing the exact string <code>a b c!</code></p>
-</td>
-<td>Indexes, attributes, streaming</td>
-<td>Only valid if exact matching is chosen.</td>
+  matches documents with <code>foo</code> and at least one of
+  <code>'N Sync</code> or <code>*NSYNC</code> or <code>A*teens</code> or <code>Wham!</code>
+  in the artist field
+  </p><p>
+  Note that without the quotes, the space in <code>'N Sync</code> would end that word
+  and would result in a search for just <code>'N</code>,
+  similarly the <code>!</code> would mean to increase the weight of a <code>Wham</code> term if not quoted.
+  <a href="../performance/feature-tuning.html#indexing-strings">Example</a>.
+</p></td>
 </tr>
 
-<tr><td><code>prefix</code></td>
-<td>This field supports prefix* searches. For streaming: this field uses prefix* searching for all search terms.</td>
+<tr id="prefix"><td><code>prefix</code></td>
 <td>Attributes, streaming</td>
-<td>Prefix searching is always enabled for attributes and in streaming.
-In these cases use the query syntax for prefix terms to get prefix searching even though the match method is not prefix.</td>
+<td><p>
+  Set default match mode to <em>prefix</em> for the field -
+  i.e. queries do not need to specify prefix matching.
+  As the data structures in <a href="../attributes.html">attributes</a> and
+  <a href="../streaming-search.html">streaming search</a>
+  support prefix searches, one can always set prefix matching in the query,
+  without setting the field to prefix default.
+  Also see <a href="../query-language.html#regular-expressions">regular expressions</a>.
+</p></td>
 </tr>
 
-<tr><td><code>substring</code></td>
-<td>This field uses *substring* searching for all search terms as default.</td>
+<tr id="substring"><td><code>substring</code></td>
 <td>Streaming</td>
-<td>Substring searching is always enabled in streaming.
-Use the query syntax for substring terms to get substring searching even though the match method is not substring.</td>
+<td><p>
+  Set default match mode to <em>substring</em> for the field.
+  Only available in <a href="../streaming-search.html">streaming search</a>.
+  As the data structures in <a href="../streaming-search.html">streaming search</a>
+  support substring searches, one can always set substring matching in the query,
+  without setting the field to substring default.
+  Also see <a href="../query-language.html#regular-expressions">regular expressions</a>.
+</p></td>
 </tr>
 
-<tr><td><code>suffix</code></td>
-<td>This field uses *suffix searching for all search terms as default.</td>
+<tr id="suffix"><td><code>suffix</code></td>
 <td>Streaming</td>
-<td>Suffix searching is always enabled in streaming.
-Use the query syntax for suffix terms to get suffix searching even though the match method is not suffix.</td>
+<td><p>
+  Like substring (above).
+</p></td>
 </tr>
 
 <tr id="max-length"><td><code>max-length</code></td>
-<td>This limits the length of the field that will be used for matching.</td>
 <td>Indexes, streaming</td>
-<td>If this value is set it is the max number of characters of a field that will be considered during search.
- If not the default <code><a href="#fieldmatchmaxlength">fieldmatchmaxlength</a></code> will be used.</td>
+<td><p>
+  Override <code><a href="#fieldmatchmaxlength">fieldmatchmaxlength</a></code> -
+  this limits the length of the field that will be used for matching.
+</p></td>
 </tr>
 
-<tr><td><code>gram</code></td>
-<td>This field is matched using n-grams. For example, with the default gram size 2 the string "hi blue" is tokenized to "hi bl lu ue" both in the index and in queries to the index.
-	<p>
-		N-gram matching is useful mainly as an alternative to segmentation in CJK languages. Typically it results in increased recall and lower precision. However, as
-Vespa usually uses proximity in ranking the precision offset may not be of much importance. Grams consumes more resources than other matching methods because both
-indexes and queries will have more terms, and the terms contains repetition of the same letters. On the other hand, CPU intensive CJK segmentation is avoided.
-<p>
-It may also be used for substring matching in general.</td>
+<tr id="gram"><td><code>gram</code></td>
 <td>Indexes</td>
-<td></td>
+<td><p>
+  This field is matched using n-grams.
+  For example, with the default gram size 2 the string "hi blue" is tokenized to "hi bl lu ue"
+  both in the index and in queries to the index.
+  </p><p>
+  N-gram matching is useful mainly as an alternative to
+  <a href="../linguistics.html#tokenization">segmentation</a> in CJK languages.
+  Typically it results in increased recall and lower precision.
+  However, as Vespa usually uses proximity in ranking,
+  the precision offset may not be of much importance.
+  Grams consumes more resources than other matching methods
+  because both indexes and queries will have more terms,
+  and the terms contains repetition of the same letters.
+  On the other hand, CPU intensive CJK segmentation is avoided.
+  </p><p>
+  It may also be used for substring matching in general.
+</p></td>
 </tr>
 
-<tr><td><code>gram-size</code></td>
-<td>Sets the gram size when gram matching is used. The default size (if this is not present) is 2.
-<p>Example
+<tr id="gram-size"><td><code>gram-size</code></td>
+<td>Indexes</td>
+<td><p>
+  A positive, nonzero, number, default 2.
+  Sets the gram size when gram matching is used. Example:
 <pre>
-    match {
-        gram
-        gram-size: 3
-    }
+match {
+    gram
+    gram-size: 3
+}
 </pre>
-<td>Indexes
-<td>This may be any positive number larger than 0.
+</p></td>
 </tr>
+
 </tbody>
 </table>
 
