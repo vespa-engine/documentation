@@ -30,15 +30,11 @@ function init() {
 }
 </script>
 
-<p>Vespa accepts unstructured human input and structured
-queries for application logic separately, then combines them into a single data
-structure for executing. Human input is parsed heuristically,
-while application queries are formulated in YQL.</p>
-
-
-<h2 id="yql-101">YQL 101</h2>
-
 <p>
+Vespa accepts unstructured human input and structured queries for application logic separately,
+then combines them into a single data structure for executing.
+Human input is parsed heuristically, while application queries are formulated in YQL.
+</p><p>
 A simple query URL looks like:
 <pre>
 http://myhost.mydomain.com:8080/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22%3B
@@ -48,13 +44,15 @@ In other words, <em>yql</em> contains:
 select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22%3B
 </pre>
 This matches all documents where the field named <em>text</em> contains the word <em>blues</em>.
-The match type is determined by the <a href="reference/search-definitions-reference.html">search definition</a>.
+The <a href="reference/search-definitions-reference.html#match">match type</a> is
+set in the search definition.
 <p>
 
 
-<h2 id="select-statement">SELECT</h2>
 
-<p>SELECT is the list of requested <a href="search-definitions.html#indexing">summary fields</a>
+<h2 id="select">SELECT</h2>
+<p>
+SELECT is the list of requested <a href="search-definitions.html#indexing">summary fields</a>
 (a field with the "summary" index attribute).
 Vespa will hide other fields in the matching documents.
 <pre class="urlunencode" oncopy="">
@@ -65,28 +63,30 @@ To request all fields, use an asterisk as field selection:
 <pre class="urlunencode" oncopy="">
 select%20*%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%3B
 </pre>
+</p>
 
 
 
 <h2 id="from-sources">FROM SOURCES</h2>
-
-<p>FROM specifies which document sources to search,
-it is handled in a similar way to Vespa's "sources" parameter. Example:
+<p>
+FROM (SOURCES) specifies which document
+<a href="reference/search-api-reference.html#model.sources">sources</a> to search. Example:
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20music%20where%20title%20contains%20%22madonna%22%3B
 </pre>
-searches in the source "music" for the documents matching the "where" filter expression.
-<p>
-Searching in all sources, done by using
-<code>select … from <strong>sources *</strong> where …</code>,
-while searching in a set of sources is done with
-<code>select … from <strong>sources source1, source2</strong> where …</code>
-and searching a single source is done by
-<code>select … from <strong>source1</strong> where …</code>
-</p><p>
-In other words, the "sources" keyword is used for querying all sources
-(and then in conjunction with an asterisk), or when explicitly querying more than one source.
-If only a single source is requested, the "sources" keyword is dropped.
+searches in <em>music</em> documents. Search in:
+<table class="table">
+<thead></thead><tbody>
+  <tr><td>all sources</td>
+      <td><code>select … from <strong>sources *</strong> where …</code></td></tr>
+  <tr><td>a set of sources</td>
+      <td><code>select … from <strong>sources source1, source2</strong> where …</code></td></tr>
+  <tr><td>a single source</td>
+      <td><code>select … from <strong>source1</strong> where …</code></td></tr>
+</tbody>
+</table>
+In other words, <em>sources</em> is used for querying some/all sources.
+If only a single source is queries, the <em>sources</em> keyword is dropped.
 </p>
 
 
@@ -112,46 +112,78 @@ Explicitly control tokenization by using annotations:
 select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%28%5B%7B%22stem%22%3A%20false%7D%5D%22madonna%22%29%3B
 </pre>
 Note the use of parentheses to control precedence.
+</p>
+
+
+
+<h2 id="matches">MATCHES</h2>
+<p>
+Limited support for using regular expressions for searching is provided.
+Replace <code>contains</code> with <code>matches</code> to run a regex search.
+This example becomes a substring search:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22madonna%22%3B
+</pre>
+This example matches both <code>madonna</code>, <code>madona</code> and with any number of <code>n</code>s:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22mado%5Bn%5D%2Ba%22%3B
+</pre>
+Here you match any string starting with <code>mad</code>:
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22^mad%22%3B
+</pre>
+Vespa supports regular expressions with
+<a href="http://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Extended_Regular_Expressions">posix extended syntax</a>
+with the limitation that it is <strong>case insensitive</strong>.
+</p><p>
+<strong>Note:</strong> Only <a href="reference/search-definitions-reference.html#attribute">attribute</a>
+fields in <a href="reference/services-content.html#document">documents</a> that have <code>mode="index"</code> are supported.
+It is also not optimized.
+Having a prefix using the <code>^</code> will be faster than not having one.
+</p>
 
 
 
 <h2 id="or">OR</h2>
-
-<p>The OR statement accepts other OR statements, AND statements,
+<p>
+The OR statement accepts other OR statements, AND statements,
 <a href="#userquery">userQuery</a> - and contains statements as arguments:
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20or%20title%20contains%20%22saint%22%3B
 </pre>
+</p>
 
 
 
 <h2 id="and">AND</h2>
-
-<p>The AND statement accepts other AND statements, OR statements,
+<p>
+The AND statement accepts other AND statements, OR statements,
 <a href="#userquery">userQuery</a>, logically inverted statements - and contains statements as arguments:
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20and%20title%20contains%20%22saint%22%3B
 </pre>
+</p>
 
 
 
 <h2 id="and-not">AND NOT</h2>
-
-<p>Since Vespa does recall, as opposed to filtering, the only <i>excluding</i>i> operator in Vespa is "ANDNOT".
+<p>
+Since Vespa does recall, as opposed to filtering, the only <em>excluding</em> operator in Vespa is "ANDNOT".
 In YQL this is expressed as the right hand side, and only the right hand side,
 argument of the AND operator may be a logically inverted expression, i.e. using the <em>!</em> operator:
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20and%20%21%28title%20contains%20%22saint%22%29%3B
 </pre>
+</p>
 
 
 
 <h2 id="order-by">ORDER BY</h2>
-
-<p>Sorting the result according to attribute vectors in Vespa is supporting using <code>order by</code>.
+<p>
+Sorting the result according to attribute vectors in Vespa is supporting using <code>order by</code>.
 Adding <code>asc</code> or <code>desc</code> after the name of an attribute,
 specifies sorting in ascending or descending order, respectively.
-If no order is explicitly specified, ascending order is implied.
+Ascending order is default.
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20order%20by%20price%20asc%2C%20releasedate%20desc%3B
 </pre>
@@ -161,12 +193,13 @@ select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%2
 </pre>
 <strong>Note: </strong> <a href="reference/search-definitions-reference.html#match-phase">match-phase</a>
 is enabled when sorting - refer to the <a href="reference/sorting.html">sorting reference</a>.
+</p>
 
 
 
 <h2 id="numeric-operators">Numeric Operators</h2>
-
-<p>The following numeric operators are available:
+<p>
+The following numeric operators are available:
 <em>=, &lt;, &gt;, &lt;=, &gt;=</em>
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20500%20%3E%3D%20price%3B
@@ -180,7 +213,7 @@ The interval is by default a closed interval.
 If the lower bound is exclusive, set the annotation "bounds" to "leftOpen".
 If the upper bound is exclusive, set the same annotation to "rightOpen".
 If both bounds are exclusive, set the annotation to "open". <!-- ToDo: example here! -->
-<p>
+</p><p>
 These number operations support an extra annotation, the integer "hitLimit".
 This is used for <em>capped range search</em>.
 An alternative to using negative and positive values for "hitLimit"
@@ -206,11 +239,13 @@ select%20%2A%20from%20sources%20%2A%20where%20alive%20%3D%20true%3B
 </pre>
 </p>
 
+
+
 <h2 id="grouping">Grouping</h2>
 <p>
 Group / aggregate results using a grouping expression:
 <pre class="urlunencode" oncopy="">
-select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%27purchase%27%20%7C%20 all(group(customer)%20each(output(sum(price))))%3B
+select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%27purchase%27%20%7C%20all(group(customer)%20each(output(sum(price))))%3B
 </pre>
 <a href="grouping.html">Read more</a>.
 </p>
@@ -239,39 +274,6 @@ Set query timeout in milliseconds using <code>timeout</code>:
 select%20%2A%20from%20sources%20%2A%20where%20title%20contains%20%22madonna%22%20timeout%2070%3B
 </pre>
 Only literal numbers are allowed, e.g. setting another unit is not supported.
-</p>
-
-
-
-<h2 id="regular-expressions">Regular expressions</h2>
-<p>
-Limited support for using regular expressions for searching is provided.
-By replacing <code>contains</code> with <code>matches</code>, vespa will do a regex search instead.
-This example becomes a substring search:
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22madonna%22%3B
-</pre>
-This example matches both <code>madonna</code>, <code>madona</code> and with any number of <code>n</code>s:
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22mado%5Bn%5D%2Ba%22%3B
-</pre>
-Do note that you need to <strong>url encode</strong> these when using http.
-The above will then look like this:
-<pre oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22mado%5Bn%5D%2Ba%22%3B
-</pre>
-Here you match any string starting with <code>mad</code>:
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20title%20matches%20%22^mad%22%3B
-</pre>
-Vespa supports regular expressions with
-<a href="http://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Extended_Regular_Expressions">posix extended syntax</a>
-with the limitation that it is <strong>case insensitive</strong>.
-</p><p>
-<strong>Note:</strong> Only <a href="reference/search-definitions-reference.html#attribute">attribute</a>
-fields in <a href="reference/services-content.html#document">documents</a> that have <code>mode="index"</code> are supported.
-It is also not optimized.
-Having a prefix using the <code>^</code> will be faster than not having one.
 </p>
 
 
@@ -314,60 +316,52 @@ select%20%2A%20from%20sources%20%2A%20where%20description%20contains%20%28%5B%20
 <h3 id="same-element">Same element</h3>
 <p>
 <em>sameElement()</em> is an operator that requires the terms to match within the same struct element in an array or a map field. Example:
-</p>
 <pre>
-...
 struct person {
-  field first_name type string {}
-  field last_name type string {}
-  field year_of_birth type int {}
+    field first_name type string {}
+    field last_name type string {}
+    field year_of_birth type int {}
 }
 
 field persons type array&lt;person&gt; {
-  indexing: summary
-  struct-field first_name { indexing: attribute }
-  struct-field last_name { indexing: attribute }
-  struct-field year_of_birth { indexing: attribute }
+    indexing: summary
+    struct-field first_name { indexing: attribute }
+    struct-field last_name { indexing: attribute }
+    struct-field year_of_birth { indexing: attribute }
 }
 field identities type map&lt;string, person&gt; {
-  indexing: summary
-  struct-field key { indexing: attribute }
-  struct-field value.first_name { indexing: attribute }
-  struct-field value.last_name { indexing: attribute }
-  struct-field value.year_of_birth { indexing: attribute }
+    indexing: summary
+    struct-field key { indexing: attribute }
+    struct-field value.first_name { indexing: attribute }
+    struct-field value.last_name { indexing: attribute }
+    struct-field value.year_of_birth { indexing: attribute }
 }
-...
 </pre>
-<p>
 With normal <em>AND</em> the query <code>persons.first_name AND persons.last_name</code> will normally not give you what you want.
 It will match if a document has a <em>persons</em> element with a matching <em>first_name</em>
 <em>AND</em> any element with a matching <em>last_name</em>.
 So you will get a lot of false positives since there is nothing limiting them to the same element.
 However, that is what <em>sameElement</em> ensures.
-</p>
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20persons%20contains%20sameElement%28first_name%20contains%20'Joe',%20last_name%20contains%20'Smith',%20year_of_birth%20%3C%201940%29%3B
 </pre>
-<p>
 The above returns all documents containing Joe Smith born before 1940 in the <em>persons</em> array.
-</p>
-<p>
+</p><p>
 Searching in a map is similar to searching in an array of struct.
 The difference is that you have an extra synthetic struct with the field members <em>key</em> and <em>value</em>.
 The above example with the <em>identities</em> map looks like this:
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20identities%20contains%20sameElement%28key%20contains%20'father',%20value.first_name%20contains%20'Joe',%20value.last_name%20contains%20'Smith',%20value.year_of_birth%20%3C%201940%29%3B
 </pre>
-</p>
-<p>
 The above returns all documents that have tagged Joe Smith born before 1940 as a 'father'.
 The importance here is using the indirection of <em>key</em> and <em>value</em> to address the keys and the values of the map.
 </p>
 
+
 <h3 id="equiv">Term Equivalence</h3>
 <p>
-If two terms in the same field should give exactly the same behavior when
-match, the equiv() operator behaves like a special case of "or".
+If two terms in the same field should give exactly the same behavior when match,
+the equiv() operator behaves like a special case of "or".
 <pre class="urlunencode" oncopy="">
 select%20%2A%20from%20sources%20%2A%20where%20fieldName%20contains%20equiv%28%22A%22%2C%22B%22%29%3B
 </pre>
@@ -375,8 +369,9 @@ select%20%2A%20from%20sources%20%2A%20where%20fieldName%20contains%20equiv%28%22
 
 
 <h3 id="term-annotations">Term Annotations</h3>
-
-<p>Terms and phrases can be annotated to manipulate the precise behavior of the search platform.</p>
+<p>
+Terms and phrases can be annotated to manipulate the precise behavior of search.
+</p>
 
 <h4>Annotations supported by strings</h4>
 <p>
@@ -387,7 +382,7 @@ and phrase() and near() and also the string argument to the "contains" operator.
 <tr><td>"nfkc": true|false</td>
     <td>NFKC <a href="linguistics.html#normalization">normalization</a>. Default on.</td>
 </tr>
-<tr><td>"implicitTransforms": true|false</td>
+<tr><td style="white-space:nowrap;">"implicitTransforms": true|false</td>
     <td>Implicit term transformations (field defaults), default on.
     If implicitTransforms is active, the settings for the field in the search
     definition will be honored in term transforms, e.g. if the field has stemming, this term will be stemmed.
@@ -397,10 +392,14 @@ and phrase() and near() and also the string argument to the "contains" operator.
     <a href="linguistics.html#stemming">stemming</a>, accent removal, Unicode
     <a href="linguistics.html#normalization">normalizations</a> and so on.</td>
 </tr>
-<tr><td>"annotations": {"string": "string"}</td>
+<tr><td>"annotations": {<br/>
+    &nbsp;&nbsp;"string": "string"<br/>}</td>
     <td>Custom term annotations. This is by default empty.</td>
 </tr>
-<tr><td>"origin": {"original": "string", "offset": int, "length": int}</td>
+<tr><td>"origin": {<br/>
+    &nbsp;&nbsp;"original": "string",<br/>
+    &nbsp;&nbsp;"offset": int,<br/>
+    &nbsp;&nbsp;"length": int<br/>}</td>
     <td>The (sub-)string which produced this term. Default unset.</td>
 </tr>
 <tr><td>"usePositionData": true|false</td>
@@ -440,20 +439,23 @@ and phrase() and near() and also the string argument to the "contains" operator.
 <h4>Annotations supported by strings and functions</h4>
 <p>
 These annotations are supported by strings and by the functions which
-are handled like leaf nodes internally in the query tree: phrase(),
-near(), onear(), range(), equiv(), weightedSet(), weakAnd() and wand().
+are handled like leaf nodes internally in the query tree:
+phrase(), near(), onear(), range(), equiv(), weightedSet(), weakAnd() and wand().
 </p>
 <table class="table">
 <tr><td>"id": int</td>
     <td>Unique ID used for e.g. connectivity.</td>
 </tr>
-<tr><td>"connectivity": {"id": int, "weight": double}</td>
+<tr><td>"connectivity": {<br/>
+    &nbsp;&nbsp;"id": int,<br/>
+    &nbsp;&nbsp;"weight": double<br/>}</td>
     <td>Map with the ID and weight of explicitly connectivity of this item.</td>
 </tr>
 <tr><td>"significance": double</td>
     <td>Significance value for ranking.</td>
 </tr>
-<tr><td>"annotations": {"string": "string"}</td>
+<tr><td>"annotations": {<br/>
+    &nbsp;&nbsp;"string": "string"<br/>}</td>
     <td>Custom annotations. No special semantics inside the YQL layer.</td>
 </tr>
 <tr><td>"filter": true|false</td>
@@ -485,29 +487,23 @@ the expression tree is followed from the term in question and up through its anc
 Traversing the tree stops when a value is found (or there is nothing more to traverse).
 In other words, none of the terms in this example will be stemmed.
 </p><p>
-How annotations behave may be easier to understand of expressing a boolean
-query in the style of an S-expression:
+How annotations behave may be easier to understand of expressing a boolean query in the style of an S-expression:
 <pre>
 (AND term1 term2 (OR term3 term4) (OR term5 (AND term6 term7)))
 </pre>
 The annotation scopes would then be as follows, i.e. annotations on
 which elements will be checked when determining the settings for a given term:
-<dl>
-<dt>term1</dt>
-    <dd>term1 itself, and the first AND.</dd>
-<dt>term2</dt>
-    <dd>term2 itself, and the first AND.</dd>
-<dt>term3</dt>
-    <dd>term3 itself, the first OR and the first AND.</dd>
-<dt>term4</dt>
-    <dd>term4 itself, the first OR and the first AND.</dd>
-<dt>term5</dt>
-    <dd>term5 itself, the second OR and the first AND.</dd>
-<dt>term6</dt>
-    <dd>term6 itself, the second AND, the second OR and the first AND.</dd>
-<dt>term7</dt>
-    <dd>term7 itself, the second AND, the second OR and the first AND.</dd>
-</dl>
+<table class="table">
+<thead></thead><tbody>
+<tr><td>term1</td><td>term1 itself, and the first AND</td></tr>
+<tr><td>term2</td><td>term2 itself, and the first AND</td></tr>
+<tr><td>term3</td><td>term3 itself, the first OR and the first AND</td></tr>
+<tr><td>term4</td><td>term4 itself, the first OR and the first AND</td></tr>
+<tr><td>term5</td><td>term5 itself, the second OR and the first AND</td></tr>
+<tr><td>term6</td><td>term6 itself, the second AND, the second OR and the first AND</td></tr>
+<tr><td>term7</td><td>term7 itself, the second AND, the second OR and the first AND</td></tr>
+</tbody>
+</table>
 </p>
 
 
@@ -814,9 +810,9 @@ It will then perform a set of checks on that expression.
 If all the checks pass, the result is the same expression, otherwise the query will fail.
 The checks are as follows:
 <ol>
-  <li>No empty search term.</li>
-  <li>No empty operators, like phrases without terms.</li>
-  <li>No null markers (NullItem) from e.g. failed query parsing.</li>
+  <li>No empty search term</li>
+  <li>No empty operators, like phrases without terms</li>
+  <li>No null markers (NullItem) from e.g. failed query parsing</li>
 </ol>
 <pre class="urlunencode" oncopy="">
 yql=select%20%2A%20from%20sources%20%2A%20where%20bar%20contains%20%22a%22%20and%20nonEmpty%28bar%20contains%20%22bar%22%20and%20foo%20contains%20%40foo%29&amp;foo=
@@ -843,12 +839,13 @@ select%20*%20from%20sources%20*%20where%20predicate(predicate_field%2C0%2C%7B%22
 
 
 
-
 <h2 id="query-rewriting-in-searchers">Query rewriting in Searchers</h2>
-
-<p>Searchers which modifies the textual YQL statement (not recommended) should be annotated with
-<em>@Before("ExternalYql")</em>. Searchers modifying query tree produced from an input YQL statement
-should annotate with <em>@After("ExternalYql")</em>.</p>
+<p>
+Searchers which modifies the textual YQL statement (not recommended)
+should be annotated with <em>@Before("ExternalYql")</em>.
+Searchers modifying query tree produced from an input YQL statement
+should annotate with <em>@After("ExternalYql")</em>.
+</p>
 
 <script>
 window.onload=init();
