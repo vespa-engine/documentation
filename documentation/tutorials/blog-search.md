@@ -896,6 +896,8 @@ Finally, all numeric fields should always be attributes.
 removes all documents:
 
     $ vespa-stop-services && vespa-remove-index && vespa-start-services
+    
+Also see [vespa-configserver-remove-state](../cloudconfig/configuration-server.html#zookeeper-recovery).
 
 
 ## Conclusion
