@@ -54,12 +54,7 @@ by dedicating more resources to the best candidates - see
 By default, second-phase ranking (if specified) is run on the 100 best hits per content node,
 after matching and before information is returned to the container.
 The number of hits to rerank can be configured in the ranking expression.
-</p>
-
-
-
-<h2 id="configuring-rank-expressions">Configuring rank expressions</h2>
-<p>
+</p><p>
 Rank expressions are configured in the <code>rank profile</code> section of
 <a href="reference/search-definitions-reference.html#rank-profile">search definitions</a>. Example:
 <pre>
@@ -110,14 +105,28 @@ only the differences between two profiles.
 </p>
 
 
-
-<h2 id="advanced-ranking-functions-using-tensors">Advanced ranking functions using tensors</h2>
+<h3 id="choosing-functions-for-the-first-and-second-phase">Choosing functions for the first and second phase</h3>
 <p>
-Many modern machine-learning methods such as neural nets and large logistic regressions
-produce functions with thousands to millions of parameters.
-Vespa features a native <a href="tensor-user-guide.html">tensor</a> model and operator set,
-which makes it possible to express such functions as ranking expressions,
-which Vespa will execute as optimized code to compute a score for each document.
+A good ranking expression will for most applications consume too much CPU
+to be runnable on the entire result set,
+so in most cases the desired rank function should be used as the second phase function.
+The task then becomes to find a first phase function,
+which correlates sufficiently well with the second phase function,
+to ensure that relevance is not hurt too much by not evaluating the second phase function on all the hits.
+In many cases, <code>nativeRank</code> will work well as the first phase function.
+The impact of using a cheaper function in the first phase can be assessed by deploying
+the second order function as the first order function in a test rank profile,
+and comparing the results to the production rank profile.
+</p>
+
+
+<h3 id="nativerank">nativeRank</h3>
+<p>
+The default ranking is <code>nativeRank</code> in the first phase and no second phase re-ranking.
+The <code>nativeRank</code> is a feature which gives a reasonably good rank score,
+while being fast enough to be suitable for first phase ranking.
+See the <a href="reference/nativerank.html">native rank reference</a> and
+<a href="nativerank.html">native rank introduction</a> for more information.
 </p>
 
 
@@ -222,29 +231,6 @@ search assistance triggering when there are no good hits, and so on.
 
 
 
-<h2 id="literal-boosting">Literal boosting</h2>
-<p>
-By default, Vespa does <a href="linguistics.html#stemming">stemming</a> and
-<a href="linguistics.html#normalization">normalization</a>
-of the words in the indexes and queries to increase recall.
-Some times it helps relevance to write a ranking expression which gives a higher
-score to matches where the <em>literal</em> form used in the query matches the
-literal form used in the document.
-Add <code>rank:literal</code> to the field(s) to enable.
-Then write a ranking function which accesses features for a field name
-as the original field with <code>_literal</code> appended.
-Example field and ranking expression:
-<pre>
-field title type string {
-    indexing: index
-    rank:     literal
-}
-</pre><pre>
-0.9*fieldMatch(title) + 0.1*fieldMatch(title_literal)</pre>
-</p>
-
-
-
 <h2 id="if-function-and-string-equality-tests">The <code>if</code> function and string equality tests</h2>
 <p>
 <code>if</code> can be used for other purposes than encoding MLR trained decision trees.
@@ -326,6 +312,17 @@ from the query by sending weight, significance and connectedness with the query:
 
 
 
+<h2 id="advanced-ranking-functions-using-tensors">Advanced ranking functions using tensors</h2>
+<p>
+Many modern machine-learning methods such as neural nets and large logistic regressions
+produce functions with thousands to millions of parameters.
+Vespa features a native <a href="tensor-user-guide.html">tensor</a> model and operator set,
+which makes it possible to express such functions as ranking expressions,
+which Vespa will execute as optimized code to compute a score for each document.
+</p>
+
+
+
 <h2 id="rank-features-dumping-ranking-information-for-tuning">Rank features: dumping ranking information for tuning</h2>
 <p>
 "All" ranking features can be included in the results for each document by adding
@@ -392,22 +389,6 @@ rank-properties {
 </pre>
 The full list of configuration features is found in the
 <a href="reference/rank-feature-configuration.html">rank feature configuration reference</a>.
-</p>
-
-
-
-<h2 id="choosing-functions-for-the-first-and-second-phase">Choosing functions for the first and second phase</h2>
-<p>
-A good ranking expression will for most applications consume too much CPU
-to be runnable on the entire result set,
-so in most cases the desired rank function should be used as the second phase function.
-The task then becomes to find a first phase function,
-which correlates sufficiently well with the second phase function,
-to ensure that relevance is not hurt too much by not evaluating the second phase function on all the hits.
-In many cases, <code>nativeRank</code> will work well as the first phase function.
-The impact of using a cheaper function in the first phase can be assessed by deploying
-the second order function as the first order function in a test rank profile,
-and comparing the results to the production rank profile.
 </p>
 
 
@@ -521,6 +502,29 @@ by trying different values in each query.
 
 
 
+<h2 id="literal-boosting">Literal boosting</h2>
+<p>
+By default, Vespa does <a href="linguistics.html#stemming">stemming</a> and
+<a href="linguistics.html#normalization">normalization</a>
+of the words in the indexes and queries to increase recall.
+Some times it helps relevance to write a ranking expression which gives a higher
+score to matches where the <em>literal</em> form used in the query matches the
+literal form used in the document.
+Add <code>rank:literal</code> to the field(s) to enable.
+Then write a ranking function which accesses features for a field name
+as the original field with <code>_literal</code> appended.
+Example field and ranking expression:
+<pre>
+field title type string {
+    indexing: index
+    rank:     literal
+}
+</pre><pre>
+0.9*fieldMatch(title) + 0.1*fieldMatch(title_literal)</pre>
+</p>
+
+
+
 <h2 id="function-snippets-as-mlr-level-features">Function Snippets as MLR Level Features</h2>
 <p>
 When using machine learned ranking, we are searching a function space
@@ -551,17 +555,6 @@ summary-features {
 }
 </pre>
 The "rankingExpression" prefix, the parenthesis and the trailing at-sign are all required.
-</p>
-
-
-
-<h2 id="nativerank">nativeRank</h2>
-<p>
-The default ranking is <code>nativeRank</code> in the first phase and no second phase re-ranking.
-The <code>nativeRank</code> is a feature which gives a reasonably good rank score,
-while being fast enough to be suitable for first phase ranking.
-See the <a href="reference/nativerank.html">native rank reference</a> and
-<a href="nativerank.html">native rank introduction</a> for more information.
 </p>
 
 
