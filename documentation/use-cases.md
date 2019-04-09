@@ -15,16 +15,16 @@ More applications will be added soon.
 
 **Highlighted features**:
 
-* Multiple document types
+* multiple document types
 * partial updates
 * custom handlers
 * custom document
 * processors
 * custom configuration
-* search using yql
+* search using YQL
 * grouping
-* rank profiles,
-* and rank functions.
+* rank profiles
+* rank functions
 
 
 

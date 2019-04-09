@@ -42,7 +42,7 @@ not cause unexpected results.
 * [Multiple document types](https://docs.vespa.ai/documentation/search-definitions.html)
 
     Vespa models data as documents, which are configured in search definitions
-    that defines how documents should be storedm indexed, ranked, and searched.
+    that defines how documents should be stored, indexed, ranked, and searched.
     In Vespa you can have multiple documents types, which can be defined in
     ``services.xml`` how these should be distributed around the content clusters.
     This application uses two document types: item and review. Search is done
@@ -75,12 +75,12 @@ not cause unexpected results.
     parameters into the components. This involves defining a config definition
     (a `.def` file), which created a config class. You can instantiate this
     class with data in `services.xml` and the resulting object is injected to
-    you component during construction. This application uses custom config
+    the component during construction. This application uses custom config
     to set up the Vespa host details for the handler.
 
 * [Partial update](https://docs.vespa.ai/documentation/reference/document-json-format.html#update)
 
-    With Vepsa you can make changes to an existing document without submitting
+    With Vespa you can make changes to an existing document without submitting
     the full document. Examples are setting the value of a single field, adding
     elements to an array, or incrementing the value of a field without knowing
     the field value beforehand. This application contains an example of
