@@ -501,8 +501,51 @@ where%20rank%28a%20contains%20%22A%22%2C%20b%20contains%20%22B%22%29%3B
   </td></tr>
   <tr id="wand"><th>wand</th><td>
     <p>
-    <em>wand()</em> (aka Parallel Wand) implements the "Weak AND"/"Weighted AND" algorithm
-    and is used for matching the weighted set in its argument against a single weighted set field.
+    <em>wand()</em> (aka Parallel Wand) is a search operator that can be used for efficient top-k retrieval.
+    It implements the "Weak AND"/"Weighted AND" algorithm as described by Broder et al in
+    "Efficient query evaluation using a two-level retrieval process", and is an operator that scales
+    adaptively from OR to AND.
+    It is used for matching the weighted set in its argument against a single weighted set field.
+    </p><p>
+    Parallel Wand can be used to search for documents
+    where weighted tokens in a field matches a subset of weighted tokens in the query.
+    At the same time, it internally calculates the dot product between token weights in the query and the field.
+    Parallel Wand is guaranteed to return the top-k hits according to its internal dot product rank score.
+    It also optimizes the performance of using multiple threads per search in the backend.
+    </p><p>
+    <table class="table">
+    <thead></thead><tbody>
+    <tr>
+        <th>Field type</th>
+        <td>Weighted set attribute with fast-search.
+            Note: Also supported for regular attribute or index fields,
+            but then with much weaker performance).</td>
+    </tr><tr>
+        <th>Query model</th>
+        <td>Weighted set with {token, weight} pairs.</td>
+    </tr><tr>
+        <th>Matching</th>
+        <td>Documents where the weighted set field contains at least one of the tokens in the query
+            and where the internal dot product score for this document,
+            is larger than the worst among the current top-k best hits.
+            This means that more than top-k documents are matched and returned for ranking.
+            It also means that many documents are skipped,
+            even they match several tokens in the query because the dot product score is too low.
+            This skipping makes Parallel Wand faster than Dot Product Operator in some cases.
+        </td>
+    </tr><tr>
+        <th>Ranking</th>
+        <td>Dot product score between the weights of the matched query tokens and field tokens.
+            This score is available using <code>rawScore</code> or <code>itemRawScore</code> rank features.
+            Note that the top-k best hits are only guaranteed to be returned
+            when using this internal score as the final ranking expression.
+        </td>
+    </tr><tr>
+        <th style="white-space:nowrap;">Java Query Item</th>
+        <td><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WandItem.html">WandItem</a></td>
+    </tr>
+    </tbody>
+    </table>
     The best "targetNumHits" (according to the dot product score calculated) is returned from this function:
 <pre class="urlunencode" oncopy="">
 where%20%5B%20%7B%22scoreThreshold%22%3A%200.13%2C%20%22targetNumHits%22%3A%207%7D%20%5Dwand%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
@@ -520,17 +563,81 @@ where%20wand%28description%2C%20%5B%5B11%2C1%5D%2C%20%5B37%2C2%5D%5D%29%3B
     which is matched against a single field in the backend.
     </p><p>
     These advanced functions have recall behavior similar to OR, but only return a limited number of documents.
-    For more information on these functions take a look at
-    <a href="advanced-search-operators.html">Advanced Search Operators</a>.
+    </p><p>
+    <a href="../query-language.html#wand">wand example</a>.
     </p>
   </td></tr>
   <tr id="dotproduct"><th>dotProduct</th><td>
     <p>
+    Dot Product Operator is the brute force equivalent to Parallel Wand.
+    They are both used to search for documents
+    where weighted tokens in a field matches a subset of weighted tokens in the query.
+    They also produce the exact same dot product score.
+    In some simple cases Dot Product Operator is preferable to Parallel Wand.
+    </p>
+    <table class="table">
+    <thead></thead><tbody>
+    <tr>
+        <th>Field type</th>
+        <td>Weighted set attribute with fast-search. Note: Also supported for regular attribute or
+            index fields, but then with much weaker performance).</td>
+    </tr><tr>
+        <th>Query model</th>
+        <td>Weighted set with {token, weight} pairs</td>
+    </tr><tr>
+        <th>Matching</th>
+        <td>Documents where the weighted set field contains at least one of the tokens in the query.</td>
+    </tr><tr>
+        <th>Ranking</th>
+        <td>Dot product score between the weights of the matched query tokens and field tokens.
+            This score is available using <code>rawScore</code> or <code>itemRawScore</code> rank features.</td>
+    </tr><tr>
+        <th style="white-space:nowrap;">Java Query Item</th>
+        <td><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/DotProductItem.html">DotProductItem</a></td>
+    </tr>
+    </tbody>
+    </table>
+    <p>
+    <code>DotProductItem</code> is a query item available in the search container
+    that can be used to search for documents matching a subset of weighted tokens,
+    while at the same time calculating the sparse dot product between token weights
+    in the query item and the corpus.
+    This is the query operator for which Parallel Wand is an optimization.
+    </p><p>
+    You have a collection of weighted tokens produced by an algorithm
+    and want to match against a corpus containing weighted tokens
+    produced by another algorithm in order to implement personalized content exploration.
+    </p><p>
+    Generally, the use-cases for <em>dot product</em> are the same as for <a href="#wand">wand</a>.
+    The <a href="../ranking.html#raw-scores-and-query-item-labeling">raw scores</a> produced by
+    <em>dot product</em> operators are equivalent to those produced by <em>Parallel Wand</em>.
+    </p><p>
+    The difference is that <em>Parallel Wand</em> will perform local optimizations
+    in order to retrieve the top-k results that would be returned by the <em>dot product</em> operator.
+    This optimization will only yield correct results if the overall ranking is equal to the
+    score produced by the <em>dot product</em> operator itself.
+    </p><p>
+    It might make sense to start out using <em>dot product</em>
+    and later switch to wand if the performance gain outweighs the reduction in flexibility and correctness.
+    Also note that benchmarking should be involved in such a switch,
+    to quantify the possible gain in performance (which might be negative).
+    </p><p>
+    Here follows a list of cases where <em>dot product</em> might be
+    preferable to <em>wand</em> (Better means more correct):
+    <ul>
+      <li>Might be more efficient with few tokens or few total results.</li>
+      <li>Works better with arbitrary rank expressions and compound queries.</li>
+      <li>Works better with grouping.</li>
+      <li>Scales better when partitioning the problem space.</li>
+    </ul>
+    </p><p>
     <em>dotProduct()</em> calculates the dot product between the weighted set
     in its argument and a weighted set field in the document as its rank score contribution:
 <pre class="urlunencode" oncopy="">
 where%20dotProduct%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
 </pre>
+    </p><p>
+    <a href="../query-language.html#dotproduct">dotProduct example</a>.
     </p>
   </td></tr>
   <tr id="weightedset"><th>weightedSet</th><td>
@@ -545,7 +652,41 @@ where%20dotProduct%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
 <pre class="urlunencode" oncopy="">
 where%20weightedSet%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
 </pre>
+    <table class="table">
+    <thead></thead><tbody>
+    <tr>
+        <th>Field type</th>
+        <td>Singlevalue or <a href="../search-definitions.html#multivalue-fields">multivalue</a>
+            attribute or index field.
+            (Note: Most use cases operates on a single value field).</td>
+    </tr><tr>
+        <th>Query model</th>
+        <td>Weighted set with {token, weight} pairs.</td>
+    </tr><tr>
+        <th>Matching</th>
+        <td>Documents where the field contains at least one of the tokens in the query.</td>
+    </tr><tr>
+        <th>Ranking</th>
+        <td>The operator will act as a single term in the back-end. The query term weight is the weight
+            assigned to the operator itself and the match weight is the largest weight among matching
+            tokens from the weighted set. This operator does not produce a raw score. Due to better
+            ranking and performance we recommend using the Dot Product Operator instead.</td>
+    </tr><tr>
+        <th style="white-space:nowrap;">Java Query Item</th>
+        <td><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeightedSetItem.html">WeightedSetItem</a></td>
+    </tr>
+    </tbody>
+    </table>
+    WeightedSetItem is a query term available in the container
+    that can be used to search for a collection of tokens with individual weights.
+    It has similar semantics to EQUIV, since it acts as a single term in the query.
+    However, the restriction dictating that it contains a collection of weighted tokens directly
+    enables specific back-end optimizations that improves performance
+    for large sets of tokens compared to using the generic EQUIV or OR operators.
+    </p><p>
+    <a href="../query-language.html#weightedset">weightedSet example</a>.
     </p>
+    
   </td></tr>
   <tr id="weakand"><th>weakAnd</th><td>
     <p>
@@ -557,14 +698,51 @@ where%20weightedSet%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
 <pre class="urlunencode" oncopy="">
 where%20weakAnd%28a%20contains%20%22A%22%2C%20b%20contains%20%22B%22%29%3B
 </pre>
-    Optional Arguments
-    </p><p>
     Both wand() and weakAnd() support the annotations "scoreThreshold",
     which is an double giving the minimum rank score for hits to include, and "targetNumHits"
     which is the desired number of hits to produce from the function in question:
 <pre class="urlunencode" oncopy="">
 where%20%5B%7B%22scoreThreshold%22%3A%200.41%2C%20%22targetNumHits%22%3A%207%7D%5DweakAnd%28a%20contains%20%22A%22%2C%20b%20contains%20%22B%22%29%3B
 </pre>
+    Unlike Parallel Wand, Vespa Wand can be used to search across several fields of various types,
+    but it does NOT guarantee to return the top-k best number of hits.
+    It can however be combined with any ranking expression, but keep in mind that this expression should
+    correlate with its simple internal ranking score that uses query term weight and inverse document
+    frequency for matching terms.
+    <table class="table">
+    <thead></thead><tbody>
+    <tr>
+        <th>Field type</th>
+        <td>Multiple fields of all types (both attribute and index).</td>
+    </tr><tr>
+        <th>Query model</th>
+        <td>Arbitrary number of query items searching across different fields.</td>
+    </tr><tr>
+        <th>Matching</th>
+        <td>Documents that matches at least one of the tokens in the query
+            and where the internal operator score for this document
+            is larger than the worst among the current top-k best hits.
+            As with Parallel Wand, this means that typically more than top-k documents are matched
+            and a lot of documents are skipped.
+        </td>
+    </tr><tr>
+        <th>Ranking</th>
+        <td>Internal ranking score based on query term weight
+            and inverse document frequency for matching terms to find the top-k hits.
+            This score is currently not available to the ranking framework.
+            Matching terms are exposed to the ranking framework (same as when using AND or OR),
+            so an arbitrary ranking expression can be used in combination with this operator.
+            Note that the ranking expression used should correlate with this internal ranking score.
+            <code>nativeFieldMatch</code> and <code>nativeDotProduct</code> are good starting points.
+        </td>
+    </tr><tr>
+        <th style="white-space:nowrap;">Java Query Item</th>
+        <td><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeakAndItem.html">WeakAndItem</a></td>
+    </tr>
+    </tbody>
+    </table>
+    </p><p>
+    More <a href="../query-language.html#weakand">weakAnd details</a>.
     </p>
   </td></tr>
   <tr id="nonempty"><th>nonEmpty</th><td>
