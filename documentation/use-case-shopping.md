@@ -23,38 +23,38 @@ requests, and the JSON results from Vespa are parsed and rendered.
 
 This sample application is built around the Amazon product data set found at
 [http://jmcauley.ucsd.edu/data/amazon/links.html](http://jmcauley.ucsd.edu/data/amazon/links.html).
-A small sample of this data is included in the sample application, and the
-full data sets are available from the above site. This sample application contains
-scripts to convert from the data set format to Vespa format. These are the `convert_meta.py`
-and `convert_reviews.py`. See the README file for example of use.
+A small sample of this data is included in the sample application, and full
+data sets are available from the above site. This sample application contains
+scripts to convert from the data set format to Vespa format. These are the
+`convert_meta.py` and `convert_reviews.py`. See the README file for example of
+use.
 
 When feeding reviews, there is a custom [document
 processor](https://docs.vespa.ai/documentation/document-processing-overview.html)
-that intercepts the document write and updates the parent item with the review
+that intercepts document writes and updates the parent item with the review
 rating, so the aggregated review rating is kept stored with the item. This is
 more an example of a custom document processor than a recommended way to do
-this, as feeding the reviews more than once will result in increased values. To
-do this correctly, you should probably calculate this offline so a re-feed does
+this, as feeding the reviews more than once will result in inflated values. To
+do this correctly, one should probably calculate this offline so a re-feed does
 not cause unexpected results.
 
-### Features in applications
+### Highlighted features
 
 * [Multiple document types](https://docs.vespa.ai/documentation/search-definitions.html)
 
     Vespa models data as documents, which are configured in search definitions
     that defines how documents should be stored, indexed, ranked, and searched.
     In Vespa you can have multiple documents types, which can be defined in
-    ``services.xml`` how these should be distributed around the content clusters.
-    This application uses two document types: item and review. Search is done
-    in the items, but reviews refer to a single item and are rendered on the
-    item page. In this application both document types live in the same content
-    cluster.
+    `services.xml` how these should be distributed around the content clusters.
+    This application uses two document types that both are stored in the same
+    content cluster: item and review. Search is done on items, but reviews
+    refer to a single parent item and are rendered on the item page.
 
 * [Custom document processor](https://docs.vespa.ai/documentation/document-processing-overview.html)
 
     In Vespa you can set up custom document processors to perform any type of
     extra processing during document feeding. One example is to enrich the
-    document with extra information, and another is precalculating values of
+    document with extra information, and another is to precalculate values of
     fields to avoid unnecessary computation during ranking. This application
     uses a document processor to intercept reviews and update the parent item's
     review rating.
@@ -71,36 +71,38 @@ not cause unexpected results.
 * [Custom configuration](https://docs.vespa.ai/documentation/configuring-components.html)
 
     When creating custom components in Vespa, for instance document processors,
-    searchers or handler, one can use custom configuration to inject config
+    searchers or handlers, one can use custom configuration to inject config
     parameters into the components. This involves defining a config definition
-    (a `.def` file), which created a config class. You can instantiate this
-    class with data in `services.xml` and the resulting object is injected to
-    the component during construction. This application uses custom config
-    to set up the Vespa host details for the handler.
+    (a `.def` file), which creates a config class. You can instantiate this
+    class with data in `services.xml` and the resulting object is dependency
+    injected to the component during construction. This application uses custom
+    config to set up the Vespa host details for the handler.
 
 * [Partial update](https://docs.vespa.ai/documentation/reference/document-json-format.html#update)
 
     With Vespa you can make changes to an existing document without submitting
     the full document. Examples are setting the value of a single field, adding
     elements to an array, or incrementing the value of a field without knowing
-    the field value beforehand. This application contains an example of
-    partial update, in the voting of whether a review is helpful or not.
-    The `SiteHandler` receives the request and the `ReviewVote` class
-    sends a partial update to increment the up- or downvotes field.
+    the field value beforehand. This application contains an example of a
+    partial update, in the voting of whether a review is helpful or not.  The
+    `SiteHandler` receives the request and the `ReviewVote` class sends a
+    partial update to increment the up- or downvotes field.
 
 * [Search using YQL](https://docs.vespa.ai/documentation/query-language.html)
 
     In Vespa you search for documents using YQL. In this application, the
     classes responsible for retrieving data from Vespa (in the `data` package
-    beneath the `SiteHandler`) set up the YQL queries which are used to
-    query Vespa over HTTP.
+    beneath the `SiteHandler`) set up the YQL queries which are used to query
+    Vespa over HTTP.
 
 * [Grouping](https://docs.vespa.ai/documentation/grouping.html)
 
     Grouping is used to group various fields of query results together.  For
     this application, many of the queries to Vespa include grouping requests.
-    An example is the search page which groups results matching the query into
-    categories, brands, item rating and price ranges.
+    The home page uses grouping to dynamically extract the first 3 levels of
+    categories from the stored items. The search page groups results matching
+    the query into categories, brands, item rating and price ranges. The item
+    page groups review ratings to construct the rating graph.
 
 * [Rank profiles](https://docs.vespa.ai/documentation/ranking.html)
 
@@ -119,8 +121,8 @@ not cause unexpected results.
 
 Going forward, there are quite a few things one could add to this application
 to get a more functional site. One important thing is user handling, with
-features such as user profiles, what they have recently viewed and made
-favorites etc. Then one could use a custom searcher that first retrieves the
-user profile for instance based on a cookie, and uses the profile to
-personalize results. However, this is currently left as exercises for the reader.
+features such as user profiles, recently viewed items, marking of favorites
+etc. Then one could use a custom searcher that retrieves the user profile, for
+instance based on a cookie, and uses the profile during search to personalize
+results. However, this is currently left as exercises for the reader.
 
