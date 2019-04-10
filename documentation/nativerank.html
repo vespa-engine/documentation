@@ -124,11 +124,14 @@ tuning parameters of the nativeRank feature</a>, like:
 <li>The weight of the 3 nativeRank components that nativeRank consist
     of: nativeFieldMatch, nativeProximity and
     nativeAttributeMatch</li>
-<li>The shape the boosting tables for core statistics like term
+<li>The shape of the boosting tables for core statistics like term
     frequency and proximity between terms in the field.</li>
 <li>Per field configuration supported, can have different term
     frequency boosting (or any other of the core statistics) for text
     with different characteristics, e.g title compared to body</li>
+<li>Per field <a href="reference/rank-types.html">rank-types</a> like <code>identity</code> and <code>about</code> which
+are pre-configured boosting tables for different type of text fields
+</li>
 </ul>
 <a href="reference/nativerank.html#configuration-properties">See
 the comprehensive list of all the configuration properties of nativeRank</a>.
@@ -184,11 +187,12 @@ with all relevant settings (properties) and ranking expressions.
 rank-profile blog inherits default {
     weight title: 200
     weight body: 100
+    rank-type body: about
     rank-properties {
       $textMatchWeight: 0.4 #pre-configured weights, can be overridden at query time
       $qualityWeight: 0.3
       $deservesFreshness: 0.3
-      nativeFieldMatch.occurrenceCountTable.title: &quot;linear(0,1)&quot; #Example of nativeRank tuning, override the occurrence boost shape to be flat
+      nativeFieldMatch.occurrenceCountTable.title: &quot;linear(0,8000)&quot; #Example of nativeRank tuning, override the occurrence boost shape to be flat
     }
 
     # our freshness rank feature
@@ -199,6 +203,7 @@ rank-profile blog inherits default {
     # our quality rank feature
     function quality() {
       expression: attribute(sourcequality)
+    }
 
     # normalization factor for the weighted sum
     function normalization() {
@@ -210,7 +215,7 @@ rank-profile blog inherits default {
       expression: (query(textMatchWeight) * (nativeRank(title,body) + query(qualityWeight) * quality +  query(deservesFreshness) * freshness))/normalization
     }
 
-    summary-features: nativeRank(title,body) age(date) freshness quality
+    summary-features: nativeRank(title,body) age(timestamp) freshness quality
   }
 }
 </pre>
@@ -228,53 +233,3 @@ allows us to have access to the individual ranking signals along with the hit's 
 </p>
 
 
-
-<h2 id="an-alternative-approach-with-tiering">An alternative approach with tiering</h2>
-<p>
-After some research we figured that we would like to have a tiered ranking function,
-where the freshness signal is only applied to documents that are from trustworthy blog sites.
-A suggested approach is given below:
-<pre>
-rank-profile blog inherits default {
-    weight title: 200
-    weight body: 100
-    rank-properties {
-      $textMatchWeight: 0.4 #pre-configured weights, can be overridden at query time
-      $qualityWeight: 0.3
-      $deservesFreshness: 0.3
-      $qualityLimit: 0.4
-      nativeFieldMatch.occurrenceCountTable.title: &quot;linear(0,1)&quot; #Example of nativeRank tuning, override the occurrence boost shape to be flat
-    }
-
-    # our freshness rank feature
-    function freshness() {
-      expression: exp(-1 * age(timestamp)/(3600*12))
-    }
-
-    # our quality rank feature
-    function quality() {
-      expression: attribute(sourcequality)
-
-    # normalization factor for the weighted sum
-    function normalization() {
-      expression: $textMatchWeight + $qualityWeight + $deservesFreshness
-    }
-
-    function normalrank() {
-      expression: (nativeRank(title,body) + query(qualityWeight) * quality
-    }
-
-    # ranking function that runs over all matched documents, determined by the boolean query logic
-    first-phase {
-      expression: if(quality &lt; query(qualityLimit), normalrank/normalization, (normalrank + query(deservesFreshness) * freshness))/normalization)
-    }
-
-    summary-features: nativeRank(title,body) age(date) freshness quality 
-    }
-}
-</pre>
-Here we use the conditional <em>if</em> operator to implement a tiered ranking function,
-where only documents from quality sources are given freshness boost.
-The quality limit is passed down with the user query,
-so it can be subject to tuning and changes without re-indexing or re-configuration.
-</p>
