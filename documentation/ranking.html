@@ -55,23 +55,18 @@ By default, second-phase ranking (if specified) is run on the 100 best hits per 
 after matching and before information is returned to the container.
 The number of hits to rerank can be configured in the ranking expression.
 </p><p>
-Rank expressions are configured in the <code>rank profile</code> section of
+Rank expressions are configured in the <code>rank-profile</code> section of
 <a href="reference/search-definitions-reference.html#rank-profile">search definitions</a>. Example:
 <pre>
 search myapp {
-
     &hellip;
-
     rank-profile default inherits default {
-
         first-phase {
             expression: nativeRank + query(deservesFreshness) * freshness(timestamp)
         }
-
         second-phase {
             expression {
-                0.7 * ( 0.7*fieldMatch(title) + 0.2*fieldMatch(description) + 0.1*fieldMatch(body) ) +
-                0.3 * attributeMatch(keywords)
+                xgboost("my_model.json") 
             }
             rerank-count: 200
         }
@@ -81,23 +76,15 @@ search myapp {
 In this example, the first phase uses the <a href="reference/nativerank.html">nativeRank</a> feature
 as the ranking expression plus a freshness component.
 The contribution from the freshness feature is set in a query parameter.
-</p><p>
-The second phase uses a ranking expression which combines the match features of a few fields.
-In a real application this expression could be very large, or use tensors.
-Using <code>rerank-count</code>, it runs the second phase on the 200 best hits per node
+The second phase uses a trained <a href="xgboost.html">xgboost</a> model. 
 </p><p>
 Ranking expressions can be large.
 They can be wrapped in curly braces, or put in files in the application package,
 using <code>file:filename</code> in place of the expression.
 </p><p>
-How the rank features are calculated is configurable.
-One can specify which rank feature values should be included in the hit information sent to the search container.
 See the <a href="reference/search-definitions-reference.html#rank-profile">rank profiles</a>
 reference for details.
 </p><p>
-To add or change ranking expressions, (re)deploy the
-<a href="reference/application-packages-reference.html">application package</a> -
-this does not require restart or redindexing.
 It is possible to configure multiple rank profiles and choose between them in the query,
 for example to use different ranking expressions for different use cases or to bucket test new revisions.
 A rank profile may also <code>inherit</code> another to allow specifying 
@@ -462,12 +449,12 @@ one can use <a href="reference/rank-features.html#feature-list">query features</
 These variables can be assigned default values in the rank profile by adding:
 <pre>
 rank-properties {
-    query(name): "value"
+    query(name): 0.5 
 }
 </pre>
 to the ranking profile. Also, these variables can be overridden in the query by adding:
 <pre>
-rankfeature.query(name)=value
+rankfeature.query(name)=0.1
 </pre>
 to the query - see the <a href="reference/search-api-reference.html#ranking.features">Search API</a>.
 These variables can be used for example to allow the query
@@ -478,7 +465,7 @@ by trying different values in each query.
 
 
 
-<h2 id="function-snippets-as-mlr-level-features">Function Snippets as MLR Level Features</h2>
+<h2 id="function-snippets-as-mlr-level-features">Function snippets </h2>
 <p>
 When using machine learned ranking, we are searching a function space
 which is much more limited than the space of functions supported by ranking expressions.
@@ -491,7 +478,7 @@ and given to MLR as primitives.
 Such primitives can then be replaced textually by the corresponding rank expression snippet,
 before the learned expression is deployed on Vespa.
 </p><p>
-Vespa supports <a href="reference/search-definitions-reference.html#rank-profile">expression functions</a>.
+Vespa supports <a href="reference/search-definitions-reference.html#function-rank">expression functions</a>.
 Functions having zero arguments can be used as summary- and rank-features.
 For example, the function "myfeature":
 <pre>
@@ -504,10 +491,9 @@ rank-profile myrankprofile inherits default {
 becomes available as a feature as follows:
 <pre>
 summary-features {
-    rankingExpression(myfeature@)
+    myfeature
 }
 </pre>
-The "rankingExpression" prefix, the parenthesis and the trailing at-sign are all required.
 </p>
 
 
