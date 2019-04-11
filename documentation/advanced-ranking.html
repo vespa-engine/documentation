@@ -1,0 +1,396 @@
+---
+# Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Advanced ranking"
+---
+
+<p>
+This article is a follow up to the <a href="ranking.html">ranking introduction</a>.
+</p>
+
+
+
+<h2 id="tensors">Tensors</h2>
+<p>
+Many modern machine-learning methods such as neural nets and large logistic regressions
+produce functions with thousands to millions of parameters.
+Vespa features a native <a href="tensor-user-guide.html">tensor</a> model and operator set,
+which makes it possible to express such functions as ranking expressions,
+which Vespa will execute as optimized code to compute a score for each document.
+</p><p>
+Advanced ranking use cases are most often best solved using tensors - try this first.
+Below is also some examples of dot product and wand operators 
+</p>
+
+
+
+<h2 id="dotproduct-and-wand">dotProduct and wand</h2>
+<p>
+It might make sense to start out using <em>dotProduct</em>
+and later switch to <em>wand</em> if the performance gain outweighs
+the reduction in flexibility and correctness.
+Also note that benchmarking should be involved in such a switch,
+to quantify the possible gain in performance (which might be negative).
+</p><p>
+<em>wand</em> (aka Parallel Wand) is a search operator that can be used for efficient top-k retrieval.
+It implements the <em>Weak AND/Weighted AND</em> algorithm as described by Broder et al in
+<a href="https://dl.acm.org/citation.cfm?id=956944">Efficient query evaluation using a two-level retrieval process</a>,
+</p>
+<p>
+<em>wand</em>, <em>dotProduct</em> and <em>weightedSet</em>
+model very similar operations in the search core.
+They have recall behavior similar to <em>or</em>,
+but only return a limited number of documents.
+</p><p>
+<em>dotProduct</em> is the brute force equivalent to <em>wand</em>.
+They are both used to search for documents
+where weighted tokens in a field matches a subset of weighted tokens in the query.
+The <a href="../advanced-ranking.html#raw-scores-and-query-item-labeling">raw scores</a> produced by
+<em>dotProduct</em> are equivalent to those produced by <em>wand</em>.
+In some simple cases <em>dotProduct</em> is preferable to <em>wand</em>.
+</p><p>
+The difference is that <em>wand</em> will perform local optimizations
+in order to retrieve the top-k results that would be returned by <em>dotProduct</em>.
+This optimization will only yield correct results if the overall ranking is equal to the
+score produced by the <em>dotProduct</em> itself.
+</p><p>
+Cases where <em>dotProduct</em> might be better / more correct than <em>wand</em>:
+<ul>
+  <li>Might be more efficient with few tokens or few total results</li>
+  <li>Works better with arbitrary rank expressions and compound queries</li>
+  <li>Works better with grouping</li>
+  <li>Scales better when partitioning the problem space</li>
+</ul>
+</p><p>
+Use cases for a Wand operator arise when you have many query
+terms that you would like to see matched with OR semantics,
+but you are only interested in a small number of top hits for the query.
+With the normal OR operator the cost rises very quickly with the number of terms,
+so five terms inside OR may already be "many":
+a simple rule of thumb is that the evaluation cost is proportional to the number of hits the OR yields.
+A Wand operator, in contrast, has a target for the number of hits you want it to produce,
+and may throw away hits that are not good enough once it has produced enough hits.
+</p><p>
+If you are only interested in the best 100 hits (or less) from an OR,
+a Wand operator should be a good match.
+The basic idea is that after seeing enough hits,
+the Wand algorithm will require that a document match more terms (or more relevant terms) in the query.
+The operator may go all the way to requiring match on all terms if that gives many hits.
+Note that since the behavior is adaptive you will always get at least the target number of hits,
+usually many more. Example use cases:
+<ul>
+  <li>Make recommendations based on user history</li>
+  <li>Find similar documents</li>
+  <li>Find extra content for a web page that is relevant to the text on the page</li>
+</ul>
+Note that in the cases above you would extract a large number of words from user history,
+from a document, or from some text you are going to display,
+and then make a query with all those words as weak criteria,
+looking for documents that contain as many of those words as possible,
+optionally with extra weight on those words that are considered more important.
+</p>
+
+
+
+
+<h2 id="dotproduct-example">dotProduct example</h2>
+<p>
+Refer to the <a href="reference/query-language-reference.html#dotproduct">dotProduct</a> reference.
+<em>dotProduct</em> calculates the dot product of a weighted set in the query and a weighted set in a field -
+and stores the result in <a href="advanced-ranking.html#raw-scores-and-query-item-labeling">raw scores</a>,
+which is used in ranking expressions.
+</p><p>
+Use a weighted set field (use <a href="attributes.html">attribute</a> with <em>fast-search</em> for higher performance)
+in the document to store the tokens:
+<pre>
+field features type weightedset&lt;string&gt; {
+    indexing: summary | attribute
+    attribute: fast-search
+}
+</pre>
+The query needs to be prepared by a custom searcher or sent
+using <a href="reference/query-language-reference.html#dotproduct">YQL</a>.
+The code below shows the relevant part.
+If using multiple dot products in the same query it is a good idea to label them.
+This enables us to use individual dot product scores when ranking results later.
+<pre>
+Item makeDotProduct(String label, String field, Map&lt;String, Integer&gt; token_map) {
+    DotProductItem item = new DotProductItem(field);
+    item.setLabel(label);
+    for (Map.Entry&lt;String, Integer&gt; entry : token_map.entrySet()) {
+        item.addToken(entry.getKey(), entry.getValue());
+    }
+    return item;
+}
+</pre>
+<em>dotProduct</em> produces
+<a href="advanced-ranking.html#raw-scores-and-query-item-labeling">raw scores</a>
+that can be used in a ranking expression.
+The simplest approach is to use the sum of all raw scores for the field containing the tokens:
+<pre>
+rank-profile default {
+    first-phase {
+        expression: rawScore(features)
+    }
+}
+</pre>
+For better control, label each dot product in the query and use their scores individually:
+<pre>
+rank-profile default {
+    first-phase {
+        expression: itemRawScore(dp1) + itemRawScore(dp2)
+    }
+}
+</pre>
+</p>
+
+
+
+<h2 id="weightedset-example">weightedSet example</h2>
+<p>
+Refer to the <a href="reference/query-language-reference.html#weightedset">weightedSet</a> reference.
+The use cases for <em>weightedSet</em> are for limiting the search result
+to documents with specific properties that can have a large number of distinct values, like:
+<ul>
+  <li>We know who the user is, and want to restrict to documents
+      written by one of the user's friends</li>
+  <li>We have the topic area the user is interested in, and want to
+      restrict to the top-ranked authors for this topic</li>
+  <li>We have recorded the documents that have been clicked by users
+      in the last 10 minutes, and want to search only in these</li>
+</ul>
+Note that in most actual use cases,
+the field we are searching in is some sort of user ID, topic ID, group ID, or document ID
+and can often be modeled as a number -
+usually in a field of type <code>long</code>
+(or <code>array&lt;long&gt;</code> if multiple values are needed).
+If a string field is used, it will usually also be some sort of ID;
+if you have data in a string field intended for searching with WeightedSetItem,
+then using <code>match: word</code> for that field is recommended.
+</p><p>
+The decision to use a <code>WeightedSetItem</code> must be taken by application-specific logic.
+This must be in the form of a Container plugin where the query object can be manipulated as follows:
+<ul>
+  <li>Decide if <code>WeightedSetItem</code> should be used</li>
+  <li>Create a new <code>WeightedSetItem</code> for the field you want to use as filter</li>
+  <li>Find the tokens and optionally weights to insert into the set</li>
+  <li>Combine new <code>WeightedSetItem</code> with the original query by using an <code>AndItem</code></li>
+</ul>
+A simple code example adding a hardcoded filter containing 10 tokens:
+<pre>
+private Result hardCoded(Query query, Execution execution) {
+    WeightedSetItem filter = new WeightedSetItem("author");
+    filter.addToken("magazine1", 2);
+    filter.addToken("magazine2", 2);
+    filter.addToken("magazine3", 2);
+    filter.addToken("tv", 3);
+    filter.addToken("tabloid1", 1);
+    filter.addToken("tabloid2", 1);
+    filter.addToken("tabloid3", 1);
+    filter.addToken("tabloid4", 1);
+    filter.addToken("tabloid5", 1);
+    filter.addToken("tabloid6", 1);
+    QueryTree tree = query.getModel().getQueryTree();
+    Item oldroot = tree.getRoot();
+    AndItem newtop = new AndItem();
+    newtop.addItem(oldroot);
+    newtop.addItem(filter);
+    tree.setRoot(newtop);
+    query.trace("FriendFilterSearcher added hardcoded filter: ", true, 2);
+    return execution.search(query);
+}
+</pre>
+The biggest challenge here is finding the tokens to insert;
+normally the incoming search request URL should not contain all the tokens directly.
+For example, the search request could contain the user id,
+and a lookup (in a database or a Vespa index) would fetch the friends list.
+</p><p>
+Since the tokens are inserted directly into the query
+without going through the Search Container query parsing and query handling,
+they won't be subject to transforms such as lowercasing, stemming, or phrase generation.
+This means that if the field is a string field you'll need to insert lowercased tokens only,
+and only single tokens in the index can be matched.
+</p><p>
+For more examples on how the code might look there is
+<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeightedSetItem.html">container javadoc</a> available.
+</p>
+
+
+
+<h2 id="wand-example">wand example</h2>
+<p>
+The field to search must be a weighted set attribute with fast-search.
+Refer to the <a href="reference/query-language-reference.html#wand">wand</a> reference.
+</p>
+
+
+<h3 id="example">Example</h3>
+<p>
+Lets imagine we have an application where we would like to search for popular blogs about cars
+and we have the following search definition file.
+The weighted set attribute <code>car_types</code> is used to tag an article
+with which car types that are discussed in that article,
+while the integer attribute <code>popularity</code>
+is used to track the static popularity of that article.
+We want to search the <code>car_types</code> field using
+<a href="reference/query-language-reference.html#wand">wand</a>.
+<p><p>
+We also have two rank profiles:
+<code>dotproductonly</code> uses the raw dot product score that is calculated by <em>wand</em>,
+while <code>combined_score</code> combines the dot product score with the static popularity score:
+<pre>
+search article {
+  document article {
+    field car_types type weightedset&lt;string&gt; {
+      indexing: attribute
+      attribute: fast-search
+    }
+    field popularity type int {
+      indexing: attribute | summary
+    }
+  }
+  rank-profile dotproductonly {
+    first-phase {
+      expression: rawScore(car_types)
+    }
+  }
+  rank-profile combined_score {
+    first-phase {
+      expression: rawScore(car_types) + attribute(popularity)
+    }
+  }
+}
+</pre>
+</p>
+
+
+<h3 id="query">Query</h3>
+<p>
+Lets imagine a particular user that is interested in Italian cars, especially sports cars.
+This user would mainly like to get blogs discussing Italian sports cars,
+but blogs about more usual Italian cars could also be returned.
+In the following example we see how to use YQL to create a <em>wand</em> for the
+<code>car_types</code> field with 25 as the target number of hits to produce.
+Notice that the weights for sports cars are higher than for others.
+<pre>
+yql=select ignoredfield from ignoredsource where [ {"targetNumHits": 25} ]
+ wand(car_types, {"pagani":400,"lamborghini":300,"maserati":250,"ferrari":150,"lancia":50,"alfa":40,"fiat":30});
+</pre>
+</p>
+<p>
+The same can be added in a Searcher plugin using
+<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WandItem.html">WandItem</a>:
+<pre>
+import com.yahoo.prelude.query.*;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.query.QueryTree;
+import com.yahoo.search.searchchain.Execution;
+
+private Result hardCoded(Query query, Execution execution) {
+    WandItem filter = new WandItem("car_types", 25);
+    filter.addToken("pagini", 400);
+    filter.addToken("lamborghini", 300);
+    filter.addToken("maserati", 250);
+    filter.addToken("ferrari", 150);
+    filter.addToken("lancia", 50);
+    filter.addToken("alfa", 40);
+    filter.addToken("fiat", 30);
+    QueryTree tree = query.getModel().getQueryTree();
+    Item oldroot = tree.getRoot();
+    AndItem newtop = new AndItem();
+    newtop.addItem(oldroot);
+    newtop.addItem(filter);
+    tree.setRoot(newtop);
+    query.trace("added hardcoded filter: ", true, 2);
+    return execution.search(query);
+}
+</pre>
+</p>
+
+
+<h3 id="ranking-notes">Ranking notes</h3>
+<p>
+Note that when using the <code>default</code> rank profile in this example,
+we are guaranteed to get the top-k hits
+(according to the raw dot product score) in the final search result.
+This is however not the case when using the <code>combined_score</code> rank profile.
+In this case the top-k hits (according to the raw dot product score)
+are also returned from the <em>wand</em> in the match phase,
+but in the ranking phase we also consider the static popularity score
+which may alter what is the final top-k hits
+according to the expression in the rank profile.
+This means that when combining the raw dot product score of the <em>wand</em> with something else
+(in either a first phase or second phase rank expression),
+you must ensure that these rank scores correlate somewhat.
+When combining scores like this you also should tune the
+<code>targetNumHits</code> used by the <em>wand</em>.
+</p><p>
+If combining <em>wand</em> with a ranking expression that does not use its raw score,
+the tuning of <code>targetNumHits</code> should follow the
+<a href="reference/query-language-reference.html#weakand">weakAnd</a> guide lines.
+A score threshold can be specified when using <em>wand</em>.
+The internal dot product score for a document must be larger than <code>scoreThreshold</code>
+in order to be considered a match. Default value is 0.0.
+Refer to the <a href="reference/query-language-reference.html#weakand">reference</a> for details.
+</p>
+
+
+
+<h2 id="weakand">weakAnd</h2>
+<p>
+<a href="reference/query-language-reference.html#weakand">weakAnd</a>
+is a search operator that also implements the <em>Weak AND/Weighted AND</em> algorithm.
+</p><p>
+When using <em>weakAnd</em> via YQL or a Java Searcher plugin,
+specify the target for minimum number of hits the operator should produce.
+The effect of tuning <code>targetNumHits</code> may not be very intuitive.
+To ensure that you get the best hits possible with a <em>weakAnd</em>,
+set the target number somewhat higher than the number of hits returned to the user;
+setting it 10 times higher should be more than enough.
+The reason for increasing the target number is that <em>weakAnd</em>
+uses a very simple ranking function internally to filter away bad hits.
+If the normal rank expression correlates poorly with this internal filtering formula,
+increase the target number.
+The easiest is probably to use the default number (100) and see if that gives good results,
+only tuning if you see a problem.
+Also note that if the rank correlates poorly with the filtering criteria,
+<em>weakAnd</em> may not be a good operator.
+</p><p>
+Anything similar to classic vector model ranking will work well with <em>weakAnd</em>.
+We suggest using the <code>nativeFieldMatch</code> or <code>nativeDotProduct</code> feature as a starting point.
+Note that because <em>weakAnd</em> relies on feedback
+identifying which hits are used for first phase ranking to increase its threshold for what's considered a good hit,
+the special <code>unranked</code> rank profile (which turns off ranking completely)
+may cause <em>weakAnd</em> queries to become slower than a more normal ranking.
+</p>
+
+
+
+<h2 id="raw-scores-and-query-item-labeling">Raw scores and query item labeling</h2>
+<p>
+Vespa ranking is flexible and relatively decoupled from document matching.
+The output from the matching pipeline typically indicates
+how the different words in the query matches a specific document
+and lets the ranking framework figure out how this translates to match quality.
+</p><p>
+However, some of the more complex match operators will produce scores directly,
+rather than expose underlying match information.
+A good example is the <em>wand</em> operator.
+During ranking, a wand will look like a single word that has no detailed match information,
+but rather a numeric score attached to it.
+This is called a <em>raw score</em>,
+and can be included in ranking expressions using the <code>rawScore</code> feature.
+</p><p>
+The <code>rawScore</code> feature takes a field name as parameter
+and gives the sum of all raw scores produced by the query for that field.
+If more fine-grained control is needed
+(the query contains multiple operators producing raw scores for the same field,
+but we want to handle those scores separately in the ranking expression),
+the <code>itemRawScore</code> feature may be used.
+This feature takes a query item <em>label</em> as parameter
+and gives the raw score produced by that item only.
+</p><p>
+Query item labeling is a generic mechanism that can be used to attach symbolic names to query items.
+A query item is labeled by using the <code>setLabel</code> method on a query item
+in the search container query API.
+</p>
