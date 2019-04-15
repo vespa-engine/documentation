@@ -572,7 +572,7 @@ These can be run locally on a laptop, like in this tutorial.
 In case you would like to use HDFS (Hadoop Distributed File System) for storing the data,
 it is just a matter of uploading it to HDFS with the following command:
 
-    $ hadoop fs -put trainPosts.json blog-app/trainPosts.json
+    $ hadoop fs -put trainPosts.json blog-job/trainPosts.json
 
 If you go with this approach, you need to replace the local file paths with the
 equivalent HDFS file paths in this tutorial.
