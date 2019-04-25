@@ -1,21 +1,20 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Vespa Feeding Client API"
+title: "Vespa HTTP Client"
 ---
 
 <p>
-The Vespa HTTP Feeding Client is a Java API and command line tool to feed document operations to Vespa.
+The Vespa HTTP Feed Client is a Java API and command line tool to feed document operations to Vespa.
 The Vespa feeding client allows you to combine high throughput with feeding over HTTP:
 
 <ul>
-    <li>Uses HTTP as transport protocol</li>
-    <li>Feeds in parallel to <strong>one or more</strong> Vespa clusters, ordering still guaranteed</li>
-    <li>Programmatic Java API that has <em>very few</em> runtime dependencies in its <em>pom.xml</em>,
-      and which is completely independent of Vespa</li>
-    <li>Easy feeding from sources like e.g. Hadoop or Storm, or any other Java process</li>
-    <li>Feed with <strong>much higher performance</strong> than all na&iuml;ve HTTP feeding approaches</li>
-    <li>Automatic retries, re-connect, performance tuning through parameters, compression, statistics supported</li>
-    <li>Supports unlimited sized data sources, it is processed streaming (the simple HTTP protocol is batch)</li>
+    <li>Uses HTTP as transport protocol.</li>
+    <li>Feeds in parallel to <strong>one or more</strong> Vespa clusters, ordering still guaranteed.</li>
+    <li>Programmatic Java API that has few runtime dependencies, and no Vespa dependencies.</li>
+    <li>Easy feeding from sources like e.g. Hadoop or Storm, or any other Java process.</li>
+    <li>Feed with <strong>much higher performance</strong> than na&iuml;ve HTTP feeding approaches.</li>
+    <li>Automatic retries, re-connect, performance tuning through parameters, compression and feed statistics.</li>
+    <li>Supports unlimited sized data sources, it is processed streaming (the simple HTTP protocol is batch).</li>
     <li>Built in back throttling, it is hard to flood the system using this library.</li>
 </ul>
 There is a prebuilt standalone command-line tool that let you feed from file using the API.
@@ -50,11 +49,11 @@ $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar
 </pre>
 Example:
 <pre>
-$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file file.json --host gatewayhost --port 8080
+$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --file file.json --host document-api-host --port 8080
 </pre>
 Alternatively, read from stdin:
 <pre>
-$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --host gatewayhost &lt; file.json
+$ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --host document-api-host &lt; file.json
 </pre>
 Use <em>--help</em> to list supported features.
 </p>
@@ -63,18 +62,20 @@ Use <em>--help</em> to list supported features.
 
 
 <h2 id="using-the-vespa-http-client-api">Using the Java Vespa Feeding Client API</h2>
+
 <p>
-In this API, call <code>stream(document)</code> on document operations.
-The API will block while/if the queues are full.
-When a document has been processed, a callback is asynchronously made.
-This callback will always happen, even when errors occur.
+This section explains the four steps needed to use the client API from your own Java code. For maximum throughput
+this is an async API. In some cases, especially when feeding data from systems which do not support ack'ing of individual
+operations such as e.g Kafka and DynamoDb, it is possible to use the SyncFeedClient wrapper instead, which blocks and
+returns a single result for a batch of operations. The throughput reduction from using this decreases with
+larger batch sizes.
 </p>
 
 
-<h3 id="dependency">Dependency</h3>
-<p>
-The sending side is any Java process. To use the Java Client API,
-add the following dependency to <em>pom.xml</em>:
+<h3 id="add-dependency">1. Add the dependency</h3>
+
+<p>Add the following dependency to <em>pom.xml</em>:</p>
+
 <pre>
 &lt;dependency&gt;
   &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
@@ -82,115 +83,52 @@ add the following dependency to <em>pom.xml</em>:
   &lt;version&gt;7.25.26&lt;/version&gt; &lt;!-- Find latest version at <a href="https://search.maven.org/search?q=g:com.yahoo.vespa%20a:vespa-http-client">search.maven.org/search?q=g:com.yahoo.vespa%20a:vespa-http-client</a> --&gt;
 &lt;/dependency&gt;
 </pre>
-</p>
 
 
-<h3 id="using-the-api">Using the API</h3>
+<h3 id="creating-a-feed-client-instance">2. Creating a client instance</h3>
 
 <p>
-The API is centered around the
-<a href="http://javadoc.io/page/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/FeedClient.html">
-FeedClient</a>, which is created using a
-<a href="http://javadoc.io/page/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/FeedClientFactory.html">
-FeedClientFactory</a>:
-<pre>
-public interface FeedClient extends AutoCloseable {
-
-    /**
-     * Streams a document operation to cluster(s). If the pipeline and buffers are full, this call will be blocking.
-     * Document operations might time out before they are sent. Failed operations are not re-attempted.
-     * Don't call stream() after close is called.
-     * @param documentId Document id of the document.
-     * @param documentData The document data as JSON (as specified when using the factory to create the API)
-     */
-    void stream(String documentId, CharSequence documentData);
-
-    /**
-     * This callback is executed when new results are arriving. Don't do any heavy lifting in this thread (no IO, disk,
-     * or heavy CPU usage) as this might block the progress of result processing and data sending.
-     * This call back will run in a different thread than your main program so use e.g.
-     * AtomicInteger for counters and follow general guides for thread-safe programming.
-     * There is an example implementation in class SimpleLoggerResultCallback.
-     */
-    static interface ResultCallback {
-        void onCompletion(String docId, Result documentResult);
-    }
-
-    /**
-     * Waits for all results to arrive and closes the FeedClient. Don't call any other method after calling close().
-     * Does not throw any exceptions.
-     */
-    @Override
-    void close();
-</pre>
-When creating a <code>FeedClient</code>, some config must be provided.
-The <strong>minimum</strong> is the hostname and port of <strong>one</strong> HTTP gateway, denoted as an
-<a href="http://javadoc.io/page/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/config/Endpoint.html">Endpoint</a>.
-Other options include:
-<ul>
-    <li>One or more <a href="http://javadoc.io/page/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/config/Cluster.html"><em>clusters</em></a> to feed to in parallel.</li>
-    <li>The <em>data format</em> to use, UTF-8-encoded JSON.</li>
-    <li>The <em>route</em> and <em>timeout</em> for the data in the Vespa cluster.</li>
-    <li>Whether to use <em>SSL</em> or not (default: off).</li>
-    <li>Any additional <em>HTTP headers</em></li>
-</ul>
-See the <a href="http://javadoc.io/page/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/package-summary.html">
-Javadoc</a> for a full overview.
+Use FeedClientFactory to create a feed client instance. Instances are expensive - create one instance
+and use it for the duration of your client runtime (or until reconfiguration). You can share it between threads if desired.
+A suitable result callback must be passed to the client on creation, see
+<a href="#handling-callbacks">handling callbacks</a> below.
 </p>
 
+<p>Make sure to close the client when done.</p>
 
 
-<h3 id="feeding-a-stream-of-data">Feeding a stream of data</h3>
+<h3 id="feeding">3. Feeding</h3>
+
 <p>
-If there is already a file of data that is just waiting to be fed into Vespa,
-consider using one of the utility functions for feeding inputStreams into already created FeedClients.
+Call a <code>stream</code> or <code>feed</code> method on your client instance to issue document operations.
+These calls will block when queues are full which ensures that the feed process will not produce data faster
+than the Vespa instance can receive it.
 </p>
-<pre>
- /**
-   * Utility function that takes an array of JSON documents and calls the FeedClient for each element.
-   * @param inputStream This can be a very large stream. The outer element is an array (of document operations).
-   * @param feedClient The feedClient that will receive the document operations.
-   * @param numSent increased per document sent to API (but no waiting for results).
-   */
-  public static void feedJson(InputStream inputStream, FeedClient feedClient, AtomicInteger numSent) {
-      JsonReader.read(inputStream, feedClient, numSent);
-  }
-</pre>
 
+<h3 id="handling-callbacks">4. Handling callbacks</h3>
 
-
-<h3 id="result-callbacks">Result callbacks</h3>
 <p>
-After a document operation has been streamed, there will always be a callback eventually.
-</p><p>
-The <code>Result</code> has information on its document ID,
-the Endpoint it was fed to (recall that operations are sent to <code>Endpoints</code>
-based on hashing of document ID within one Cluster),
-whether it was successful or not, whether an error was transient or permanent,
-and any exception that was thrown (possibly containing an error message from the Vespa cluster).
-</p><p>
-The order of the callbacks is non-deterministic -
-the only guarantee is that operations are sequenced per document ID.
+Exactly one <code>onCompletion</code> callback will always be received from the client for each operation
+passed in a stream call, whether or not it was successful.
+Implementing the onCompletion method of the callback is how you can know
+whether your feed operations were successfully persisted in Vespa. The usual way to implement
+this is to emit metrics for successful and failed operations that can be monitored and used for alerting.
+Callbacks will not arrive in the same order they are issued (except for operations on the same document).
 </p>
 
-
-
-<h3 id="error-handling">Error handling</h3>
 <p>
-The vespa-http-client is set up with a high number of retries and a long time out (configurable).
-The client will retry transient errors such as network problems and capacity problems.
-If they later succeed, they are not reported to the user.
-For permanent problems such as parsing problems, it will fail early.
-There should normally be no need to retry operations that have failed externally.
-All errors are propagated out to Result objects.
-The API has <strong>no (semi) transactional behavior</strong>
-(such as rollback in case of partial failure in a multi-cluster scenario).
-It is thus important that user code checks the state of the Result objects returned.
+In addition, <code>onEndpointException</code> callbacks may be received for connection level errors
+which may or may not be transient. This is to provide additional information about possible connectivity
+issues. It may be suitable to both log and emit metrics for these.
 </p>
 
+<p>
+These callbacks are called from IO threads of the feed client so the implementation should return fast.
+</p>
 
 
 <h2 id="feeding-multiple-clusters">Feeding Multiple Clusters</h2>
+
 <p>
 Both the API and the command line tool have support for feeding multiple clusters.
 For example if there are a few documents that are to be inserted in two clusters, it is easy to feed both simultaneously.
@@ -220,6 +158,7 @@ easier monitoring, alerting, and better transparency on what is happening.
 
 
 <h2 id="config-parameters">Config parameters</h2>
+
 <p>
 The default values for the client should work fine in most cases.
 In some cases you want to try to tune feeding for higher throughput.
@@ -299,6 +238,7 @@ the cluster gets overloaded.
 
 
 <h2 id="find-slowest-cluster-when-feeding-multi-cluster">Find slowest cluster when feeding multi-cluster</h2>
+
 <p>
 Get a snapshot of the current state by calling FeedClient getStatsAsJson().
 This JSON is meant to be human readable, and can change at any time - example:
