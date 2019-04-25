@@ -363,17 +363,13 @@ This configures a ranking feature named `query(user_item_cf)` with type
 elements.  This is the same as the attribute, hence the dot product can be
 computed.
 
-
-## Query Vespa with a tensor
-
-Test recommendations by sending a tensor with latenct factors:
-[localhost:8080/search/?yql=select%20\*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D](http://localhost:8080/search/?yql=select%20*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D)
+Test recommendations by sending a tensor with latent factors:
+[localhost:8080/search/?yql=select+%2A+from+sources+blog_post+where+has_user_item_cf%3D1%3B&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Bd0%3A0%2Cd1%3A0%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A1%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A2%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A3%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A4%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A5%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A6%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A7%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A8%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A9%7D%3A0.1%7D](http://localhost:8080/search/?yql=select+%2A+from+sources+blog_post+where+has_user_item_cf%3D1%3B&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Bd0%3A0%2Cd1%3A0%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A1%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A2%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A3%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A4%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A5%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A6%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A7%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A8%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A9%7D%3A0.1%7D)
 
 The query string, decomposed:
 
 - yql=select * from sources blog_post where has_user_item_cf = 1 - this selects
   all documents of type blog_post which has a latent factor tensor
-- restrict=blog_post - search only in `blog_post` documents
 - ranking=tensor - use the rank-profile `tensor` in `blog_post.sd`.
 - ranking.features.query(user_item_cf) - send the tensor as user_item_cf. As
   this tensor is defined in the query-profile-type, the ranking framework knows
