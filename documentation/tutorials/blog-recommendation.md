@@ -4,12 +4,14 @@ title: "Vespa tutorial pt. 2: Blog recommendation"
 ---
 
 ## Introduction
-This tutorial builds upon the [blog searching tutorial](blog-search.html)
-and extends the basic search engine to include machine learned models to help us
-recommend blog posts to users that arrive at our application.
-Assume that once a user arrives, we obtain his user identification number,
-denoted in this tutorial by `user_id`, and that we will send this information down to Vespa
-and expect to obtain a blog post recommendation list containing 100 blog posts tailored for that specific user.
+
+This tutorial builds upon the [blog searching tutorial](blog-search.html) and
+extends the basic search engine to include machine learned models to help us
+recommend blog posts to users that arrive at our application.  Assume that once
+a user arrives, we obtain his user identification number, denoted in this
+tutorial by `user_id`, and that we will send this information down to Vespa and
+expect to obtain a blog post recommendation list containing 100 blog posts
+tailored for that specific user.
 
 Prerequisites:
 - Install and build files - code source and build instructions for sbt and Spark is found at
@@ -21,11 +23,11 @@ Prerequisites:
 - docker as in the [blog search tutorial](blog-search.html)
 
 
-
 ## Collaborative Filtering
+
 We will start our recommendation system by implementing the collaborative
-filtering algorithm for implicit feedback described in (Hu et. al. 2008).
-The data is said to be implicit because the users did not explicitly rate each blog
+filtering algorithm for implicit feedback described in (Hu et. al. 2008).  The
+data is said to be implicit because the users did not explicitly rate each blog
 post they have read. Instead, the have "liked" blog posts they have likely
 enjoyed (positive feedback) but did not have the chance to "dislike" blog posts
 they did not enjoy (absence of negative feedback). Because of that, implicit
@@ -54,9 +56,10 @@ This is what is called a cold start problem and will be addressed with
 content-based techniques described in future tutorials.
 
 
-
 ## Evaluation metrics
-The evaluation metric used by [Kaggle](https://www.kaggle.com/c/predict-wordpress-likes/details/evaluation)
+
+The evaluation metric used by
+[Kaggle](https://www.kaggle.com/c/predict-wordpress-likes/details/evaluation)
 for this challenge was the Mean Average Precision at 100 (MAP@100).  However,
 since we do not have information about which blog posts the users did not like
 (that is, we have only positive feedback) and our inability to obtain user
@@ -71,13 +74,14 @@ $$
 prank = \frac{\sum _{u,i} rank_{u,i}}{\sum_u N_u}
 $$
 
-where $$rank_{u,i}$$ is the percentile-ranking of blog post $$i$$ that was read by the user
-$$u$$ within the ordered list of all blog post recommendation prepared for user $$u$$.
-This way, $$rank_{u,i}=0\%$$ would mean that one of the blog posts read by user $$u$$ was the
-first on the list of blog post recommendation given to user $$u$$.
-On the other hand, $$rank_{u,i}=100\%$$ indicates that the blog post $$i$$ was placed at
-the end of the recommendation list. $$N_u$$ represents the number of blog posts read by user
-$$u$$ from the recommended list of blog posts.
+where $$rank_{u,i}$$ is the percentile-ranking of blog post $$i$$ that was read
+by the user $$u$$ within the ordered list of all blog post recommendation
+prepared for user $$u$$.  This way, $$rank_{u,i}=0\%$$ would mean that one of
+the blog posts read by user $$u$$ was the first on the list of blog post
+recommendation given to user $$u$$.  On the other hand, $$rank_{u,i}=100\%$$
+indicates that the blog post $$i$$ was placed at the end of the recommendation
+list. $$N_u$$ represents the number of blog posts read by user $$u$$ from the
+recommended list of blog posts.
 
 {% comment %}
 
@@ -94,11 +98,10 @@ illustrates how to compute the expected percentile ranking with the following in
 {% endcomment %}
 
 
-
 ## Evaluation Framework
 
-
 ### Generate training and test sets
+
 In order to evaluate the gains obtained by the recommendation system when we
 start to improve it with more accurate algorithms, we will split the dataset we
 have available into training and test sets. The training set will contain
@@ -160,6 +163,7 @@ TODO: Include file samples for those that do not want to generate their own
 
 
 ### Compute user and item latent factors
+
 Use the complete training set to compute user and item latent factors.
 We will leave the discussion about tuning and performance
 improvement of the model used to the section about [model tuning and offline
@@ -180,57 +184,58 @@ Verify the vectors for the latent factors for users and posts:
     {
         "user_id": 270,
         "user_item_cf": {
-            "user_item_cf:0": -1.750116e-05,
-            "user_item_cf:1": 9.730623e-05,
-            "user_item_cf:2": 8.515047e-05,
-            "user_item_cf:3": 6.9297894e-05,
-            "user_item_cf:4": 7.343942e-05,
-            "user_item_cf:5": -0.00017635927,
-            "user_item_cf:6": 5.7642872e-05,
-            "user_item_cf:7": -6.6685796e-05,
-            "user_item_cf:8": 8.5506894e-05,
-            "user_item_cf:9": -1.7209566e-05
+            "d0:0,d1:0": -1.750116e-05,
+            "d0:0,d1:1": 9.730623e-05,
+            "d0:0,d1:2": 8.515047e-05,
+            "d0:0,d1:3": 6.9297894e-05,
+            "d0:0,d1:4": 7.343942e-05,
+            "d0:0,d1:5": -0.00017635927,
+            "d0:0,d1:6": 5.7642872e-05,
+            "d0:0,d1:7": -6.6685796e-05,
+            "d0:0,d1:8": 8.5506894e-05,
+            "d0:0,d1:9": -1.7209566e-05
         }
     }
     $ head -1 blog-job/user_item_cf/product_features/part-00000 | python -m json.tool
     {
         "post_id": 20,
         "user_item_cf": {
-            "user_item_cf:0": 0.0019320602,
-            "user_item_cf:1": -0.004728486,
-            "user_item_cf:2": 0.0032499845,
-            "user_item_cf:3": -0.006453364,
-            "user_item_cf:4": 0.0015929453,
-            "user_item_cf:5": -0.00420313,
-            "user_item_cf:6": 0.009350027,
-            "user_item_cf:7": -0.0015649397,
-            "user_item_cf:8": 0.009262732,
-            "user_item_cf:9": -0.0030964287
+            "d0:0,d1:0": 0.0019320602,
+            "d0:0,d1:1": -0.004728486,
+            "d0:0,d1:2": 0.0032499845,
+            "d0:0,d1:3": -0.006453364,
+            "d0:0,d1:4": 0.0015929453,
+            "d0:0,d1:5": -0.00420313,
+            "d0:0,d1:6": 0.009350027,
+            "d0:0,d1:7": -0.0015649397,
+            "d0:0,d1:8": 0.009262732,
+            "d0:0,d1:9": -0.0030964287
         }
     }
 
 At this point, the vectors with latent factors can be added to posts and users.
 
 
-
 ## Add vectors to search definitions using tensors
+
 Modern machine learning applications often make use of large, multidimensional
-feature spaces and perform complex operations on those features,
-such as in large logistic regression and deep learning models.
-It is therefore necessary to have an expressive framework
-to define and evaluate ranking expressions of such complexity at scale.
+feature spaces and perform complex operations on those features, such as in
+large logistic regression and deep learning models.  It is therefore necessary
+to have an expressive framework to define and evaluate ranking expressions of
+such complexity at scale.
 
 Vespa comes with a Tensor framework, which unify and generalize scalar, vector
 and matrix operations, handles the sparseness inherent to most machine learning
 application (most cases evaluated by the model is lacking values for most of
-the features) and allow for models to be continuously updated.
-Additional information about the Tensor framework can be found in the
-[tensor user guide](../tensor-user-guide.html).
+the features) and allow for models to be continuously updated.  Additional
+information about the Tensor framework can be found in the [tensor user
+guide](../tensor-user-guide.html).
 
-We want to have those latent factors available in a Tensor representation to be used during ranking by the Tensor framework.
-A tensor field `user_item_cf` is added to `blog_post.sd` to hold the blog post latent factor:
+We want to have those latent factors available in a Tensor representation to be
+used during ranking by the Tensor framework.  A tensor field `user_item_cf` is
+added to `blog_post.sd` to hold the blog post latent factor:
 
-	field user_item_cf type tensor(user_item_cf[10]) {
+	field user_item_cf type tensor(d0[1],d1[10]) {
 		indexing: summary | attribute
 	}
 
@@ -244,7 +249,8 @@ TODO: Explain the indexing and attribute spec for the tensor type ... and explai
 we have a field has_user_item_cf for now.
 {% endcomment %}
 
-A new search definition  `user.sd`  defines a  document type named `user` to hold information for users:
+A new search definition `user.sd` defines a  document type named `user` to
+hold information for users:
 
     search user {
         document user {
@@ -257,7 +263,7 @@ A new search definition  `user.sd`  defines a  document type named `user` to hol
                 indexing: summary | attribute
             }
 
-            field user_item_cf type tensor(user_item_cf[10]) {
+            field user_item_cf type tensor(d0[1],d1[10]) {
                 indexing: summary | attribute
             }
 
@@ -279,8 +285,8 @@ TODO: Comment Tensor spec
 {% endcomment %}
 
 
-
 ## Join and feed data
+
 Build and deploy the application:
 
     $ mvn install
@@ -294,9 +300,11 @@ Wait for app to activate (200 OK):
 
     $ curl -s --head http://localhost:8080/ApplicationStatus
 
-The code to join the latent factors in `blog-job/user_item_cf` into blog_post and user documents is implemented in
+The code to join the latent factors in `blog-job/user_item_cf` into blog_post
+and user documents is implemented in
 [tutorial_feed_content_and_tensor_vespa.pig](https://github.com/vespa-engine/sample-apps/blob/master/blog-tutorial-shared/src/main/pig/tutorial_feed_content_and_tensor_vespa.pig).
-After joining in the new fields, a Vespa feed is generated and fed to Vespa directly from Pig :
+After joining in the new fields, a Vespa feed is generated and fed to Vespa
+directly from Pig :
 
     $ pig -Dvespa.feed.defaultport=8080 -Dvespa.feed.random.startup.sleep.ms=0 \
       -x local \
@@ -315,7 +323,7 @@ A successful data join and feed will output:
     Successfully read 341416 records from: "file:///Users/kraune/github/vespa-engine/sample-apps/blog-recommendation/blog-job/training_and_test_indices/testing_set_ids"
     Successfully read 323727 records from: "file:///Users/kraune/github/vespa-engine/sample-apps/blog-recommendation/blog-job/user_item_cf/product_features"
     Successfully read 6290 records from: "file:///Users/kraune/github/vespa-engine/sample-apps/blog-recommendation/blog-job/user_item_cf/user_features"
-    
+
     Output(s):
     Successfully stored 286237 records in: "localhost"
 
@@ -324,12 +332,12 @@ Sample blog post and user:
 - [localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008](http://localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008)
 
 
-
 ## Ranking
-Set up a rank function to return the best matching blog posts given some user latent factor.
-Rank the documents using a dot product between the user and blog post latent factors,
-i.e. the query tensor and blog post tensor dot product
-(sum of the product of the two tensors) - from `blog_post.sd`:
+
+Set up a rank function to return the best matching blog posts given some user
+latent factor.  Rank the documents using a dot product between the user and
+blog post latent factors, i.e. the query tensor and blog post tensor dot
+product (sum of the product of the two tensors) - from `blog_post.sd`:
 
     rank-profile tensor {
         first-phase {
@@ -339,60 +347,68 @@ i.e. the query tensor and blog post tensor dot product
         }
     }
 
-Configure the ranking framework to expect that `query(user_item_cf)` is a tensor,
-and that it is compatible with the attribute in a [query profile type](../query-profiles.html#query-profile-types) -
-see `search/query-profiles/types/root.xml` and `search/query-profiles/default.xml`:
+Configure the ranking framework to expect that `query(user_item_cf)` is a
+tensor, and that it is compatible with the attribute in a [query profile
+type](../query-profiles.html#query-profile-types) - see
+`search/query-profiles/types/root.xml` and `search/query-profiles/default.xml`:
 
     <query-profile-type id="root" inherits="native">
-        <field name="ranking.features.query(user_item_cf)" type="tensor(user_item_cf[10])" />
+        <field name="ranking.features.query(user_item_cf)" type="tensor(d0[1],d1[10])" />
     </query-profile-type>
 
     <query-profile id="default" type="root" />
 
-This configures a ranking feature named `query(user_item_cf)` with type `tensor(user_item_cf[10])`,
-which defines it as an indexed tensor with 10 elements.
-This is the same as the attribute, hence the dot product can be computed.
-
+This configures a ranking feature named `query(user_item_cf)` with type
+`tensor(d0[1],d1[10])`, which defines it as an indexed tensor with 10
+elements.  This is the same as the attribute, hence the dot product can be
+computed.
 
 
 ## Query Vespa with a tensor
-Test recommendations by sending a tensor with latenct factors: [localhost:8080/search/?yql=select%20\*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D](http://localhost:8080/search/?yql=select%20*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D)
+
+Test recommendations by sending a tensor with latenct factors:
+[localhost:8080/search/?yql=select%20\*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D](http://localhost:8080/search/?yql=select%20*%20from%20sources%20blog_post%20where%20has_user_item_cf%20=%201;&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Buser_item_cf%3A0%7D%3A0.1%2C%7Buser_item_cf%3A1%7D%3A0.1%2C%7Buser_item_cf%3A2%7D%3A0.1%2C%7Buser_item_cf%3A3%7D%3A0.1%2C%7Buser_item_cf%3A4%7D%3A0.1%2C%7Buser_item_cf%3A5%7D%3A0.1%2C%7Buser_item_cf%3A6%7D%3A0.1%2C%7Buser_item_cf%3A7%7D%3A0.1%2C%7Buser_item_cf%3A8%7D%3A0.1%2C%7Buser_item_cf%3A9%7D%3A0.1%7D)
 
 The query string, decomposed:
-- yql=select * from sources blog_post where has_user_item_cf = 1 - this selects all documents of type blog_post
-  which has a latent factor tensor
+
+- yql=select * from sources blog_post where has_user_item_cf = 1 - this selects
+  all documents of type blog_post which has a latent factor tensor
 - restrict=blog_post - search only in `blog_post` documents
 - ranking=tensor - use the rank-profile `tensor` in `blog_post.sd`.
-- ranking.features.query(user_item_cf) - send the tensor as user_item_cf. As this tensor is defined in the query-profile-type,
-  the ranking framework knows its type (i.e. dimensions) and is able to do a dot product with the attribute of same type.
-  The tensor before URL-encoding:
+- ranking.features.query(user_item_cf) - send the tensor as user_item_cf. As
+  this tensor is defined in the query-profile-type, the ranking framework knows
+  its type (i.e. dimensions) and is able to do a dot product with the attribute
+  of same type. The tensor before URL-encoding:
 
       {
-        {user_item_cf:0}:0.1,
-        {user_item_cf:1}:0.1,
-        {user_item_cf:2}:0.1,
-        {user_item_cf:3}:0.1,
-        {user_item_cf:4}:0.1,
-        {user_item_cf:5}:0.1,
-        {user_item_cf:6}:0.1,
-        {user_item_cf:7}:0.1,
-        {user_item_cf:8}:0.1,
-        {user_item_cf:9}:0.1
+        {d0:0,d1:0}:0.1,
+        {d0:0,d1:1}:0.1,
+        {d0:0,d1:2}:0.1,
+        {d0:0,d1:3}:0.1,
+        {d0:0,d1:4}:0.1,
+        {d0:0,d1:5}:0.1,
+        {d0:0,d1:6}:0.1,
+        {d0:0,d1:7}:0.1,
+        {d0:0,d1:8}:0.1,
+        {d0:0,d1:9}:0.1
       }
 
-
-
 ## Query Vespa with user id
-Next step is to query Vespa by user id, look up the user profile for the user, get the tensor from it
-and recommend documents based on this tensor (like the query in previous section).
-The user profiles is fed to Vespa in the `user_item_cf` field of the `user` document type.
 
-In short, set up a [searcher](../searcher-development.html) to retrieve the user profile by user id - then run the query.
-When the [Vespa Container](../container-intro.html) receives a request, it will create a `Query` representing it
-and execute a configured list of such Searcher components, called a [search chain](../chained-components.html).
-The `query` object contains all the information needed to create a result to the request
-while the `Result` encapsulates all the data generated from a `Query`.
-The `Execution` object keeps track of the call state for an execution of the searchers of a search chain:
+The next step is to query Vespa by user id, look up the user profile for the
+user, get the tensor from it and recommend documents based on this tensor (like
+the query in previous section).  The user profiles is fed to Vespa in the
+`user_item_cf` field of the `user` document type.
+
+In short, set up a [searcher](../searcher-development.html) to retrieve the
+user profile by user id - then run the query.  When the [Vespa
+Container](../container-intro.html) receives a request, it will create a
+`Query` representing it and execute a configured list of such Searcher
+components, called a [search chain](../chained-components.html).  The `query`
+object contains all the information needed to create a result to the request
+while the `Result` encapsulates all the data generated from a `Query`.  The
+`Execution` object keeps track of the call state for an execution of the
+searchers of a search chain:
 
     package com.yahoo.example;
 
@@ -431,7 +447,7 @@ The `Execution` object keeps track of the call state for an execution of the sea
                     for (String item : getReadItems(userProfile.getField("has_read_items"))){
                         notItem.addItem(new WordItem(item, "post_id"));
                     }
-                    QueryTreeUtil.andQueryItemWithRoot(query, notItem);
+                    query.getModel().getQueryTree().and(notItem);
                 }
             }
 
@@ -463,13 +479,8 @@ The `Execution` object keeps track of the call state for an execution of the sea
 
         private void addUserProfileTensorToQuery(Query query, Hit userProfile) {
             Object userItemCf = userProfile.getField("user_item_cf");
-            if (userItemCf != null) {
-                if (userItemCf instanceof Tensor) {
-                    query.getRanking().getFeatures().put("query(user_item_cf)", (Tensor)userItemCf);
-                }
-                else {
-                    query.getRanking().getFeatures().put("query(user_item_cf)", Tensor.from(userItemCf.toString()));
-                }
+            if (userItemCf != null && userItemCf instanceof Tensor) {
+                query.getRanking().getFeatures().put("query(user_item_cf)", (Tensor)userItemCf);
             }
         }
 
@@ -492,13 +503,15 @@ The  searcher is configured in  in `services.xml`:
         <searcher bundle='blog-recommendation' id='com.yahoo.example.UserProfileSearcher' />
     </chain>
 
-Deploy, then query a user to get blog recommendations: [localhost:8080/search/?user_id=34030991&searchChain=user](http://localhost:8080/search/?user_id=34030991&searchChain=user).
+Deploy, then query a user to get blog recommendations:
+[localhost:8080/search/?user_id=34030991&searchChain=user](http://localhost:8080/search/?user_id=34030991&searchChain=user).
 
-To refine recommendations, add query terms: [localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20\*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;](http://localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;)
-
+To refine recommendations, add query terms:
+[localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20\*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;](http://localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;)
 
 
 ## Model tuning and offline evaluation
+
 We will now optimize the latent factors using the training set
 instead of manually picking hyperparameter values as was done in
 [Compute user and item latent factors](#compute-user-and-item-latent-factors):
@@ -557,9 +570,8 @@ TODO: add a summary here of what we accomplished and way forward from here.
 You can now move on to the [next part of the tutorial](blog-recommendation-nn.html)
 where we improve accuracy using a simple neural network.
 
-
-
 ## Vespa and Hadoop
+
 Vespa was designed to keep low-latency performance even at Yahoo-like web scale.
 This means supporting a large number of concurrent requests
 as well as a very large number of documents.
@@ -601,3 +613,4 @@ You need both Pig and Hadoop libraries installed on your machine to run this loc
 but you don't need to install and start a running instance of Hadoop.
 More examples of feeding to Vespa from Pig is found in
 [sample apps](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared/src/main/pig).
+
