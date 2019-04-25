@@ -4,7 +4,8 @@ title: "Container Tuning"
 ---
 
 <p>
-A collection of configuration parameters to tune the Container as used in Vespa.
+A collection of configuration parameters to tune the Container as used in Vespa. Some configuration parameters have native <a href="../cloudconfig/application-packages.html">services.xml</a> support while 
+others are configured through <a href="../reference/config-files.html#generic-configuration-in-services-xml">generic config overrides</a>.
 </p>
 
 
@@ -17,94 +18,58 @@ controlling the max number is an integer variable named <em>maxthreads</em>, the
 default value is 500. Do note that e.g. federation will spawn off extra worker
 threads in addition to this number. The Executor provider will pre-start
 the worker threads, so even an idle container will report running several
-hundred threads. Tuning this value is especially relevant if the log starts
-being filled with warnings about no available worker threads on the docproc,
-search or processing container. Example:
+hundred threads. Note that tuning this upwards increases the risk of high GC pressure as concurrency becomes higher with more in-flight requests.
+The GC pressure is a function of number of in-flight requests, the time it takes to complete the request and the amount of garbage produced per request.  
 <pre>
-&lt;container&gt;
+&lt;container id="container" version="1.0"&gt;
   ...
   &lt;config name="container.handler.threadpool"&gt;
-    &lt;maxthreads&gt;2000&lt;/maxthreads&gt;
+    &lt;maxthreads&gt;200&lt;/maxthreads&gt;
   &lt;/config&gt;
   ...
 &lt;/container&gt;
 </pre>
 Handlers which are injected with an Executor in their constructor will share
-threads from the same threadpool.
+threads from the same threadpool. Number of threads is active is available as <a href="../jdisc/metrics.html"serverActiveThreads>metric</a>.
+If all threads are occupied requests are denied with 503.
 </p>
-
-
 
 <h2 id="document-processing-threads">Document processing threads</h2>
 <p>
-Document processing throughput is normally a factor of the code and how many threads used.
-If the process uses too much memory, too many threads in use can be the root cause.
-Write code that is efficient and does not wait - if needed, use <em>Progress.LATER</em>.
+<a href="document-processing-overview.html">Document processing</a> throughput is normally a factor of the code complexity and how many threads used.
 Number of threads defaults to number of CPU cores - to override, set <em>numthreads</em>:
 </p>
 <pre>
-&lt;container&gt;
+&lt;container id="container" version="1.0"&gt;
+  ...
   &lt;config name="config.docproc.docproc"&gt;
-    <strong style="background-color: yellow;">&lt;numthreads&gt;96&lt;/numthreads&gt;</strong>
+    &lt;numthreads&gt;96&lt;/numthreads&gt;
   &lt;/config&gt;
-  &lt;document-processing&gt;
-    &lt;cluster name="default"&gt;
-      &lt;nodes&gt;
-        &lt;node hostalias="node1"/&gt;
-      &lt;/nodes&gt;
-    &lt;/cluster&gt;
-  &lt;/document-processing&gt;
-&lt;/container&gt;
+  ...
+  &lt;/container&gt;
 </pre>
-
-
 
 <h2 id="jvm-heap-size">JVM heap size</h2>
 <p>
 Change the default JVM heap size settings used by Vespa to better suit
 the specific hardware settings or application requirements.
-Vespa provides two short-hand config parameters for tuning the total JVM heap size settings;
-absolute size and as a percentage of available memory on the machine.
 </p>
 
-
-<h3 id="absolute-size">Absolute size</h3>
 <p>
-By setting the absolute size of the total JVM heap in MB, one gets specific control of the size.
-The disadvantage is that the configuration now strictly depends on running environment
-not significantly changing with regards to available memory.
-The example below will allocate a 2GB total heap:
-</p>
-<pre>
-&lt;container&gt;
-  ...
-  &lt;config name="search.config.qr-start"&gt;
-    &lt;jvm&gt;
-      &lt;heapsize&gt;2048&lt;/heapsize&gt;
-    &lt;/jvm&gt;
-  &lt;/config&gt;
-  ...
-&lt;/container&gt;
-</pre>
-
-
-<h3 id="relative-size">Relative size</h3>
-<p>
-By setting the relative size of the total JVM heap in percentage of available memory,
+By setting the relative size of the total JVM heap in <a href="../reference/services-container.html#nodes">percentage of available memory</a>,
 one does not know exactly what the heap size will be,
 but the configuration will be adaptable and ensure that the container can start
 even in environments with less available memory.
-The example below allocates 60% of available memory on the machine to the JVM heap:
+The example below allocates 50% of available memory on the machine to the JVM heap:
 </p>
 <pre>
-&lt;container&gt;
+&lt;container id="container" version="1.0"&gt;
   ...
-  &lt;config name="search.config.qr-start"&gt;
-    &lt;jvm&gt;
-      &lt;heapSizeAsPercentageOfPhysicalMemory&gt;60&lt;/heapSizeAsPercentageOfPhysicalMemory&gt;
-    &lt;/jvm&gt;
-  &lt;/config&gt;
+  &lt;nodes allocated-memory="50%"&gt;
+    &lt;node hostalias="node0" /&gt;
+  &lt;/nodes&gt;
   ...
+
 &lt;/container&gt;
 </pre>
 
@@ -112,62 +77,16 @@ The example below allocates 60% of available memory on the machine to the JVM he
 
 <h2 id="jvm-tuning">JVM Tuning</h2>
 <p>
-Some of the Vespa services are implemented in Java. Setting the
-correct settings for memory usage etc. is non-trivial, and the Vespa
-defaults are most often good for production - not a development
-machine. This is not an extensive guide on how to tune the JVM,
-but rather a list of pointers of where to look and change.
-</p><p>
-If things work when running Vespa, skip reading here. However,
-if parts of Vespa fail at startup or while running, and it
-might be memory related, look below for hints.
-Example <em>vespa.log</em> entries:
-<pre>
-  1222175132.631524       mynode.mydomain.com   12213   config-sentinel config-sentinel.service event   stopped/1 name="qrserver" pid=15414 exitcode=32768
-  1222175132.631583       mynode.mydomain.com   12213   config-sentinel config-sentinel.service error   qrserver: Attempted to start, but fork() failed: Cannot allocate memory
-  
-  ...
-  
-  1222175132.52427        mynode.mydomain.com   15381   logserver       stdout  info    Java HotSpot(TM) 64-Bit Server VM warning: Attempt to deallocate stack guard pages failed.
-  1222175132.52480        mynode.mydomain.com   15381   logserver       stdout  info    Java HotSpot(TM) 64-Bit Server VM warning: Attempt to allocate stack guard pages failed.
-  1222175132.036          mynode.mydomain.com   -/10    -       ADM.com.yahoo.logserver.handlers.HandlerThread  config  logserver.queue.size=200
-  1222175132.52521        mynode.mydomain.com   15381   logserver       stderr  warning Exception in thread "main" java.lang.OutOfMem
-  oryError: unable to create new native thread
-  
-  ...
-  
-  1222175130.810528       mynode.mydomain.com   14314   logserver       stderr  warning dl failure on line 685 Error: failed $VESPA_HOME/libexec64/jdk1.6.0/jre/lib/amd64/server/libjvm.so, because $VESPA_HOME/libexec64/jdk1.6.0/jre/lib/amd64/server/libjvm.so: failed to map segment from shared object: Cannot allocate memory
-</pre>
-A frequent case is trying to run some a sample Vespa application,
-configured with all services, on a development machine -
-this consumes gigabytes of memory and might fail.
-</p><p>
-Set JVM parameters for Java services in <em>services.xml</em>.
-When modified, <em>vespa-deploy prepare</em>, <em>vespa-deploy activate</em> and restart the relevant services.
-Example: Run two containers with concurrent garbage collection:
+Use <em>jvm-gc-options</em> for controlling GC related parameters and <em>jvm-options</em> for tuning other parameters. See <a href="../reference/services-container.html#nodes">reference documentation</a>. 
+Example: Running with CMS concurrent garbage collection and using NewRatio = 1 (equal size of old and new generation) and enabling verbose GC logging (Logged to stdout to vespa.log file).
 <pre>
 &lt;container id="default" version="1.0"&gt;
-  &lt;nodes jvmargs="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+CMSIncrementalPacing"&gt;
+  &lt;nodes jvm-gc-options="-XX:+UseConcMarkSweepGC -XX:MaxTenuringThreshold=15 -XX:NewRatio=1 -XX:+PrintGC" jvm-options="-XX:+PrintCommandLineFlags"&gt;
     &lt;node hostalias="node0" /&gt;
-    &lt;node hostalias="node1" /&gt;
   &lt;/nodes&gt;
 &lt;/container&gt;
 </pre>
-Example: Run the Log Server with verbose garbage collection:
-<pre>
-&lt;logserver hostalias="node0" jvmargs="-verbose:gc"/&gt;
 </pre>
-Use the <em>jvmargs</em> attribute on:
-<ul>
-  <li>(container) nodes</li>
-  <li>(container) node</li>
-  <li>logserver</li>
-</ul>
-The given JVM parameters are <em>appended</em> to Vespa's default ones on the
-command line when executing Java. When supplying a setting that is also
-given by default in the start script, e.g. <em>-Xmx</em>, the last one
-(i.e. the configured setting) takes effect, as expected.
-</p>
 
 
 <h3 id="config-server-and-config-proxy">Config Server and Config Proxy</h3>
@@ -190,7 +109,7 @@ Refer to <a href="../setting-vespa-variables.html">Setting Vespa variables</a>.
 
 
 
-<h2 id="warmup-queries">Warmup queries</h2>
+<h2 id="warmup-queries">Container warmup</h2>
 <p>
 Some applications observe that the first queries made to a freshly started container
 take a very long time to complete. This is typically due to some components performing
@@ -227,36 +146,3 @@ external queries, they will cause the first external queries to observe a warmed
 up container instance.
 </p>
 
-<h2 id="override-defaults">Override defaults</h2>
-<p>
-Sometimes it is necessary to turn off a Vespa default setting to make
-custom settings take effect, for instance when choosing another GC
-algorithm. First disable the Vespa setting, then enable the custom setting.
-Assuming a Vespa release has CMS as default setting which should be overridden:
-<pre>
--XX:-UseConcMarkSweepGC -XX:+UseOtherGCAlgo
-</pre>
-I.e., use the standard JVM option syntax for turning on and off boolean flags
-by prefixing the actual option name with plus and minus.
-The user defined parameters will <em>always</em> be appended
-after factory settings, this to ensure straightforward overrides will
-automatically take precedence over factory settings.
-</p>
-
-
-<h3>Verifying settings</h3>
-<p>
-By adding <em>-XX:+PrintFlagsFinal</em> to the JVM parameters,
-the JVM will dump (to the log) the final value of all flags.
-Be warned, though, as there are many hundred tunable flags in the JVM.
-</p>
-
-
-<h3>Other</h3>
-<p>
-A few links about JVM tuning:
-</p>
-<ul>
-  <li><a href="http://www.oracle.com/technetwork/java/javase/tech/vmoptions-jsp-140102.html">Java HotSpot VM Options</a></li>
-  <li><a href="http://javahowto.blogspot.com/2006/06/6-common-errors-in-setting-java-heap.html">6 Common Errors in Setting Java Heap Size</a></li>
-</ul>
