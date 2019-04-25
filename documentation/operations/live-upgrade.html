@@ -3,59 +3,49 @@
 title: "Live-upgrading Vespa"
 ---
 
-<p>This document describes how to live-upgrade a Vespa system.
-Follwing this procedure ensures that the upgrade can be accomplished
-without disruption to read or write traffic.</p>
-
-
+<p>
+This document describes how to live-upgrade a Vespa instance.
+Use this procedure to upgrade without disruption to read or write traffic.
+</p>
 <ol>
-  <li id="consider-before-upgrading"><strong>Consider before upgrading</strong>
+  <li id="before-upgrading"><strong>Before upgrading</strong>
     <ul>
-      <li>If you are upgrading to a <b>new major version</b>, you should first upgrade to
-        the latest version on the current major, then make sure there are no deprecation
-        warnings when building and deploying your application.
-      </li>
-      <li>Redundancy: You should always have capacity to take one node per cluster out of service at the time.
-        This procedure relies on that. If your content clusters have redundancy=1, or searchable-copies=1, you
-        will have some data unavailability (reduced coverage) during live upgrade.</li>
-      <li>To reduce node downtime, you can download the new Vespa version to all hosts in advance.
-      <li>To reduce content node node downtime, consider
-        use <a href="../reference/services-content.html#flush-on-shutdown">flush-on-shutdown</a>.
-        This flushes the transaction before stopping nodes, which reduces startup time.
+      <li>
+        If upgrading to a <strong>new major version</strong>,
+        first upgrade to the latest version on the current major,
+        then make sure there are no deprecation warnings when building and deploying the application
+        <ul>
+          <li>Also make sure to
+            <a href="../reference/config-proxy.html#major-vespa-software-upgrade">detach</a>
+            nodes as part of the procedure</li>
+        </ul>
+      </li><li>
+        Redundancy: for data availability,
+        there must be capacity to take one node per cluster out of service at the time.
+        This procedure relies on that.
+        If the clusters have redundancy=1, or searchable-copies=1,
+        some data is not available (reduced coverage) during the upgrade
+      </li><li>
+        To reduce node downtime, download the new Vespa version to all hosts in advance
       </li>
     </ul>
   </li>
 
   <li id="upgrade-config-server"><strong>Upgrade config servers</strong>
     <ul><li>
-      Detach all nodes from the
-      config servers by running this command on all hosts:
-      <pre class="brush: cli">$ vespa-configproxy-cmd -m setmode memorycache</pre>
-      This causes services to keep their current configuration until both config
-      server and the services themselves have been upgraded.
-    </li><li>
       Install the new Vespa version on the config servers and restart them.
     </li><li>
       Redeploy and activate the application:
-      <pre class="brush: cli">$ vespa-deploy prepare &lt;app&gt; &amp;&amp; vespa-deploy activate</pre>
-    </li><li>
-      Restart services on the config servers -
-      the config proxy will then go back to using the default mode and
-      serve config from the upgraded config servers.
+      <pre>$ <a href="../reference/vespa-cmdline-tools.html#vespa-deploy">vespa-deploy</a> prepare &lt;app&gt; &amp;&amp; vespa-deploy activate</pre>
     </li></ul>
   </li>
 
   <li id="upgrade-all-other-nodes-one-by-one"><strong>Upgrade all other nodes one by one</strong>
-    For each of the other nodes in the system:
+    - for each of the other nodes in the system:
     <ul>
-      <li>Stop Vespa services on the node.</li>
-      <li>Install the new Vespa version.</li>
-      <li>Start Vespa services on the node.</li>
-      <li>Reattach the node to the config servers:
-        <pre class="brush: cli">$ vespa-configproxy-cmd -m setmode default</pre>
-      <li>Wait until the node is fully up before doing the next node.</li>
+      <li>Stop Vespa services on the node</li>
+      <li>Install the new Vespa version</li>
+      <li>Start Vespa services on the node</li>
+      <li>Wait until the node is fully up before doing the next node</li>
     </ul>
-
 </ol>
-
-
