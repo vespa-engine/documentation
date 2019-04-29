@@ -1,6 +1,6 @@
-#! /usr/bin/python
+#! /usr/bin/env python3
 
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 
 import os
 import re
@@ -50,7 +50,7 @@ class PseudoTerminal:
         env = os.environ.copy()
         env["PS1"] = ""  # remove default terminal prompt
         env["PS2"] = ""
-        self._pty = pexpect.spawn('sh', env=env, echo=False)
+        self._pty = pexpect.spawn('sh', env=env, echo=False, encoding='utf-8')
         self._pty.logfile_read = self._log
 
     def stop(self):

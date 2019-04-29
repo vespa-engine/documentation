@@ -1,12 +1,13 @@
-#! /usr/bin/python
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+#! /usr/bin/env python3
+# Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 
+import io
 import os
 import sys
 import json
 import time
 import yaml
-import urllib2
+import urllib.request
 import tempfile
 
 from bs4 import BeautifulSoup
@@ -131,9 +132,9 @@ def parse_cmd(cmd, attrs):
     if len(cmd) == 0:
         return None
 
-    if attrs.has_key("data-test-wait-for"):
+    if "data-test-wait-for" in attrs:
         return { "$" : cmd, "type":"wait", "wait-for":attrs["data-test-wait-for"] }
-    if attrs.has_key("data-test-assert-contains"):
+    if "data-test-assert-contains" in attrs:
         return { "$" : cmd, "type":"assert", "contains":attrs["data-test-assert-contains"] }
     return { "$" : cmd, "type":"default" }
 
@@ -217,7 +218,7 @@ def create_work_dir():
 
 
 def run_url(url):
-    html = urllib2.urlopen(url).read()
+    html = urllib.request.urlopen(url).read()
     process_page(html, url)
 
 
@@ -247,7 +248,7 @@ def run_file(file_name):
     elif file_name == "-":
         process_page(sys.stdin.read(), "stdin")
     else:
-        with open(file_name) as f:
+        with io.open(file_name, 'r', encoding="utf-8") as f:
             process_page(f.read(), file_name)
 
 
