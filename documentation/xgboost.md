@@ -54,6 +54,8 @@ like this:
 
 An application package can have multiple models.
 
+To download models during deployment, see [deploying remote models](deploying-remote-models.html).
+
 ## Ranking with XGBoost models
 
 Vespa has a special [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html)

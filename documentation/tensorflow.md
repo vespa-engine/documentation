@@ -80,6 +80,8 @@ something like this:
 An application package can have multiple models, as long as they are in their
 own directories.
 
+To download models during deployment, see [deploying remote models](deploying-remote-models.html).
+
 ## Ranking with TensorFlow models
 
 Vespa has a special [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
