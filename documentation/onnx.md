@@ -25,6 +25,8 @@ something like this:
 
 An application package can have multiple models.
 
+To download models during deployment, see [deploying remote models](deploying-remote-models.html).
+
 ## Ranking with ONNX models
 
 Vespa has a special [ranking
