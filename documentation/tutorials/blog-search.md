@@ -895,7 +895,9 @@ Finally, all numeric fields should always be attributes.
 [vespa-remove-index](../reference/vespa-cmdline-tools.html#vespa-remove-index)
 removes all documents:
 
-    $ vespa-stop-services && vespa-remove-index && vespa-start-services
+<pre data-test="exec">
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-stop-services && /opt/vespa/bin/vespa-remove-index && /opt/vespa/bin/vespa-start-services'
+</pre>
 
 Also see [vespa-configserver-remove-state](../cloudconfig/configuration-server.html#zookeeper-recovery).
 
