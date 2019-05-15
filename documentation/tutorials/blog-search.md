@@ -395,7 +395,7 @@ $ curl -s "http://localhost:19112/state/v1/metrics" | tr "," "\n" | grep -A 2 co
 
 You can also inspect the search node state by:
 
-<pre data-test="exec" data-test-assert-contains='"onlineDocs", "998"'>
+<pre data-test="exec" data-test-assert-contains='"onlineDocs", "1000"'>
 $ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'
 </pre>
 
@@ -896,7 +896,7 @@ Finally, all numeric fields should always be attributes.
 removes all documents:
 
     $ vespa-stop-services && vespa-remove-index && vespa-start-services
-    
+
 Also see [vespa-configserver-remove-state](../cloudconfig/configuration-server.html#zookeeper-recovery).
 
 
