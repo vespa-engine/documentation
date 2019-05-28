@@ -133,7 +133,7 @@ $ curl -s http://localhost:8080/document/v1/application_name/doc_name/docid/elas
  Feel free to use our GUI for building queries at [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/) (with Vespa-container running) which can help you building queries with e.g. autocompletion of YQL. Also take a look at Vespa's [Search API](https://docs.vespa.ai/documentation/search-api.html).
  
 
-Click for more information about [developing applications](https://docs.vespa.ai/documentation/jdisc/developing-applications.html) and [application packages](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html) like `application`.
+Click for more information about [developing applications](https://docs.vespa.ai/documentation/getting-started-vespa-applications.html) and [application packages](https://docs.vespa.ai/documentation/cloudconfig/application-packages.html) like `application`.
 
 Please take a look at [how to secure your Vespa installation](https://docs.vespa.ai/documentation/securing-your-vespa-installation.html)
 
