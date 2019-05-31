@@ -6,27 +6,34 @@ title: "Visiting"
 <p>
 Visiting is a feature to efficiently process a set of documents, identified by a
 <a href="../reference/document-select-language.html">document selection expression</a>.
-A client sends <em>visit</em>-requests to distributors,
-which picks a copy of all buckets to visit and forwards the requests to the content nodes.
-The content nodes reads the documents, and processes these documents in the same process.
-Typical use cases for this processing is to perform streaming search in the data,
-send the data back to the client, or send the data to some other target.
+See <a href="#request-handling">request handling</a> for details on how the feature works.
 </p><p>
-<a href="../streaming-search.html">Streaming search</a> uses visiting in a latency-critical context.
+In short, <em>visit</em> iterates over all, or a set of, <a href="buckets.html">buckets</a>
+and sends documents to (a set of) targets.
+The target is normally the visit client
+(like <a href="../reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a>),
+but can be set a set of targets that act like sinks for the documents -
+see <a href="../reference/vespa-cmdline-tools.html#vespa-visit-target">vespa-visit-target</a>.
 </p><p>
-Background tasks like migration, reprocessing, backup or debugging are not latency critical.
-It is more important that such tasks have little impact on the user driven load,
-and have low priority and long run time.
-Throttling ensures that only a few requests are active per content node at a time.
+Typical use cases are data dump and reprocessing that are not time sensitive.
+However, <a href="../streaming-search.html">streaming search</a>
+uses visiting in a latency-critical context.
+</p><p>
+It is possible so prioritize visit load higher/lower, and throughput can be throttled.
+</p><p>
+Performance note: Due to the bucket iteration, visiting is normally not a low-latency iteration.
+An empty cluster has 8 distribution bits and hence 256 buckets -
+dumping just one document requires iteration,
+unless unless <em>location</em>-specific selections are used,
+and typically uses a second or two.
+To test visiting performance, use larger data sets, do not extrapolate from small.
+Use search for low latency operations on small result sets.
 </p>
 
 
 
 <h2 id="tools">Tools</h2>
 <p>
-For programmatic access, check the
-<a href="../document-api-guide.html#visitorsession">visitor session API</a>.
-</p><p>
 <a href="../reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> is used to run a visit operation.
 By default, vespa-visit gets visited documents and emits to stdout.
 However, the tool may specify a visitor target and be used as a tool
@@ -34,17 +41,50 @@ to run reprocessing or migration.
 It supports keeping a progress file on disk,
 such that you can restart it if it should fail in the middle for some reason.
 </p><p>
-<em>vespa-visit-target</em> is a tool to set up an endpoint for visiting data.
+<a href="../reference/vespa-cmdline-tools.html#vespa-visit-target">vespa-visit-target</a>
+is a tool to set up an endpoint for visiting data.
 It binds to a socket or to a slobrok address,
 which is specified as a target in the visit client.
-Check <em>vespa-visit-target --help</em> for details.
+</p><p>
+For programmatic access, see the
+<a href="../document-api-guide.html#visitorsession">visitor session API</a>.
+</p>
+
+
+
+<h2 id="selection">Selection</h2>
+<p>
+To select which documents to visit, use a
+<a href="../reference/document-select-language.html">document selection expression</a>.
+</p><p>
+If co-localization of documents has been used, and the selection specifies location criteria,
+the visitor client may be able to identify one or a few buckets
+that are guaranteed to include all documents that will match the expression.
+In all other cases, visiting needs to visit all buckets in the cluster.
+</p><p>
+Note that streaming search typically relies on this behavior to ensure low latency,
+but the visitor client will only be able to map visitors to a bucket subset
+if the document selection is simple, i.e. maps to a <em>location</em>.
+If streaming search uses a lot of time,
+verify that the selection is actually simple enough
+for the visitor client to map it to a small bucket set.
+</p>
+
+
+
+<h2 id="fields">Fields</h2>
+<p>
+To select which fields to output, use a
+<a href="../documents.html#fieldsets">fieldset</a>.
+See examples below - common use cases is to use a comma-separated list of fields
+or the <em>[document]</em> / <em>[all]</em> shorthand.
 </p>
 
 
 
 <h2 id="data-export-import">Data export / import</h2>
 <p>
-Export data to stdout (JSON format):
+Export data to stdout:
 <pre>
 $ vespa-visit
 </pre>
@@ -280,25 +320,8 @@ use a selection string to reprocess one document type at a time.
 
 
 
-<h2 id="selection">Selection</h2>
-<p>
-To select which documents to visit, use a
-<a href="../reference/document-select-language.html">document selection expression</a>.
-</p><p>
-If co-localization of documents has been used, and the selection specifieslocation criteria,
-the visitor client may be able to identify one or a few buckets
-that are guaranteed to include all documents that will match the expression.
-In all other cases, visiting needs to visit all buckets in the cluster.
-</p><p>
-Note that streaming search typically relies on this behavior to ensure low latency,
-but the visitor client will only be able to map visitors to a bucket subset
-if the document selection is simple.
-If streaming search uses a lot of time,
-verify that the selection is actually simple enough
-for the visitor client to map it to a small bucket set.
-</p>
-
-<h2 id="client-visit-requests">Client visit requests</h2>
+<h2 id="request-handling">Request handling</h2>
+<h3 id="client">Client</h3>
 <p>
 If the selection criteria managed to map the visitor to a specific set of buckets,
 these will be used when sending distributor visit requests.
@@ -325,8 +348,7 @@ or whether to start visiting many buckets at a time, allowing great throughput.
 </p>
 
 
-
-<h2 id="distributor-visit-requests">Distributor visit requests</h2>
+<h3 id="distributor">Distributor</h3>
 <p>
 The distributors receive visit requests from clients for a given bucket,
 which may map to none, one or many buckets within the distributor.
@@ -355,8 +377,7 @@ so a bit more documents may need to be revisited when continued after a failure.
 </p>
 
 
-
-<h2 id="content-node-visit-requests">Content node visit requests</h2>
+<h3 id="content-node">Content node</h3>
 <p>
 The content node receives visit requests for single buckets for which they store documents.
 It may receive many in parallel, but their execution is independent of each other.
@@ -376,6 +397,63 @@ the visit processor will process the data.
 The default is one iterator request is pending to the backend at any time.
 By sending many small iterator requests, having several pending at a time,
 the processing may occur in parallel with the document fetching.
+</p>
+
+
+<h3 id="priority">Priority</h3>
+<p>
+Visitor requests have priorities just like any other requests.
+These priorities are kept throughout the chain of requests.
+A low priority reprocessing visitor will end up sending
+low priority visitor requests to the content nodes,
+which will send low priority put operations to be reprocessed,
+which will end up as low priority put operations to the backend. Example:
+<pre>
+$ vespa-visit --priority LOW_1 -p progress-file
+</pre>
+Refer to <a href="../reference/services.html#load-types">load types</a> for priority values.
+</p>
+
+
+<h3 id="max-concurrent-visitors-on-content-nodes">Max concurrent visitors on content nodes</h3>
+<p>
+Content nodes process <a href="../reference/services-content.html#max-concurrent">max-concurrent</a>
+visitors at a time.
+This enforces enough memory for the currently active ones,
+and that the active ones will complete in reasonable time.
+To prevent a lot of low priority visitors to stop high priority visitors from being started,
+the maximum amount of concurrent visitors is a function that depends on the priority:
+</p><p><!-- depends on mathjax -->
+$$\text{maxconcurrent}_{V} = \text{fixed + variable} \times \frac{255 - \text{priority}_{V}}{255}$$
+</p><p>
+The <em>fixed</em> value represent the number always allowed to process in parallel regardless of priority,
+and the <em>variable</em> represent how many additional visitors can be run at maximum priority.
+Thus, if only low priority visitors are running,
+there will be free slots in the queue for high priority visitors incoming.
+</p><p>
+Once visitors have started, backend requests for documents are also prioritized,
+but the processing of the documents are not.
+However, as the high priority backend requests will take priority,
+the high priority visitors should also get responses to process faster.
+</p>
+
+
+<h3 id="queueing">Queueing</h3>
+<p>
+Visitor requests may be queued at several layers.
+Visitor clients have a virtual queue by deciding only to send requests for a few buckets at a time.
+Distributors have a virtual queue deciding to only forward requests for some buckets at a time.
+These queues are per visitor, and can be adjusted through visitor parameters.
+</p><p>
+The content node queues up visitor requests if the maximum allowed is already running.
+If doing so, this queue will be kept in priority order.
+In the event of client hammering, this queue may also fill up, replying busy back to the clients.
+</p><p>
+The partition threads will queue up requests to read needed parts of data.
+These requests will be tagged with the priority of the visitor itself.
+Additionally, the responses from the backend will be queued for processing in the visitor thread.
+This queue is not a priority queue, but as it contains replies from data processed of a priority queue,
+this is not expected to be an issue.
 </p>
 
 
@@ -402,82 +480,13 @@ the processing may occur in parallel with the document fetching.
     </tr><tr>
       <th style="white-space: nowrap">Streaming search visitor</th>
       <td>
-        Another visitor processor is the streaming search visitor. This is run on the search containers,
-        making it transparent whether search results were created from streaming search,
-        or through indexed search in proton.
-      </td>
-    </tr><tr>
-      <th>Statistics visitor</th>
-      <td>
-        There is also a statistics visitor that just generate some statistics of stored data
+        The <a href="../streaming-search.html">streaming search</a> visitor runs in the Vespa container,
+        making it transparent whether search results were created from streaming or indexed search -
+        see <a href="../reference/services-content.html#document">indexing mode</a>.
       </td>
     </tr>
   </tbody>
 </table>
-
-
-
-<h2 id="priority">Priority</h2>
-<p>
-Visitor requests have priorities just like any other requests.
-These priorities are kept throughout the chain of requests.
-A low priority reprocessing visitor will end up sending
-low priority visitor requests to the content nodes,
-which will send low priority put operations to be reprocessed,
-which will end up as low priority put operations to the backend. Example:
-<pre>
-$ vespa-visit --priority LOW_1 -p progress-file
-</pre>
-Refer to <a href="../reference/services.html#load-types">load types</a> for priority values.
-</p>
-
-
-<h3 id="max-concurrent-visitors-on-content-nodes">Max concurrent visitors on content nodes</h3>
-<p>
-Content nodes have a maximum amount of visitors they will process at a time.
-This maximum enforces that there is enough memory for the currently active ones,
-and that the active ones will complete in reasonable time,
-rather than having a huge number of active visitors that all use a long time to finish
-as they compete with so many other visitors for resources.
-</p><p>
-To prevent a lot of low priority visitors to stop high priority visitors from being started,
-the maximum amount of concurrent visitors is a function that depends on the priority:
-</p><p><!-- depends on mathjax -->
-$$\text{maxconcurrent}_{V} = \text{fixed + variable} \times \frac{255 - \text{priority}_{V}}{255}$$
-</p><p>
-The <em>fixed</em> value represent the number always allowed to process in parallel regardless of priority,
-and the <em>variable</em> represent how many additional visitors can be run at maximum priority.
-</p><p>
-Thus, if only low priority visitors are running,
-there will be free slots in the queue for high priority visitors incoming.
-</p><p>
-Once visitors have started, backend requests for documents are also prioritized,
-but the processing of the documents are not.
-However, as the high priority backend requests will take priority,
-the high priority visitors should also get responses to process faster.
-</p><p>
-These values can be configured in
-<a href="../reference/services-content.html#max-concurrent">tuning</a>.
-</p>
-
-
-<h3 id="queueing">Queueing</h3>
-<p>
-Visitor requests may be queued at several layers.
-Visitor clients have a virtual queue by deciding only to send requests for a few buckets at a time.
-Distributors have a virtual queue deciding to only forward requests for some buckets at a time.
-These queues are per visitor, and can be adjusted through visitor parameters.
-</p><p>
-The content node queues up visitor requests if the maximum allowed is already running.
-If doing so, this queue will be kept in priority order.
-In the event of client hammering, this queue may also fill up, replying busy back to the clients.
-</p><p>
-The partition threads will queue up requests to read needed parts of data.
-These requests will be tagged with the priority of the visitor itself.
-Additionally, the responses from the backend will be queued for processing in the visitor thread.
-This queue is not a priority queue, but as it contains replies from data processed of a priority queue,
-this is not expected to be an issue.
-</p>
 
 
 
@@ -514,7 +523,8 @@ Requests sent from the visitor processor are sent to a visitor target - types:
         The data sent from the visitor will be distributed among the matching nodes,
         but each message will just be sent to one node.
         </p><p>
-        Slobrok names may also be used if you use <em>vespa-visit-target</em>
+        Slobrok names can be used when using
+        <a href="../reference/vespa-cmdline-tools.html#vespa-visit-target">vespa-visit-target</a>
         to retrieve the data at some location.
         If you start vespa-visit-target on two nodes,
         listening to slobrok names <em>mynode/0/visit-destination</em>
@@ -522,13 +532,12 @@ Requests sent from the visitor processor are sent to a visitor target - types:
         you can send the results to these nodes by specifying
         <em>mynode/*/visit-destination</em> as the data handler.
         </p><p>
-        <em>vespadestination</em> is a small java program,
-        similar to vespa-visit-target in that it can receive messages
+        <a href="../reference/vespa-cmdline-tools.html#vespa-destination">vespa-destination</a>
+        is similar to vespa-visit-target in that it can receive messages
         from messagebus and print the contents to stdout.
         It can be useful in situations where you want to debug a route or a docproc,
         by using the vespadestination as the endpoint of your route.</p>
-      </td>    <!-- ToDo: vespa-visit-target and vespadestination should be merged into one tool?
-                Need to decide what to do with these tools ...-->
+      </td>
     </tr><tr>
       <th>TCP socket</th>
       <td>
