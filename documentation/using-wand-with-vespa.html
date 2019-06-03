@@ -1,0 +1,107 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Using Wand with Vespa"
+---
+
+<p>
+This document describes how to use Weak And/WAND for complex type any queries. This document uses conceps and data set from the <a href="tutorials/blog-search.html">blog search tutorial</a>
+</p>
+
+
+<h2 id="introduction-to-wand">Introduction to Wand</h2>
+Both Wand query operator implementations in Vespa 
+
+<ul>
+<li>Accepts the targeted number of hits to be returned</li>
+<li>Accepts a score threshold </li>
+</ul>
+
+<h2 id="using-weakAnd">Using the Vespa Wand (YQL weakAnd()) query operator</h2>
+<p>The <em>weakAnd</em> query operator accepts any 
+<p>With the complete blog search data set we could imagine a user query <em>blogs about adidas joggers or white nike's or reebook</em> which could be represented in the <a href="query-language.html">Vespa Query Language</a> as:
+<pre>
+select * from blog_post where (
+  default contains "blog" OR default contains "about" OR 
+  default contains "adidas" OR default contains "joggers" OR default contains "or" OR 
+  default contains "white" OR 
+  default contains phrase("nike", "s") OR default contains "or" OR default contains "reebook"
+  ); 
+</pre>
+<p>The query would recall about 462,857 documents out of a total corpus of 1,196,110 documents which equals roughly 39% of the total corpus. Vespa will rank all those recalled documents using the configured
+<em>first-phase</em> ranking function.  Using the <em>weakAnd</em> query operator the query could look like this: 
+
+<pre>
+select * from blog_post where (
+  [{"targetNumHits": 200}] 
+    weakAnd(
+      default contains "blog", default contains "about", default contains "adidas", 
+      default contains "joggers", default contains "or", default contains "white", 
+      default contains phrase("nike", "s"), default contains "reeboks"
+    )
+  );
+</pre>
+<p>We specify that the target number of hits (top k) should be 200 (Default 100) and this number is used per content node. 
+In the case of weakAnd Vespa returns a total of 3342 documents (Out of the actual 462,857 matching the logical disjunction). 
+Those 3342 documents are evaluated using the configured <em>first-phase</em> ranking expression
+as configured in the rank-profile used. The weakAnd implementation scores documents by 
+a simplified scoring function which uses two core text rank features: </p>
+<ul>
+<li><a href="reference/rank-features.html#term(n).significance">term(n).significance</a></li>
+<li><a href="reference/rank-features.html#term(n).weight">term(n).weight</a></li>
+</ul>
+<p>Both features could be overridden in the query using <a href="reference/query-language-reference.html#annotations">annotations</a>:</p>
+<pre>
+
+select * from blog_post where (
+  [{"targetNumHits": 200}] 
+    weakAnd(
+      default contains "blog", default contains "about", default contains ([{"weight":200}]"adidas")
+    )
+  );
+</pre>
+
+<p>The inner scoring function of the <em>weakAnd</em> operator is:
+<pre>
+rank_score = sum_n(term(n).significance * term(n).weight) 
+</pre>
+<p>Documents that could not potentially complete with any of the hits already in heap of top hits(targetNumHits) are skipped and weak a/, 
+the weakAnd implementation exposes all hits which were evaluated and not only the top k heap.   
+
+<h3 id="weakAnd-limitations">Limitations of weakAnd</h3>
+<p>In the <a href="tutorials/blog-search.html#blog-popularity-signal">blog search tutorial</a> a document <em>popularity</em> ranking feature is introduced and which is used in the
+<em>first-phase</em> ranking function in addition to text matching features:
+<pre>
+rank-profile post_popularity inherits default {
+    first-phase {
+        expression: nativeRank(title, content) + 10 * if(isNan(attribute(popularity)), 0, attribute(popularity))
+    }
+}
+</pre>
+<p>As described earlier the <em>weakAnd</em> inner ranking function is only considering the <em>term(n).weight</em>and <em>term(n).significance</em> and is
+has no knowledge of the <em>first-phase</em> function inA use and with the above ranking function the correlation between the simple inner weakAnd scoring and the first phase function would be weak
+and the most popular blog posts might not appear at all in the top k weakAnd scored hits.</p> 
+
+<h3 id="weakAnd">Benefits of weakAnd</h3>
+<p>It's accepts any field and query terms can search different fields and has great performance. It's integrated with linguistics so whatever stemming and linguistic settings is configured is applied
+including also bolding of query terms and also using the same query terms for other more advanced ranking expressions like nativeRank/nativeFieldMatch. </p> 
+
+
+<h2 id="using-wand">Using the parallel wand (YQL wand()) query operator</h2>
+<p>The <em>wand</em> operator works over a single field only and it accepts a list of features or pre-processed text tokens with weights. It allows full control over both query side weights and document side weights and 
+it's guaranteed that it will find the top K best hits ranked by the dotProduct between the query and the document side feature vectors. 
+See <a href="advanced-ranking.html">Advanced ranking</a> documentation on how to use the wand operator. Note that this operator does not integrate with <a href="linguistics.html">linguistic processing</a>. The Vespa <em>rank()</em> query
+operator can be used to create a query tree which includes a bag of features used in the wand for recall and also other query terms to produce ranking features for first-phase/second-phase ranking. Building on the example in <a href="advanced-ranking.html">Advanced ranking</a> the below uses the <em>rank</em> operator to pass a query term searching the title field for phrase. This phrase does not impact recall but creates ranking features for first-phase or second-phase ranking.</p>
+
+<pre>
+select ignoredfield from ignoredsource where rank(
+    ([ {"targetNumHits": 25} ]
+      wand(car_types, {"pagani":400,"lamborghini":300,"maserati":250,"ferrari":150,"lancia":50,"alfa":40,"fiat":30})),
+      title contains phrase("italian", "car","makers"));
+</pre>
+
+   
+
+
+
+
+
