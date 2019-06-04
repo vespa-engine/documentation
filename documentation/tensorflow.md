@@ -5,7 +5,7 @@ title: "Ranking with TensorFlow Models"
 
 Vespa has support for advanced ranking models through it's tensor API. If
 you have models that are trained in TensorFlow, Vespa can import the models
-and use them in ranking functions directly.
+and use them directly.
 
 ## Exporting models from TensorFlow
 

@@ -4,7 +4,7 @@ title: "Ranking with XGBoost Models"
 ---
 
 If you have models that are trained in XGBoost, Vespa can import the models
-and use them in ranking functions directly.
+and use them directly.
 
 ## Exporting models from XGBoost
 

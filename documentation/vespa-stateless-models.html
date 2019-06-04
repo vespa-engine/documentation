@@ -1,0 +1,82 @@
+---
+# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa stateless models"
+---
+
+<p>Some times it is useful to evaluate machine-learned models expressed in Vespa's native language
+in [stateless mode](stateless-mode-evaluation.html), i.e deploy a set of ranking expressions
+which can be invoked as functions in the container and are not tied to a document type.</p>
+
+<p>To do this, create a file containing ranking expressions ending by ".model"
+below the models/ directory in your application package:</p>
+
+
+<pre>
+├── models
+│   └── my_model.model
+└── services.xml
+</pre>
+
+<p>An example can be found in the
+    <a href="https://github.com/vespa-engine/system-test/tree/master/tests/container/model_evaluation/app">model-evaluation system test</a></p>
+
+<h2 id="model-example">.model example</h2>
+
+<p>A complete example. This file must be saved as <code>example.model</code> somewhere below the <code>models/</code> directory, and the same
+directory must also contain a file <code>constant1asLarge.json</code> containing a tensor on JSON format.</p>
+
+<pre>
+model example {
+
+    # All inputs that are not scalar (aka 0-dimensional tensor) must be declared
+    input1: tensor(name{}, x[3])
+    input2: tensor(x[3])
+
+    constants {
+        constant1: tensor(x[3]):{{x:0}:0.5, {x:1}:1.5, {x:2}:2.5}
+        constant2: 3.0
+    }
+
+    # Constant managed as a separate file
+    constant constant1asLarge {
+        type: tensor(x[3])
+        file: constant1asLarge.json
+    }
+
+    function foo1() {
+        expression: reduce(sum(input1 * input2, name) * constant1, max, x) * constant2
+    }
+
+    function foo2() {
+        expression: reduce(sum(input1 * input2, name) * constant1asLarge, max, x) * constant2
+    }
+
+}
+</pre>
+
+<p>It causes the model "example" to be available with the two functions "foo1" and "foo2".</p>
+
+<h2 id="model-file-format-specification">.model file format specification</h2>
+
+<pre>
+model [name] {
+
+    ([input-argument-name]: [<a href="reference/tensor.html#tensor-type-spec">input-argument-type</a>])*
+    
+    contants {
+        ([constant-name]: [scalar or <a href="reference/tensor.html#tensor-literal-form">tensor in literal form</a>])*
+    }
+    
+    (constant [name] {
+        type: [<a href="reference/tensor.html#tensor-type-spec">tensor-type-spec</a>]]
+        file: [file path relative to this .model file]
+    })*
+    
+    (function [name]([argument-name]*) {
+        expression: [<a href="reference/ranking-expressions.html">ranking expression</a>]
+    })*
+
+}
+</pre>
+
+<p>The elements can appear in any order (and number).</p>
