@@ -22,12 +22,12 @@ Tensors can have any order:
 
 Tensors consist of a set of double valued cells, with each cell having a unique address.
 A cell's address is specified by its index or label along all dimensions.
-The number of dimensions in a tensor is the _order_ of the tensor.
+The number of dimensions in a tensor is the _rank_ of the tensor.
 Each dimension can be either _mapped_ or _indexed_.
-Mapped dimensions have labels designating their address,
-while indexed dimensions have indices.
+Mapped dimensions are sparse and allow any label (string identifier) designating their address,
+while indexed dimensions use dense numberic indices starting at 0.
 
-Example: Using [literal form](reference/tensor.html), the tensor:
+Example: Using [literal form](reference/tensor.html#tensor-literal-form), the tensor:
 
     {
         {x:2, y:1}:1.0,
