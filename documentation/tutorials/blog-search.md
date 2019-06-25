@@ -386,8 +386,7 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 
 ### Track feeding progress
 
-Use the [Metrics API](../reference/metrics-health-format.html) to track number
-of documents indexed:
+Use the [Metrics API](../reference/metrics.html) to track number of documents indexed:
 
 <pre data-test="exec" data-test-assert-contains="content.proton.documentdb.documents.active">
 $ curl -s "http://localhost:19112/state/v1/metrics" | tr "," "\n" | grep -A 2 content.proton.documentdb.documents.active

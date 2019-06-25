@@ -1,10 +1,157 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Container Metrics"
+title: "Metrics"
 ---
 
-<p>Vespa reports a certain number of standard metrics. You can also set up
-Vespa to report your own custom metrics.</p>
+<p>
+Vespa processes expose APIs for <em>metrics</em> and <em>health</em>.
+Default port is 8080.
+The Health APIs is used for heartbeating.
+Use the Metrics API to integrate with graphing and alerting services.
+</p><p>
+To find metrics ports, use <code><a href="vespa-cmdline-tools.html#vespa-model-inspect">
+vespa-model-inspect</a> services</code> to find running services in a cluster, then
+<code><a href="vespa-cmdline-tools.html#vespa-model-inspect">
+vespa-model-inspect</a> service &lt;service name&gt;</code>
+to find ports for the given service (e.g. <em>searchnode</em>).
+</p>
+
+
+
+<h2 id="node-metrics-api">Node metrics API</h2>
+<p>
+The node's metrics are available at <em>http://host:19092/metrics/v1/values</em>.
+This is a subset of each process' metrics at <em>http://host:19092/state/v1/metrics</em> (below).
+Use the node metrics to integrate with monitoring systems.
+</p>
+
+
+
+<h2 id="health-api">Health API</h2>
+<p>
+Health status is found at <em>http://host:port/state/v1/health</em>
+</p><p>
+Example:
+<pre>
+{
+  "status" : {
+    "code" : "up",
+    "message" : "Everything ok here"
+  }
+}
+</pre>
+The status code can either be <code>up</code> or
+<code>down</code>. Status <code>up</code> means that the service is fully up,
+ready for serving traffic. If the page cannot be
+downloaded, a state of down is typically assumed.
+The message part is optional. Typically it is empty if the service is
+up, while it is set to a textual reason for why it is unavailable if
+that is the case.
+</p>
+
+
+
+<h2 id="metrics-api">Metrics API</h2>
+<p>
+Per-process metrics are found at <em>http://host:port/state/v1/metrics</em>
+</p><p>
+Metrics are reported in snapshots, where the snapshot specifies the
+time window the metrics
+are gathered from. Typically, the service will aggregate metrics as
+they are reported, and after each snapshot period, a snapshot is taken
+of the current values and they are reset. Using this approach,
+min and max values are tracked, and enables values like
+95% percentile for each complete snapshot period.
+</p><p>
+The from and to times are specified in seconds since 1970.
+Milliseconds or microseconds can be added as decimals.
+</p><p>
+Vespa supports <a href="#metrics-from-custom-components">custom metrics</a>.
+</p>
+<p>
+Example:
+<pre>
+{
+  "status" : {
+    "code" : "up",
+    "message" : "Everything ok here"
+  },
+  "metrics" : {
+    "snapshot" : {
+      "from" : 1334134640.089,
+      "to" : 1334134700.088,
+    },
+    "values" : [
+      {
+        "name" : "queries",
+        "description" : "Number of queries executed during snapshot interval",
+        "values" : {
+          "count" : 28,
+          "rate" : 0.4667
+        },
+        "dimensions" : {
+          "searcherid" : "x"
+        }
+      },
+      {
+        "name" : "query_hits",
+        "description" : "Number of documents matched per query during snapshot interval",
+        "values" : {
+          "count" : 28,
+          "rate" : 0.4667,
+          "average" : 128.3,
+          "min" : 0,
+          "max" : 10000,
+          "sum" : 3584,
+          "median" : 124.0,
+          "std_deviation": 5.43
+        },
+        "dimensions" : {
+          "searcherid" : "x"
+        }
+      }
+    ]
+  }
+}
+</pre>
+A flat list of metrics is returned. Each metric value reported by a component
+should be a separate metric. For related metrics,
+prefix metric names with common parts and dot separate the names -
+e.g. <code>memory.free</code> and <code>memory.virtual</code>.
+Each metric have one or more values set - valid values:
+</p>
+<table class="table">
+<thead>
+</thead><tbody>
+<tr>
+  <th>count</th>
+  <td>Number of times metric has been set. For instance in a count
+      metric counting number of operations done, it will annotate the
+      number of operations added for that snapshot period. For a value
+      metric, for instance setting latency of operations, the count
+      will set how many times latencies have been added to the
+      metric.</td>
+</tr><tr>
+  <th>average</th>
+  <td>The average of all the values gotten during a snapshot
+      period. Typically sum divided by count.</td>
+</tr><tr>
+  <th>rate</th>
+  <td>count/s.</td>
+</tr><tr>
+  <th>min</th>
+  <td>The smallest value seen in this snapshot period.</td>
+</tr><tr>
+  <th>max</th>
+  <td>The largest value seen in this snapshot period.</td>
+</tr><tr>
+  <th>sum</th>
+  <td>The total value seen in this snapshot period.</td>
+</tr>
+</tbody>
+</table>
+
+
 
 <h2 id="metrics-from-custom-components">Metrics from custom components</h2>
 <ol>
@@ -58,7 +205,7 @@ public class HitCountSearcher extends Searcher {
     }
 }
 </pre>
-Then look at the <a href="../reference/metrics-health-format.html#metrics-api">Metrics API</a>
+Then look at the <em>Metrics API</em>
 where the new event <em>example_hitcounts</em> is available in the list of metrics.
 The histograms for the last five minutes of logged data are available as CSV per
 dimension at <em>http://host:port/state/v1/metrics/histograms</em>.
@@ -72,8 +219,7 @@ that library generates itself.
 
 <h2 id="http-server-metrics">Http Server metrics</h2>
 <p>
-The metrics from the built-in HTTP server are available in JSON using the
-<a href="../reference/metrics-health-format.html">metrics API</a>.
+The metrics from the built-in HTTP server are available in JSON using the <em>metrics API</em>.
 </p><p>
 The Container HTTP server is based on Jetty.
 Some of the metrics are gathered from the Jetty <code>StatisticsHandler</code>
@@ -85,7 +231,6 @@ for compatibility with different metrics frameworks.
 In <em>services.xml</em>-terminology, a <code>server</code> means a Jetty connector,
 while there is always only one Jetty server per node in a JDisc cluster.
 </p>
-
 
 
 <h3 id="server-wide-metrics">Server-wide Metrics</h3>
@@ -155,23 +300,19 @@ These metrics are output for each connector in the Jetty server.
   </thead><tbody>
     <tr>
       <td>serverNumConnections</td>
-      <td>See Jetty <a
-        href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+      <td>See Jetty <a href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
       </a></td>
     </tr><tr>
       <td>serverNumOpenConnections</td>
-      <td>See Jetty <a
-        href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+      <td>See Jetty <a href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
       </a></td>
     </tr><tr>
       <td>serverConnectionsOpenMax</td>
-      <td>See Jetty <a
-        href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+      <td>See Jetty <a href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
       </a></td>
     </tr><tr>
       <td>serverConnectionDurationMean, -Max, -StdDev</td>
-      <td>See Jetty <a
-        href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+      <td>See Jetty <a href="http://download.eclipse.org/jetty/stable-9/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
       </a></td>
     </tr><tr>
       <td>serverNumRequests, jdisc.http.requests</td>
