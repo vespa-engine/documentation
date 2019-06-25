@@ -3,59 +3,35 @@
 title: "Testing"
 ---
 
-
-<h2>Using Application </h2>
+<h2 id="unit-testing-using-application">Unit testing using Application</h2>
 <p>
-Notice the <code>com.yahoo.application.container.JDisc</code> class that is accessed by
-the test through <code>app.getJDisc(clusterName)</code>. That class has methods for
-exercising all common <a href="component-types.html">component types</a>.
+The <code><a href="http://javadoc.io/page/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html">
+Application</a></code> class is useful when writing unit tests.
+Application uses the application package configuration and set up a container instance for testing.
+The <code><a href="http://javadoc.io/page/com.yahoo.vespa/application/latest/com/yahoo/application/container/JDisc.html">
+JDisc</a></code> class that is accessed by
+the test through <code><a href="https://javadoc.io/page/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html#getJDisc-java.lang.String-">app.getJDisc(clusterName)</a></code> -
+this class has methods for using all common <a href="component-types.html">component types</a>.
 </p><p>
-Notice how the the test disables the network layer in the call to the
-<code>Application</code> factory method. Unit tests should disable
-the network to allow tests to be run in parallel. However, to have the JDisc
-Container bind to the appropriate network sockets, the network needs to be enabled.
+Refer to <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-java/src/test/java/com/mydomain/example/MetalSearcherTest.java">
+MetalSearcherTest.java</a> for example use.
+Notice how the the test disables the network layer in order to run tests in parallel.
 </p><p>
-Using Application instantiates the Container
-and lets you run requests using a browser or HTTP client,
-by enabling the network interface:
+<strong>Pro Tip:</strong> For prototyping, enable the network interface,
+instantiate the Container and run requests using a browser:
 <pre>
 public class ApplicationMain {
-
   @Test
   public static void main(String[] args) throws Exception {
     try (com.yahoo.application.Application app = com.yahoo.application.Application.fromApplicationPackage(
         FileSystems.getDefault().getPath("src/main/application"),
         Networking.enable)) {
-      app.getClass(); // throws NullPointerException
+      app.getClass();
       Thread.sleep(Long.MAX_VALUE);
     }
   }
 }
 </pre>
-Run/debug this, and it will invoke the plugins as configured.
-Most often, you will write tests like:
-<pre>
-import java.io.File;
-import org.junit.Test;
-import com.yahoo.application.Application;
-import com.yahoo.search.Query;
-
-public class ApplicationTest {
-
-  @Test
-  public void testContainerApplicationWithReferencedContentCluster() throws Exception {
-    try (Application application =
-        Application.fromApplicationPackage(new File("myapplication/"),
-        Networking.disable) ) {
-      byte[] response = application.getJDisc("foo").search().processAndRender(chainId, rendererId,
-      new Query("?query=foo"));
-      ...
-    }
-  }
-}
-</pre>
-Disabling the network interface eliminates port conflicts,
-and tests can be run in parallel.
 </p>
 
 
@@ -208,3 +184,28 @@ public class DemoTest {
 
 }
 </pre>
+
+
+
+<h2 id="system-tests">System tests</h2>
+<p>
+A System Test is a test that tests a full Vespa application, using its endpoints.
+A System Test is invoked before a change to the production environment:
+<ol>
+  <li>Application package deployment</li>
+  <li>Vespa software upgrade</li>
+</ol>
+Vespa System Tests use <a href="https://junit.org/junit5/">JUnit 5</a> annotations.
+Tests are annotated with <code>@Test</code> as unit tests.
+The test class must be annotated with <code>@Tag("SystemTest")</code>
+to be a System Test class (and hence invoked in correct phase).
+See <code>test.categories</code> in the example
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-java/pom.xml">
+pom.xml</a> for details. To run a system test:
+<ol>
+  <li>Deploy the application, make note of endpoints</li>
+  <li>Update <code>test-config</code> ToDo: update filename</li>
+  <li>Run tests using <pre>$ mvn test -Dtest.categories=SystemTest</pre></li>
+</ol>
+Automate these steps for deployments, and/or run manually when developing System Tests.
+</p>
