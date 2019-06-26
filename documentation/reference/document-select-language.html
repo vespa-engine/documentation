@@ -103,6 +103,14 @@ addition <code>+</code> and subtractions <code>-</code> have lowest precedence.
         used to match all/nothing</td>
   </tr>
   <tr>
+    <td>Null constant</td>
+    <td>Referencing a field that is not present in a document returns a special <code>null</code> value.
+        The expression <code>music.title</code> is shorthand for <code>music.title != null</code>.
+        There are potentially subtle interactions with null values when used with comparisons, see
+        <a href="#comparisons-with-missing-fields-null-values">comparisons with missing fields (null values)</a>.
+    </td>
+  </tr>
+  <tr>
     <td>Document type</td>
     <td>A document type can be used as a primitive to select a given type of
         documents</td>
@@ -178,7 +186,45 @@ All the operators are infix and take two arguments.
 </table>
 </p>
 
-<h4>Locale / Character sets</h4>
+<h4 id="comparisons-with-missing-fields-null-values">Comparisons with missing fields (null values)</h4>
+<p>
+The only comparison operators that are well-defined when one or both operands may be <code>null</code>
+(i.e. field is not present) are <code>==</code> and <code>!=</code>. Using any other comparison operators
+on a <code>null</code> value will yield a special invalid value.
+</p>
+<p>
+Invalid values may "poison" any logical expression they are part of:
+</p>
+<ul>
+  <li><code>AND</code> returns invalid if none of its operands are false and at least one is invalid</li>
+  <li><code>OR</code> returns invalid if none of its operands are true and at least one is invalid</li>
+  <li><code>NOT</code> returns invalid if the operand is invalid</li>
+</ul>
+<p>
+If an invalid value is propagated as the root result of a selection expression, the document is
+not considered a match. This is usually the behavior you want; if a field does not exist, any selection
+requiring it should not match either.
+</p>
+<p>
+One example where this may have <em>unexpected</em> behavior:
+</p>
+<ol>
+  <li>You have many documents of type <code>foo</code> already fed into a cluster.</li>
+  <li>You add a new field <code>expires_at_time</code> to the document type and update a subset of the
+      documents that you wish to keep.</li>
+  <li>You add a garbage collection selection to the <code>foo</code> document declaration to only
+      keep non-expired documents: <code>foo.expires_at_time > now()</code></li>
+</ol>
+<p>
+At this point, the old documents that <em>do not</em> contain an <code>expires_at_time</code> field will <em>not</em>
+be removed, as the expression will evaluate to invalid instead of <code>false</code>.
+</p>
+<p>
+To work around this issue, "short-circuiting" using a field presence check may be used:
+<code>foo.expires_at_time and foo.expires_at_time > now()</code>.
+</p>
+
+<h3>Locale / Character sets</h3>
 <p>
 The language currently does not support character sets other than ASCII.
 Glob and regex matching of single characters are not guaranteed to match exactly one character,
