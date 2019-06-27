@@ -1,0 +1,360 @@
+---
+# Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "BM25 Reference"
+---
+
+<p>
+The
+<a href="rank-features.html#bm25">bm25 rank feature</a>
+implements the
+<a href="https://en.wikipedia.org/wiki/Okapi_BM25">Okapi BM25</a>
+ranking function used to estimate the relevance of a text document given a search query.
+It is a pure text ranking feature which operates over an
+<a href="search-definitions-reference.html#indexing-index">indexed string field</a>.
+The feature is very cheap to compute, about 3-4 times faster than
+<a href="nativerank.html">nativeRank</a>,
+while still providing a good rank score quality wise.
+It is a good candidate to use in a first phase ranking function when ranking text documents.
+</p>
+
+
+<h2 id="ranking-function">Ranking function</h2>
+<p>
+The <em>bm25</em> feature calculates a score for how good a query with terms
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+  <semantics>
+    <mrow>
+      <msub>
+      <mi>q</mi>
+      <mi>1</mi>
+      </msub>
+      <mo>,</mo>
+      <mo>.</mo>
+      <mo>.</mo>
+      <mo>.</mo>
+      <mo>,</mo>
+      <msub>
+      <mi>q</mi>
+      <mi>n</mi>
+      </msub>
+    </mrow>
+  </semantics>
+</math>
+matches an indexed string field <em>t</em> in a document <em>D</em>.
+The score is calculated as follows:
+</p>
+
+</p>
+<figure>
+  <div>
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="block">
+      <semantics>
+        <mrow>
+          <munderover>
+            <mo>&Sum;</mo>
+            <mi>i</mi>
+            <mi>n</mi>
+          </munderover>
+          <mi>I</mi>
+          <mi>D</mi>
+          <mi>F</mi>
+          <mrow>
+            <mo>(</mo>
+            <msub>
+              <mi>q</mi>
+              <mi>i</mi>
+            </msub>
+            <mo>)</mo>
+          </mrow>
+          <mo>&#x22C5;<!--MULTIPLICATION SIGN--></mo>
+          <mfrac>
+            <mrow>
+              <mi>f</mi>
+              <mo>(</mo>
+              <msub>
+                <mi>q</mi>
+                <mi>i</mi>
+              </msub>
+              <mo>,</mo>
+              <mi>D</mi>
+              <mo>)</mo>
+              <mo>&#x22C5;<!--MULTIPLICATION SIGN--></mo>
+              <mo>(</mo>
+              <msub>
+                <mi>k</mi>
+                <mn>1</mn>
+              </msub>
+              <mo>+</mo>
+              <mn>1</mn>
+              <mo>)</mo>
+            </mrow>
+            <mrow>
+              <mi>f</mi>
+              <mo stretchy="false">(</mo>
+              <msub>
+                <mi>q</mi>
+                <mi>i</mi>
+              </msub>
+              <mo>,</mo>
+              <mi>D</mi>
+              <mo stretchy="false">)</mo>
+              <mo>+</mo>
+              <msub>
+                <mi>k</mi>
+                <mn>1</mn>
+              </msub>
+              <mo>&#x22C5;<!--MULTIPLICATION SIGN--></mo>
+              <mo>(</mo>
+              <mn>1</mn>
+              <mo>-</mo>
+              <mi>b</mi>
+              <mo>+</mo>
+              <mi>b</mi>
+              <mo>&#x22C5;<!--MULTIPLICATION SIGN--></mo>
+              <mfrac>
+                <mrow>
+                  <mi>f</mi>
+                  <mi>i</mi>
+                  <mi>e</mi>
+                  <mi>l</mi>
+                  <mi>d</mi>
+                  <mi>_</mi>
+                  <mi>l</mi>
+                  <mi>e</mi>
+                  <mi>n</mi>
+                </mrow>
+                <mrow>
+                  <mi>a</mi>
+                  <mi>v</mi>
+                  <mi>g</mi>
+                  <mi>_</mi>
+                  <mi>f</mi>
+                  <mi>i</mi>
+                  <mi>e</mi>
+                  <mi>l</mi>
+                  <mi>d</mi>
+                  <mi>_</mi>
+                  <mi>l</mi>
+                  <mi>e</mi>
+                  <mi>n</mi>
+                </mrow>
+              </mfrac>
+              <mo>)</mo>
+            </mrow>
+          </mfrac>
+        </mrow>
+      </semantics>
+    </math>
+  </div>
+</figure>
+
+Where the components in the function are:
+</p>
+<ul>
+  <li>
+    <p>
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+      <semantics>
+        <mrow>
+          <mi>I</mi>
+          <mi>D</mi>
+          <mi>F</mi>
+          <mo>(</mo>
+          <msub>
+            <mi>q</mi>
+            <mi>i</mi>
+          </msub>
+          <mo>)</mo>
+        </mrow>
+      </semantics>
+    </math>: The
+    <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Inverse_document_frequency">inverse document frequency</a>
+    (<em>IDF</em>) of query term <em>i</em> in field <em>t</em>. This is calculated as:
+    <figure>
+      <div>
+        <math xmlns="http://www.w3.org/1998/Math/MathML" display="block">
+          <semantics>
+            <mrow>
+              <mi>l</mi>
+              <mi>o</mi>
+              <mi>g</mi>
+              <mo>(</mo>
+              <mn>1</mn>
+              <mo>+</mo>
+              <mfrac>
+                <mrow>
+                  <mi>N</mi>
+                  <mo>-</mo>
+                  <mi>n</mi>
+                  <mo>(</mo>
+                  <msub>
+                    <mi>q</mi>
+                    <mi>i</mi>
+                  </msub>
+                  <mo>)</mo>
+                  <mo>+</mo>
+                  <mn>0.5</mn>
+                </mrow>
+                <mrow>
+                  <mi>n</mi>
+                  <mo>(</mo>
+                  <msub>
+                    <mi>q</mi>
+                    <mi>i</mi>
+                  </msub>
+                  <mo>)</mo>
+                  <mo>+</mo>
+                  <mn>0.5</mn>
+                </mrow>
+              </mfrac>
+              <mo>)</mo>
+            </mrow>
+          </semantics>
+        </math>
+      </div>
+    </figure>
+    <em>N</em> is the total number of documents on the content node.
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+      <semantics>
+        <mrow>
+          <mi>n</mi>
+          <mo>(</mo>
+          <msub>
+            <mi>q</mi>
+            <mi>i</mi>
+          </msub>
+          <mo>)</mo>
+        </mrow>
+      </semantics>
+    </math>
+    is the number of documents containing query term <em>i</em> for field <em>t</em>,
+    which is calculated per index existing for that field.
+    The max value among the indexes is used in the calculation,
+    which typically comes from the largest <a href="../proton.html#index">disk index</a>.
+    </p>
+    <p>
+    As the <em>IDF</em> is calculated per content node and index, slight variations might occur.
+    To use the same <em>IDF</em> across all content nodes, set it as the <em>significance</em>
+    on each query term using <a href="query-language-reference.html#annotations">annotations</a>.
+    </p>
+  </li>
+  <li>
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+      <semantics>
+        <mrow>
+          <mi>f</mi>
+          <mo>(</mo>
+          <msub>
+            <mi>q</mi>
+            <mi>i</mi>
+          </msub>
+          <mo>,</mo>
+          <mi>D</mi>
+          <mo>)</mo>
+        </mrow>
+      </semantics>
+    </math>: The number of occurrences (term frequency) of query term <em>i</em>
+    in the field <em>t</em> of document <em>D</em>.
+    For multi-value fields we use the sum of occurrences over all elements.
+  </li>
+  <li>
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+      <semantics>
+        <mrow>
+          <mi>f</mi>
+          <mi>i</mi>
+          <mi>e</mi>
+          <mi>l</mi>
+          <mi>d</mi>
+          <mi>_</mi>
+          <mi>l</mi>
+          <mi>e</mi>
+          <mi>n</mi>
+        </mrow>
+      </semantics>
+    </math>: The field length (in number of words) of field <em>t</em> in document <em>D</em>.
+    For multi-value fields we use the sum of field lengths over all elements.
+  </li>
+  <li>
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+      <semantics>
+        <mrow>
+          <mi>a</mi>
+          <mi>v</mi>
+          <mi>g</mi>
+          <mi>_</mi>
+          <mi>f</mi>
+          <mi>i</mi>
+          <mi>e</mi>
+          <mi>l</mi>
+          <mi>d</mi>
+          <mi>_</mi>
+          <mi>l</mi>
+          <mi>e</mi>
+          <mi>n</mi>
+        </mrow>
+      </semantics>
+    </math>: The average field length of field <em>t</em> among the documents on the content node.
+  </li>
+  <li>
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+      <semantics>
+        <mrow>
+          <msub>
+            <mi>k</mi>
+            <mn>1</mn>
+          </msub>
+        </mrow>
+      </semantics>
+    </math>: A parameter used to limit how much a single query term can affect the score for document <em>D</em>.
+    With a higher value the score for a single term can continue to go up relatively more
+    when more occurrences for that term exists. Default value is 1.2.
+    Can be configured using
+    <a href="rank-feature-configuration.html#bm25">rank-properties</a>.
+  </li>
+  <li>
+    <math xmlns="http://www.w3.org/1998/Math/MathML" display="inline">
+      <semantics>
+        <mrow>
+          <mi>b</mi>
+        </mrow>
+      </semantics>
+    </math>: A parameter used to control the effect of the field length of field <em>t</em>
+    compared to the average field length. Default value is 0.75.
+    Can be configured using
+    <a href="rank-feature-configuration.html#bm25">rank-properties</a>.
+  </li>
+</ul>
+
+
+<h2 id="example">Example</h2>
+<p>
+In the following example we have an indexed string field <em>content</em>,
+and a rank profile using the <em>bm25</em> rank feature.
+Note that the field must be enabled for usage with the bm25 feature
+by setting the <em>enable-bm25</em> flag in the
+<a href="search-definitions-reference.html#index">index</a>
+section of the field definition.
+</p>
+
+<p>
+<pre>
+search example {
+  document example {
+    field content type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+  }
+  rank-profile default {
+    first-phase {
+      expression {
+        bm25(content)
+      }
+    }
+  }
+}
+</pre>
+</p>
+
+
