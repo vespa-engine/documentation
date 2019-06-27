@@ -4,32 +4,67 @@ title: "Metrics"
 ---
 
 <p>
-Vespa processes expose APIs for <em>metrics</em> and <em>health</em>.
-Default port is 8080.
-The Health APIs is used for heartbeating.
-Use the Metrics API to integrate with graphing and alerting services.
-</p><p>
-To find metrics ports, use <code><a href="vespa-cmdline-tools.html#vespa-model-inspect">
-vespa-model-inspect</a> services</code> to find running services in a cluster, then
-<code><a href="vespa-cmdline-tools.html#vespa-model-inspect">
-vespa-model-inspect</a> service &lt;service name&gt;</code>
-to find ports for the given service (e.g. <em>searchnode</em>).
+Vespa exposes APIs for service <em>metrics</em> and <em>health</em>. The <a
+href="#node-metrics-api">node metrics API</a> allows the user to conveniently integrate
+with graphing and alerting services. Each service also exposes health status and all
+its metrics from the <a href="#health-api">process health api</a> and
+<a href="#metrics-api">process metrics api</a> respectively.
+
+</p>
+
+<h2 id="node-metrics-api">Node Metrics API</h2>
+<p>
+To simplify the integration with monitoring systems, Vespa is running a <em>metrics
+proxy</em> on each node. The metrics proxy exposes a selected set of metrics from each
+service running on the node, at <em>http://host:19092/metrics/v1/values</em>.
+The Vespa team has created an integration for Datadog which is currently in beta.
+</p>
+
+<p>
+The output from the node metrics API is a list of <code>service</code> elements, each
+containing the name, status and metrics for that service. Example:
+<pre>
+{
+  "services": [
+    {
+      "name": "vespa.logd",
+      "timestamp": 1561469256,
+      "status": {
+        "code": "up",
+        "description": "Data collected successfully"
+      },
+      "metrics": [
+        {
+          "values": {
+            "memory_virt": 111796224,
+            "memory_rss": 14086144,
+            "cpu": 1.0631117111036
+          },
+          "dimensions": {
+            "metrictype": "system",
+            "instance": "logd",
+            "vespaVersion": "7.0.0"
+          }
+        }
+      ]
+    },
+    ....
+  ]
+}
+</pre>
+</p>
+
+<p>
+The status for each service is either <code>up</code>,
+<code>down</code> or (in rare cases) <code>unknown</code>. The <code>unknown</code> status
+is for example used if the service seems to be alive, but does not report any metrics.
 </p>
 
 
-
-<h2 id="node-metrics-api">Node metrics API</h2>
+<h2 id="health-api">Process Health API</h2>
 <p>
-The node's metrics are available at <em>http://host:19092/metrics/v1/values</em>.
-This is a subset of each process' metrics at <em>http://host:19092/state/v1/metrics</em> (below).
-Use the node metrics to integrate with monitoring systems.
-</p>
-
-
-
-<h2 id="health-api">Health API</h2>
-<p>
-Health status is found at <em>http://host:port/state/v1/health</em>
+The Health APIs is most commonly used for heartbeating.
+Health status for each process is found at <em>http://host:port/state/v1/health</em>
 </p><p>
 Example:
 <pre>
@@ -51,10 +86,20 @@ that is the case.
 
 
 
-<h2 id="metrics-api">Metrics API</h2>
+<h2 id="metrics-api">Process Metrics API</h2>
 <p>
 Per-process metrics are found at <em>http://host:port/state/v1/metrics</em>
-</p><p>
+</p>
+
+<p>
+To find metrics ports, use <code><a href="vespa-cmdline-tools.html#vespa-model-inspect">
+vespa-model-inspect</a> services</code> to find running services in a cluster, then
+<code><a href="vespa-cmdline-tools.html#vespa-model-inspect">
+vespa-model-inspect</a> service &lt;service name&gt;</code>
+to find ports for the given service (e.g. <em>searchnode</em>).
+</p>
+
+<p>
 Metrics are reported in snapshots, where the snapshot specifies the
 time window the metrics
 are gathered from. Typically, the service will aggregate metrics as
