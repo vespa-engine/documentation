@@ -30,7 +30,7 @@ scripts to convert from the data set format to Vespa format. These are the
 use.
 
 When feeding reviews, there is a custom [document
-processor](https://docs.vespa.ai/documentation/document-processing-overview.html)
+processor](https://docs.vespa.ai/documentation/document-processing.html)
 that intercepts document writes and updates the parent item with the review
 rating, so the aggregated review rating is kept stored with the item. This is
 more an example of a custom document processor than a recommended way to do
@@ -50,7 +50,7 @@ not cause unexpected results.
     content cluster: item and review. Search is done on items, but reviews
     refer to a single parent item and are rendered on the item page.
 
-* [Custom document processor](https://docs.vespa.ai/documentation/document-processing-overview.html)
+* [Custom document processor](https://docs.vespa.ai/documentation/document-processing.html)
 
     In Vespa you can set up custom document processors to perform any type of
     extra processing during document feeding. One example is to enrich the
