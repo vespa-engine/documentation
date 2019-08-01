@@ -8,13 +8,18 @@ Indexing is the process of <a href="routing.html">routing</a> document writes to
 processing (indexing) documents and writing the documents to proton.
 </p><p>
 Refer to the <a href="overview.html">overview</a>.
+The primary index configuration is the <a href="search-definitions.html">search definition</a> -
+<a href="reference/services.html">services.xml</a> configures how indexing is distributed to the nodes.
+</p><p>
+This article documents the default indexing, how to configure indexing for different clusters,
+the different index and streaming modes and finally how to add custom document processing.
 </p>
 
 
 <h2 id="routing">Routing</h2>
 <p>
 A normal Vespa configuration has container and content cluster(s),
-with one or more document types defined in <a href="search-definitions.html">search definitions</a>.
+with one or more document types defined in <em>search definitions</em>.
 Routing document write hence means routing documents to the indexing container cluster,
 then content cluster.
 </p><p>
@@ -127,6 +132,10 @@ ilscript[0].content[5] "clear_state | guard { input year | summary year | attrib
 ilscript[0].content[6] "clear_state | guard { input popularity | summary popularity | attribute popularity; }"
 </pre>
 Refer to <a href="linguistics.html">linguistics</a> for more details.
+</p><p>
+By default, the indexing chain is set up on the <em>first</em> container cluster in <em>services.xml</em>.
+When having multiple container clusters, it is recommended to configure this explicitly, see
+<a href="#multiple-container-clusters">multiple container clusters</a>.
 </p>
 
 
@@ -134,11 +143,18 @@ Refer to <a href="linguistics.html">linguistics</a> for more details.
 <h2 id="document-selection">Document selection</h2>
 <p>
 The <a href="http://localhost:4000/documentation/reference/services-content.html#document">document</a>
-can have a <a href="reference/document-select-language.html">selection</a> string.
-This is used to expire documents, but also evaluated during feeding,
-so documents that would immediately expire are dropped.
+can have a <a href="reference/document-select-language.html">selection</a> string,
+normally used to expire documents.
+This is also evaluated during feeding, so documents that would immediately expire are dropped.
 This is not an error, the document API will report 200 - but can be confusing.
-Here, the selection is configured to not match the document being fed:
+</p><p>
+The evaluation is done in the
+<a href="https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/messagebus/protocol/DocumentRouteSelectorPolicy.java">
+DocumentRouteSelector</a> at the feeding endpoint - <em>before</em> any processing/indexing.
+I.e, the document is evaluated using the selection string (drop it or not),
+then where to route it, based on document type.
+</p><p>
+Example: the selection is configured to not match the document being fed:
 <pre>
 &lt;content id="music" version="1.0"&gt;
   &lt;redundancy&gt;1&lt;/redundancy&gt;
@@ -194,15 +210,70 @@ and the document was forward to the nex hop in the route.
 <h2 id="document-processing">Document processing</h2>
 <p>
 Add custom processing of documents using <a href="document-processing.html">document processing</a>.
+The normal use case is to add document processors in the default route, beforing indexing. Example:
+<pre>
+&lt;services version="1.0"&gt;
+
+  &lt;container id="container" version="1.0"&gt;
+    &lt;document-api /&gt;
+    &lt;search /&gt;
+    <span style="background-color: yellow;">&lt;document-processing&gt;
+        &lt;chain id="default"&gt;
+            &lt;documentprocessor id="com.mydomain.example.Rot13DocumentProcessor" bundle="basic-search-java" /&gt;
+        &lt;/chain&gt;
+    &lt;/document-processing&gt;</span>
+    &lt;nodes&gt;
+      &lt;node hostalias="node1" /&gt;
+    &lt;/nodes&gt;
+  &lt;/container&gt;
+
+  &lt;content id="music" version="1.0"&gt;
+    &lt;redundancy&gt;1&lt;/redundancy&gt;
+    &lt;documents&gt;
+      &lt;document >type="music" mode="index" /&gt;
+    &lt;/documents&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="node1" distribution-key="0" /&gt;
+    &lt;/nodes&gt;
+  &lt;/content&gt;
+
+&lt;/services&gt;
+</pre>
+Note that a new hop <em>default/chain.default</em> is added,
+and the default route is changed to include this:
+<pre>
+$ vespa-route
+
+There are 6 route(s):
+    1. default
+    2. default-get
+    3. music
+    4. music-direct
+    5. music-index
+    6. storage/cluster.music
+
+There are 3 hop(s):
+    1. default/chain.default
+    2. default/chain.indexing
+    3. indexing
+</pre>
+<pre>
+$ vespa-route --route default
+
+The route 'default' has 2 hop(s):
+    1. default/chain.default
+    2. indexing
+</pre>
+Note that the document processing chain must be called <em>default</em>
+to automatically be included in the default route.
 </p><p>
-Adding <em>document-processing</em> to container and content cluster does not change routing config.
 </p>
 
 
 
 <h2 id="streaming-search">Streaming Search</h2>
 <p>
-<a href="streaming-search.html">Streaming search</a> does not generate an index,
+<a href="streaming-search.html">Streaming search</a> does not generate posting lists,
 and the routing configuration is hence different, too - indexed search:
 <pre>
 $ vespa-route
@@ -272,11 +343,98 @@ Observe that the <em>DocumentRouteSelector</em> selects different
 
 
 
-<h2 id="using-default-names">Using "default" names</h2>
+<h2 id="multiple-container-clusters">Multiple container clusters</h2>
 <p>
-Something here on the <em>default</em> names and auto config generation etc
-</p>
+Vespa can be configured to use more than one container cluster.
+Use cases can be to separate search and document processing
+or having different document processing clusters due to capacity constraints, dependencies, etc.
+Example with separate search and feeding/indexing container clusters:
+<pre>
+&lt;services version="1.0"&gt;
+ 
+  &lt;container id="container-search" version="1.0"&gt;
+    &lt;search /&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="node1" /&gt;
+    &lt;/nodes&gt;
+  &lt;/container&gt;
+  
+  &lt;container <span style="background-color: yellow;">id="container-indexing"</span> version="1.0"&gt;
+    &lt;http&gt;
+      &lt;server id="httpServer2" port="8081" /&gt;
+    &lt;/http&gt;
+    <span style="background-color: yellow;">&lt;document-api /&gt;</span>
+    <span style="background-color: yellow;">&lt;document-processing /&gt;</span>
+    &lt;nodes&gt;
+      &lt;node hostalias="node1" /&gt;
+    &lt;/nodes&gt;
+  &lt;/container&gt;
 
+  &lt;content id="music" version="1.0"&gt;
+    &lt;redundancy&gt;1&lt;/redundancy&gt;
+    &lt;documents&gt;
+      &lt;document type="music" mode="index" /&gt;
+      <span style="background-color: yellow;">&lt;document-processing cluster="container-indexing" /&gt;</span>
+    &lt;/documents&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="node1" distribution-key="0" /&gt;
+    &lt;/nodes&gt;
+  &lt;/content&gt;
+
+&lt;/services&gt;
+</pre>
+Notes:
+<ul>
+    <li>
+      The indexing route is explicit using
+      <a href="#reference/services-content.html#document-processing">document-processing</a>
+      elements from the content to the container cluster
+    </li><li>
+      Set up <em>document-api</em> on the same cluster as indexing to avoid network hop
+      from feed endpoint to indexing processors
+    </li>
+</ul>
+Observe the <em>container-indexing/chain.indexing</em> hop,
+and the indexing chain is set up on the <em>container-indexing</em> cluster:
+<pre>
+$ vespa-route
+
+There are 6 route(s):
+    1. default
+    2. default-get
+    3. music
+    4. music-direct
+    5. music-index
+    6. storage/cluster.music
+
+There are 2 hop(s):
+    1. container-indexing/chain.indexing
+    2. indexing
+</pre>
+<pre>
+$ curl -s http://localhost:8081 | python -m json.tool | grep -C 3 chain.indexing
+
+        {
+            "bundle": "container-disc:7.0.0",
+            "class": "com.yahoo.messagebus.jdisc.MbusClient",
+            "id": "chain.indexing@MbusClient",
+            "serverBindings": []
+        },
+        {
+--
+            "class": "com.yahoo.docproc.jdisc.DocumentProcessingHandler",
+            "id": "com.yahoo.docproc.jdisc.DocumentProcessingHandler",
+            "serverBindings": [
+                "mbus://*/chain.indexing"
+            ]
+        },
+        {
+
+</pre>
+
+</p><p>
+
+</p>
 
 
 <h2 id="appendix-trace">Appendix: trace</h2>
