@@ -3,24 +3,31 @@
 title: "Stateless Model Evaluation"
 ---
 
-<p>Vespas speciality is evaluating machine-learned models quickly over large
-numbers of data points.  However, it can also be used to evaluate models once
-on request in stateless containers.  By enabling a feature in <a href="reference/services.xml">services.xml</a>,
+<p>
+Vespa's speciality is evaluating machine-learned models quickly over large numbers of data points.
+However, it can also be used to evaluate models once on request in stateless containers.
+By enabling a feature in <a href="reference/services.html">services.xml</a>,
 all machine-learned models -
-<a href="tensorflow.html">TensorFlow</a>, <a href="onnx.html">Onnx</a>, <a href="xgboost.html">XGBoost</a> and <a href="vespa-stateless-models.html">Vespa stateless models</a> -
-added to the <code>models/</code> directory of the <a href="reference/application-packages-reference.html">application package</a>,
-are made available through both a REST API and a Java API where you can compute inferences from your own code.</p>
-
-<p>An example application package can be found at in the
-    <a href="https://github.com/vespa-engine/system-test/tree/master/tests/container/model_evaluation/app">model-evaluation system test</a>.</p>
+<a href="tensorflow.html">TensorFlow</a>,
+<a href="onnx.html">Onnx</a>,
+<a href="xgboost.html">XGBoost</a> and
+<a href="vespa-stateless-models.html">Vespa stateless models</a> -
+added to the <code>models/</code> directory of the
+<a href="reference/application-packages-reference.html">application package</a>,
+are made available through both a REST API and a Java API
+where you can compute inferences from your own code.
+</p><p>
+An example application package can be found at in the
+<a href="https://github.com/vespa-engine/system-test/tree/master/tests/container/model_evaluation/app">
+model-evaluation system test</a>.
+</p>
 
 
 <h3 id="add-the-model-evaluation-tag">The model evaluation tag</h3>
-
-<p>To enable both the REST API and the Java API, add the <code>model-evaluation</code> tag
+<p>
+To enable both the REST API and the Java API, add the <code>model-evaluation</code> tag
 inside the <a href="jdisc/">container</a> clusters where
-it is needed in <a href="reference/services.html">services.xml</a>:</p>
-
+it is needed in <a href="reference/services.html">services.xml</a>:
 <pre>
 &lt;container&gt;
     ...
@@ -28,57 +35,66 @@ it is needed in <a href="reference/services.html">services.xml</a>:</p>
     ...
 &lt;/container&gt;
 </pre>
+</p>
+
+
 
 <h2 id="model-inference-using-the-rest-api">Model inference using the REST API</h2>
-
-<p>The simplest way to evaluate the model is to use the REST API. After
-enabling it as above, a new API path is made available:
-<code>/model-evaluation/v1/</code>. To discover and find information about the
-models (including expected input parameters to the model) in your application
-package simply follow the links from this root. To evaluate a model add <code>/eval</code>
-to the query path:</p>
-
+<p>
+The simplest way to evaluate the model is to use the REST API.
+After enabling it as above, a new API path is made available:
+<code>/model-evaluation/v1/</code>.
+To discover and find information about the models
+(including expected input parameters to the model) in your application package,
+simply follow the links from this root.
+To evaluate a model add <code>/eval</code> to the query path:
 <pre>
 http://host:port/model-evaluation/v1/&lt;model-name&gt;/&lt;function&gt;/eval?&lt;param1=...&gt;&amp;...
 </pre>
-
-<p>Here &lt;model-name&gt; signifies which model to evaluate as you can deploy
-multiple models in your application package. The &lt;function&gt; specifies
+Here &lt;model-name&gt; signifies which model to evaluate as you can deploy
+multiple models in your application package.
+The &lt;function&gt; specifies
 which signature and output to evaluate as a model might have multiple
-signatures and outputs you can evaluate. If a model only has one function, this
-can be omitted. Inputs to the model are specified as query parameters for GET
-requests and they can also be in the body part of the request for POST
-requests. The expected format for input parameters are tensors as specified
-with the <a href="reference/tensor.html">literal form</a>.</p>
+signatures and outputs you can evaluate.
+If a model only has one function, this can be omitted.
+Inputs to the model are specified as query parameters for GET
+requests and they can also be in the body part of the request for POST requests.
+The expected format for input parameters are tensors as specified
+with the <a href="reference/tensor.html">literal form</a>.
+</p><p>
+See the
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/model-evaluation">
+model-evaluation sample app</a> for an example of this.
+</p>
 
-<p>See the <a href="https://github.com/vespa-engine/sample-apps/tree/master/model-evaluation">model-evaluation sample app</a>
-for an example of this.</p>
+
 
 <h2 id="model-inference-using-java">Model inference using Java</h2>
-
-<p>While the REST API gives a basic interface to run model inference, the Java
-interface offers far more control allowing you to for instance implement custom
-input and output formats.</p>
-
-<p>First, add the following dependency in your <code>pom.xml</code>:</p>
-
+<p>
+While the REST API gives a basic interface to run model inference,
+the Java interface offers far more control
+allowing you to for instance implement custom input and output formats.
+</p><p>
+First, add the following dependency in <code>pom.xml</code>:
 <pre>
-    &lt;dependency&gt;
-        &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
-        &lt;artifactId&gt;container&lt;/artifactId&gt;
-        &lt;scope&gt;provided&lt;/scope&gt;
-    &lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+    &lt;artifactId&gt;container&lt;/artifactId&gt;
+    &lt;scope&gt;provided&lt;/scope&gt;
+&lt;/dependency&gt;
 </pre>
-
-<p>(Or, if you want the minimal dependency, depend on <code>model-evaluation</code> instead of <code>container</code>.)</p>
-
-<p>With the above dependency and the <code>model-evaluation</code> tag added to <code>services.xml</code>, you can
-now have your Java component that should evaluate models take a <code>ai.vespa.models.evaluation.ModelsEvaluator</code>
-(see <a href="https://github.com/vespa-engine/vespa/blob/master/model-evaluation/src/main/java/ai/vespa/models/evaluation/ModelsEvaluator.java">ModelsEvaluator.java</a>)
-instance as a constructor argument (Vespa will <a href="jdisc/injecting-components.html">automatically inject it</a>).</p>
-
-<p>Use the <code>ModelsEvaluator</code> API (from any thread) to make inferences. Sample code:</p>
-
+(Or, if you want the minimal dependency,
+depend on <code>model-evaluation</code> instead of <code>container</code>.)
+</p><p>
+With the above dependency and the <code>model-evaluation</code> element
+added to <code>services.xml</code>,
+you can now have your Java component that should evaluate models
+take a <code>ai.vespa.models.evaluation.ModelsEvaluator</code>
+(see <a href="https://github.com/vespa-engine/vespa/blob/master/model-evaluation/src/main/java/ai/vespa/models/evaluation/ModelsEvaluator.java">
+ModelsEvaluator.java</a>) instance as a constructor argument
+(Vespa will <a href="jdisc/injecting-components.html">automatically inject it</a>).
+</p><p>
+Use the <code>ModelsEvaluator</code> API (from any thread) to make inferences. Sample code:
 <pre>
 import ai.vespa.models.evaluation.ModelsEvaluator;
 import ai.vespa.models.evaluation.FunctionEvaluator;
@@ -103,9 +119,7 @@ evaluator.bind("myInput", input);
 Tensor result = evaluator.evaluate());
 
 // Do something with the result
-
 </pre>
-
-<p>The <a href="https://github.com/vespa-engine/sample-apps/tree/master/model-evaluation">model-evaluation sample app</a>
-also has an example of this.</p>
-
+The <a href="https://github.com/vespa-engine/sample-apps/tree/master/model-evaluation">
+model-evaluation sample app</a> also has an example of this.
+</p>

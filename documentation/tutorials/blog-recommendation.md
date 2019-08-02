@@ -398,7 +398,7 @@ the query in previous section).  The user profiles is fed to Vespa in the
 
 In short, set up a [searcher](../searcher-development.html) to retrieve the
 user profile by user id - then run the query.  When the [Vespa
-Container](../container-intro.html) receives a request, it will create a
+Container](../jdisc/index.html) receives a request, it will create a
 `Query` representing it and execute a configured list of such Searcher
 components, called a [search chain](../chained-components.html).  The `query`
 object contains all the information needed to create a result to the request
