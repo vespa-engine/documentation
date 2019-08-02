@@ -38,7 +38,7 @@ This may be implemented by e.g. iptables, AWS Security Groups or similar technol
 The entry point into your Vespa installation is port 8080 on hosts running the
 application container. This port is used for feed, document retrieval and search
 queries. It should only be exposed to an untrusted network if you have properly
-[secured your application container](#securing-the-application-container). It
+[secured the application container](#securing-the-application-container). It
 should never be exposed directly to external traffic. All traffic to the containers
 should be sent by your frontends or backends.
  
@@ -67,5 +67,3 @@ data under `$VESPA_HOME`. You should ensure the files and directories under
 your application.
  
 Vespa does not have support for encryption of on-disk document stores or indexes.
-
-
