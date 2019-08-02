@@ -4,39 +4,80 @@ title: "Document Processing"
 ---
 
 <p>
-The <em>Document Processing Framework</em> is the home for all global
-processing of Vespa input data (represented as Documents).
-It runs in the Container,
-and provides a development and hosting environment for processing <em>components</em>,
-and a model for composing such components developed by multiple development teams
-into a functional whole.
-</p><p>
-This document describes how to develop and deploy Document Processor components.
+This document describes how to develop and deploy Document Processor
+<a href="jdisc/container-components.html">components</a>.
 To get started with development,
 see <a href="getting-started-vespa-applications.html">Vespa Applications</a>.
+Read <a href="indexing.html">indexing</a> first to understand deployment and routing.
+As document processors are chained components just like Searchers,
+read <a href="searcher-development.html">Searcher Development</a>.
 For reference, see the
 <a href="http://javadoc.io/doc/com.yahoo.vespa/docproc">Javadoc</a>,
 and <a href="reference/services-docproc.html">services.xml</a>.
 </p><p>
-Vespa document processing is a flexible framework that allows one to
-create reusable components (called <em>document processors</em>), that
-read and modify document operations, and compose chains of many such
-components to carry out the total processing needs of an application.
+Vespa document processing is a framework to create components called <em>document processors</em>,
+that read and modify document operations,
+and compose <a href="chained-components.html">chains</a> of many such components.
 </p><p>
-The input source, typically a crawler, a stream of incoming mail, data
-generated from user actions, products or basically anything else, is able to
-split the input data into logical units, called <em>documents</em>.
+The input source, typically a crawler, a stream of incoming mail,
+data generated from user actions, products or basically anything else,
+splits the input data into logical units called <a href="documents.html">documents</a>.
 A <a href="writing-to-vespa.html">feeder application</a>
 will then send these documents into a document processing chain.
-</p><p>
-This chain is basically an ordered list of document processors,
+This chain is an ordered list of document processors,
 where each processor has one specific task.
 This can be anything - examples range from things like language detection,
 HTML removal and natural language processing to mail attachment processing,
 character set transcoding and image thumbnailing.
-</p><p>
 At the end of the processing chain, extracted data will typically be
 set in some fields in the document, which will continue into a Vespa Content node.
+</p>
+
+
+
+<h2 id="deploying-a-document-processor">Deploying a Document Processor</h2>
+<p>
+Refer to<a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search-java">
+Basic Search Java</a> to get started,
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-java/src/main/java/com/mydomain/example/Rot13DocumentProcessor.java">
+    Rot13DocumentProcessor.java</a> / <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-java/src/test/java/com/mydomain/example/Rot13DocumentProcessorTest.java">
+        Rot13DocumentProcessorTest.java</a> is a document processor example.
+
+
+The container will create one or more instances of this class
+and place it in the document processor chain(s) to process document operations.
+The container will create a new instance of this
+document processor only when it is reconfigured, so any data needed by
+the document processor can be read and prepared from a constructor.
+Constructors accept <a href="jdisc/container-components.html">configuration</a>,
+as any other pluggable component.
+</p><p>
+Once built, it can be deployed to the Vespa system which will host it.
+The document processor must be packaged as a bundle and added to the Vespa application package,
+which is then deployed.
+How to create a bundle is described in
+<a href="jdisc/developing-osgi-bundles.html">Building OSGi bundles</a>.
+To include the document processor in <a href="reference/services-docproc.html">services.xml</a>,
+define a document processing chain (here named <em>default</em>) and add document processor to it:
+<!-- ToDo: why call it default? routing goes to the default chain -->
+<pre>
+&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;services version="1.0"&gt;
+  &lt;admin version="2.0"&gt;
+    &lt;adminserver hostalias="node1" /&gt;
+  &lt;/admin&gt;
+  &lt;container version="1.0" id="default"&gt;
+    &lt;nodes&gt;
+      &lt;node hostalias="node1"/&gt;
+    &lt;/nodes&gt;
+<span style="background-color: yellow;">    &lt;document-processing&gt;
+      &lt;chain id="default"&gt;
+        &lt;documentprocessor id="com.yahoo.vespatest.Rot13DocumentProcessor"/&gt;
+      &lt;/chain&gt;
+    &lt;/document-processing&gt;</span>
+  &lt;/container&gt;
+&lt;/services&gt;
+</pre>
 </p>
 
 
@@ -193,189 +234,6 @@ particular message.
 The execution order of the document processors in a chain are not ordered explicitly,
 but by <a href="chained-components.html#ordering-components">ordering
 constraints</a> declared in the document processors or their configuration.
-</p>
-
-
-
-<h2 id="writing-a-document-processor">Writing a Document Processor</h2>
-<p>
-Refer to<a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search-java">
-Basic Search Java</a> to get started writing Vespa plugins from an
-<a href="cloudconfig/application-packages.html">application package</a>.
-This is an example of a complete document processor:
-<pre>
-package com.yahoo.vespatest;
-
-import com.yahoo.docproc.DocumentProcessor;
-import com.yahoo.docproc.Processing;
-import com.yahoo.document.Document;
-import com.yahoo.document.DocumentPut;
-import com.yahoo.document.DocumentOperation;
-import com.yahoo.document.datatypes.StringFieldValue;
-
-public class Rot13DocumentProcessor extends DocumentProcessor {
-    private static final String FIELD_NAME = "title";
-
-    @Override
-    public Progress process(Processing processing) {
-        for (DocumentOperation op : processing.getDocumentOperations()) {
-            if (op instanceof DocumentPut) {
-                DocumentPut put = (DocumentPut) op;
-                Document document = put.getDocument();
-
-                StringFieldValue oldTitle = (StringFieldValue) document.getFieldValue(FIELD_NAME);
-                if (oldTitle != null) {
-                    document.setFieldValue(FIELD_NAME, rot13(oldTitle.getString()));
-                }
-            }
-        }
-        return Progress.DONE;
-    }
-
-    private static String rot13(String s) {
-        StringBuilder output = new StringBuilder();
-        for (int i = 0; i &lt; s.length(); i++) {
-            char c = s.charAt(i);
-            if (c &gt;= 'a' && c &lt;= 'm' || c &gt;= 'A' && c &lt;= 'M') {
-                c += 13;
-            } else if (c &gt;= 'n' && c &lt;= 'z' || c &gt;= 'N' && c &lt;= 'Z') {
-                c -= 13;
-            }
-            output.append(c);
-        }
-        return output.toString();
-    }
-}
-</pre>
-This will compile if the container-dev.jar is in the class path -
-the <a href="bundle-plugin.html">bundle plugin</a> automates this.
-In production, the container will create one or more
-instances of this class and place it in the desired document processor
-chain(s) to process document operations, as specified
-in <a href="#deploying-a-document-processor">the configuration</a>.
-The container will create a new instance of this
-document processor only when it is reconfigured, so any data needed by
-the document processor can be read and prepared from a constructor.
-Constructors accept <a href="jdisc/container-components.html">configuration</a>,
-as any other pluggable component.
-</p><p>
-For reference, read the
-<a href="http://javadoc.io/doc/com.yahoo.vespa/docproc">Document Processing Javadoc</a>.
-</p>
-
-
-<h2 id="testing-a-document-processor">Testing a Document Processor</h2>
-<p>
-A document processor is tested running inside a container using <em>Application</em>:
-<pre>
-package com.yahoo.vespatest;
-
-import com.yahoo.application.ApplicationBuilder;
-import com.yahoo.application.Networking;
-import com.yahoo.application.container.DocumentProcessing;
-import com.yahoo.application.container.JDisc;
-import com.yahoo.component.ComponentId;
-import com.yahoo.component.ComponentSpecification;
-import com.yahoo.docproc.DocumentProcessor;
-import com.yahoo.document.Document;
-import com.yahoo.document.DocumentType;
-import com.yahoo.processing.execution.chain.ChainRegistry;
-import org.junit.Test;
-
-import java.io.IOException;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
-
-public class Rot13DocprocTest {
-
-    @Test
-    public void requireThatBasicDocumentProcessingWorksForDoc() throws IOException {
-        JDisc container = new ApplicationBuilder()
-                .servicesXml("&lt;container version=\"1.0\"&gt;\n" +
-                             "  &lt;document-processing&gt;\n" +
-                             "    &lt;chain id=\"myChain\"&gt;\n" +
-                             "      &lt;documentprocessor id=\"" +
-                             Rot13DocumentProcessor.class.getCanonicalName() + "\"/&gt;\n" +
-                             "    &lt;/chain&gt;\n" +
-                             "  &lt;/document-processing&gt;\n" +
-                             "&lt;/container&gt;\n")
-                .documentType("music",
-                              "document music {\n" +
-                              "  field title type string { }\n" +
-                              "}\n")
-                .networking(Networking.disable)
-                .build()
-                .getJDisc("jdisc");
-
-        DocumentProcessing docProc = container.documentProcessing();
-        DocumentType type = docProc.getDocumentTypes().get("music");
-
-        ChainRegistry&lt;DocumentProcessor&gt; chains = docProc.getChains();
-        assertTrue(chains.allComponentsById().containsKey(new ComponentId("myChain")));
-
-        Document doc = new Document(type, "id:test:music::this:is:a:great:album");
-        doc.setFieldValue("title", "Great Album!");
-        com.yahoo.docproc.Processing processing;
-        DocumentProcessor.Progress progress;
-
-        processing = new com.yahoo.docproc.Processing();
-        processing.addDocumentOperation(new DocumentPut(doc));
-        progress = docProc.process(ComponentSpecification.fromString("myChain"), processing);
-        assertThat(progress, sameInstance(DocumentProcessor.Progress.DONE));
-        assertThat(doc.getFieldValue("title").toString(), equalTo("Terng Nyohz!"));
-
-        container.close();
-    }
-}
-</pre>
-</p>
-
-
-
-<h2 id="deploying-a-document-processor">Deploying a Document Processor</h2>
-<p>
-Once the document processor passes unit tests, it can be deployed to
-the Vespa system which will host it. The document processor must be
-packaged as a bundle and added to the Vespa application package, which
-is then deployed. How to create a bundle is described
-in <a href="jdisc/developing-osgi-bundles.html">Building OSGi bundles</a>.
-To include the document processor in <a href="reference/services-docproc.html">services.xml</a>,
-define a document processing chain (here named <em>default</em>) and add document processor to it:
-<!-- ToDo: why call it default? routing goes to the default chain -->
-<pre>
-&lt;?xml version="1.0" encoding="utf-8"?&gt;
-&lt;services version="1.0"&gt;
-  &lt;admin version="2.0"&gt;
-    &lt;adminserver hostalias="node1" /&gt;
-  &lt;/admin&gt;
-  &lt;container version="1.0" id="default"&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias="node1"/&gt;
-    &lt;/nodes&gt;
-<span style="background-color: yellow;">    &lt;document-processing&gt;
-      &lt;chain id="default"&gt;
-        &lt;documentprocessor id="com.yahoo.vespatest.Rot13DocumentProcessor"/&gt;
-      &lt;/chain&gt;
-    &lt;/document-processing&gt;</span>
-  &lt;/container&gt;
-&lt;/services&gt;
-</pre>
-The document processor id above is resolved to the component bundle
-jar we added by the symbolic name in the manifest, and to the right
-class within the bundle by the class name. By keeping all these three
-the same, we keep things simple, but more advanced use where this is
-possible is also supported. This will be explained in later sections.
-</p><p>
-By creating a directory containing
-<a href="reference/services.html">services.xml</a>,
-<a href="reference/hosts.html">hosts.xml</a>
-and <em>components/rot13docproc.jar</em>,
-that directory becomes a complete application package containing a bundle.
-<a href="cloudconfig/application-packages.html#deploy">Deploy</a>
-this to a Vespa instance.
 </p>
 
 
