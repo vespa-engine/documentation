@@ -74,7 +74,7 @@ post_id's available in the current set, so that for each (user_id, post_id) row
 with label = 1 we will increase the dataset with N (user_id, post_id_fake) rows
 with label = 0.
 
-<!-- Pre computed dataset can be found [here](link here when published) and -->
+<!-- Pre computed dataset can be found here(link here when published) and -->
 Find code to generate the dataset in the [utility
 scripts](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#create-training-dataset).
 
