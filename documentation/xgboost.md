@@ -132,7 +132,7 @@ c.get_booster().dump_model("binary_breast_cancer.json", fmap='feature-map.txt', 
 c.predict_proba(breast_cancer.data)[:,1]
 ```
 
-To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa we need to use the built sigmoid function:
+To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa we need to use the [sigmoid function](reference/ranking-expressions.html):
 
 ```
 search xgboost {
