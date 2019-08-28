@@ -4,37 +4,69 @@ title: "Ranking with XGBoost Models"
 ---
 
 If you have models that are trained in XGBoost, Vespa can import the models
-and use them directly.
+and use them directly. See [Learning to Rank](learning-to-rank.html) for examples of using XGBoost models for ranking.
 
 ## Exporting models from XGBoost
 
-Vespa supports XGBoost's JSON model dump for importing models. When dumping
+Vespa supports importing XGBoost's JSON model dump (E.g. Python API ([xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model)).
+ When dumping
 the trained model, XGBoost allows users to set the `dump_format` to `json`,
-and users can specify the feature names to be used in `fmap`.
+and users can specify the feature names to be used in `fmap`. 
 
-Here is an example of an XGBoost JSON model dump with 2 trees:
+Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 1:
 
 ```
 [
-  { "nodeid": 0, "depth": 0, "split": "f29", "split_condition": -0.1234567, "yes": 1, "no": 2, "missing": 1, "children": [
-    { "nodeid": 1, "depth": 1, "split": "f56", "split_condition": -0.242398, "yes": 3, "no": 4, "missing": 3, "children": [
-      { "nodeid": 3, "leaf": 1.71218 },
-      { "nodeid": 4, "leaf": -1.70044 }
-    ]},
-    { "nodeid": 2, "depth": 1, "split": "f109", "split_condition": 0.8723473, "yes": 5, "no": 6, "missing": 5, "children": [
-      { "nodeid": 5, "leaf": -1.94071 },
-      { "nodeid": 6, "leaf": 1.85965 }
-    ]}
+  { "nodeid": 0, "depth": 0, "split": "fieldMatch(title).completeness", "split_condition": 0.772132337, "yes": 1, "no": 2, "missing": 1, "children": [
+    { "nodeid": 1, "leaf": 0.673938096 },
+    { "nodeid": 2, "leaf": 0.791884363 }
   ]},
-  { "nodeid": 0, "depth": 0, "split": "f60", "split_condition": -0.482947, "yes": 1, "no": 2, "missing": 1, "children": [
-    { "nodeid": 1, "depth": 1, "split": "f29", "split_condition": -4.2387498, "yes": 3, "no": 4, "missing": 3, "children": [
-      { "nodeid": 3, "leaf": 0.784718 },
-      { "nodeid": 4, "leaf": -0.96853 }
-    ]},
-    { "nodeid": 2, "leaf": -6.23624 }
+  { "nodeid": 0, "depth": 0, "split": "fieldMatch(title).importance", "split_condition": 0.606320798, "yes": 1, "no": 2, "missing": 1, "children": [
+    { "nodeid": 1, "leaf": 0.469432801 },
+    { "nodeid": 2, "leaf": 0.55586201 }
   ]}
 ]
 ```
+Notice the 'split' attribute which represents the feature name. The above model was produced using the XGBoost python api:
+
+```
+#!/usr/local/bin/python3
+import xgboost as xgb
+
+dtrain = xgb.DMatrix('training-vectors.txt')
+param = {'base_score':0, 'max_depth':1,'objective':'reg:squarederror'}
+bst = xgb.train(param, dtrain, 2)
+bst.dump_model("trained-model.json",fmap='feature-map.txt', with_stats=False, dump_format='json')
+```
+The training data is represented using [LibSVM text format](https://xgboost.readthedocs.io/en/latest/tutorials/input_format.html).
+***Important*** Vespa does currently not support the `missing` feature split condition of XGBoost so all features needs to be assigned a value both during training and online prediction. 
+
+The simple model above would be represented by the following Vespa ranking expression :
+
+```
+if(fieldMatch(title).completeness < 0.772132337, 0.673938096, 0.791884363) + 
+  if(fieldMatch(title).importance <  0.606320798, 0.469432801,0.55586201)
+```
+As we can see from the produced ranking expression Vespa does not represent `missing` and only supports the yes and no branches from the dumped json model. 
+
+## Feature mappings from XGBoost to Vespa
+XGBoost is trained on array or array like data structures where features are named based on the index in the array 
+as in the example above. To convert the XGBoost features we need to map feature indexes to actual Vespa features (native features or custom defined features):
+ 
+```
+cat feature-map.txt |egrep "fieldMatch\(title\).completeness|fieldMatch\(title\).importance"
+36  fieldMatch(title).completeness q
+39  fieldMatch(title).importance q
+```
+In our feature mapping example feature at index 36 maps to Vespa's fieldMatch(title).completeness feature and index 39 maps to fieldMatch(title).importance. The feature mapping
+format is not well described in the XGBoost documentation but the [sample demo for binary classification](https://github.com/dmlc/xgboost/tree/master/demo/binary_classification) writes: 
+
+Format of ```feature-map.txt: <featureid> <featurename> <q or i or int>\n ```:
+  - Feature id must be from 0 to number of features, in sorted order.
+  - i means this feature is binary indicator feature
+  - q means this feature is a quantitative value, such as age, time, can be missing
+  - int means this feature is integer value (when int is hinted, the decision boundary will be integer)
+
 
 ## Importing XGBoost models
 
@@ -64,7 +96,7 @@ Consider the following example:
 
 ```
 search xgboost {
-    rank-profile default inherits default {
+    rank-profile prediction inherits default {
         first-phase {
             expression: xgboost("my_model.json")
         }
@@ -72,13 +104,50 @@ search xgboost {
 }
 ```
 
-Here, we specify that the model `my_model.json` should be run.
-The example XGBoost JSON model dump shown above would be converted
-to the following ranking expression:
+Here, we specify that the model `my_model.json` is applied to all documents matching a query which uses
+rank-profile prediction. One can also use [Phased ranking](phased-ranking.html) to control number of data points/documents which is ranked with the model. Generally the run time complexity is determined by 
+* The number of documents evaluated [per thread](performance/sizing-search.html) /number of nodes and the query filter
+* The feature complexity (Features which are repeated over multiple trees/branches are not re-computed) 
+* The number of trees and the maximum depth per tree
+
+
+## XGBoost models 
+There are two types of XGBoost models which can be deployed directly to Vespa: 
+
+* Regression ```reg:squarederror``` / ```reg:logistic```
+* Classification ```binary:logistic```
+
+For `reg:logistic` and `binary:logistic` the raw margin tree sum (Sum of all trees) needs to be passed through the sigmoid function to represent the probability of class 1. For regular regression 
+the model can be directly imported but the base_score should be set 0 as the base_score used during the training phase is not dumped with the model. 
+
+An example model using the sklearn toy datasets is given below:
 
 ```
-if (f29 < -0.1234567, if (f56 < -0.242398, 1.71218, -1.70044), if (f109 < 0.8723473, -1.94071, 1.85965)) +
-if (f60 < -0.482947, if (f29 < -4.2387498, 0.784718, -0.96853), -6.23624)
+from sklearn import datasets
+import xgboost as xgb
+breast_cancer = datasets.load_breast_cancer()
+c = xgb.XGBClassifier(n_estimators=20, objective='binary:logistic')
+c.fit(breast_cancer.data,breast_cancer.target) 
+c.get_booster().dump_model("binary_breast_cancer.json", fmap='feature-map.txt', dump_format='json')
+c.predict_proba(breast_cancer.data)[:,1]
 ```
 
+To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa we need to use the [sigmoid function](reference/ranking-expressions.html):
 
+```
+search xgboost {
+    rank-profile prediction-binary inherits default {
+        first-phase {
+            expression: sigmoid(xgboost("binary_breast_cancer.json"))
+        }
+    }
+}
+```
+
+## Known issues 
+* When dumping XGBoost models 
+to a JSON representation some of the model information is lost (e.g the base_score or the optimal number of trees if trained with early stopping).  XGBoost also has different predict functions (e.g predict/predict_proba). The following
+ [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost)
+demonstrates how to represent different type of XGBoost models in Vespa. 
+
+* XGBoost trees handles missing feature split values (e.g NaN features) differently then Vespa and best practise for XGBoost models is to ensure that NaN/missing features does not exit. See [Issue 9646](https://github.com/vespa-engine/vespa/issues/9646) 
