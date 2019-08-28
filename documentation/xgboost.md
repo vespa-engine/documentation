@@ -39,7 +39,7 @@ bst = xgb.train(param, dtrain, 2)
 bst.dump_model("trained-model.json",fmap='feature-map.txt', with_stats=False, dump_format='json')
 ```
 The training data is represented using [LibSVM text format](https://xgboost.readthedocs.io/en/latest/tutorials/input_format.html).
-***Important*** Vespa does not support the missing feature split condition of XGBoost so all features needs to be assigned a value both during training and online prediction. 
+***Important*** Vespa does currently not support the `missing` feature split condition of XGBoost so all features needs to be assigned a value both during training and online prediction. 
 
 The simple model above would be represented by the following Vespa ranking expression :
 
@@ -47,7 +47,7 @@ The simple model above would be represented by the following Vespa ranking expre
 if(fieldMatch(title).completeness < 0.772132337, 0.673938096, 0.791884363) + 
   if(fieldMatch(title).importance <  0.606320798, 0.469432801,0.55586201)
 ```
-As we can see from the produced ranking expression Vespa does not currently represent `missing` and only supports the yes and no branches from the dumped json model. 
+As we can see from the produced ranking expression Vespa does not represent `missing` and only supports the yes and no branches from the dumped json model. 
 
 ## Feature mappings from XGBoost to Vespa
 XGBoost is trained on array or array like data structures where features are named based on the index in the array 
