@@ -38,17 +38,17 @@ has two dimensions named `x` and `y`, and has two cells with defined values:
 
 ![Tensor graphical representation](img/tensor-guide.png)
 
-A type declaration is needed for tensors. This defines a 2-dimensional mapped tensor (matrix):
+A type declaration is needed for tensors. This defines a 2-dimensional mapped tensor (matrix) of float:
 
-    tensor(x{},y{})
+    tensor<float>(x{},y{})
 
-This is a 2-dimensional indexed tensor (a 2x3 matrix):
+This is a 2-dimensional indexed tensor (a 2x3 matrix) of double:
 
-    tensor(x[2],y[3])
+    tensor<double>(x[2],y[3])
     
 A combination of mapped and indexed dimensions is a mixed tensor:
 
-    tensor(x{},y[3])
+    tensor<float>(x{},y[3])
 
 Vespa uses the tensor type to optimize the ranking pipeline.
 Best performance is currently achieved when using only indexed dimensions.

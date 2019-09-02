@@ -33,7 +33,7 @@ In typical use, a document contains one or more
 <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L35-L37"> tensor fields</a> to be used for ranking -
 this example sets up a tensor field called <code>tensor_attribute</code>:
 <pre>
-field tensor_attribute type tensor(x[4]) {
+field tensor_attribute type tensor&lt;float&gt;(x[4]) {
     indexing: attribute | summary
 }
 </pre>
@@ -97,12 +97,12 @@ for details on how to construct tensors programmatically.
 Set the type (indexed or mapped) of the <code>query(tensor)</code> for it to be used in ranking,
 using a <a href="query-profiles.html#query-profile-types">query profile type</a>.
 This configures the ranking backend that the rank feature named
-<code>query(tensor)</code> has type <code>tensor(x[4])</code>,
+<code>query(tensor)</code> has type <code>tensor&lt;float&gt;(x[4])</code>,
 enabling it to effectively compile expressions that use this feature.
 Create a file <code>search/query-profiles/types/root.xml</code> in the application package:
 <pre>
 &lt;query-profile-type id="root" inherits="native"&gt;
-  &lt;field name="ranking.features.query(tensor)" type="tensor(x[4])" /&gt;
+  &lt;field name="ranking.features.query(tensor)" type="tensor&lt;float&gt;(x[4])" /&gt;
 &lt;/query-profile-type&gt;
 </pre>
 Also, configure the default query profile to use this this (or other query profiles as needed):
@@ -131,7 +131,7 @@ public class ExampleTensorSearcher extends Searcher {
     public Result search(Query query, Execution execution) {
         Object tensorProperty = query.properties().get("tensor");
         if (tensorProperty != null) {
-            Tensor tensor = Tensor.from(tensorProperty.toString());
+            Tensor tensor = Tensor.from("tensor&lt;float&gt;(x[4])", tensorProperty.toString());
             query.getRanking().getFeatures().put("query(tensor)", tensor);
             query.properties().set(new CompoundName("ranking"), "dot_product");
         }
@@ -207,39 +207,35 @@ More examples of tensor expression can be found in the <a href="tensor-intro.htm
 </p>
 
 
-<h2 id="performance-considerations">Performance considerations</h2>
 
+<h2 id="performance-considerations">Performance considerations</h2>
 <p class="alert alert-success">
 Tensor expressions are fairly concise, and since the expressions themselves
 are independent of the data size, the actual workload during ranking can be significant
 for large tensors.
-</p>
-
-<p>
+</p><p>
 When using tensors in ranking it is important to have an understanding of the
 potential computational cost for each query. As an example, assume
-the dot product of two tensors with 1000 values each, e.g. <code>tensor(x[1000])</code>.
+the dot product of two tensors with 1000 values each, e.g. <code>tensor&lt;double&gt;(x[1000])</code>.
 Assuming one query tensor and one document tensor, the operation is:
-</p>
-
 <pre>
 sum(query(tensor1) * attribute(tensor2))
 </pre>
-
-<p>
-If 8 bytes is used to store each value, each tensor is approximately 8KB.
+If 8 bytes is used to store each value (e.g. using a double), each tensor is approximately 8KB.
 With for instance <a href="https://ark.intel.com/products/81055/Intel-Xeon-Processor-E5-2683-v3-35M-Cache-2_00-GHz">a Haswell architecture</a>
 the theoretical upper memory bandwidth is 68GB/s, which is around 9 million
 document ranking evaluations per second. With 1 million documents, this means
 the maximum throughput, with regards to pure memory bandwidth, is 9 queries per second (per node).
-</p>
-
-<p>
+</p><p>
 Even though you would typically not do the above without reducing the
 search space first (using matching and first phase), it is important to consider
-the memory bandwidth and other hardware limitations when developing ranking
-expressions with tensors.
+the memory bandwidth and other hardware limitations when developing ranking expressions with tensors.
+</p><p>
+Using a smaller value type increases performance, trading off precision:
+<code>tensor&lt;float&gt;(x[1000])</code> uses 4 bytes per cell value.
 </p>
+
+
 
 <h2 id="constant-tensors">Constant tensors</h2>
 <p>
@@ -252,7 +248,7 @@ for instance machine learned models. Example from the
 <pre>
 constant tensor_constant {
     file: constants/constant_tensor_file.json
-    type: tensor(x[4])
+    type: tensor&lt;float&gt;(x[4])
 }
 </pre>
 This defines a new tensor rank feature with the type as defined and the
@@ -296,7 +292,7 @@ In addition we define a rank profile that calculates the dot product.
 <pre>
 search example {
   document example {
-    field document_vector type tensor(x[4]) {
+    field document_vector type tensor&lt;float&gt;(x[4]) {
       indexing: attribute | summary
     }
   }
@@ -310,7 +306,7 @@ search example {
 The tensor to pass down with query is defined in a query profile type with the same tensor type as the field in the document:
 <pre>
 &lt;query-profile-type id="myProfileType"&gt;
-  &lt;field name="ranking.features.query(query_vector)" type="tensor(x[4])" /&gt;
+  &lt;field name="ranking.features.query(query_vector)" type="tensor&lt;float&gt;(x[4])" /&gt;
 &lt;/query-profile-type&gt;
 </pre>
 Example document with the vector [1.0, 2.0, 3.0, 5.0]:
@@ -333,7 +329,7 @@ Example query set in a searcher with the vector [1.0, 2.0, 3.0, 5.0]:
 <pre>
 public Result search(Query query, Execution execution) {
     query.getRanking().getFeatures().put("query(query_vector)",
-        Tensor.Builder.of(TensorType.fromSpec("tensor(x[4])")).
+        Tensor.Builder.of(TensorType.fromSpec("tensor&lt;float&gt;(x[4])")).
         cell().label("x", 0).value(1.0).
         cell().label("x", 1).value(2.0).
         cell().label("x", 2).value(3.0).
@@ -347,12 +343,12 @@ public Result search(Query query, Execution execution) {
 <h3 id="matrix-product-between-1d-vector-and-2d-matrix">Matrix Product between 1d vector and 2d matrix</h3>
 <p>
 Assume we have a 3x2 matrix represented in an attribute tensor field <code>document_matrix</code>
-with a tensor type <code>tensor(x[3],y[2])</code> with content:
+with a tensor type <code>tensor&lt;float&gt;(x[3],y[2])</code> with content:
 <pre>
 { {x:0,y:0}:1.0, {x:1,y:0}:3.0, {x:2,y:0}:5.0, {x:0,y:1}:7.0, {x:1,y:1}:11.0, {x:2,y:1}:13.0 }
 </pre>
 Also assume we have 1x3 vector passed down with the query as a tensor
-with type <code>tensor(x[3])</code> with content:
+with type <code>tensor&lt;float&gt;(x[3])</code> with content:
 <pre>
 { {x:0}:1.0, {x:1}:3.0, {x:2}:5.0 }
 </pre>
