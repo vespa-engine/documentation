@@ -93,7 +93,7 @@ name as the input variable. Consider the following example:
 ```
 search tf {
     document tf {
-        field document_tensor type tensor(d0[1],d1[784]) {
+        field document_tensor type tensor<float>(d0[1],d1[784]) {
             indexing: attribute | summary
         }
     }
@@ -158,7 +158,7 @@ you can pass tensors in HTTP requests by using the HTTP parameter
 "query(myTensor)". To do this specify a
 [query profile](query-profiles.html) of a type containing
 
-    <field name="ranking.features.query(myTensor)" type="tensor(d0[1],d1[784])" />
+    <field name="ranking.features.query(myTensor)" type="tensor<float>(d0[1],d1[784])" />
 
 [An example can be found in the tensor sample application](https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor).
 
@@ -218,7 +218,7 @@ in step 1 and any name:
 ```
 search myvariables {
     document myvariables {
-        field my_tf_variable type tensor(y[10],x[20]) {
+        field my_tf_variable type tensor<float>(y[10],x[20]) {
             indexing: attribute
         }
     }
