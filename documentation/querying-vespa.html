@@ -4,79 +4,99 @@ title: "Querying Vespa"
 ---
 
 <p>
-Search request are sent to the Vespa <a href="search-api.html">search API</a> and queries are written in 
-<a href="query-language.html">YQL</a>. The following diagram illustrates the components and data flow for Vespa queries.
+Search request are sent to the Vespa <a href="search-api.html">search API</a>
+and queries are written in <a href="query-language.html">YQL</a>.
+The following diagram illustrates the components and data flow for Vespa queries.
+</p><p>
+<img src="img/query-to-response.svg" height="390" width="458"/>
 </p>
-<img src="img/query-to-response.svg" style="padding: 16px" />
+
+
 
 <h2 id="query-flow">Query Flow</h2>
-<p> A query is executed with two main phases:</p>
+<p>
+A query is executed in two main phases:
 <ol>
-<li>The search phase which does matching, ranking and grouping/aggregation. This phase involves dispatching the query out to content nodes</li>
-<li>The result processing phase which involves content fetching and snippeting of the top global hits found in the previous search phase</li>
+  <li>The search phase which does matching, ranking and grouping/aggregation.
+      This phase involves dispatching the query to content nodes</li>
+  <li>The result processing phase which involves content fetching and snippeting of the top global hits
+      found in the previous search phase</li>
 </ol>
-<p>The above is an simplification as if the search request also specifies <a href="grouping.html">result grouping</a> 
-the search phase might involve multiple phases or round trips between the container and the content nodes</p>
+The above is an simplification - if the search request also specifies <a href="grouping.html">result grouping</a>,
+the search phase might involve multiple phases or roundtrips between the container and content nodes.
+</p>
 
 
-<h2 id="life-of-a-query">Life of a Query </h2>
-<h3 id="first-phase">The search phase</h3>
+
+<h2 id="search-phase">Search phase</h2>
 <ol>
   <li>
     A query is sent from a front-end application to a container node over HTTP(s) using GET or POST
     using the <a href="search-api.html">search API</a> or in any custom request format handled by a 
-    custom <a href="jdisc/developing-request-handlers.html">request handler</a> which translates the custom request format to native Vespa APIs.
+    custom <a href="jdisc/developing-request-handlers.html">request handler</a>,
+    which translates the custom request format to native Vespa APIs.
   </li><li>
-    Query pre-processing, like <a href="linguistics.html">linguistic processing</a> and <a href="query-rewriting.html">query rewriting</a>,
+    Query pre-processing, like <a href="linguistics.html">linguistic processing</a>
+    and <a href="query-rewriting.html">query rewriting</a>,
     is done in <a href="chained-components.html">configured search chains</a>
   </li><li>
-    The query is sent from the container to <a href="search-definitions.html#searching-multiple-document-types">selected</a> content clusters -
-    see <a href="federation.html">federation</a> for more details. The illustration above only
-   contains one content cluster but multiple is fully supported and allows scaling <a href="search-definitions.html">document types</a> differently. 
-   For example a <em>tweet</em> document type could be indexed in a separate content cluster then <em>user</em> document type which allow for independent scaling. 
+    <p>
+    The query is sent from the container to
+    <a href="search-definitions.html#searching-multiple-document-types">selected</a> content clusters -
+    see <a href="federation.html">federation</a> for more details.
+    The illustration above only contains one content cluster but multiple is fully supported
+    and allows scaling <a href="search-definitions.html">document types</a> differently.
+    For example a <em>tweet</em> document type could be indexed in a separate content cluster
+    then <em>user</em> document type which allow for independent scaling.
+    </p><p>
+    <img src="img/reference/flow/query1.svg" height="193" width="368"/>
+    </p>
   </li><li>
-    Content clusters have top-level dispatchers (TLDs) which dispatches the query to <a href="content/data-placement.html">content groups</a> within the content cluster.
-  </li>
-  <img src="img/reference/flow/query1.png" />
-  <li>
-  At this point the query enters one or more <a href="reference/services-content.html">content clusters</a>. 
-  In a content cluster with <a href="content/data-placement.html">grouped data distribution</a> the top-level dispatcher will dispatch the query to one group at a time using
-  a <a href="reference/services-content.html#dispatch-tuning">dispatch policy</a> while with a flat single group content cluster it will dispatch the query to all content nodes.
-  </li> 
-  <li>
-    The query arrives at the content nodes which performs matching, <a href="ranking.html">ranking</a> and aggregation/grouping over the set of indexed documents in the <a href="proton.html">Ready sub database</a>:
-    The <em>vespa-proton</em> process performs matching over the ready and indexed documents and performs <a href="ranking.html">ranking</a> as specified with the request/document definition.
-     Each content node matches and ranks a subset 
-    of the total document corpus and returns the top k hits along with meta information like total hits and sorting and grouping data if requested upward to the top-level dispatcher. 
-  </li>
-  <img src="content/img/elastic_query.png"/> 
-  <li>
-    Once the content nodes within the group has replied within the <a href="graceful-degradation.html">timeout</a> the top-level dispatch 
-    will merge the results and return the merged
-    result up to the calling search container for search phase result processing. 
+    At this point the query enters one or more <a href="reference/services-content.html">content clusters</a>.
+    In a content cluster with <a href="content/data-placement.html">grouped data distribution</a>,
+    the query is dispatched to one group at a time using a <a href="reference/services-content.html#dispatch-tuning">dispatch policy</a>,
+    while with a flat single group content cluster the query is dispatched to all content nodes.
+  </li><li>
+    <p>
+    The query arrives at the content nodes which performs matching,
+    <a href="ranking.html">ranking</a> and aggregation/grouping over the set of indexed documents
+    in the <a href="proton.html">Ready sub database</a>:
+    The <em>vespa-proton</em> process performs matching over the ready and indexed documents
+    and performs <a href="ranking.html">ranking</a> as specified with the request/document definition.
+    Each content node matches and ranks a subset of the total document corpus
+    and returns the top k hits along with meta information
+    like total hits and sorting and grouping data if requested.
+    </p><p>
+    <img src="content/img/elastic-query.svg" height="320" width="270"/>
+    </p>
+  </li><li>
+    Once the content nodes within the group has replied within the <a href="graceful-degradation.html">timeout</a>,
+    results are returned to the search container for search phase result processing.
     Only the targeted number of <a href="reference/search-api-reference.html#hits">hits</a> is returned.
-    In this phase the only per hit data available is the Vespa internal global document id (gid) 
-    and the relevancy score. In addition there is result meta information like coverage and total hit count. Additional hit
-    specific data like the contents of fields is not available until the result processing phase has completed the content fetching. 
+    In this phase, the only per hit data available is the Vespa internal global document id (gid) and the relevancy score.
+    In addition there is result meta information like coverage and total hit count.
+    Additional hit specific data like the contents of fields is not available
+    until the result processing phase has completed the content fetching.
    </li>
 </ol>
 
-<h3 id="second-phase">The result processing (fill) phase</h3>
-<ul>
-<li>
-   When the result from the search phase is available a custom chained <a href="searcher-development.html#multiphase-searching">searcher component</a> 
-   can process the limited data available from the first search phase before contents of the hits is fetched from the content nodes. 
-   The fetching from content nodes is lazy and is not invoked before rendering the response unless asked for earlier by a custom searcher component.
-</li>
-<li>
-  The container will ask the content nodes which produced the best hits from search phase for the contents of the fields, 
-  only fields in the requested <a href="document-summaries.html">documenet summaries</a> is fetched. 
-  The summary request 
-  goes directly to the content nodes that produced the result from the search phase.
-</li>
-<li>
-  After the phase is completed against the content nodes  the complete result set might be processed further by 
-  custom components (e.g doing result deduping, top k re-ranking) before finally <a href="result-rendering.html">rendering</a> the response.  
-</li>
-</ul>
 
+<h2 id="result-processing-fill-phase">Result processing (fill) phase</h2>
+<ul>
+  <li>
+    When the result from the search phase is available,
+    a custom chained <a href="searcher-development.html#multiphase-searching">searcher component</a>
+    can process the limited data available from the first search phase
+    before contents of the hits is fetched from the content nodes.
+    The fetching from content nodes is lazy and is not invoked before rendering the response,
+    unless asked for earlier by a custom searcher component.
+  </li><li>
+    The container will ask the content nodes which produced the best hits from search phase for the contents of the fields,
+    only fields in the requested <a href="document-summaries.html">document summaries</a> is fetched.
+    The summary request goes directly to the content nodes that produced the result from the search phase.
+  </li><li>
+    After the phase is completed against the content nodes, the complete result set might be processed further
+    by custom components (e.g doing result deduping, top k re-ranking),
+    before finally <a href="result-rendering.html">rendering</a> the response.
+  </li>
+</ul>
