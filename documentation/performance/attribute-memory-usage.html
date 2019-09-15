@@ -110,7 +110,7 @@ listed below - concepts:
     <tr>
       <td>D</td>
       <td>Number of documents</td>
-      <td>Number of documents on the node, or rather the maximum number of documentids allocated</td>
+      <td>Number of documents on the node, or rather the maximum number of local document ids allocated</td>
     </tr>
     <tr>
       <td>V</td>
@@ -120,7 +120,8 @@ listed below - concepts:
     <tr>
       <td>U</td>
       <td>Number of unique values</td>
-      <td>Only applies if <em>fast-search</em> is set</td>
+      <td>Only applies for strings or if
+          <a href="../reference/search-definitions-reference.html#attribute">fast-search</a> is set</td>
     </tr>
     <tr>
       <td>FW</td>
@@ -133,10 +134,10 @@ listed below - concepts:
       <td>Width of the weight in a weighted set, 4 bytes</td>
     </tr>
     <tr>
-      <td>EW</td>
+      <td>EIW</td>
       <td>Enum index width</td>
-      <td>Width of the enum index, 4 bytes. Used by all strings and other attributes if
-        <a href="../reference/search-definitions-reference.html#attribute">fast-search</a> is set</td>
+      <td>Width of the index into the enum store, 4 bytes. Used by all strings and other attributes if
+          <a href="../reference/search-definitions-reference.html#attribute">fast-search</a> is set</td>
     </tr>
     <tr>
       <td>VW</td>
@@ -145,14 +146,19 @@ listed below - concepts:
     </tr>
     <tr>
       <td>PW</td>
-      <td>Posting width</td>
-      <td>Width of a postinglist entry for attribute. fast-search
-          -&gt; 4. array/weighted set -&gt; (4+4)</td>
+      <td>Posting entry width</td>
+      <td>Width of a posting list entry, 4 bytes for singlevalue, 8 bytes for array and weighted sets.
+          Only applies if <a href="../reference/search-definitions-reference.html#attribute">fast-search</a> is set</td>.
     </tr>
     <tr>
-      <td>IW</td>
-      <td>Index width</td>
-      <td>Width of index - 4 bytes</td>
+      <td>PIW</td>
+      <td>Posting index width</td>
+      <td>Width of the index into the store of posting lists; 4 bytes</td>
+    </tr>
+    <tr>
+      <td>MIW</td>
+      <td>Multivalue index width</td>
+      <td>Width of the index into the multivalue mapping; 4 bytes</td>
     </tr>
     <tr>
       <td>ROF</td>
@@ -179,29 +185,30 @@ listed below - concepts:
   <tbody>
     <tr>
       <td>Document vector</td>
-      <td>D * ((FW or EW) or IW)</td>
+      <td>D * ((FW or EIW) or MIW)</td>
       <td>ROF</td>
-      <td>FW for singlevalue numeric attributes and IW for
-          multivalue attributes. EW for single value string or the
-          attribute is single value fast-search</td>
+      <td>FW for singlevalue numeric attributes and MIW for
+          multivalue attributes. EIW for singlevalue string or if the
+          attribute is singlevalue fast-search</td>
     </tr>
     <tr>
       <td>Multivalue mapping</td>
-      <td>D * V * (FW or EW)</td>
+      <td>D * V * (FW or EIW)</td>
       <td>ROF</td>
-      <td>Applicable only for array or weighted sets. EW if string or fast-search</td>
+      <td>Applicable only for array or weighted sets. EIW if string or fast-search</td>
     </tr>
     <tr>
       <td>Enum store</td>
-      <td>U * (FW + VW) + 4</td>
+      <td>U * ((FW + VW) + 4 + ((EIW + PIW) or EIW))</td>
       <td>ROF</td>
-      <td>Applicable for strings or if fast-search is set</td>
+      <td>Applicable for strings or if fast-search is set.
+          (EIW + PIW) if fast-search is set, EIW otherwise.</td>
     </tr>
     <tr>
       <td>Posting list</td>
       <td>D * V * PW</td>
       <td>ROF</td>
-      <td>Applicable for strings or if fast-search is set</td>
+      <td>Applicable if fast-search is set</td>
     </tr>
   </tbody>
 </table>
@@ -226,37 +233,37 @@ listed below - concepts:
     <tr>
       <td>Numeric multivalue value plain</td>
       <td>Document vector, Multivalue mapping</td>
-      <td>D * IW * ROF + D * V * FW * ROF </td>
+      <td>D * MIW * ROF + D * V * FW * ROF </td>
     </tr>
     <tr>
       <td>Numeric singlevalue fast-search</td>
       <td>Document vector, Enum store, Posting List</td>
-      <td>D * EW * ROF + D * PW  * ROF + U * (FW+4) * ROF</td>
+      <td>D * EIW * ROF + U * (FW+4+EIW+PIW) * ROF + D * PW * ROF</td>
     </tr>
     <tr>
       <td>Numeric multivalue value fast-search</td>
       <td>Document vector, Multivalue mapping, Enum store, Posting List</td>
-      <td>D * IW * ROF + D * V * EW * ROF + U * (FW+4) * ROF + D * V * PW * ROF</td>
-    </tr>
-    <tr>
-      <td>Singlevalue string fast-search</td>
-      <td>Document vector, Enum store, Posting List</td>
-      <td>D * EW * ROF + U * (FW+VW+4) * ROF + D * PW * ROF</td>
+      <td>D * MIW * ROF + D * V * EIW * ROF + U * (FW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
     </tr>
     <tr>
       <td>Singlevalue string plain</td>
       <td>Document vector, Enum store</td>
-      <td>D * EW * ROF + U * (FW+VW+4) * ROF</td>
+      <td>D * EIW * ROF + U * (FW+VW+4+EIW) * ROF</td>
+    </tr>
+    <tr>
+      <td>Singlevalue string fast-search</td>
+      <td>Document vector, Enum store, Posting List</td>
+      <td>D * EIW * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * PW * ROF</td>
     </tr>
     <tr>
       <td>Multivalue string plain</td>
       <td>Document vector, Multivalue mapping, Enum store</td>
-      <td>D * IW * ROF + D * V * EW * ROF + U * (FW+VW+4) * ROF</td>
+      <td>D * MIW * ROF + D * V * EIW * ROF + U * (FW+VW+4+EIW) * ROF</td>
     </tr>
     <tr>
       <td>Multivalue string fast-search</td>
       <td>Document vector, Multivalue mapping, Enum store, Posting list</td>
-      <td>D * IW * ROF + D * V * EW * ROF + U * (FW+VW+4) * ROF + D * V * PW * ROF</td>
+      <td>D * MIW * ROF + D * V * EIW * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
     </tr>
     <tr>
       <td>Boolean singlevalue</td>
@@ -268,9 +275,9 @@ listed below - concepts:
 
 
 
-<h2 id="enum-store">Enum Store</h2>
+<h2 id="multivalue-mapping-enum-store">Multivalue Mapping and Enum Store</h2>
 <p>
-The Attribute Enum Store has an upper limit, limiting the number of different values in an attribute.
+The attribute Multivalue Mapping and Enum Store has upper limits, limiting the number of values in an attribute.
 <table class="table">
 <thead>
 <tr><th>resource</th><th>default</th><th>metric</th><th>description</th></tr>
@@ -281,7 +288,8 @@ The Attribute Enum Store has an upper limit, limiting the number of different va
   </td><td>content.proton.documentdb.attribute.resource_usage.enum_store</td>
   <td>For string attribute fields or attribute fields with
     <a href="../attributes.html#search">fast-search</a>,
-    there is a 32GB max limit on the size of the unique values stored for that attribute.
+    there is a max limit on the number of unique values that can be stored for that attribute.
+    The limit is approx 2 billion.
     The component storing these values is called enum store</td></tr>
 <tr><td>attribute multivalue</td>
   <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
