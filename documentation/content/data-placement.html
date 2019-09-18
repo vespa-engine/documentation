@@ -17,158 +17,72 @@ documents - use cases:
 <table class="table">
 <thead></thead><tbody>
 <tr>
-  <th>Cluster upgrade</th>
-  <td>Use two (or more) groups with one replica each -
-  then shut down one group in the cluster for upgrade.
-  This is quicker than doing it one by one node - the tradeoff
-  is that 50% of the nodes must sustain the full load (in case of two groups),
-  and one must always grow the cluster by two (or more) nodes,
-  one in each group. Latency per search node goes up with a larger index,
-  such grouping will double the index size.</td>
+  <th style="white-space: nowrap">Cluster upgrade</th>
+  <td>
+    Use two (or more) groups  - then shut down one group in the cluster for upgrade.
+    This is quicker than doing it one by one node -
+    the tradeoff is that 50% of the nodes must sustain the full load (in case of two groups),
+    and one must always grow the cluster by two (or more) nodes, one in each group.
+    Latency per search node goes up with a larger index, such grouping will double the index size.
+  </td>
 </tr><tr>
-  <th>Query throughput</th>
-  <td>Applications with high query load on a small index
-  can benefit of keeping the full index on all nodes - i.e. configuring
-  the same number of groups as nodes. This confines queries to one node only,
-  so less <em>total</em> work is done per query in the cluster.
-  Hence the throughput increase. This increases latency
-  compared with splitting the index on many nodes. It also limits
-  options when growing the index size - at some point, the query latency might
-  grow too high, and the only option then is to add nodes to the group.
-  Having two nodes per group is bad if one node goes down, as one node must
-  hence be able to hold the full index again. Use this option with care.</td>
+  <th style="white-space: nowrap">Query throughput</th>
+  <td>
+    Applications with high query load on a small index can benefit of keeping the full index on all nodes -
+    i.e. configuring the same number of groups as nodes.
+    This confines queries to one node only,
+    so less <em>total</em> work is done per query in the cluster.
+    Hence the throughput increase.
+    This increases latency compared with splitting the index on many nodes.
+    It also limits options when growing the index size -
+    at some point, the query latency might grow too high,
+    and the only option then is to add nodes to the group.
+    Having two nodes per group is bad if one node goes down,
+    as one node must hence be able to hold the full index again.
+  </td>
+</tr><tr>
+  <th style="white-space: nowrap">Cautious data placement</th>
+  <td>
+    A way to reduce the risk of data unavailability,
+    is to spread the data copies across different locations,
+    like placing all the copies in different racks.
+    Furthermore, this data placement enables fast upgrade procedures without service interruption,
+    as entire groups can be upgraded at a time.
+  </td>
 </tr>
 </tbody>
 </table>
 </p>
 
+
+
 <h2>Details</h2>
 <p>
-By default, Vespa distributes <a href="buckets.html">buckets</a> uniformly
-across all distributor and storage nodes.
-This creates a uniform distribution, but has a few drawbacks:
-<ul>
-<li>If the cluster is large, some nodes often have less network bandwidth
-between them than nodes that are closer to each other. Spreading the copies at
-random, we might not get to utilize this improved bandwidth between nodes that
-are closer to each other at all.</li>
-<li>Wanting copies of data to be available at all times, storing few copies,
-means that you can do maintenance on very few nodes at a time to keep data
-available. For instance, if you store only 2 copies, you can only do
-maintenance on one node at a time to ensure all data has at least one copy
-available, which makes upgrades time consuming.</li>
-</ul>
-<p>
-Hierarchical distribution can remedy the above. With this,
-you have control over where bucket copies are stored in
-relation to each other. For instance, if your cluster consists of 10 racks, you
-can define that for any given bucket, it should store 2 copies in one rack and
-2 copies in another rack. That means that you can take down a whole rack, and
-you are still sure that all your data is available, because you know all data
-on that rack should have 2 copies on another rack. Also, improved network
-bandwidth can be utilized. If a node has restarted and it needs to fetch some
-data that came in while restarting to get up to date, it can now choose to
-fetch that data from a node on the same rack, which has better connectivity as
-it is in the same rack. (Here you must of course define one group per rack, and
-add the nodes in the rack in the respective groups)
+By default, Vespa distributes <a href="buckets.html">buckets</a>
+uniformly across all distributor and storage nodes.
+Use hierarchical distribution to control where bucket copies are stored in relation to each other.
+For instance, if your cluster consists of 10 racks,
+you can define that for any given bucket,
+it should store 2 copies in one rack and 2 copies in another rack.
+That means that you can take down a whole rack,
+and you are still sure that all your data is available,
+because you know all data on that rack should have 2 copies on another rack.
 </p><p>
-This can also be used for simple data center failover. If nodes are divided into two
-separate geographical locations, you can define a group for each of these
-locations, and you can for instance configure 2 copies to be stored on each
-location. That way, your data is always available on both locations, and you
-can survive a fire without data loss.
+Also, improved network bandwidth can be utilized.
+If a node has restarted and it needs to fetch some data that came in while restarting to get up to date,
+it can now choose to fetch that data from a node on the same rack,
+which has better connectivity as it is in the same rack.
+(Here you must of course define one group per rack,
+and add the nodes in the rack in the respective groups)
 </p><p>
-Currently, you have no control of what group is selected for which copies
-though. The failover example works because you divide your copies among N groups
-with equal amount of copies in each, and you only have N groups available, thus
-you  know each group will have that amount of copies.
-</p><p>
-Groups can be defined in several layers, creating a tree-structure. That way
-you can for instance define a top level group to do failover, and below that you can
-make smaller groups to improve network bandwidth locally and ensure you can
-take down multiple nodes simultaneously without making any data unavailable.
-</p><p>
-When configuring the groups, you have to bundle either a set of storage
-nodes (for a bottom level group) or a set of groups at a lower level to make
-your group. Then you must specify how data is to be distributed among the
-group children. Refer to the
-<a href="../reference/services-content.html#group">group</a>
+When configuring the groups, specify how data is to be distributed among the group children.
+Refer to the <a href="../reference/services-content.html#group">group</a>
 documentation for details about how to configure storage groups.
-</p>
-
-
-<h3 id="downside">Skew in data distribution when using groups</h3>
-<p>
+</p><p>
 Which groups are selected as primary, secondary and so on, groups for a
 given bucket is randomly determined using the same ideal state algorithm we
 use to pick nodes, described in more detail in the
-<a href="idealstate.html">ideal state</a> reference document. Each group is
-assigned an index, to be used in this algorithm. Because each bucket will
-have different sets of groups assigned to it, all data should still be
-equally divided among nodes, even though you have defined that one rack
-should keep twice as many bucket copies as another rack. If you have two
-racks, then one will typically store 2 copies for half of the buckets, and
-the other will store 2 copies of the other half of the buckets.
-</p><p>
-This will however likely create a bit worse skew globally compared to not
-using groups. If you're to divide buckets between two groups, you will
-likely get a little skew. Say one group will store 50.05 % of your data
-because the ideal state algorithm use pseudo-random numbers and doesn't
-create perfect distributions. Then the next level might also have a little
-skew, and as we move down, the cumulative skew will rise a bit.
-</p>
-
-
-
-<h2 id="examples">Examples</h2>
-<p>
-Here are some examples illustrating how the data placement control feature
-would be helpful. They all depict a deployment scenario with
-<a href="../elastic-vespa.html#redundancy">redundancy</a> 3 (i.e.
-3 data copies) and a cluster topology composed of 2 clusters with 2 racks of
-nodes each. These examples have few groups and nodes to keep the example
-simple.  In a normal case you'd probably have more racks than you want to store
-copies in for instance, so you'd pick 2 of N racks rather than 2 of 2.
-</p>
-
-
-<h3>Cautious data placement</h3>
-<p>
-A way to reduce the risk of data unavailability, is to spread the data copies
-across different geographical locations (e.g. data centers). In this example, the aim
-is to place all the copies in different racks (cautiousness).
-</p><p>
-<img src="../img/storage/hierarch-data-distr-ex2.png" width=700 height=325/>
-</p><p>
-Furthermore, this data placement enables fast upgrade procedures without service
-interruption, as entire groups can be upgraded at a time.
-</p>
-
-
-<h3>Data placement for performance</h3>
-<p>
-Large deployments involving dozens or hundreds of nodes intrinsically imply
-heterogeneous connectivity between groups of nodes. For instance, nodes located
-on the same switch will experience a greater connectivity than nodes that are
-not. And so it is at the rack, cluster and data center levels.
-</p><p>
-It is possible to reduce cross-level communication patterns by placing data
-replicas close to each other. In this example, the aim is to place all the
-copies in the same rack (optimized for performance).
-</p><p>
-<img src="../img/storage/hierarch-data-distr-ex3.png" width=700 height=325/>
-</p>
-
-
-<h3>Hybrid data placement</h3>
-<p>
-Hybrid data placement trade performance and cautiousness to get a bit of both worlds.
-In this example, the aim is to place two copies in the same rack, and
-the third copy in a different rack but still in the same cluster.
-</p><p>
-<img src="../img/storage/hierarch-data-distr-ex1.png" width=700 height=325/>
-</p><p>
-If additional cautiousness is desired, the third copy can be placed in the other cluster.
-</p><p>
-<img src="../img/storage/hierarch-data-distr-ex4.png" width=700 height=325/>
+<a href="idealstate.html">ideal state</a> reference document.
+Each group is assigned an index, to be used in this algorithm.
+This will however likely create a bit worse skew globally compared to not using groups.
 </p>
