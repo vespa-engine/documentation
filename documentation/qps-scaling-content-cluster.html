@@ -21,29 +21,21 @@ For more detailed information on capacity planning and performance tuning take a
 <a href="performance/sizing-search.html">Vespa search sizing guide</a>.
 For more information on generic use of hierarchical distribution take a look at
 <a href="content/data-placement.html">Document distribution</a>.
-</p>
-
-
-<h2>Flat vs Hierarchical Distribution</h2>
-<p>
+</p><p>
 With <em>flat distribution</em>, documents are distributed equally
 across all content/search nodes in the cluster.
 The redundancy of the cluster specifies how many copies of a document that exist among the nodes.
 Below, redundancy is 2 and each document is located on two nodes;
 </p>
-<img src="img/qps-scaling-content-cluster.svg" height="400" width="500" />
+<img src="img/qps-scaling-content-cluster.svg" height="420" width="740" />
 <p>
 <em>Hierarchical distribution</em> defines a number of <em>groups</em>,
 each containing a set of content/search nodes.
 The documents are uniformly distributed across all nodes in each group,
 such that the entire document collection is contained in each group.
 The total redundancy of the cluster specifies how many copies of a document that exists in total.
-Above, total redundancy is 4, and redundancy 2 in each group.
-</p>
-
-
-<h3>Search Query Handling</h3>
-<p>
+Above, total redundancy is 2, and redundancy 1 in each group.
+</p><p>
 In addition to an indexed content cluster, there are Container nodes running the Search Container.
 These scatters queries to content nodes and gathers the partial results.
 When using flat distribution, each query is sent (in parallel) to all the content nodes.
@@ -54,7 +46,7 @@ and that query only sent to the nodes of that group.
 
 
 
-<h2 id="qps-scaling">Scaling</h2>
+<h2 id="scaling">Scaling</h2>
 <p>
 An important aspect when sizing an indexed content cluster
 is the QPS (queries per second) the system can handle.
@@ -88,176 +80,8 @@ effectively scale QPS.</td>
 </p>
 
 
-<h3>Migrate to using groups - procedure</h3>
-<p>
-Migrating from flat distribution to a hierarchy,
-means you might increase redundancy first, then reconfigure to using groups -
-this to ensure proper search coverage during the transition.
-When adding new group(s), it will take some time to populate the new nodes.
-During this transition period, queries hitting these nodes will return partial results.
-<a href="reference/services-content.html#nodes">Reference documentation</a>.
-</p><p>
-Example - migrate to using groups. Starting point:
-A cluster with 4 nodes and flat distribution and redundancy 2.
-End state: all 4 nodes with all documents:
-<pre>
-&lt;content id="music" version="1.0"&gt;
-  &lt;redundancy&gt;2&lt;/redundancy&gt;
-  &lt;documents&gt;
-    &lt;document mode="index" type="music" /&gt;
-  &lt;/documents&gt;
-  &lt;nodes /&gt;
-    &lt;node hostalias="node0"/&gt;
-    &lt;node hostalias="node1"/&gt;
-    &lt;node hostalias="node2"/&gt;
-    &lt;node hostalias="node3"/&gt;
-  &lt;/nodes&gt;
-  &lt;engine&gt;
-    &lt;proton&gt;
-      &lt;searchable-copies&gt;2&lt;/searchable-copies&gt;
-    &lt;/proton&gt;
-  &lt;/engine&gt;
-&lt;/content&gt;
-</pre>
-Increase <em>redundancy</em> and <em>searchable-copies</em> to 4.
-After deploying this, wait for all search nodes to finish redistribution
-(i.e. all nodes have all documents):
-<pre>
-&lt;content id="music" version="1.0"&gt;
-  &lt;redundancy&gt;4&lt;/redundancy&gt;
-  &lt;documents&gt;
-    &lt;document mode="index" type="music" /&gt;
-  &lt;/documents&gt;
-  &lt;nodes /&gt;
-    &lt;node hostalias="node0"/&gt;
-    &lt;node hostalias="node1"/&gt;
-    &lt;node hostalias="node2"/&gt;
-    &lt;node hostalias="node3"/&gt;
-  &lt;/nodes&gt;
-  &lt;engine&gt;
-    &lt;proton&gt;
-      &lt;searchable-copies&gt;4&lt;/searchable-copies&gt;
-    &lt;/proton&gt;
-  &lt;/engine&gt;
-&lt;/content&gt;
-</pre>
-Reconfigure to 4 groups, setting <em>redundancy</em>
-and <em>searchable-copies</em> to 1:
-<pre>
-&lt;content id="music" version="1.0"&gt;
-  &lt;redundancy&gt;1&lt;/redundancy&gt;
-  &lt;documents&gt;
-    &lt;document mode="index" type="music" /&gt;
-  &lt;/documents&gt;
-  &lt;group distribution-key="0" name="mytopgroup"&gt;
-    &lt;distribution partitions="1|*"/&gt;
-    &lt;group distribution-key="0" name="mygroup0"&gt;
-      &lt;node distribution-key="0" hostalias="node0"/&gt;
-    &lt;/group&gt;
-    &lt;group distribution-key="1" name="mygroup1"&gt;
-      &lt;node distribution-key="0" hostalias="node1"/&gt;
-    &lt;/group&gt;
-    &lt;group distribution-key="2" name="mygroup2"&gt;
-      &lt;node distribution-key="0" hostalias="node1"/&gt;
-    &lt;/group&gt;
-    &lt;group distribution-key="3" name="mygroup3"&gt;
-      &lt;node distribution-key="0" hostalias="node1"/&gt;
-    &lt;/group&gt;
-  &lt;/group&gt;
-  &lt;engine&gt;
-    &lt;proton&gt;
-      &lt;searchable-copies&gt;1&lt;/searchable-copies&gt;
-    &lt;/proton&gt;
-  &lt;/engine&gt;
-&lt;/content&gt;
-</pre>
-</p>
 
-
-
-<h2 id="hierarchical-distribution">Hierarchical distribution</h2>
-<p>
-You can exercise full control over group layout
-by specifying a hierarchy of groups in the content cluster definition in services.xml.
-A flat distribution will have all content/search nodes defined under a single top group,
-while hierarchical distribution introduces an extra level of groups under the top group.
-</p>
-
-
-<h3>Content cluster using flat distribution</h3>
-<p>
-The following example has a simple content cluster with flat distribution,
-redundancy 2 and 3 content/search nodes:
-<pre>
-&lt;content version="1.0" id="mycluster"&gt;
-  &lt;redundancy&gt;2&lt;/redundancy&gt;
-  &lt;documents&gt;
-    &lt;document mode="index" type="mydoctype"/&gt;
-  &lt;/documents&gt;
-  &lt;group distribution-key="0" name="mytopgroup"&gt;
-    &lt;node distribution-key="0" hostalias="node0"/&gt;
-    &lt;node distribution-key="1" hostalias="node1"/&gt;
-    &lt;node distribution-key="2" hostalias="node2"/&gt;
-  &lt;/group&gt;
-  &lt;engine&gt;
-    &lt;proton&gt;
-      &lt;searchable-copies&gt;2&lt;/searchable-copies&gt;
-    &lt;/proton&gt;
-  &lt;/engine&gt;
-&lt;/content&gt;
-</pre>
-Lets say we need to increase the QPS in our system by a factor of 2
-and that the static query cost (SQC) is high.
-We cannot just add 3 more content/search nodes to reach the desired QPS.
-Instead we use hierarchical distribution to get extra groups
-that also contain the entire document collection.
-The next example shows how to setup such a system.
-</p>
-
-
-<h3>Content cluster using hierarchical distribution</h3>
-<p>
-In the following example we have a similar content cluster that uses hierarchical distribution.
-We have defined 2 leaf groups (<em>mygroup0</em>, <em>mygroup1</em>)
-that are located under the top group.
-Each leaf group has 3 content/search nodes.
-The total redundancy of the system is now 4,
-and the <a href="content/data-placement.html">distribution partitions</a>
-is specified such that each leaf group will have 2 copies of the documents in the system.
-Each query can be sent to the nodes of a single group instead of all nodes in the system
-and the QPS requirement can be met through parallelization of searches.
-With redundancy 2 per leaf group we can also lose a node from a group
-and still have enough coverage.
-<pre>
-&lt;content version="1.0" id="mycluster"&gt;
-  &lt;redundancy&gt;4&lt;/redundancy&gt;
-  &lt;documents&gt;
-    &lt;document mode="index" type="mydoctype"/&gt;
-  &lt;/documents&gt;
-  &lt;group distribution-key="0" name="mytopgroup"&gt;
-    &lt;distribution partitions="2|*"/&gt;
-    &lt;group distribution-key="0" name="mygroup0"&gt;
-      &lt;node distribution-key="0" hostalias="node0"/&gt;
-      &lt;node distribution-key="1" hostalias="node1"/&gt;
-      &lt;node distribution-key="2" hostalias="node2"/&gt;
-    &lt;/group&gt;
-    &lt;group distribution-key="1" name="mygroup1"&gt;
-      &lt;node distribution-key="3" hostalias="node3"/&gt;
-      &lt;node distribution-key="4" hostalias="node4"/&gt;
-      &lt;node distribution-key="5" hostalias="node5"/&gt;
-    &lt;/group&gt;
-  &lt;/group&gt;
-  &lt;engine&gt;
-    &lt;proton&gt;
-      &lt;searchable-copies&gt;4&lt;/searchable-copies&gt;
-    &lt;/proton&gt;
-  &lt;/engine&gt;
-&lt;/content&gt;
-</pre>
-</p>
-
-
-<h3>Heterogeneous groups</h3>
+<h2 id="heterogeneous-groups">Heterogeneous groups</h2>
 <p>
 Vespa supports 2 <a href="reference/services-content.html#dispatch-policy">dispatch policies</a>
 for dispatching queries to the groups.
@@ -269,7 +93,7 @@ It will select a random group with a probability that is proportional to the inv
 </p>
 
 
-<h3>Restrictions</h3>
+<h2 id="restrictions">Restrictions</h2>
 <p>
 When using hierarchical distribution in an indexed content cluster,
 the following restrictions apply:
