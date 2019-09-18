@@ -92,7 +92,7 @@ container:
 <pre data-test="exec">
 $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
     --privileged --volume `pwd`:/app \
-    --publish 8080:8080 --publish 19112:19112 vespaengine/vespa
+    --publish 8080:8080 --publish 19092:19092 vespaengine/vespa
 </pre>
 
 Make sure that the configuration server is running - signified by a 200 OK response:
@@ -389,7 +389,7 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 Use the [Metrics API](../reference/metrics.html) to track number of documents indexed:
 
 <pre data-test="exec" data-test-assert-contains="content.proton.documentdb.documents.active">
-$ curl -s "http://localhost:19112/state/v1/metrics" | tr "," "\n" | grep -A 2 content.proton.documentdb.documents.active
+$ curl -s "http://localhost:19092/metrics/v1/values" | tr "," "\n" | grep content.proton.documentdb.documents.active
 </pre>
 
 You can also inspect the search node state by:
@@ -936,4 +936,3 @@ function processFilePREs() {
 processFilePREs();
 
 </script>
-
