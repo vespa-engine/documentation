@@ -4,49 +4,44 @@ title: "Vespa Search Sizing Guide"
 ---
 
 <p>
-Capacity planning and performance tuning are in a
-sense the same thing: choosing system components, placement, and
-parameters based on a given performance criteria. The difference is in
-when they are carried out.  Capacity planning is part of planning; it
-is generally done before any of the system has been assembled. Tuning,
-on the other hand, is done after the initial architecture is a fact,
+Capacity planning and performance tuning are in a sense the same thing:
+choosing system components, placement, and parameters based on a given performance criteria.
+The difference is in when they are carried out.
+Capacity planning is part of planning;
+it is generally done before any of the system has been assembled.
+Tuning, on the other hand, is done after the initial architecture is a fact,
 when you have some feedback on the performance of the architecture.
-Perfect capacity planning would eliminate the need for performance
-tuning.  However, since it is impossible to predict exactly how your
-system will be used, you will find that planning can reduce the need
-to tune but cannot eliminate it.  With Vespa it is possible to do
-benchmarking on a few nodes to infer the overall performance of the
-chosen system.
+Perfect capacity planning would eliminate the need for performance tuning.
+However, since it is impossible to predict exactly how your system will be used,
+you will find that planning can reduce the need to tune but cannot eliminate it.
+With Vespa it is possible to do benchmarking on a few nodes
+to infer the overall performance of the chosen system.
 </p><p>
 This article primarily describes static sizing - refer to
 <a href="../proton.html#proton-maintenance-jobs">Proton maintenance jobs</a>
 to learn the dynamic behavior of the search core.
-</p>
-
-
-<h3 id="elastic-architecture">Content cluster</h3>
-<p>
-The basic element in the Vespa search architecture is a content node. A content
-node holds a partition, an index, for a fraction of the entire data corpus.
-A content cluster consists of a collection of content nodes.  Partitioning is
-then used to create linear scalability in data size and query rate.
+</p><p>
+The basic element in the Vespa search architecture is a content node.
+A content node holds a partition, an index, for a fraction of the entire data corpus.
+A content cluster consists of a collection of content nodes.
+Partitioning is then used to create linear scalability in data size and query rate.
 </p>
 
 
 
 <h2 id="life-of-a-query">Life of a query</h2>
+<!-- ToDo: kill this section and link to querying-vespa.html instead / move this info there
+   - this to remove overlap -->
 <p>
-Vespa executes a query in two phases (Or more if you are using
-grouping features).  During the first-phase, search/content nodes (proton)
-match and rank documents. The topmost documents are returned upwards
-to the TLD (Top Level Dispatcher) and the search Container 
-for merging and potentially blending when multiple search clusters are
-involved.  When the best ranking documents have been found, the
-second-phase is to fetch the summary data for those hits (snippets,
-bolding etc). The figure below illustrates how the query travels down
-to all the search/content nodes:
+Vespa executes a query in two phases (or more if when using grouping features).
+During the first-phase, search/content nodes (proton) match and rank documents.
+The topmost documents are returned to the search Container for merging
+and potentially blending when multiple search clusters are involved.
+When the best ranking documents are found,
+the second-phase is to fetch the summary data for those hits (snippets, bolding etc).
+The figure below illustrates the query flow to the search/content nodes:
 <figure>
-  <img src="../img/query_life.png" />
+  <img src="../img/query-life.svg" height="250" width="625"/>
 </figure>
 Components Involved in Query Execution:
 <ul>
@@ -55,31 +50,21 @@ Components Involved in Query Execution:
   <li>Parses the query</li>
   <li>Modify the query according to the search definition specification
   (stemming, etc)</li>
-  <li>Dispatching of query to selected search cluster(s)</li>
+  <li>Dispatching of query to content nodes in the search cluster(s)</li>
   <li>Blending of topmost results from cluster(s)</li>
   <li>Fetching the topmost results with document summaries from cluster(s)</li>
   <li>Rendering of results back to client </li>
   </ul>
 </li>
-<li>TLD (top level dispatcher, vespa-dispatch-bin process)
-  <ul>
-  <li>Dispatching incoming query in parallel to all content nodes so
-  that the entire data collection is searched.</li>
-  <li>Merging the topmost hits from all queried content nodes</li>
-  </ul>
-</li>
-<li>Searcher (vespa-proton-bin process)
+<li>Search (vespa-proton-bin process)
   <ul>
   <li>Finding all documents matching an incoming query using the indices.</li>
   <li>Calculating the rank score (relevancy) of each hit, using the chosen
   rank-profile (first-phase and second-phase ranking expression).</li>
-  <li>Aggregating information over all the generated hits using attributes in
-  grouping.</li>
-  <li>Sorting hits on rank score, or on attribute(s) if requested in the
-  query.</li>
+  <li>Aggregating information over all the generated hits using attributes in grouping.</li>
+  <li>Sorting hits on rank score, or on attribute(s) if requested in the query.</li>
   <li>Processing and returning the document summaries of the selected hits
-  (during second-phase after merging and blending has happened on levels
-  above).</li>
+  (during second-phase after merging and blending has happened on levels above).</li>
   </ul>
 </li>
 </ul>
@@ -93,29 +78,32 @@ Components Involved in Query Execution:
     <td>
       Portion of the query cost on a search/content node that does not depend on the
       number of documents on the node.  This is an administrative overhead caused by
-      system design and abstractions, e.g. number of memory allocations per query
-      term.  Referenced later as <em>SQC</em>.
+      system design and abstractions, e.g. number of memory allocations per query term.
+      Referenced later as <em>SQC</em>.
     </td>
   </tr><tr id="dynamic-query-cost">
     <td><strong>dynamic query cost</strong></td>
     <td>
       Portion of the query cost on a search/content node that depends on the number
-      of documents on the node.  This portion scales mostly linearly with the number
-      of documents.  Referenced later as <em>DQC</em>
+      of documents on the node.
+      This portion scales mostly linearly with the number of documents.
+      Referenced later as <em>DQC</em>
     </td>
   </tr><tr id="feed-cost">
     <td><strong>feed cost</strong></td>
     <td>
-      This is the cost of handling feeding operations on search/content nodes.  Referenced later as <em>FC</em>.
+      This is the cost of handling feeding operations on search/content nodes.
+      Referenced later as <em>FC</em>.
     </td>
   </tr><tr id="dispatch-cost">
     <td><strong>dispatch cost</strong></td>
     <td>
-      This is the cost on query scatter/result gather handling performed by TLD
-      (vespa-dispatch).  It scales mostly linearly with the number of nodes involved.
-      Unless the query payload is large (e.g. social search friend list, large
-      set of words for WAND style queries) or the number of requested hits is
-      large, this cost is normally not an issue for the sizing.
+      This is the cost on query scatter/result gather handling.
+      It scales mostly linearly with the number of nodes involved.
+      Unless the query payload is large
+      (e.g. social search friend list, large set of words for WAND style queries)
+      or the number of requested hits is large,
+      this cost is normally not an issue for the sizing.
       Referenced later as <em>DC</em>.
     </td>
   </tr><tr id="maintenance-cost">
@@ -137,79 +125,77 @@ response time on an idle system (<em>R<sub>idle</sub></em>).
 </center><center>
 <em>R<sub>idle</sub> = R<sub>proton,idle</sub> + DC</em>
 </center>
-With feeding and maintenance operations happening in the background, the
-average single threaded response time for queries will typically be higher.
+With feeding and maintenance operations happening in the background,
+the average single threaded response time for queries will typically be higher.
 </p>
 
 
-<h3 id="utilization">System utilization</h3>
+<h3 id="system-utilization">System utilization</h3>
 <p>
 The average response time for a query on a loaded system can be approximately
 derived from the response time for the same query on a idle system and the
 system utilization using the following formulas:
 <center>
-<em>R<sub>proton</sub> = R<sub>proton,idle</sub> / ( 1 - U<sub>proton</sub>
-)</em>
+<em>R<sub>proton</sub> = R<sub>proton,idle</sub> / ( 1 - U<sub>proton</sub>)</em>
 </center>
 <center>
 <em>R = R<sub>proton</sub> + DC</em>
 </center>
 <em>R</em> is response time idle system, and <em>U<sub>proton</sub></em>
-is utilization on the node where <code>vespa-proton-bin</code> is running.  Due to
-increased rate of CPU cache misses and TLB misses when the number of threads
-goes up, the above formula is just a rough approximation (ballpark estimate).
+is utilization on the node where <code>vespa-proton-bin</code> is running.
+Due to increased rate of CPU cache misses and TLB misses when the number of threads goes up,
+the above formula is just a rough approximation (ballpark estimate).
 To limit this issue, <code>vespa-proton</code> has a cap on the number of threads
-performing query evaluation.  By pushing the utilization to 100% during system
-benchmarking on a single node, we get an upper throughput measurement of when
-the node becomes overloaded.
+performing query evaluation.
+By pushing the utilization to 100% during system benchmarking on a single node,
+we get an upper throughput measurement of when the node becomes overloaded.
 </p><p>
 It is important to also measure behaviour under non-ideal circumstances to
 avoid getting too good results, since this could result in an undersized
 installation that breaks down when redistributing documents after some nodes
-have gone down or up while feeding data and serving queries.  Thus a second
-measurement should be performed on a small content cluster (e.g. 4 nodes) with
-active feeding and one of the nodes being taken down during the benchmark, then
-later brought up again.
+have gone down or up while feeding data and serving queries.
+Thus a second measurement should be performed on a small content cluster (e.g. 4 nodes)
+with active feeding and one of the nodes being taken down during the benchmark,
+then later brought up again.
 </p><p>
-The higher utilization a system has in production, the more fragile it is.  If
-utilization is 80% then a relative traffic spike of 25% will cause an outage,
+The higher utilization a system has in production, the more fragile it is.
+If utilization is 80% then a relative traffic spike of 25% will cause an outage,
 and even a small relative traffic spike of 10% will double the response time,
-likely breaking the SLA.  The situation is even worse if the retry rate for
+likely breaking the SLA. The situation is even worse if the retry rate for
 failed queries increases, either due to frontend logic or users.
 </p><p>
 The target system utilization should be kept sufficiently low for the response
-times to be reasonable and within SLA even with some extra traffic occurring
-at peak hours.
+times to be reasonable and within SLA even with some extra traffic occurring at peak hours.
 </p>
 
 
 
 <h2 id="data-volume-and-throughput-scaling-by-partitioning">Data volume and throughput scaling by partitioning</h2>
 <p>
-Each search/content node holds a partition of the index. Each search/content
-node queries its partition of the index upon a request from
-a <em>dispatcher</em>. A dispatcher is responsible for sending an incoming
-query in parallel to a set of search/content nodes so that all partitions are
-asked (full coverage). The results are then merged, and a complete result from
-the entire cluster is generated. The time to search the index is dependent on
-the number of nodes in the content cluster, since this determines
-the number of documents per node, which directly relates to <em>DQC</em> in
-the formulas above.  The Vespa search kernel has performance characteristics
-where, within certain boundaries, the latency can be considered to scale
-linearly with the number of documents indexed on each node. See the graph
-below, where we have plotted the 99 percentile latency of a fixed set of
+Each search/content node holds a partition of the index.
+Each search/content node queries its partition of the index upon a request from a <em>container</em>.
+A container is responsible for sending an incoming query in parallel
+to a set of search/content nodes so that all partitions are asked (full coverage).
+The results are then merged, and a complete result from the entire cluster is generated.
+The time to search the index is dependent on the number of nodes in the content cluster,
+since this determines the number of documents per node,
+which directly relates to <em>DQC</em> in the formulas above.
+The Vespa search kernel has performance characteristics where, within certain boundaries,
+the latency can be considered to scale linearly with the number of documents indexed on each node.
+See the graph below, where we have plotted the 99 percentile latency of a fixed set of
 queries executed against an increasing number of documents indexed.
 </p>
 
 
 <h3 id="latency-reduction-caching-summaries">Latency reduction caching summaries</h3>
 <p>
-Fetching document summaries are normally a small cost compared to actually searching.
+Fetching document summaries is normally a small cost compared to actually searching.
 Default configuration for this phase is focused on low resource usage.
 However if you want faster fetching of summaries you can enable the cache in the backend.
 Then you will use some more memory, but will get reduced latency/higher throughput.
 </p><p>
-Enabling summary cache is done by tuning <a href="../content/setup-proton-tuning.html#summary-store-cache-maxsize">maxsize</a>.
+Enabling summary cache is done by tuning
+<a href="../content/setup-proton-tuning.html#summary-store-cache-maxsize">maxsize</a>.
 <strong>Note</strong> that this is tuning setting affects <strong>all document types</strong>.
 I.e. if the cluster has 10 document types, the total is 10 caches each of size 1G amounting to 10G.
 </p><p>
@@ -218,46 +204,47 @@ cached by the OS is the file system caches.
 But you will save CPU as the summaries by default are compressed in 65k chunks.
 With normal data each chunk is compressed down to 10-15k.
 Accessing 1 document will require decompressing 1 chunk.
-We will only cache the document you access.
+Vespa only caches the accessed documents.
 </p>
 
 
 <h3 id="latency-reduction-by-using-more-threads-per-query">Latency reduction by using more threads per query</h3>
 <p>
 It is possible to improve latency of queries where the <a href="#dynamic-query-cost">dynamic query cost</a> is high.
-This portion of the cost can be split over multiple threads. This will reduce latency as long as you have
-free cpu cores available. By default this number is 1 as that gives the best resource usage measured as cpu/query.
-This can be overridden by a config override in <em>services.xml</em>. Remember to benchmark both throughput and latency
-when changing this.
+This portion of the cost can be split over multiple threads.
+This will reduce latency as long as you have free cpu cores available.
+By default this number is 1 as that gives the best resource usage measured as cpu/query.
+This can be overridden by a config override in <em>services.xml</em>.
+Remember to benchmark both throughput and latency when changing this.
 </p><p>
-You control this setting globally by tuning <a href="../content/setup-proton-tuning.html#requestthreads-persearch">persearch</a>. This can be overridden to a lower
-value in <a href="../reference/search-definitions-reference.html#num-threads-per-search">the rank profiles</a>.
-</pre>
+You control this setting globally by tuning
+<a href="../content/setup-proton-tuning.html#requestthreads-persearch">persearch</a>.
+This can be overridden to a lower value in
+<a href="../reference/search-definitions-reference.html#num-threads-per-search">the rank profiles</a>.
 <figure>
   <img src="../img/latency_vs_documents.png" />
 </figure>
-As we grow the document volume, the average number of hits per query
-increases, causing a higher latency since the search/content node needs to
-rank more documents within the thread handling the query. If the
-number of hits is not a function of the total number of documents, the
-latency will have a much flatter curve then in the graph above.
+As the document volume grows, the average number of hits per query increases,
+causing a higher latency since the search/content node needs to
+rank more documents within the thread handling the query.
+If the number of hits is not a function of the total number of documents,
+the latency will have a much flatter curve then in the graph above.
 </p><p>
 It is important to decide on a latency service level agreement (SLA)
-before sizing the Vespa search architecture for your application and
-query features. An SLA is often given as a percentiles at a certain
-traffic level, often peak traffic.
+before sizing the Vespa search architecture for your application and query features.
+An SLA is often given as a percentiles at a certain traffic level, often peak traffic.
 <ul>
 <li>Example 1: 99.0 percentile &lt; 200 ms @ 100 QPS</li>
 <li>Example 2: 99.0 percentile &lt; 400 ms @ 100 QPS</li>
 </ul>
-As can be seen from the graph above, if we chose 200 ms as an
-acceptable SLA, about 10M documents is the maximum number of documents
-a search/content node can hold.  If we chose 400 ms, we can double the
-document volume to 20M documents. This assumes that the query features
-are fixed as well &mdash; what query features are in use will also
-impact the latency. Changing any of the query and ranking parameters
-will potentially make the capacity plan invalid as the latency will
-violate the SLA. Features that might impact latency severely:
+As can be seen from the graph above, if we chose 200 ms as an acceptable SLA,
+about 10M documents is the maximum number of documents a search/content node can hold.
+If we chose 400 ms, we can double the document volume to 20M documents.
+This assumes that the query features are fixed as well -
+what query features are in use will also impact the latency.
+Changing any of the query and ranking parameters
+will potentially make the capacity plan invalid as the latency will violate the SLA.
+Features that might impact latency severely:
 </p>
 <ul>
 <li>The boolean query logic used to recall documents. Changing the
@@ -279,29 +266,27 @@ violate the SLA. Features that might impact latency severely:
 </ul>
 <p>
 There are other factors that will limit the amount of documents that
-can be indexed per node, such as the memory footprint, indexing
-latency and disk space.  It is also very important to make sure that
-these numbers were obtained while keeping the query features
-fixed. Changing the way you query Vespa, for instance asking for more
-hits (document summaries) or changing the ranking expression, might
-have a severe impact on the latency and hence also the sizing.  If we
-are going to size the application for 100M documents, we'll need
-100M/20M = 5 nodes for the 400 ms case and 100M/10M = 10 nodes for
-the 200 ms case.
+can be indexed per node, such as the memory footprint, indexing latency and disk space.
+It is also important to make sure that these numbers were obtained
+while keeping the query features fixed.
+Changing the way you query Vespa, for instance asking for more
+hits (document summaries) or changing the ranking expression,
+might have a severe impact on the latency and hence also the sizing.
+If we are going to size the application for 100M documents,
+we'll need 100M/20M = 5 nodes for the 400 ms case and 100M/10M = 10 nodes for the 200 ms case.
 </p><p>
 An SLA per query class, and not as an overall requirement is a nice
-way to get an even better utilization of the system resources. For
-instance, Direct Display traffic might have a stricter SLA then costly
+way to get an even better utilization of the system resources.
+For instance, Direct Display traffic might have a stricter SLA then costly
 navigational queries involving more features like grouping etc.
 </p><p>
 Adding content nodes to a content cluster
 reduces the dynamic query cost per node (<em>DQC</em>) but does not
-reduce the static query cost (<em>SQC</em>).  When
-<em>SQC</em> is no longer significantly less than <em>DQC</em>, the
-gain of adding more nodes is diminished, and the corresponding increase
+reduce the static query cost (<em>SQC</em>).
+When <em>SQC</em> is no longer significantly less than <em>DQC</em>,
+the gain of adding more nodes is diminished, and the corresponding increase
 in dispatch cost (<em>DQ</em>) will eventually outweigh the reduction
-in <em>DQC</em> as the number of nodes in the content cluster becomes very
-large.
+in <em>DQC</em> as the number of nodes in the content cluster becomes very large.
 </p>
 
 
@@ -311,9 +296,9 @@ Disk usage of a search/content node increases as the document volume increases:
 <figure>
   <img src="../img/documents_vs_disk.png" />
 </figure>
-The disk usage per document depends on various factors like the number
-of search definitions, the number of indexed fields and their
-settings, and most important the size of the fields that are indexed.
+The disk usage per document depends on various factors like the number of search definitions,
+the number of indexed fields and their settings,
+and most important the size of the fields that are indexed.
 The simplest way to determine the disk usage is to simply index
 documents and watch the index usage.
 </p><p>
@@ -331,79 +316,78 @@ The memory usage on a search/content node increases as the document volume incre
 <figure>
   <img src="../img/documents_vs_memory.png" />
 </figure>
-The memory usage increases linearly with the number of documents
-without any significant spikes.
-The Vespa vespa-proton-bin process (search/content node) will use the entire
-64 bit virtual address space, so the virtual memory usage reported
-might be very high as seen in the graph above.
+The memory usage increases linearly with the number of documents without any significant spikes.
+The Vespa vespa-proton-bin process (search/content node)
+will use the entire 64 bit virtual address space,
+so the virtual memory usage reported might be very high as seen in the graph above.
 </p><p>
-Do not let the virtual memory usage of proton scare you. It is
-important to monitor the resident memory usage. It is not uncommon to
-see proton use 22G of virtual memory but only 7G resident as seen
-above.  If the node had 16G of physical memory, we could probably fit
-20M documents without running the risk of heavy swap activity. Do note
-that in a default vespa setup there will be multiple other processes
+Do not let the virtual memory usage of proton scare you.
+It is important to monitor the resident memory usage.
+It is not uncommon to see proton use 22G of virtual memory but only 7G resident as seen above.
+If the node had 16G of physical memory, we could probably fit
+20M documents without running the risk of heavy swap activity.
+Do note that in a default vespa setup there will be multiple other processes
 running along with the vespa-proton process that will also consume memory.
 </p><p>
-The memory usage per document depends on the number of fields, the
-size of the document and how many of the fields are defined as
-attributes.
+The memory usage per document depends on the number of fields,
+the size of the document and how many of the fields are defined as attributes.
 </p>
 
 
 
 <h2 id="throughput-scaling-by-replication">Throughput scaling by replication</h2>
+<!-- ToDo: Migrate the relevant parts from qps-scaling-content-cluster.html here (it overlaps) -
+  and put how to migrate to groups into operations/admin-procedures.html -
+  then remove qps-scaling-content-cluster.html -->
 <p>
-When the static query cost (<em>SQC</em>) or the dispatch cost (<em>DC</em>)
-becomes significant, then scaling by replication should be considered.
+When the static query cost (<em>SQC</em>) or the dispatch cost (<em>DC</em>) becomes significant,
+then scaling by replication should be considered.
 It is supported for content clusters, using hierarchical distribution.
 Take a look at
 <a href="../qps-scaling-content-cluster.html">QPS Scaling in an Indexed
 Content Cluster</a> for more information on how to use hierarchical distribution.
 </p><p>
 When data is replicated such that only a portion of the nodes are needed by
-the <em>dispatcher</em> to get full coverage, then both the average static
-query cost (<em>SQC</em>) and the dispatch cost (<em>DC</em>) are significantly
-reduced.  But the feed cost (<em>FC</em>), disk space requirement, and
-maintenance cost is also significantly higher, compared to just using
-partitioning.  Except under very special circumstances, getting sufficient
-redundancy is the only reason for scaling throughput by replication.
+the <em>container</em> to get full coverage,
+then both the average static query cost (<em>SQC</em>)
+and the dispatch cost (<em>DC</em>) are significantly reduced.
+But the feed cost (<em>FC</em>), disk space requirement,
+and maintenance cost is also significantly higher, compared to just using partitioning.
+Except under very special circumstances,
+getting sufficient redundancy is the only reason for scaling throughput by replication.
 </p><p>
-When you have decided the latency SLA and benchmarked latencies versus
-document volume, one can start to look at how many groups that will be
-needed in the setup, given the estimated traffic (queries/s or
-QPS). Finding where the "hockey stick" or break point in the response
-times occurs is extremely important in order to make sure that the
-Vespa system deployed is well below this threshold and that it has
-capacity to absorb load increases over time as well as having
-sufficient capacity to sustain node outages during peak traffic.
+When you have decided the latency SLA and benchmarked latencies versus document volume,
+one can start to look at how many groups that will be needed in the setup,
+given the estimated traffic (queries/s or QPS).
+Finding where the "hockey stick" or break point in the response times occurs
+is extremely important in order to make sure that the
+Vespa system deployed is well below this threshold
+and that it has capacity to absorb load increases over time
+as well as having sufficient capacity to sustain node outages during peak traffic.
 </p><p>
 At some throughput level, some resource(s) in the system will be
 saturated and requests will be queued up causing latency to spike up
-exponentially since requests are arriving faster then they they are
-able to be served. The more queries executed past the saturation
-point, the longer an average request needs to be in the queue waiting
-to be served. This is demonstrated in the graph below for the 10M
-documents per node case:
+exponentially since requests are arriving faster then they they are able to be served.
+The more queries executed past the saturation point,
+the longer an average request needs to be in the queue waiting to be served.
+This is demonstrated in the graph below for the 10M documents per node case:
 <figure>
   <img src="../img/qps_vs_latency-1row.png" />
 </figure>
-At around 60 queries per second, the latency spikes up as some
-resource is saturated (100% utilization). When a given resource that
-is involved in the query is saturated (the bottleneck), the whole
-system saturates.
+At around 60 queries per second,
+the latency spikes up as some resource is saturated (100% utilization).
+When a given resource that is involved in the query is saturated (the bottleneck),
+the whole system saturates.
 </p><p>
 If we had chosen 20M documents per node, the break down point would be
 at approximately half of what is observed in the above graph (30 QPS).
 </p><p>
-We should identify which resource is the bottleneck (container, search
-kernel, CPU, disk?).  Potentially we can go through a set of
-optimizations to make the application have a higher break down point
-(and lower latency). But for now we assume that 60 QPS is the best we
-can do with 10M docs per node.
+We should identify which resource is the bottleneck (container, search kernel, CPU, disk?).
+Potentially we can go through a set of optimizations
+to make the application have a higher break down point (and lower latency).
+But for now we assume that 60 QPS is the best we can do with 10M docs per node.
 </p><p>
-It is given in the SLA that our application needs to support 100 QPS
-at peak traffic:
+It is given in the SLA that our application needs to support 100 QPS at peak traffic:
 <ul>
 <li>2 groups give 2*60 QPS = 120 QPS. We are then close
     to the limit and have very little head room for traffic
@@ -414,103 +398,100 @@ at peak traffic:
 <li>3 groups give 3*60 QPS = 180 QPS, and we will still
     able to serve 100 QPS if a single node fails.</li>
 </ul>
-In total we then end up with 10 nodes to meet the &lt; 200 ms
-latency, and 3 groups to handle the traffic volume and fail-over if a
-single node fails. If the same node fails we
-still have a problem. If possible we should use a RAID solution to
-avoid that the entire node becomes unavailable due to a single disk
-failure in this case. In total 30 search nodes.
+In total we then end up with 10 nodes to meet the &lt; 200 ms latency,
+and 3 groups to handle the traffic volume and fail-over if a single node fails.
+If the same node fails we still have a problem.
+If possible we should use a RAID solution
+to avoid that the entire node becomes unavailable due to a single disk failure in this case.
+In total 30 search nodes.
 </p><p>
-If we had gone for more documents per node (20M, meeting the &lt; 400
-ms latency), a single group would be able to handle 30 qps (double the
-document volume, double the latency which gives half the supported
-qps). We would then have needed 5 groups to support 100 qps estimated
-traffic (5 * 30 = 150, losing a single node would give us 120
-qps). In total 5 * 5 = 25 search nodes.
+If we had gone for more documents per node (20M, meeting the &lt; 400 ms latency),
+a single group would be able to handle 30 qps (double the document volume,
+double the latency which gives half the supported qps).
+We would then have needed 5 groups to support 100 qps estimated traffic
+(5 * 30 = 150, losing a single node would give us 120 qps).
+In total 5 * 5 = 25 search nodes.
 </p><p>
 As we can see, it's going to be more cost effective if we can relax
-our latency requirement and store more documents per node, so it
-always important to try to optimize the number of documents that a
-node can hold to reduce the number of columns.
+our latency requirement and store more documents per node,
+so it important to try to optimize the number of documents that a node can hold
+to reduce the number of columns.
 </p>
 
 
 
 <h2 id="searchnode">Search/Content Node</h2>
 <p>
-A Vespa search/content node typically runs the search
-process, <em>vespa-proton-bin</em>. It is possible to configure multiple
-instances per physical node.  The situation is a bit complex,
-since a physical node going down will
-be equivalent to multiple logical nodes going down at the same time.  By using
-hierarchical distribution, it is possible to tweak the distribution of bucket
+A Vespa search/content node runs the <a href="../proton.html">proton</a> search process.
+<!-- ToDo: remove this part, not relevant as users should run one proton per node
+   and use docker / kubernetes / other container tech to virtualize on node level instead -->
+It is possible to configure multiple instances per physical node.
+The situation is a bit complex, since a physical node going down will
+be equivalent to multiple logical nodes going down at the same time.
+By using hierarchical distribution, it is possible to tweak the distribution of bucket
 replicas in such a way that the system should still handle <em>n - 1</em>
-physical nodes going down on a content cluster where redundancy has been set
-to <em>n</em>.
+physical nodes going down on a content cluster where redundancy has been set to <em>n</em>.
+<!-- end ToDo -->
 </p><p>
 The search process has the following roles:
 <ul>
   <li>Accepting documents and indexing. If configured, this is done in multiple threads,
     and has a sequential read/write I/O characteristic.</li>
-<li>Executing queries and returning hits. This is done in multiple
+  <li>Executing queries and returning hits. This is done in multiple
     threads, and has a random I/O read characteristic.</li>
 </ul>
-Depending on the workload, either the query or indexing part will be
-the most dominating. For a typical search application, the query
-execution role is the most resource demanding in terms of CPU, while
-the indexing consumes most of the disk resources.
+Depending on the workload, either the query or indexing part will be the most dominating.
+For a typical search application, the query execution role is the most resource demanding in terms of CPU,
+while the indexing consumes most of the disk resources.
 </p>
 
 
 <h3 id="Optimizing-the-number-of-documents-per-node">Optimizing the number of documents per node</h3>
 <p>
-As we have seen the previous sections, it is important to establish a
-latency SLA and that latency is a linear function of how many
-documents is indexed given a fixed set of query features. The question
-is still, how many documents can a node hold when we also start
+As we have seen the previous sections,
+it is important to establish a latency SLA
+and that latency is a linear function of how many documents is indexed,
+given a fixed set of query features.
+The question is still, how many documents can a node hold when we also start
 considering other factors that limits the number of documents that a
 node can hold, such as memory, disk space, and indexing latency.
 </p>
 
 <h4 id="memory">Memory</h4>
 <p>
-Attribute data and the memory index could potentially use a lot of
-memory, so it is important that we understand the memory footprint of
-our application. If a node starts running low on memory, a lot of bad
-things will happen.  A standard search/content node configuration comes with
-8-48G of RAM. Many Vespa applications do not need that amount of
-memory per node. Perhaps the latency SLA is so strict that CPU is the
-limitation? Maybe 8G is enough, since the amount of documents/latency
+Attribute data and the memory index could potentially use a lot of memory,
+so it is important that we understand the memory footprint of the application.
+If a node starts running low on memory, a lot of bad things will happen.
+A standard search/content node configuration comes with 8-48G of RAM.
+Many Vespa applications do not need that amount of memory per node.
+Perhaps the latency SLA is so strict that CPU is the limitation?
+Maybe 8G is enough, as the amount of documents/latency
 restricts the number of docs we can place per node.
-</p>
-
-<p>
+</p><p>
 The simplest way to determine the memory footprint on the search/content node,
-is to feed a random sample of your document collection and view the
-stable persistent memory size of the process in a monitoring
-tool. Note, however, that the memory usage will increase during query
-load, as dictionaries and document summaries are memory mapped by
-default. Thus, you will usually see high virtual memory use, but a
-lower resident memory use. On a search/content node, the search process
-<em>vespa-proton-bin</em> is the main user of memory. The amount of memory used by
-the search process is dominated by the memory index and the
-attributes.
+is to feed a random sample of your document collection
+and view the stable persistent memory size of the process in a monitoring tool.
+Note, however, that the memory usage will increase during query load,
+as dictionaries and document summaries are memory mapped by default.
+Thus, you will usually see high virtual memory use, but a lower resident memory use.
+On a search/content node, the search process <em>vespa-proton-bin</em> is the main user of memory.
+The amount of memory used by the search process is dominated by the memory index and the attributes.
 </p>
 
 <h5 id="memory-index">Memory index</h5>
 <p>
-New documents are indexed in the memory index, which enables
-sub-second indexing latency. The memory index is later flushed to the
-disk index whenever the memory usage goes beyond a certain limit, or a
-certain time interval has passed. The default settings should be good
-enough for most setups, but it can be necessary to adjust these
-settings depending on the application.  The more memory you allow for
-the memory index to use, the more documents can be kept in memory
-before they must be flushed to disk. This affects feeding performance,
-as the number of fusions between the memory and disk index is
-inversely proportional with the number of documents in the memory
-index. The various tuneables for the memory index can be found in the
-reference doc.
+New documents are indexed in the memory index,
+which enables sub-second indexing latency.
+The memory index is later flushed to the disk index whenever the memory usage goes beyond a certain limit,
+or a certain time interval has passed.
+The default settings should be good enough for most setups,
+but it can be necessary to adjust these settings depending on the application.
+The more memory you allow for the memory index to use,
+the more documents can be kept in memory before they must be flushed to disk.
+This affects feeding performance,
+as the number of fusions between the memory and disk index
+is inversely proportional with the number of documents in the memory index.
+The various tuneables for the memory index can be found in the reference doc.
 </p>
 
 <h5 id="attributes">Attributes</h5>
@@ -527,18 +508,16 @@ for sizing of attribute data.
 <h4 id="disk-io">Disk I/O</h4>
 <p>
 The core data structures powering Vespa search are built
-on <a href="http://en.wikipedia.org/wiki/Inverted_index">inverted
-indexes</a>. The number of I/O operations per query is given by the
-following equation:
+on <a href="http://en.wikipedia.org/wiki/Inverted_index">inverted indexes</a>.
+The number of I/O operations per query is given by the following equation:
 </p><p><!-- depends on mathjax -->
   $$\text{io-seeks}_{\text{node}} = 2n + \frac{h}{H}$$
 </p><p>
 Where <strong>n</strong> is the number of query/filter terms
-and <strong>h</strong> is the number of document summary hits for
-display. <strong>H</strong> is the total number of nodes in the
-search cluster. Note that this formula gives the worst case scenario,
-and does not take the OS cache nor application cache into account.
-Observations:
+and <strong>h</strong> is the number of document summary hits for display.
+<strong>H</strong> is the total number of nodes in the search cluster.
+Note that this formula gives the worst case scenario,
+and does not take the OS cache nor application cache into account. Observations:
 <ul>
 <li>This equation only applies for indexed fields. Search in
     attributes is memory based.</li>
@@ -558,14 +537,14 @@ Observations:
     the operating system.</li>
 </ul>
 <strong>Rule of Thumb:</strong>
-Assume a cluster with x nodes and that y hits per query is
-requested. If we need to support z queries/s, the I/O subsystem needs
-to be able to handle z * y / x I/O operations per second. If we got 10
-nodes, and request 10 hits per query, and estimated traffic is 100
-queries/s we need to be able to perform 100 * 10 / 10 = 100 I/O
-ops/sec per search/content node. Reduce the number of nodes to 1 and we need
-to be able to do 1000 IO ops/s since all 10 summaries needs to be
-fetched from the same node.
+Assume a cluster with x nodes and that y hits per query is requested.
+If we need to support z queries/s,
+the I/O subsystem needs to be able to handle z * y / x I/O operations per second.
+If we got 10 nodes, and request 10 hits per query,
+and estimated traffic is 100 queries/s,
+we need to be able to perform 100 * 10 / 10 = 100 I/O ops/sec per search/content node.
+Reduce the number of nodes to 1 and we need to be able to do 1000 IO ops/s
+since all 10 summaries needs to be fetched from the same node.
 </p>
 
 
@@ -573,33 +552,33 @@ fetched from the same node.
 <p>
 Refer to the <a href="../reference/search-definitions-reference.html#match-phase">match-phase reference</a>.
 Match-phase works by specifying an <code>attribute</code> that measures document
-quality in some way (popularity, click-through rate, pagerank, bid value,
-price, text quality).  In addition a <code>max-hits</code> value is specified
+quality in some way (popularity, click-through rate, pagerank, bid value, price, text quality).
+In addition a <code>max-hits</code> value is specified
 that specifies how many hits are "more than enough" for your application.
-Then an estimate is made after collecting a reasonable amount of
-hits for the query, and if the estimate is higher than the configured
-<code>max-hits</code> value, an extra limitation is added to the query,
+Then an estimate is made after collecting a reasonable amount of hits for the query,
+and if the estimate is higher than the configured <code>max-hits</code> value,
+an extra limitation is added to the query,
 ensuring that only the highest quality documents can become hits.
 </p><p>
-In effect this limits the documents actually searched to the highest
-quality documents, a subset of the full corpus, where the
-size of subset is calculated in such a way that the query is
-estimated to give <code>max-hits</code> hits.  Since some (low-quality)
-hits will already have been collected to do the estimation, the
-actual number of hits returned will usually be higher than max-hits.
+In effect this limits the documents actually searched to the highest quality documents,
+a subset of the full corpus,
+where the size of subset is calculated in such a way
+that the query is estimated to give <code>max-hits</code> hits.
+Since some (low-quality) hits will already have been collected to do the estimation,
+the actual number of hits returned will usually be higher than max-hits.
 But since the distribution of documents isn't perfectly smooth,
-you risk sometimes getting less than the configured
-<code>max-hits</code> hits back.
+you risk sometimes getting less than the configured <code>max-hits</code> hits back.
 </p><p>
 Note that limiting hits in the match-phase also affects aggregation,
-grouping, and total-hit-count since it actually limits so the query
-gets less hits.  Also note that it doesn't really make sense to use this
-feature together with a WAND operator that also limit your hits, since they
-both operate in the same manner and you would get interference between
-them that could cause very unpredictable results.
-The graph  shows possible hits versus actual hits in a corpus with 100 000 documents,
+grouping, and total-hit-count since it actually limits so the query gets less hits.
+Also note that it doesn't really make sense to use this
+feature together with a WAND operator that also limit your hits,
+since they both operate in the same manner
+and you would get interference between them that could cause very unpredictable results.
+The graph shows possible hits versus actual hits in a corpus with 100 000 documents,
 where <code>max-hits</code> is configured to 10 000.
-The corpus is a synthetic (slightly randomized) data set, in practice the graph will be less smooth:
+The corpus is a synthetic (slightly randomized) data set,
+in practice the graph will be less smooth:
 </p>
 <img src="match-phase-max-hits.png">
 <p>
@@ -619,16 +598,17 @@ This means that if you have queries that matches few documents,
 match-phase might make these queries significantly slower,
 hence it might actually be faster to run the query without the filter.
 </p><p>
-Example: Lets say you have a corpus with a document attribute named created_time.
-For all queries you want the newest content surfaced so you enable match-phase on created_time. So far, so good.
-You get a great latency and always get your top-k hits.
+Example: Lets say you have a corpus with a document attribute named <em>created_time</em>.
+For all queries you want the newest content surfaced so you enable match-phase on <em>created_time</em>.
+So far, so good - you get a great latency and always get your top-k hits.
 The problem might come if you introduce a filter.
-If you have a filter saying you only want documents from the last day
+If you have a filter saying you only want documents from the last day,
 then match-phase can become sub-optimal and in some cases much worse than not running with match-phase.
 By design Vespa will evaluate potential matches for a query by the order of their internal documentid.
 This means it will start evaluating documents in the order they was indexed on the node,
 and for most use-cases that means the oldest documents first.
-Without a filter, every document is a potential match and match-phase will quickly figure out how it can optimize.
+Without a filter, every document is a potential match,
+and match-phase will quickly figure out how it can optimize.
 With the filter, on the other hand, the algorithm need to evaluate almost all the corpus
 before it reaches potential matches (1 day old corpus),
 and because of the way the algorithm is implemented,
@@ -650,47 +630,36 @@ and contact the Vespa team if your results are not what you expect.
 
 <h2 id="container-node">Container node</h2>
 <p>
-In general, the container follows the classic "hockey stick" for
-latency when overloaded. When overloaded, a sharp increase in latency
-is followed by a cascade of effects which each contribute to a
-worsening of the situation.  For search applications, the container
-has some heuristics to try and detect a breakdown state.
+In general, the container follows the classic "hockey stick" for latency when overloaded.
+When overloaded, a sharp increase in latency is followed by a cascade of effects
+which each contribute to a worsening of the situation.
+For search applications, the container has some heuristics to try and detect a breakdown state.
 </p><p>
-First of all, if a node is extremely overloaded, nothing will run
-efficiently at all. If the container thinks this is the case, it will
-log a thread dump, starting with the following warning in the log:
-</p>
-<blockquote>
-<em>A watchdog meant to run 10 times a second has not been invoked for 5 seconds.
-This usually means this machine is swapping or otherwise severely overloaded.</em>
-</blockquote>
-<p>
-The shutdown watchdog may deactivated by editing
-the <code>bropt</code> variable in
-the <code>vespa-start-container-daemon</code> script, or by adding the
-correct system property
-(<code>-Dvespa.freezedetector.disable=true</code>) to the JVM startup
-arguments.
+First of all, if a node is extremely overloaded, nothing will run efficiently at all.
+If the container thinks this is the case, it will log a thread dump,
+starting with the following warning in the log:
+<pre>
+A watchdog meant to run 10 times a second has not been invoked for 5 seconds.
+This usually means this machine is swapping or otherwise severely overloaded.
+</pre>
+The shutdown watchdog may deactivated by editing the <code>bropt</code> variable
+in the <code>vespa-start-container-daemon</code> script,
+or by adding the correct system property
+(<code>-Dvespa.freezedetector.disable=true</code>) to the JVM startup arguments.
 </p><p>
-If a large proportion of search queries start timing out, and there is
-enough traffic that it is not obvious it is a pure testing scenario,
-the container will log the following warning message:
-</p>
-<blockquote>
-<em>Too many queries timed out. Assuming container is in breakdown.</em>
-</blockquote>
-<p>
-A search plug-in may inspect whether the container thinks the system
-is in breakdown, using a the Execution.Context object in the Execution
-instance passed by the search method. Please refer to the JavaDoc
-for <a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchchain/Execution.html">com.yahoo.search.searchchain.Execution.Context.getBreakdown()</a>.
+If a large proportion of search queries start timing out,
+and there is enough traffic that it is not obvious it is a pure testing scenario, the container will log:
+<pre>
+Too many queries timed out. Assuming container is in breakdown.
+</pre>
+A search plug-in may inspect whether the container thinks the system is in breakdown,
+using a the Execution.Context object in the Execution instance passed by the search method - see
+<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchchain/Execution.Context.html#getBreakdown()">getBreakdown()</a>.
 </p><p>
-When breakdown is assumed, a certain amount of queries will start
-emitting detailed diagnostics in the log
-(<code>com.yahoo.search.searchchain.Execution.Context.getDetailedDiagnostics()</code>).
-The messages will look something like this:
-</p>
-<pre class="code">
+When breakdown is assumed, some queries will start emitting detailed diagnostics in the log - see
+<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchchain/Execution.Context.html#getDetailedDiagnostics()">
+getDetailedDiagnostics()</a> - the messages will look like:
+<pre>
 1304337308.016  myhost.mydomain.com 20344/17  container  Container.com.yahoo.search.handler.SearchHandler warning
     Time use per searcher:
     com.yahoo.search.querytransform.NGramSearcher@music(QueryProcessing(SEARCH: 0 ms), ResultProcessing(SEARCH: 0 ms)),
@@ -703,7 +672,7 @@ The messages will look something like this:
     com.yahoo.prelude.querytransform.NormalizingSearcher@music(QueryProcessing(SEARCH: 1 ms), ResultProcessing(SEARCH: 0 ms)),
     com.yahoo.prelude.searcher.ValidateSortingSearcher@music(QueryProcessing(SEARCH: 0 ms), ResultProcessing(SEARCH: 0 ms)),
     com.yahoo.prelude.cluster.ClusterSearcher@music(QueryProcessing(SEARCH: 0 ms), ResultProcessing()),
-    com.yahoo.search.SlowSearcher@default(QueryProcessing(SEARCH: 12 ms, FILL: 0 ms), ResultProcessing(SEARCH: 18 ms)),
+    <span style="background-color: yellow;">com.yahoo.search.SlowSearcher@default(QueryProcessing(SEARCH: 12 ms, FILL: 0 ms), ResultProcessing(SEARCH: 18 ms)),</span>
     com.yahoo.prelude.statistics.StatisticsSearcher@native(QueryProcessing(SEARCH: 1 ms), ResultProcessing(SEARCH: 0 ms)),
     com.yahoo.search.grouping.GroupingQueryParser@vespa(QueryProcessing(SEARCH: 0 ms), ResultProcessing(SEARCH: 0 ms)),
     com.yahoo.prelude.searcher.JuniperSearcher@vespa(QueryProcessing(SEARCH: 0 ms), ResultProcessing(SEARCH: 0 ms)),
@@ -719,20 +688,13 @@ The messages will look something like this:
     com.yahoo.prelude.querytransform.VietnamesePhrasingSearcher@vespa(QueryProcessing(SEARCH: 0 ms), ResultProcessing(SEARCH: 0 ms)),
     federation@native(QueryProcessing(SEARCH: 0 ms), ResultProcessing(SEARCH: 1 ms)).
 </pre>
-<p>
 This message gives time spent for each searcher,
-in each search for each type of activity (basically searching versus
-filling hits). The data above are from a test where a SlowSearcher
-class was inserted to provoke extra timing information:
-</p>
-<pre class="code">
-com.yahoo.search.SlowSearcher@default(QueryProcessing(SEARCH: 12 ms, FILL: 0 ms), ResultProcessing(SEARCH: 18 ms))
-</pre>
-<p>
-In other words, the class named <code>SlowSearcher</code>, in the
-search chain named <code>default</code>, spent 12 ms while query
-processing in the search phase, and somewhere less than a ms while
-invoked in the fill phase. No time was added for its result processing
-in the fill phase, but it was measured to use 18 ms for result
-processing in the search.
+in each search for each type of activity (basically searching versus filling hits).
+The data above are from a test where a SlowSearcher class was inserted to provoke extra timing information.
+In other words, the class named <code>SlowSearcher</code>,
+in the search chain named <code>default</code>,
+spent 12 ms while query processing in the search phase,
+and somewhere less than a ms while invoked in the fill phase.
+No time was added for its result processing in the fill phase,
+but it was measured to use 18 ms for result processing in the search.
 </p>
