@@ -30,12 +30,13 @@ Partitioning is then used to create linear scalability in data size and query ra
 
 
 <h2 id="life-of-a-query">Life of a query</h2>
+<!-- ToDo: kill this section and link to querying-vespa.html instead / move this info there
+   - this to remove overlap -->
 <p>
 Vespa executes a query in two phases (or more if when using grouping features).
 During the first-phase, search/content nodes (proton) match and rank documents.
-The topmost documents are returned upwards to the TLD (Top Level Dispatcher)
-and the search Container for merging and potentially blending
-when multiple search clusters are involved.
+The topmost documents are returned to the search Container for merging
+and potentially blending when multiple search clusters are involved.
 When the best ranking documents are found,
 the second-phase is to fetch the summary data for those hits (snippets, bolding etc).
 The figure below illustrates the query flow to the search/content nodes:
@@ -49,31 +50,21 @@ Components Involved in Query Execution:
   <li>Parses the query</li>
   <li>Modify the query according to the search definition specification
   (stemming, etc)</li>
-  <li>Dispatching of query to selected search cluster(s)</li>
+  <li>Dispatching of query to content nodes in the search cluster(s)</li>
   <li>Blending of topmost results from cluster(s)</li>
   <li>Fetching the topmost results with document summaries from cluster(s)</li>
   <li>Rendering of results back to client </li>
   </ul>
 </li>
-<li>TLD (top level dispatcher, vespa-dispatch-bin process)
-  <ul>
-  <li>Dispatching incoming query in parallel to all content nodes so
-  that the entire data collection is searched.</li>
-  <li>Merging the topmost hits from all queried content nodes</li>
-  </ul>
-</li>
-<li>Searcher (vespa-proton-bin process)
+<li>Search (vespa-proton-bin process)
   <ul>
   <li>Finding all documents matching an incoming query using the indices.</li>
   <li>Calculating the rank score (relevancy) of each hit, using the chosen
   rank-profile (first-phase and second-phase ranking expression).</li>
-  <li>Aggregating information over all the generated hits using attributes in
-  grouping.</li>
-  <li>Sorting hits on rank score, or on attribute(s) if requested in the
-  query.</li>
+  <li>Aggregating information over all the generated hits using attributes in grouping.</li>
+  <li>Sorting hits on rank score, or on attribute(s) if requested in the query.</li>
   <li>Processing and returning the document summaries of the selected hits
-  (during second-phase after merging and blending has happened on levels
-  above).</li>
+  (during second-phase after merging and blending has happened on levels above).</li>
   </ul>
 </li>
 </ul>
@@ -107,7 +98,7 @@ Components Involved in Query Execution:
   </tr><tr id="dispatch-cost">
     <td><strong>dispatch cost</strong></td>
     <td>
-      This is the cost on query scatter/result gather handling performed by TLD (vespa-dispatch).
+      This is the cost on query scatter/result gather handling.
       It scales mostly linearly with the number of nodes involved.
       Unless the query payload is large
       (e.g. social search friend list, large set of words for WAND style queries)
@@ -181,9 +172,9 @@ times to be reasonable and within SLA even with some extra traffic occurring at 
 
 <h2 id="data-volume-and-throughput-scaling-by-partitioning">Data volume and throughput scaling by partitioning</h2>
 <p>
-Each search/content node holds a partition of the index. Each search/content
-node queries its partition of the index upon a request from a <em>dispatcher</em>.
-A dispatcher is responsible for sending an incoming query in parallel
+Each search/content node holds a partition of the index.
+Each search/content node queries its partition of the index upon a request from a <em>container</em>.
+A container is responsible for sending an incoming query in parallel
 to a set of search/content nodes so that all partitions are asked (full coverage).
 The results are then merged, and a complete result from the entire cluster is generated.
 The time to search the index is dependent on the number of nodes in the content cluster,
@@ -198,7 +189,7 @@ queries executed against an increasing number of documents indexed.
 
 <h3 id="latency-reduction-caching-summaries">Latency reduction caching summaries</h3>
 <p>
-Fetching document summaries are normally a small cost compared to actually searching.
+Fetching document summaries is normally a small cost compared to actually searching.
 Default configuration for this phase is focused on low resource usage.
 However if you want faster fetching of summaries you can enable the cache in the backend.
 Then you will use some more memory, but will get reduced latency/higher throughput.
@@ -345,6 +336,9 @@ the size of the document and how many of the fields are defined as attributes.
 
 
 <h2 id="throughput-scaling-by-replication">Throughput scaling by replication</h2>
+<!-- ToDo: Migrate the relevant parts from qps-scaling-content-cluster.html here (it overlaps) -
+  and put how to migrate to groups into operations/admin-procedures.html -
+  then remove qps-scaling-content-cluster.html -->
 <p>
 When the static query cost (<em>SQC</em>) or the dispatch cost (<em>DC</em>) becomes significant,
 then scaling by replication should be considered.
@@ -354,7 +348,7 @@ Take a look at
 Content Cluster</a> for more information on how to use hierarchical distribution.
 </p><p>
 When data is replicated such that only a portion of the nodes are needed by
-the <em>dispatcher</em> to get full coverage,
+the <em>container</em> to get full coverage,
 then both the average static query cost (<em>SQC</em>)
 and the dispatch cost (<em>DC</em>) are significantly reduced.
 But the feed cost (<em>FC</em>), disk space requirement,
@@ -428,13 +422,16 @@ to reduce the number of columns.
 
 <h2 id="searchnode">Search/Content Node</h2>
 <p>
-A Vespa search/content node typically runs the search process, <em>vespa-proton-bin</em>.
+A Vespa search/content node runs the <a href="../proton.html">proton</a> search process.
+<!-- ToDo: remove this part, not relevant as users should run one proton per node
+   and use docker / kubernetes / other container tech to virtualize on node level instead -->
 It is possible to configure multiple instances per physical node.
 The situation is a bit complex, since a physical node going down will
 be equivalent to multiple logical nodes going down at the same time.
 By using hierarchical distribution, it is possible to tweak the distribution of bucket
 replicas in such a way that the system should still handle <em>n - 1</em>
 physical nodes going down on a content cluster where redundancy has been set to <em>n</em>.
+<!-- end ToDo -->
 </p><p>
 The search process has the following roles:
 <ul>
@@ -601,8 +598,8 @@ This means that if you have queries that matches few documents,
 match-phase might make these queries significantly slower,
 hence it might actually be faster to run the query without the filter.
 </p><p>
-Example: Lets say you have a corpus with a document attribute named created_time.
-For all queries you want the newest content surfaced so you enable match-phase on created_time.
+Example: Lets say you have a corpus with a document attribute named <em>created_time</em>.
+For all queries you want the newest content surfaced so you enable match-phase on <em>created_time</em>.
 So far, so good - you get a great latency and always get your top-k hits.
 The problem might come if you introduce a filter.
 If you have a filter saying you only want documents from the last day,
@@ -651,8 +648,7 @@ or by adding the correct system property
 (<code>-Dvespa.freezedetector.disable=true</code>) to the JVM startup arguments.
 </p><p>
 If a large proportion of search queries start timing out,
-and there is enough traffic that it is not obvious it is a pure testing scenario,
-the container will log the following warning message:
+and there is enough traffic that it is not obvious it is a pure testing scenario, the container will log:
 <pre>
 Too many queries timed out. Assuming container is in breakdown.
 </pre>
