@@ -361,6 +361,163 @@ read requests may be sent to a bucket copy that does not have the most updated s
 
 
 
+<h2 id="migrate-to-using-groups-example-1">Migrate to using groups - example 1</h2>
+<p>
+Migrating from flat distribution to a
+<a href="../elastic-vespa.html#grouped-distribution">hierarchy</a>
+will temporarily reduce query coverage.
+To work around, increase redundancy first, then reconfigure to using groups.
+When adding new group(s), it will take some time to populate the new nodes.
+During this transition period, queries hitting these nodes will return partial results.
+<a href="../reference/services-content.html#nodes">Reference documentation</a>.
+</p><p>
+Example - migrate to using groups. Starting point:
+A cluster with 4 nodes and flat distribution and redundancy 2.
+End state: all 4 nodes with all documents:
+<pre>
+&lt;content id="music" version="1.0"&gt;
+  &lt;redundancy&gt;2&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="music" /&gt;
+  &lt;/documents&gt;
+  &lt;nodes&gt;
+    &lt;node hostalias="node0"/&gt;
+    &lt;node hostalias="node1"/&gt;
+    &lt;node hostalias="node2"/&gt;
+    &lt;node hostalias="node3"/&gt;
+  &lt;/nodes&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;searchable-copies&gt;2&lt;/searchable-copies&gt;
+    &lt;/proton&gt;
+  &lt;/engine&gt;
+&lt;/content&gt;
+</pre>
+Increase <em>redundancy</em> and <em>searchable-copies</em> to 4.
+After deploying this, wait for all search nodes to finish redistribution
+(i.e. all nodes have all documents):
+<pre>
+&lt;content id="music" version="1.0"&gt;
+  &lt;redundancy&gt;4&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="music" /&gt;
+  &lt;/documents&gt;
+  &lt;nodes&gt;
+    &lt;node hostalias="node0"/&gt;
+    &lt;node hostalias="node1"/&gt;
+    &lt;node hostalias="node2"/&gt;
+    &lt;node hostalias="node3"/&gt;
+  &lt;/nodes&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;searchable-copies&gt;4&lt;/searchable-copies&gt;
+    &lt;/proton&gt;
+  &lt;/engine&gt;
+&lt;/content&gt;
+</pre>
+Reconfigure to 4 groups, setting <em>redundancy</em>
+and <em>searchable-copies</em> to 1 (these settings apply per group):
+<pre>
+&lt;content id="music" version="1.0"&gt;
+  &lt;redundancy&gt;1&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="music" /&gt;
+  &lt;/documents&gt;
+  &lt;group distribution-key="0" name="mytopgroup"&gt;
+    &lt;distribution partitions="1|*"/&gt;
+    &lt;group distribution-key="0" name="mygroup0"&gt;
+      &lt;node distribution-key="0" hostalias="node0"/&gt;
+    &lt;/group&gt;
+    &lt;group distribution-key="1" name="mygroup1"&gt;
+      &lt;node distribution-key="0" hostalias="node1"/&gt;
+    &lt;/group&gt;
+    &lt;group distribution-key="2" name="mygroup2"&gt;
+      &lt;node distribution-key="0" hostalias="node1"/&gt;
+    &lt;/group&gt;
+    &lt;group distribution-key="3" name="mygroup3"&gt;
+      &lt;node distribution-key="0" hostalias="node1"/&gt;
+    &lt;/group&gt;
+  &lt;/group&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;searchable-copies&gt;1&lt;/searchable-copies&gt;
+    &lt;/proton&gt;
+  &lt;/engine&gt;
+&lt;/content&gt;
+</pre>
+</p>
+
+
+<h2 id="migrate-to-using-groups-example-2">Migrate to using groups - example 2</h2>
+<!-- ToDo: Reference to performance/sizing-search.html and/or migrate this there -->
+<p>
+The following example has a simple content cluster with flat distribution,
+redundancy 2 and 3 content/search nodes:
+<pre>
+&lt;content version="1.0" id="mycluster"&gt;
+  &lt;redundancy&gt;2&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="mydoctype"/&gt;
+  &lt;/documents&gt;
+  &lt;group distribution-key="0" name="mytopgroup"&gt;
+    &lt;node distribution-key="0" hostalias="node0"/&gt;
+    &lt;node distribution-key="1" hostalias="node1"/&gt;
+    &lt;node distribution-key="2" hostalias="node2"/&gt;
+  &lt;/group&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;searchable-copies&gt;2&lt;/searchable-copies&gt;
+    &lt;/proton&gt;
+  &lt;/engine&gt;
+&lt;/content&gt;
+</pre>
+Lets say we need to increase the QPS in our system by a factor of 2
+and that the static query cost (SQC) is high.
+We cannot just add 3 more content/search nodes to reach the desired QPS.
+Instead we use hierarchical distribution to get extra groups
+that also contain the entire document collection.
+The next section shows how to setup such a system.
+</p><p>
+We have defined 2 leaf groups (<em>mygroup0</em>, <em>mygroup1</em>)
+that are located under the top group.
+Each leaf group has 3 content/search nodes.
+The total redundancy of the system is now 4,
+and the <em>distribution partitions</em>
+is specified such that each leaf group will have 2 copies of the documents in the system.
+Each query can be sent to the nodes of a single group instead of all nodes in the system
+and the QPS requirement can be met through parallelization of searches.
+With redundancy 2 per leaf group we can also lose a node from a group
+and still have enough coverage.
+<pre>
+&lt;content version="1.0" id="mycluster"&gt;
+  &lt;redundancy&gt;4&lt;/redundancy&gt;
+  &lt;documents&gt;
+    &lt;document mode="index" type="mydoctype"/&gt;
+  &lt;/documents&gt;
+  &lt;group distribution-key="0" name="mytopgroup"&gt;
+    &lt;distribution partitions="2|*"/&gt;
+    &lt;group distribution-key="0" name="mygroup0"&gt;
+      &lt;node distribution-key="0" hostalias="node0"/&gt;
+      &lt;node distribution-key="1" hostalias="node1"/&gt;
+      &lt;node distribution-key="2" hostalias="node2"/&gt;
+    &lt;/group&gt;
+    &lt;group distribution-key="1" name="mygroup1"&gt;
+      &lt;node distribution-key="3" hostalias="node3"/&gt;
+      &lt;node distribution-key="4" hostalias="node4"/&gt;
+      &lt;node distribution-key="5" hostalias="node5"/&gt;
+    &lt;/group&gt;
+  &lt;/group&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;searchable-copies&gt;4&lt;/searchable-copies&gt;
+    &lt;/proton&gt;
+  &lt;/engine&gt;
+&lt;/content&gt;
+</pre>
+</p>
+
+
+
 <h2 id="troubleshooting">Troubleshooting</h2>
 
 

@@ -154,8 +154,6 @@ Other aspects of feeding:
         content nodes and add/remove as needed.
         Write operations wait for replies from every replica
         and fail if less than redundancy are persisted within timeout.
-        Replica placement is found in
-        <a href="content/data-placement.html">document distribution</a>.
         </p><p>
         <a href="reference/services-content.html#searchable-copies">Searchable-copies</a>
         configures how many replicas to keep in the
@@ -370,7 +368,7 @@ otherwise the buckets would all have to move to regain their ideal states.
 Do not remove more than <em>redundancy</em>-1 nodes at a time.
 Observe <em>idealstate.merge_bucket.pending</em> to know bucket replica status,
 when zero on all distributor nodes, it is safe to remove more nodes.
-If <a href="content/data-placement.html">hierarchical distribution</a>
+If <a href="#grouped-distribution">grouped distribution</a>
 is used to control bucket replicas, remove all nodes in a group
 if the redundancy settings ensure replicas in each group.
 </p><p>
@@ -404,6 +402,86 @@ This is supported using <a href="content/visiting.html#data-export-import">visit
 
 
 
+<h2 id="grouped-distribution">Grouped distribution</h2>
+<p>
+Documents can be uniformly distributed or in groups:
+</p>
+<img src="img/qps-scaling-content-cluster.svg" height="420" width="740" />
+<p>
+The <a href="reference/services-content.html#group">group</a> element is used to distribute
+<a href="content/buckets.html">buckets</a> of documents - use cases:
+<table class="table">
+<thead></thead><tbody>
+<tr>
+  <th style="white-space: nowrap">Cluster upgrade</th>
+  <td>
+    Use two (or more) groups  - then shut down one group in the cluster for upgrade.
+    This is quicker than doing it one by one node -
+    the tradeoff is that 50% of the nodes must sustain the full load (in case of two groups),
+    and one must always grow the cluster by two (or more) nodes, one in each group.
+    Latency per search node goes up with a larger index, such grouping will double the index size.
+  </td>
+</tr><tr>
+  <th style="white-space: nowrap">Query throughput</th>
+  <td>
+    Applications with high query load on a small index can benefit of keeping the full index on all nodes -
+    i.e. configuring the same number of groups as nodes.
+    This confines queries to one node only,
+    so less <em>total</em> work is done per query in the cluster.
+    Hence the throughput increase.
+    This increases latency compared with splitting the index on many nodes.
+    It also limits options when growing the index size -
+    at some point, the query latency might grow too high,
+    and the only option then is to add nodes to the group.
+    Having two nodes per group is bad if one node goes down,
+    as one node must hence be able to hold the full index again.
+  </td>
+</tr><tr>
+  <th style="white-space: nowrap">Cautious data placement</th>
+  <td>
+    A way to reduce the risk of data unavailability,
+    is to spread the data copies across different locations,
+    like placing all the copies in different racks.
+    Furthermore, this data placement enables fast upgrade procedures without service interruption,
+    as entire groups can be upgraded at a time.
+  </td>
+</tr>
+</tbody>
+</table>
+By default, Vespa distributes <a href="content/buckets.html">buckets</a>
+uniformly across all distributor and storage nodes.
+Use grouped distribution to control where bucket copies are stored in relation to each other.
+For instance, if your cluster consists of 10 racks,
+you can define that for any given bucket,
+it should store 2 copies in one rack and 2 copies in another rack.
+That means that you can take down a whole rack,
+and you are still sure that all your data is available,
+because you know all data on that rack should have 2 copies on another rack.
+</p><p>
+Also, improved network bandwidth can be utilized.
+If a node has restarted and it needs to fetch some data that came in while restarting to get up to date,
+it can now choose to fetch that data from a node on the same rack,
+which has better connectivity as it is in the same rack.
+(Here you must of course define one group per rack,
+and add the nodes in the rack in the respective groups)
+</p><p>
+When configuring the groups, specify how data is to be distributed among the group children.
+Refer to the <a href="reference/services-content.html#group">group</a>
+documentation for details about how to configure storage groups.
+</p><p>
+Which groups are selected as primary, secondary and so on, groups for a
+given bucket is randomly determined using the same ideal state algorithm we
+use to pick nodes, described in more detail in the
+<a href="content/idealstate.html">ideal state</a> reference document.
+Each group is assigned an index, to be used in this algorithm.
+This will however likely create a bit worse skew globally compared to not using groups.
+</p><p>
+Find examples on how to migrate from a flat to a grouped distribution in
+<a href="operations/admin-procedures.html#migrate-to-using-groups-example-1">procedures</a>.
+</p>
+
+
+
 <h2 id="limitations-and-tradeoffs">Limitations and tradeoffs</h2>
 <table class="table">
 <thead></thead></tbody>
@@ -417,7 +495,7 @@ This is supported using <a href="content/visiting.html#data-export-import">visit
     Note that <em>searchable-copies</em> does not apply to <a href="streaming-search.html">streaming search</a>
     as this does not use index structures.
     </p><p>
-    Distributing buckets using <a href="content/data-placement.html">groups</a>
+    Distributing buckets using <a href="#grouped-distribution">groups</a>
     helps implement policies for availability and
     <a href="qps-scaling-using-groups.html">query performance</a>.
     </p></td>
