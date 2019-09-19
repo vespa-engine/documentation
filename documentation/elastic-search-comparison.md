@@ -40,12 +40,12 @@ In Vespa you do not have to worry about the number of shards and re-sharding. Ve
 Vespa allows applications to grow (and shrink) their hardware while serving queries and accepting writes as normal. Data is automatically redistributed in the background using the minimal amount of data movement required to reestablish an even data distribution. No restarts or other operations are needed, just change the hardware listed in the configuration and redeploy the application.
 
 
-For a detailed guide on how to set up a multinode Vespa system see [Multi-Node Quick Start](https://docs.vespa.ai/documentation/vespa-quick-start-multinode-aws.html).
+For a detailed guide on how to set up a multinode Vespa system see [Multi-Node Quick Start](vespa-quick-start-multinode-aws.html).
 
 
 Other relevant sources:
 
-* [Vespa Elasticity](https://docs.vespa.ai/documentation/elastic-vespa.html)
-* [Vespa sizing guide](https://docs.vespa.ai/documentation/performance/sizing-search.html)
-* [QPS Scaling in an Indexed Content Cluster](https://docs.vespa.ai/documentation/qps-scaling-content-cluster.html)
-* [Migrating from Elasticsearch to Vespa](/documentation/migrating-from-elastic-search-to-vespa.html)
+* [Vespa Elasticity](elastic-vespa.html)
+* [Vespa sizing guide](performance/sizing-search.html)
+* [QPS scaling using groups](qps-scaling-using-groups.html)
+* [Migrating from Elasticsearch to Vespa](migrating-from-elastic-search-to-vespa.html)
