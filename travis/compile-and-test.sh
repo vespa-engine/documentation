@@ -11,7 +11,7 @@ source /etc/profile.d/jdk-env.sh
 /usr/sbin/alternatives --set javac "$JAVAC_11"
 export JAVA_HOME="$JAVA_11_HOME"
 
-yum install -y python36-pip
+yum install -y python36-pip docker
 
 pip3 install -r test/requirements.txt --user
 
