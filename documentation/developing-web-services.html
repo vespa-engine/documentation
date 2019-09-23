@@ -152,40 +152,36 @@ A request handler may query the search components running in the same container
 without any appreciable overhead:</p>
 
 
-<h3 id="invoking-search-queries-from-a-jdisc-component">Invoking search queries from a JDisc component</h3>
-<p>
-It is not necessary to dispatch a request through JDisc,
-with the overhead associated with that procedure,
-to perform a search query from e.g. a request handler
-running in the JDisc Container if the same container also functions as a search container.
-If the application is a search application,
-simply add the class <em>com.yahoo.search.handler.SearchHandler</em>
-to the list of constructor arguments,
-and invoke its <em>handle(HttpRequest)</em> method directly. Example:
-</p><p>
-Construction:
+<h3 id="invoking-Vespa-queries-from-a-component">Invoking Vespa queries from a component</h3>
+
+<p>To invoke Vespa queries from a component, have an instance of com.yahoo.search.searchchain.ExecutionFactory injected
+in your constructor and use its API to construct and issue the query. The container this runs in must include the
+<code>&lt;search&gt;</code> tag for the ExecutionFactory to be available. Example:</p>
+
 <pre>
-  private final SearchHandler searchHandler;
-  
-  public HelloWorld(Executor executor, AccessLog accessLog,
-                    SearchHandler searchHandler, ResponseConfig config) {
-      super(executor, accessLog);
-      super(executor, accessLog,null,true);
-      this.response = config.response();
-      this.searchHandler = searchHandler;
-  }
+import com.google.inject.Inject;
+import com.yahoo.component.ComponentId;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.component.Chain;
+import com.yahoo.search.searchchain.Execution;
+import com.yahoo.search.searchchain.ExecutionFactory;
+
+public class MyComponent {
+
+    private final ExecutionFactory executionFactory;
+
+    @Inject
+    public MyComponent(ExecutionFactory executionFactory) {
+        this.executionFactory = executionFactory;
+    }
+
+    Result executeQuery(Query query, String chainId) {
+        Chain&lt;Search&gt; searchChain = executionFactory.searchChainRegistry().getChain(new ComponentId(chainId));
+        Execution execution = executionFactory.newExecution(searchChain);
+        query.getModel().setExecution(execution);
+        return execution.search(query);
+    }
+
+}
 </pre>
-Request handling:
-<pre>
-  @Override
-  public HttpResponse handle(HttpRequest request) {
-      HttpRequest searchRequest = new HttpRequest.Builder(request)
-          .put(Model.QUERY_STRING, "something to look for")
-          .createDirectRequest();
-      HttpResponse response = searchHandler.handle(searchRequest);
-      return r;
-  }
-</pre>
-The search will then run directly in the thread owned by the <em>HelloWorld</em> request handler,
-and no extra resolving of URI pattern bindings is necessary.
-</p>
