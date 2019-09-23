@@ -4,4 +4,4 @@
 
 set -e
 
-docker run --rm -v $(pwd):/source -w /source --entrypoint /source/travis/compile-and-test.sh vespaengine/vespa-pipeline
+docker run --rm -v/var/run/docker.sock:/var/run/docker.sock -v $(pwd):/source -w /source --entrypoint /source/travis/compile-and-test.sh vespaengine/vespa-pipeline
