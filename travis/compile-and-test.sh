@@ -11,9 +11,15 @@ source /etc/profile.d/jdk-env.sh
 /usr/sbin/alternatives --set javac "$JAVAC_11"
 export JAVA_HOME="$JAVA_11_HOME"
 
-yum install -y python36-pip docker
+# Install same docker as in our host on travis
+curl -sLOf "https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-17.03.3.ce-1.el7.x86_64.rpm"
+curl -sLOf "https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-selinux-17.03.3.ce-1.el7.noarch.rpm"
+yum localinstall -y docker-ce-17.03.3.ce-1.el7.x86_64.rpm docker-ce-selinux-17.03.3.ce-1.el7.noarch.rpm
 
+# Install python 3 and requirements for the tests
+yum install -y python36-pip
 pip3 install -r test/requirements.txt --user
 
+# Run all tests
 ./test/test.py
 
