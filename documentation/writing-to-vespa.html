@@ -9,16 +9,19 @@ Vespa documents are created according to the
 or constructed programmatically - options:
 <ul><li>
   <a href="document-api.html">RESTified Document Operation API</a>:
-  Simple REST API for operations based on document ID (get, put, remove, update,visit). 
+  REST API for get, put, remove, update, visit.
 </li><li>
-  <a href="vespa-http-client.html">The Vespa HTTP client</a>. This is a small standalone jar which
-  feeds to Vespa either through method calls in Java or by consuming a file from the command line.
-  It provides a simple API while achieving high performance by using multiplexing and multiple parallel async connections.
+  <a href="vespa-http-client.html">The Vespa HTTP client</a>.
+  A standalone jar which feeds to Vespa either by method calls in Java or from the command line.
+  It provides a simple API while achieving high performance
+  by using multiplexing and multiple parallel async connections.
   It is recommended in all cases when feeding from a node outside the Vespa cluster. 
 </li><li>
-  <a href="document-api-guide.html">The Document API</a>. This provides direct read-and write access to Vespa documents
-  through Vespa's internal communication layer. Use this when accessing documents from Java components in Vespa
-  such as searchers and document processors.
+  <a href="document-api-guide.html">The Document API</a>.
+  This provides direct read-and write access to Vespa documents using Vespa's internal communication layer.
+  Use this when accessing documents from Java components in Vespa
+  such as <a href="searcher-development.html">searchers</a> and
+  <a href="document-processing.html">document processors</a>.
 </li><li>
   <a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a> is a utility to feed data with high performance.
   <a href="reference/vespa-cmdline-tools.html#vespa-get">vespa-get</a> gets single documents,
@@ -40,7 +43,7 @@ CRUD operations:
     provided by the application's <a href="search-definitions.html">search definition</a> -
     see <a href="reference/search-definitions-reference.html#field">field types</a>.
     A document is overwritten if a document with the same document ID exists
-    and no <a href="reference/document-json-format.html#test-and-set"> test and set</a> condition is given.
+    and without a <a href="reference/document-json-format.html#test-and-set">test and set</a> condition.
   </td>
 </tr><tr>
   <td><strong>Remove</strong></td>
@@ -53,7 +56,7 @@ CRUD operations:
     Like the put and update operations, a
     <a href="reference/document-json-format.html#test-and-set">
     test and set</a> condition can be specified for remove operations,
-    only removing the document when the condition (document selection) matches the document.
+    only removing the document when the condition is true.
   </td>
 </tr><tr>
   <td><strong>Update</strong></td>
@@ -78,6 +81,106 @@ CRUD operations:
 
 
 
+<h2 id="performance">Performance</h2>
+<p>
+When updating (put/update/remove), consider:
+<ul>
+  <li><a href="proton.html#transaction-log">transaction log</a></li>
+  <li><a href="document-summaries.html#document-store">document store</a></li>
+  <li><a href="attributes.html">attributes</a></li>
+  <li><a href="proton.html#index">indexes</a></li>
+</ul>
+These data structures might or might not be updated,
+depending on the <a href="search-definitions.html">search definition</a>.
+The transaction log is always written. General notes:
+<ol>
+<li>
+<em>Putting</em> a document will always update the document store, a file append.
+</li><li>
+A partial update on an <em>indexed</em> field will read the document from the document store,
+change the field, and write it back to the store - and also update the memory index.
+</li><li>
+To improve feed throughput, trading off freshness, increase
+<a href="reference/services-content.html#visibility-delay">visibility-delay</a>
+to batch writes on the content nodes for higher write performance.
+This trades off latency -
+writes will take effect in search results after <em>visibility-delay</em> seconds.
+This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
+</li><li>
+Configure the CPU allocation for feeding vs. searching in
+<a href="content/setup-proton-tuning.html#feeding">concurrency</a>.
+</li><li>
+The feeding endpoint is run in a <a href="overview.html">stateless container cluster</a>.
+Documents flow from this cluster to the content node cluster.
+Hence both this cluster and the content node cluster must be evaluated to find the bottleneck.
+For the stateless cluster, check CPU usage and GC metrics -
+the <a href="performance/container-tuning.html">heap</a> must not be too low.
+Some applications use separate container clusters
+for feeding (<em>&lt;document-api&gt;</em>) and searching (<em>&lt;search&gt;</em>).
+</li>
+</ol>
+
+
+<h3 id="feed-updates-with-high-throughput">Feed updates with high throughput</h3>
+<p>
+A Vespa content node can sustain a high document update rate,
+given that all data to be updated is in memory.
+Complete step 3-5 in previous section - then:
+<ol>
+  <li>Make sure all fields that are updated are <a href="attributes.html">attributes</a>.</li>
+  <li>Make sure all attributes to update are <a href="proton.html#sub-databases">ready</a>,
+    meaning the content node has loaded the attribute into memory.
+    One way to ensure this is to set
+    <a href="reference/services-content.html#searchable-copies">searchable copies</a> equal to
+    <a href="reference/services-content.html#redundancy">redundancy</a> -
+    i.e. all nodes that has a replica of the document has loaded it as searchable.
+    Another way is by setting
+    <a href="reference/search-definitions-reference.html#attribute">fast-access</a> on each attribute to update.</li>
+  <li>Use the <a href="vespa-http-client.html">Java HTTP client</a> in asynchronous mode.</li>
+  <li>Test feeding performance by adding feeder instances.
+    Make sure network and CPU (content and container node) usage increases, until saturation.</li>
+</ol>
+</p>
+
+
+
+<h2 id="feed-block">Feed block</h2>
+<p>
+Feed operations fail when a cluster is at disk or memory capacity.
+Configure <a href="reference/services-content.html#resource-limits">resource-limits</a> to tune this -
+the defaults block feeding before disk or memory is full.
+</p><p>
+The <a href="performance/attribute-memory-usage.html#multivalue-mapping-enum-store">attribute multivalue mapping and enum store</a>
+can also go full and block feeding.
+</p><p>
+To remedy, add nodes to the content cluster or use nodes with higher capacity.
+The data will <a href="elastic-vespa.html">auto-redistribute</a>, and feeding is unblocked.
+These metrics indicate whether feeding is blocked (set to 1 when blocked):
+<table class="table">
+  <tr>
+    <th>content.proton.resource_usage.feeding_blocked</th>
+    <td>disk or memory</td>
+  </tr><tr>
+    <th>content.proton.documentdb.attribute.resource_usage.feeding_blocked</th>
+    <td><a href="performance/attribute-memory-usage.html#multivalue-mapping-enum-store">attribute enum store</a>
+      or <a href="search-definitions.html#multivalue-fields">multivalue</a></td>
+  </tr>
+</table>
+When feeding is blocked, events are logged - examples:
+<pre>
+Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
+  action: \"add more content nodes\",
+  reason: \"disk used (0.85) &gt; disk limit (0.8)\",
+  capacity: 100000000000,
+  free: 85000000000,
+  available: 85000000000,
+  diskLimit: 0.8
+}'
+</pre>
+</p>
+
+
+
 <h2 id="ordering">Ordering</h2>
 <p>
 The Document API uses the document identifier to implement ordering.
@@ -92,104 +195,28 @@ document, and the first operation fails, the second operation that was
 enqueued is sent. If the client chooses to just resend the failed request,
 the order of operations has been switched.
 </p><p>
-If different clients have operations towards the same document pending,
-the order of operations is undefined.
+If <em>different</em> clients have pending operations on the same document,
+the order is undefined.
 </p>
+
 
 
 <h2 id="timestamps">Timestamps</h2>
 <p>
 Write operations like <em>put</em>, <em>update</em> and <em>remove</em>,
-will have a timestamp assigned to them going through the <em>distributor</em>.
-This timestamp is guaranteed to be unique within the
+have a timestamp assigned, passing through the <a href="distributor.html">distributor</a>.
+The timestamp is guaranteed to be unique within the
 <a href="content/buckets.html">bucket</a> where it is stored.
-This timestamp is used by the content layer to decide which operation is newest.
+The timestamp is used by the content layer to decide which operation is newest.
 These timestamps may be used when <a href="content/visiting.html">visiting</a>,
 to only process/retrieve documents within a given timeframe.
-To guarantee unique timestamps, they are given in microseconds,
+To guarantee unique timestamps, they are in microseconds,
 and the microsecond part may be generated or altered to avoid conflicts with other documents.
 </p><p>
 The internal timestamp is often referred to as the last modified time.
-This is the time of the last write operation going through the <a href="distributor.html">distributor</a>.
+This is the time of the last write operation going through the <em>distributor</em>.
 If documents are migrated from cluster to cluster,
 the target cluster will have new timestamps for their entries,
 and when reprocessing documents within a cluster,
 documents will have new timestamps even if not modified.
-</p>
-
-
-
-<h2 id="performance">Performance</h2>
-<p>
-When updating the data (put/update/remove), consider:
-<ul>
-  <li><a href="proton.html#transaction-log">transaction log</a></li>
-  <li><a href="document-summaries.html#document-store">document store</a></li>
-  <li><a href="attributes.html">attributes</a></li>
-  <li><a href="proton.html#index">indexes</a></li>
-</ul>
-These data structures might or might not be updated depending on the <a href="search-definitions.html">search definition</a>.
-The transaction log is always written.
-</p><p>
-<em>Putting</em> a document will always update the document store, a file append.
-</p><p>
-A partial update on an <em>indexed</em> field will read the document from the document store,
-change the field, and write it back to the store - and also update the memory index.
-</p><p>
-A partial update on an <em>attribute</em> field is a memory-only operation (except for the transaction log).
-There are some performance tradeoffs described in <a href="attributes.html">attribute update</a>:
-Speed of partial updates and garbage collection is reduced if
-<a href="reference/services-content.html#searchable-copies">
-searchable copies</a> is lower than <a href="reference/services-content.html#redundancy">redundancy</a>.
-This is caused by no <a href="attributes.html">attributes</a> for the non-searchable copies.
-Set <a href="reference/search-definitions-reference.html#attribute">fast-access</a> on the attributes to
-update to ensure they exist for the non-searchable copies as well.
-</p><p>
-To improve feed throughput, trading off freshness, increase
-<a href="reference/services-content.html#visibility-delay">visibility-delay</a>
-to batch writes on the content nodes for higher write performance.
-This trades off latency -
-writes will take effect in search results after <em>visibility-delay</em> seconds.
-This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
-</p><p>
-Configure the fraction of CPU capacity to allocate to feeding in
-<a href="content/setup-proton-tuning.html#feeding">concurrency</a>.
-</p><p>
-The feeding endpoint is run in a <a href="overview.html">stateless container cluster</a>.
-Documents flow from this cluster to the content node cluster.
-Hence both this cluster and the content node cluster must be evaluated to find the bottleneck.
-For the stateless cluster, check CPU usage and GC metrics -
-the <a href="performance/container-tuning.html">heap</a> must not be too low.
-</p>
-
-
-
-<h2 id="feed-block">Feed block</h2>
-<p>
-Feed operations fail when a cluster is at full disk or memory capacity.
-Configure <a href="reference/services-content.html#resource-limits">resource-limits</a> to tune this -
-the defaults will block feeding before disk or memory is full.
-</p><p>
-The <a href="performance/attribute-memory-usage.html#multivalue-mapping-enum-store">attribute multivalue mapping and enum store</a>
-can also go full and block feeding.
-</p><p>
-To remedy, add nodes to the content cluster or swap nodes with higher capacity.
-The data will <a href="elastic-vespa.html">auto-redistribute</a> and feeding will succeed again.
-These metrics indicate whether feeding is blocked (set to 1 when blocked):
-<ul>
-  <li><em>content.proton.resource_usage.feeding_blocked</em>: disk / memory</li>
-  <li><em>content.proton.documentdb.attribute.resource_usage.feeding_blocked</em>: attribute enum store or
-    <a href="search-definitions.html#multivalue-fields">multivalue</a></li>
-</ul>
-When feeding is blocked, events are logged - examples:
-<pre>
-Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
-  action: \"add more content nodes\",
-  reason: \"disk used (0.85) &gt; disk limit (0.8)\",
-  capacity: 100000000000,
-  free: 85000000000,
-  available: 85000000000,
-  diskLimit: 0.8
-}'
-</pre>
 </p>
