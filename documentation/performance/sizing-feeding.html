@@ -1,0 +1,249 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vespa Feed Sizing Guide"
+---
+
+<p>
+When updating (put/update/remove), consider:
+<ul>
+  <li><a href="../proton.html#transaction-log">transaction log</a></li>
+  <li><a href="../document-summaries.html#document-store">document store</a></li>
+  <li><a href="../attributes.html">attributes</a></li>
+  <li><a href="../proton.html#index">indexes</a></li>
+</ul>
+These data structures might or might not be updated,
+depending on the <a href="../search-definitions.html">search definition</a>.
+The transaction log is always written. General notes:
+<ol>
+<li>
+<em>Putting</em> a document will always update the <em>document store</em>, a file append.
+</li><li>
+A partial update on an <em>indexed</em> field will read the document from the <em>document store</em>,
+change the field, and write it back - and also update the memory index.
+</li><li>
+To improve feed throughput, trading off freshness, increase
+<a href="../reference/services-content.html#visibility-delay">visibility-delay</a>
+to batch writes on the content nodes for higher write performance.
+This trades off latency -
+writes will take effect in search results after <em>visibility-delay</em> seconds.
+This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
+</li><li>
+Configure the CPU allocation for feeding vs. searching in
+<a href="../content/setup-proton-tuning.html#feeding">concurrency</a>.
+</li><li>
+The feeding endpoint is run in a <a href="../overview.html">stateless container cluster</a>.
+Documents flow from this cluster to the content node cluster.
+Hence both this cluster and the content node cluster must be evaluated to find the bottleneck.
+For the stateless cluster, check CPU usage and GC metrics -
+the <a href="container-tuning.html">heap</a> must not be too low.
+Some applications use separate container clusters
+for feeding (<em>&lt;document-api&gt;</em>) and searching (<em>&lt;search&gt;</em>).
+</li>
+</ol>
+
+
+<h2 id="document-updates">Document updates</h2>
+<p>
+Consider the difference when sending two fields assignments two the same document:
+<pre>
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{1}" : {
+            "assign" : {
+                "timestamp" : 1570187817
+            }
+        }
+        "myMap{2}" : {
+            "assign" : {
+                "timestamp" : 1570187818
+            }
+        }
+    }
+}
+</pre>
+
+<pre>
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{1}" : {
+            "assign" : {
+                "timestamp" : 1570187817
+            }
+        }
+    }
+}
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{2}" : {
+            "assign" : {
+                "timestamp" : 1570187818
+            }
+        }
+    }
+}
+</pre>
+In the first case, <em>one</em> update operation is send from the vespa-http-client -
+in the latter, the client will send the second update operation <em>after</em> receiving
+and ack for the first.
+<a href="writing-to-vespa.html#ordering">Ordering details</a>.
+</p>
+
+
+
+<h2 id="feed-updates-with-high-throughput">Feed updates with high throughput</h2>
+<p>
+A Vespa content node can sustain a high document update rate,
+given that all data to be updated is in memory.
+Complete step 3-5 in previous section - then:
+<ol>
+  <li>Make sure all fields that are updated are <a href="../attributes.html">attributes</a>.</li>
+  <li>Make sure all attributes to update are <a href="../proton.html#sub-databases">ready</a>,
+    meaning the content node has loaded the attribute into memory.
+    One way to ensure this is to set
+    <a href="../reference/services-content.html#searchable-copies">searchable copies</a> equal to
+    <a href="../reference/services-content.html#redundancy">redundancy</a> -
+    i.e. all nodes that has a replica of the document has loaded it as searchable.
+    Another way is by setting
+    <a href="../reference/search-definitions-reference.html#attribute">fast-access</a> on each attribute to update.</li>
+  <li>Update to arrays of struct/map requires a read from the
+    <a href="../document-summaries.html#document-store">document store</a> and will hence reduce update rate -
+      see <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.</li>
+</ol>
+Then see next section
+</p>
+
+
+
+<h2 id="feed-testing">Feed testing</h2>
+<p>
+When testing for feeding capacity:
+<ol>
+  <li>Use the <a href="../vespa-http-client.html">Java HTTP client</a> in asynchronous mode.</li>
+  <li>Test feeding performance by adding feeder instances.
+    Make sure network and CPU (content and container node) usage increases, until saturation.</li>
+  <li>See troubleshooting at end to make sure there are no errors</li>
+</ol>
+Scenarios: Feed testing for capacity for sustained load in a system in steady state,
+during state changes, during query load.
+</p>
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>
+Find a non-exhaustive list of things to check below:
+</p>
+
+<h3 id="metrics">Metrics</h3>
+<p>
+Look at queues on content nodes - queue wait time and queue size:
+<pre>
+vds.filestor.alldisks.averagequeuewait.sum average=217.635 last=94.464 min=6.6731 max=598.772 count=80554 total=1.75313e+07
+vds.filestor.alldisks.queuesize average=11.95 last=3 min=0 max=119 count=60 total=717
+</pre>
+Check content node metrics across all nodes to see if there are any outliers. Also check
+<pre>
+vds.filestor.alldisks.allthreads.update.sum.latency
+</pre>
+</p>
+
+
+<h3 id="failure-rates">Failure rates</h3>
+<p>
+<pre>
+vds.distributor.updates.sum.latency average=6324.93 last=4480.5 min=2.06559 max=35757.4 count=1596 total=1.00946e+07
+vds.distributor.updates.sum.ok count=1101
+vds.distributor.updates.sum.failures.total count=1085
+vds.distributor.updates.sum.failures.storagefailure count=495
+</pre>
+</p>
+
+
+<h3 id="blocked-feeding">Blocked feeding</h3>
+<p>
+Should be 0 everywhere -
+refer to <a href="../writing-to-vespa.html#feed-block">feed block</a>:
+<pre>
+content.proton.resource_usage.feeding_blocked
+</pre>
+
+</p>
+
+
+<h3 id="concurrent-mutations">Concurrent mutations</h3>
+<p>
+<pre>
+vds.distributor.updates.sum.failures.concurrent_mutations count=1484
+</pre>
+Mutating client operations towards a given document ID are sequenced on the distributors.
+If an operation is already active towards a document,
+a subsequently arriving one will be bounced back to the client with a transient failure code.
+Usually this happens when users send feed from multiple clients concurrently without synchronisation.
+Note that feed operations sent by a single client are sequenced client-side,
+so this should not be observed with a single client only.
+Bounced operations are never sent on to the backends and should not cause elevated latencies there,
+although the client will observe higher latencies due to automatic retries with back-off.
+</p>
+
+
+<h3 id="wrong-distribution">Wrong distribution</h3>
+<p>
+<pre>
+vds.distributor.updates.sum.failures.wrongdistributor count=590
+</pre>
+Indicates that clients keep sending to the wrong distributor.
+Normally this shouldn’t happen,
+as clients update and cache all state required to route directly to the correct distributor
+(Vespa uses a deterministic CRUSH-based algorithmic distribution).
+Some potential reasons for this:
+<ol>
+  <li>Clients are being constantly re-created with no cached state.</li>
+  <li>The system is in some kind of flux where the underlying state keeps changing constantly.</li>
+  <li>The client distribution policy has received so many errors
+      that it throws away its cached state to start with a clean slate to
+      e.g. avoid the case where it only has cached information for the bad side of a network partition.</li>
+  <li>The system has somehow failed to converge to a shared cluster state,
+      causing parts of the cluster to have a different idea of the correct state than others.</li>
+</ol>
+</p>
+
+
+<h3 id="cluster-out-of-sync">Cluster out of sync</h3>
+<p>
+<em>update_puts/gets</em> indicate "two-phase" updates:
+<pre>
+vds.distributor.update_puts.sum.latency average=8135.33 last=6635.28 min=2.72349 max=36744.2 count=3129 total=2.54555e+07
+vds.distributor.update_puts.sum.ok count=3129
+vds.distributor.update_puts.default.latency average=8135.33 last=6635.28 min=2.72349 max=36744.2 count=3129 total=2.54555e+07
+vds.distributor.update_puts.default.ok count=3129
+vds.distributor.update_gets.sum.latency average=4705.52 last=6677.02 min=1.71955 max=36792.9 count=4530 total=2.1316e+07
+vds.distributor.update_gets.sum.ok count=4530
+vds.distributor.update_gets.sum.failures.total count=20
+vds.distributor.update_gets.sum.failures.notfound count=20
+vds.distributor.update_gets.default.latency average=4705.52 last=6677.02 min=1.71955 max=36792.9 count=4530 total=2.1316e+07
+vds.distributor.update_gets.default.ok count=4530
+vds.distributor.update_gets.default.failures.total count=20
+vds.distributor.update_gets.default.failures.notfound count=20
+</pre>
+If replicas are out of sync,
+updates cannot be applied directly on the replica nodes
+as they risk ending up with diverging state.
+In this case, Vespa performs an explicit read-consolidate-write (write repair) operation on the distributors.
+This is usually a lot slower than the regular update path because it doesn’t happen in parallel.
+It also happens in the write path of other operations,
+so risks blocking these if the updates are expensive in terms of CPU.
+</p><p>
+Replicas being out of sync is by definition not the expected steady state of the system.
+For example, replica divergence can happen if one or more replica nodes are unable to process or persist operations.
+<pre>
+vds.idealstate.buckets average=2426 last=2426 min=2426 max=2426 count=5 total=12130
+vds.idealstate.merge_bucket.pending average=1701 last=1700 min=1700 max=1702 count=5 total=8505
+vds.idealstate.merge_bucket.done_ok count=2
+vds.idealstate.merge_bucket.done_failed count=2250
+</pre>
+Out of 2426 data buckets, 1700 of these are out of sync and require reconciliation.
+But only 2 attempts have actually succeeded.
+In a 5 minute time window, this is a very low success ratio.
+</p>
