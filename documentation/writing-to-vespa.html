@@ -27,8 +27,8 @@ or constructed programmatically - options:
   <a href="reference/vespa-cmdline-tools.html#vespa-get">vespa-get</a> gets single documents,
   <a href="reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> gets multiple.
 </li></ul>
-</p>
-<p>
+Refer to <a href="performance/sizing-feeding.html">feed sizing guide</a> for feeding performance.
+</p><p>
 CRUD operations:
 </p>
 <table class="table">
@@ -78,69 +78,6 @@ CRUD operations:
 </tr>
 </tbody>
 </table>
-
-
-
-<h2 id="performance">Performance</h2>
-<p>
-When updating (put/update/remove), consider:
-<ul>
-  <li><a href="proton.html#transaction-log">transaction log</a></li>
-  <li><a href="document-summaries.html#document-store">document store</a></li>
-  <li><a href="attributes.html">attributes</a></li>
-  <li><a href="proton.html#index">indexes</a></li>
-</ul>
-These data structures might or might not be updated,
-depending on the <a href="search-definitions.html">search definition</a>.
-The transaction log is always written. General notes:
-<ol>
-<li>
-<em>Putting</em> a document will always update the document store, a file append.
-</li><li>
-A partial update on an <em>indexed</em> field will read the document from the document store,
-change the field, and write it back to the store - and also update the memory index.
-</li><li>
-To improve feed throughput, trading off freshness, increase
-<a href="reference/services-content.html#visibility-delay">visibility-delay</a>
-to batch writes on the content nodes for higher write performance.
-This trades off latency -
-writes will take effect in search results after <em>visibility-delay</em> seconds.
-This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
-</li><li>
-Configure the CPU allocation for feeding vs. searching in
-<a href="content/setup-proton-tuning.html#feeding">concurrency</a>.
-</li><li>
-The feeding endpoint is run in a <a href="overview.html">stateless container cluster</a>.
-Documents flow from this cluster to the content node cluster.
-Hence both this cluster and the content node cluster must be evaluated to find the bottleneck.
-For the stateless cluster, check CPU usage and GC metrics -
-the <a href="performance/container-tuning.html">heap</a> must not be too low.
-Some applications use separate container clusters
-for feeding (<em>&lt;document-api&gt;</em>) and searching (<em>&lt;search&gt;</em>).
-</li>
-</ol>
-
-
-<h3 id="feed-updates-with-high-throughput">Feed updates with high throughput</h3>
-<p>
-A Vespa content node can sustain a high document update rate,
-given that all data to be updated is in memory.
-Complete step 3-5 in previous section - then:
-<ol>
-  <li>Make sure all fields that are updated are <a href="attributes.html">attributes</a>.</li>
-  <li>Make sure all attributes to update are <a href="proton.html#sub-databases">ready</a>,
-    meaning the content node has loaded the attribute into memory.
-    One way to ensure this is to set
-    <a href="reference/services-content.html#searchable-copies">searchable copies</a> equal to
-    <a href="reference/services-content.html#redundancy">redundancy</a> -
-    i.e. all nodes that has a replica of the document has loaded it as searchable.
-    Another way is by setting
-    <a href="reference/search-definitions-reference.html#attribute">fast-access</a> on each attribute to update.</li>
-  <li>Use the <a href="vespa-http-client.html">Java HTTP client</a> in asynchronous mode.</li>
-  <li>Test feeding performance by adding feeder instances.
-    Make sure network and CPU (content and container node) usage increases, until saturation.</li>
-</ol>
-</p>
 
 
 
