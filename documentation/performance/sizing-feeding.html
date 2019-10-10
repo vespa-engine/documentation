@@ -247,3 +247,52 @@ vds.idealstate.merge_bucket.done_ok
 vds.idealstate.merge_bucket.done_failed
 </pre>
 </p>
+
+
+<h3 id="summary-store">Summary store</h3>
+<p>
+When debugging update performance, it is useful to know if an update hits the
+<a href="../document-summaries.html#document-store">document store</a> or not.
+Enable <em>spam</em> log level and look for <em>SummaryAdapter::put</em> - then do an update:
+<pre>
+$ vespa-logctl searchnode:proton.server.summaryadapter spam=on
+.proton.server.summaryadapter    ON  ON  ON  ON  ON  ON OFF  ON
+
+$ vespa-logfmt -l all -f | grep 'SummaryAdapter::put'
+[2019-10-10 12:16:47.339] SPAM    : searchnode       proton.proton.server.summaryadapter	summaryadapter.cpp:45 SummaryAdapter::put(serialnum = '12', lid = 1, stream size = '199')
+</pre>
+Existence of such log messages indicates that the update was accessing the document store.
+</p>
+<!-- ToDo: when we have log for get and remove as well, add to documentation
+https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/proton/server/summaryadapter.cpp#L75
+-->
+
+
+<h3 id="conditional-updates">Conditional updates</h3>
+<p>
+A conditional update looks like:
+<pre>
+{
+    "condition" : "myDoc.myField == \"abc\"",
+    "update" : "id:namespace:myDoc::1",
+    "fields" : {
+        "myTimestamp" : {
+            "assign" : 1570187817
+        }
+    }
+}
+</pre>
+If the <a href="../document-summaries.html#document-store">document store</a>
+is accessed when evaluating the condition, performance drops.
+Conditions should be evaluated using attribute values for high performance -
+in the example above, <em>myField</em> should be an attribute.
+</p><p>
+Note: If the condition uses struct or map, values are read from the document store:
+<pre>
+    "condition": "myDoc.myMap{1} == 3"
+</pre>
+This is true even though all struct/map elements are defined as attribute.
+Improvements to this is tracked in
+<a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
+</p>
+<!-- ToDo: can probably use the "SummaryAdapter::get" log message above, once made -->
