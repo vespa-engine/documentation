@@ -85,9 +85,8 @@ Consider the difference when sending two fields assignments two the same documen
     }
 }
 </pre>
-In the first case, <em>one</em> update operation is send from the vespa-http-client -
-in the latter, the client will send the second update operation <em>after</em> receiving
-and ack for the first.
+In the first case, <em>one</em> update operation is sent from the vespa-http-client - in the latter,
+the client will send the second update operation <em>after</em> receiving and ack for the first.
 <a href="../writing-to-vespa.html#ordering">Ordering details</a>.
 </p>
 
@@ -111,8 +110,13 @@ Complete step 3-5 in previous section - then:
   <li>Update to array of struct/map and map of struct/map requires a read from the
     <a href="../document-summaries.html#document-store">document store</a> and will hence reduce update rate -
       see <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.</li>
+  <li>Updates to <a href="../reference/search-definitions-reference.html#field">multivalue fields</a>
+      are more expensive as the size grows. Example: a weighted set of string with many (1000+) elements.
+      Adding an element to the set means an enum store lookup/add and add/sort of the attribute multivalue map -
+      details in <a href="../attributes.html">attributes</a>.
+      Use a numeric type instead to speed this up - this has no string comparisons.
+      </li>
 </ol>
-Then see next section
 </p>
 
 
@@ -122,13 +126,15 @@ Then see next section
 When testing for feeding capacity:
 <ol>
   <li>Use the <a href="../vespa-http-client.html">Java HTTP client</a> in asynchronous mode.</li>
+  <li>Test using one content node to find its capacity</li>
   <li>Test feeding performance by adding feeder instances.
     Make sure network and CPU (content and container node) usage increases, until saturation.</li>
   <li>See troubleshooting at end to make sure there are no errors</li>
 </ol>
-Scenarios: Feed testing for capacity for sustained load in a system in steady state,
+Other scenarios: Feed testing for capacity for sustained load in a system in steady state,
 during state changes, during query load.
 </p>
+
 
 
 <h2 id="troubleshooting">Troubleshooting</h2>
@@ -136,10 +142,10 @@ during state changes, during query load.
 Find a non-exhaustive list of things to check below:
 </p>
 
+
 <h3 id="metrics">Metrics</h3>
 <p>
-<!-- ToDo: add command for how to find port etc for content node metrics / fix metrics doc for this -->
-Use <a href="../reference/metrics.html">metrics</a> from content nodes and look at queues -
+Use <a href="../reference/metrics.html#process-metrics-api">metrics</a> from content nodes and look at queues -
 queue wait time and queue size (all metrics in milliseconds):
 <pre>
 vds.filestor.alldisks.averagequeuewait.sum
@@ -175,7 +181,6 @@ refer to <a href="../writing-to-vespa.html#feed-block">feed block</a>:
 <pre>
 content.proton.resource_usage.feeding_blocked
 </pre>
-
 </p>
 
 
