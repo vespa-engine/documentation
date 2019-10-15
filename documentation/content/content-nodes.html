@@ -1,56 +1,58 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Cluster Controller"
+title: "Content nodes"
 ---
 
+
+<h2 id="cluster-controller">Cluster controller</h2>
 <p>
 The <em>cluster controller</em> will:
 <table class="table">
 <thead></thead><tbody>
 <tr>
   <th>Give the cluster a uniform view of its state</th><td>
-    The main responsibility of the cluster controller is to give the entire
-    cluster a uniform view of what nodes are available and what they capacities
-    are. To do this, it polls all distributor and content nodes for their
-    health and state information. All the states are combined into a cluster
-    state which is broadcasted back to all the distributors and content nodes.
+    The main cluster controller task is to give the cluster a uniform view
+    of what nodes are available and what they capacities are.
+    To do this, it polls all distributor and content nodes for health and state information.
+    All the states are combined into a cluster state which is again broadcasted.
   </td>
 </tr><tr>
   <th>Allow administrators to override node states</th><td>
     If one wants a node to be less available than its health indicates,
     administrators can override node states in the cluster controller.
-    Maintenance and retired modes offer other options to stop using the node
-    than just stopping the services, and enforcing it to be down also means
-    that if someone accidentally starts the services again it will not enter
-    the live cluster.
+    Maintenance and retired modes are options to stop using nodes
+    other than just stopping the services.
+    Enforcing a node to be down also means that
+    if someone accidentally starts the services again,
+    it will not enter the live cluster.
   </td>
 </tr><tr>
   <th>Automatically detect and fix cluster issues</th><td>
-    The cluster controller may notice that a node is misbehaving, such as
-    constantly crashing. The cluster controller may detect such issues and fix
-    them by stop using problematic nodes.
+    The cluster controller may notice that a node is failing,
+    such as constantly crashing.
+    The cluster controller can detect this and stop using problematic nodes.
   </td>
 </tr><tr>
   <th>Improving alerting and monitoring</th><td>
-    As the cluster controller monitors every nodes health, and can easily gather
-    node metrics, it is a good location to implement utilities to improve
-    automatic detection of issues and cluster monitoring.
+    As the cluster controller monitors content nodes' health,
+    and keeps some node metrics,
+    it is a good location to implement utilities
+    to improve automatic detection of issues and cluster monitoring.
   </td>
 </tbody>
 </table>
 
 
-
-<h2 id="uniform-state-view">Uniform state view</h2>
+<h3 id="uniform-state-view">Uniform state view</h3>
 <p>
-The main responsibility of the cluster controller is to give the cluster
-a uniform view of its <a href="content/admin-states.html">state</a>.
-This is achieved by <a href="#state-gather">gathering</a> node states,
-<a href="#state-combine">combining</a> them into a cluster state which is
-then <a href="#state-broadcast">broadcasted</a> to all the nodes in the cluster.
+The main task of the cluster controller is to maintain the
+<a href="admin-states.html">cluster state</a>.
+This is achieved by <em>polling</em> nodes for state,
+<em>generating</em> a cluster state,
+which is then <em>broadcast</em> to all the content nodes in the cluster.
 </p><p>
 Clients use the cluster state to route to the correct distributor
-using the <a href="content/idealstate.html">ideal state algorithm</a>.
+using the <a href="idealstate.html">ideal state algorithm</a>.
 They get updated cluster states through the distributors they talk to.
 If clients use the wrong distributor for a bucket,
 it will get the correct cluster state returned in the reply.
@@ -61,16 +63,16 @@ as distributors serves cluster states to clients.
 With an updated cluster state,
 distributors can detect that they are the correct target for the request,
 and content nodes can verify that the request comes from the correct distributor node.
-Verifying this allows the cluster to be less confused by misbehaving nodes.
 </p>
-<img src="img/design/clustercontroller-overview.png"/>
+<img src="../img/design/clustercontroller-overview.png"/>
 
 
-<h3 id="state-gather">Gathering node states</h3>
+<h3 id="node-state-polling">Node state polling</h3>
 <p>
-The cluster state needs availability and capacity information from all the
-distributor and content nodes. The cluster controller retrieves this
-information by polling all the nodes for health and state information.
+The cluster state uses availability and capacity information
+from all the distributor and content nodes.
+The cluster controller retrieves this information
+by polling all the nodes for health and state information.
 </p><p>
 To give the cluster controller an updated view, the cluster controller sends
 requests with the currently known node state.
@@ -83,27 +85,25 @@ This will trigger a reply to the lingering request and make the new one linger i
 This way, each node have a pending state request at almost all times,
 such that new information can be quickly given to the cluster controller.
 </p><p>
-In the case of a node doing a controlled shutdown,
-it may thus start the shutdown process by responding to the pending state request that it is now stopping.
-Seeing this reply, the cluster controller can know that the node is doing a controlled shutdown or restart.
+During a controlled node shutdown, it may thus start the shutdown process
+by responding to the pending state request that it is now stopping.
 <strong>Note: </strong> As controlled restarts or shutdowns are implemented as TERM signals
-from the <a href="config-sentinel.html">config-sentinel</a>,
-the cluster controller is not able to differ between controlled shutdowns
-and the process being killed by the OS for using too much memory
-or any other functionality that sends a TERM signal.
+from the <a href="../config-sentinel.html">config-sentinel</a>,
+the cluster controller is not able to differ between controlled and other shutdowns.
 </p>
 
 
-<h3 id="state-combine">Combining node states into a cluster state</h3>
+<h3 id="cluster-state-generation">Cluster state generation</h3>
 <p>
 The node states kept in the cluster state doesn't need to match the states
-reported from the node themselves. For instance, while a node may return that
-it is stopping to the cluster controller to indicate a reason for it shutting down,
+reported from the node themselves.
+For instance, while a node may return that it is stopping to the cluster controller
+to indicate a reason for it shutting down,
 the cluster state will say that this node is down or in maintenance mode.
 </p><p>
 The cluster controller is also free to keep the node temporarily out of service.
 For instance, if the node died while initializing last time it started,
-the cluster controller may find it wise to keep the node in the down state
+the cluster controller may keep the node in the down state
 until it verifies that the node managed to finish initializing this time around.
 </p><p>
 On top of this, there may be permanent state overrides for the node.
@@ -122,14 +122,14 @@ the state is adjusted based on it.
 
 <h3 id="state-broadcast">Cluster state broadcasting</h3>
 <p>
-When node states are received, an cluster controller internal cluster state is updated.
+When node states are received, a cluster controller internal cluster state is updated.
 To limit the amount of cluster states broadcasted to the cluster,
 the cluster controller is not allowed to create a new official state before a
 given time period has past since the last one.
 Additionally it will wait for a short period of time after receiving a change,
 in case there are other changes happening at about the same time that should be included too.
 For instance, distributors and content nodes that are on the same node
-often go down at the same time.
+often stop at the same time.
 </p><p>
 If the internal cluster state have changed enough from the last official
 cluster state for the cluster to care,
@@ -140,11 +140,10 @@ The version number is upped, and the new official cluster state is immediately b
 </p>
 
 
-
-<h2 id="master-election">Master election</h2>
+<h3 id="master-election">Master election</h3>
 <p>
 A set of cluster controllers elect a master among themselves.
-The master gathers <a href="content/admin-states.html">node states</a>
+The master gathers <a href="admin-states.html">node states</a>
 from all the distributor and content nodes, and combine them into a cluster state.
 The cluster state is broadcasted to all the nodes every time it changes,
 allowing all nodes to know what distributors are responsible for handling what parts of the data.
@@ -185,8 +184,7 @@ but participate in the master election voting process.
 </p>
 
 
-
-<h2 id="historic-state">Historic state</h2>
+<h3 id="historic-state">Historic state</h3>
 <p>
 Very little state is persisted by the cluster controllers.
 If the master changes, or is restarted, historic knowledge built up is typically reset.
@@ -230,31 +228,19 @@ but it may result in a few temporarily failures while it is confused.
 </p>
 
 
-
-<h2 id="monitoring">Monitoring cluster controller state</h2>
-
-
-<h3 id="rest-api">State Rest API</h3>
+<h3 id="monitoring">Monitoring cluster controller state</h3>
 <p>
 Basic cluster and node state information is available through the
-<a href="content/api-state-rest-api.html">State Rest API</a>.
+<a href="api-state-rest-api.html">State Rest API</a>.
 This API can also be used to set a user state for a node, e.g. forcing a node permanently down.
-</p>
-
-
-<h3 id="console-tools">Command line tools</h3>
-<p>
+</p><p>
 A few command line tools have been implemented using the State Rest API:
 <ul>
   <li><code>vespa-get-cluster-state</code></li>
   <li><code>vespa-get-node-state</code></li>
   <li><code>vespa-set-node-state</code></li>
 </ul>
-</p>
-
-
-<h3 id="monitoring">Monitoring cluster controller state</h3>
-<p>
+</p><p>
 A status page for the cluster controller is available at the status port at
 <code>http://hostname:port/clustercontroller-status/v1/<em>&lt;clustername&gt;</em></code>.
 If <em>clustername</em> is not specified, the available clusters will be listed.
@@ -262,7 +248,7 @@ The cluster controller leader status page will show if any nodes are operating w
 It will also show how many data buckets are pending merging (document set reconciliation)
 due to either missing or being out of sync.
 <pre>
-$ <a href="reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a> service container-clustercontroller | grep HTTP
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a> service container-clustercontroller | grep HTTP
 </pre>
 With multiple cluster controllers, look at the one with a "/0" suffix in its config ID;
 it is the preferred leader.
@@ -272,8 +258,7 @@ Divergence here usually points to host or networking issues.
 </p>
 
 
-
-<h2 id="configuration">Configuration</h2>
+<h3 id="configuration">Configuration</h3>
 <p>
 To configure the cluster controller, use
 <a href="/documentation/reference/services-content.html#cluster-controller">services.xml</a>
@@ -286,4 +271,65 @@ configuration</a> under the <em>services</em> element - example:
     &lt;min_time_between_new_systemstates&gt;5000&lt;/min_time_between_new_systemstates&gt;
   &lt;/config&gt;
 </pre>
+</p>
+
+
+
+<h2 id="distributor">Distributor</h2>
+<p>
+The distributor keeps track of which search nodes should hold which copy of each bucket,
+based on the <em>redundancy</em> setting and information from the cluster controller.
+Distributors are responsible for keeping track of metadata for a non-overlapping subset of the data in the cluster.
+The distributors each keep a bucket database containing metadata of buckets it is responsible for.
+This metadata indicates what content nodes store copies of the buckets,
+the checksum of the bucket content and the number of documents and meta entries within the bucket.
+Each incoming document is assigned to a bucket and forwarded to the right search nodes.
+All requests related to these buckets are sent through the distributors.
+</p><p>
+A <a href="../elastic-vespa.html#bucket-distribution-algorithm">distribution algorithm</a>
+calculates what distributors are responsible for given buckets based on
+information of what nodes are available in the cluster.
+Clients calculate what distributor to talk to using information in the cluster state.
+</p><p>
+When a distributor goes down or becomes available,
+all distributors reshuffle what buckets they are responsible for.
+During this reshuffling, clients may get some requests temporarily failing
+as distributors taking over bucket ownership doesn't yet know where copies of its buckets are located.
+These requests will automatically be resent, providing timeouts allow for it.
+Changes in what distributors are up and available will currently cause windows of availability loss.
+Other distributors take over bucket ownership.
+To do this, they fetch bucket metadata for new buckets from all storage nodes,
+in-memory operations for speed.
+</p><p>
+The distribution algorithm also calculates what content nodes copies of buckets should be stored on.
+As moving bucket copies take time, the distributors track current state in a bucket database,
+allowing requests to be processed independent of where buckets are currently located.
+Distributors use the distribution algorithm to detect buckets that are stored on wrong nodes,
+and move copies to correct nodes when there are free resources to do so.
+</p><p>
+In addition the distributor can track some historic knowledge.
+For instance it may know that of the currently existing bucket copies,
+a given copy has been available all the time and may be trusted to have all the information,
+while another copy may be on a storage node that recently restarted,
+so that copy may lack some documents.
+Such historic state is not persisted, and is thus lost on distributor restarts.
+</p><p>
+The distributors use the bucket metadata to ensure the buckets are in a good state.
+<ul>
+  <li>If buckets have too few copies, new copies are generated</li>
+  <li>If buckets have too many copies, superfluous copies are deleted once the
+    distributor knows the copies to delete don't contain data other copies do not have</li>
+  <li>If all the copies do not contain the same data,
+    merges are issued to get bucket copies consistent</li>
+  <li>If two buckets exist, such that both may contain the same document,
+    the buckets are split or joined to remove such overlapping buckets</li>
+  <li>If buckets contain too little or too much data, they should be joined or split</li>
+  <li>If not exactly one copy is marked active, and the backend wants a copy to
+    be marked active, activate or deactivate copies to get in a good state</li>
+</ul>
+The maintenance operations have different priorities.
+The distributor prioritizes to fix the most critical issues first.
+If no maintenance operations are needed, the cluster is said to be in the <em>ideal state</em>.
+The distributors synchronize maintenance load with user load,
+e.g. to remap requests to other buckets after bucket splitting and joining.
 </p>
