@@ -143,19 +143,19 @@ Write the following to `application/services.xml`:
 <services version="1.0">
 
   <container id="text_search" version="1.0">
-    <search/>
-    <document-processing/>
-    <document-api/>
+    <search></search>
+    <document-processing></document-processing>
+    <document-api></document-api>
   </container>
 
   <content id="msmarco" version="1.0">
     <redundancy reply-after='1'>1</redundancy>
     <documents>
-      <document type='msmarco' mode="index"/>
-      <document-processing cluster="text_search"/>
+      <document type='msmarco' mode="index"></document>
+      <document-processing cluster="text_search"></document-processing>
     </documents>
     <nodes>
-      <node distribution-key='0' hostalias='node1'/>
+      <node distribution-key='0' hostalias='node1'></node>
     </nodes>
   </content>
 </services>
