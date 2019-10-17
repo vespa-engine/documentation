@@ -10,6 +10,8 @@ for an overview of the Document API flow using the nodes described below.
 Refer to <a href="../operations/admin-procedures.html">administrative procedures</a>
 for configuration and state monitoring / management.
 </p>
+<img src="../img/design/clustercontroller-overview.png"/>
+<!-- ToDo: replace with better illustration -->
 
 
 
@@ -137,8 +139,87 @@ may thus have outdated data on the node level.
 <!-- ToDo: An example cluster state string is useful here -->
 
 
+
 <h2 id="cluster-controller">Cluster controller</h2>
 <p>
+The main task of the cluster controller is to maintain the <a href="#cluster-state">cluster state</a>.
+This is done by <em>polling</em> nodes for state,
+<em>generating</em> a cluster state,
+which is then <em>broadcast</em> to all the content nodes in the cluster:
+<table class="table">
+<tr id="node-state-polling">
+  <th>Node state polling</th>
+  <td>
+  <p>
+  The cluster controller polls nodes, sending the current cluster state.
+  If the cluster state is no longer correct, the node returns correct information immediately.
+  If the state is correct, the request lingers on the node,
+  such that the node can reply to it immediately if its state changes.
+  After a while, the cluster controller will send a new state request to the node,
+  even with one pending.
+  This triggers a reply to the lingering request and makes the new one linger instead.
+  Hence, nodes have a pending state request.
+  </p><p>
+  During a controlled node shutdown, it starts the shutdown process
+  by responding to the pending state request that it is now stopping.
+  <strong>Note: </strong> As controlled restarts or shutdowns are implemented as TERM signals
+  from the <a href="../config-sentinel.html">config-sentinel</a>,
+  the cluster controller is not able to differ between controlled and other shutdowns.
+  </p>
+  </td>
+</tr><tr id="cluster-state-generation">
+  <th>Cluster state generation</th>
+  <td>
+  <p>
+  The node states in the cluster state do not necessarily match the states
+  reported from the node themselves.
+  E.g, a node may return that it is <em>stopping</em>,
+  but the cluster state will say that this node is <em>down</em> or in <em>maintenance</em>.
+  </p><p>
+  The cluster controller is also free to keep the node temporarily out of service.
+  For instance, if the node died while initializing last time it started,
+  the cluster controller may keep the node in the down state
+  until it verifies that the node managed to finish initializing this time around.
+  </p><p>
+  On top of this, there may be permanent state overrides for the node.
+  If the cluster controller detects the node constantly restarting,
+  creating unnecessary state flux that interrupts the cluster,
+  it may permanently set the node out of service until an administrator can fix it.
+  Administrators may also manually override the state to set the node temporarily out of service
+  while doing maintenance work, or removing it permanently due to some issues being manually detected.
+  </p><p>
+  The node states in the cluster states are thus calculated based on the
+  reported states from the node, and historic knowledge kept in the cluster controller.
+  If the result ends up in a state with higher availability than the user state for the node,
+  the state is adjusted based on it.
+  </p>
+  </td>
+</tr><tr id="state-broadcast">
+  <th>Cluster state broadcasting</th>
+  <td>
+  <p>
+  When node states are received, a cluster controller internal cluster state is updated.
+  To limit the amount of cluster states broadcasted to the cluster,
+  the cluster controller is not allowed to create a new official state before a
+  given time period has past since the last one.
+  Additionally it will wait for a short period of time after receiving a change,
+  in case there are other changes happening at about the same time that should be included too.
+  For instance, distributors and content nodes that are on the same node
+  often stop at the same time.
+  </p><p>
+  If the internal cluster state have changed enough from the last official
+  cluster state for the cluster to care,
+  enough time has passed since the last official state was generated (typically a few seconds),
+  and no more node state changes have been seen recently (typically less than a second),
+  a new official cluster state is generated based on the internal state.
+  The version number is upped, and the new official cluster state is immediately broadcasted to all the nodes.
+  </p>
+  </td>
+</tr>
+</table>
+Note that clients do not interface with the cluster controller -
+they get the cluster state from the distributors - <a href="#distributor">details</a>.
+</p><p>
 The <em>cluster controller</em> will:
 <table class="table">
 <thead></thead><tbody>
@@ -174,97 +255,6 @@ The <em>cluster controller</em> will:
   </td>
 </tbody>
 </table>
-The main task of the cluster controller is to maintain the <a href="#cluster-state">cluster state</a>.
-This is achieved by <em>polling</em> nodes for state,
-<em>generating</em> a cluster state,
-which is then <em>broadcast</em> to all the content nodes in the cluster.
-</p><p>
-Clients use the cluster state to route to the correct distributor
-using the <a href="idealstate.html">ideal state algorithm</a>.
-They get updated cluster states through the distributors they talk to.
-If clients use the wrong distributor for a bucket,
-it will get the correct cluster state returned in the reply.
-The client then calculates the correct distributor and resends the request.
-That way, clients do not depend directly on the cluster controller
-as distributors serves cluster states to clients.
-</p><p>
-With an updated cluster state,
-distributors can detect that they are the correct target for the request,
-and content nodes can verify that the request comes from the correct distributor node.
-</p>
-<img src="../img/design/clustercontroller-overview.png"/>
-
-
-<h3 id="node-state-polling">Node state polling</h3>
-<p>
-The cluster state uses availability and capacity information
-from all the distributor and content nodes.
-The cluster controller retrieves this information
-by polling all the nodes for health and state information.
-</p><p>
-To give the cluster controller an updated view, the cluster controller sends
-requests with the currently known node state.
-If the supplied state is no longer correct, the node returns correct information immediately.
-If the state is correct, the request lingers on the node for a while, such that the
-node can reply to it immediately if its state changes.
-After a while, the cluster controller will send a new state request to the node,
-even if it has one pending.
-This will trigger a reply to the lingering request and make the new one linger instead.
-This way, each node have a pending state request at almost all times,
-such that new information can be quickly given to the cluster controller.
-</p><p>
-During a controlled node shutdown, it may thus start the shutdown process
-by responding to the pending state request that it is now stopping.
-<strong>Note: </strong> As controlled restarts or shutdowns are implemented as TERM signals
-from the <a href="../config-sentinel.html">config-sentinel</a>,
-the cluster controller is not able to differ between controlled and other shutdowns.
-</p>
-
-
-<h3 id="cluster-state-generation">Cluster state generation</h3>
-<p>
-The node states kept in the cluster state doesn't need to match the states
-reported from the node themselves.
-For instance, while a node may return that it is stopping to the cluster controller
-to indicate a reason for it shutting down,
-the cluster state will say that this node is down or in maintenance mode.
-</p><p>
-The cluster controller is also free to keep the node temporarily out of service.
-For instance, if the node died while initializing last time it started,
-the cluster controller may keep the node in the down state
-until it verifies that the node managed to finish initializing this time around.
-</p><p>
-On top of this, there may be permanent state overrides for the node.
-If the cluster controller detects the node constantly restarting,
-creating unnecessary state flux that interrupts the cluster,
-it may permanently set the node out of service until an administrator can fix it.
-Administrators may also manually override the state to set the node temporarily out of service
-while doing maintenance work, or removing it permanently due to some issues being manually detected.
-</p><p>
-The node states in the cluster states are thus calculated based on the
-reported states from the node, and historic knowledge kept in the cluster controller.
-If the result ends up in a state with higher availability than the user state for the node,
-the state is adjusted based on it.
-</p>
-
-
-<h3 id="state-broadcast">Cluster state broadcasting</h3>
-<p>
-When node states are received, a cluster controller internal cluster state is updated.
-To limit the amount of cluster states broadcasted to the cluster,
-the cluster controller is not allowed to create a new official state before a
-given time period has past since the last one.
-Additionally it will wait for a short period of time after receiving a change,
-in case there are other changes happening at about the same time that should be included too.
-For instance, distributors and content nodes that are on the same node
-often stop at the same time.
-</p><p>
-If the internal cluster state have changed enough from the last official
-cluster state for the cluster to care,
-enough time has passed since the last official state was generated (typically a few seconds),
-and no more node state changes have been seen recently (typically less than a second),
-a new official cluster state is generated based on the internal state.
-The version number is upped, and the new official cluster state is immediately broadcasted to all the nodes.
 </p>
 
 
@@ -414,4 +404,14 @@ The distributor prioritizes to fix the most critical issues first.
 If no maintenance operations are needed, the cluster is said to be in the <em>ideal state</em>.
 The distributors synchronize maintenance load with user load,
 e.g. to remap requests to other buckets after bucket splitting and joining.
+</p><p>
+<!-- ToDo rewrite this -->
+Clients use the cluster state to route to the correct distributor
+using the <a href="idealstate.html">ideal state algorithm</a>.
+They get updated cluster states through the distributors they talk to.
+If clients use the wrong distributor for a bucket,
+it will get the correct cluster state returned in the reply.
+The client then calculates the correct distributor and resends the request.
+That way, clients do not depend directly on the cluster controller
+as distributors serves cluster states to clients.
 </p>
