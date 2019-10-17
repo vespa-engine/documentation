@@ -47,20 +47,18 @@ search foo {
 </pre>
 <p>
 Refer to formulas below.
-Assume average 5 values per document, and average string length 10.
-Then usage is 5*(10 + 32) bytes per document during
-initialization, with 10 million documents that becomes 2100000000
-bytes, or roughly 2GB of attribute data. Increase the average number of
-values per document to 10 (double) will also double the memory
-footprint during initialization (4GB). The steady state attribute
-footprint will be lower, but when doing the capacity plan,
-keep in mind the maximum footprint, which occurs during
-initialization. For the steady state footprint, the number of unique
-values is very important for string attributes.
+Assume average 10 values per document, average string length 15, 100k unique strings and 20M documents.
+Steady state memory usage is approx 1GB (20M*4*(6/5) + 20M*10*4*(6/5) + 100k*(15+1+4+4)*(6/5)).
+During initialization (loading attribute from disk) an additional 2.4GB is allocated (20M*10*(4+4+4), for each
+value we track the local document id, enum value and weight).
+Increasing the average number of values per document to 20 (double) will also double the memory
+footprint during initialization (4.8GB).
+When doing the capacity planning, keep in mind the maximum footprint, which occurs during initialization.
+For the steady state footprint, the number of unique values is very important for string attributes.
 </p><p>
 Check the <a href="../files/Attribute-memory-Vespa.xls">Example attribute sizing spreadsheet</a>,
-with various data types and collection types for a simple search application.
-It also contains estimates for how many documents a 16GB RAM node can hold.
+with various data types and collection types.
+It also contains estimates for how many documents a 48GB RAM node can hold, taking initialization into account.
 </p>
 
 
@@ -131,7 +129,7 @@ listed below - concepts:
     <tr>
       <td>WW</td>
       <td>Weight width</td>
-      <td>Width of the weight in a weighted set, 4 bytes</td>
+      <td>Width of the weight in a weighted set, 4 bytes. 0 bytes for arrays.</td>
     </tr>
     <tr>
       <td>EIW</td>
@@ -193,7 +191,7 @@ listed below - concepts:
     </tr>
     <tr>
       <td>Multivalue mapping</td>
-      <td>D * V * (FW or EIW)</td>
+      <td>D * V * ((FW or EIW) + WW)</td>
       <td>ROF</td>
       <td>Applicable only for array or weighted sets. EIW if string or fast-search</td>
     </tr>
@@ -233,7 +231,7 @@ listed below - concepts:
     <tr>
       <td>Numeric multivalue value plain</td>
       <td>Document vector, Multivalue mapping</td>
-      <td>D * MIW * ROF + D * V * FW * ROF </td>
+      <td>D * MIW * ROF + D * V * (FW+WW) * ROF </td>
     </tr>
     <tr>
       <td>Numeric singlevalue fast-search</td>
@@ -243,7 +241,7 @@ listed below - concepts:
     <tr>
       <td>Numeric multivalue value fast-search</td>
       <td>Document vector, Multivalue mapping, Enum store, Posting List</td>
-      <td>D * MIW * ROF + D * V * EIW * ROF + U * (FW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
+      <td>D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
     </tr>
     <tr>
       <td>Singlevalue string plain</td>
@@ -258,12 +256,12 @@ listed below - concepts:
     <tr>
       <td>Multivalue string plain</td>
       <td>Document vector, Multivalue mapping, Enum store</td>
-      <td>D * MIW * ROF + D * V * EIW * ROF + U * (FW+VW+4+EIW) * ROF</td>
+      <td>D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+VW+4+EIW) * ROF</td>
     </tr>
     <tr>
       <td>Multivalue string fast-search</td>
       <td>Document vector, Multivalue mapping, Enum store, Posting list</td>
-      <td>D * MIW * ROF + D * V * EIW * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
+      <td>D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
     </tr>
     <tr>
       <td>Boolean singlevalue</td>
