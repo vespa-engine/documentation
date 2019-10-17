@@ -104,55 +104,26 @@ Divergence here usually points to host or networking issues.
 
 
 
-<h2 id="detecting-overload">Detecting overload</h2>
-<ul>
-<li>
-  If the number of requests exceed what the cluster is scaled for,
-  there may be permanent overload until more nodes can be added
-  or some data can be migrated off the cluster
-</li><li>
-  If nodes have been disabled, cluster capacity is lowered,
-  which may cause permanent overload
-</li><li>
-  Spikes in external load may lead to temporary overload
-</li><li>
-  Background tasks with inappropriate priorities may overload cluster until they complete
-</li><li>
-  Cluster incidents requiring maintenance operations to fix may cause temporary overloads.
-  Most maintenance operations can be performed at reasonably low priority,
-  but some operations are more important than others,
-  and may have been set to a priority higher than some not that critical external traffic
-</li><li>
-  Metrics for operation throughput can also be used,
-  to detect that the cluster is suddenly doing a lot of one type of operation that it doesn't normally do
-</li><li>
-  Disk and/or memory might be exhausted and block feeding - recover from
-  <a href="../writing-to-vespa.html#feed-block">feed block</a>
-</li>
-</ul>
-
-
-<h3 id="queues">Queues</h3>
+<h2 id="Overload">Overload</h2>
 <p>
-The most trustworthy metric for overload is the prioritized partition queues on the content nodes.
-In an overload situation, operations above some priority level will come in so fast
-that operations below this priority level will just fill up the queue.
+Disk and/or memory might be exhausted and block feeding - recover from
+<a href="../writing-to-vespa.html#feed-block">feed block</a>
+</p><p>
+Prioritized partition queues on the content nodes.
 The metric to look out for is the <code>.filestor.alldisks.queuesize</code> metric,
 giving a total value for all the partitions.
-</p><p>
 While queue size is the most dependable metric, operations can be queued elsewhere too,
 which may be able to hide the issue.
 There are some visitor related queues:
 <code>.visitor.allthreads.queuesize</code> and <code>.visitor.cv_queuesize</code>.
-Additionally, maintenance operations may be queued merely by not being created yet,
-as there's no reason to keep more pending operations than is needed to get good throughput.
-</p>
-
-
-<h3 id="track-system-resources">Track system resources</h3>
-<p>
-It may seem obvious to detect overload by monitoring CPU, memory and IO usage.
-However, a fully utilized resource does not necessarily indicate overload.
+</p><p>
+Many applications built on Vespa is used by multiple clients
+and faces the problem of protecting clients from abuse. Use the
+<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchers/RateLimitingSearcher.html">
+RateLimitingSearcher</a> to rate limit load from each client type.
+</p><p>
+Monitor CPU, memory and IO usage.
+Note: A fully utilized resource does not necessarily indicate overload.
 As the content cluster supports prioritized operations,
 it will typically do as many low priority operations as it is able to
 when no high priority operations are in the queue.
@@ -160,22 +131,8 @@ This means, that even if there's just a low priority reprocess
 or a load rebalancing effort going on after a node went down,
 the cluster may still use up all available resources to process these low priority tasks.
 </p><p>
-Network bandwidth consumption and switch saturation is something to look out for.
-These communication channels are not prioritized, and if they fill up processing low priority operations,
-high priority operations may not get through.
-If latencies gets mysterious high while no queuing is detected, the network is a candidate.
+Track network bandwidth consumption and switch saturation.
 </p>
-
-
-<h3 id="rate-limiting">Rate limiting</h3>
-<p>
-Many applications built on Vespa is used by multiple clients
-and faces the problem of protecting clients from others overuse or abuse.
-To solve this problem, use the
-<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchers/RateLimitingSearcher.html">
-RateLimitingSearcher</a> to rate limit load from each client type.
-</p>
-
 
 
 
