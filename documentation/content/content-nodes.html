@@ -193,45 +193,20 @@ they get the cluster state from the distributors - <a href="#distributor">detail
 
 <h3 id="master-election">Master election</h3>
 <p>
+Vespa can be configured with one cluster controller.
+Reads and writes will work well in case of cluster controller down,
+but other changes to the cluster (like a content node down) will not be handled.
+It is hence possible to configure a set of cluster controllers.
+</p><p>
 A set of cluster controllers elect a master among themselves.
-The master gathers <a href="#node-state">node states</a>
-from all the distributor and content nodes, and combine them into a cluster state.
-The cluster state is broadcasted to all the nodes every time it changes,
-allowing all nodes to know what distributors are responsible for handling what parts of the data.
-Clients picks up an updated cluster state if they try talking to the wrong distributor.
-</p><p>
-Having only a single cluster controller, if the controller goes down for any reason,
-there is no longer a cluster controller alive to adjust the cluster state.
-While this is not a single point of failure,
-as typically a distributor or content node have to go down afterwards for it to matter much,
-it would still be good if one could have more than one cluster controller
-such that it was less critical for one to go down.
-</p><p>
-However, having two cluster controllers working at the same time,
-the cluster could end up confused with the cluster controllers sending contradicting cluster states.
-One of them may have failed to talk to node 3 while the other one may have failed to talk to node 5,
-and then they send out two different cluster states.
-The nodes in the cluster may receive the cluster states in different order,
-and may end up confused with the state of the cluster.
-</p><p>
-To allow multiple controllers, but avoid confusion,
-only a single cluster controller is allowed to broadcast cluster states.
-This cluster controller is known as the master cluster controller.
-The other cluster controller instances only exist to participate in master election
+The master does the node polling and cluster state broadcast.
+The other cluster controller instances exist to participate in master election
 and potentially take over if the master dies.
 </p><p>
 All cluster controllers will vote for cluster controller with the lowest index that says it is ready.
-If a cluster controller have more than half of the configured cluster controllers voting for it,
-it will be elected master.
-A newly elected master will not start broadcasting states before a transition time is passed,
+If a cluster controller has more than half of the votes, it will be elected master.
+A fresh master will not broadcast states before a transition time is passed, <!-- ToDo config ref -->
 allowing an old master to have some time to realize it is no longer the master.
-</p><p>
-This means, that for there to be a master with <code>N</code> nodes down,
-<code>2 * N + 1</code> cluster controllers must be configured.
-It also means only the cluster controllers with the <code>N</code> lowest indexes
-will ever be able to become master.
-The remaining cluster controllers will never do anything
-but participate in the master election voting process.
 </p>
 
 
