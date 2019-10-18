@@ -84,6 +84,11 @@ There are three kinds of state:
   The cluster controller fetches states from all nodes, called <em>unit states</em>.
   States reported from the nodes are either <em>initializing</em>, <em>up</em> or <em>stopping</em>.
   If the node can not be reached, a <em>down</em> state is assumed.
+  </p><p>
+  This means, the cluster controller detects failed nodes.
+  The subsequent <em>generated states</em> will hence have nodes in <em>down</em>,
+  and the <a href="idealstate.html">ideal state algorithm</a> will redistribute
+  <a href="buckets.html">buckets</a> of documents.
   </p>
   </td>
 </tr><tr id="user-state">
@@ -99,6 +104,7 @@ There are three kinds of state:
       use <em>maintenance</em> to avoid merging buckets to other nodes</li>
   <li>Fail a bad node. The cluster controller or an operator can set a node <em>down</em></li>
   </ul>
+  Use tools for <a href="../operations/admin-procedures.html#cluster-state">user state management</a>.
   </p>
   </td>
 </tr><tr id="generated-state">
@@ -107,16 +113,7 @@ There are three kinds of state:
   <p>
   The cluster controller <em>generates</em> the cluster state
   from the <em>unit</em> and <em>user</em> states, over time.
-  </p><p>
-  The cluster controller will typically mask a <em>down</em> unit state with a
-  <em>maintenance</em> state for a short time if it has seen a stopping state,
-  indicating a controlled restart (assuming the node will soon be initializing again)
-  If the node fails to come back quickly, the state is set down.
-  </p><p>
-  <em>down</em> nodes that come back up, reporting as <em>initializing</em>,
-  is masked as <em>down</em> until the node reports <em>up</em>.
-  (The cluster controller might suspect it of repeatedly stalling or crashing during initialization,
-  and may keep it <em>down</em> to avoid the cluster to be interrupted) <!-- ToDo rewrite -->
+  The generated state is called the <em>cluster state</em>.
   </p>
   </td>
 </tr>
@@ -145,7 +142,9 @@ may thus have outdated data on the node level.
 The main task of the cluster controller is to maintain the <a href="#cluster-state">cluster state</a>.
 This is done by <em>polling</em> nodes for state,
 <em>generating</em> a cluster state,
-which is then <em>broadcast</em> to all the content nodes in the cluster:
+which is then <em>broadcast</em> to all the content nodes in the cluster.
+Note that clients do not interface with the cluster controller -
+they get the cluster state from the distributors - <a href="#distributor">details</a>.
 <table class="table">
 <tr id="node-state-polling">
   <th>Node state polling</th>
@@ -171,89 +170,23 @@ which is then <em>broadcast</em> to all the content nodes in the cluster:
   <th>Cluster state generation</th>
   <td>
   <p>
-  The node states in the cluster state do not necessarily match the states
-  reported from the node themselves.
-  E.g, a node may return that it is <em>stopping</em>,
-  but the cluster state will say that this node is <em>down</em> or in <em>maintenance</em>.
-  </p><p>
-  The cluster controller is also free to keep the node temporarily out of service.
-  For instance, if the node died while initializing last time it started,
-  the cluster controller may keep the node in the down state
-  until it verifies that the node managed to finish initializing this time around.
-  </p><p>
-  On top of this, there may be permanent state overrides for the node.
-  If the cluster controller detects the node constantly restarting,
-  creating unnecessary state flux that interrupts the cluster,
-  it may permanently set the node out of service until an administrator can fix it.
-  Administrators may also manually override the state to set the node temporarily out of service
-  while doing maintenance work, or removing it permanently due to some issues being manually detected.
-  </p><p>
-  The node states in the cluster states are thus calculated based on the
-  reported states from the node, and historic knowledge kept in the cluster controller.
-  If the result ends up in a state with higher availability than the user state for the node,
-  the state is adjusted based on it.
+  The cluster controller translates unit and user states
+  into the generated <em>cluster state</em>
   </p>
   </td>
 </tr><tr id="state-broadcast">
-  <th>Cluster state broadcasting</th>
+  <th>Cluster state broadcast</th>
   <td>
   <p>
-  When node states are received, a cluster controller internal cluster state is updated.
-  To limit the amount of cluster states broadcasted to the cluster,
-  the cluster controller is not allowed to create a new official state before a
-  given time period has past since the last one.
-  Additionally it will wait for a short period of time after receiving a change,
-  in case there are other changes happening at about the same time that should be included too.
-  For instance, distributors and content nodes that are on the same node
-  often stop at the same time.
+  When node unit states are received, a cluster controller internal cluster state is updated.
+  New cluster states are distributed with a minimum interval between. <!-- ToDo link to config here -->
+  A grace period per unit state too -
+  e.g, distributors and content nodes that are on the same node often stop at the same time.
   </p><p>
-  If the internal cluster state has changed enough from the last official
-  cluster state for the cluster to care,
-  enough time has passed since the last official state was generated (typically a few seconds),
-  and no more node state changes have been seen recently (typically less than a second),
-  a new official cluster state is generated based on the internal state.
-  The version number is upped, and the new official cluster state is immediately broadcasted to all the nodes.
+  The version number is upped, and the new cluster state is broadcast.
   </p>
   </td>
 </tr>
-</table>
-Note that clients do not interface with the cluster controller -
-they get the cluster state from the distributors - <a href="#distributor">details</a>.
-</p><p>
-The <em>cluster controller</em> will:
-<table class="table">
-<thead></thead><tbody>
-<tr>
-  <th>Give the cluster a uniform view of its state</th><td>
-    The main cluster controller task is to give the cluster a uniform view
-    of what nodes are available and what they capacities are.
-    To do this, it polls all distributor and content nodes for health and state information.
-    All the states are combined into a cluster state which is again broadcasted.
-  </td>
-</tr><tr>
-  <th>Allow administrators to override node states</th><td>
-    If one wants a node to be less available than its health indicates,
-    administrators can override node states in the cluster controller.
-    Maintenance and retired modes are options to stop using nodes
-    other than just stopping the services.
-    Enforcing a node to be down also means that
-    if someone accidentally starts the services again,
-    it will not enter the live cluster.
-  </td>
-</tr><tr>
-  <th>Automatically detect and fix cluster issues</th><td>
-    The cluster controller may notice that a node is failing,
-    such as constantly crashing.
-    The cluster controller can detect this and stop using problematic nodes.
-  </td>
-</tr><tr>
-  <th>Improving alerting and monitoring</th><td>
-    As the cluster controller monitors content nodes' health,
-    and keeps some node metrics,
-    it is a good location to implement utilities
-    to improve automatic detection of issues and cluster monitoring.
-  </td>
-</tbody>
 </table>
 </p>
 
