@@ -184,6 +184,10 @@ they get the cluster state from the distributors - <a href="#distributor">detail
   e.g, distributors and content nodes that are on the same node often stop at the same time.
   </p><p>
   The version number is upped, and the new cluster state is broadcast.
+  </p><p>
+  If cluster state version is <a href="../operations/admin-procedures.html#cluster-state">reset</a>,
+  clients to distributors can temporarily fail operations in the transition,
+  but will eventually converge on the new (lower) cluster state version.
   </p>
   </td>
 </tr>
@@ -198,9 +202,9 @@ Reads and writes will work well in case of cluster controller down,
 but other changes to the cluster (like a content node down) will not be handled.
 It is hence recommended to configure a set of cluster controllers.
 </p><p>
-A set of cluster controllers elect a master among themselves.
-The master does the node polling and cluster state broadcast.
-The other cluster controller instances exist to participate in master election
+The cluster controller nodes elect a master,
+which does the node polling and cluster state broadcast.
+The other cluster controller nodes only exist to do master election
 and potentially take over if the master dies.
 </p><p>
 All cluster controllers will vote for cluster controller with the lowest index that says it is ready.
@@ -209,29 +213,6 @@ As a majority vote is required,
 the number of cluster controllers should be an odd number of 3 or greater.
 A fresh master will not broadcast states before a transition time is passed, <!-- ToDo config ref -->
 allowing an old master to have some time to realize it is no longer the master.
-</p>
-
-
-
-<h3 id="version-reset">Cluster State Version Reset</h3>
-<p>
-If ZooKeeper data goes missing, the cluster state version will be reset to zero.
-This is not an issue for distributors and content nodes,
-as these will trust that the most recently received cluster state is always the most correct one.
-</p><p>
-Clients use the versions to detect that a cluster state is upgraded.
-The cluster controller tries to broadcast the cluster state at the same time to all the nodes,
-but the distributors may process the new cluster state at a bit different times,
-such that clients may alternatively talk to distributors having the newest cluster state or not.
-By using the version numbers, the clients does not dump the newest cluster state
-for one received by a distributor that have not processed the new one yet.
-</p><p>
-To handle a cluster state version reset,
-clients have some functionality for detecting whether distributors seems to agree
-the cluster state it has is wrong, even if version is newer.
-In such cases clients will dump its cluster state and use a new one even if version is lower.
-Clients thus handle a version reset,
-but it may result in a few temporarily failures while it is confused.
 </p>
 
 
