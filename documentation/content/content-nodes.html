@@ -47,7 +47,7 @@ Content and distributor nodes have state:
   <th>Maintenance</th>
   <td>This node is temporarily unavailable.
       The node is available for bucket placement, redundancy is hence lower. <!-- ToDo rewrite -->
-      Using this mode, new copies of the documents stored on this node will not be created,
+      Using this mode, new replicas of the documents stored on this node will not be created,
       allowing the node to be down with less of a performance impact on the rest of the cluster.
       This mode is typically used to mask a down state during controlled node restarts,
       or by an administrator that need to do some short maintenance work,
@@ -184,6 +184,10 @@ they get the cluster state from the distributors - <a href="#distributor">detail
   e.g, distributors and content nodes that are on the same node often stop at the same time.
   </p><p>
   The version number is upped, and the new cluster state is broadcast.
+  </p><p>
+  If cluster state version is <a href="../operations/admin-procedures.html#cluster-state">reset</a>,
+  clients to distributors can temporarily fail operations in the transition,
+  but will eventually converge on the new (lower) cluster state version.
   </p>
   </td>
 </tr>
@@ -198,9 +202,9 @@ Reads and writes will work well in case of cluster controller down,
 but other changes to the cluster (like a content node down) will not be handled.
 It is hence recommended to configure a set of cluster controllers.
 </p><p>
-A set of cluster controllers elect a master among themselves.
-The master does the node polling and cluster state broadcast.
-The other cluster controller instances exist to participate in master election
+The cluster controller nodes elect a master,
+which does the node polling and cluster state broadcast.
+The other cluster controller nodes only exist to do master election
 and potentially take over if the master dies.
 </p><p>
 All cluster controllers will vote for cluster controller with the lowest index that says it is ready.
@@ -213,94 +217,67 @@ allowing an old master to have some time to realize it is no longer the master.
 
 
 
-<h3 id="version-reset">Cluster State Version Reset</h3>
+<h2 id="distributor">Distributor</h2>
 <p>
-If ZooKeeper data goes missing, the cluster state version will be reset to zero.
-This is not an issue for distributors and content nodes,
-as these will trust that the most recently received cluster state is always the most correct one.
+Document operations are mapped to content nodes based on bucket locations -
+each put/update/get/remove is mapped to a <a href="buckets.html">bucket</a>
+and sent to the right content nodes.
+To manage the document set as it grows and nodes change, buckets move.
+I.e, sets of documents (a bucket) is copied between nodes for redundancy /
+redistribution for growth / node failures.
 </p><p>
-Clients use the versions to detect that a cluster state is upgraded.
-The cluster controller tries to broadcast the cluster state at the same time to all the nodes,
-but the distributors may process the new cluster state at a bit different times,
-such that clients may alternatively talk to distributors having the newest cluster state or not.
-By using the version numbers, the clients does not dump the newest cluster state
-for one received by a distributor that have not processed the new one yet.
+Buckets are mapped to distributors using the <a href="idealstate.html">ideal state algorithm</a>.
+As the cluster state changes, buckets are re-mapped immediately.
+The mapping does not overlap - a bucket is owned by one distributor.
 </p><p>
-To handle a cluster state version reset,
-clients have some functionality for detecting whether distributors seems to agree
-the cluster state it has is wrong, even if version is newer.
-In such cases clients will dump its cluster state and use a new one even if version is lower.
-Clients thus handle a version reset,
-but it may result in a few temporarily failures while it is confused.
+Distributors do not persist the bucket database,
+the bucket-to-content-node mapping is stored in memory in the distributor.
+Document count, persisted size and a metadata checksum per bucket is stored as well.
+At distributor (re)start, content nodes are polled for bucket information,
+and return which buckets are owned by this distributor (using the ideal state algorithm).
+There is hence no master / name node in Vespa.
+Likewise, at any distributor cluster state change,
+content nodes are polled for bucket handover -
+a distributor will then handle a new set of buckets.
+</p><p>
+Document API clients do not interface with the cluster controller,
+and does hence not know the cluster start at startup.
+A random distributor is used first.
+If the document operation hit the wrong distributor,
+<em>WRONG_DISTRIBUTION</em> is returned, with the current cluster state.
+<em>WRONG_DISTRIBUTION</em> is hence expected and normal at cold start / state change events.
+</p><p>
+</p><p>
 </p>
 
 
-
-<h2 id="distributor">Distributor</h2>
+<h3 id="maintenance-operations">Maintenance operations</h3>
 <p>
-The distributor keeps track of which search nodes should hold which copy of each bucket,
-based on the <em>redundancy</em> setting and information from the cluster controller.
-Distributors are responsible for keeping track of metadata for a non-overlapping subset of the data in the cluster.
-The distributors each keep a bucket database containing metadata of buckets it is responsible for.
-This metadata indicates what content nodes store copies of the buckets,
-the checksum of the bucket content and the number of documents and meta entries within the bucket.
-Each incoming document is assigned to a bucket and forwarded to the right search nodes.
-All requests related to these buckets are sent through the distributors.
-</p><p>
-A <a href="../elastic-vespa.html#bucket-distribution-algorithm">distribution algorithm</a>
-calculates what distributors are responsible for given buckets based on
-information of what nodes are available in the cluster.
-Clients calculate what distributor to talk to using information in the cluster state.
-</p><p>
-When a distributor goes down or becomes available,
-all distributors reshuffle what buckets they are responsible for.
-During this reshuffling, clients may get some requests temporarily failing
-as distributors taking over bucket ownership doesn't yet know where copies of its buckets are located.
-These requests will automatically be resent, providing timeouts allow for it.
-Changes in what distributors are up and available will currently cause windows of availability loss.
-Other distributors take over bucket ownership.
-To do this, they fetch bucket metadata for new buckets from all storage nodes,
-in-memory operations for speed.
-</p><p>
-The distribution algorithm also calculates what content nodes copies of buckets should be stored on.
-As moving bucket copies take time, the distributors track current state in a bucket database,
-allowing requests to be processed independent of where buckets are currently located.
-Distributors use the distribution algorithm to detect buckets that are stored on wrong nodes,
-and move copies to correct nodes when there are free resources to do so.
-</p><p>
-In addition the distributor can track some historic knowledge.
-For instance it may know that of the currently existing bucket copies,
-a given copy has been available all the time and may be trusted to have all the information,
-while another copy may be on a storage node that recently restarted,
-so that copy may lack some documents.
-Such historic state is not persisted, and is thus lost on distributor restarts.
-</p><p>
-The distributors use the bucket metadata to ensure the buckets are in a good state.
+Distributors track which content nodes have which buckets in their bucket batabase.
+Distributors then use the <a href="idealstate.html">ideal state algorithm</a>
+to generate bucket <em>maintenance operations</em>.
+A stable system has all buckets located per the ideal state:
 <ul>
-  <li>If buckets have too few copies, new copies are generated</li>
-  <li>If buckets have too many copies, superfluous copies are deleted once the
-    distributor knows the copies to delete don't contain data other copies do not have</li>
-  <li>If all the copies do not contain the same data,
-    merges are issued to get bucket copies consistent</li>
+  <li>If buckets have too few replicas, new are generated on other content nodes.</li>
+  <li>If the replicas differ, a bucket merge is issued to get replicas consistent.</li>
+  <li>If a buckets has too many replicas, superfluous are deleted.
+      Buckets are merged, if inconsistent, before deletion.</li>
   <li>If two buckets exist, such that both may contain the same document,
-    the buckets are split or joined to remove such overlapping buckets</li>
-  <li>If buckets contain too little or too much data, they should be joined or split</li>
-  <li>If not exactly one copy is marked active, and the backend wants a copy to
-    be marked active, activate or deactivate copies to get in a good state</li>
+      the buckets are split or joined to remove such overlapping buckets.
+      Read more on <a href="buckets.html">inconsistent buckets</a>.</li> <!-- ToDo: change this to a proper anchor within buckets.html - this needs a dedicated section, relevant to point to from visiting -->
+  <li>If buckets are too small/large, they will be joined or split.</li>
+  <li>In clusters a with document type marked as
+      <a href="../reference/services-content.html#document">mode="index"</a>,
+      the distributor will ensure that only one of a bucket's replicas within a group
+      will be used when processing search queries.
+      Otherwise search results would contain duplicates.
+      This is known as an <a href="../proton.html#sub-databases">active</a> replica,
+      the rest being <em>inactive</em> and available for failover
+      if the currently active node should become unavailable,
+      or the ideal state changes.</li>
 </ul>
 The maintenance operations have different priorities.
-The distributor prioritizes to fix the most critical issues first.
 If no maintenance operations are needed, the cluster is said to be in the <em>ideal state</em>.
 The distributors synchronize maintenance load with user load,
 e.g. to remap requests to other buckets after bucket splitting and joining.
-</p><p>
-<!-- ToDo rewrite this -->
-Clients use the cluster state to route to the correct distributor
-using the <a href="idealstate.html">ideal state algorithm</a>.
-They get updated cluster states through the distributors they talk to.
-If clients use the wrong distributor for a bucket,
-it will get the correct cluster state returned in the reply.
-The client then calculates the correct distributor and resends the request.
-That way, clients do not depend directly on the cluster controller
-as distributors serve cluster states to clients.
 </p>
