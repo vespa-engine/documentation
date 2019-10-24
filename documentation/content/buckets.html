@@ -4,34 +4,11 @@ title: "Buckets"
 ---
 
 <p>
-The content layer splits the document space into chunks called <em>buckets</em>.
-This document is about how documents map to buckets
-and how buckets are distributed and managed.
-Learn more about the <a href="idealstate.html">distribution algorithm</a>.
-</p><p>
-The various operations done through and within the content layer need some
-unit of data to operate on. This could be documents directly, but then the
-number of units existing can not be controlled by the content layer. Mapping
-documents to buckets, the number of units existing can be controlled.
-</p><p>
-Advantages of many units:
-<ul>
-  <li>Easy to create an even distribution</li>
-  <li>Issues detected are more specific,
-    relating to a smaller part of the document corpus</li>
-  <li>Operations on small units finish quickly</li>
-</ul>
-Advantages of few units:
-<ul>
-  <li>Per unit metadata takes up less space,
-    simplifying caching and metadata transfers.</li>
-  <li>Iterating metadata for all units is faster.</li>
-</ul>
-To strike a balance, documents are mapped to a set of buckets,
-where the number of buckets can be configured.
-As clusters grow or shrink, or document sizes in the cluster change,
-one may want to have a different amount of buckets in the cluster.
-This is achieved by bucket splitting and joining.
+The content layer splits the document space into chunks called <em>buckets</em>,
+documents are hence mapped to buckets.
+The cluster automatically splits and joins buckets
+to maintain a uniform distribution across all nodes
+and to keep bucket sizes within configurable limits.
 </p><p>
 Documents have string identifiers that maps to a 58 bit numeric location.
 A bucket is defined as all the documents that shares a given amount
@@ -44,53 +21,35 @@ Similarly buckets can be joined by requiring one less bit in common.
 
 
 
-<h2 id="bucket-space">Bucket space</h2>
-<p>
-Buckets exist in the <em>default</em> or <em>global</em> bucket space.
-<!-- ToDo more info here -->
-</p>
-
-
-
 <h2 id="distribution">Distribution</h2>
 <p>
 Distribution happens in several layers.
 <ul>
   <li>Documents map to 58 bit numeric locations.</li>
   <li>Locations map to buckets</li>
-  <li>Buckets map to distributors responsible for handling requests related to
-      those buckets.</li>
-  <li>Buckets map to content nodes responsible for storing replicas of
-      buckets.</li>
-  <li>Buckets within a content node are mapped to partitions within. Partitions generally map 1-1 to disks.
-      This only applies to providers that support storing data across multiple partitions.</li>
+  <li>Buckets map to distributors responsible for handling requests related to those buckets.</li>
+  <li>Buckets map to content nodes responsible for storing replicas of buckets.</li>
 </ul>
 </p>
 
 
 <h3 id="documents-to-location-distribution">Document to location distribution</h3>
 <p>
-Document identifiers may use document identifier schemes to control how documents map to locations.
-This way it is possible to colocate data within buckets
+Document identifiers use <a href="../documents.html">document identifier schemes</a>
+to map documents to locations.
+This way it is possible to co-locate data within buckets
 by enforcing some documents to have common LSB bits.
 </p><p>
-See <a href="../documents.html">document identifier schemes</a>
-for how the document identifiers can be user to override location bits.
 Specifying a group or numeric value with the n and g options
 overrides the 32 LSB bits of the location.
 This is useful for <a href="../streaming-search.html">streaming search</a>.
-Unless co-localization is required, it is recommended <em>not</em>
-to override the location bits, to generate a more even distribution.
+Only use this when required, e.g. when searching within a small set
+like in personal search.
 </p>
 
 
 <h3 id="location-to-bucket-distribution">Location to bucket distribution</h3>
 <p>
-When clients talk to the content layer, they typically have a document where
-a location can be calculated. But in order to know what distributor to talk
-to, they need to know the correct bucket to use.
-</p><p>
-Currently this is solved by enforcing a given number of location bits to be used.
 The cluster state contains a distribution bit count,
 which is the amount of location bits to use to generate buckets which can be mapped to distributors.
 </p><p>
@@ -99,8 +58,7 @@ number of buckets distributed at this level.
 When adding more nodes to the cluster,
 the number of buckets increases in order for the distribution to remain uniform.
 </p><p>
-Altering the distribution bit count causes a full redistribution of all buckets
-in the system.
+Altering the distribution bit count causes a redistribution of all buckets.
 </p><p>
 If locations have been overridden to co-localize documents into few units,
 the distribution of documents into these buckets may be skewed.
@@ -109,70 +67,22 @@ the distribution of documents into these buckets may be skewed.
 
 <h3 id="bucket-to-distributor-distribution">Bucket to distributor distribution</h3>
 <p>
-Clients need to reach the entire cluster.
-Keeping a single registry of where to find all buckets would require memory to scale with cluster size.
-Requiring this registry to fit in memory limits amount of buckets used and
-complicates creating an even distribution. Keeping a dynamic, large memory structure
-synchronized across many nodes would also add significant complexity.
-</p><p>
-An external registry service could be used, but if the registry is large
-enough to require multiple nodes, then it becomes another stateful service of
-its own, and client requests would need to do extra network hops to talk to the registry server.
-</p><p>
-To avoid the problems above, the content layer maps buckets to nodes using an
-algorithm calculating distributor targets based on bucket and knowledge about
-what distributors exist, and what their capacities are.
+Buckets are mapped to distributors using the ideal state algorithm.
 </p>
 
 
 <h3 id="bucket-to-content-node-distribution">Bucket to content node distribution</h3>
 <p>
-Buckets are mapped to content nodes for storage.
-As the content nodes store persistent data,
-moving ownership of buckets take a lot more time at the content node level than on the distributor level.
-But as each distributor only handles a controllable amount of buckets,
-they can keep per bucket metadata in memory without creating a scaling issue.
-Distributors route requests on to content nodes based on an in-memory bucket database,
-telling it which nodes have replicas of which buckets.
+Buckets are mapped to content nodes using the ideal state algorithm.
+As the content nodes persist data,
+changing bucket ownership takes more time/resources than on the distributors.
 </p><p>
-The same algorithm that is used to calculate distributor ownership is used to
-calculate wanted content node ownership. This implies that there is usually a
-replica of a bucket on the same content node as the distributor owning the bucket.
+There is usually a replica of a bucket on the same content node
+as the distributor owning the bucket, as the same algorithm is used.
 </p><p>
-The distributor uses this algorithm to calculate where bucket replicas are supposed to be,
-and move buckets that are currently in the wrong position in the background.
-</p><p>
-The distributors typically use little system resources, and should not be a bottleneck.
-It is thus not critical if the distribution to distributors are not as even
-as distribution of buckets to content nodes.
 The distributors may split the buckets further than the distribution bit count indicates,
 allowing more units to be distributed among the content nodes to create a more even distribution,
 while not affecting routing from client to distributors.
-</p>
-
-
-<h3 id="bucket-to-partition-distribution">Bucket to partition distribution</h3>
-<p>
-A content node may contain multiple partitions (e.g. disks),
-enabling it to fail only parts of the node,
-or easily split requests between multiple resources.
-</p><p>
-Buckets map to partitions within a content node using the same algorithm that is used to map to nodes.
-Just that in this case, the distribution keys used are the partition indexes.
-The seed used includes the distribution key of the node,
-to ensure the bucket will map to different partitions on other nodes.
-This is an important property to ensure that when a partition goes down,
-all partitions on all other nodes will divide the extra load between them.
-</p><p>
-To avoid a two level distribution with non-ideal movement on state changes,
-the distributors are aware of the partition states and partition selection algorithm.
-When mapping buckets to content nodes,
-it will not map buckets to nodes where the correct partition is not available.
-By doing this, there is still minimal transfer of buckets on partition state changes,
-and the node capacities do not need to be altered.
-The cost is that the remaining partitions on the node
-will not take over any load from the disk that went down.
-However, in clusters with many nodes, this should be a small percentage of the partitions.
 </p>
 
 
@@ -326,4 +236,12 @@ node owning the bucket and the nodes its replica data will be stored on.
 The effect of this is that documents sharing a location will be spread across
 nodes in the entire cluster once they reach a certain size. This enables efficient
 parallel processing.
+</p>
+
+
+
+<h2 id="bucket-space">Bucket space</h2>
+<p>
+Buckets exist in the <em>default</em> or <em>global</em> bucket space.
+<!-- ToDo more info here -->
 </p>
