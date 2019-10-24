@@ -232,7 +232,7 @@ The mapping does not overlap - a bucket is owned by one distributor.
 </p><p>
 Distributors do not persist the bucket database,
 the bucket-to-content-node mapping is stored in memory in the distributor.
-Document count per bucket is stored as well. <!-- ToDo: checksum? -->
+Document count, persisted size and a metadata checksum per bucket is stored as well.
 At distributor (re)start, content nodes are polled for bucket information,
 and return which buckets are owned by this distributor (using the ideal state algorithm).
 There is hence no master / name node in Vespa.
@@ -242,7 +242,7 @@ a distributor will then handle a new set of buckets.
 </p><p>
 Document API clients do not interface with the cluster controller,
 and does hence not know the cluster start at startup.
-A random distributor is used first. <!-- ToDo: Or does it use the ideal state algo? -->
+A random distributor is used first.
 If the document operation hit the wrong distributor,
 <em>WRONG_DISTRIBUTION</em> is returned, with the current cluster state.
 <em>WRONG_DISTRIBUTION</em> is hence expected and normal at cold start / state change events.
@@ -258,25 +258,23 @@ Distributors then use the <a href="idealstate.html">ideal state algorithm</a>
 to generate bucket <em>maintenance operations</em>.
 A stable system has all buckets located per the ideal state:
 <ul>
-    <li>If buckets have too few replicas, new are generated on other content nodes.</li>
-  <li>If the replicas differ, a bucket merge is issued to get replicas consistent.
-      The distributor sets a bucket replica <em>trusted</em>. <!-- ToDo: need something here - this is confusing - old text below:
-      
-      For instance it may know that of the currently existing replicas,
-      a given replica has been available all the time and may be trusted to have all the information,
-      while another replica may be on a content node that recently restarted,
-      so that replicas may lack some documents.
-      Such historic state is not persisted,
-      and is thus lost on distributor restarts.--></li>
+  <li>If buckets have too few replicas, new are generated on other content nodes.</li>
+  <li>If the replicas differ, a bucket merge is issued to get replicas consistent.</li>
   <li>If a buckets has too many replicas, superfluous are deleted.
       Buckets are merged, if inconsistent, before deletion.</li>
   <li>If two buckets exist, such that both may contain the same document,
       the buckets are split or joined to remove such overlapping buckets.
       Read more on <a href="buckets.html">inconsistent buckets</a>.</li> <!-- ToDo: change this to a proper anchor within buckets.html - this needs a dedicated section, relevant to point to from visiting -->
   <li>If buckets are too small/large, they will be joined or split.</li>
-  <li>If not exactly one replica is marked active, <!-- ToDo: what is this ?-->
-      and the content node wants a replica to be marked active,
-      activate or deactivate replicas to get in a good state.</li>
+  <li>In clusters a with document type marked as
+      <a href="../reference/services-content.html#document">mode="index"</a>,
+      the distributor will ensure that only one of a bucket's replicas within a group
+      will be used when processing search queries.
+      Otherwise search results would contain duplicates.
+      This is known as an <a href="../proton.html#sub-databases">active</a> replica,
+      the rest being <em>inactive</em> and available for failover
+      if the currently active node should become unavailable,
+      or the ideal state changes.</li>
 </ul>
 The maintenance operations have different priorities.
 If no maintenance operations are needed, the cluster is said to be in the <em>ideal state</em>.
