@@ -1,0 +1,278 @@
+---
+# Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. 
+title: "Semantic Retrieval for Question Answering Applications"
+---
+
+<p>
+This document describes how to represent <a href="https://en.wikipedia.org/wiki/Word_embedding">text embedding</a> tensors in Vespa and 
+how to build a scalable real time semantic search engine with Vespa using Google's <a href="https://arxiv.org/abs/1907.04307">Multilingual Universal Sentence Encoder</a> for Semantic Retrieval. For an introduction to
+neural information retrieval we recommend <a href="https://www.microsoft.com/en-us/research/uploads/prod/2017/06/INR-061-Mitra-neuralir-intro.pdf">An Introduction to Neural
+Information Retrieval</a> and <a href="https://www.sciencedirect.com/science/article/pii/S0020025518309952">An anatomy for neural search engines</a>.</p>
+
+<p>
+Over the last year or we have seen dramatic improvements on reading comprehension tasks where deep learning models have outperformed even human performance on question-answering benchmarks. 
+The top performing models like
+<a href="https://arxiv.org/abs/1810.04805">BERT</a> and <a href="https://arxiv.org/abs/1909.11942">ALBERT</a> gives best results when used as interaction models, e. given a question and an answer paragraph find
+the correct answer. Doing a brute force BERT inference over all candidate sentences or paragraphs in user time is extremely costly so the solution is to introduce a representation based model which enables 
+end to end retrieval of a set of small number of sentence length text which can be re-ranked using the advanced interaction based models in user time to find the exact answer. 
+</p>
+
+<p>
+In <a href="https://arxiv.org/abs/1907.04780">ReQA: An Evaluation for End-to-End Answer Retrieval Models</a> Ahmad Et al. introduce Retrieval Question Answering (ReQA),a benchmark 
+for evaluating large-scale sentence level answer retrieval models and where they establish a baseline for both traditional information retrieval techniques and neural encoding models on the 
+<em>Stanford Question Answering Dataset (SQuAD)</em> v1.1 dataset. 
+In this document we reproduce the work done by Ahmad et al. on the <a href="https://rajpurkar.github.io/SQuAD-explorer/">SQuAD 1.1</a> retrieval task using Vespa serving engine. 
+
+We replicate the exact results from the paper which enables
+organization to deploy state of the art question answering systems with low effort using the scalable Vespa engine.</p>
+
+<p>
+Vespa has support for storing tensors as fields in the Vespa document model which we can performing operations over tensors fields in addition to traditional field types and ranking features 
+like <a href="reference/bm25.html">bm25</a> or Vespa's <a href="reference/nativerank.html">nativeRank</a>.  Having both traditional text ranking features and semantic similarity features
+expressed in the same engine is a powerful feature of Vespa.
+ 
+The work described in this document can be reproduced using the <a href="https://github.com/vespa-engine/sample-apps/tree/master/semantic-qa-retrieval">semantic-qa-retrieval sample application</a>. 
+</p>
+
+<h2 id="universal-sentence-encoder">About Google's Universal Sentence Encoder</h2> 
+<p>
+The Universal Sentence Encoder encodes text into dense tensors that can be used for broad range of tasks such as semantic similarity,  semantic retrieval and other natural language processing (NLP) tasks.
+Google has released several different sentence encoder models with different goals and following the work of Ahmad et al. we use the 
+<a href="https://ai.googleblog.com/2019/07/multilingual-universal-sentence-encoder.html">Multilingual Universal Sentence Encoder for Question-Answer Retrieval</a>.
+
+The Universal Sentence Encoder for Question-Answer Retrieval enables us to process questions and candidate answer sentences independently and map the high dimensional sparse text representation to a relatively low dimensional
+dense tensor representation. 
+
+<ul>
+<li>Question text is encoded using the question encoder which takes the question text as input and outputs a 512 dimensional dense tensor. This can be done at user time in a couple of ms</li>
+<li>Each sentence of text (Which might contain the answer to a given question) is encoded using the response encoder which takes the sentence and the surrounding context (e.g paragraph level) as input and outputs a 512 dimension dense tensor</li> 
+</ul>
+We can store and index the dense tensor embedding in Vespa using <a href="tensor-user-guide.html">tensor fields</a> and perform tensor operations like tensor dot product between the encoded question tensor and the document (sentence) tensor(s).
+</p>
+
+<figure>
+<img src="https://www.gstatic.com/aihub/tfhub/universal-sentence-encoder/example-similarity.png" alt="Image Courtesy https://tfhub.dev/google/universal-sentence-encoder/2" width="1272" height="280"/>
+<figcaption>Image Courtesy <a href="https://tfhub.dev/google/universal-sentence-encoder/2">https://tfhub.dev/google/universal-sentence-encoder/2</a></figcaption>
+</figure>
+<p>Papers and resources on Google's Universal Sentence Encoder:</p>
+<ul>
+  <li><a href="https://arxiv.org/abs/1907.04307">Multilingual Universal Sentence Encoder for Semantic Retrieval Paper</a> </li>
+  <li><a href="https://ai.googleblog.com/2019/07/multilingual-universal-sentence-encoder.html">Google AI Blog: Multilingual Universal Sentence Encoder for Semantic Retrieval</a> </li>
+  <li><a href="https://tfhub.dev/google/universal-sentence-encoder-multilingual-qa/1">Tensorflow Hub: USE-QA </a> </li>
+</ul>
+<p>
+
+<h2 id="dataset">About the SQuAD dataset</h2> 
+<p> The <a href="https://arxiv.org/abs/1606.05250">SQuAD: 100,000+ Questions for Machine Comprehension of Text</a> paper introduced the SQuAD dataset 
+which is available for download <a href="https://rajpurkar.github.io/SQuAD-explorer/">here</a>.
+
+The Stanford Question Answering Dataset (SQuAD) is a reading comprehension dataset, consisting of questions posed by 
+crowdworkers on a set of Wikipedia articles, where the answer to every question is a segment of text, or span, from the corresponding reading passage. In our experiments we use the train v1.1 dataset.</p>
+<p>
+Sample questions and answers for a given paragraph context taken from a snapshot of 
+the <a href="https://en.wikipedia.org/wiki/University_of_Notre_Dame">University_of_Notre_Dame Wikipedia page</a> is shown below:
+<pre>
+{
+ "data": [
+  {
+    "title": "University_of_Notre_Dame"
+    "paragraphs": [
+      {
+        "context": "Architecturally, the school has a Catholic character. Atop the Main Building's gold dome is a golden statue of the Virgin Mary. 
+         Immediately in front of the Main Building and facing it, is a copper statue of Christ with arms upraised with the legend \"Venite Ad Me Omnes\". 
+         Next to the Main Building is the Basilica of the Sacred Heart. Immediately behind the basilica is the Grotto, a Marian place of prayer and reflection. 
+         It is a replica of the grotto at Lourdes, France where the Virgin Mary reputedly appeared to Saint Bernadette Soubirous in 1858. 
+         At the end of the main drive (and in a direct line that connects through 3 statues and the Gold Dome), is a simple, modern stone statue of Mary.",
+      "qas": [
+        {
+          "question": "To whom did the Virgin Mary allegedly appear in 1858 in Lourdes France?",
+          "answers": [
+            {
+             "answer_start": 515,
+             "text": "Saint Bernadette Soubirous"
+            }
+           ],
+           "id": "5733be284776f41900661182"
+        },
+        {
+          "question": "What is in front of the Notre Dame Main Building?",
+          "answers": [
+            {
+              "answer_start": 188,
+              "text": "a copper statue of Christ"
+            }
+          ],
+          "id": "5733be284776f4190066117f"
+        }
+      ]
+      }
+    ]
+   }
+ ]
+}
+</pre>
+<p>
+The <em>answer_</em> start represent the offset where the answer for the question can be found.
+The SQuAD v1.1 train dataset consists of 87,599 questions and 18,896 paragraphs. The paragraphs can further be segmented into 91,729 sentences using a sentence tokenizer.   
+</p>
+
+<h2 id="vespa-data-model">SQuAD Data modelling with Vespa</h2>
+<p>We model the SQuaD data set in Vespa in two different document types, a <em>context</em> document type and a <em>sentence</em> document type</a>:</p>
+
+<b>Context document type</b>:
+<pre>
+search context {
+ document context {
+    field context_id type int {
+      indexing: summary | attribute 
+    }
+    field text type string {
+      indexing: summary | index
+      index: enable-bm25
+    }
+  }
+}
+</pre>
+<b>Sentence document type</b>:
+<pre>
+search sentence {
+  document sentence inherits context {
+    field sentence_embedding type tensor&lt;float&gt;(x[512]) {
+      indexing: attribute
+    }
+  }
+}
+</pre>
+<p>In order to evaluate the retrieval metrics and compare the Vespa implementation with the mentioned paper we also store the set of question ids which a given sentence or context answers (if any) but is 
+left out of the sample above and is only used to check if the sentence or context retrieved 
+for a question did contain the answer or not to that particular question.</p>
+
+<p>The sentence document type inherits the fields from the context document type (text and context_id), 
+the sentence document type contains the tensor embedding which is produced by the Google Universal Sentence Encoder for QA retrieval. 
+We don't in this case represent the relationship between context and sentence
+as a <a href="parent-child.html">parent child</a> relationship but a real production system with many updates would probably use parent child representation in Vespa 
+as we could update the parent document only and have parent
+context features imported to the sentence document type at query time. 
+</p>
+
+<p>Vespa supports a <a href="reference/search-definitions-reference.html#type:tensor">tensor field type</a> which allows 
+representing high dimensional tensors of any order. 
+The Vespa tensor field type cannot be searched as regular <a href="reference/search-definitions-reference.html#field-types">field types</a> but can be 
+used for ranking. There exist techniques which can be used in combination with tensor fields in Vespa 
+which can enable search or approximate nearest neigboor search over other data structures than 
+the tensor fields, e.g over weighted sets in Vespa 
+using <a href="https://en.wikipedia.org/wiki/Locality-sensitive_hashing">Locality Sensitive Hashing</a> for dimension reduction which 
+enables sparse representations which can be efficiently evaluated using e.g the Vespa <a href="using-wand-with-vespa.html">WAND</a> implementation. 
+Such approximation techniques are though out of scope for this particular document.
+</p>
+
+<h2 id="vespa-feed-generating">Converting the SQuAD json to Vespa json feed format</h2>
+<p>In order to feed the SQuAD data we need to convert it into our Vespa document model and feed documents using the <a href="reference/document-json-format.html">Vespa json format</a>.</p>
+<p>For each paragraph context we run a simple 
+<a href="https://github.com/google/retrieval-qa-eval/blob/master/sb_sed.py">sentence tokenizer </a> published by Ahmed et al to extract sentences from the paragraph context. We 
+simply assign a unique sentence id sentences and likewise for context. Below is a sample of one sentence extracted from the above example paragraph:
+
+<pre>
+{
+  "put": "id:squad:sentence::5"
+    "fields": {
+      "context_id": 0,
+        "text": "Immediately in front of the Main Building and facing it, is a copper statue of Christ with arms upraised with the legend \"Venite Ad Me Omnes\"."
+        "sentence_embedding": {
+          "values": [
+            -0.0528511106967926,
+            0.00927420798689127,
+            ......
+            0.011870068497955799,
+            -0.06848619878292084
+          ]
+        }
+    }
+}
+</pre>
+We can feed the generated document set to Vespa using any of the feed api's but we use the <a href="vespa-http-client.html">Vespa http client</a>. After this step we have one content db
+with 18,896 context documents and 91,729 sentences in another in the same Vespa content cluster. 
+
+<h2 id="ranking-sentences">Sentence Retrieval</h2>
+<p>The goal of the ReQA task is to retrieve sentences which have the answer for any given question. We can also compute context or paragraph level retrieval using the sentence level semantic similarity 
+by aggregating 
+over the sentence level scores, we can do this efficiently using the Vespa <a href="grouping.html">grouping</a> api if we want to retrieve paragraphs instead of sentences.</p> 
+
+<h3 id="semantic-similarity">Tensor Operations for Semantic Similarity Scoring</h3>
+<p>The tensor produced by the Google Universal Sentence Encoder is according to the authors approximately normalized so we can use
+the inner dot product between the query and document tensors as our textual semantic similarity function. The inner dot product will compute the same
+score as the cosine similarity when the dense tensors are normalized. 
+
+The scoring formula involving tensors uses Vespa <a href="reference/tensor.html#operations">Tensor operations</a> which can be combined with <a href="reference/rank-features.html">Vespa rank features</a>
+expressed by Vespa <a href="reference/ranking-expressions.html">ranking expression</a>. Examples of tensor operations where A, B are dense or sparse 1-order tensor (vectors): </p> 
+
+<pre> 
+sum(A * B) #inner dot product
+sum(A * B) / ( sqrt(sum(A*A)) + sqrt(sum(B*B)) ) # Cosine similarity 
+sqrt(sum(map(A - B, f(x)(x * x)))) # Euclidian distance
+</pre>
+<p>More examples tensors and tensor operations in <a href="tensor-intro.html">tensor intro</a> documentation. The embedding vectors produced by the USE-Q encoder are normalized to unit length so we can use the dotproduct directly.</p>
+
+<h3 id="recall-strategies">Query &amp; Recall strategies</h3>
+<p> 
+As mentioned earlier the Vespa tensors does not support search/query operations <a href="https://github.com/vespa-engine/vespa/issues/9747">yet</a> so 
+we need to match all documents and evaluate the tensor similarity over documents of type <em>sentence</em>. There exist approximation techniques (e.g LSH) 
+which could be used to speed up evaluation doing approximate nearest neighbor search instead. 
+
+ We use the <a href="search-api.html">Vespa Search Api</a>
+and express our queries using the <a href="reference/simple-query-language-reference.html">Simple query language</a>. Using the sample question from the example the POST 
+http search request for  becomes:
+
+<pre>
+{
+  "query": "(context_id:&gt;-1 To whom did the Virgin Mary allegedly appear in 1858 in Lourdes France?)",
+  "type": "any",
+  "hits": 100,
+  "ranking.features.query(tensor)": [-0.0466...,,],
+  "ranking.profile": "sentence-semantic-similarity'" 
+}
+result = requests.post('http://localhost:8080/search/', json=json_request)
+</pre>
+
+<ul>
+<li>The query <em>type</em> is any which is equivalent to a logical OR. We include a query term which is always true <em>context_id:&gt;0</em> to handle the cases where none of the query terms matches the sentence text.</li>
+<li>We ask to get the 10 best hits ranked by the <em>ranking.profile</em></li>
+<li>Along with the query terms we also pass the dense tensor representation encoded by the sentence encoder in the <em>ranking.features.query(tensor)</em> parameter</li>
+<li>Last the recall parameter limits the recall to only those documents which were associated with the query_id in the dev set.</li> 
+</ul>
+
+By passing the original text representation of the question along with the dense tensor representation we can also combine traditional text ranking features like bm25 with the semantic similarity feature in one ranking expression
+and also retrieve answers even if there is no overlap between the terms in the question and the answer sentence. </p>
+
+For paragraph level retrieval we use Vespa's <a href="grouping.html">grouping</a> framework to recall paragraphs instead of sentences. As in the paper we use the max sentence score in the paragraph to represent the paragraph level 
+score. The query above is changed to add 
+<pre>
+{
+  "query": "(context_id:&gt;-1 To whom did the Virgin Mary allegedly appear in 1858 in Lourdes France?)",
+  "yql": "select * from sources * where userQuery() | all(group(context_id) max(100) order(-max(relevance())) each(each(output(summary())) as(sentences)) as(paragraphs));" 
+}
+</pre>
+<p>The grouping expression groups sentences by the assigned context id and order the groups of paragraphs by the maximum relevance score and within the context id we get the set of sentences ordered
+by their relevance which in our case for semantic retrieval is the dot product between the question tensor and the sentence tensor. This also allows input several of the best matching sentences into a possible later<
+re-ranking stage involving a interaction based deep ranking model (e.g like BERT). </p> 
+
+
+<h2 id="scaling-semantic-search">Serving Performance & Scalability</h2>
+<p>The tensor evaluation <a href="performance/sizing-search.html">scales</a> like any other ranking feature but the cost is quite high if the retrieved set of documents is high. The above examples uses a query which 
+matches all documents of document type sentence, hence the performance scales with the number of documents. To bring down latency we can use more threads per query and partition the data over more nodes as well as using approximation
+techniques and phased retrieval and ranking.
+</p>
+
+<h2 id="phased-ranking">Multi-Tiered retrieval</h2>
+<p>
+Vespa supports multi-tiering architecture where each tier or phase ranks a set of candidates and outputs a shorter list of documents than was given as input. <a href="phased-ranking.html">The phased ranking</a> document 
+describes phased ranking in detail. In the context of semantic retrieval we could deploy an architecture on Vespa where: 
+<ul>
+<li>Use WAND query operator over a sparse representation using a dimensionality reduction technique (E.g. LSH). With WAND we can combine multiple WAND query operators in the same query tree allowing to retrieve documents
+using traditional BM25 like features and semantic features in the same engine. </li>
+<li>Rank documents retrieved by the WAND query operator using the dense tensor representation to get the exact semantic similarity score and potentially also other traditional ranking signals like BM25</li>
+</ul> 
+The above retrieval and ranking happens across the set of nodes in a Vespa content cluster in a distributed scatter and gather process, see <a href="performance/sizing-search.html">sizing search</a> and where we finally have
+the top global candidate set which further can be re-ranked with a interaction based model when we have access to all document level features (e.g the potential answer sentence in a paragraph). 
+</p>
+
