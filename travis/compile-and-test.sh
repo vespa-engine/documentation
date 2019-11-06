@@ -4,12 +4,7 @@
 
 set -e
 
-# The vespaengine/vespa-pipeline contains both JDK 8 and 11. For the sample-apps/documentation we
-# must use JDK 11:
 source /etc/profile.d/jdk-env.sh
-/usr/sbin/alternatives --set java "$JAVA_11"
-/usr/sbin/alternatives --set javac "$JAVAC_11"
-export JAVA_HOME="$JAVA_11_HOME"
 
 # Install same docker as in our host on travis
 curl -sLOf "https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-17.09.1.ce-1.el7.centos.x86_64.rpm"
