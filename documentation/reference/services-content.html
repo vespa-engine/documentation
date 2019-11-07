@@ -387,6 +387,9 @@ Defines the hierarchical distribution structure of the cluster.
 Can not be used in conjunction with the <code><a href="#nodes">nodes</a></code> element.
 If a non-flat structure is desired, use this element instead.
 Groups can contain other groups or nodes, but not both.
+In <b>Open Source Vespa</b> when using groups, <code><a href="#searchable-copies">searchable-copies</a></code> and
+<code><a href="#redundancy">redundancy</a></code> becomes the total number across all leaf groups in the cluster.
+For groups in <b>Vespa Cloud</b> see <a href="https://cloud.vespa.ai/reference/services-hosted.html">separate documentation</a>.
 Read more on using <a href="../elastic-vespa.html#grouped-distribution">groups</a>. Attributes:
 <table class="table">
 <thead>
@@ -448,53 +451,13 @@ In higher level groups, <em>distribution</em> is mandatory. Attributes:
   <thead>
     <tr><th>Partition specification</th><th>Description</th></tr>
   </thead><tbody>
-    <tr><th>*</th><td>Place all copies into 1 of N groups</td></tr>
-    <tr><th>*|*</th><td>Place all copies into 2 of N groups</td></tr>
-    <tr><th>*|*|*</th><td>Place all copies into 3 of N groups</td></tr>
-    <tr><th>n|*</th><td>Place n copies in 1 group, the rest in another</td></tr>
-    <tr><th>n|*|*</th><td>Place n copies in 1 group, and divide the rest in 2 other groups</td></tr>
-    <tr><th>n</th><td>invalid - use * and set redundancy to specify number of copies</td></tr>
-    <tr><th>n|m</th><td>invalid - use n|* and set redundancy to specify number of copies in the second group</td></tr>
-    <tr><th>*|m</th><td>invalid - non-asterisk values must be placed first in specification</td></tr>
-    <tr><th>n|*|m</th><td>invalid - non-asterisk values must be placed first in specification</td></tr>
+    <tr><th>*</th><td>Distribute all copies over 1 of N groups</td></tr>
+    <tr><th>*|*</th><td>Distribute all copies over 2 of N groups</td></tr>
+    <tr><th>*|*|*</th><td>Distribute all copies over 3 of N groups</td></tr>
   </tbody>
 </table>
-The asterisks (*) will be replaced by numbers as the placement algorithm
-traverses down the tree when picking groups. All numbers are integers.
-When dividing remaining copies among multiple groups, which can create fractions,
-fractions are rounded up and down to keep total redundancy correct.
-</p><p>
-Partitions like <em>1|2|*</em> and <em>2|1|*</em> are identical.
-After replacing asterisks with real numbers depending on the redundancy to split,
-the partitions will be sorted so the highest numbers appear first.
-This is because the highest priority child will get the first assignment,
-and then the second highest and so on.
-The highest priority groups for a bucket keeps most copies,
-to reduce amount of copies needing to be created and removed when groups go up or down.
-Thus, the order of numbers in the partition string is irrelevant.
-</p><p>
-An asterisk is forced to be in an expression to handle changes to global redundancy.
-Also, when using multiple group levels
-one might divide different amount of copies,
-depending on which group bucket has been assigned to.
-For instance, if global redundancy is 5 and the top level group partitions into <em>2|*</em>,
-then one group gets two copies and another group gets 3.
-But each of these groups will be primary group (3 copies)
-and secondary groups (2 copies) for a lot of buckets,
-but it can only configure one partition specification.
-So if that subgroup then stores <em>1|*|*</em> for instance,
-it will store <em>1|1|1</em> for the buckets where it is asked to keep 3 copies,
-and <em>1|1</em> for the buckets where it is asked to keep 2 copies.
-</p><p>
-If the redundancy at some level is lower than the partition spec,
-Vespa stores less copies than the partition spec - starting leftwards.
-If the spec is <em>2|2|*</em> and configures to store 3 copies only,
-Vespa first fills the primary group with 2,
-then gives the secondary group the 1 remaining copy,
-and there will be no third group as there are no more copies to store.
-This may be a valid case if using multiple levels of groups
-and a single group needs to store differently for buckets depending on
-which buckets it is primary or secondary group for.
+The partition specification is used to evenly distribute content copies across groups.
+You must write one <code>*</code> per group separated by pipes (e.g. <code>*|*</code> for two groups).
 </p>
 
 
