@@ -335,39 +335,42 @@ select * from mydocumenttype where myidfield contains ([ {"ranked": false} ] "my
 </pre>
 
 
-<h2 id="summary-features-getting-match-information-in-the-results">Summary features: getting match information in the results</h2>
-<p>
-As <code>rankfeatures</code> dumps too many features to to be usable for production,
-Vespa also allows a smaller number of feature values to be returned with each result
-by specifying a list of <a href="reference/search-definitions-reference.html#summary-features">summary-features</a>.
-This can be used, for example, to write custom Searcher or presentation logic which
-depends on which fields was matched and how well they matched -
-see <a href="reference/inspecting-structured-data.html">inspecting structured data</a>.
-</p><p>
-A list of summary features is set by adding to the rank profile(s):
-<pre>
-summary-features: feature1 feature2 &hellip;
-</pre>
-The list can also be enclosed by curly brackets and split into multiple lines.
-</p><p>
-Summary features is useful to dump tensors results from ranking expressions:
+<h2 id="summary-features-accessing-feature-function-values-in-results">Summary features: Accessing feature/function values in results</h2>
+
+<p>Any feature can be returned in the hit producing it by adding it to the list of
+<a href="reference/search-definitions-reference.html#summary-features">summary-features</a> of the rank profile.
+As all functions are features this allows the result of any computation to be accessible in results.</p>
+
+<p>For example, given this rank profile</p>
+
 <pre>
 rank-profile test {
-    summary-features: output_indexed_tensor output_mapped_tensor output_mixed_tensor
 
-    function output_indexed_tensor() {
-        expression: attribute(indexed_tensor)
+    summary-features: tensor_join, join_sum
+
+    function tensor_join() {
+        expression: attribute(my_tensor_field) * query(my_query_tensor)
     }
-    function output_mapped_tensor() {
-        expression: attribute(mapped_tensor)
+
+    function join_sum() {
+        expression: sum(tensor_join())
     }
-    function output_mixed_tensor() {
-        expression: attribute(mixed_tensor)
-    }
+
 }
 </pre>
-</p>
 
+<p>The results of this functions will be available in the Hits of the result as follows:</p>
+
+<pre>
+import com.yahoo.search.result.FeatureData;
+
+    ...
+    FeatureData featureData = (FeatureData)hit.getField("summaryfeatures");
+    Tensor tensor_join_value = featureData.getTensor("rankingExpression(tensor_join)");
+    double join_sum_value = featureData.getTensor("rankingExpression(join_sum)");
+</pre>
+
+<p>You can easily do further computation on the returned tensors, such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</code>.</p>
 
 
 <h2 id="feature-configuration">Feature configuration</h2>
