@@ -63,8 +63,9 @@ $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationSt
 <li>
     <p><strong>Deploy and activate a sample application:</strong></p>
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /vespa-sample-apps/basic-search/src/main/application/ &amp;&amp; \
-    /opt/vespa/bin/vespa-deploy activate'
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare \
+  /vespa-sample-apps/album-recommendation-selfhosted/src/main/application/ &amp;&amp; \
+  /opt/vespa/bin/vespa-deploy activate'
 </pre>
     <p>More sample applications can be found in
     <a href="https://github.com/vespa-engine/sample-apps/tree/master">sample-apps</a>.
@@ -80,49 +81,44 @@ $ curl -s --head http://localhost:8080/ApplicationStatus
 </li>
 
 <li>
-    <p><strong>Feed documents into Vespa:</strong></p>
+    <p><strong>Feed documents:</strong></p>
 <pre data-test="exec">
-$ curl -s -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/basic-search/music-data-1.json \
-    http://localhost:8080/document/v1/music/music/docid/1 | python -m json.tool
-$ curl -s -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/basic-search/music-data-2.json \
-    http://localhost:8080/document/v1/music/music/docid/2 | python -m json.tool
+$ curl -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation-selfhosted/src/test/resources/A-Head-Full-of-Dreams.json \
+  http://localhost:8080/document/v1/mynamespace/music/docid/1
+$ curl -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation-selfhosted/src/test/resources/Love-Is-Here-To-Stay.json \
+  http://localhost:8080/document/v1/mynamespace/music/docid/2
+$ curl -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation-selfhosted/src/test/resources/Hardwired...To-Self-Destruct.json \
+  http://localhost:8080/document/v1/mynamespace/music/docid/3
 </pre>
     <p>This uses the <a href="document-api.html">document API</a>.
     Use the <a href="vespa-http-client.html">Vespa HTTP client</a> to feed large amounts of data fast.</p>
 </li>
 
 <li>
-    <p><strong>Make a query POST or GET request:</strong></p>
-<pre data-test="exec" data-test-assert-contains="Michael Jackson">
-$ curl -s -H "Content-Type: application/json" --data '{"query" : "bad"}' http://localhost:8080/search/ | python -m json.tool
+    <p><strong>Make a query:</strong></p>
+<pre data-test="exec" data-test-assert-contains="Metallica">
+$ curl "http://localhost:8080/search/?ranking=rank_albums&amp;yql=select%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20%22music%22%3B&amp;ranking.features.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D"
 </pre>
-<pre data-test="exec" data-test-assert-contains="Michael Jackson">
-$ curl -s http://localhost:8080/search/?query=bad | python -m json.tool
-</pre>
-<p>
-    You can also view query results in a browser with the query builder UI at <a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a>, or have a look at raw query results at <a href="http://localhost:8080/search/?query=bad">http://localhost:8080/search/?query=bad</a>. The query builder can be used to develop search queries as it offers guided queries and YQL autocompletion.
+    <p>
+    You can also view query results in a browser with the query builder UI at
+    <a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a>,
+    or have a look at raw query results at <a href="http://localhost:8080/search/?query=bad">http://localhost:8080/search/?query=artist:metallica</a>.
+    The query builder has guided queries and YQL autocompletion.
+    Read more in the <a href="search-api.html">query API</a>.
     </p>
-
-    <p>Read more in the <a href="search-api.html">Search API</a>.</p>
 </li>
 
 <li>
     <p><strong>Run a document GET request:</strong></p>
-<pre data-test="exec" data-test-assert-contains="Eminem">
-$ curl -s http://localhost:8080/document/v1/music/music/docid/2 | python -m json.tool
+<pre data-test="exec" data-test-assert-contains="Diana">
+$ curl -s http://localhost:8080/document/v1/mynamespace/music/docid/2
 </pre>
-
 </li>
 
 <li>
-    <p><strong><em>Optional:</em> Clean up when you're done</strong></p>
-    <p>Stop the running container when you no longer need it:</p>
+    <p><strong>Clean up:</strong></p>
 <pre data-test="after">
-$ docker stop vespa
-</pre>
-    <p>You can then also remove the stopped container entirely:</p>
-<pre data-test="after">
-$ docker rm vespa
+$ docker rm -f vespa
 </pre>
 </li>
 
@@ -130,8 +126,14 @@ $ docker rm vespa
 
 
 <h2 id="troubleshooting">Troubleshooting</h2>
-
-<p>If you encounter any problems see <a href="vespa-quick-start-troubleshooting.html">troubleshooting</a>.</p>
+<p>
+If you encounter any problems see <a href="vespa-quick-start-troubleshooting.html">troubleshooting</a>.
+For json pretty-print, append
+<pre>
+| python -m json.tool
+</pre>
+to commands that output json.
+</p>
 
 
 <h2 id="next-steps">Next Steps</h2>
