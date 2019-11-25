@@ -5,13 +5,21 @@ title: "Improving Text Search through ML"
 
 ## Introduction
 
-In this tutorial, we assume that you have followed the [Text Search Tutorial](text-search.html) and have created and deployed a basic text search app in Vespa and fed it with MS MARCO full document dataset. We are now going to show you how to create a dataset that joins relevance information from MS MARCO with ranking features from Vespa to enable you to train ML models to improve your application.
+At this point, we assume you have read our [Text Search Tutorial](text-search.html) and accomplished the following steps.
+* Created and deployed a basic text search app in Vespa.
+* Fed the app with the MS MARCO full document dataset.
+* Compared and evaluated two different ranking functions.
 
-The first section will describe how to collect rank feature data from Vespa associated with a specific query. After that we will show how to create a dataset from a set of training queries that also contain information about relevant documents associated with each query. To finalize ... TODO.
+We are now going to show you how to create a dataset that joins relevance information from the MS MARCO dataset with ranking features from Vespa to enable you to train ML models to improve your application. More specifically, you will accomplish the following steps in this tutorial.
+
+* Learn how to collect rank feature data from Vespa associated with a specific query. 
+* Create a dataset that can be used to improve your app's ranking function.
+* Propose sanity-checks to help you detect bugs in your data collection logic and ensure you have a properly built dataset at the end of the process.
+* Illustrate the importance of going beyond pointwise loss functions when dealing with Learning To Rank (LTR) tasks.
 
 ## Collect rank feature data from Vespa
 
-Vespa's [rank feature set](../reference/rank-features.html) contains a large set of low and high level features that are available to you upon request. Those features are useful to understand the behavior of your app or even to improve your ranking function.
+Vespa's [rank feature set](../reference/rank-features.html) contains a large set of low and high level features that are available to you upon request. Those features are useful to understand the behavior of your app and to improve your ranking function.
 
 ### Default rank features
 
@@ -92,10 +100,10 @@ The `random` global feature is explained in the [Rank Feature Reference](https:/
 
 After adding the _rank-profile_ `collect_rank_features` to our _msmarco.sd_ file, you should redeploy the app:
 
-<pre data-test="exec">
+```
 docker exec vespa-msmarco bash -c '/opt/vespa/bin/vespa-deploy prepare /app/src/main/application && \
     /opt/vespa/bin/vespa-deploy activate'
-</pre>
+```
 
 ## Create a training dataset
 
@@ -103,16 +111,15 @@ The [MS MARCO](http://msmarco.org) dataset described in [the previous tutorial](
 
 Before we move on to describe the collection process in detail, we want to point out that the whole process can be replicated by the following call to the data collection script `collect_training_data.py` available in [this tutorial repository](https://github.com/vespa-engine/sample-apps/tree/master/text-search). 
  
-TODO: Make the collect script work with sample data
 ```
-./src/python/collect_training_data.py data/msmarco-doctrain-queries.tsv.gz data/msmarco-doctrain-qrels.tsv.gz data collect_rank_features 99
+./src/python/collect_training_data.py data collect_rank_features 99
 ```
 
-The command above use data contained in the query (data/msmarco-doctrain-queries.tsv.gz) and in the relevance (data/msmarco-doctrain-qrels.tsv.gz) files that are part of the MSMARCO dataset, and send queries to Vespa using the `collect_rank_features` _ranking-profile_ defined in the previous section in order to request 99 randomly selected documents for each query in addition to the relevant document associated with the query. All the data from the request are then parsed and stored in the output folder, which is chosen to be `data` in this case.
+The command above use data contained in the query (msmarco-doctrain-queries.tsv.gz) and in the relevance (msmarco-doctrain-qrels.tsv.gz) files that are part of the MSMARCO dataset, and send queries to Vespa using the `collect_rank_features` _ranking-profile_ defined in the previous section in order to request `99` randomly selected documents for each query in addition to the relevant document associated with the query. All the data from the request are then parsed and stored in the output folder, which is chosen to be `data` in this case.
 
 ### Data collection logic
 
-Since we want to improve the first-phase ranking function of our application, our goal here is to create a dataset that will be used to train models that will generalize well when those models are used in the first-phase ranking of an actual Vespa instance running against possibly unseen queries and documents. This might seem obvious at first but turns out to be easy to neglect when making some data collection decisions.
+Since we want to improve the first-phase ranking function of our application, our goal here is to create a dataset that will be used to train models that will generalize well when used in the first-phase ranking of an actual Vespa instance running against possibly unseen queries and documents. This might be obvious at first but turns out to be easy to neglect when making some data collection decisions.
 
 The logic behind the `collect_training_data.py` can be summarized by the pseudo-code below:
 
@@ -124,9 +131,9 @@ if relevant_hit:
     append_data(file, data) 
 ```
 
-For each query, we first send a request to Vespa to get the relevant document associated with the query. If the relevant document is matched by the query, Vespa will return it and we will expand the number of documents associated with the query by sending a second request to Vespa, this time asking Vespa to return a number of random documents sampled from the set of documents that were matched by the query. We then parse the hits returned by Vespa and organize the data into a tabular form containing the rank features and the binary variable indicating if the query-document pair is relevant or not.
+For each query, we first send a request to Vespa to get the relevant document associated with the query. If the relevant document is matched by the query, Vespa will return it and we will expand the number of documents associated with the query by sending a second request to Vespa. The second request asks Vespa to return a number of random documents sampled from the set of documents that were matched by the query. We then parse the hits returned by Vespa and organize the data into a tabular form containing the rank features and the binary variable indicating if the query-document pair is relevant or not.
 
-We are only interested in collecting documents that are matched by the query because those are the documents that would be presented to the first-phase model. This means that we will likely leave some queries that contain information about relevant documents out of the collected dataset but it will create a dataset that are closer to our stated goal.
+We are only interested in collecting documents that are matched by the query because those are the documents that would be presented to the first-phase model in a production environment. This means that we will likely leave some queries that contain information about relevant documents out of the collected dataset but it will create a dataset that are closer to our stated goal. In other words, the dataset we collect is conditional on our match criteria. 
 
 ### Get relevant hit
 
@@ -144,7 +151,7 @@ body = {
 ```
 where the `yql` and `userQuery` parameters instruct Vespa to return the _id_ of the documents along with the selected _rankfeatures_ defined in the _collect_rank_features_ rank-profile. The `hits` parameter is set to 1 because we know there are only one relevant id for each query, so we set Vespa to return only one document in the result set. The `recall` parameter allow us to specify the exact document _id_ we want to retrieve. The `ranking` parameter specify which _rank_profile_ we want to use and enable the rank features dumping by setting `listFeatures` to `True`.
 
-Note that the parameter `recall` only works if the document is matched by the query, which is exactly the behavior we want in this case, as discussed in the data collection logic. The `recall` syntax to retrieve one document with id equal to 1 is given by `"recall": "+id:1"` and the syntax to retrieve more than one document, say documents with ids 1 and 2 is given by `"recall": "+(id:1 id:2)"`.
+Note that the parameter `recall` only works if the document is matched by the query, which is exactly the behavior we want in this case. The `recall` syntax to retrieve one document with id equal to 1 is given by `"recall": "+id:1"` and the syntax to retrieve more than one document, say documents with ids 1 and 2 is given by `"recall": "+(id:1 id:2)"`.
 
 ### Get random hits
 
@@ -159,7 +166,7 @@ body = {
     "ranking": {"profile": collect_features, "listFeatures": "true"},
 }
 ```
-where the only changes with respect to the `get_relevant_hit` is that we no longer need to use the `recall` parameter and that we set the number of hits returned by Vespa to be equal the `number_random_sample`. This works as intended because we have used 
+where the only changes with respect to the `get_relevant_hit` is that we no longer need to use the `recall` parameter and that we set the number of hits returned by Vespa to be equal to `number_random_sample`. This works as intended because we have used 
 ```
 first-phase {
     expression: random
@@ -247,15 +254,19 @@ first-phase {
     expression: random
 }
 ```
-in our `collect_rank_features` _rank-profile_ leading to a biased dataset where the negative examples were actually quite relevant to the query. The trained model did well on the validation set but failed miserably on the test set when deployed to Vespa. This showed us that our dataset probably had a very different distribution than what is observed on a running Vespa instance and led us to investigate and catch the bug.
+in our `collect_rank_features` _rank-profile_ leading to a biased dataset where the negative examples were actually quite relevant to the query. The trained model did well on the validation set but failed miserably on the test set when deployed to Vespa. This showed us that our dataset probably had a very different distribution than what was observed on a running Vespa instance and led us to investigate and catch the bug.
 
 ## Beyond pointwise loss functions
 
-The most straightforward way to train the linear model mentioned in the previous section would be to use a vanilla logistic regression (since our target variable is the binary variable `relevant`). However, the metric that we want to optimize in this case is the Mean Reciprocal Rank (MRR), as described in [the previous tutorial](text-search.html). The MRR is affected by the relative order of the relevance we assign to the list of documents generated by a query and not by their absolute magnitudes, and the loss function of the classic logistic regression is referred to as a pointwise loss function in the learning to rank literature, as it does not take the relative order of documents into account. For ranking search results, it is preferable to use a listwise loss function when training our linear model, which  takes the entire ranked list into consideration when updating the model parameters.
+The most straightforward way to train the linear model mentioned in the previous section would be to use a vanilla logistic regression, since our target variable `relevant` is binary. The most commonly used loss function in this case (binary cross-entropy) is referred to as a pointwise loss function in the LTR literature, as it does not take the relative order of documents into account. However, as we described in [the previous tutorial](text-search.html), the metric that we want to optimize in this case is the Mean Reciprocal Rank (MRR). The MRR is affected by the relative order of the relevance we assign to the list of documents generated by a query and not by their absolute magnitudes. This disconnect between the characteristics of the loss function and the metric of interest might lead to suboptimal results.
 
-TODO: include reference
+For ranking search results, it is preferable to use a listwise loss function when training our linear model, which takes the entire ranked list into consideration when updating the model parameters. To illustrate this, we trained linear models using the [TF-Ranking framework](https://github.com/tensorflow/ranking). The framework is built on top of TensorFlow and allow us to specify pointwise, pairwise and listwise loss functions, among other things. The following script was used to generate the results below (just remember to increase the number of training steps when using the script).
 
-To illustrate this, we trained linear models using the [TF-Ranking framework](https://github.com/tensorflow/ranking). The framework is built on top of TensorFlow and allow us to specify pointwise, pairwise and listwise loss functions, among other things. The two _rank-profile_'s below are obtained by training the linear model with a pointwise (sigmoid cross-entropy) and listwise (softmax cross-entropy) loss function, respectivelly.
+```
+./src/python/tfrank.py
+```
+
+The two _rank-profile_'s below are obtained by training the linear model with a pointwise (sigmoid cross-entropy) and listwise (softmax cross-entropy) loss functions, respectivelly.
 ```
 rank-profile pointwise_linear_bm25 inherits default {
     first-phase {
@@ -271,13 +282,11 @@ rank-profile listwise_linear_bm25 inherits default {
 ```
 It is interesting to see that a pointwise loss function set more weight into the title in relation to the body while the opposite happens when using the listwise loss function.
 
-The figure below show how frequently (over more than 5.000 test queries) those two ranking functions allocate the relevant document between the 1st and 10th position of the list of documents returned by Vespa. Although there is not a huge difference between those models on average, we can clearly see in the figure below that a model based on a listwise loss function allocate more documents in the first two positions of the ranked list when compared to the pointwise model.
+The figure below shows how frequently (over more than 5.000 test queries) those two ranking functions allocate the relevant document between the 1st and 10th position of the list of documents returned by Vespa. Although there is not a huge difference between those models on average, we can clearly see in the figure below that a model based on a listwise loss function allocate more documents in the first two positions of the ranked list when compared to the pointwise model.
 
 <div style="text-align:center"><img src="images/text_search_baseline_pointwise_listwise_rr.png" style="width: 50%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
-The code to train those models can be found ... TODO
-
-Overall, on average, there is not much difference between those models (with respect to MRR), which was expected given the simplicity of the models described here. The point was simply to point out the importance of choosing better loss functions when dealing with LTR tasks and to give a quick start for those who want to give it a shot in their own applications. We expect the difference in MRR between pointwise and listwise loss functions to get bigger as we move on to more complex models.
+Overall, on average, there is not much difference between those models (with respect to MRR), which was expected given the simplicity of the models described here. The point was simply to point out the importance of choosing better loss functions when dealing with LTR tasks and to give a quick start for those who want to give it a shot in their own applications. We expect the difference in MRR between pointwise and listwise loss functions to increase as we move on to more complex models.
 
 
 <script>
