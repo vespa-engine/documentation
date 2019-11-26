@@ -38,24 +38,38 @@ Read more  in the [blog recommendation tutorial](/documentation/tutorials/blog-r
 
 
 
-## Structured data / parent child
-Applications often have structured data - Ads come from Advertisers, Authors write Comments.
-This can be modeled in Vespa, there are two approaches:
-1. Let children documents refer to [parent documents](/documentation/parent-child.html) using a document reference
-1. Let documents have arrays or maps of (structured) fields using
-    [multivalue fields](/documentation/search-definitions.html#multivalue-fields) -
-    use [sameElement](/documentation/reference/query-language-reference.html#sameelement) for matching
+## Social Media
+In social media, content is often _user generated_.
+A used is hence related to the data elements, like _author_, _owner_ and so on.
+This is a good use case for structured data and/or [parent/child](/documentation/parent-child.html).
 
-These are not _true_ distributed joins, but uses the propery of less parent items to work.
-Which of the two features to use is application dependent.
+Example 1: A user writes a comment to an article.
+All comments from the same user have the same parent document.
+As some users are better writers than others, comments can be ranked based on an author score.
+Updating an author score is hence updating one document only.
+
+Example 2: Users tag items.
+A document can have a [multivalue field](/documentation/search-definitions.html#multivalue-fields)
+like array to struct to save such data as tag value/timestamp/author.
 
 **Highlighted features**
-* Simplify document operations - one write to update one value
-* No de-normalization needed - simplifies data updates and atomic update into all children
+* No de-normalization needed - simplifies data updates (one write) and atomic update into all children
 * Search child documents based on properties from parent documents
 * Search parent documents only
 * Multi-value field types like arrays and maps
 * Struct field type
+
+
+
+<!--
+## Local Search
+something here later
+
+position
+time
+ranking
+paid placement
+-->
 
 
 
