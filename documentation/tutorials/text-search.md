@@ -308,7 +308,7 @@ Looking at the figure we can see that the faster BM25 feature has delivered supe
 
 To stop and remove the Docker container for this application:
 
-<pre style="display:none" data-test="after">
+<pre data-test="after">
 $ docker rm -f vespa-msmarco
 </pre>
 
