@@ -128,11 +128,73 @@ make running deep models feasible.
 
 ## ONNX operation support
 
+The following is a list of operators currently supported with respective ONNX
+opsets. In general, use ONNX opset 8 or above.
+
+<table border="1" class="dataframe" style="text-align:center">
+  <col width="150">
+  <col width="150">
+  <tbody>
+    <tr>
+      <td><b>Operator</b></td>
+      <td><b>Supported opsets</b></td>
+    </tr>
+    <tr><td>abs </td>               <td>[6, 11]</td></tr>
+    <tr><td>acos</td>               <td>[7, 11]</td></tr>
+    <tr><td>add</td>                <td>[7, 11]</td></tr>
+    <tr><td>asin</td>               <td>[7, 11]</td></tr>
+    <tr><td>atan</td>               <td>[7, 11]</td></tr>
+    <tr><td>div</td>                <td>[7, 11]</td></tr>
+    <tr><td>ceil</td>               <td>[6, 11]</td></tr>
+    <tr><td>cos</td>                <td>[7, 11]</td></tr>
+    <tr><td>concat</td>             <td>[4, 11]</td></tr>
+    <tr><td>elu</td>                <td>[6, 11]</td></tr>
+    <tr><td>equal</td>              <td>[7, 11]</td></tr>
+    <tr><td>exp</td>                <td>[6, 11]</td></tr>
+    <tr><td>floor</td>              <td>[6, 11]</td></tr>
+    <tr><td>greater</td>            <td>[7, 11]</td></tr>
+    <tr><td>gemm</td>               <td>[7, 11]</td></tr>
+    <tr><td>identity</td>           <td>[1, 11]</td></tr>
+    <tr><td>leakyrelu</td>          <td>[6, 11]</td></tr>
+    <tr><td>less</td>               <td>[7, 11]</td></tr>
+    <tr><td>log</td>                <td>[6, 11]</td></tr>
+    <tr><td>max</td>                <td>[8, 11]</td></tr>
+    <tr><td>matmul</td>             <td>[1, 11]</td></tr>
+    <tr><td>mean</td>               <td>[8, 11]</td></tr>
+    <tr><td>min</td>                <td>[8, 11]</td></tr>
+    <tr><td>mul</td>                <td>[7, 11]</td></tr>
+    <tr><td>neg</td>                <td>[6, 11]</td></tr>
+    <tr><td>reciprocal</td>         <td>[6, 11]</td></tr>
+    <tr><td>reducel1</td>           <td>[1, 11]</td></tr>
+    <tr><td>reducel2</td>           <td>[1, 11]</td></tr>
+    <tr><td>reducelogsum</td>       <td>[1, 11]</td></tr>
+    <tr><td>reducelogsumexp</td>    <td>[1, 11]</td></tr>
+    <tr><td>reducemax</td>          <td>[1, 11]</td></tr>
+    <tr><td>reducemean</td>         <td>[1, 11]</td></tr>
+    <tr><td>reducemin</td>          <td>[1, 11]</td></tr>
+    <tr><td>reduceprod</td>         <td>[1, 11]</td></tr>
+    <tr><td>reducesum</td>          <td>[1, 11]</td></tr>
+    <tr><td>reducesumsquare</td>    <td>[1, 11]</td></tr>
+    <tr><td>relu</td>               <td>[6, 11]</td></tr>
+    <tr><td>reshape</td>            <td>[5, 11]</td></tr>
+    <tr><td>selu</td>               <td>[6, 11]</td></tr>
+    <tr><td>shape</td>              <td>[1, 11]</td></tr>
+    <tr><td>sigmoid</td>            <td>[6, 11]</td></tr>
+    <tr><td>sin</td>                <td>[7, 11]</td></tr>
+    <tr><td>softmax</td>            <td>[1, 11]</td></tr>
+    <tr><td>sqrt</td>               <td>[6, 11]</td></tr>
+    <tr><td>squeeze</td>            <td>[1, 11]</td></tr>
+    <tr><td>sub</td>                <td>[7, 11]</td></tr>
+    <tr><td>tan</td>                <td>[7, 11]</td></tr>
+    <tr><td>tanh</td>               <td>[6, 11]</td></tr>
+    <tr><td>where</td>              <td>[1, 11]</td></tr>
+  </tbody>
+</table>
+
 Currently, not [all operations in
 ONNX](https://github.com/onnx/onnx/blob/master/docs/Operators.md) are
 supported. Typical neural networks are supported, but convolutional and
 recurrent neural networks are not yet supported. Also, the [ML
 extensions](https://github.com/onnx/onnx/blob/master/docs/Operators-ml.md) for
 ONNX are currently not yet supported.
-
 
