@@ -1,25 +1,20 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Ranking Introduction"
+title: "Ranking"
 ---
 
 <p>
-Vespa computes one or more <em>ranking expressions</em> for documents matching a query.
-The results of the computations can be returned with the documents
+Vespa uses <em>ranking expressions</em> to rank documents matching a query.
+The results of the ranking computation can be returned with the documents,
 and used to order and further select the documents that should be returned.
-</p><p>
-Ranking expressions are mathematical functions over <a href="tensor-intro.html">tensors</a> or scalars.
+Ranking expressions are mathematical functions over <a href="tensor-intro.html">tensors</a>,
+<a href="search-definitions.html#multivalue-fields">multivalue fields</a> or scalars.
 The function may contain anything from a single reference
 to a built-in feature to a machine-learned models from
 <a href="tensorflow.html">Tensorflow</a>, <a href="onnx.html">ONNX</a> or <a href="xgboost.html">XGBoost</a> -
 refer to <a href="advanced-ranking.html">advanced ranking</a>
 for details on using dot products, tensors and wand.
-</p>
-
-
-
-<h2 id="ranking-expressions-and-rank-features">Ranking expressions and rank features</h2>
-<p>
+</p><p>
 Vespa computes the rank score by a configured expression
 called a <a href="reference/ranking-expressions.html">ranking expression</a>.
 Ranking expressions look like standard mathematical expressions
@@ -27,6 +22,17 @@ and support the usual operators and functions as well as an <code>if</code> func
 enabling decision trees and conditional business logic.
 It supports a comprehensive set of  <a href="reference/tensor.html">tensor functions</a>,
 which allows expressing machine-learned functions such as deep neural nets.
+Example: Rank the freshest document highest, using the value in an attribute named <em>timestamp</em>:
+<pre>
+search myapp {
+    &hellip;
+    rank-profile default inherits default {
+        first-phase {
+            expression: freshness(timestamp)
+        }
+    }
+}
+</pre>
 </p><p>
 The primitive values which are combined by ranking expressions
 are called <a href="reference/rank-features.html">rank features</a>.
@@ -37,91 +43,29 @@ The rank features can be both scalars and tensors, and one of:
     <li>Computed by Vespa from the query and the document
       to provide information about how well the query matched the document</li>
 </ul>
-</p>
-
-
-
-<h2 id="two-phase-ranking">Two-phase ranking</h2>
-<p>
-Rank scores in general become more accurate by using complex expressions
-which use many features or large tensors.
-Even though Vespa is optimized for such calculations,
-complex expressions become expensive when calculated for each selected document.
-For this reason Vespa can be configured to run two ranking expressions -
-a smaller and less accurate one on all matches as they are found (first-phase ranking)
-and a more expensive and accurate one only on the best documents (second-phase ranking).
-This provides a better CPU budget distribution
-by dedicating more resources to the best candidates - see
-<a href="reference/search-api-reference.html#ranking.softtimeout">ranking.softtimeout</a>.
-</p><p>
-By default, second-phase ranking (if specified) is run on the 100 best hits per content node,
-after matching and before information is returned to the container.
-The number of hits to rerank can be configured in the ranking expression.
-</p><p>
-Rank expressions are configured in the <code>rank-profile</code> section of
-<a href="reference/search-definitions-reference.html#rank-profile">search definitions</a>. Example:
-<pre>
-search myapp {
-    &hellip;
-    rank-profile default inherits default {
-        first-phase {
-            expression: nativeRank + query(deservesFreshness) * freshness(timestamp)
-        }
-        second-phase {
-            expression {
-                xgboost("my_model.json") 
-            }
-            rerank-count: 200
-        }
-    }
-}
-</pre>
-In this example, the first phase uses the <a href="reference/nativerank.html">nativeRank</a> feature
-as the ranking expression plus a freshness component.
-The contribution from the freshness feature is set in a query parameter.
-The second phase uses a trained <a href="xgboost.html">xgboost</a> model. 
+The default ranking is <code>nativeRank</code> -
+see <a href="text-ranking.html">text ranking</a> for details.
 </p><p>
 Ranking expressions can be large.
 They can be wrapped in curly braces, or put in files in the application package,
 using <code>file:filename</code> in place of the expression.
+See the <a href="reference/search-definitions-reference.html#rank-profile">rank profile reference</a>
+for details.
 </p><p>
-See the <a href="reference/search-definitions-reference.html#rank-profile">rank profiles</a>
-reference for details.
-</p><p>
-It is possible to configure multiple rank profiles and choose between them in the query,
+It is possible to configure multiple rank profiles and choose between them in the
+<a href="https://docs.vespa.ai/documentation/reference/search-api-reference.html#ranking.profile">query</a>,
 for example to use different ranking expressions for different use cases or to bucket test new revisions.
-A rank profile may also <code>inherit</code> another to allow specifying 
+A rank profile may also <code>inherit</code> another to allow specifying
 only the differences between two profiles.
-</p>
-
-
-<h3 id="choosing-functions-for-the-first-and-second-phase">Choosing functions for the first and second phase</h3>
-<p>
-A good ranking expression will for most applications consume too much CPU
-to be runnable on the entire result set,
-so in most cases the desired rank function should be used as the second phase function.
-The task then becomes to find a first phase function,
-which correlates sufficiently well with the second phase function,
-to ensure that relevance is not hurt too much by not evaluating the second phase function on all the hits.
-In many cases, <code>nativeRank</code> will work well as the first phase function.
-The impact of using a cheaper function in the first phase can be assessed by deploying
-the second order function as the first order function in a test rank profile,
-and comparing the results to the production rank profile.
-</p>
-
-
-<h3 id="nativerank">nativeRank</h3>
-<p>
-The default ranking is <code>nativeRank</code> in the first phase and no second phase re-ranking.
-The <code>nativeRank</code> is a feature which gives a reasonably good rank score,
-while being fast enough to be suitable for first phase ranking.
-See the <a href="reference/nativerank.html">native rank reference</a> and
-<a href="nativerank.html">native rank introduction</a> for more information.
+</p><p>
+Ranking is most often the resource driver.
+Use <a href="#two-phase-ranking">two-phase ranking</a> to optimize,
+using a cheap first-phase ranking to eliminate the lowest ranked candidates.
 </p>
 
 
 
-<h2 id="choosing-ranking-expressions">Choosing ranking expressions</h2>
+<h2 id="Ranking-expressions">Ranking expressions</h2>
 <p>
 There are two methods for deciding ranking expressions for the application.
 </p><p>
@@ -151,7 +95,7 @@ and/or the weights of the expression (often represented in a constant tensor).
 
 
 
-<h2 id="choosing-features">Choosing features</h2>
+<h2 id="rank-features">Rank features</h2>
 <p>
 Vespa's <a href="reference/rank-features.html">rank feature set</a>
 contains a large set of low level features, as well as some higher level features.
@@ -172,6 +116,41 @@ and allows a normalized score to be produced by simply summing the product of th
 and any other normalized per-field score for each field.
 In addition, some attribute value(s) must usually be included
 to determine the a priori quality of each document.
+</p>
+
+
+<h3 id="dumping-ranking-information-for-tuning">Dumping ranking information for tuning</h3>
+<p>
+"All" rank features can be included in the results for each document by adding
+<code><a href="reference/search-api-reference.html#ranking.listFeatures">rankfeatures</a></code> to the query.
+This is useful for tasks like recording the rank feature values for automated training.
+Since the set of actual feature computable are in general infinite,
+"all" features really means a large default set.
+If more rank features than is available in the default set is wanted,
+they can be added to the set in the <a href="reference/search-definitions-reference.html#rank-features">rank profile</a>:
+<pre>
+rank-features: feature1 feature2 &hellip;
+</pre>
+This list can also be enclosed in curly brackets and span multiple lines.
+It is also possible to take full control over which features will be dumped by adding
+<pre>
+ignore-default-rank-features
+</pre>
+to the rank profile. This will make the explicitly listed rank features the only ones dumped
+when requesting rankfeatures in the query.
+The features are dumped in JSON format.
+</p>
+
+
+<h3 id="dumping-rank-features-for-specific-documents">Dumping rank features for specific documents</h3>
+<p>
+For a training set containing judgements for certain documents,
+it is useful to select those documents in the query by adding a term matching the document id,
+but without impacting the values of any rank features.
+To do this, add that term with <code>ranked</code> set to false:
+<pre>
+select * from mydocumenttype where myidfield contains ([ {"ranked": false} ] "mydocumentid" and ...);
+</pre>
 </p>
 
 
@@ -248,101 +227,11 @@ followed by everything else sorted by the overall match quality and popularity.
 
 
 
-<h2 id="weight-significance-and-connectedness">Weight, significance and connectedness</h2>
+<h2 id="accessing-feature-function-values-in-results">Accessing feature/function values in results</h2>
 <p>
-It is possible to influence the values of the match features calculated by Vespa
-from the query by sending weight, significance and connectedness with the query:
-<table class="table">
-  <thead></thead><tbody>
-    <tr><th>Weight</th><td><p>
-      Signify that some query terms are more or less important than others in matches.
-      For example <code>query=large shoes!200</code> specifies that he term "shoes" <!-- ToDo: rewrite to YQL -->
-      should be twice as important for the final rank score than "large"
-      (since the default weight is 100).
-      </p><p>
-      Weight is used in <code><a href="reference/rank-features.html#fieldMatch(name).weight">
-      fieldMatch(<em>name</em>).weight</a></code>, which can be multiplied with
-      <code><a href="reference/rank-features.html#fieldMatch(name)">
-      fieldMatch(<em>name</em>)</a></code> to yield a weighted score for the field,
-      and in <code><a href="reference/rank-features.html#fieldMatch(name).weightedOccurrence">
-      fieldMatch(<em>name</em>).weightedOccurrence</a></code>
-      to get a occurrence score which is higher if higher weighted terms occurs most.
-      Configure static field weights in the
-      <a href="reference/search-definitions-reference.html#weight">search definition</a>.</p></td>
-    </tr><tr><th>Significance</th><td><p>
-      How rare a particular term is in the corpus or the language.
-      This is sometimes valuable information because if a document matches a rare word,
-      it might mean the document is more important than one which matches a common word.
-      Significance is calculated automatically by Vespa during indexing,
-      but can also be overridden by setting the significance values on the query terms
-      in a <a href="searcher-development.html">Searcher component</a>.
-      Significance is accessible in
-      <code><a href="reference/rank-features.html#fieldMatch(name).significance">
-      fieldMatch(<em>name</em>).significance</a></code>, which can be used the same way as weight.
-      Weight and significance are also averaged into
-      <code><a href="reference/rank-features.html#fieldMatch(name).importance">
-      fieldMatch(<em>name</em>).importance</a></code> for convenience.</p></td>
-    </tr><tr><th>Connectedness</th><td><p>
-      Signify the degree of connection between adjacent terms in the query.
-      For example, the query <code>new york newspaper</code> should have a higher connectedness
-      between the terms "new" and "york" than between "york" and "newspaper" to rank documents higher
-      if they contain "new york" as a phrase.
-      Term connectedness is taken into account by
-      <code><a href="reference/rank-features.html#fieldMatch(name).proximity">
-      fieldMatch(<em>name</em>).proximity</a></code>,
-      which is also an important contribution to
-      <code><a href="reference/rank-features.html#fieldMatch(name)">fieldMatch(<em>name</em>)</a></code>.
-      Connectedness is a normalized value which is 0.1 by default.
-      It must be set by a custom Searcher,
-      looking up connectivity information from somewhere - there is no query syntax for it.</p></td>
-    </tr>
-  </tbody>
-</table>
-</p>
-
-
-
-<h2 id="rank-features-dumping-ranking-information-for-tuning">Rank features: dumping ranking information for tuning</h2>
-<p>
-"All" rank features can be included in the results for each document by adding
-<code><a href="reference/search-api-reference.html#ranking.listFeatures">rankfeatures</a></code> to the query.
-This is useful for tasks like recording the rank feature values for automated training.
-Since the set of actual feature computable are in general infinite,
-"all" features really means a large default set.
-If more rank features than is available in the default set is wanted,
-they can be added to the set in the <a href="reference/search-definitions-reference.html#rank-features">rank profile</a>:
-<pre>
-rank-features: feature1 feature2 &hellip;
-</pre>
-This list can also be enclosed in curly brackets and span multiple lines.
-It is also possible to take full control over which features will be dumped by adding
-<pre>
-ignore-default-rank-features
-</pre>
-to the rank profile. This will make the explicitly listed rank features the only ones dumped
-when requesting rankfeatures in the query.
-The features are dumped in JSON format.
-
-<h2 id="dumping-rank-features-for-specific-documents">Dumping rank features for specific documents</h2>
-
-<p>When you have a training set containing judgements for certain documents, it is
-useful to select those documents in the query by adding a term matching the document id,
-but without impacting the values of any rank features. To do this, add that term with
-<code>ranked</code>code> set to false. In YQL:</p>
-
-<pre>
-select * from mydocumenttype where myidfield contains ([ {"ranked": false} ] "mydocumentid" and ...);
-</pre>
-
-
-<h2 id="summary-features-accessing-feature-function-values-in-results">Summary features: Accessing feature/function values in results</h2>
-
-<p>Any feature can be returned in the hit producing it by adding it to the list of
+Any feature can be returned in the hit producing it by adding it to the list of
 <a href="reference/search-definitions-reference.html#summary-features">summary-features</a> of the rank profile.
-As all functions are features this allows the result of any computation to be accessible in results.</p>
-
-<p>For example, given this rank profile</p>
-
+As all functions are features this allows the result of any computation to be accessible in results. Example:
 <pre>
 rank-profile test {
 
@@ -358,24 +247,23 @@ rank-profile test {
 
 }
 </pre>
-
-<p>The results of this functions will be available in the Hits of the result as follows:</p>
-
+The results of this functions will be available in the Hits of the result as follows:
 <pre>
 import com.yahoo.search.result.FeatureData;
-
     ...
     FeatureData featureData = (FeatureData)hit.getField("summaryfeatures");
     Tensor tensor_join_value = featureData.getTensor("rankingExpression(tensor_join)");
     double join_sum_value = featureData.getTensor("rankingExpression(join_sum)");
 </pre>
+You can easily do further computation on the returned tensors,
+such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</code>.
+</p>
 
-<p>You can easily do further computation on the returned tensors, such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</code>.</p>
 
 
 <h2 id="feature-configuration">Feature configuration</h2>
 <p>
-Some features, most notably the <code>fieldMatch</code> features,
+Some features, most notably the <a href="text-ranking.html">fieldMatch</a> features,
 contains configuration parameters which allows the feature calculation
 to be tweaked per field for performance or relevance.
 Feature configuration values are set by adding:
@@ -493,4 +381,58 @@ or as a result of changing user behavior.
 The relevance metrics are <code>relevance.at_1</code>,
 <code>relevance.at_3</code> and <code>relevance.at_10</code>.
 See <a href="reference/metrics.html">metrics</a> for more information.
+</p>
+
+
+
+<h2 id="two-phase-ranking">Two-phase ranking</h2>
+<p>
+Rank scores in general become more accurate by using complex expressions
+which use many features or large tensors.
+Even though Vespa is optimized for such calculations,
+complex expressions become expensive when calculated for each selected document.
+For this reason Vespa can be configured to run two ranking expressions -
+a smaller and less accurate one on all matches as they are found (first-phase ranking)
+and a more expensive and accurate one only on the best documents (second-phase ranking).
+This provides a better CPU budget distribution
+by dedicating more resources to the best candidates - see
+<a href="reference/search-api-reference.html#ranking.softtimeout">ranking.softtimeout</a>.
+</p><p>
+By default, second-phase ranking (if specified) is run on the 100 best hits per content node,
+after matching and before information is returned to the container.
+The number of hits to rerank can be configured in the ranking expression.
+</p><p>
+Rank expressions are configured in the <code>rank-profile</code> section of
+<a href="reference/search-definitions-reference.html#rank-profile">search definitions</a>. Example:
+<pre>
+search myapp {
+    &hellip;
+    rank-profile default inherits default {
+        first-phase {
+            expression: nativeRank + query(deservesFreshness) * freshness(timestamp)
+        }
+        second-phase {
+            expression {
+                xgboost("my_model.json")
+            }
+            rerank-count: 200
+        }
+    }
+}
+</pre>
+In this example, the first phase uses the <a href="reference/nativerank.html">nativeRank</a> feature
+as the ranking expression plus a freshness component.
+The contribution from the freshness feature is set in a query parameter.
+The second phase uses a trained <a href="xgboost.html">xgboost</a> model.
+</p><p>
+A good ranking expression will for most applications consume too much CPU
+to be runnable on the entire result set,
+so in most cases the desired rank function should be used as the second phase function.
+The task then becomes to find a first phase function,
+which correlates sufficiently well with the second phase function,
+to ensure that relevance is not hurt too much by not evaluating the second phase function on all the hits.
+In many cases, <code>nativeRank</code> will work well as the first phase function.
+The impact of using a cheaper function in the first phase can be assessed by deploying
+the second order function as the first order function in a test rank profile,
+and comparing the results to the production rank profile.
 </p>
