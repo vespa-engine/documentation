@@ -206,12 +206,15 @@ functions that can be implemented by primitive functions.
 <tr>
     <td><a href="#reduce">reduce</a></td>
     <td style="white-space:nowrap;">reduce(tensor, aggregator, dim1, dim2, ...)</td>
-    <td>Returns a new tensor with the <code>aggregator</code> applied across dimensions dim1, dim2, etc. If no dimensions are specified, reduce over all dimensions.</td>
+    <td>Returns a new tensor with the <code>aggregator</code> applied across dimensions dim1, dim2, etc.
+        If no dimensions are specified, reduce over all dimensions.</td>
 </tr>
 <tr>
     <td><a href="#join">join</a></td>
     <td style="white-space:nowrap;">join(tensor1, tensor2, f(x,y)(expr))</td>
-    <td>Returns a new tensor constructed from the <em>natural join</em> between <code>tensor1</code> and <code>tensor2</code>, with the resulting cells having the value as calculated from <code>f(x,y)(expr)</code>, where <code>x</code> is the cell value from <code>tensor1</code> and <code>y</code> from <code>tensor2</code>.</td>
+    <td>Returns a new tensor constructed from the <em>natural join</em> between <code>tensor1</code> and <code>tensor2</code>,
+        with the resulting cells having the value as calculated from <code>f(x,y)(expr)</code>, where <code>x</code>
+        is the cell value from <code>tensor1</code> and <code>y</code> from <code>tensor2</code>.</td>
 </tr>
 <tr>
     <td><a href="#tensor">tensor</a></td>
@@ -227,6 +230,11 @@ functions that can be implemented by primitive functions.
     <td><a href="#concat">concat</a></td>
     <td style="white-space:nowrap;">concat(tensor1, tensor2, dim)</td>
     <td>Concatenates two tensors along dimension <code>dim</code>.</td>
+</tr>
+<tr>
+    <td><a href="#slice">slice</a></td>
+    <td style="white-space:nowrap;">(tensor)partial-key</td>
+    <td>Returns a new tensor containing the cells matching the partial key.</td>
 </tr>
 </tbody>
 </table>
@@ -253,7 +261,7 @@ f(x,y)(if(x &lt; y, 0, 1))
 <p>
 Arguments:
 <ul>
-    <li><code>tensor</code>: a tensor.</li>
+    <li><code>tensor</code>: a tensor expression.</li>
     <li><code>f(x)(expr)</code>: a <a href="#lambda">lambda function</a> with one argument.</li>
 </ul>
 Returns a new tensor where the expression in the lambda function is
@@ -270,7 +278,7 @@ map(t, f(i)(if(i &lt; 0, 0, i)))
 <p>
 Arguments:
 <ul>
-    <li><code>tensor</code>: a tensor.</li>
+    <li><code>tensor</code>: a tensor expression.</li>
     <li><code>aggregator</code>: the aggregator to use. See below.</li>
     <li><code>dim1, dim2, ...</code>: the dimensions to reduce over. Optional.</li>
 </ul>
@@ -298,8 +306,8 @@ reduce(t, count, x)    # Count number of cells along dimension x
 <p>
 Arguments:
 <ul>
-    <li><code>tensor1</code>: a tensor.</li>
-    <li><code>tensor2</code>: a tensor.</li>
+    <li><code>tensor1</code>: a tensor expression.</li>
+    <li><code>tensor2</code>: a tensor expression.</li>
     <li><code>f(x,y)(expr)</code>: a <a href="#lambda">lambda function</a> with two arguments.</li>
 </ul>
 Returns a new tensor constructed from the <em>natural join</em>
@@ -343,7 +351,7 @@ Useful for creating transformation tensors.
 Examples:
 {% raw %}
 <pre>
-tensor&lt;float&gt;(x[3])(x) = {{x:0}: 0.0, {x:1}: 1.0, {x:2}: 2.0}
+tensor&lt;float&gt;(x[3])(x) = [0.0, 1.0, 2.0]
 tensor&lt;float&gt;(x[2],y[2])(x == y) = {{x:0,y:0}: 1.0, {x:0,y:1}: 0.0, {x:1,y:0}: 0.0, {x:1,y:1}: 1.0}
 </pre>
 {% endraw %}
@@ -353,7 +361,7 @@ tensor&lt;float&gt;(x[2],y[2])(x == y) = {{x:0,y:0}: 1.0, {x:0,y:1}: 0.0, {x:1,y
 <p>
 Arguments:
 <ul>
-    <li><code>tensor</code>: a tensor.</li>
+    <li><code>tensor</code>: a tensor expression.</li>
     <li><code>dim-to-rename</code>: a dimension, or list of dimensions, to rename.</li>
     <li><code>new-names</code>: new names for the dimensions listed above.</li>
 </ul>
@@ -374,13 +382,12 @@ rename(t1,(x,y),(i,j)) = {{i:0,j:0}: 1.0, {i:0,j:1}: 0.0, {i:1,j:0}: 0.0, {i:1,j
 <p>
 Arguments:
 <ul>
-    <li><code>tensor1</code>: a tensor or scalar.</li>
-    <li><code>tensor2</code>: a tensor or scalar.</li>
+    <li><code>tensor1</code>: a tensor expression.</li>
+    <li><code>tensor2</code>: a tensor expression.</li>
     <li><code>dim</code>: the dimension to concatenate along.</li>
 </ul>
 Returns a new tensor with the two tensors <code>tensor1</code> and
 <code>tensor2</code> concatenated along dimension <code>dim</code>.
-The tensors can also be scalars.
 </p><p>
 Examples:
 {% raw %}
@@ -389,6 +396,42 @@ t1 = {{x:0}: 0.0, {x:1}: 1.0}
 t2 = {{x:0}: 2.0, {x:1}: 3.0}
 
 concat(t1,t2,x) = {{x:0}: 0.0, {x:1}: 1.0}, {x:2}: 2.0, {x:3}: 3.0}}
+</pre>
+{% endraw %}
+</p>
+
+<h4 id="slice">- slice</h4>
+
+(tensor)partial-key
+
+<p>
+    Arguments:
+<ul>
+    <li><code>tensor</code>: a tensor expression.</li>
+    <li><code>partial-key</code>: A key can be given in the form of a tensor address {dimension:label,..}, or for tensors having a single
+        mapped or indexed type respectively as just a label in curly brackets {label} or just an index in square brackets,
+        [index]. Indexes in keys may be specified by no-argument lambda functions.
+    </li>
+</ul>
+
+Returns a new tensor containing the cells matching the partial key. A common special case is producing a single value
+by specifying a full key. The type of the resulting tensor is the dimensions of the argument tensor
+not specified by the partial key.
+</p>
+
+<p>Examples:
+{% raw %}
+<pre>
+t1 = tensor(x[2]):[1.0, 2.0]]
+t2 = tensor(key{}):{ key1:1.0, key2:2.0 }
+t3 = tensor(key{},x[2]):{ key1:[1.0, 2.0], key2:[3.0, 4.0] }
+
+t1[1] = {2.0}
+t2{key1} = {1.0}
+t3{key1} = tensor(x[2]):[1.0, 2.0]
+t3[1] = tensor(key{}):{key1:2.0, key2:4.0}
+t3{key:key1,x:1} = {2.0}
+t3{key:key1,x:(3-2)} = {2.0}
 </pre>
 {% endraw %}
 </p>
