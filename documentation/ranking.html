@@ -4,25 +4,11 @@ title: "Ranking"
 ---
 
 <p>
-Vespa uses <em>ranking expressions</em> to rank documents matching a query.
+Vespa uses <a href="reference/ranking-expressions.html">ranking expression</a>
+to rank documents matching a query, computing a rank score per document.
 The results of the ranking computation can be returned with the documents,
 and used to order and further select the documents that should be returned.
-Ranking expressions are mathematical functions over <a href="tensor-intro.html">tensors</a>,
-<a href="search-definitions.html#multivalue-fields">multivalue fields</a> or scalars.
-The function may contain anything from a single reference
-to a built-in feature to a machine-learned models from
-<a href="tensorflow.html">Tensorflow</a>, <a href="onnx.html">ONNX</a> or <a href="xgboost.html">XGBoost</a> -
-refer to <a href="advanced-ranking.html">advanced ranking</a>
-for details on using dot products, tensors and wand.
-</p><p>
-Vespa computes the rank score by a configured expression
-called a <a href="reference/ranking-expressions.html">ranking expression</a>.
-Ranking expressions look like standard mathematical expressions
-and support the usual operators and functions as well as an <code>if</code> function -
-enabling decision trees and conditional business logic.
-It supports a comprehensive set of  <a href="reference/tensor.html">tensor functions</a>,
-which allows expressing machine-learned functions such as deep neural nets.
-Example: Rank the freshest document highest, using the value in an attribute named <em>timestamp</em>:
+Simple example: Rank the freshest document highest, using the value in an attribute named <em>timestamp</em>:
 <pre>
 search myapp {
     &hellip;
@@ -33,70 +19,57 @@ search myapp {
     }
 }
 </pre>
+Ranking expressions are mathematical functions.
+The function may contain anything from a single reference to a built-in feature,
+to a machine-learned models from <a href="tensorflow.html">Tensorflow</a>,
+<a href="onnx.html">ONNX</a> or <a href="xgboost.html">XGBoost</a>.
+Ranking expressions support the usual operators and functions,
+as well as an <em>if</em> function - enabling decision trees and conditional business logic.
+They support a comprehensive set of  <a href="reference/tensor.html">tensor functions</a>,
+which allows expressing machine-learned functions such as deep neural nets.
+Refer to <a href="advanced-ranking.html">advanced ranking</a>
+for details on using dot products, tensors and wand.
 </p><p>
-The primitive values which are combined by ranking expressions
-are called <a href="reference/rank-features.html">rank features</a>.
-The rank features can be both scalars and tensors, and one of:
-<ul>
-    <li>Constants set in the application package</li>
-    <li>Values sent with the query or set in the document</li>
-    <li>Computed by Vespa from the query and the document
-      to provide information about how well the query matched the document</li>
-</ul>
-The default ranking is <code>nativeRank</code> -
-see <a href="text-ranking.html">text ranking</a> for details.
-</p><p>
-Ranking expressions can be large.
-They can be wrapped in curly braces, or put in files in the application package,
-using <code>file:filename</code> in place of the expression.
-See the <a href="reference/search-definitions-reference.html#rank-profile">rank profile reference</a>
-for details.
-</p><p>
-It is possible to configure multiple rank profiles and choose between them in the
-<a href="https://docs.vespa.ai/documentation/reference/search-api-reference.html#ranking.profile">query</a>,
-for example to use different ranking expressions for different use cases or to bucket test new revisions.
-A rank profile may also <code>inherit</code> another to allow specifying
-only the differences between two profiles.
-</p><p>
-Ranking is most often the resource driver.
+Ranking is most often the resource driver - this is where is application's logic is imlpemented.
 Use <a href="#two-phase-ranking">two-phase ranking</a> to optimize,
-using a cheap first-phase ranking to eliminate the lowest ranked candidates.
+using an inexpensive <em>first-phase</em> ranking to eliminate the lowest ranked candidates,
+then focus the resources on a strong <em>second-phase</em> ranking.
+</p><p>
+Ranking expressions can be <em>hand written</em> -
+works well if the ranking is well defined enough
+to be easily mappable into a ranking expression.
+Alternatively, make the ranking expression automatically using <em>machine learning</em>.
+Ranking expressions can be large, and can be imported using
+<a href="reference/search-definitions-reference.html#expression">file:filename</a>.
 </p>
 
 
 
-<h2 id="Ranking-expressions">Ranking expressions</h2>
+<h2 id="rank-profiles">Rank profiles</h2>
 <p>
-There are two methods for deciding ranking expressions for the application.
+Ranking expressions are stored in <a href="reference/search-definitions-reference.html#rank-profile">rank profiles</a>.
+Queries select profile using <a href="reference/search-api-reference.html#ranking.profile">ranking.profile</a> -
+this can be used for implementing different use cases, or bucket testing ranking variations.
 </p><p>
-The first method is to <strong>hand write</strong> a ranking expression.
-For example, assuming the title field is more important than the body field,
-create a ranking expression which gives more weight to that field, as in the example above.
-Vespa contains some built-in convenience support for this -
-weights can be set in the individual fields by <code>weight: &lt;number&gt;</code>
-and the feature <code>match</code> can be used to get a weighted average
-of the fieldMatch scores of each field.
-The built in text matching feature <a href="nativerank.html">nativeRank</a>
-has a set of tunable parameters (including field <code>weight</code>)
-to control the text matching ranking component in the overall ranking expression.
-The overall ranking expression might contain other ranking dimensions than just text match,
-like freshness, the quality of the document, or any other property of the document or query.
-Hand writing is fine if the intended ranking is well defined enough
-to be easily mappable into a ranking expression, or if the alternative below is too expensive.
+A rank profile can <em>inherit</em> another rank profile.
 </p><p>
-The second method is to produce the ranking expression <strong>automatically</strong>
-from a <em>training set</em> - a set of document and query pairs
-where a human has assessed the quality of the document as an answer to the query.
-Given many (tens of thousands) of such <em>judgements</em>,
-and the rank feature values for each,
-a machine learning algorithm can be used to produce the ranking expression
-and/or the weights of the expression (often represented in a constant tensor).
+If rank-profile is not specified, the <a href="text-ranking.html">default text ranking</a> is used.
 </p>
 
 
 
 <h2 id="rank-features">Rank features</h2>
 <p>
+The primitive values used in ranking expressions
+are called <a href="reference/rank-features.html">rank features</a>.
+Rank features can be <a href="tensor-intro.html">tensors</a>,
+<a href="search-definitions.html#multivalue-fields">multivalue fields</a> or scalars, and one of:
+<ul>
+    <li>Constants set in the application package</li>
+    <li>Values sent with the query or set in the document</li>
+    <li>Computed by Vespa from the query and the document
+      to provide information about how well the query matched the document</li>
+</ul>
 Vespa's <a href="reference/rank-features.html">rank feature set</a>
 contains a large set of low level features, as well as some higher level features.
 If automated training is used, all features can often just be handed to the training algorithm
@@ -104,18 +77,6 @@ to let it choose which ones to use.
 Depending on the algorithm, it can be a good idea to leave out the unnormalized features
 to avoid spending learning power on having to learn to normalize these features
 and determine that they really represent the same information as some of the normalized features.
-</p><p>
-If the expression is written manually, it might be most convenient to
-stick with using the <code>fieldMatch(<em>name</em>)</code> feature for each field.
-This feature combines the more basic fieldMatch features in a reasonable way.
-A good way to combine the fieldMatch score of each field is to use a weighted average as explained above.
-Another way is to combine the field match scores
-using the <code>fieldMatch(<em>name</em>).weight/significance/importance</code> features
-which takes term weight or rareness or both into account
-and allows a normalized score to be produced by simply summing the product of this feature
-and any other normalized per-field score for each field.
-In addition, some attribute value(s) must usually be included
-to determine the a priori quality of each document.
 </p>
 
 
