@@ -73,8 +73,10 @@ r  b   swpd   free   buff  cache   si   so    bi    bo   in    cs us sy id wa
   </tbody>
 </table>
 
-<h2 id="perf">Profiling using perf</h2>
-<p> To use perf, install <em>vespa-debuginfo-<vespa-version></em> matching your Vespa version, example with 7.147.12:
+<h2 id="perf">CPU Profiling using perf</h2>
+<p>Someimes, when debugging cpu usage in a remote cluster and debugging performance it might
+  be beneficial to get a performance profile snapshot. 
+  To use perf , install <em>vespa-debuginfo-<vespa-version></em> matching your Vespa version, example with 7.147.12:
   
   <pre>
   $ sudo yum install vespa-debuginfo-7.147.12
@@ -83,87 +85,19 @@ r  b   swpd   free   buff  cache   si   so    bi    bo   in    cs us sy id wa
   <pre>
   $ sudo perf record --pid=<pid-of-proton-process>
   </pre>
-  Report:
+  <p>The pid of the vespa-proton-bin process can be obtained using the
+  <a href="../config-sentinel.html">vespa-sentinel-cmd</a> command line utility, or simply use top/ps. 
+  
+  To get a performance profile report:
   <pre>
   $ sudo perf report 
   </pre>
-
-
-<h2 id="oprofile">OProfile</h2>
+ 
 <p>
-This section explains how to setup OProfile and doing simple profiling.
-See the <a href="http://oprofile.sourceforge.net/doc/index.html">OProfile manual</a>
-for examples of more complicated OProfile usage.
-OProfile is the best tool to find where the system is spending time.
-It gives an accurate view at a cost of 0.1-2%.
-Use a real host - it will not work on OpenVZ jails or linux containers.
-</p>
-
-
-
-<h3 id="install">Install</h3>
-<p>
-This will also install bindings that allow profiling java applications as well:
-<pre>
-$ sudo yum install oprofile oprofile-jit
-</pre>
-</p>
-
-
-<h3 id="set-up">Set up</h3>
-<p>
-It is useful to have kernel debug info installed to get symbol info for the Linux kernel:
+Sometimes it's useful to have kernel debug info installed to get symbol info for the Linux kernel:
 <pre>
 $ sudo yum install kernel-debuginfo
 </pre>
 Its important to get somewhat same version of <em>kernel-debuginfo</em>
 as the <em>kernel</em> package.
-Then setup OProfile to point to the kernel debuginfo file
-and ensure that one get per-application profiles:
-<pre>
-$ sudo opcontrol --separate=kernel --vmlinux=$(rpm -ql kernel-debuginfo | grep vmlinux)
-</pre>
-OProfile is typically run like:
-<pre>
-$ sudo opcontrol --start
-$ sudo opcontrol --reset
-$ # put some load on the system
-$ sudo opcontrol --shutdown
-</pre>
-</p>
-
-
-<h3 id="profile-java-applications">Profile java applications</h3>
-<p>
-To profile java applications, start the java application with <code>-agentlib:jvmti_oprofile</code>.
-For Vespa, set <a href="../reference/services-container.html#jvm">jvm options</a>
-or set the <code>services.agentlib</code> variable to <em>jvmti_oprofile</em> -
-refer to <a href="../setting-vespa-variables.html">setting vespa variables</a>.
-<em>jvmti_oprofile</em> is installed when installing oprofile-jit with yum.
-Then restart services.
-</p>
-
-
-<h3 id="troubleshooting">Troubleshooting</h3>
-<p>
-If there is no output from <em>opreport -l</em>, it is probably because the kernel is to old for the CPU.
-OProfile will not be able to do to event profiling.
-To fix, force OProfile to use the timer mode:
-<pre>
-$ sudo opcontrol --shutdown
-$ sudo opcontrol --deinit
-$ sudo modprobe oprofile timer=1
-</pre>
-</p>
-
-
-<h3 id="analysis">Analysis</h3>
-<pre>
-$ opreport -l # gives whole system - all one needs to know.
-$ opreport -l "path of binary" #  i.e. "*vespa-proton-bin" -&gt; gives a view of the binary only.
-</pre>
-<p>
-For java applications, its important to let the application run for a while
-to allow the JIT compiler to do its magic.
-Then run <code>opcontrol --dump</code> before inspecting OProfile reports.
 </p>
