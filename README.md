@@ -9,7 +9,7 @@ All Vespa features must have user documentation - this document explains how to 
 Vespa documentation is served using
 [GitHub Project pages](https://help.github.com/categories/github-pages-basics/)
 with
-[Jekyll](https://help.github.com/categories/customizing-github-pages/).
+[Jekyll](https://help.github.com/en/github/working-with-github-pages/about-github-pages-and-jekyll).
 To edit documentation, check out and work off the master branch in this repository.
 
 Documentation is written in HTML or Markdown.
