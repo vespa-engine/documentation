@@ -50,9 +50,8 @@ A combination of mapped and indexed dimensions is a mixed tensor:
 
     tensor<float>(x{},y[3])
 
-Vespa uses the tensor type to optimize the ranking pipeline.
-Best performance is currently achieved when using only indexed dimensions.
-As seen above, the dimensions themselves define if they are mapped or indexed.
+Vespa uses the type information to optimize execution plans at configuration time.
+For dense data the best performance is achieved with indexed dimensions.
 
 
 
