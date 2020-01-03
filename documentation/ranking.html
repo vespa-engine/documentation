@@ -77,29 +77,22 @@ to let it choose which ones to use.
 Depending on the algorithm, it can be a good idea to leave out the unnormalized features
 to avoid spending learning power on having to learn to normalize these features
 and determine that they really represent the same information as some of the normalized features.
-</p>
-
-
-<h3 id="dumping-ranking-information-for-tuning">Dumping ranking information for tuning</h3>
-<p>
-"All" rank features can be included in the results for each document by adding
-<code><a href="reference/search-api-reference.html#ranking.listFeatures">rankfeatures</a></code> to the query.
-This is useful for tasks like recording the rank feature values for automated training.
-Since the set of actual feature computable are in general infinite,
-"all" features really means a large default set.
+</p><p>
+Include <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/rankfeatures/dump.txt">default rank features</a>
+in query results by adding
+<a href="reference/search-api-reference.html#ranking.listFeatures">ranking.listFeatures</a> to the query.
+This is useful for tasks like recording the rank feature values for automated training -
+learn more in the <a href="tutorials/text-search-ml.html">tutorial</a>.
 If more rank features than is available in the default set is wanted,
 they can be added to the set in the <a href="reference/search-definitions-reference.html#rank-features">rank profile</a>:
 <pre>
 rank-features: feature1 feature2 &hellip;
 </pre>
-This list can also be enclosed in curly brackets and span multiple lines.
-It is also possible to take full control over which features will be dumped by adding
+It is also possible to control which features to dump - add this to the rank profile:
 <pre>
 ignore-default-rank-features
 </pre>
-to the rank profile. This will make the explicitly listed rank features the only ones dumped
-when requesting rankfeatures in the query.
-The features are dumped in JSON format.
+This will make the explicitly listed rank features the only ones dumped when requesting rankfeatures in the query.
 </p>
 
 
@@ -112,6 +105,39 @@ To do this, add that term with <code>ranked</code> set to false:
 <pre>
 select * from mydocumenttype where myidfield contains ([ {"ranked": false} ] "mydocumentid" and ...);
 </pre>
+</p>
+
+
+<h3 id="accessing-feature-function-values-in-results">Accessing feature/function values in results</h3>
+<p>
+Any feature can be returned in the hit producing it by adding it to the list of
+<a href="reference/search-definitions-reference.html#summary-features">summary-features</a> of the rank profile.
+As all functions are features this allows the result of any computation to be accessible in results. Example:
+<pre>
+rank-profile test {
+
+    summary-features: tensor_join, join_sum
+
+    function tensor_join() {
+        expression: attribute(my_tensor_field) * query(my_query_tensor)
+    }
+
+    function join_sum() {
+        expression: sum(tensor_join())
+    }
+
+}
+</pre>
+The results of this functions will be available in the Hits of the result as follows:
+<pre>
+import com.yahoo.search.result.FeatureData;
+    ...
+    FeatureData featureData = (FeatureData)hit.getField("summaryfeatures");
+    Tensor tensor_join_value = featureData.getTensor("rankingExpression(tensor_join)");
+    double join_sum_value = featureData.getTensor("rankingExpression(join_sum)");
+</pre>
+You can easily do further computation on the returned tensors,
+such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</code>.
 </p>
 
 
@@ -184,40 +210,6 @@ if (fieldMatch(business).fieldCompleteness==1, 0.8+document.distance*0.2,
 This function puts all exact matches on business names first,
 sorted by geographical distance, followed by all shops sorted by title match,
 followed by everything else sorted by the overall match quality and popularity.
-</p>
-
-
-
-<h2 id="accessing-feature-function-values-in-results">Accessing feature/function values in results</h2>
-<p>
-Any feature can be returned in the hit producing it by adding it to the list of
-<a href="reference/search-definitions-reference.html#summary-features">summary-features</a> of the rank profile.
-As all functions are features this allows the result of any computation to be accessible in results. Example:
-<pre>
-rank-profile test {
-
-    summary-features: tensor_join, join_sum
-
-    function tensor_join() {
-        expression: attribute(my_tensor_field) * query(my_query_tensor)
-    }
-
-    function join_sum() {
-        expression: sum(tensor_join())
-    }
-
-}
-</pre>
-The results of this functions will be available in the Hits of the result as follows:
-<pre>
-import com.yahoo.search.result.FeatureData;
-    ...
-    FeatureData featureData = (FeatureData)hit.getField("summaryfeatures");
-    Tensor tensor_join_value = featureData.getTensor("rankingExpression(tensor_join)");
-    double join_sum_value = featureData.getTensor("rankingExpression(join_sum)");
-</pre>
-You can easily do further computation on the returned tensors,
-such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</code>.
 </p>
 
 

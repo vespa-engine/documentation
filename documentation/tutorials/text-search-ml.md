@@ -19,11 +19,16 @@ We are now going to show you how to create a dataset that joins relevance inform
 
 ## Collect rank feature data from Vespa
 
-Vespa's [rank feature set](../reference/rank-features.html) contains a large set of low and high level features that are available to you upon request. Those features are useful to understand the behavior of your app and to improve your ranking function.
+Vespa's [rank feature set](../reference/rank-features.html) contains a large set of low and high level features.
+Those features are useful to understand the behavior of your app and to improve your ranking function.
 
 ### Default rank features
 
-Vespa always return a particular set of ranking features by default. To access the default set of features we simply need to set the query parameter [`ranking.listFeatures`](../reference/search-api-reference.html#ranking.listFeatures) equal to `true`. For example, below is the body of a post request that sends a specific query in [YQL format](../query-language.html), selects the `bm25` _ranking-profile_ developed in our previous tutorial and returns the rank features associated with each of the results returned by Vespa.
+To access the default set of ranking features,
+set the query parameter [`ranking.listFeatures`](../reference/search-api-reference.html#ranking.listFeatures)  to `true`.
+For example, below is the body of a post request that in a [query](../query-language.html),
+selects the `bm25` _ranking-profile_ developed in our previous tutorial
+and returns the rank features associated with each of the results returned.
 
 ```
 body = {
@@ -34,7 +39,10 @@ body = {
 }
 ```
 
-The list of rank features that are returned by default can change in the future but the current list can be checked in [this system test](https://github.com/vespa-engine/system-test/blob/master/tests/search/rankfeatures/dump.txt). For the request specified by the body above we get the following (edited) json back. Each result will contain a field called `rankfeatures` containing the set of default ranking features.
+The list of rank features that are returned by default can change in the future - the current list can be checked in the
+[system test](https://github.com/vespa-engine/system-test/blob/master/tests/search/rankfeatures/dump.txt).
+For the request specified by the body above we get the following (edited) json back.
+Each result will contain a field called `rankfeatures` containing the set of default ranking features:
 
 ```
 {
@@ -75,7 +83,11 @@ The list of rank features that are returned by default can change in the future 
 
 ### Chose and process specific rank features
 
-If instead of returning the default ranking features you want to select a few specific ones from [our list of ranking features](../reference/rank-features.html), you can add a new _ranking-profile_ (let's call it `collect_rank_features`) to our _msmarco.sd_ search definition and disable the default ranking features by adding `ignore-default-rank-features` to the new _ranking-profile_. In addition, we can specify the desired features within the `rank-features` element. In the example below we explicitly configured Vespa to only return `bm25(title)`, `bm25(body)`, `nativeRank(title)` and `nativeRank(body)`. 
+If instead of returning the default ranking features you want to select [specific ones](../reference/rank-features.html),
+you can add a new _ranking-profile_ (let's call it `collect_rank_features`) to our _msmarco.sd_ search definition
+and disable the default ranking features by adding `ignore-default-rank-features` to the new _ranking-profile_.
+In addition, we can specify the desired features within the `rank-features` element.
+In the example below we explicitly configured Vespa to only return `bm25(title)`, `bm25(body)`, `nativeRank(title)` and `nativeRank(body)`.
 
 ```
 rank-profile collect_rank_features inherits default {
