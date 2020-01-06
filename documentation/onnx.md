@@ -96,7 +96,8 @@ you can pass tensors in HTTP requests by using the HTTP parameter
 
     <field name="ranking.features.query(myTensor)" type="tensor(d0[1],d1[784])" />
 
-[An example can be found in the tensor sample application](https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor).
+A tensor example can be found in the
+[sample application](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation).
 
 #### Batch dimensions
 
