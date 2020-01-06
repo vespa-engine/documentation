@@ -413,7 +413,6 @@ searchers of a search chain:
     import com.yahoo.prelude.query.IntItem;
     import com.yahoo.prelude.query.NotItem;
     import com.yahoo.prelude.query.WordItem;
-    import com.yahoo.processing.request.CompoundName;
     import com.yahoo.search.Query;
     import com.yahoo.search.Result;
     import com.yahoo.search.Searcher;
@@ -452,7 +451,7 @@ searchers of a search chain:
 
             // Rank blog posts using tensor rank profile
             if(query.properties().get("ranking") == null) {
-                query.properties().set(new CompoundName("ranking"), "tensor");
+                query.getRanking().setProfile("tensor");
             }
 
             return execution.search(query);
