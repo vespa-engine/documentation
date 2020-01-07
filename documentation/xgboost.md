@@ -6,6 +6,7 @@ title: "Ranking with XGBoost Models"
 If you have models that are trained in XGBoost, Vespa can import the models
 and use them directly. See [Learning to Rank](learning-to-rank.html) for examples of using XGBoost models for ranking.
 
+
 ## Exporting models from XGBoost
 
 Vespa supports importing XGBoost's JSON model dump (E.g. Python API ([xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model)).
@@ -39,15 +40,7 @@ bst = xgb.train(param, dtrain, 2)
 bst.dump_model("trained-model.json",fmap='feature-map.txt', with_stats=False, dump_format='json')
 ```
 The training data is represented using [LibSVM text format](https://xgboost.readthedocs.io/en/latest/tutorials/input_format.html).
-***Important*** Vespa does currently not support the `missing` feature split condition of XGBoost so all features needs to be assigned a value both during training and online prediction. 
 
-The simple model above would be represented by the following Vespa ranking expression :
-
-```
-if(fieldMatch(title).completeness < 0.772132337, 0.673938096, 0.791884363) + 
-  if(fieldMatch(title).importance <  0.606320798, 0.469432801,0.55586201)
-```
-As we can see from the produced ranking expression Vespa does not represent `missing` and only supports the yes and no branches from the dumped json model. 
 
 ## Feature mappings from XGBoost to Vespa
 XGBoost is trained on array or array like data structures where features are named based on the index in the array 
@@ -88,6 +81,7 @@ An application package can have multiple models.
 
 To download models during deployment,
 see [deploying remote models](cloudconfig/application-packages.html#deploying-remote-models).
+
 
 ## Ranking with XGBoost models
 
@@ -145,10 +139,9 @@ search xgboost {
 }
 ```
 
+
 ## Known issues 
 * When dumping XGBoost models 
 to a JSON representation some of the model information is lost (e.g the base_score or the optimal number of trees if trained with early stopping).  XGBoost also has different predict functions (e.g predict/predict_proba). The following
  [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost)
 demonstrates how to represent different type of XGBoost models in Vespa. 
-
-* XGBoost trees handles missing feature split values (e.g NaN features) differently then Vespa and best practise for XGBoost models is to ensure that NaN/missing features does not exit. See [Issue 9646](https://github.com/vespa-engine/vespa/issues/9646) 
