@@ -294,14 +294,48 @@ to the ranking profile. Also, these variables can be overridden in the query by 
 ranking.features.query(myvalue)=0.1
 </pre>
 to the query - see the <a href="reference/search-api-reference.html#ranking.features">Search API</a>.
+</p><p>
 Use the <a href="reference/tensor.html#tensor-literal-form">tensor literal form</a> to send a tensor -
 here send <em>user_profile</em> as <em>{% raw %}{{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}{% endraw %}</em>:
 <pre>
 ranking.features.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D
 </pre>
-The query tensor type must be configured, easiest done in a query profile type - see the
+In order to use this feature you must define the tensor type of the query feature in a query profile type.
+Refer to <a href="reference/query-profile-reference.html#field-type">query profile field type reference</a>.
+In the following example the tensor type is defined to have one mapped dimension <em>x</em>
+(also see the
 <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/src/main/application/search/query-profiles/types/root.xml">
-sample application</a>.
+sample application</a>):
+<pre>
+&lt;query-profile-type id="myProfileType"&gt;
+    &lt;field name="ranking.features.query(tensor_feature)" type="tensor&lt;float&gt;(x{})" /&gt;
+&lt;/query-profile-type&gt;
+</pre>
+A query tensor can also be made in a <a href="searcher-development.html">Searcher</a>.
+Set the tensor value using the
+<a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/query/ranking/RankFeatures.java">
+RankFeatures</a> instance associated with
+<a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/Query.java">
+Query</a> instance. This example makes a tensor with a single cell with value 500:
+<pre>
+package com.yahoo.example;
+
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.Searcher;
+import com.yahoo.search.searchchain.Execution;
+import com.yahoo.tensor.MappedTensor;
+import com.yahoo.tensor.TensorType;
+
+public class TensorInQuerySearcher extends Searcher {
+    @Override
+    public Result search(Query query, Execution execution) {
+        query.getRanking().getFeatures().put("query(tensor_feature)",
+            new MappedTensor.Builder(TensorType.fromSpec("tensor&lt;float&gt;(x{})")).cell().label("x", "foo").value(500).build());
+        return execution.search(query);
+    }
+}
+</pre>
 </p>
 
 
