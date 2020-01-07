@@ -80,7 +80,8 @@ something like this:
 An application package can have multiple models, as long as they are in their
 own directories.
 
-To download models during deployment, see [deploying remote models](deploying-remote-models.html).
+To download models during deployment,
+see [deploying remote models](cloudconfig/application-packages.html#deploying-remote-models).
 
 ## Ranking with TensorFlow models
 
