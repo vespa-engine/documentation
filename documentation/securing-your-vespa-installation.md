@@ -49,8 +49,8 @@ By default, the container allows unauthenticated writes to, and reads from, the 
 installation. For a production deployment, this must be locked down.
  
 Connections to the HTTP containers may be
-[protected with TLS](jdisc/http-server-and-filters.html#ssl). Client certificate
-authentication is not currently supported.
+[protected with TLS](jdisc/http-server-and-filters.html#ssl). Mutual TLS is supported 
+and should be configured.
  
 Access to the container API endpoints can be controlled using
 [request filters](jdisc/http-server-and-filters.html#set-up-filter-chains).
@@ -65,5 +65,8 @@ All Vespa processes run under the Linux user given by `$VESPA_USER` and store th
 data under `$VESPA_HOME`. You should ensure the files and directories under
 `$VESPA_HOME` are not accessible by other users if you store sensitive data in
 your application.
+
+Note also that private keys used by the container to setup TLS must be protected 
+to be readable by the container process only.
  
 Vespa does not have support for encryption of on-disk document stores or indexes.
