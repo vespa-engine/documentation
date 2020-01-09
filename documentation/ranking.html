@@ -4,27 +4,88 @@ title: "Ranking"
 ---
 
 <p>
-Vespa uses <a href="reference/ranking-expressions.html">ranking expressions</a>
-to rank documents matching a query, computing a rank score per document.
-A ranking expression is stored in a <a href="#rank-profile">rank profile</a>.
-An application can have multiple rank profiles -
-this can be used for implementing different use cases, or bucket testing ranking variations.
-</p><p>
-Example: Rank the freshest document highest, using the value in an attribute named <em>timestamp</em>:
+Vespa defines Big Data Serving as:
+<blockquote style="background: #1a7db6; color: #ffffff"><strong>
+Selection, organization and machine-learned model inference,
+<ul>
+    <li>over many, constantly changing data items (thousands to billions),</li>
+    <li>with low latency (~100 ms) and high load (thousands of queries/second)</li>
+</ul>
+</strong></blockquote>
+<em>Ranking</em> enables organization and ML inference,
+and <em>multi-phased ranking</em> addresses latency and load:
 <pre>
 search myapp {
-    &hellip;
+
     rank-profile my-rank-profile {
         first-phase {
-            expression: freshness(timestamp)
+            expression: attribute(quality) * freshness(timestamp)
+        }
+        second-phase {
+            expression: sum(onnx("my-model.onnx", "add"))
         }
     }
 }
 </pre>
+Applications use the <a href="search-api.html">query API</a> to <em>select</em> the documents to evaluate
+using a <a href="query-language.html">query language</a>,
+and choose a <a href="#rank-profile">rank profile</a> for the ranking.
+Rank profiles have <a href="#two-phase-ranking">one or two phases</a>:
+<ul>
+    <li>Phase one should use a computationally inexpensive function to rank candidates</li>
+    <li>Phase two is run on a small candidate set</li>
+</ul>
+Hence, the query selection and first phase ranking reduces the size of the computation -
+then machine-learned models can be used on the second-phase ranking on
+<a href="reference/search-definitions-reference.html#rerank-count">rerank-count</a> documents per node.
+This makes the ranking scalable:
+<ul>
+    <li>Control the second phase candidate set size</li>
+    <li>Add content nodes to rank more documents / less documents per node</li>
+</ul>
+</p><p>
+Ranking is run in the <a href="overview.html">content cluster</a>.
+This means, <em>online inference</em> (a.k.a. <em>real time inference</em> or <em>dynamic inference</em>)
+is executed for the candidate document set.
+Ranking is running <a href="#ranking-expressions">ranking expressions</a> using
+<a href="rank-features">rank features</a> (values / computed values from queries, document and constants).
+</p>
+
+
+
+<h2 id="machine-learned-model-inference">Machine-Learned model inference</h2>
+<p>
+Vespa supports ranking using the following ML models:
+<ul>
+    <li><a href="onnx.html">ONNX</a></li>
+    <li><a href="tensorflow.html">Tensorflow</a></li>
+    <li><a href="xgboost.html">XGBoost</a></li>
+</ul>
+As these are exposed as rank features, it is possible to rank using a <em>model ensemble</em>.
+Deploy multiple model instances and write a rank expression that combines the results (max, avg, custom, ...) - example:
+<pre>
+search myapp {
+
+    rank-profile my-rank-profile {
+    ...
+        second-phase {
+            expression: max( sum(onnx("my-model-1.onnx", "add"), sum(onnx("my-model-2.onnx", "add") )
+        }
+    }
+}
+</pre>
+</p>
+
+
+
+<h2 id="ranking-expressions">Ranking expressions</h2>
+<p>
+Vespa uses <a href="reference/ranking-expressions.html">ranking expressions</a>
+to rank documents matching a query, computing a rank score per document.
+A ranking expression is stored in a <a href="#rank-profile">rank profile</a>.
+</p><p>
 Ranking expressions are mathematical functions.
-The function may contain anything from a single reference to a built-in feature,
-to a machine-learned models from <a href="tensorflow.html">Tensorflow</a>,
-<a href="onnx.html">ONNX</a> or <a href="xgboost.html">XGBoost</a>.
+The function may contain anything from a single reference to a built-in feature to a machine-learned model.
 Ranking expressions support the usual operators and functions,
 as well as an <em>if</em> function - enabling decision trees and conditional business logic.
 They support a comprehensive set of  <a href="reference/tensor.html">tensor functions</a>,
@@ -50,11 +111,13 @@ Ranking expressions can be large, and can be imported using
 <h2 id="rank-profile">Rank profile</h2>
 <p>
 Ranking expressions are stored in <a href="reference/search-definitions-reference.html#rank-profile">rank profiles</a>.
+An application can have multiple rank profiles -
+this can be used for implementing different use cases, or bucket testing ranking variations.
 If not specified, the <a href="text-ranking.html">default text ranking</a> profile is used.
 </p><p>
 A rank profile can <em>inherit</em> another rank profile.
 </p><p>
-Queries select profile using <a href="reference/search-api-reference.html#ranking.profile">ranking.profile</a>,
+Queries select rank profile using <a href="reference/search-api-reference.html#ranking.profile">ranking.profile</a>,
 or in <a href="searcher-development.html">Searcher</a> code:
 <pre>
 query.getRanking().setProfile("my-rank-profile");
