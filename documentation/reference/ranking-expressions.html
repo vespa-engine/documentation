@@ -6,7 +6,7 @@ title: "Ranking Expressions"
 <p>
 This is a complete reference to the <em>ranking expressions</em>
 used to configure application specific ranking functions.
-For an overview of how to use ranking expressions,
+For examples and an overview of how to use ranking expressions,
 see the <a href="../ranking.html">ranking overview</a>.
 </p><p>
 Ranking expressions are written in a simple language similar to ordinary functional notation.
@@ -16,7 +16,7 @@ These atoms can be combined by <a href="#arithmetic-operations">arithmetic opera
 <table class="table">
 <thead>
 </thead><tbody>
-<tr id="rank-features"><th>Rank Features</th>
+<tr id="rank-features"><th style="white-space:nowrap;">Rank Features</th>
 <td>
 A rank feature is a named value calculated or looked up by vespa for
 each query/document combination.  See the
@@ -25,8 +25,8 @@ for a list of all the rank features available to ranking expressions.
 </td>
 </tr><tr id="constants"><th>Constants</th>
   <td>
-    A constant is either a floating point number, or a quoted
-    string. Strings are only useful for equality comparison in the if function.
+    A constant is either a floating point number, or a quoted string.
+    Strings are only useful for equality comparison in the if function.
   </td>
 </tr>
 </tbody>
@@ -39,7 +39,7 @@ for a list of all the rank features available to ranking expressions.
 <p>
 The four basic operations, addition, subtraction, multiplication and
 division are expressed in in-fix notation:
-<pre class="brush: text">
+<pre>
 a + b - c * d / (e + f)
 </pre>
 Multiplication and division has higher precedence than addition and subtraction.
@@ -48,15 +48,7 @@ Terms can be ordered using parentheses when it is necessary to override default 
 
 
 
-<h2 id="built-in-functions">Built-in Functions</h2>
-<p>
-The built-in functions is the usual mathematical set, as well as a
-special <a href="#the-if-function">if</a> function useful to create non-linear
-functions like decision trees.
-</p>
-
-
-<h3 id="mathematical-functions">Mathematical Functions</h3>
+<h2 id="mathematical-functions">Mathematical Functions</h2>
 <table class="table">
   <thead></thead><tbody>
 <tr><td>cosh(<em>x</em>)</td> <td>Hyperbolic cosine of <em>x</em></td></tr>
@@ -67,7 +59,8 @@ functions like decision trees.
 <tr><td>tan(<em>x</em>)</td> <td>Tangent of <em>x</em></td></tr>
 <tr><td>acos(<em>x</em>)</td> <td>Inverse cosine of <em>x</em></td></tr>
 <tr><td>asin(<em>x</em>)</td> <td>Inverse sine of <em>x</em></td></tr>
-<tr><td>atan2(<em>y</em>, <em>x</em>)</td> <td>Inverse tangent of <em>y / x</em>, using signs of both arguments to determine correct quadrant.</td></tr>
+<tr><td>atan2(<em>y</em>, <em>x</em>)</td> <td>Inverse tangent of <em>y / x</em>,
+    using signs of both arguments to determine correct quadrant.</td></tr>
 <tr><td>atan(<em>x</em>)</td> <td>Inverse tangent of <em>x</em></td></tr>
 <tr><td>exp(<em>x</em>)</td> <td>Base-e exponential function.</td></tr>
 <tr><td>ldexp(<em>x</em>, <em>exp</em>)</td> <td>Multiply <em>x</em> by 2 to the power of <em>exp</em></td></tr>
@@ -89,15 +82,16 @@ functions like decision trees.
 </p>
 
 
-<h3 id="the-if-function">The if Function</h3>
+
+<h2 id="the-if-function">The if Function</h2>
 <p>
 The <code>if</code> function chooses between two sub-expressions based
 on the truth value of a condition.
 <pre>
 if (expression1 <em style="background-color: yellow;">operator</em> expression2, trueExpression, falseExpression)
 </pre>
-If the condition given in the first argument is true, the expression
-in argument 2 is used, otherwise argument 3.
+If the condition given in the first argument is true,
+the expression in argument 2 is used, otherwise argument 3.
 The four expressions may be any ranking expression.
 Conditional operators in ranking expression if functions:</p>
 <table class="table">
@@ -120,7 +114,8 @@ then trueExpression is used, otherwise falseExpresion.
 </p>
 
 
-<h3 id="the-foreach-function">The foreach Function</h3>
+
+<h2 id="the-foreach-function">The foreach Function</h2>
 <p>
 The foreach function is not really part of the expression language but implemented as a
 <a href="rank-features.html#foreach(dimension,variable,feature,condition,operation)">rank feature</a>.
@@ -128,21 +123,654 @@ The foreach function is not really part of the expression language but implement
 
 
 
-<h2 id="examples">Examples</h2>
+<h2 id="tensor-operations">Tensor Operations</h2>
 <p>
-If the user is underage, assign 0 to adult content and use the average
-of match quality in the title field and popularity among kids.
-If the user is not, use the match quality in the title field:
+The following set of tensors operations are available to use in ranking expressions.
+Operations are grouped in primitive functions and convenience
+functions that can be implemented by primitive functions.
+</p>
+
+
+<h3 id="primitive-functions">Primitive functions</h3>
+<table class="table">
+  <thead></thead>
+<tbody>
+<tr>
+    <td><a href="#map">map</a></td>
+    <td style="white-space:nowrap;">map(tensor, f(x)(expr))</td>
+    <td>Returns a new tensor with the lambda function defined in <code>f(x)(expr)</code> applied to each cell.</td>
+</tr>
+<tr>
+    <td><a href="#reduce">reduce</a></td>
+    <td style="white-space:nowrap;">reduce(tensor, aggregator, dim1, dim2, ...)</td>
+    <td>Returns a new tensor with the <code>aggregator</code> applied across dimensions dim1, dim2, etc.
+        If no dimensions are specified, reduce over all dimensions.</td>
+</tr>
+<tr>
+    <td><a href="#join">join</a></td>
+    <td style="white-space:nowrap;">join(tensor1, tensor2, f(x,y)(expr))</td>
+    <td>Returns a new tensor constructed from the <em>natural join</em> between <code>tensor1</code> and <code>tensor2</code>,
+        with the resulting cells having the value as calculated from <code>f(x,y)(expr)</code>, where <code>x</code>
+        is the cell value from <code>tensor1</code> and <code>y</code> from <code>tensor2</code>.</td>
+</tr>
+<tr>
+    <td><a href="#tensor">tensor</a></td>
+    <td style="white-space:nowrap;">tensor(tensor-type-spec)(expr)</td>
+    <td>Generates new tensors according to type specification and expression <code>expr</code>.</td>
+</tr>
+<tr>
+    <td><a href="#rename">rename</a></td>
+    <td style="white-space:nowrap;">rename(tensor, dimensions-to-rename, new-names)</td>
+    <td>Renames one or more dimensions in the tensor.</td>
+</tr>
+<tr>
+    <td><a href="#concat">concat</a></td>
+    <td style="white-space:nowrap;">concat(tensor1, tensor2, dim)</td>
+    <td>Concatenates two tensors along dimension <code>dim</code>.</td>
+</tr>
+<tr>
+    <td><a href="#slice">slice</a></td>
+    <td style="white-space:nowrap;">(tensor)partial-key</td>
+    <td>Returns a new tensor containing the cells matching the partial key.</td>
+</tr>
+<tr>
+    <td><a href="#literal">literal</a></td>
+    <td style="white-space:nowrap;">tensor-literal-form</td>
+    <td>Returns a new tensor having the type and cell values given explicitly.
+        Each cell value may be supplied by a lambda which can access other features.</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="lambda">Lambda functions in primitive functions</h4>
+<p>
+Some of the primitive functions accept lambda functions that are evaluated
+and applied to a set of tensor cells.
+The functions contain a single expression that have the same format and built-in functions as
+<a href="ranking-expressions.html">general ranking expressions</a>.
+However, the atoms are the arguments defined in the argument list of the lambda.
+</p><p>
+The expression cannot access variables or data structures outside of the lambda,
+i.e. they are not closures.
+</p><p>
+Examples:
 <pre>
-if ( query(userage) &lt; 18,
-     if ( attribute(adultness) > 0.1, 0 , (fieldMatch(title)+attribute(kidspopularity)) / 2 ),
-     fieldMatch(title) )
-</pre>
-<hr/>
-Use a weighted average of the match quality in some fields,
-multiplied by 1-exp of the document age:
-<pre>
-( 10*fieldMatch(title) + 5*fieldMatch(description) +
-  7*attributeMatch(tags).normalizedWeight ) /22 * ( 1 - age(creationtime) )
+f(x)(abs(x))
+f(x,y)(if(x &lt; y, 0, 1))
 </pre>
 </p>
+
+<h4 id="map">Map</h4>
+<p>
+Arguments:
+<ul>
+    <li><code>tensor</code>: a tensor expression.</li>
+    <li><code>f(x)(expr)</code>: a <a href="#lambda">lambda function</a> with one argument.</li>
+</ul>
+Returns a new tensor where the expression in the lambda function is
+evaluated in each cell in <code>tensor</code>.
+</p><p>
+Examples:
+<pre>
+map(t, f(x)(abs(x)))
+map(t, f(i)(if(i &lt; 0, 0, i)))
+</pre>
+</p>
+
+<h4 id="reduce">Reduce</h4>
+<p>
+Arguments:
+<ul>
+    <li><code>tensor</code>: a tensor expression.</li>
+    <li><code>aggregator</code>: the aggregator to use. See below.</li>
+    <li><code>dim1, dim2, ...</code>: the dimensions to reduce over. Optional.</li>
+</ul>
+Returns a new tensor with the aggregator applied across dimensions
+<code>dim1</code>, <code>dim2</code>, etc.
+If no dimensions are specified, reduce over all dimensions.
+</p><p>
+Available aggregators are:
+<ul>
+    <li><code>avg</code>: arithmetic mean</li>
+    <li><code>count</code>: number of elements</li>
+    <li><code>prod</code>: product of all values</li>
+    <li><code>sum</code>: sum of all values</li>
+    <li><code>max</code>: maximum value</li>
+    <li><code>min</code>: minimum value</li>
+</ul>
+Examples:
+<pre>
+reduce(t, sum)         # Sum all values in tensor
+reduce(t, count, x)    # Count number of cells along dimension x
+</pre>
+</p>
+
+<h4 id="join">Join</h4>
+<p>
+Arguments:
+<ul>
+    <li><code>tensor1</code>: a tensor expression.</li>
+    <li><code>tensor2</code>: a tensor expression.</li>
+    <li><code>f(x,y)(expr)</code>: a <a href="#lambda">lambda function</a> with two arguments.</li>
+</ul>
+Returns a new tensor constructed from the <em>natural join</em>
+between <code>tensor1</code> and <code>tensor2</code>,
+with the resulting cells having the value as calculated from <code>f(x,y)(expr)</code>,
+where <code>x</code> is the cell value from <code>tensor1</code> and
+<code>y</code> from <code>tensor2</code>.
+</p><p>
+Formally, the result of the <code>join</code> is a new tensor with dimensions
+the union of dimension between <code>tensor1</code> and <code>tensor2</code>.
+The cells are the set of all combinations of cells that have equal values
+on their common dimensions.
+</p><p>
+Examples:
+<pre>{% raw %}
+t1 = {{x:0}: 1.0, {x:1}: 2.0}
+t2 = {{x:0,y:0}: 3.0, {x:0,y:1}: 4.0, {x:1,y:0}: 5.0, {x:1,y:1}: 6.0}
+
+join(t1, t2, f(x,y)(x * y)) = {{x:0,y:0}: 3.0, {x:0,y:1}: 4.0, {x:1,y:0}: 10.0, {x:1,y:1}: 12.0}
+
+reduce(join(t1, t2, f(x,y)(x * y)), sum) = 29.0
+{% endraw %}</pre>
+</p>
+
+<h4 id="tensor">tensor</h4>
+<p>
+tensor-type-spec(expression)
+</p><p>
+Arguments:
+<ul>
+    <li><code>tensor-type-spec</code>: an <a href="#tensor-type-spec">indexed tensor type specification.</a></li>
+    <li><code>(expression)</code>: a <a href="#lambda">lambda function</a> expressing how to generate the tensor.</li>
+</ul>
+Generates new tensors according to the type specification and expression <code>expr</code>.
+The tensor type must be an indexed tensor (e.g. <code>tensor&lt;float&gt;(x[10])</code>).
+The expression in <code>expr</code> will be evaluated for each cell.
+The arguments in the expression is implicitly the names of the dimensions defined in the type spec.
+</p><p>
+Useful for creating transformation tensors.
+</p><p>
+Examples:
+<pre>{% raw %}
+t1 = tensor(x[4]):[1.0, 2.0, 3.0, 4.0]
+
+tensor&lt;float&gt;(x[3])(x) = [0.0, 1.0, 2.0]
+tensor&lt;float&gt;(x[2],y[2])(x == y) = {{x:0,y:0}: 1.0, {x:0,y:1}: 0.0, {x:1,y:0}: 0.0, {x:1,y:1}: 1.0}
+tensor(f[2])(t1{x: f + f()})) - Create a size 2 1d tensor by accessing t1 at two indexes given by adding
+                                the index of it (f - which is 0 and 1) by a function also named f.
+{% endraw %}</pre>
+</p>
+
+<h4 id="rename">rename</h4>
+<p>
+Arguments:
+<ul>
+    <li><code>tensor</code>: a tensor expression.</li>
+    <li><code>dim-to-rename</code>: a dimension, or list of dimensions, to rename.</li>
+    <li><code>new-names</code>: new names for the dimensions listed above.</li>
+</ul>
+Returns a new tensor with one or more dimension renamed.
+</p><p>
+Examples:
+<pre>{% raw %}
+t1 = {{x:0,y:0}: 1.0, {x:0,y:1}: 0.0, {x:1,y:0}: 0.0, {x:1,y:1}: 1.0}
+
+rename(t1,x,z) = {{z:0,y:0}: 1.0, {z:0,y:1}: 0.0, {z:1,y:0}: 0.0, {z:1,y:1}: 1.0}
+rename(t1,(x,y),(i,j)) = {{i:0,j:0}: 1.0, {i:0,j:1}: 0.0, {i:1,j:0}: 0.0, {i:1,j:1}: 1.0}
+{% endraw %}</pre>
+</p>
+
+<h4 id="concat">concat</h4>
+<p>
+Arguments:
+<ul>
+    <li><code>tensor1</code>: a tensor expression.</li>
+    <li><code>tensor2</code>: a tensor expression.</li>
+    <li><code>dim</code>: the dimension to concatenate along.</li>
+</ul>
+Returns a new tensor with the two tensors <code>tensor1</code> and
+<code>tensor2</code> concatenated along dimension <code>dim</code>.
+</p><p>
+Examples:
+<pre>{% raw %}
+t1 = {{x:0}: 0.0, {x:1}: 1.0}
+t2 = {{x:0}: 2.0, {x:1}: 3.0}
+
+concat(t1,t2,x) = {{x:0}: 0.0, {x:1}: 1.0}, {x:2}: 2.0, {x:3}: 3.0}}
+{% endraw %}</pre>
+</p>
+
+<h4 id="slice">slice</h4>
+<p>
+(tensor)partial-key
+</p><p>
+Arguments:
+<ul>
+    <li><code>tensor</code>: a tensor expression.</li>
+    <li><code>partial-key</code>: A key can be given in the form of a tensor address {dimension:label,..},
+        or for tensors having a single mapped or indexed type respectively as just a label in curly brackets {label}
+        or just an index in square brackets, [index].
+        Indexes in keys may be specified by no-argument lambda functions.
+    </li>
+</ul>
+Returns a new tensor containing the cells matching the partial key.
+A common special case is producing a single value by specifying a full key.
+The type of the resulting tensor is the dimensions of the argument tensor not specified by the partial key.
+</p><p>
+Examples:
+<pre>{% raw %}
+t1 = tensor(x[2]):[1.0, 2.0]]
+t2 = tensor(key{}):{ key1:1.0, key2:2.0 }
+t3 = tensor(key{},x[2]):{ key1:[1.0, 2.0], key2:[3.0, 4.0] }
+
+t1[1] = {2.0}
+t2{key1} = {1.0}
+t3{key1} = tensor(x[2]):[1.0, 2.0]
+t3[1] = tensor(key{}):{key1:2.0, key2:4.0}
+t3{key:key1,x:1} = {2.0}
+t3{key:key1,x:(3-2)} = {2.0}
+{% endraw %}</pre>
+</p>
+
+<h4 id="literal">literal</h4>
+<p>
+Returns a new tensor from the <a href="#tensor-literal-form">literal form</a>,
+where the type must be specified explicitly.
+Each value may be supplied by a lambda,
+which - in contrast to all other lambdas - <em>may refer to features and expressions from the context.</em>
+</p><p>
+Examples:
+<pre>{% raw %}
+t1 = tensor(x[2]):[1.0, 2.0]]
+
+tensor(x{}):{x1:3, x2:4} = tensor(x{}):{x1:3.0, x2:4.0}
+tensor(x{}):{x1:t1[1], x2:t1[0]} = tensor(x{}):{x1:2.0, x2:1.0} - Used in conjunction with slice to convert an indexed tensor to mapped form.
+{% endraw %}</pre>
+</p>
+
+
+<h3>Non-primitive functions</h3>
+<p>
+Non-primitive functions can be implemented by primitive functions,
+but are not necessarily so for performance reasons.
+</p>
+<table class="table">
+  <thead></thead>
+<tbody>
+<tr>
+    <td>abs(t)</td>
+    <td>
+        <code>map(t, f(x)(abs(x)))</code> <br />
+        Absolute value of all elements.
+    </td>
+</tr>
+<tr>
+    <td>acos(t)</td>
+    <td>
+        <code>map(t, f(x)(acos(x)))</code> <br />
+        Arc cosine of all elements.
+    </td>
+</tr>
+<tr>
+    <td>t1 + t2 (add)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x + y))</code> <br />
+        Join and sum tensors <code>t1</code> and <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>argmax(t)</td>
+    <td>
+        <code>join(t, max(t), f(x,y)(if (x == y, 1, 0)))</code> <br />
+        Returns a tensor with cell(s) of the highest value(s) in the tensor set to 1.
+    </td>
+</tr>
+<tr>
+    <td>argmin(t)</td>
+    <td>
+        <code>join(t, min(t), f(x,y)(if (x &gt;= y, 0, 1)))</code> <br />
+        Returns a tensor with cell(s) of the lowest value(s) in the tensor set to 1.
+    </td>
+</tr>
+<tr>
+    <td>asin(t)</td>
+    <td>
+        <code>map(t, f(x)(asin(x)))</code> <br />
+        Arc sine of all elements.
+    </td>
+</tr>
+<tr>
+    <td>atan(t)</td>
+    <td>
+        <code>map(t, f(x)(atan(x)))</code> <br />
+        Arc tangent of all elements.
+    </td>
+</tr>
+<tr>
+    <td>atan2(t1,t2)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(atan2(x,y)))</code> <br />
+        Arctangent of <code>t1</code> and <code>t2</code>/
+    </td>
+</tr>
+<tr>
+    <td>avg(t, dim)</td>
+    <td>
+        <code>reduce(t, avg, dim)</code> <br />
+        Reduce the tensor with the <code>average</code> aggregator along dimension <code>dim</code>.
+    </td>
+</tr>
+<tr>
+    <td>ceil(t)</td>
+    <td>
+        <code>map(t, f(x)(ceil(x)))</code> <br />
+        Ceiling of all elements.
+    </td>
+</tr>
+<tr>
+    <td>count(t, dim)</td>
+    <td>
+        <code>reduce(t, count, dim)</code> <br />
+        Reduce the tensor with the <code>count</code> aggregator along dimension <code>dim</code>.
+    </td>
+</tr>
+<tr>
+    <td>cos(t)</td>
+    <td>
+        <code>map(t, f(x)(cos(x)))</code> <br />
+        Cosine of all elements.
+    </td>
+</tr>
+<tr>
+    <td>cosh(t)</td>
+    <td>
+        <code>map(t, f(x)(cosh(x)))</code> <br />
+        Hyperbolic cosine of all elements.
+    </td>
+</tr>
+<tr>
+    <td>diag(n1,n2)</td>
+    <td>
+        <code>tensor(i[n1],j[n2])(if (i==j, 1.0, 0.0)))</code> <br />
+        Returns a tensor with the diagonal set to 1.0.
+    </td>
+</tr>
+<tr>
+    <td>t1 / t2 (div)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x / y))</code> <br />
+        Join and divide tensors <code>t1</code> and <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>elu(t)</td>
+    <td>
+        <code>map(t, f(x)(if(x &lt; 0, exp(x)-1, x)))</code> <br />
+        <a href="https://arxiv.org/abs/1511.07289">Exponential linear unit</a>.
+    </td>
+</tr>
+<tr>
+    <td>t1 == t2 (equal)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x == y))</code> <br />
+        Join and determine if each element in <code>t1</code> and <code>t2</code> are equal.
+    </td>
+</tr>
+<tr>
+    <td>exp(t)</td>
+    <td>
+        <code>map(t, f(x)(exp(x)))</code> <br />
+        Exponential function (e^x) of each element.
+    </td>
+</tr>
+<tr>
+    <td>floor(t)</td>
+    <td>
+        <code>map(t, f(x)(floor(x)))</code> <br />
+        Floor of each element.
+    </td>
+</tr>
+<tr>
+    <td>t1 &gt; t2 (greater)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x &gt; y))</code> <br />
+        Join and determine if each element in <code>t1</code> is greater than <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>t1 &gt;= t2 (greater or equals)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x &gt;= y))</code> <br />
+        Join and determine if each element in <code>t1</code> is greater than or equals <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>t1 &lt; t2 (less)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x &lt; y))</code> <br />
+        Join and determine if each element in <code>t1</code> is less than <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>t1 &lt;= t2 (less equals)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x &lt;= y))</code> <br />
+        Join and determine if each element in <code>t1</code> is less than or equals <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>l1_normalize(t, dim)</td>
+    <td>
+        <code>join(t, reduce(t, sum, dim), f(x,y) (x / y))</code> <br />
+        L1 normalization: <code>t / sum(t, dim)</code>.
+    </td>
+</tr>
+<tr>
+    <td>l2_normalize(t, dim)</td>
+    <td>
+        <code>join(t, map(reduce(map(t, f(x)(x * x)), sum, dim), f(x)(sqrt(x))), f(x,y)(x / y))</code> <br />
+        L2 normalization: <code>t / sqrt(sum(t^2, dim)</code>.
+    </td>
+</tr>
+<tr>
+    <td>log(t)</td>
+    <td>
+        <code>map(t, f(x)(log(x)))</code> <br />
+        Natural logarithm of each element.
+    </td>
+</tr>
+<tr>
+    <td>log10(t)</td>
+    <td>
+        <code>map(t, f(x)(log10(x)))</code> <br />
+        Logarithm with base 10 of each element.
+    </td>
+</tr>
+<tr>
+    <td>matmul(t1, t2, dim)</td>
+    <td>
+        <code>reduce(join(t1, t2, f(x,y)(x * y)), sum, dim)</code> <br />
+        Matrix multiplication of two tensors. This is the product of the two tensors summed along a shared dimension.
+    </td>
+</tr>
+<tr>
+    <td>max(t, dim)</td>
+    <td>
+        <code>reduce(t, max, dim)</code> <br />
+        Reduce the tensor with the <code>max</code> aggregator along dimension <code>dim</code>.
+    </td>
+</tr>
+<tr>
+    <td>max(t1,t2)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(max(x,y)))</code> <br />
+        Join and return the max of <code>t1</code> or <code>t2</code>. Arguments can be scalars.
+    </td>
+</tr>
+<tr>
+    <td>min(t, dim)</td>
+    <td>
+        <code>reduce(t, min, dim)</code> <br />
+        Reduce the tensor with the <code>min</code> aggregator along dimension <code>dim</code>.
+    </td>
+</tr>
+<tr>
+    <td>min(t1,t2)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(min(x,y)))</code> <br />
+        Join and return the minimum of <code>t1</code> or <code>t2</code>. Arguments can be scalars.
+    </td>
+</tr>
+<tr>
+    <td>mod(t,constant)</td>
+    <td>
+        <code>map(t, f(x)(mod(x,constant)))</code> <br />
+        Modulus of <code>constant</code> with each element.
+    </td>
+</tr>
+<tr>
+    <td>t1 * t2 (mul)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x * y))</code> <br />
+        Join and multiply tensors <code>t1</code> and <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>t1 != t2 (not equal)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x != y))</code> <br />
+        Join and determine if each element in <code>t1</code> and <code>t2</code> are not equal.
+    </td>
+</tr>
+<tr>
+    <td>pow(t,constant)</td>
+    <td>
+        <code>map(t, f(x)(pow(x,constant)))</code> <br />
+        Raise each element to the power of <code>constant</code>.
+    </td>
+</tr>
+<tr>
+    <td>prod(t, dim)</td>
+    <td>
+        <code>reduce(t, prod, dim)</code> <br />
+        Reduce the tensor with the <code>product</code> aggregator along dimension <code>dim</code>.
+    </td>
+</tr>
+<tr>
+    <td>random(n1, n2, ...)</td>
+    <td>
+        <code>tensor(i1[n1],i2[n2],...)(random(1.0))</code> <br />
+        Returns a tensor with random values between 0.0 and 1.0, uniform distribution.
+    </td>
+</tr>
+<tr>
+    <td>range(n)</td>
+    <td>
+        <code>tensor(i[n])(i)</code> <br />
+        Returns a tensor with increasing values.
+    </td>
+</tr>
+<tr>
+    <td>relu(t)</td>
+    <td>
+        <code>map(t, f(x)(max(0,x)))</code> <br />
+        Rectified linear unit.
+    </td>
+</tr>
+<tr>
+    <td>round(t)</td>
+    <td>
+        <code>map(t, f(x)(round(x)))</code> <br />
+        Round each element.
+    </td>
+</tr>
+<tr>
+    <td>sigmoid(t)</td>
+    <td>
+        <code>map(t, f(x)(1.0 / (1.0 + exp(0.0-x))))</code> <br />
+        Returns the sigmoid of each element.
+    </td>
+</tr>
+<tr>
+    <td>sin(t)</td>
+    <td>
+        <code>map(t, f(x)(sin(x)))</code> <br />
+        Sinus of each element.
+    </td>
+</tr>
+<tr>
+    <td>sinh(t)</td>
+    <td>
+        <code>map(t, f(x)(sinh(x)))</code> <br />
+        Hyperbolic sinus of each element.
+    </td>
+</tr>
+<tr>
+    <td>sign(t)</td>
+    <td>
+        <code>map(t, f(x)(if(x &lt; 0, -1.0, 1.0)))</code> <br />
+        The sign of each element.
+    </td>
+</tr>
+<tr>
+    <td>softmax(t, dim)</td>
+    <td>
+        <code>join(map(t, f(x)(exp(x))), reduce(map(t, f(x)(exp(x))), sum, dim), f(x,y)(x / y))</code> <br />
+        The softmax of the tensor, e.g. <code>e^x / sum(e^x)</code>.
+    </td>
+</tr>
+<tr>
+    <td>sqrt(t)</td>
+    <td>
+        <code>map(t, f(x)(sqrt(x)))</code> <br />
+        The square root of each element.
+    </td>
+</tr>
+<tr>
+    <td>square(t)</td>
+    <td>
+        <code>map(t, f(x)(square(x)))</code> <br />
+        The square of each element.
+    </td>
+</tr>
+<tr>
+    <td>t1 - t2 (subtract)</td>
+    <td>
+        <code>join(t1, t2, f(x,y)(x - y))</code> <br />
+        Join and subtract tensors <code>t1</code> and <code>t2</code>.
+    </td>
+</tr>
+<tr>
+    <td>sum(t, dim)</td>
+    <td>
+        <code>reduce(t, sum, dim)</code> <br />
+        Reduce the tensor with the <code>summation</code> aggregator along dimension <code>dim</code>.
+    </td>
+</tr>
+<tr>
+    <td>tan(t)</td>
+    <td>
+        <code>map(t, f(x)(tan(x)))</code> <br />
+        The tangent of each element.
+    </td>
+</tr>
+<tr>
+    <td>tanh(t)</td>
+    <td>
+        <code>map(t, f(x)(tanh(x)))</code> <br />
+        The hyperbolic tangent of each element.
+    </td>
+</tr>
+<tr>
+    <td>xw_plus_b(x,w,b,dim)</td>
+    <td>
+        <code>join(reduce(join(x, w, f(x,y)(x * y)), sum, dim), b, f(x,y)(x+y))</code> <br />
+        Matrix multiplication of <code>x</code> (usually a vector) and <code>w</code> (weights),
+        with <code>b</code> added (bias).
+        A typical operation for activations in a neural network layer,
+        e.g. <code>sigmoid(xw_plus_b(x,w,b)))</code>.
+    </td>
+</tr>
+</tbody>
+</table>
