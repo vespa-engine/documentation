@@ -167,6 +167,69 @@ This will make the explicitly listed rank features the only ones dumped when req
 </p>
 
 
+<h3 id="normalization">Normalization</h3>
+<p>
+The rank features provided includes both features normalized to the range 0-1,
+and un-normalized features like counts and positions.
+Whenever possible, prefer the normalized features.
+They capture the same information (and more),
+but are easier to use because they can be combined more easily with other features.
+In addition, try to write ranking expressions such that the combined rank score is also normalized,
+for example by taking averages not sums.
+The resulting normalized rank scores makes it possible to implement relevance based blending,
+search assistance triggering when there are no good hits, and so on.
+</p>
+
+
+<h3 id="configuration">Configuration</h3>
+<p>
+Some features, most notably the <a href="text-ranking.html">fieldMatch</a> features,
+has configuration parameters that enables the feature calculation to be tweaked per field for performance or relevance.
+Feature configuration values are set by adding to the rank profile:
+<pre>
+rank-properties {
+    featureName.configurationProperty: "value"
+}
+</pre>
+The values are set per field, like:
+<pre>
+rank-properties {
+    fieldMatch(title).maxAlternativeSegmentations: 10
+    fieldmatch(title).maxOccurrences: 5
+    fieldMatch(description).maxOccurrences: 20
+}
+</pre>
+Refer to the
+<a href="reference/rank-feature-configuration.html">rank feature configuration</a> reference.
+</p>
+
+
+<h3 id="feature-contribution-functions">Feature contribution functions</h3>
+<p>
+Vespa ranking features are linear.
+For example, the <a href="reference/rank-features.html#fieldMatch(name).earliness">earliness</a> feature
+is 0 if the match is at the very end of the field,
+1 if the match is at the very start of the field,
+and 0.5 if the match is exactly in the middle of the field.
+In many cases, the contribution of a feature should not be linear with its "goodness".
+For example, <em>earliness</em> could decay quickly in the beginning and slowly at the end of the field.
+This from the intuition that it matters more if the match is of the first or the twentieth word in the field,
+but it doesn't matter as much if the match is at the thousands or thousand-and-twentieths.
+</p><p>
+To achieve this, pass the feature value through a function
+which turns the line into a curve matching the intent.
+This is easiest with normalized fields.
+The function begins and ends in the same point, f(0)=0 and f(1)=1, but which curves in between.
+To get the effect described above, a curve which starts almost flat and ends very steep works - example:
+<pre>
+pow(0-x,2)
+</pre>
+The second number decides how pronounced the curving is.
+A larger number will make changes to higher x values even more important
+relative to the same change to lower x values.
+</p>
+
+
 <h3 id="dumping-rank-features-for-specific-documents">Dumping rank features for specific documents</h3>
 <p>
 For a training set containing judgements for certain documents,
@@ -213,51 +276,6 @@ such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</c
 
 
 
-<h2 id="feature-contribution-functions">Feature contribution functions</h2>
-<p>
-The ranking features in Vespa are linear.
-For example, the <code>earliness</code> feature is 0 if the match is at the very end of the field,
-1 if the match is at the very start of the field,
-and 0.5 if the match is exactly in the middle of the field.
-In many cases, we do not want the contribution of a feature to be linear with its "goodness".
-For example, we may want <code>earliness</code> to decay quickly in the beginning, as the match moves further out,
-but decay very slowly as it nears the end of the field,
-from the intuition that it matters a lot if the match is of the first word or the twentieth in the field,
-but it doesn't matter as much if the match is at the thousands or thousand-and-twentieths.
-</p><p>
-To achieve this, we need to pass the feature value through a function
-which turns the line into a curve matching our intent.
-This is easiest if you stick to normalized fields.
-Then we are looking for any function which begins and ends in the same point,
-f(0)=0 and f(1)=1, but which curves in between.
-To get the effect described above,
-we need a curve which starts almost flat and ends very steep.
-One example of a function like that is:
-<pre>
-pow(0-x,2)
-</pre>
-The second number decides how pronounced the curving is.
-A larger number will make changes to higher x values even more important
-relative to the same change to lower x values.
-</p>
-
-
-
-<h2 id="normalization">Normalization</h2>
-<p>
-The rank features provided includes both features normalized to the range 0-1,
-and un-normalized features like counts and positions.
-Whenever possible, prefer the normalized features.
-They capture the same information (and more),
-but are easier to use because they can be combined more easily with other features.
-In addition, try to write ranking expressions such that the combined rank score is also normalized,
-for example by taking averages not sums.
-The resulting normalized rank scores makes it possible to implement relevance based blending,
-search assistance triggering when there are no good hits, and so on.
-</p>
-
-
-
 <h2 id="if-function-and-string-equality-tests">The <code>if</code> function and string equality tests</h2>
 <p>
 <code>if</code> can be used for other purposes than encoding MLR trained decision trees.
@@ -281,33 +299,6 @@ if (fieldMatch(business).fieldCompleteness==1, 0.8+document.distance*0.2,
 This function puts all exact matches on business names first,
 sorted by geographical distance, followed by all shops sorted by title match,
 followed by everything else sorted by the overall match quality and popularity.
-</p>
-
-
-
-<h2 id="feature-configuration">Feature configuration</h2>
-<p>
-Some features, most notably the <a href="text-ranking.html">fieldMatch</a> features,
-contains configuration parameters which allows the feature calculation
-to be tweaked per field for performance or relevance.
-Feature configuration values are set by adding:
-<pre>
-rank-properties {
-    featureName.configurationProperty: "value"
-}
-</pre>
-to the rank profile. These values are set per field, so for example to
-set some values for the <code>title</code> field and some others for
-the <code>description</code> field, add:
-<pre>
-rank-properties {
-    fieldMatch(title).maxAlternativeSegmentations: 10
-    fieldmatch(title).maxOccurrences: 5
-    fieldMatch(description).maxOccurrences: 20
-}
-</pre>
-The full list of configuration features is found in the
-<a href="reference/rank-feature-configuration.html">rank feature configuration reference</a>.
 </p>
 
 
