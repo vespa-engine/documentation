@@ -1,36 +1,36 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Tensor User Guide"
+title: "Tensor Guide"
 ---
 
 <p>
-This user guide explains the common steps needed to work with tensors in Vespa:
+Tensors allow Vespa to support advanced ranking models such as large logistic regression models and neural networks.
+In this guide, tensors are introduced with some examples of use.
+For details, refer to the <a href="reference/tensor.html">tensor reference</a>.
+Also try the <a href="tutorials/blog-recommendation.html">blog recommendation tutorial</a>.
+This guide goes through:
 <ul>
     <li>Setting up tensor fields in search definitions</li>
     <li>Feeding tensors to Vespa</li>
     <li>Querying Vespa with tensors</li>
     <li>Ranking with tensors</li>
     <li>Constant tensors</li>
-    <li>Tensor Java API -
-      <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">javadoc</a></li>
+    <li><a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">Tensor Java API</a></li>
     <li>Common use cases</li>
+    <li>Tensor concepts</li>
 </ul>
-Most of the contents discussed here is demonstrated in the
-<a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor">tensor sample app</a>.
 For a quick introduction to tensors, refer to
-<a href="tensor-intro.html">working with tensors</a>
+<a href="#tensor-concepts">tensor concepts</a>
 and <a href="reference/tensor.html">the tensor reference guide</a>.
 See also <a href="tensorflow.html">using TensorFlow models</a> or
-<a href="onnx.html">using ONNX models</a> which explains how to
-use TensorFlow or ONNX models directly in Vespa.
+<a href="onnx.html">using ONNX models</a> which explains how to use TensorFlow or ONNX models directly in Vespa.
 </p>
 
 
 
 <h2 id="tensor-document-fields">Tensor document fields</h2>
 <p>
-In typical use, a document contains one or more
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L35-L37"> tensor fields</a> to be used for ranking -
+In typical use, a document contains one or more <em>tensor fields</em> to be used for ranking -
 this example sets up a tensor field called <code>tensor_attribute</code>:
 <pre>
 field tensor_attribute type tensor&lt;float&gt;(x[4]) {
@@ -38,7 +38,7 @@ field tensor_attribute type tensor&lt;float&gt;(x[4]) {
 }
 </pre>
 A tensor requires a type - <code>x[4]</code> means <em>indexed</em> dimension of size 4,
-where <code>x{}</code> means <em>mapped</em> dimension.
+where <code>x{}</code> means <em>mapped</em> dimension - see
 <a href="reference/search-definitions-reference.html#type:tensor">tensor field</a> in search definitions.
 For details on tensor types, refer to the
 <a href="reference/tensor.html#tensor-type-spec">tensor type reference</a>.
@@ -51,8 +51,8 @@ For details on tensor types, refer to the
 There are two options when feeding tensors.
 <ul>
   <li>Convert some other field, for instance a vector of floats,
-    to a tensor during document processing using the tensor Java API -
-    refer to the <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">tensor Java API</a>.</li>
+    to a tensor during document processing using the
+    <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">tensor Java API</a>.</li>
   <li>Feed tensors using the <a href="reference/document-json-format.html#tensor">
     tensor JSON format</a> - example:
 <pre>
@@ -73,8 +73,6 @@ There are two options when feeding tensors.
 </ul>
 Here, the <code>x</code>-dimension is indexed, so the indices must be numeric.
 For mapped dimensions, indices can be any textual value.
-See the <a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/music-data-1.json#L8-L15">
-  sample app</a>.
 </p><p>
 Tensors can be updated - one can
 <a href="https://docs.vespa.ai/documentation/reference/document-json-format.html#tensor-add">add</a>,
@@ -91,60 +89,11 @@ a completely new tensor value.
 Tensors can only be used for <em>ranking</em>, not searching.
 The tensor can either be supplied in the query string,
 or constructed from some other data or data source.
-In the latter case, please refer to <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">the tensor Java API</a>
-for details on how to construct tensors programmatically.
-</p><p>
-Use the <a href="reference/rank-features.html#query(key)">query(key)</a> rank feature -
-here <em>ranking.features.query(tensor)</em> - to send a tensor with the query to ranking.
-Set the <a href="reference/tensor.html#tensor-type-spec">tensor type</a>
-using a <a href="query-profiles.html#query-profile-types">query profile type</a>
-(the tensor type cannot be inferred from its value).
-Create a file <code>search/query-profiles/types/root.xml</code> in the application package - example:
-<pre>
-&lt;query-profile-type id="root" inherits="native"&gt;
-  &lt;field name="ranking.features.query(tensor)" type="tensor&amp;lt;float&amp;gt;(x[4])" /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-Also, configure the default query profile to use this this (or other query profiles as needed) -
-<code>search/query-profiles/default.xml</code>:
-<pre>
-&lt;query-profile id="default" type="root" /&gt;
-</pre>
-A tensor can be constructed directly from the tensor <a href="reference/tensor.html">literal form</a>.
-The corresponding literal form of the tensor in the feeding section is:
-<pre>{% raw %}
-{{x:0}: 1.0, {x:1}: 2.0, {x:2}: 3.0, {x:3}: 5.0}
-{% endraw %}</pre>
-Example query (not url-encoded for readability),
-using rank profile <em>dot_product</em> and the tensor in <em>query(tensor)</em>:
-<pre>{% raw %}
-http://host:port/search/?ranking=dot_product&amp;ranking.features.query(tensor)={{x:0}:1.0,{x:1}:2.0,{x:2}:3.0,{x:3}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
-{% endraw %}</pre>
-</p><p>
-Alternatively, use a custom searcher, and send the tensor in a parameter, like:
-<pre>{% raw %}
-http://host:port/search/?tensor={{x:0}:1.0,{x:1}:2.0,{x:2}:3.0,{x:3}:5.0}&amp;yql=select * from sources * where sddocname contains "music";
-{% endraw %}</pre>
-<pre>
-public class ExampleTensorSearcher extends Searcher {
-
-    @Override
-    public Result search(Query query, Execution execution) {
-        Object tensorProperty = query.properties().get("tensor");
-        if (tensorProperty != null) {
-            Tensor tensor = Tensor.from("tensor&lt;float&gt;(x[4])", tensorProperty.toString());
-            query.getRanking().getFeatures().put("query(tensor)", tensor);
-            query.properties().set(new CompoundName("ranking"), "dot_product");
-        }
-        return execution.search(query);
-    }
-}
-</pre>
-This grabs the value of the <code>tensor</code> query parameter, and constructs a
-<code>com.yahoo.tensor.Tensor</code> object directly from the value. It then adds this object
-to the query as a rank feature. You can also create the Tensor object programmatically.
-Refer to <a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">the tensor Java API</a> and the
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/java/com/yahoo/example/ExampleTensorSearcher.java">tensor sample app</a>.
+In the latter case, refer to the
+<a href="http://javadoc.io/page/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">Tensor</a>
+Java API for details on how to construct tensors programmatically.
+Find a guide and examples for how to add a tensor to queries in the
+<a href="ranking-expressions-features.html#using-query-variables">ranking guide</a>.
 </p>
 
 
@@ -161,9 +110,7 @@ Two rank features are defined above:
     <li><code>query(tensor)</code>: the tensor sent with the query</li>
 </ul>
 These can be used in rank expressions.
-Note that the final rank score of a document must resolve into a single double value -
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L49-L55">
-example</a>:
+Note that the final rank score of a document must be a single double value - example</a>:
 <pre>
 rank-profile dot_product {
     first-phase {
@@ -173,7 +120,7 @@ rank-profile dot_product {
 </pre>
 This takes the product of the query tensor and the document tensor, and sums
 all fields thus resolving into a single value which is used as the rank score.
-In the case above, the value is <code>39.0</code> (1*1 + 2*2 + 3*3 + 5*5).
+In the case above, the value is 39.0 (1*1 + 2*2 + 3*3 + 5*5).
 </p><p>
 There are some <a href="reference/ranking-expressions.html#built-in-functions">ranking functions</a>
 that are specific for tensors:
@@ -204,7 +151,6 @@ rank-profile dot_product {
 ...and represents the general dot product for tensors of any order.
 Details about tensor ranking functions including lambda expression and available aggregators
 can be found in the <a href="reference/tensor.html">tensor reference documentation</a>.
-More examples of tensor expression can be found in the <a href="tensor-intro.html">tensor introduction</a>.
 </p>
 
 
@@ -244,8 +190,7 @@ In addition to document tensors and query tensors,
 <a href="reference/search-definitions-reference.html#constant">constant tensors</a>
 can be put in the <a href="reference/application-packages-reference.html">application package</a>.
 This is useful when constant tensors are used in ranking expressions,
-for instance machine learned models. Example from the
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/basic-search-tensor/src/main/application/searchdefinitions/music.sd#L43-L46">sample app</a> (with a slightly changed tensor type):
+for instance machine learned models. Example:
 <pre>
 constant tensor_constant {
     file: constants/constant_tensor_file.json
@@ -354,7 +299,7 @@ with type <code>tensor&lt;float&gt;(x[3])</code> with content:
 { {x:0}:1.0, {x:1}:3.0, {x:2}:5.0 }
 </pre>
 that is set as <code>query(query_vector)</code> in a searcher
-as specified in <a href="reference/tensor.html#query-feature">query feature</a>.
+as specified in <a href="ranking-expressions-features.html#using-query-variables">query feature</a>.
 </p><p>
 To calculate the matrix product between the 1x3 vector and 3x2 matrix (to get a 1x2 vector)
 use the following ranking expression:
@@ -364,3 +309,85 @@ sum(query(query_vector) * attribute(document_matrix),x)
 This is a sparse tensor product over the shared dimension <code>x</code>,
 followed by a sum over the same dimension.
 </p>
+
+
+
+<h2 id="tensor-concepts">Tensor concepts</h2>
+<p>
+In Vespa, a tensor is a data structure which is a generalization of scalars, vectors and matrices.
+Tensors can have any order:
+<ul>
+    <li>A scalar is a tensor of order 0</li>
+    <li>A vector is a tensor of order 1</li>
+    <li>A matrix is a tensor of order 2</li>
+</ul>
+Tensors consist of a set of double valued cells, with each cell having a unique address.
+A cell's address is specified by its index or label along all dimensions.
+The number of dimensions in a tensor is the <em>rank</em> of the tensor.
+Each dimension can be either <em>mapped</em> or <em>indexed</em>.
+Mapped dimensions are sparse and allow any label (string identifier) designating their address,
+while indexed dimensions use dense numberic indices starting at 0.
+</p><p>
+Example: Using <a href="reference/tensor.html#tensor-literal-form">literal form</a>, the tensor:
+<pre>
+{
+    {x:2, y:1}:1.0,
+    {x:0, y:2}:1.0
+}
+</pre>
+has two dimensions named <code>x</code> and <code>y</code>, and has two cells with defined values:
+</p>
+<img src="img/tensor-guide.png" alt="Tensor graphical representation" />
+<p>
+A type declaration is needed for tensors. This defines a 2-dimensional mapped tensor (matrix) of float:
+<pre>
+tensor&lt;float&gt;(x{},y{})
+</pre>
+This is a 2-dimensional indexed tensor (a 2x3 matrix) of double:
+<pre>
+tensor&lt;double&gt;(x[2],y[3])
+</pre>
+A combination of mapped and indexed dimensions is a mixed tensor:
+<pre>
+tensor&lt;float&gt;(x{},y[3])
+</pre>
+Vespa uses the type information to optimize execution plans at configuration time.
+For dense data the best performance is achieved with indexed dimensions.
+</p>
+
+
+<!-- hide this for now, until fixed
+<h2 id="tensor-examples">Tensor examples</h2>
+<p>
+The following examples, uses the tensor playground to visualize tensor operations.
+The playground can be started by deploying the
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor">tensor sample app</a>
+and opening <code>http://[host]:[port]/playground/index.html</code>.
+By clicking on the links below, a setup string will be copied to the clipboard -
+paste the string into the setup input box in the playground and press enter.
+</p>
+<script>
+function copyToClipboard(text) {
+    var textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+}
+</script>
+<ol>
+    <li><a href="#dense_dot_product" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJAAiyeqmRghMkrDAATEozBlYJFQFcqzdvgC+R42yL8O5SpABu3AJbwARgBtkrIxE7ckfb2J6JE9xAEEvAUEATzJQqAVUJQAKYWwAZgBdAEpIqKgHN114yGBgYQwARmMMAAYAOmrIQNMicyMrYhtxB1hnd08LAV8eAPyoYJRbACE8qMhGWJLElLSs3KH5wuLbMoramobKlnKqw-qAJmNmqNaTTYJA0gpxES00VEcSejniLlGsJ0OJMSr8OG9YB8vj9wmAAFRgWYtMwPIFQbpQCFQ75gqD-fyAwI+EG2XE+LGoT448SoXSIZJhOHTXLItqop4YyAUqk-B4+fG8QnjSAk8RkzHCd6U6G2SF6KjIZIAKxIjnoDJYiM10FSLGi2VScP12U1tMQLNuZjwmRAxiAA')">Dense tensor dot product</a></li>
+    <li><a href="#sparse_dot_product" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJADKXWKmRgh9VCVhgAJiUZgysEqoCuVZu3wBfYybZF+HcpUgA3bgEt4AIwA2yVsYiduSPh9ieiQvcQBBbwFBAE8yMKgFJVgACmFgEwBKKOioR3c9BMhgYGEMAEYTDAAGADpKyCCzIgtja2JbcUdYFw8vSwE-HkDcqBCUOwAhHOjIRjiipOU0jOyB2fzCuxKy6qq68pZSiv3agCYTRujm03WCINIKcRFtNFQnEnoZ4mkArHaOOMit8OC9YG8Pl8ImAAFRgaZNcx3AFQTpQMEQz4gqC-Xj-IK+IF2bG+DGod5Y8SoPSIFLhGGTFhgYTZREtZEPNGQMkUr53Xy4ka5SBE8Qk9HCV7kyF2cH6KjIFIAKxITnodKZjLA0DSLBimTSMP1mSZ1MQrOu5jwAF0QCYgA')">Sparse tensor dot product</a></li>
+    <li><a href="#vector_matrix_product" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJABqyKoxKwAtIniNYAS2FgysEgBMArjIB0kdvgC+ps2yL8O5SpABu3VfABGAG2StTETtyQ+X2J6JG9xCR8BQQBPMnCoIXpUOQAKYWwAZgBdAEoo6KhnDz0EyGBgYQwABjMawwBWFkqMAEY66sbmqoAmDsazE2iLIitTW2J7cWc1dy8Cji4eIMKoUJQHAFkFgUhGOLKklNhUqizslgyc-OtCp3gSsoqqGsuajuaX6rf2+tbP169fo9AH-Kq1Nqgn51VqGf7AF5gjB9NqGEEI5FvCHol4gqq-HpwgF45F1Ql9IYCEbmW4QCZ+KZQERaNCoVQkeg7PxLQJYekhMIOLnEZmwVnszniVB6RCpCRgABUYE2LDAwnywWpEDGNmCpAo4hodGQTGF-mWfOCfiEogcADkSEIwIwABbKZ0u5BgOQ6ZCwb3QMCIPQeRiqMgeVRUZQSsA6EhoegAckYQeUQlghjAAElU6pUB6vTpVAw2RznSQwNLEN7HH6Pe6lIwM6hjJrLLSCHrGZBReKOWaebxLatIOsysK-H3UGXJVBq6lNoqwBJVerKaMO+NuwamcIWTOJYOAsOu6Px0LOxxp7OHGL9FRkKkAFYkVT0OWqlVgaDpFgxXJ0mXADclVas1w1YZLDwbIQDMIA')">Vector-matrix product</a></li>
+    <li><a href="#matrix_matrix_product" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJACiwpGQA2yMCWhh4YRPEawAlsIC06zTrBlYJACYBXKowB0kdvgC+Dx2yL8O5SpABu3LfAARvKsDhCc3Eh8YcT0SMjeAIKhAoIAnmQJ4kL0qCSwABTCwK5pJQCUKalQfrIWWVDAADr0wMIYAAwsaZ2OnSwtbf09AIx9HTYjA63tUz0dfVODs90YY2uTLY72qc5Erg4exF7iftpBIW4CETzR1VBxKN4AQlWpkIwZDR-IufkFZVcAC8Km9rrV6t5mq15iwgb1+oNYfD1ksYWs4QiJmjgKNMajNvRtjE9k4rhAjuETlARCY0KgtCR6GDwlxblhKbF4t4WcRabB6YzmeJEmAAFRgV4klzkggxUgUcT8wVM3k3KIcmLhR7fXnhZWoBmq8SoCyIAqiiXPFhgNKVaX7WWchXeA1G5my1mRXia+6QHU8z184R0w1C7wCyxUZAFABWJC09AtLGt0CK3XKRTFdvKLFNiAzOwEpIgpIAuiBHEA')">Matrix-matrix product</a></li>
+    <li><a href="#tensor_generation" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJADEEsABVk9VCVhgA5vOQJGASxL0WYACZaGqHfTCx5SLfRVh49A2Br0q8IfXdnI7fAF9fPzYifg5ySkgRMktUU11WXwhObiQ+ROJPFAiAQQSBYiiYuPoIj0VYAAotbABmAF0ASiqGn3yAoiDfUOJw8UK0YryBZJ40-KTM5AiAISH8yOFoge9xMqUq7AAmRqqAahqW9Pb-YPxupN6oftjvU44uUaxzjKQp8QBhOeHrwfEXN0YFWyLGmLC0hzagTuBHSpAofUWRVusIeqSe6QmrwiXw4PxWUEskwq730Wn0wghAmOEGOdRAfiAA')">Tensor generation, dimension renaming and concatenation</a></li>
+    <li><a href="#neural_network" onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJAByyAK4IANmHrJGAdxKwA1mBFIyc5JHb4AvkeNsi-DuUqQAbtwCW8AEb7WRiJ25I+n4vRIBuKO9GTSzBYCXowAnmTBUEL0qOoAFKHhjNgAzAC6AJQe0V4OctKJkMDAmREYAAzGDQB0AIwsNWF1rU31bR21jBgATL1txobRpkTmRlbENuIOsM5uBlEcXDx+JVCBKLYqABaOACanyPTFJZBxCbbJqbAZXdn5LCfnl9gArIXX0Xs8HKlWqnwu9AaLEGDSaAFo+gB2VoADgAnMMOuDLhh2jDGrjmmi0a1hiisWcISNoa9YS16gAWBmoilfSE5GlZOkItoo4YMjnAbGQhmcuoEvr1fnE1lU+pioY9FoANhRiJRP1lOLxtKVcNazWV-J+5KFlJxmJhSr6wxyyplZrZGA5VrGyp+iMRosdVNFrpaPzR7tNwqhMNGGH1zR+TOV3tDOq5EZtaPqjK1kMttOTbWVytamp9OJd2aaBq9rRyIfNIoVIzGOVaAp+E380xMGwI-lIFCWTlc7k7Xi2viw8w4+0qLmFAIEt3ilUe6WFv3+Q+IZQqtjBNbpNpRUsRGdxYylHsLoZzafq+ePOTGw3zrXaRZF8L6rTz9TRramZk745QIsUDLKsg7diOvBjv4XiToc0ChMCs4cHci6XE8aQrn8LAIYEcjYK0a4wSBwJbuIO5OvKuHAtyyrNHyPyqse7TUXI3LPtGPzDOqx6Yqx3KSo2aJHq+zo4YhbEEjknGIo+x6ivxBI8naiI5Iiv4CO2ECzJY3bAUCKwDusEE+FBXa7JAcHiC4rHIYIC4POh6SsQRREWZuoLAIpp7uoiyqNJMmn-nMem9tQtAMJEJnbNBFlCKItgAGKOLAqCMGAcjwLEyCwGA8BUIwjgOIVJCQoFMzBbpgL6SIZCwGgqCOKVdneDF5k3FZUB2V4tX1agjXNeIqDSIgLxZGAABUYDHDWLBgIMBRgAA1GA041uVJiVfggE9rYvUNU1Vzrq1o7tYCnWQJl2WwK03VQPt-WHbY9XlGkw2jYMk3TcKc0Lctq3CkUbZbRAO01cIdUHc1x2QTsHVBLYwJCLAgSFXYyAAPpXTlt3rj1EN9QNVziC90hpMIKgY3o0ioBjLhjREc0zWyc1rSz82vAUQN-jMAGhbYNB0JcUWArDsU3PFYhQMleEZVlOV5QVRXwCVZXA7zIXVWFkAPUTLVi2dc4XXdOsE1DxNQO9aTYzdX0qKxc2A-9NkSRt2kg4bXjg5Dj3Q9Fp2AbBCPiDbwwm7rT1DY4ADmiAkGcb0jdb8u21N9sSY7NaLStLt4dzQUa1Vc76YLkX66ZcOApLSUSWACD0FoqA0PVGBu2AWnt3zWt7WbvtHf7ZmB3swddXj9293rQ1J6H+cVXPYB5CAxhAA')">Neural network</a></li>
+</ol>
+<p>
+The neural network example is quite a bit more involved.
+Here, the network has 3 input neurons, 5 hidden neurons and a single output neuron.
+An example of neural networks in action can be found in the
+<a href="tutorials/blog-recommendation-nn.html">blog recommendation tutorial part 3</a>.
+</p>
+-->

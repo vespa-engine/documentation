@@ -25,7 +25,8 @@ something like this:
 
 An application package can have multiple models.
 
-To download models during deployment, see [deploying remote models](deploying-remote-models.html).
+To download models during deployment,
+see [deploying remote models](cloudconfig/application-packages.html#deploying-remote-models).
 
 ## Ranking with ONNX models
 
@@ -96,7 +97,8 @@ you can pass tensors in HTTP requests by using the HTTP parameter
 
     <field name="ranking.features.query(myTensor)" type="tensor(d0[1],d1[784])" />
 
-[An example can be found in the tensor sample application](https://github.com/vespa-engine/sample-apps/tree/master/basic-search-tensor).
+A tensor example can be found in the
+[sample application](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation).
 
 #### Batch dimensions
 

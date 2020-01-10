@@ -1,0 +1,81 @@
+---
+# Copyright 2020 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Stateless model reference"
+---
+<p>
+<em>.model</em> files are used in
+<a href="../stateless-model-evaluation.html">stateless model evaluation</a>.
+These are files with <a href="../ranking.html">ranking expressions</a>,
+located in <a href="application-packages-reference.html">models</a> / a subdirectory of <em>models</em>,
+with <em>.model</em> suffix:
+<pre>
+├── models
+│   └── my_model.model
+└── services.xml
+</pre>
+</p>
+
+
+
+<h2 id="model-file-format-specification">.model file format specification</h2>
+<p>
+<pre>
+model [name] {
+
+    ([input-argument-name]: [<a href="tensor.html#tensor-type-spec">input-argument-type</a>])*
+
+    contants {
+        ([constant-name]: [scalar or <a href="tensor.html#tensor-literal-form">tensor in literal form</a>])*
+    }
+
+    (constant [name] {
+        type: [<a href="tensor.html#tensor-type-spec">tensor-type-spec</a>]]
+        file: [file path relative to this .model file]
+    })*
+
+    (function [name]([argument-name]*) {
+        expression: [<a href="ranking-expressions.html">ranking expression</a>]
+    })*
+
+}
+</pre>
+The elements can appear in any order (and number).
+</p>
+
+
+
+<h2 id="model-example">.model example</h2>
+<p>
+This file must be saved as <code>example.model</code> somewhere in the
+<a href="application-packages-reference.html">models</a> directory tree,
+and the same directory must also contain <code>constant1asLarge.json</code> with a tensor.
+<pre>{% raw %}
+model example {
+
+    # All inputs that are not scalar (aka 0-dimensional tensor) must be declared
+    input1: tensor(name{}, x[3])
+    input2: tensor(x[3])
+
+    constants {
+        constant1: tensor(x[3]):{{x:0}:0.5, {x:1}:1.5, {x:2}:2.5}
+        constant2: 3.0
+    }
+
+    # Constant in a separate file
+    constant constant1asLarge {
+        type: tensor(x[3])
+        file: constant1asLarge.json
+    }
+
+    function foo1() {
+        expression: reduce(sum(input1 * input2, name) * constant1, max, x) * constant2
+    }
+
+    function foo2() {
+        expression: reduce(sum(input1 * input2, name) * constant(constant1asLarge), max, x) * constant2
+    }
+
+}
+</pre>{% endraw %}
+This makes the model <em>example</em> available with the functions <em>foo1</em> and <em>foo2</em>.
+</p>

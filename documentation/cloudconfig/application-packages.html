@@ -98,6 +98,63 @@ vespa-status-filedistribution</a> to check if files have been distributed to all
 </p>
 
 
+<h3 id="deploying-remote-models">Deploying remote models</h3>
+<p>
+Machine learned models in Vespa, either <a href="../tensorflow.html">TensorFlow</a>,
+<a href="../onnx.html">ONNX</a>, or <a href="../xgboost.html">XGBoost</a>,
+are stored in the application package under the <em>models</em> directory.
+This might be inconvenient for some applications,
+for instance for models that are frequently retrained on some remote system.
+Also, models might be too large to fit within the constraints of the version control system.
+</p><p>
+The solution is to download the models from the remote location during the application package build.
+This is simply implemented by adding a step in <em>pom.xml</em>:
+<pre>
+&lt;build&gt;
+  &lt;plugins&gt;
+    &lt;plugin&gt;
+      &lt;groupId&gt;org.codehaus.mojo&lt;/groupId&gt;
+      &lt;artifactId&gt;exec-maven-plugin&lt;/artifactId&gt;
+      &lt;version&gt;1.4.0&lt;/version&gt;
+      &lt;executions&gt;
+        &lt;execution&gt;
+          &lt;id&gt;download-model&lt;/id&gt;
+          &lt;phase&gt;generate-resources&lt;/phase&gt;
+          &lt;goals&gt;
+            &lt;goal&gt;exec&lt;/goal&gt;
+          &lt;/goals&gt;
+          &lt;configuration&gt;
+            &lt;executable&gt;bin/download_models.sh&lt;/executable&gt;
+            &lt;arguments&gt;
+              &lt;argument&gt;target/application/models&lt;/argument&gt;
+              &lt;argument&gt;MODEL-URL&lt;/argument&gt;
+            &lt;/arguments&gt;
+          &lt;/configuration&gt;
+        &lt;/execution&gt;
+      &lt;/executions&gt;
+    &lt;/plugin&gt;
+  &lt;/plugins&gt;
+&lt;/build&gt;
+</pre>
+<em>bin/download_model.sh</em> example:
+<pre>
+#!/bin/bash
+
+DIR="$1"
+URL="$2"
+
+echo "[INFO] Downloading $URL into $DIR"
+
+mkdir -p $DIR
+pushd $DIR
+    curl -O $URL
+popd
+</pre>
+Any necessary credentials for authentication and authorization should be added to this script,
+as well as any unpacking of archives (for TensorFlow models for instance).
+</p>
+
+
 
 <h2 id="services.xml">services.xml</h2>
 <p>
