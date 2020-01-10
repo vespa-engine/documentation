@@ -60,7 +60,14 @@ Check the <a href="../files/Attribute-memory-Vespa.xls">Example attribute sizing
 with various data types and collection types.
 It also contains estimates for how many documents a 48GB RAM node can hold, taking initialization into account.
 </p>
-
+<p>
+When <em>resizing</em> attributes, both current and new attribute will temporarily reside in memory.
+Hence, increasing an attribute means more than doubling the memory used -
+refer to the <a href="../content/setup-proton-tuning.html#resizing">resizing reference</a>.
+</p><p>
+<a href="search-definitions.html#multivalue-fields">Multivalue</a> attributes use an adaptive approach in how data is stored in memory,
+and up to 2 billion documents per node is supported.
+</p>
 
 
 <h2 id="fast-search">fast-search</h2>
@@ -69,8 +76,8 @@ Attributes can be configured with <a href="../reference/search-definitions-refer
 fast-search</a> - this impacts memory footprint:
 </p>
 <ul>
-  <li>Setting <em>fast-search</em> is not recommended unless
-    querying the attribute without any other more restrictive terms that are indexed</li>
+  <li>See <a href="feature-tuning.html#when-to-use-fast-search">when to use fast-search</a>.</li>
+
   <li><em>fast-search</em> will increase steady state memory usage for all
     attribute types and also add initialization overhead for numeric types</li>
 </ul>
@@ -317,4 +324,47 @@ add content nodes to distribute documents with attributes over more nodes.
 Use metrics <em>content.proton.documentdb.attribute.resource_usage.enum_store.average</em> and
 <em>content.proton.documentdb.attribute.resource_usage.multi_value.average</em>
 to track usage.
+</p>
+
+<h2 id="document-meta-store">Document meta store (Implicit attribute) </h2>
+<p>
+The document meta store is an in-memory data structure used for bookkeeping about every
+document stored on a node.
+</p><p>
+The document meta store is an implicit attribute, and is
+<a href="proton.html#lid-space-compaction">compacted</a> and
+<a href="proton.html#attribute-flush">flushed</a>.
+Memory usage for applications with small documents can be dominated by this attribute,
+particularly for <em>store-only</em> and <em>streaming search</em> applications.
+</p><p>
+The document meta store scales linearly with number of documents -
+using approximately 30 bytes per document on disk.
+</pre>
+The metric <em>content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes</em> for
+<em>"field": "[documentmetastore]"</em> is the size of the document meta store in memory - use the
+<a href="reference/metrics.html#process-metrics-api">metric API</a> to find the size - example:
+<pre>
+{
+  "name": "content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes",
+  "description": "The number of allocated bytes",
+  "values": {
+    "average": 4.69736008E8,
+    "count": 12,
+    "rate": 0.2,
+    "min": 469736008,
+    "max": 469736008,
+    <span style="background-color: yellow;">"last": 469736008</span>
+  },
+  "dimensions": {
+    "documenttype": "doctype",
+    <span style="background-color: yellow;">"field": "[documentmetastore]"</span>
+  }
+},
+</pre>
+In the above example, the node has 9M ready documents with 52 bytes in memory per document.
+</p><p>
+Note: the above is for the <em>ready</em> (i.e. indexed) documents -
+also check <em>removed</em> and <em>notready</em> metrics.
+For more information on what these different document categories mean for a search node, please
+see the <a href="proton.html#sub-databases">document sub database</a> documentation.
 </p>
