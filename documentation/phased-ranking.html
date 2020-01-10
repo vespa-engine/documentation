@@ -10,24 +10,30 @@ Even though Vespa is optimized for such calculations,
 complex expressions become expensive when calculated for each selected document.
 For this reason Vespa can be configured to run multiple phases of ranking expressions -
 This provides a better CPU budget distribution
-by dedicating more resources to the best candidates as calculated per ranking phase.</p>
-<p> To get an overview of how queries are executed in Vespa reading the <a href="querying-vespa.html">querying Vespa</a> guide is recommended
-before diving deep into this document.</p>
- 
-<p> Vespa supports multiple rank phases:
-
+by dedicating more resources to the best candidates as calculated per ranking phase.
+</p><p>
+Read the <a href="querying-vespa.html">querying Vespa</a> guide
+to get an overview of how queries are executed in Vespa, before continuing this guide.
+</p><p>
+Vespa supports multiple rank phases:
 <ul>
-<li>Re-ranking of the top hits from the content nodes using a custom <a href="searcher-development.html">searcher component</a>. 
-</li>
-<li>Re-ranking at each content node using two phase ranking configured by rank profiles with ranking expressions working on scalars, tensors or matching features.
-</li>
-<li>Ranking with query operators like <a href="https://dl.acm.org/citation.cfm?id=956944">WAND/Weak And</a> which speeds up retrieval of top matches of a disjunction query (OR) </li>
+  <li>Re-ranking of the top hits from the content nodes
+      using a custom <a href="searcher-development.html">searcher component</a></li>
+  <li>Re-ranking at each content node using two phase ranking configured by rank profiles
+      with ranking expressions working on scalars, tensors or matching features</li>
+  <li>Ranking with query operators like <a href="https://dl.acm.org/citation.cfm?id=956944">WAND/Weak And</a>
+      which speeds up retrieval of top matches of a disjunction query (OR)</li>
 </ul>
+</p>
 
-<h2 id="container-reranking">Container top matches re-ranking</h2>
-<p>It's possible to write <a href="searcher-development.html">custom searcher plugin</a> which can re-rank hits using any custom scoring function. The searcher can also blend and re-order hits from multiple sources when
-using <a href="federation.html">federation</a> of content sources.</p>
 
+
+<h2 id="container-top-matches-re-ranking">Container top matches re-ranking</h2>
+<p>
+It's possible to write <a href="searcher-development.html">custom searcher plugin</a>
+which can re-rank hits using any custom scoring function.
+The searcher can also blend and re-order hits from multiple sources
+when using <a href="federation.html">federation</a> of content sources.
 <pre>
 public class ReRankerSearcher extends Searcher {
     
@@ -50,78 +56,90 @@ public class ReRankerSearcher extends Searcher {
     }
 }
 </pre>
-<p>The searcher might request rank features calculated by the content nodes to be returned along with the hit fields using <a href="reference/inspecting-structured-data.html">summary-features</a>. 
-The features returned can be configured in the <em>rank-profile</em> as <a href="reference/search-definitions-reference.html#summary-features">summary-features</a>. 
->As the example above is executed in a single thread iterating over the top hits the number of hits and complexity of the re-ranking need to be adjusted per the given latency budget. The number of <em>hits</em> is limited by the search api  <a href="reference/search-api-reference.html#hits">hits</a> parameter
-and <a href="reference/search-api-reference.html#queryProfile">maxHits</a> setting. 
+The searcher might request rank features calculated by the content nodes to be returned
+along with the hit fields using <a href="reference/inspecting-structured-data.html">summary-features</a>.
+The features returned can be configured in the <em>rank-profile</em>
+as <a href="reference/search-definitions-reference.html#summary-features">summary-features</a>.
+As the example above is executed in a single thread iterating over the top hits,
+the number of hits and complexity of the re-ranking need to be adjusted per the given latency budget.
+The number of <em>hits</em> is limited by the search api <a href="reference/search-api-reference.html#hits">hits</a> parameter
+and <a href="reference/search-api-reference.html#queryProfile">maxHits</a> setting.
+</p>
 
 
-<h2 id="content-ranking">Two-phase ranking content nodes</h2>
+
+<h2 id="two-phase-ranking-content-nodes">Two-phase ranking content nodes</h2>
 <p>
 Rank expressions are configured in the <code>rank-profile</code> section of
 <a href="reference/search-definitions-reference.html#rank-profile">search definitions</a>. 
-The rank-profile supports having two phases of ranking: first-phase and second-phase:
+The rank-profile supports having two phases of ranking; first-phase and second-phase:
 <p>
 By default, second-phase ranking (if specified) is run on the 100 best hits from the first-phase ranking per content node,
 after matching and before information is returned to the container.
-The number of hits to rerank can be configured as well in the rank-profile.
-</p>
-
-Example:
-
+The number of hits to rerank can be configured as well in the rank-profile. Example:
 <pre>
 search myapp {
     &hellip;
     rank-profile title-freshness inherits default {
         first-phase {
-            expression: nativeRank(title) + freshness(timestamp)
+            expression {
+                nativeRank(title) + freshness(timestamp)
+            }
         }
         second-phase {
             expression {
-                xgboost("my_model.json") 
+                xgboost("my-model.json")
             }
             rerank-count: 50
         }
     }
 }
 </pre>
-In this example, the first phase uses the text matching feature <a href="reference/nativerank.html">nativeRank</a> scoped to the <em>title</em> field 
-plus one of the built-in document <a href="reference/rank-features.html">ranking features</a> named <em>freshness</em> over a <em>timestamp</em> field which stores the epoch time in second resolution.
- For each content node the top 50 hits from
-the first phase function is re-ranked using a
-trained <a href="xgboost.html">xgboost</a> model. 
+In this example, the first phase uses the text matching feature
+<a href="reference/nativerank.html">nativeRank</a> scoped to the <em>title</em> field
+plus one of the built-in document <a href="reference/rank-features.html">ranking features</a> named <em>freshness</em>
+over a <em>timestamp</em> field which stores the epoch time in second resolution.
+For each content node, the top 50 hits from the first phase function is re-ranked using
+a trained <a href="xgboost.html">xgboost</a> model.
 </p>
 
-<h2 id="wand">Top-K Query Operator/Weak And</h2>
+
+
+<h2 id="top-k-query-operator-weak-and">Top-K Query Operator/Weak And</h2>
 <p>
-If the first-phase ranking function can be approximated as a simple linear function and the query mode is <em>any</em> the 
-<a href="https://dl.acm.org/citation.cfm?id=956944">Weak And/WAND</a> implementations in Vespa allows avoiding fully evaluating all the documents matching the query with the <em>first-phase</em> function. Instead 
-only the Top N hits using the internal operator ranking will be exposed to the <em>first-phase</em> ranking function.</p>
+If the first-phase ranking function can be approximated as a simple linear function,
+and the query mode is <em>any</em>,
+the <a href="https://dl.acm.org/citation.cfm?id=956944">Weak And/WAND</a> implementations in Vespa
+allows avoiding fully evaluating all the documents matching the query with the <em>first-phase</em> function.
+Instead, only the Top N hits using the internal operator ranking will be exposed
+to the <em>first-phase</em> ranking function.
+</p><p>
+Both wand implementations accepts a targeted number of hits (top N).
+Each content node will expose all hits that were evaluated to the first-phase ranking function,
+while skipped documents will not.
+The skipped set are the ones that matches the query,
+but which cannot outperform any of the already collected hits on the internal scoring heap.
+Due to not fully evaluating all documents matching the query,
+the total hit count becomes inaccurate when using weakAnd/Wand.
+</p><p>
+Find more details in <a href="using-wand-with-vespa.html">Wand with Vespa</a>.
+</p>
 
-<p>
-Both wand implementations accepts a targeted number of hits (top N) and each
-content node will expose all hits that were evaluated to the first-phase ranking function while skipped documents will not and the skipped set are the ones that matches the query but which cannot outperform any of
-the already collected hits on the internal scoring heap.
-Due to not fully evaluating all documents matching the query the total hit count becomes inaccurate when using weakAnd/Wand.</p> 
 
-<p>See using <a href="using-wand-with-vespa.html">Wand with Vespa</a> documentation</p>
 
-<h2 id="choosing-functions">Choosing phased ranking functions </h3>
+<h2 id="choosing-functions">Choosing phased ranking functions</h2>
 <p>
 A good ranking expression will for most applications consume too much CPU
-to be runnable on the entire result set within the latency budget/SLA,
-so in most cases the desired rank function should be used as the second phase function.
+to be runnable on the entire result set within the latency budget/SLA.
+The application rank function should hence in most cases be a second phase function.
 The task then becomes to find a first phase function,
-which correlates sufficiently well with the second phase function,
-to ensure that relevance is not hurt too much by not evaluating the second phase function on all the hits.
+which correlates sufficiently well with the second phase function -
+this to ensure that relevance is not hurt too much
+by not evaluating the second phase function on all the hits.
+</p><p>
+The impact of using a cheaper function in the first phase can be assessed
+by deploying the second phase function as the first phase function in a test rank profile,
+and comparing the results to the production rank profile.
+During such evaluation, the timeout should be adjusted for the increased resource usage
+with using the second order function over all matching candidates.
 </p>
-
-
-<h2 id="evaluation">Evaluating relevancy impact of phased ranking</h2>
-<p>
-The impact of using a cheaper function in the first phase can be assessed by deploying
-the second phase function as the first phase function in a test rank profile,
-and comparing the results to the production rank profile. During such evaluation the timeout should be adjusted for the increased resource usage with using
-the second order function over all matching candidates.
-</p>
-
