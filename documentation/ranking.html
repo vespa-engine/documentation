@@ -30,7 +30,7 @@ search myapp {
 Applications use the <a href="search-api.html">query API</a> to <em>select</em> the documents to evaluate
 using a <a href="query-language.html">query language</a>,
 and choose a <a href="#rank-profile">rank profile</a> for the ranking.
-Rank profiles have <a href="#two-phase-ranking">one or two phases</a>:
+Rank profiles have <a href="phased-ranking.html">one or two phases</a>:
 <ul>
     <li>Phase one should use a computationally inexpensive function to rank candidates</li>
     <li>Phase two is run on a small candidate set</li>
@@ -97,7 +97,7 @@ Refer to <a href="advanced-ranking.html">advanced ranking</a>
 for details on using dot products, tensors and wand.
 </p><p>
 Ranking is most often the resource driver - this is where is application's logic is imlpemented.
-Use <a href="#two-phase-ranking">two-phase ranking</a> to optimize,
+Use <a href="phased-ranking.html">two-phase ranking</a> to optimize,
 using an inexpensive <em>first-phase</em> ranking to eliminate the lowest ranked candidates,
 then focus the resources on a strong <em>second-phase</em> ranking.
 </p><p>
@@ -443,60 +443,6 @@ or as a result of changing user behavior.
 The relevance metrics are <code>relevance.at_1</code>,
 <code>relevance.at_3</code> and <code>relevance.at_10</code>.
 See <a href="reference/metrics.html">metrics</a> for more information.
-</p>
-
-
-
-<h2 id="two-phase-ranking">Two-phase ranking</h2>
-<p>
-Rank scores in general become more accurate by using complex expressions
-which use many features or large tensors.
-Even though Vespa is optimized for such calculations,
-complex expressions become expensive when calculated for each selected document.
-For this reason Vespa can be configured to run two ranking expressions -
-a smaller and less accurate one on all matches as they are found (first-phase ranking)
-and a more expensive and accurate one only on the best documents (second-phase ranking).
-This provides a better CPU budget distribution
-by dedicating more resources to the best candidates - see
-<a href="reference/search-api-reference.html#ranking.softtimeout">ranking.softtimeout</a>.
-</p><p>
-By default, second-phase ranking (if specified) is run on the 100 best hits per content node,
-after matching and before information is returned to the container.
-The number of hits to rerank can be configured in the ranking expression.
-</p><p>
-Rank expressions are configured in the <code>rank-profile</code> section of
-<a href="reference/search-definitions-reference.html#rank-profile">search definitions</a>. Example:
-<pre>
-search myapp {
-    &hellip;
-    rank-profile default inherits default {
-        first-phase {
-            expression: nativeRank + query(deservesFreshness) * freshness(timestamp)
-        }
-        second-phase {
-            expression {
-                xgboost("my_model.json")
-            }
-            rerank-count: 200
-        }
-    }
-}
-</pre>
-In this example, the first phase uses the <a href="reference/nativerank.html">nativeRank</a> feature
-as the ranking expression plus a freshness component.
-The contribution from the freshness feature is set in a query parameter.
-The second phase uses a trained <a href="xgboost.html">xgboost</a> model.
-</p><p>
-A good ranking expression will for most applications consume too much CPU
-to be runnable on the entire result set,
-so in most cases the desired rank function should be used as the second phase function.
-The task then becomes to find a first phase function,
-which correlates sufficiently well with the second phase function,
-to ensure that relevance is not hurt too much by not evaluating the second phase function on all the hits.
-In many cases, <code>nativeRank</code> will work well as the first phase function.
-The impact of using a cheaper function in the first phase can be assessed by deploying
-the second order function as the first order function in a test rank profile,
-and comparing the results to the production rank profile.
 </p>
 
 
