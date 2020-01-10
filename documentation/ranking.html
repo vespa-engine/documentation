@@ -4,27 +4,96 @@ title: "Ranking"
 ---
 
 <p>
-Vespa uses <a href="reference/ranking-expressions.html">ranking expressions</a>
-to rank documents matching a query, computing a rank score per document.
-A ranking expression is stored in a <a href="#rank-profile">rank profile</a>.
-An application can have multiple rank profiles -
-this can be used for implementing different use cases, or bucket testing ranking variations.
-</p><p>
-Example: Rank the freshest document highest, using the value in an attribute named <em>timestamp</em>:
+Vespa defines Big Data Serving as:
+<blockquote style="background: #1a7db6; color: #ffffff"><strong>
+Selection, organization and machine-learned model inference,
+<ul>
+    <li>over many, constantly changing data items (thousands to billions),</li>
+    <li>with low latency (~100 ms) and high load (thousands of queries/second)</li>
+</ul>
+</strong></blockquote>
+<em>Ranking</em> enables organization and ML inference,
+and <em>multi-phased ranking</em> addresses latency and load:
 <pre>
 search myapp {
-    &hellip;
+
     rank-profile my-rank-profile {
         first-phase {
-            expression: freshness(timestamp)
+            expression: attribute(quality) * freshness(timestamp)
+        }
+        second-phase {
+            expression: sum(onnx("my-model.onnx", "add"))
         }
     }
 }
 </pre>
+Applications use the <a href="search-api.html">query API</a> to <em>select</em> the documents to evaluate
+using a <a href="query-language.html">query language</a>,
+and choose a <a href="#rank-profile">rank profile</a> for the ranking.
+<!-- ToDo: Also phased ranking is about fine tuning the precision (most relevant first)
+           while first-phase is about recall (finding the relevant docs) -->
+Rank profiles can have one or two phases:
+<ul>
+    <li>Phase one should use a computationally inexpensive function to rank candidates</li>
+    <li>Phase two is run on a small candidate set</li>
+</ul>
+Read more about <a href="phased-ranking.html">phased ranking</a>.
+</p><p>
+In short, the query selection and first phase ranking reduces the size of the computation -
+then machine-learned models can be used on the second-phase ranking on
+<a href="reference/search-definitions-reference.html#rerank-count">rerank-count</a> documents per node.
+This makes the ranking scalable (see <a href="performance/sizing-search.html">sizing</a>):
+<ul>
+    <li>Control the second phase candidate set size</li>
+    <li>Add content nodes to rank less documents per node</li>
+</ul>
+</p><p>
+Ranking is run in the <a href="overview.html">content cluster</a>.
+This means, <em>online inference</em> (a.k.a. <em>real time inference</em> or <em>dynamic inference</em>)
+is executed for the candidate document set.
+Ranking is running <a href="#ranking-expressions">ranking expressions</a> using
+<a href="rank-features">rank features</a> (values / computed values from queries, document and constants).
+</p><p>
+Note: Vespa also supports <a href="stateless-model-evaluation.html">stateless model evaluation</a> -
+making inferences without documents (i.e. query to model).
+</p>
+
+
+
+<h2 id="machine-learned-model-inference">Machine-Learned model inference</h2>
+<p>
+Vespa supports the following ML models:
+<ul>
+    <li><a href="onnx.html">ONNX</a></li>
+    <li><a href="tensorflow.html">Tensorflow</a></li>
+    <li><a href="xgboost.html">XGBoost</a></li>
+</ul>
+As these are exposed as rank features, it is possible to rank using a <em>model ensemble</em>.
+Deploy multiple model instances and write a rank expression that combines the results (max, avg, custom, ...) - example:
+<pre>
+search myapp {
+
+    rank-profile my-rank-profile {
+    ...
+        second-phase {
+            expression: max( sum(onnx("my-model-1.onnx", "add"), sum(onnx("my-model-2.onnx", "add") )
+        }
+    }
+}
+</pre>
+</p>
+<!-- ToDo: Not exclusive list, we can represent lots of model, logistic regression etc. Also mention PyTorch through ONNX. -->
+
+
+
+<h2 id="ranking-expressions">Ranking expressions</h2>
+<p>
+Vespa uses <a href="reference/ranking-expressions.html">ranking expressions</a>
+to rank documents matching a query, computing a rank score per document.
+A ranking expression is stored in a <a href="#rank-profile">rank profile</a>.
+</p><p>
 Ranking expressions are mathematical functions.
-The function may contain anything from a single reference to a built-in feature,
-to a machine-learned models from <a href="tensorflow.html">Tensorflow</a>,
-<a href="onnx.html">ONNX</a> or <a href="xgboost.html">XGBoost</a>.
+The function may contain anything from a single reference to a built-in feature to a machine-learned model.
 Ranking expressions support the usual operators and functions,
 as well as an <em>if</em> function - enabling decision trees and conditional business logic.
 They support a comprehensive set of  <a href="reference/tensor.html">tensor functions</a>,
@@ -33,7 +102,7 @@ Refer to <a href="advanced-ranking.html">advanced ranking</a>
 for details on using dot products, tensors and wand.
 </p><p>
 Ranking is most often the resource driver - this is where is application's logic is imlpemented.
-Use <a href="#two-phase-ranking">two-phase ranking</a> to optimize,
+Use <a href="phased-ranking.html">two-phase ranking</a> to optimize,
 using an inexpensive <em>first-phase</em> ranking to eliminate the lowest ranked candidates,
 then focus the resources on a strong <em>second-phase</em> ranking.
 </p><p>
@@ -50,11 +119,13 @@ Ranking expressions can be large, and can be imported using
 <h2 id="rank-profile">Rank profile</h2>
 <p>
 Ranking expressions are stored in <a href="reference/search-definitions-reference.html#rank-profile">rank profiles</a>.
+An application can have multiple rank profiles -
+this can be used for implementing different use cases, or bucket testing ranking variations.
 If not specified, the <a href="text-ranking.html">default text ranking</a> profile is used.
 </p><p>
 A rank profile can <em>inherit</em> another rank profile.
 </p><p>
-Queries select profile using <a href="reference/search-api-reference.html#ranking.profile">ranking.profile</a>,
+Queries select rank profile using <a href="reference/search-api-reference.html#ranking.profile">ranking.profile</a>,
 or in <a href="searcher-development.html">Searcher</a> code:
 <pre>
 query.getRanking().setProfile("my-rank-profile");
@@ -104,6 +175,69 @@ This will make the explicitly listed rank features the only ones dumped when req
 </p>
 
 
+<h3 id="normalization">Normalization</h3>
+<p>
+The rank features provided includes both features normalized to the range 0-1,
+and un-normalized features like counts and positions.
+Whenever possible, prefer the normalized features.
+They capture the same information (and more),
+but are easier to use because they can be combined more easily with other features.
+In addition, try to write ranking expressions such that the combined rank score is also normalized,
+for example by taking averages not sums.
+The resulting normalized rank scores makes it possible to implement relevance based blending,
+search assistance triggering when there are no good hits, and so on.
+</p>
+
+
+<h3 id="configuration">Configuration</h3>
+<p>
+Some features, most notably the <a href="text-ranking.html">fieldMatch</a> features,
+has configuration parameters that enables the feature calculation to be tweaked per field for performance or relevance.
+Feature configuration values are set by adding to the rank profile:
+<pre>
+rank-properties {
+    featureName.configurationProperty: "value"
+}
+</pre>
+The values are set per field, like:
+<pre>
+rank-properties {
+    fieldMatch(title).maxAlternativeSegmentations: 10
+    fieldmatch(title).maxOccurrences: 5
+    fieldMatch(description).maxOccurrences: 20
+}
+</pre>
+Refer to the
+<a href="reference/rank-feature-configuration.html">rank feature configuration</a> reference.
+</p>
+
+
+<h3 id="feature-contribution-functions">Feature contribution functions</h3>
+<p>
+Vespa ranking features are linear.
+For example, the <a href="reference/rank-features.html#fieldMatch(name).earliness">earliness</a> feature
+is 0 if the match is at the very end of the field,
+1 if the match is at the very start of the field,
+and 0.5 if the match is exactly in the middle of the field.
+In many cases, the contribution of a feature should not be linear with its "goodness".
+For example, <em>earliness</em> could decay quickly in the beginning and slowly at the end of the field.
+This from the intuition that it matters more if the match is of the first or the twentieth word in the field,
+but it doesn't matter as much if the match is at the thousands or thousand-and-twentieths.
+</p><p>
+To achieve this, pass the feature value through a function
+which turns the line into a curve matching the intent.
+This is easiest with normalized fields.
+The function begins and ends in the same point, f(0)=0 and f(1)=1, but which curves in between.
+To get the effect described above, a curve which starts almost flat and ends very steep works - example:
+<pre>
+pow(0-x,2)
+</pre>
+The second number decides how pronounced the curving is.
+A larger number will make changes to higher x values even more important
+relative to the same change to lower x values.
+</p>
+
+
 <h3 id="dumping-rank-features-for-specific-documents">Dumping rank features for specific documents</h3>
 <p>
 For a training set containing judgements for certain documents,
@@ -150,51 +284,6 @@ such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</c
 
 
 
-<h2 id="feature-contribution-functions">Feature contribution functions</h2>
-<p>
-The ranking features in Vespa are linear.
-For example, the <code>earliness</code> feature is 0 if the match is at the very end of the field,
-1 if the match is at the very start of the field,
-and 0.5 if the match is exactly in the middle of the field.
-In many cases, we do not want the contribution of a feature to be linear with its "goodness".
-For example, we may want <code>earliness</code> to decay quickly in the beginning, as the match moves further out,
-but decay very slowly as it nears the end of the field,
-from the intuition that it matters a lot if the match is of the first word or the twentieth in the field,
-but it doesn't matter as much if the match is at the thousands or thousand-and-twentieths.
-</p><p>
-To achieve this, we need to pass the feature value through a function
-which turns the line into a curve matching our intent.
-This is easiest if you stick to normalized fields.
-Then we are looking for any function which begins and ends in the same point,
-f(0)=0 and f(1)=1, but which curves in between.
-To get the effect described above,
-we need a curve which starts almost flat and ends very steep.
-One example of a function like that is:
-<pre>
-pow(0-x,2)
-</pre>
-The second number decides how pronounced the curving is.
-A larger number will make changes to higher x values even more important
-relative to the same change to lower x values.
-</p>
-
-
-
-<h2 id="normalization">Normalization</h2>
-<p>
-The rank features provided includes both features normalized to the range 0-1,
-and un-normalized features like counts and positions.
-Whenever possible, prefer the normalized features.
-They capture the same information (and more),
-but are easier to use because they can be combined more easily with other features.
-In addition, try to write ranking expressions such that the combined rank score is also normalized,
-for example by taking averages not sums.
-The resulting normalized rank scores makes it possible to implement relevance based blending,
-search assistance triggering when there are no good hits, and so on.
-</p>
-
-
-
 <h2 id="if-function-and-string-equality-tests">The <code>if</code> function and string equality tests</h2>
 <p>
 <code>if</code> can be used for other purposes than encoding MLR trained decision trees.
@@ -218,33 +307,6 @@ if (fieldMatch(business).fieldCompleteness==1, 0.8+document.distance*0.2,
 This function puts all exact matches on business names first,
 sorted by geographical distance, followed by all shops sorted by title match,
 followed by everything else sorted by the overall match quality and popularity.
-</p>
-
-
-
-<h2 id="feature-configuration">Feature configuration</h2>
-<p>
-Some features, most notably the <a href="text-ranking.html">fieldMatch</a> features,
-contains configuration parameters which allows the feature calculation
-to be tweaked per field for performance or relevance.
-Feature configuration values are set by adding:
-<pre>
-rank-properties {
-    featureName.configurationProperty: "value"
-}
-</pre>
-to the rank profile. These values are set per field, so for example to
-set some values for the <code>title</code> field and some others for
-the <code>description</code> field, add:
-<pre>
-rank-properties {
-    fieldMatch(title).maxAlternativeSegmentations: 10
-    fieldmatch(title).maxOccurrences: 5
-    fieldMatch(description).maxOccurrences: 20
-}
-</pre>
-The full list of configuration features is found in the
-<a href="reference/rank-feature-configuration.html">rank feature configuration reference</a>.
 </p>
 
 
@@ -386,60 +448,6 @@ or as a result of changing user behavior.
 The relevance metrics are <code>relevance.at_1</code>,
 <code>relevance.at_3</code> and <code>relevance.at_10</code>.
 See <a href="reference/metrics.html">metrics</a> for more information.
-</p>
-
-
-
-<h2 id="two-phase-ranking">Two-phase ranking</h2>
-<p>
-Rank scores in general become more accurate by using complex expressions
-which use many features or large tensors.
-Even though Vespa is optimized for such calculations,
-complex expressions become expensive when calculated for each selected document.
-For this reason Vespa can be configured to run two ranking expressions -
-a smaller and less accurate one on all matches as they are found (first-phase ranking)
-and a more expensive and accurate one only on the best documents (second-phase ranking).
-This provides a better CPU budget distribution
-by dedicating more resources to the best candidates - see
-<a href="reference/search-api-reference.html#ranking.softtimeout">ranking.softtimeout</a>.
-</p><p>
-By default, second-phase ranking (if specified) is run on the 100 best hits per content node,
-after matching and before information is returned to the container.
-The number of hits to rerank can be configured in the ranking expression.
-</p><p>
-Rank expressions are configured in the <code>rank-profile</code> section of
-<a href="reference/search-definitions-reference.html#rank-profile">search definitions</a>. Example:
-<pre>
-search myapp {
-    &hellip;
-    rank-profile default inherits default {
-        first-phase {
-            expression: nativeRank + query(deservesFreshness) * freshness(timestamp)
-        }
-        second-phase {
-            expression {
-                xgboost("my_model.json")
-            }
-            rerank-count: 200
-        }
-    }
-}
-</pre>
-In this example, the first phase uses the <a href="reference/nativerank.html">nativeRank</a> feature
-as the ranking expression plus a freshness component.
-The contribution from the freshness feature is set in a query parameter.
-The second phase uses a trained <a href="xgboost.html">xgboost</a> model.
-</p><p>
-A good ranking expression will for most applications consume too much CPU
-to be runnable on the entire result set,
-so in most cases the desired rank function should be used as the second phase function.
-The task then becomes to find a first phase function,
-which correlates sufficiently well with the second phase function,
-to ensure that relevance is not hurt too much by not evaluating the second phase function on all the hits.
-In many cases, <code>nativeRank</code> will work well as the first phase function.
-The impact of using a cheaper function in the first phase can be assessed by deploying
-the second order function as the first order function in a test rank profile,
-and comparing the results to the production rank profile.
 </p>
 
 
