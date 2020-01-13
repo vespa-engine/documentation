@@ -62,92 +62,21 @@ Using attribute for a field means query matching works on memory structures only
 Note that a basic attribute is a linear array-like data structure -
 matching documents means scanning <em>all</em> attributes.
 Setting <a href="reference/search-definitions-reference.html#attribute">fast-search</a>
-generates an index structure for quicker lookup, using more memory.
-As a rule of thumb, set fast-search on attributes used in queries,
-with some <a href="performance/attribute-memory-usage.html#fast-search">caveats</a>.
+generates an b-tree index structure for quicker lookup, 
+using more memory. See <a href="performance/feature-tuning.html#when-to-use-fast-search">when to use fast-search</a>.
 </p>
-
 
 
 <h2 id="updates">Updates</h2>
 <p>
 A <a href="reference/document-json-format.html#update">partial update</a>
-can update memory structures for high throughput.
-The Vespa search core maintains separate data structures for the document active/inactive replicas.
-Make sure all attribute replicas are in memory by using
-<a href="reference/search-definitions-reference.html#attribute">fast-access</a>, trading off memory usage.
-Conversely, one can save memory by not setting fast-access, if the partial update rate is low
-and update latency is not important.
+can update memory structures with high throughput and low latency without having to read the original copy from the document store.
+The Vespa search core maintains separate data structures for the document <a href="proton.html#sub-databases">sub databases</a>
+, where only the ready sub database is in memory one should consider making also the not ready sub database attribute data in memory by 
+configuring the attribute 
+<a href="reference/search-definitions-reference.html#attribute">fast-access</a>. 
 </p>
 
-
-
-<h2 id="sizing">Sizing</h2>
-<p>
-Attributes are always stored in memory, except when
-<a href="streaming-search.html">streaming search</a> is enabled.
-In streaming search, attribute data is read into memory during query evaluation.
-Note that the <a href="#document-meta-store">document meta store</a>
-is always stored in memory, regardless of indexing mode
-</p><p>
-When <em>resizing</em> attributes, both current and new attribute will temporarily reside in memory.
-Hence, increasing an attribute means more than doubling the memory used -
-refer to the <a href="content/setup-proton-tuning.html#resizing">resizing reference</a>.
-</p><p>
-<a href="search-definitions.html#multivalue-fields">Multivalue</a> attributes use an adaptive approach in how data is stored in memory,
-and up to 2 billion documents per node is supported.
-</p><p>
-Read the <a href="performance/attribute-memory-usage.html">attribute sizing guide</a>.
-</p>
-
-
-
-<h2 id="document-meta-store">Document meta store</h2>
-<p>
-The document meta store is an in-memory data structure used for bookkeeping about every
-document stored on a node.
-</p><p>
-The document meta store is an implicit attribute, and is
-<a href="proton.html#lid-space-compaction">compacted</a> and
-<a href="proton.html#attribute-flush">flushed</a>.
-Memory usage for applications with small documents can be dominated by this attribute,
-particularly for <a href="reference/services-content.html#document">store-only and streaming search</a> applications.
-</p><p>
-The document meta store scales linearly with number of documents -
-using approximately 30 bytes per document on disk.
-Hence, to estimate disk usage, feed X% of corpus and extrapolate.
-<pre>
-$ du -sh $VESPA_HOME/var/db/vespa/search/cluster.mystream/n1/documents/doctype/0.ready/*
-  4.0K	attribute
-  <span style="background-color: yellow;">216M	documentmetastore</span>
-  4.0K	index
-  1.5G	summary
-</pre>
-The metric <em>content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes</em> for
-<em>"field": "[documentmetastore]"</em> is the size of the document meta store in memory - use the
-<a href="reference/metrics.html#process-metrics-api">metric API</a> to find the size - example:
-<pre>
-{
-  "name": "content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes",
-  "description": "The number of allocated bytes",
-  "values": {
-    "average": 4.69736008E8,
-    "count": 12,
-    "rate": 0.2,
-    "min": 469736008,
-    "max": 469736008,
-    <span style="background-color: yellow;">"last": 469736008</span>
-  },
-  "dimensions": {
-    "documenttype": "doctype",
-    <span style="background-color: yellow;">"field": "[documentmetastore]"</span>
-  }
-},
-</pre>
-In the above example, the node has 9M ready documents with 52 bytes in memory per document.
-</p><p>
-Note: the above is for the <em>ready</em> (i.e. indexed) documents -
-also check <em>removed</em> and <em>notready</em> metrics.
-For more information on what these different document categories mean for a search node, please
-see the <a href="proton.html#sub-databases">document sub database</a> documentation.
-</p>
+<h2 id="sizing">Sizing attribute memory</h2>
+<p>Attribute data can consume a lot of memory, especially when using <em>fast-access</em>, where <em>not ready</em> copies are brought into memory. 
+Please see <a href="performance/attribute-memory-usage.html">attribute memory usage sizing</a>.</p>

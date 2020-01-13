@@ -347,7 +347,7 @@ Configures a content node to the cluster. Attributes:
   <td>1</td>
   <td>
     Capacity of this node, relative to other nodes.
-    A node with capacity 2 will get double the data and requests of a node with capacity 1.
+    A node with capacity 2 will get double the data and feed requests of a node with capacity 1. This feature is expert mode only. Don't use if you don't know what you are doing.
   </td></tr>
 <tr id="node.baseport"><th>baseport</th>  <!-- ToDo: next 4 attributes are undocumented, still valid? -->
   <td>optional</td>
@@ -417,20 +417,9 @@ Consequently, take great care when modifying the set of nodes in a content clust
 Assigning a new distribution key to an existing node is undefined behavior;
 Best case, the existing data will be temporarily unavailable until the error has been corrected.
 Worst case, risk crashes or data loss.
-</p><p>
-Example with two groups, where each group has all copies of half of the data set:
-<pre>
-&lt;group name="top-group" distribution-key="0">
-  &lt;distribution partitions="*"/>
-  &lt;group name="bottom-1" distribution-key="0">
-    &lt;node distribution-key="0" hostalias="node1"/>
-  &lt;/group>
-  &lt;group name="bottom-2" distribution-key="1">
-    &lt;node distribution-key="1" hostalias="node2"/>
-  &lt;/group>
-&lt;/group>
-</pre>
-</p>
+</p><p>See <a href="../performance/sizing-search.html">Scaling Vespa Serving</a> for when to consider using 
+grouped distribution and <a href="../performance/sizing-examples.html">Examples</a> for example deployments using
+flat and grouped distribution.</p>
 
 
 
@@ -456,7 +445,7 @@ In higher level groups, <em>distribution</em> is mandatory. Attributes:
   </tbody>
 </table>
 The partition specification is used to evenly distribute content copies across groups.
-You must write one <code>*</code> per group separated by pipes (e.g. <code>*|*</code> for two groups).
+You must write one <code>*</code> per group separated by pipes (e.g. <code>*|*</code> for two groups). See <a href="../performance/sizing-examples.html">Sample deployment configurations</a>.
 </p>
 
 
@@ -573,7 +562,7 @@ Declares search configuration for this content cluster. Optional sub-elements ar
 <p>
 Contained in <a href="#search"><code>search</code></a>.
 Specifies the query timeout in seconds for queries against the search interface on the content nodes.
-The default is 5.0, the max is 600.0.
+The default is 0.5 (Equal to 500ms), the max is 600.0.
 For query timeout also see the request parameter <a href="search-api-reference.html#timeout">timeout</a>.
 </p><p>
 <strong>Note:</strong> You will not be able to override the configured value using the request parameter
@@ -585,14 +574,14 @@ For query timeout also see the request parameter <a href="search-api-reference.h
 <h2 id="visibility-delay">visibility-delay</h2>
 <p>Contained in:<a href="#search"><code>search</code></a>.
 Specifies the maximum amount of time (in seconds) that should pass from a write operation is
-performed, to the change is visible, in search results.
-The default value is 0 seconds.
-Configuring a larger value then 0 will add a results-oriented cache at the container level
-where time to live (ttl) is set to the same value as the visibility-delay.
+performed, to the change is visible, in search results. The default value is 0 seconds (No buffering) and max allowed value is 1 seconds.
+
+This setting impacts feed performance and 
+also controls the TTL caching for parent-child imported fields. 
 Note that by increasing this value you should also expect an increase in throughput during batch feeding.
 </p><p>
 When benchmarking batch feeding for a given test set, we got the following improvements
-in throughput when setting <code>visibility-delay</code> to 4.0 seconds:
+in throughput when setting <code>visibility-delay</code> to 1.0 seconds:
 +20% during initial feeding, +15% during re-feeding and +120% during removing of 1M documents.
 These improvements depend on how many index and attribute fields are in the search definition,
 the content of the documents and the <code>visibility-delay</code> itself.
@@ -609,8 +598,6 @@ Declares search coverage configuration for this content cluster. Optional sub-el
 <a href="#max-wait-after-coverage-factor"><code>max-wait-after-coverage-factor</code></a>.
 </p>
 
-
-
 <h2 id="minimum">minimum</h2>
 <p>
 Contained in <a href="#coverage"><code>coverage</code></a>.
@@ -618,10 +605,8 @@ Declares the minimum search coverage required before returning the results of a 
 This number is in the range <code>[0, 1]</code>, with 0 being no coverage and 1 being full coverage.
 </p><p>
 The default is 1; unless configured otherwise a query will not return
-until all search nodes have responded.
+until all search nodes have responded within the specified timeout. 
 </p>
-
-
 
 <h2 id="min-wait-after-coverage-factor">min-wait-after-coverage-factor</h2>
 <p>Contained in: <a href="#coverage"><code>coverage</code></a>.
@@ -632,8 +617,6 @@ multiplied with the time remaining at the time of reaching minimum coverage.
 The default is 0; unless configured otherwise a query will return as soon as the
 minimum coverage has been reached, and the remaining search nodes appear to be lagging.
 </p>
-
-
 
 <h2 id="max-wait-after-coverage-factor">max-wait-after-coverage-factor</h2>
 <p>Contained in:<a href="#coverage"><code>coverage</code></a>.
@@ -646,83 +629,15 @@ The default is 1; unless configured otherwise a query is allowed to wait its ful
 timeout for full coverage even after reaching the minimum.
 </p>
 
-
-
 <h2 id="dispatch">dispatch DEPRECATED</h2>
 <p>
 Since Vespa-7.109.10, this element as no effect -
 <a href="../vespa8-release-notes.html#vespa-dispatch-bin-process-is-removed">details</a>.
-</p><p>
-Contained in:<a href="#content"><code>content</code></a>, optional.
-Defines the multi-level structure of dispatchers (scatter-gather nodes) in this cluster.
-By adding this element we get a hierarchy of mid-level dispatchers, ordered in dispatch groups,
-with content/search nodes at the leaf level.
-This can be used in a system with a huge amount (hundreds) of content/search nodes
-where the fan-out from the top-level dispatchers causes the network to be a bottleneck.
-</p><p>
-Currently, this multi-level structure is only supported when using flat document distribution
-and only one level of mid-level dispatchers.
-Optional sub-elements are
-<a href="#dispatch-group"><code>group</code></a> and
-<a href="#num-dispatch-groups"><code>num-dispatch-groups</code></a>.
-</p><p>
-In the following example we create 2 mid-level dispatch groups, each containing 3 content/search
-nodes (referenced by the distribution key of the actual nodes).
-Each dispatch group also consists of 3 mid-level dispatchers that will be located on the content/search node hosts.
-The nodes of a dispatch group will typically be located on the same physical switch in a production setup.
-</p><p>
-In this setup the top-level dispatchers will see 2 mid-level dispatch groups,
-and each query is passed to 1 of the 3 dispatchers in each group.
-The mid-level dispatchers will pass the query to all its underlying content/search nodes:
-<pre>
-&lt;dispatch&gt;
-    &lt;group&gt;
-        &lt;node distribution-key='0'/&gt;
-        &lt;node distribution-key='1'/&gt;
-        &lt;node distribution-key='2'/&gt;
-    &lt;/group&gt;
-    &lt;group&gt;
-        &lt;node distribution-key='3'/&gt;
-        &lt;node distribution-key='4'/&gt;
-        &lt;node distribution-key='5'/&gt;
-    &lt;/group&gt;
-&lt;/dispatch&gt;
-</pre>
 </p>
-
-
 
 <h2 id="num-dispatch-groups">num-dispatch-groups (in dispatch) DEPRECATED</h2>
-<p>Contained in <a href="#dispatch"><code>dispatch</code></a>.
-Defines the number of dispatch groups to be used in the multi-level dispatch setup.
-This can be specified instead of explicit dispatch groups.
-In this case the content/search nodes of this cluster is automatically assigned to the specified number of dispatch groups
-(in the same order they are specified in this cluster).
-</p><p>
-NOTE: Should NOT be used for production.
-</p>
-
-
-
 <h2 id="dispatch-group">group (in dispatch) DEPRECATED</h2>
-<p>Contained in <a href="#dispatch"><code>dispatch</code></a>.
-Defines a mid-level dispatch group in a multi-level dispatch setup.
-Required sub-element is <a href="#dispatch-node"><code>node</code></a>.
-</p>
-
-
-
 <h2 id="dispatch-node">node (in dispatch) DEPRECATED</h2>
-<p>Contained in <a href="#dispatch-group"><code>group</code></a>, required.
-Defines a node in a mid-level dispatch group.
-This is a reference to the actual content/search node that should be part of this dispatch group.
-A mid-level dispatcher will also be located on the host of the content/search node. Attribute:
-<ul>
-  <li><strong>distribution-key (required)</strong>:
-    Reference to the distribution key of the actual content/search node
-  </li>
-</ul>
-</p>
 
 
 <h2 id="tuning">tuning</h2>
@@ -999,9 +914,10 @@ Tune the query-dispatch behavior - child elements:
         Declares the maximum number of hits to return from a single node.
         By default, a query returns the requested number of hits +
         offset from every search node up to the container,
-        which in turns orders them according to the query,
+        which in turns orders them globally according to the query,
         then discards all hits beyond the number requested.
-        In a system with a large fan-out, this can consume a lot of bandwidth.
+        In a system with a large fan-out, this can consume a lot of network bandwidth and the container nodes
+        are easily network saturated even if the query is performed in. See <a href="../performance/sizing-search.html">Vespa Search Sizing</a>.
         When there is sufficiently many search nodes,
         assuming an even distribution of the hits,
         it should suffice to only return some fraction of the request number of hits from each node.
@@ -1013,16 +929,18 @@ Tune the query-dispatch behavior - child elements:
       <td>round-robin / adaptive</td>
       <td>round-robin</td>
       <td>
-        Configure policy for choosing which <a href="../qps-scaling-using-groups.html">group</a>
-        shall receive the next request. However multi-phase
+        Configure policy for choosing which group 
+        shall receive the next query request.
+        However multi-phase
         requests that either requires or benefits from hitting the same group in all phases are always hashed.
+        Relevant only for <a href="../performance/sizing-search.html">grouped distribution</a>.
         <ul>
           <li>
             <strong>round-robin</strong>: round-robins between the groups,
             putting uniform load on the groups.
           </li><li>
             <strong>adaptive</strong>: measures latency, preferring lower latency groups,
-            useful for heterogeneous groups.
+            useful for heterogeneous groups and handles soft-failing/slow nodes in a group better than round-robin.
           </li>
         </ul>
     <tr id="min-group-coverage"><th>min-group-coverage</th>
@@ -1031,7 +949,7 @@ Tune the query-dispatch behavior - child elements:
       <td>100</td>
       <td>
         Coverage required in order to serve from a group - default full coverage.
-        Relevant only for <a href="../qps-scaling-using-groups.html">grouped distribution</a>.</td></tr>
+        Relevant only for <a href="../performance/sizing-search.html">grouped distribution</a>.</td></tr>
     <tr id="min-active-docs-coverage"><th style="white-space: nowrap">min-active-docs-coverage</th>
       <td>optional</td>
       <td></td>
@@ -1040,7 +958,7 @@ Tune the query-dispatch behavior - child elements:
         Percentage of active documents a group needs to have
         compared to average of other groups in order to be active for serving queries.
         Because of measurement timing differences, it is not advisable to tune this above 99 percent.
-        Relevant only for <a href="../qps-scaling-using-groups.html">grouped distribution</a>.</td></tr>
+        Relevant only for <a href="../performance/sizing-search.html">grouped distribution</a>.</td></tr>
   </tbody>
 </table>
 
