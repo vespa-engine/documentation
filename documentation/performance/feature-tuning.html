@@ -6,69 +6,82 @@ title: "Vespa Serving Tuning"
 This document describes tuning certain features of an application for high performance, 
 this document mainly focus on content cluster search features, 
 see <a href="container-tuning.html">Container tuning</a> for tuning of container clusters</a>.
-See <a href="sizing-search.html">search sizing guide</a> is about scaling an application deployment.
+The <a href="sizing-search.html">search sizing guide</a> is about scaling an application deployment.
 </p>
+
+
 
 <h2 id="attribute-vs-index">Attribute v.s index</h2>
 <p>
-The <a href="../attributes.html">attribute</a> documentation summaries when to use <a href="../reference/search-definitions-reference.html#attribute">attribute</a> 
+The <a href="../attributes.html">attribute</a> documentation summaries when to use
+<a href="../reference/search-definitions-reference.html#attribute">attribute</a>
 in the <a href="../reference/search-definitions-reference.html#indexing">indexing</a> statement.
-
 <pre>
 field timestamp type long {
     indexing: summary | attribute
-    rank: filter
+    rank:     filter
 }
 </pre>
+If both index and attribute is configured for string type fields,
+Vespa will do search and matching against the index with default match <samp>text</samp>.
+All numeric type fields and tensor fields are attribute (in-memory) fields in Vespa.
+</p>
 
-<p>If both index and attribute is configured for string type fields,
-Vespa will do search and matching against the index with default match <samp>text</samp>. All numeric type fields and tensor fields are attribute (in-memory)
-fields in Vespa.</p>
+
 
 <h2 id="when-to-use-fast-search">When to use fast-search for attribute fields</h2>
-<p> By default there Vespa does not build any posting list index structures over <em>attribute</em> fields, adding <em>fast-search</em> to the attribute 
-definition as show below will add an in-memory B-tree posting list structure which enables faster search for some cases (but not all, see next paragraph):</p>
-
+<p>
+By default there Vespa does not build any posting list index structures over <em>attribute</em> fields.
+Adding <em>fast-search</em> to the attribute definition as show below
+will add an in-memory B-tree posting list structure
+which enables faster search for some cases (but not all, see next paragraph):
 <pre>
 field timestamp type long {
-    indexing: summary | attribute
+    indexing:  summary | attribute
     attribute: fast-search
-    rank: filter
+    rank:      filter
 }
 </pre>
-<p>When Vespa executes a query with multiple query items it builds an query execution plan which it tries to optimize so that query tree items that 
-are restrictive meaning they match few documents are evaluated early so that the temporary result set becomes as low as possible. To do so the query execution 
-plan looks at hit count estimates for each part of the query tree using the index and b-tree dictionaries which track the number of documents a given term occurs in. However, for
-attribute fields without fast-search there is no hit count estimate so the estimate becomes equal to the total number of documents (matches all) and is thus moved
-to the end of the query evaluation. A query with only one query term searching a attribute field without <em>fast-search</em> would be a linear scan over all documents
-and thus very slow:
-
+When Vespa executes a query with multiple query items, it builds an query execution plan.
+It then optimizes so that query tree items that are restrictive (matching few documents) are evaluated early.
+This makes the temporary result set as small as possible.
+To do so, the query execution plan looks at hit count estimates for each part of the query tree
+using the index and b-tree dictionaries,
+tracking the number of documents a given term occurs in.
+However, for attribute fields without <a href="../reference/search-definitions-reference.html#attribute">fast-search</a>,
+there is no hit count estimate.
+The estimate hence equals the total number of documents (matches all)
+and is thus moved to the end of the query evaluation.
+</p><p>
+A query with only one query term, searching a attribute field without <em>fast-search</em>,
+will be a linear scan over all documents and thus slow:
 <pre>
 select * from sources * where range(timestamp, 0, 100);
 </pre>
-
-But if this query term is used in combination with a more restrictive query term (see section below) using <em>and</em> the query optimizer will notice that the second 
-query term has a low hit count estimate than
-the range over the timestamp and the query becomes super fast and scales with number of documents that matches the uuid field.
+But if this query term is <em>and</em>-ed with a more restrictive query term (see section below),
+the query optimizer will find that the second query term has a lower hit count estimate than the timestamp range
+and the query becomes fast and scales with number of documents that matches the uuid field.
 <pre>
 select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000";
 </pre>
-
-The general rules of thumb for when to use fast-search for an attribute field is: 
-
+The general rules of thumb for when to use fast-search for an attribute field is:
 <ul>
   <li>Use <em>fast-search</em> if the attribute field is searched without any other query terms</li>
   <li>Use <em>fast-search</em> if the attribute field could limit the total number of hits efficiently</li>
 </ul>
-<p>Changing fast-search aspect of the attribute is a live change which does not require any re-feeding so testing the performance with and without is low effort</p>
+Changing fast-search aspect of the attribute is a
+<a href="../reference/search-definitions-reference.html#modify-search-definitions">live change</a>
+which does not require any re-feeding, so testing the performance with and without is low effort.
+</p>
+
+
 
 <h2 id="indexing-strings">Indexing strings</h2>
 <p>
 When configuring <a href="../reference/search-definitions-reference.html#type:string">string</a>
 type fields with <samp>index</samp>,
 the default <a href="../reference/search-definitions-reference.html#match">match</a> mode is <samp>text</samp>.
-This means Vespa will <a href="../linguistics.html#tokenization">tokenize</a> the content and index the tokens.  
-
+This means Vespa will <a href="../linguistics.html#tokenization">tokenize</a> the content and index the tokens.
 Example document definition:
 <pre>
 search foo {
@@ -129,27 +142,34 @@ and <a href="../reference/services-content.html#visibility-delay">visibility-del
 </p>
 
 
-<h2 id="ranking">Ranking and ML Model inferences </h2>
-<p>
-<a href="sizing-search.html">Vespa scales</a> with the number of hits the query retrieves per node/search thread and which needs to be evaluated
-by the first-phase ranking function. 
-Read more on <a href="../phased-ranking.html">phased ranking</a>. Using phased ranking 
-enables spending more resources 
-during a second phase ranking step than in the first-phase. 
-The first-phase should be focused on getting decent recall (retrieve relevant documents in the top k), while second phase is
-used to tune precision at k, bringing the relevant documents to the top of the result set. 
 
-For text ranking applications one might consider using the <a href="../using-wand-with-vespa.html">WAND</a>
-query operator which can efficiently find the top k documents using a linear ranking function (inner dot product).
+<h2 id="ranking-and-ml-model-inferences">Ranking and ML Model inferences</h2>
+<p>
+Vespa <a href="sizing-search.html">scales</a> with the number of hits the query retrieves per node/search thread,
+and which needs to be evaluated by the first-phase ranking function.
+Read more on <a href="../phased-ranking.html">phased ranking</a>.
+Using phased ranking enables spending more resources during a second phase ranking step than in the first-phase.
+The first-phase should be focused on getting decent recall (retrieve relevant documents in the top k),
+while second phase is used to tune precision at k,
+bringing the relevant documents to the top of the result set.
+</p><p>
+For <a href="../text-ranking.html">text ranking</a> applications,
+consider using the <a href="../using-wand-with-vespa.html">WAND</a> query operator -
+WAND can efficiently find the top k documents using a linear ranking function (inner dot product).
 </p>
+
+
 
 <h2 id="document-summaries-hits">Document summaries - hits</h2>
 <p>
 If queries request many hits from a few content nodes,
 a <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
 </p><p>
-Using <a href="../document-summaries.html">Document summaries</a>,  Vespa can support memory-only operations if fields in the summary are defined with the <emp>attribute</em>.
+Using <a href="../document-summaries.html">Document summaries</a>,
+Vespa can support memory-only operations if fields in the summary are defined as <em>attribute</em>.
 </p>
+
+
 
 <h2 id="boolean-numeric-text-attribute">Boolean, numeric, text attribute</h2>
 <p>
