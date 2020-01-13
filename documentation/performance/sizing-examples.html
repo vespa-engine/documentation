@@ -1,26 +1,32 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright 2020 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Vespa Scaling Configuration Examples"
 ---
-<p>This document contains a set of example configurations for content clusters using flat or grouped 
-data distribution. Data is distributed over nodes and groups
+
+<p>
+This document has a set of example configurations
+for content clusters using flat or grouped data distribution.
+Data is distributed over nodes and groups
 using a Vespa's <a href="../reference/services-content.html#distribution">distribution algorithm</a>.
-Please see <a href="sizing-search.html">Scaling Vespa</a> for when to use grouped or flat data distribution. 
-These examples illustrates common deployment patterns. In all examples we keep the number 
-of stateless <a href="../jdisc/">container</a> nodes fixed. The examples 
-are <em>services.xml</em> deployed via 
-Vespa <a href="../cloudconfig/application-packages.html">Application Packages</a>. See 
-<a href="../reference/services-content.html">services.xml - 'content' element</a> reference documentation</p>
+See <a href="sizing-search.html">Scaling Vespa</a> for when to use grouped or flat data distribution.
+These examples illustrates common deployment patterns.
+In all examples, the number of stateless <a href="../jdisc/">container</a> nodes is fixed.
+The examples are <em>services.xml</em> deployed using
+<a href="../cloudconfig/application-packages.html">Application Packages</a>.
+See <a href="../reference/services-content.html">services.xml - 'content' element</a> reference documentation.
+</p>
+
+
 
 <h2 id="flat-distribution">Flat Distribution</h2>
-<p>Flat (single group) distribution with <em>redundancy</em> 3 and <em>searchable-copies</em> 1. 
+<p>
+Flat (single group) distribution with <em>redundancy</em> 3 and <em>searchable-copies</em> 1.
 Data is distributed and partitioned over 9 nodes and there are 3 copies of each document stored on 3 different nodes. 
-Queries are dispatched in parallel to all nodes 
-and with <em>searchable-copies</em> 1 only one of the 3 copies of a document is indexed and active 
-which means less resource usage (memory, disk, and cpu). 
-In case of a node failure, the remaining nodes will index (make ready) and activate the <em>not ready</em> (stored) 
-copies to restore full search coverage.</p>
-
+Queries are dispatched in parallel to all nodes, and with <em>searchable-copies</em> 1,
+only one of the 3 copies of a document is indexed and active.
+This means less resource usage (memory, disk, and cpu).
+In case of a node failure, the remaining nodes will index (make ready)
+and activate the <em>not ready</em> (stored) copies to restore full search coverage.
 <pre>
 &lt;services version="1.0"&gt;
   &lt;container id="stateless-container-cluster" version="1.0"&gt;  
@@ -57,39 +63,44 @@ copies to restore full search coverage.</p>
   &lt;/content&gt;
 &lt;/services&gt;
 </pre>
+</p>
+
+
 
 <h2 id="grouped-distribution">Grouped Distribution</h2>
-When using hierarchical distribution in an indexed content cluster, the following restrictions apply:
+<p>
+When using grouped distribution in an indexed content cluster, the following restrictions apply:
 <ul>
-<li>There can only be a single level of leaf groups under the top group</li>
-<li>Each leaf group must have the same number of nodes </li>
-<li>The number of leaf groups must be a factor of the redundancy</li>
-<li>The <a href="../reference/services-content.html#distribution">distribution partitions</a> 
-must be specified such that the redundancy per group is equal</li> 
-<li>The number of <em>searchable-copies</em> must be less than or equal to <em>redundancy</em>
-<li>The number of leaf groups must be a factor of <em>searchable-copies</em></li>
+  <li>There can only be a single level of leaf groups under the top group</li>
+  <li>Each leaf group must have the same number of nodes </li>
+  <li>The number of leaf groups must be a factor of the redundancy</li>
+  <li>The <a href="../reference/services-content.html#distribution">distribution partitions</a>
+    must be specified such that the redundancy per group is equal</li>
+  <li>The number of <em>searchable-copies</em> must be less than, or equal to, <em>redundancy</em>
+  <li>The number of leaf groups must be a factor of <em>searchable-copies</em></li>
 </ul>
-<p>When using groups, with a low number of nodes per group it's important to remember that a node failure 
-will cause the data to be re-distributed to the remaining nodes
-and their memory footprint and disk usage will grow when those nodes starts activating the 
-documents originally activated on the failed node. 
-With e.g. 2 nodes per group, the remaining healthy node will start activating all the 
-content which will cause a 2x memory and disk fooprint compared with the ideal state. 
-The
-<a href="../reference/services-content.html#min-node-ratio-per-group">min-node-ratio-per-group</a> 
-controls the data distribution behavior inside a group in cases of 
-node failures. The setting states a lower bound requirement on the ratio of nodes 
-within individual groups 
+<p>
+When using groups, with a low number of nodes per group,
+it's important to remember that a node failure will cause the data to be re-distributed to the remaining nodes.
+Hence memory footprint and disk usage will grow
+when those nodes starts activating the documents originally activated on the failed node.
+E.g. with 2 nodes per group, the remaining healthy node will start activating all the content,
+which will cause a 2x memory and disk fooprint compared to the ideal state.
+The <a href="../reference/services-content.html#min-node-ratio-per-group">min-node-ratio-per-group</a>
+controls the data distribution behavior inside a group in cases of node failures.
+The setting states a lower bound requirement on the ratio of nodes within individual groups
 that must be online and able to accept feed and query traffic before the entire group is 
 automatically taken out of service from both feed and search/serving. 
-Once number of nodes in the group have been restored and ideal state has been achieved
+Once number of nodes in the group have been restored and ideal state has been achieved,
 the group will be automatically set in service.  
-</p> 
+</p>
 
-<p><b>9 nodes, 3 groups with 3 nodes per group</b></p>
-<p>In this example we have 3 groups and each group index all of the documents over the 3 nodes in the group. 
-With 3 groups we have 3 replicas in total of each document and each replica is indexed and active. 
-Losing a node does not reduce search coverage.</p>
+
+<h3>9 nodes, 3 groups with 3 nodes per group</h3>
+<p>
+This example has 3 groups and each group index all of the documents over the 3 nodes in the group.
+With 3 groups there are 3 replicas in total of each document, and each replica is indexed and active.
+Losing a node does not reduce search coverage.
 <pre>
 &lt;services version="1.0"&gt;
   &lt;container id="stateless-container-cluster" version="1.0"&gt;  
@@ -131,14 +142,16 @@ Losing a node does not reduce search coverage.</p>
   &lt;/content&gt;
 &lt;/services&gt;
 </pre>
-
-<p><b>9 nodes, 9 groups with 1 node per group</b></p>
-<p>
-<p>In this example we have 9 groups and each group index all of the documents on a single node. 
-With 9 groups we have 9 replicas in total of each document and each replica is indexed and active. 
-Losing a node does not reduce search coverage. With a single node
-indexing throughput is limited by the single node performance as all data needs to go all nodes. 
 </p>
+
+
+<h3>9 nodes, 9 groups with 1 node per group</h3>
+<p>
+This example has 9 groups and each group index all of the documents on a single node.
+With 9 groups there are 9 replicas in total of each document, and each replica is indexed and active.
+Losing a node does not reduce search coverage.
+With a single node, indexing throughput is limited by the single node performance,
+as all data needs to go all nodes.
 <pre>
 &lt;services version="1.0"&gt;
 &lt;services version="1.0"&gt;
@@ -193,25 +206,32 @@ indexing throughput is limited by the single node performance as all data needs 
   &lt;/content&gt;
 &lt;/services&gt;
 </pre>
+</p>
+
+
 
 <h2 id="serving-availability-tuning">Serving Availability Tuning</h2>
-<p>When using flat distribution, soft failing nodes might be a challenge for serving with high availability and low latency. 
+<p>
+When using flat distribution,
+<em>soft failing nodes</em> is a challenge for serving with high availability and low latency.
 Soft failing nodes are nodes which answers health checks from 
-<a href="../content/content-nodes.html">cluster controllers</a> and 
-search container dispatch health checks, but which still experiences issues which impacts 
-serving latency (For example cpu frequency throttling due to thermal heating, memory corruptions and so forth). 
-In a cluster with a flat distribution
-the slowest node will determine the overall latency since the query request is dispatched 
-to all content nodes in parallel and the probability 
-of a soft failing node simply increases with the number of nodes used 
-to distribute the data over. 
-To prevent slow soft failing nodes to impact availability
-it's possible to configure <a href="../reference/services-content.html#coverage">adaptive coverage timeout</a> which 
-allows the dispatcher to stop waiting for the slowest node(s). See also 
-<a href="../graceful-degradation.html">graceful search degradation</a>.
-</p>
-<p>Groped distributions are less impacted by soft failing nodes in general as queries are dispatched to 
-one group at a time using a 
+<a href="../content/content-nodes.html">cluster controllers</a>
+and search container dispatch health checks,
+but still experiences issues which impacts serving latency
+(e.g. cpu frequency throttling due to thermal heating, memory corruptions and so forth).
+In a cluster with a flat distribution,
+the slowest node determines the latency,
+as the query request is dispatched to all content nodes in parallel.
+The probability of a soft failing node increases with the number of nodes used to distribute the data over.
+</p><p>
+Use <a href="../reference/services-content.html#coverage">adaptive coverage timeout</a>
+to prevent slow soft failing nodes to impact availability.
+This allows the dispatcher to stop waiting for the slowest node(s).
+See also <a href="../graceful-degradation.html">graceful search degradation</a>.
+</p><p>
+Grouped distributions are less impacted by soft failing nodes in general,
+as queries are dispatched to one group at a time using a
 <a href="../reference/services-content.html#dispatch-policy">dispatch policy</a>.
-The <em>adaptive</em> policy takes group latency into account when determine which group 
-the next query request should be routed to. </p>
+The <em>adaptive</em> policy takes group latency into account
+when deciding which group the query request should be routed to.
+</p>
