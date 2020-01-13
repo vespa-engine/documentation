@@ -109,7 +109,7 @@ Vespa allows configuring the availability versus cost using the
         <p>
         <a href="../reference/services-content.html#redundancy">Redundancy</a>
         Defines the total number of copies of each piece of data the cluster will store and maintain to avoid data loss. 
-        Example: with a redundancy of 2, the system tolerates 1 node failure before data becomes unavailable. 
+        Example: with a redundancy of 2, the system tolerates 1 node failure before any further node failures may cause data to become unavailable.
         </p>
       </td>
     </tr><tr id="searchable-copies">
@@ -165,7 +165,7 @@ for concrete examples using grouped and flat data distribution.</p>
 
 <h2 id="life-of-a-query-in-vespa">Life of a query in Vespa</h2>
 <p>
-Vespa executes a query in two protocol phases (or more if when using <a href="../grouping.html">result grouping features</a>) 
+Vespa executes a query in two protocol phases (or more if using <a href="../grouping.html">result grouping features</a>) 
 to optimize the network footprint of the parallel query execution. The first protocol phase executes the query in parallel over
 content nodes in a group and finds the global top hits, the second protocol phase fetches the data of the global top hits. 
 
@@ -228,8 +228,8 @@ the query is dispatched to all content nodes within a group and the queries are 
    Each thread will do its own thread local setup</li>
   <li>Each search thread will evaluate the query over its document space</li>
   <li>The search threads complete first phase and agree which hits will 
-  continue to second phase ranking (if enabled per the used rank-profile), 
-  the threads operate over a shared heap with the global top ranking hits</li>
+  continue to second phase ranking (if enabled per the used rank-profile). 
+  The threads operate over a shared heap with the global top ranking hits</li>
   <li>Each thread will the complete second phase and grouping/aggregation/sorting</li>
   <li>Merge all threads results and return back up to the container</li>
 </ol>
@@ -245,8 +245,8 @@ content cluster does not require re-feeding of the corpus so it's easy to start 
 sample prototype and scale it to production scale work loads.</p>
 
 <h2 id="content-cluster-scalability-model">Content cluster scalability model</h2>
-Vespa is as described in the previous section a parallel computing platform
-where the work of matching and ranking is parallelized across a set of nodes and processors and the speedup we can get by altering 
+Vespa is a parallel computing platform
+where the work of matching and ranking is parallelized across a set of nodes and processors. The speedup we can get by altering 
 the number of nodes in a Vespa content group follows 
 <a href="https://en.wikipedia.org/wiki/Amdahl%27s_law">Amdahl's law</a> which is a formula used to find the 
 maximum improvement possible by improving a particular part of a system. 
@@ -293,7 +293,7 @@ Adding content nodes to content cluster (keeping the total document volume fixed
 reduces the dynamic query work per node (<em>DQW</em>) but does not
 reduce the static query work (<em>SQW</em>). 
 The overall system cost also increases as you need to rent another node.</p>
-Since <em>DQQ</em> depends and scales almost linearly with the number of documents 
+Since <em>DQW</em> depends and scales almost linearly with the number of documents 
 on the content nodes we can try to distribute the work over more nodes,
 <em>Amdahl's law</em> specifies that the maximum speedup we achieve by parallelizing the 
 dynamic work (<em>DQW</em>) is given by the formula: 
@@ -317,12 +317,12 @@ any serving performance gain except increasing overall
 supported feed throughput which will increase almost linearly with number of nodes. 
 
 Two different <em>DQW/(DQW+SQW)</em> factors are  
-are illustrated in the figures below. The overall query work (TQW) is the same for both cases (10 ms) 
+are illustrated in the figures below. The overall query work <em>TQW</em> is the same for both cases (10 ms) 
 but the <em>DQW</em> portion of the <em>TQW</em> is different. 
 The throughput (QPS) is 
 a function of the latency (<a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's Law</a>) 
 and the number of cpu cores * nodes. 
-Using 1 node with 24 v-cpu cores and 10 ms service time (<em>TQW</em> we expect to reach close to 
+Using 1 node with 24 v-cpu cores and 10 ms service time (<em>TQW</em>) we expect to reach close to 
 2400 QPS at 100% utilization (Unless there are other bottlenecks like network or stateless container processing). 
 </p>
 
@@ -331,13 +331,13 @@ Using 1 node with 24 v-cpu cores and 10 ms service time (<em>TQW</em> we expect 
   <img src="../img/ScalingLatencyFactor0.005.svg" />
 </figure>
 <p>
-In the left figure the overall latency is 10 ms but the dynamic query work (latency) is only 50% and given <em>Amdahl's law</em> 
-it follows that the maximum speedup we can get is 2 regardless how many
+In the first figure the overall latency is 10 ms but the dynamic query work (latency) is only 50% and given <em>Amdahl's law</em> 
+it follows that the maximum speedup we can get is 2. This is true regardless of how many
 processors or nodes we distribute the dynamic query work over. 
-No matter how many nodes we add we don't get above 4800 queries/s.  The only thing we achieve by adding more nodes 
-is higher cost.</p>
+No matter how many nodes we add we don't get above 4800 queries/s.  
+The only thing we achieve by adding more nodes is increasing the cost without any performance benefits.</p>
 <p>
-In the figure to the right we illustrate a system where the dynamic work portion is much higher (0.9)
+In the figure to the second figure we illustrate a system where the dynamic work portion is much higher (0.9)
  and the theoretical maximum 
 speedup becomes bound by 10x as given by <em>Amdahl's law</em>. 
 Note that both figures are with a single flat distributed content cluster with a fixed document volume.</p>
@@ -449,12 +449,14 @@ constrains (e.g available cpu, memory, disk) while maintaining
   <li>The targeted feed and update rate, and feed latency</li>
 </ul> 
 With the latency SLA in mind we should benchmark with increasing number of 
-documents per node and watch system level metrics and Vespa metrics. If latency is within SLA and sustained feed rate 
-we reduce the overall cost by fitting more documents in a given node 
+documents per node and watch system level metrics and Vespa metrics. 
+If latency is within the stated latency SLA and 
+the system meets the targeted sustained feed rate,  
+we reduce the overall cost by fitting more documents into each node 
 (e.g. by increasing memory, cpu and disk constraints set by the node flavor). 
 
 Vespa will block feed operations
-if <a href="../reference/services-content.html#resource-limits">resource limits</a> has been reached.</p> 
+if <a href="../reference/services-content.html#resource-limits">resource limits</a> have been reached.</p> 
 
 <h3 id="disk-usage-sizing">Disk usage sizing</h3>
 <p>
@@ -464,7 +466,7 @@ the number of indexed fields and their settings,
 and most important the size of the fields that are indexed and stored.
 The simplest way to determine the disk usage is to simply index
 documents and watch the disk usage along with the relevant metrics. 
-The <em>redundancy</em> (number of copies) of a document which is stored, as specified by <em>redundancy</em>
+The <em>redundancy</em> (number of copies) of a document which are stored, as specified by <em>redundancy</em> and
 will obviously impact the disk usage footprint.</p>
 
 <p>
@@ -490,12 +492,12 @@ The memory usage per document depends on the number of fields,
 the raw size of the documents and how many of the fields are defined as 
 <a href="https://docs.vespa.ai/documentation/attributes.html">attributes</a>.
 See <a href="attribute-memory-usage.html">attribute memory usage sizing</a>
-and See <a href="#metrics-for-capacity-plan">metrics for capacity planning</a>.
+and see <a href="#metrics-for-capacity-plan">metrics for capacity planning</a>.
 
 
 <h2 id="scaling-throughput">Scaling Throughput</h2>
 <p>
-As seen in the previous sections When the static query work (<em>SQW</em>) becomes large we 
+As seen in the previous sections when the static query work (<em>SQW</em>) becomes large we 
 should scale throughput by using grouped distribution. 
 Regardless if we have scaled throughput by grouped distribution for use cases 
 with high static query work portion or 
@@ -514,7 +516,7 @@ At some throughput level, some resource(s) in the system will be
 fully saturated and requests will be queued up causing latency to spike up
 exponentially since requests are spending more time in the queue.  
 The more queries/s we try to push by increasing the load 
-, the longer request needs to be in the queue waiting to be served. 
+, the longer a request needs to be in the queue waiting to be served. 
 This behaviour is illustrated in the figure below. 
 <figure>
   <img src="../img/QPS-scaling.svg" />
