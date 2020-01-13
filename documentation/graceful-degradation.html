@@ -2,47 +2,63 @@
 #Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Search Coverage Degradation - Graceful degradation in Vespa"
 ---
-<p>Ideally one want to search all data indexed in a Vespa cluster within the specified timeout but that might not be possible due to several different reasons:
-
-<ul>
-	<li>The system might be overloaded due to capacity constraints and queries does does not complete within the timeout as they are sitting in the queue (Little's Law)</li>
-	<li>A complex query might take longer time to execute than the specified timeout or the timeout is too low given the complexity of the query and available capacity</li>
-</ul>
-This document describes how Vespa could gracefully degrade the result set if the query cannot be completed within the timeout specified.</p>
-
-<p><b>Definitions:</b>
-<ul>
-	<li> <b>Coverage</b> The percentage of documents indexed which were searched by the query. Ideally we want coverage to be 100%</li>
-	<li> <b>Timeout</b> The total time a query is allowed to run for. Vespa is a distributed system where multiple components are involved in the query execution</li>
-	<li> <b>Soft Timeout</b> Soft timeout is a Vespa configuration switch which allows coverage to be less than 100% but bigger than 0% if the query is going to time out. E.g return what you got when time budget is used</li>
-
-</ul>
-
-<h2 id="timeouts">Query timeout and soft timeout</h2>
-<p>Vespa's default query timeout is 500 ms in Vespa 7 and 5000 ms in Vespa 6 and soft timeout is enabled per default in Vespa 7. </p>
-
-<b>Reference documentation:</b>
-<ul>
-<li><a href="reference/search-api-reference.html#timeout">Search api reference timeout</a></li>
-<li><a href="reference/search-api-reference.html#ranking.softtimeout">Search api reference ranking.softtimeout</a></li>
-</ul>
-
-<p>The timeout specifies the overall timeout of the query execution and can be configured and also overridden by the timeout run time request parameter or defined in a query profile so that 
-different classes of queries can have a different latency budget/timeout.</p>
 <p>
-The softtimeout setting controls what the content nodes should do in the case where the latency budget has almost been used (timeout times a factor). 
-Return the documents recalled and ranked with the first phase function within the time used or simply don't produce a result. Without softtimeout enabled the 
-Vespa container will return a 504 timeout without any results while with enabled it will return the documents matched and ranked up until the timeout was reached with a 
-200 OK response along with the reason the result set was degraded. The container might respond with a timeout error with http response code 504 even with softtimeout enabled if the timeout is set so low that that the query does not make it to
-the content nodes or the container does not have any time left after input and query processing to dispatch the query to the content clusters.</p>
+Ideally one want to search all data indexed in a Vespa cluster within the specified timeout,
+but that might not be possible due to several different reasons:
+<ul>
+	<li>The system might be overloaded due to capacity constraints,
+        and queries does does not complete within the timeout,
+        as they are sitting in the queue (Little's Law)</li>
+	<li>A complex query might take longer time to execute than the specified timeout,
+        or the timeout is too low given the complexity of the query and available capacity</li>
+</ul>
+This document describes how Vespa could gracefully degrade the result set
+if the query cannot be completed within the timeout specified. Definitions:
+<ul>
+    <li> <strong>Coverage</strong>: The percentage of documents indexed which were searched by the query.
+        Ideally coverage is 100%</li>
+    <li> <strong>Timeout</strong>: The total time a query is allowed to run for.
+        Vespa is a distributed system where multiple components are involved in the query execution</li>
+    <li> <strong>Soft Timeout</strong>: Soft timeout is a Vespa configuration switch which allows coverage to be less than 100%,
+        but bigger than 0% if the query is going to time out. E.g return current hit set when time budget is used</li>
+</ul>
 
-<br/>
 
-<h2 id="coverage">How to tell if the query was degraded and coverage was reduced?</h2>
-<p>The default JSON renderer template will always render a <em>coverage</em> element below the root element which will 
-contain a <em>degraded</em> element if the query execution was degraded in some way and the <em>coverage</em> field will be less than 100. 
-An example is given below for a request with a query timeout of 200 ms and ranking.softtimeout.enable=true:
+<h2 id="timeouts">Timeouts</h2>
+<p>
+Vespa's default query timeout is 500ms in Vespa 7 (5000ms in Vespa 6),
+and soft timeout is enabled per default in Vespa 7.
+</p><p>
+Search API reference documentation:
+<ul>
+<li><a href="reference/search-api-reference.html#timeout">timeout</a></li>
+<li><a href="reference/search-api-reference.html#ranking.softtimeout">ranking.softtimeout</a></li>
+</ul>
+<p>
+The timeout specifies the overall timeout of the query execution
+and can be configured and also overridden by the timeout run time request parameter,
+or defined in a query profile so that different classes of queries can have a different latency budget/timeout.
+</p><p>
+The softtimeout setting controls what the content nodes should do
+in the case where the latency budget has almost been used (timeout times a factor).
+Return the documents recalled and ranked with the first phase function within the time used,
+or simply don't produce a result.
+Without softtimeout enabled the Vespa container will return a 504 timeout without any results,
+while with enabled it will return the documents matched and ranked up until the timeout was reached
+with a 200 OK response along with the reason the result set was degraded.
+The container might respond with a timeout error with http response code 504,
+even with softtimeout enabled if the timeout is set so low that that the query does not make it to the content nodes,
+or the container does not have any time left after input and query processing to dispatch the query to the content clusters.
+</p>
 
+
+
+<h2 id="detection">Detection</h2>
+<p>
+The default JSON renderer template will always render a <em>coverage</em> element below the root element,
+which has a <em>degraded</em> element if the query execution was degraded in some way
+and the <em>coverage</em> field will be less than 100.
+Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enable=true</em>:
 <pre>
 /search/?searchChain=vespa&yql=select * from sources * where foo contains bar;&presentation.format=json&timeout=200ms&ranking.softtimeout.enable=true
 
@@ -68,23 +84,32 @@ An example is given below for a request with a query timeout of 200 ms and ranki
     }
 }
 </pre>
-<p> In this example the result was delivered in 200 ms but the query was degraded as coverage is less than 100 (not all available documents searched and ranked within the specified timeout of 200ms). 
-In this case 167006201 out of x documents where searched and 16469732 documents where matched and ranked using the first-phase ranking expression in the default ranking profile. 
-
+The result was delivered in 200 ms but the query was degraded as coverage is less than 100
+(not all available documents searched and ranked within the specified timeout of 200ms).
+In this case 167006201 out of x documents where searched, and 16469732 documents where matched and ranked,
+using the first-phase ranking expression in the default ranking profile.
+</p><p>
 The <em>degraded</em> field contains the following fields which explains why the result had coverage less than 100:
 <ul>
-<li><em>adaptive-timeout</em> is true if <a href="reference/services-content.html#coverage">Adaptive coverage</a> has been enabled and one or more nodes fail to produce a result at all within the timeout.
-This could be caused by nodes with degraded hardware making them slower than others in the cluster </li>
-<li><em>match-phase</em> is true if the ranking profile in use has defined <a href="reference/search-definitions-reference.html#match-phase">match phase ranking degradation</a> 
-match-phase can be used to control which documents gets ranked within the timeout</li>
-<li><em>non-ideal-state</em> is true in cases where  the system is not in <a href="content/idealstate.html">ideal state</a> </li>
-<li><em>timeout</em> is true if softtimeout was enabled and not all documents could be matched & ranked with the first phase ranking function withing the timeout</li>
+  <li><em>adaptive-timeout</em> is true if <a href="reference/services-content.html#coverage">Adaptive coverage</a>
+      has been enabled and one or more nodes fail to produce a result at all within the timeout.
+      This could be caused by nodes with degraded hardware making them slower than others in the cluster</li>
+  <li><em>match-phase</em> is true if the ranking profile has defined
+      <a href="reference/search-definitions-reference.html#match-phase">match phase ranking degradation</a>.
+      Match-phase can be used to control which documents gets ranked within the timeout</li>
+  <li><em>non-ideal-state</em> is true in cases where the system is not in <a href="content/idealstate.html">ideal state</a></li>
+  <li><em>timeout</em> is true if softtimeout was enabled and not all documents could be matched and& ranked
+      with the first phase ranking function within the timeout</li>
 </ul> 
-<p>Note that the degraded reasons are not mutually exclusive. In our example the softtimeout was triggered and only 99% of of the documents where searched before the time budget was used. One
-could imagine scenarios where 10 out of 11 nodes involved in the query execution were healthy and triggered soft timeout and delivered a result while the last node was in a bad state (e.g hw issues) and could not produce
-a result at all and that would cause both <em>timeout</em> and <em>adaptive-timeout</em> to be true.</p>
-
-<p>If you are working on Results in a custom <a href="searcher-development.html">custom searcher</a> you can get the coverage information programmatically:</p>
+Note that the degraded reasons are not mutually exclusive.
+In the example, the softtimeout was triggered and only 99% of of the documents where searched before the time budget was used.
+One could imagine scenarios where 10 out of 11 nodes involved in the query execution were healthy
+and triggered soft timeout and delivered a result,
+while the last node was in a bad state (e.g. hw issues) and could not produce a result at all,
+and that would cause both <em>timeout</em> and <em>adaptive-timeout</em> to be true.
+</p><p>
+When working on Results in a <a href="searcher-development.html">Searcher</a>,
+get the coverage information programmatically:
 <pre>
     @Override
     public Result search(Query query, Execution execution) {
@@ -96,10 +121,13 @@ a result at all and that would cause both <em>timeout</em> and <em>adaptive-time
         return result;
     }
 </pre>
+</p>
+
+
 
 <h2 id="match-phase-degradation">Match phase degradation</h2>
 <p>
-Refer to the <a href="../reference/search-definitions-reference.html#match-phase">match-phase reference</a>.
+Refer to the <a href="reference/search-definitions-reference.html#match-phase">match-phase reference</a>.
 Match-phase works by specifying an <code>attribute</code> that measures document
 quality in some way (popularity, click-through rate, pagerank, bid value, price, text quality).
 In addition a <code>max-hits</code> value is specified
@@ -129,16 +157,17 @@ where <code>max-hits</code> is configured to 10 000.
 The corpus is a synthetic (slightly randomized) data set,
 in practice the graph will be less smooth:
 </p>
-<img src="match-phase-max-hits.png">
+<img src="performance/match-phase-max-hits.png">
 <p>
 There is a searchnode metric per rank-profile named <em>limitedqueries</em>
 to see how many of your queries are actually affected by these settings;
 compare with the corresponding <em>queries</em> metric to measure the percentage.
 <p>
 
-<h4>Tradeoffs</h4>
+
+<h3>Tradeoffs</h3>
 <p>
-There are some very important things to consider before using match-phase.
+There are some important things to consider before using match-phase.
 In a normal search scenario latency is directly proportional to the number of hits the query matches:
 a query that matches few documents will have low latency
 and a query that matches many documents will have high latency.
@@ -174,6 +203,3 @@ it is not a straight forward fix-it-all silver bullet.
 Please test and measure your use of match-phase,
 and contact the Vespa team if your results are not what you expect.
 </p>
-
-
-
