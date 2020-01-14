@@ -10,97 +10,97 @@ title: "Vespa Serving Scaling Guide"
   <li>Scale query throughput</li>
   <li>Scale serving latency to meet service level agreement (SLA)</li>
 </ul>
-
-The question you try to answer during a sizing exercise is what the total cost would be to serve a use case using Vespa.  
-This document will help you size your application correctly with as low cost as possible. Vespa could be used to implement many use cases 
-and this document is relevant for  all of them.
-
+The question you try to answer during a sizing exercise is
+"what the total cost would be to serve a use case using Vespa".
+This document helps sizing an application correctly with as low cost as possible.
+Vespa is used to implement many use cases, and this document is relevant for all of them:
 <ul>
   <li>Serving a <a href="../text-ranking.html">text ranking</a> use case 
     or a <a href="..//tutorials/blog-recommendation.html">recommendation</a> use case</li>
   <li>Serving a Machine Learned Model, e.g a <a href="../tensorflow.html">Tensorflow</a>,
-  <a href="../onnx.html">ONNX</a> or <a href="../xgboost.html">XGBoost</a> model.</li>
+    <a href="../onnx.html">ONNX</a> or <a href="../xgboost.html">XGBoost</a> model</li>
 </ul>
-</p>
-
-<p>
 With Vespa it is possible to do benchmarking on a few nodes
-to infer the overall performance and cost of the chosen deployment architecture and as 
-Vespa supports <a href="..//elastic-vespa.html#resizing">live resizing</a> it's easy to 
-scale from a prototype to a full production size deployment. </p>
-
-<p>This document covers sizing and capacity planning for serving,
- see <a href="sizing-feeding.html">feed performance sizing</a> for feed 
-performance sizing and <a href="feature-tuning.html">Vespa serving feature tuning</a>.
-</p>
-<p>
-This document covers the following topics:
+to infer the overall performance and cost of the chosen deployment architecture,
+and as Vespa supports <a href="../elastic-vespa.html#resizing">live resizing</a>,
+it is easy to scale from a prototype to a full production size deployment.
+</p><p>
+This document covers sizing and capacity planning for serving,
+see <a href="sizing-feeding.html">feed performance sizing</a> for feed performance sizing
+and <a href="feature-tuning.html">Vespa serving feature tuning</a>.
+It also covers the following topics:
 <ul>
-<li><a href="#data-distribution">Data distribution</a> in Vespa and how it impacts serving</li>
-<li><a href="#content-cluster-scalability-model">Scaling Serving Latency and Throughput</a> in Vespa</li>
-<li><a href="#scaling-document-volume">Scaling Data Volume</a> in Vespa</li>
+  <li><a href="#data-distribution">Data distribution</a> in Vespa and how it impacts serving</li>
+  <li><a href="#content-cluster-scalability-model">Scaling Serving Latency and Throughput</a> in Vespa</li>
+  <li><a href="#scaling-document-volume">Scaling Data Volume</a> in Vespa</li>
 </ul>
 </p>
+
+
 
 <h2 id="data-distribution">Data distribution in Vespa - flat versus grouped</h2>
 <p>
-The basic element in the Vespa search architecture is a content node which is part of a content cluster. A 
-Vespa deployment might consist of several content clusters which can be scaled independently.</p>
-
-<p>
-A content node holds a fraction of the entire data corpus,  
-data is distributed to nodes using a <a href="../content/idealstate.html">distribution algorithm</a>, which goal is to uniformly 
-distribute data over the set of nodes avoiding distribution skew while at the same time 
-supporting re-distribution of data, with minimal data movement 
-if the size of the content cluster is altered. 
-How data is distributed across nodes and how adding or removing nodes works in Vespa is described in 
-<a href="../elastic-vespa.html">elastic Vespa</a>. See also <a href="../content/consistency.html">Vespa's consistency model</a> 
-documentation.</p>
-
+The basic element in the Vespa search architecture is a content node, which is part of a content cluster.
+A Vespa deployment can have several content clusters, which can be scaled independently.
+</p><p>
+A content node holds a fraction of the entire data corpus.
+Data is distributed to nodes using a <a href="../content/idealstate.html">distribution algorithm</a>,
+which goal is to uniformly distribute data over the set of nodes.
+The goal is also to avoid distribution skew,
+while at the same time supporting re-distribution of data,
+with minimal data movement,
+if the size of the content cluster changes.
+Read <a href="../elastic-vespa.html">elastic Vespa</a> to learn
+how data is distributed across nodes, and how adding or removing nodes works.
+See also <a href="../content/consistency.html">Vespa's consistency model</a> documentation.
+</p>
 <figure>
-<figcaption><b>Flat content distribution</b></figcaption>
+<figcaption><strong>Flat content distribution</strong></figcaption>
 <img src="../img/flat_content_cluster.svg" height="420" width="840"/>
 </figure>
-<p>With a flat distribution, the content is distributed using the  
-<a href="../content/idealstate.html">ideal state distribution algorithm</a> 
-over the set of content nodes in a content cluster. 
-
+<p>
+With a flat distribution, the content is distributed to content nodes using the
+<a href="../content/idealstate.html">ideal state distribution algorithm</a>.
 A query is dispatched in parallel from a container instance to
-<b>all</b> content nodes in the container cluster, and each content node searches the <em>active</em> part 
-of the <em>ready</em> sub-database. The above figure
-illustrates a deployment using 4 nodes with <em>redundancy</em> 2 and <em>searchable-copes 2</em>. 
-We describe these settings in the <a href="#high-availability">availability</a>
-section in this document. 
-When using flat data distribution, the only way to scale query throughput is to reduce the search latency. 
-Given a fixed occupancy (users, load clients) this 
-relationship between query throughput and latency is described by 
-<a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's law</a> 
-, more on this in <a href="#content-cluster-scalability-model">content cluster 
-scalability model</a> section of this document.</p>
-
+<strong>all</strong> content nodes in the content cluster.
+Each content node searches the <em>active</em> part of the <em>ready</em> sub-database.
+The above figure illustrates a deployment using 4 nodes with <em>redundancy</em> 2 and <em>searchable-copies</em> 2 -
+see the <a href="#high-availability">availability</a> section.
+</p><p>
+When using flat data distribution, the only way to scale query throughput is to reduce the search latency.
+Given a fixed occupancy (users, load clients),
+this relationship between query throughput and latency is described by
+<a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's law</a> -
+more on this in <a href="#content-cluster-scalability-model">content cluster scalability model</a> section.
+</p>
 <figure>
-<figcaption><b>Grouped content distribution</b></figcaption>
+<figcaption><strong>Grouped content distribution</strong></figcaption>
 <img src="../img/grouped_content_cluster.svg" height="420" width="840"/>
 </figure>
-
-<p>With a grouped distribution, content is distributed to a configured set of <em>groups</em>, 
+<p>
+With a grouped distribution, content is distributed to a configured set of <em>groups</em>,
 such that the entire document collection is contained in each group.
-A <em>group</em> contains a set of content nodes which the content is 
-distributed over using the Vespa <a href="../content/idealstate.html">distribution algorithm</a>. In the above illustration
-there are 4 nodes in total, 2 groups with 2 nodes in each group. <em>redundancy</em> is 2 and <em>searchable-copies</em> is also
-2. As can seen from the figure with this grouped configuration the content nodes only have a populated ready sub-database.
-A query is dispatched in parallel to all nodes in <b>one group</b> at a time 
-using a <a href="../reference/services-content.html#dispatch-policy">dispatch-policy</a>, 
-default is <em>round-robin</em> which gives an uniform query
-distribution over the set of groups.</p>
+A <em>group</em> contains a set of content nodes where the content is
+distributed using the <a href="../content/idealstate.html">distribution algorithm</a>.
+In the above illustration, there are 4 nodes in total, 2 groups with 2 nodes in each group.
+<em>redundancy</em> is 2 and <em>searchable-copies</em> is also 2.
+As can seen from the figure with this grouped configuration,
+the content nodes only have a populated ready sub-database.
+A query is dispatched in parallel to all nodes in <strong>one group</strong> at a time
+using a <a href="../reference/services-content.html#dispatch-policy">dispatch-policy</a>.
+The default policy is <em>round-robin</em>, which gives an uniform query distribution over the set of groups.
+</p>
+
 
 <h3 id="high-availability">High Data Availability</h3>
-<p>Ideally we want our data to be available and searchable at all times even if there are node failures,
- but high availability also costs resources as we need to replicate data. How many replicas of the data 
-we configure depends on what kind of availability guarantees the deployment should provide.  
+<p>
+Ideally, the data is available and searchable at all times, even during node failures.
+High availability costs resources due to data replication.
+How many replicas of the data to configure
+depends on what kind of availability guarantees the deployment should provide.
 Vespa allows configuring the availability versus cost using the 
-<em>redundancy</em> and <em>searchable-copies</em> settings, described below: </p>
-
+<em>redundancy</em> and <em>searchable-copies</em> settings:
+</p>
 <table class="table">
   <thead></thead><tbody>
     <tr id="redundancy">
@@ -113,29 +113,30 @@ Vespa allows configuring the availability versus cost using the
         </p>
       </td>
     </tr><tr id="searchable-copies">
-      <th>Searchable copies</th>
+      <th style="white-space: nowrap">Searchable-copies</th>
       <td>
         <p>
         <a href="../reference/services-content.html#searchable-copies">Searchable-copies</a>
-        configures how many of the copies (as configured with <em>redundancy</em>) to be indexed 
-        (<em>ready</em>) at any time. Configuring
-        <em>searchable-copies</em> to be less than redundancy saves resources (memory, disk, cpu) 
-        as not all copies are indexed (<em>ready</em>).  In case 
-        of node failure the remaining nodes needs to a index the 
-        <em>not ready</em> documents which belonged to the failed node. In this transition
-        period the search is operating with reduced search coverage. 
+        configures how many of the copies (as configured with <em>redundancy</em>)
+        to be indexed (<em>ready</em>) at any time.
+        Configuring <em>searchable-copies</em> to be less than redundancy saves resources (memory, disk, cpu),
+        as not all copies are indexed (<em>ready</em>).
+        In case of node failure, the remaining nodes needs to a index the
+        <em>not ready</em> documents which belonged to the failed node.
+        In this transition period, the search has reduced search coverage.
         </p>
       </td>
     </tr>
   </tbody>
 </table>
 <figure>
-<figcaption><b>Content node database illustration</b></figcaption>
+<figcaption><strong>Content node database illustration</strong></figcaption>
 <img src="../img/proton_database.svg"  height="420" width="840"/>
 </figure>
 <p>
 The above figure illustrates the three 
-<a href="/documentation/proton.html#sub-databases">sub-database</a> inside a Vespa content node. </p>
+<a href="/documentation/proton.html#sub-databases">sub-databases</a> inside a Vespa content node.
+</p>
 
 <ul>
 <li>The documents in the <b>Ready</b> DB are indexed but only the documents in <b>Active</b> state are searchable. 
@@ -146,7 +147,7 @@ instance of the same document, while with grouped distribution there is one acti
 
 <li>The documents in the <b>Deleted</b> are stored but blacklisted so they are hidden from search until 
 permanently deleted
-from storage by <a href="proton.html#proton-maintenance-jobs">Proton maintenance jobs</a></li>
+from storage by <a href="../proton.html#proton-maintenance-jobs">Proton maintenance jobs</a></li>
 
 </ul>
 <p>If the availability guarantees tolerate temporary search coverage loss during node 
