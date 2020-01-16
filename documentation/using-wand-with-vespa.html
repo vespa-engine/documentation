@@ -20,8 +20,31 @@ Both Wand query operator implementations in Vespa
 <p>
 The <a href="reference/query-language-reference.html#weakand">weakAnd query operator</a>
 accepts terms searching over multiple fields and also logical conjuctions using OR/AND etc.
+It is a search operator that implements the <em>Weak AND/Weighted AND</em> algorithm.
 </p><p>
 WeakAnd is also called <em>Vespa Wand</em> in this documentation.
+</p><p>
+When using <em>weakAnd</em> via YQL or a Java Searcher plugin,
+specify the target for minimum number of hits the operator should produce.
+The effect of tuning <code>targetNumHits</code> may not be very intuitive.
+To ensure that you get the best hits possible with a <em>weakAnd</em>,
+set the target number somewhat higher than the number of hits returned to the user;
+setting it 10 times higher should be more than enough.
+The reason for increasing the target number is that <em>weakAnd</em>
+uses a very simple ranking function internally to filter away bad hits.
+If the normal rank expression correlates poorly with this internal filtering formula,
+increase the target number.
+The easiest is probably to use the default number (100) and see if that gives good results,
+only tuning if you see a problem.
+Also note that if the rank correlates poorly with the filtering criteria,
+<em>weakAnd</em> may not be a good operator.
+</p><p>
+Anything similar to classic vector model ranking will work well with <em>weakAnd</em>.
+We suggest using the <code>nativeFieldMatch</code> or <code>nativeDotProduct</code> feature as a starting point.
+Note that because <em>weakAnd</em> relies on feedback
+identifying which hits are used for first phase ranking to increase its threshold for what's considered a good hit,
+the special <code>unranked</code> rank profile (which turns off ranking completely)
+may cause <em>weakAnd</em> queries to become slower than a more normal ranking.
 </p><p>
 With the complete blog search data set,
 we could imagine a user query <em>blogs about adidas joggers or white nike's or reebook</em>
@@ -120,13 +143,12 @@ between the query and the document side feature vectors.
 </p><p>
 WeakAnd is also called <em>Vespa Wand</em> in this documentation.
 </p><p>
-See <a href="advanced-ranking.html">Advanced ranking</a> documentation on how to use the wand operator.
+See <a href="multivalue-query-operators.html">multivalue query operators</a> for how to use wand.
 Note that this operator does not integrate with <a href="linguistics.html">linguistic processing</a>.
 The Vespa <a href="reference/query-language-reference.html#rank">rank query operator</a>
 can be used to create a query tree, which includes a bag of features used in the wand for recall
 and also other query terms to produce ranking features for first-phase/second-phase ranking.
-Building on the example in <a href="advanced-ranking.html">Advanced ranking</a>,
-the below uses the <em>rank</em> operator to pass a query term searching the title field for phrase.
+The example below uses the <em>rank</em> operator to pass a query term searching the title field for phrase.
 This phrase does not impact recall,
 but creates ranking features for first-phase or second-phase ranking.
 <pre>
@@ -135,4 +157,112 @@ select ignoredfield from ignoredsource where rank(
       wand(car_types, {"pagani":400,"lamborghini":300,"maserati":250,"ferrari":150,"lancia":50,"alfa":40,"fiat":30})),
       title contains phrase("italian", "car","makers"));
 </pre>
+</p>
+
+
+<h3 id="wand-example">wand example</h3>
+<p>
+The field to search must be a weighted set attribute with fast-search.
+Refer to the <a href="reference/query-language-reference.html#wand">wand</a> reference.
+</p><p>
+Lets imagine we have an application where we would like to search for popular blogs about cars
+and we have the following search definition file.
+The weighted set attribute <code>car_types</code> is used to tag an article
+with which car types that are discussed in that article,
+while the integer attribute <code>popularity</code>
+is used to track the static popularity of that article.
+We want to search the <code>car_types</code> field using
+<a href="reference/query-language-reference.html#wand">wand</a>.
+<p><p>
+We also have two rank profiles:
+<code>dotproductonly</code> uses the raw dot product score that is calculated by <em>wand</em>,
+while <code>combined_score</code> combines the dot product score with the static popularity score:
+<pre>
+search article {
+  document article {
+    field car_types type weightedset&lt;string&gt; {
+      indexing: attribute
+      attribute: fast-search
+    }
+    field popularity type int {
+      indexing: attribute | summary
+    }
+  }
+  rank-profile dotproductonly {
+    first-phase {
+      expression: rawScore(car_types)
+    }
+  }
+  rank-profile combined_score {
+    first-phase {
+      expression: rawScore(car_types) + attribute(popularity)
+    }
+  }
+}
+</pre>
+Lets imagine a particular user that is interested in Italian cars, especially sports cars.
+This user would mainly like to get blogs discussing Italian sports cars,
+but blogs about more usual Italian cars could also be returned.
+In the following example we see how to use YQL to create a <em>wand</em> for the
+<code>car_types</code> field with 25 as the target number of hits to produce.
+Notice that the weights for sports cars are higher than for others.
+<pre>
+yql=select ignoredfield from ignoredsource where [ {"targetNumHits": 25} ]
+ wand(car_types, {"pagani":400,"lamborghini":300,"maserati":250,"ferrari":150,"lancia":50,"alfa":40,"fiat":30});
+</pre>
+The same can be added in a Searcher plugin using
+<a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WandItem.html">WandItem</a>:
+<pre>
+import com.yahoo.prelude.query.*;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.query.QueryTree;
+import com.yahoo.search.searchchain.Execution;
+
+private Result hardCoded(Query query, Execution execution) {
+    WandItem filter = new WandItem("car_types", 25);
+    filter.addToken("pagini", 400);
+    filter.addToken("lamborghini", 300);
+    filter.addToken("maserati", 250);
+    filter.addToken("ferrari", 150);
+    filter.addToken("lancia", 50);
+    filter.addToken("alfa", 40);
+    filter.addToken("fiat", 30);
+    QueryTree tree = query.getModel().getQueryTree();
+    Item oldroot = tree.getRoot();
+    AndItem newtop = new AndItem();
+    newtop.addItem(oldroot);
+    newtop.addItem(filter);
+    tree.setRoot(newtop);
+    query.trace("added hardcoded filter: ", true, 2);
+    return execution.search(query);
+}
+</pre>
+</p>
+
+
+<h3 id="ranking-notes">Ranking notes</h3>
+<p>
+Note that when using the <code>default</code> rank profile in this example,
+we are guaranteed to get the top-k hits
+(according to the raw dot product score) in the final search result.
+This is however not the case when using the <code>combined_score</code> rank profile.
+In this case the top-k hits (according to the raw dot product score)
+are also returned from the <em>wand</em> in the match phase,
+but in the ranking phase we also consider the static popularity score
+which may alter what is the final top-k hits
+according to the expression in the rank profile.
+This means that when combining the raw dot product score of the <em>wand</em> with something else
+(in either a first phase or second phase rank expression),
+you must ensure that these rank scores correlate somewhat.
+When combining scores like this you also should tune the
+<code>targetNumHits</code> used by the <em>wand</em>.
+</p><p>
+If combining <em>wand</em> with a ranking expression that does not use its raw score,
+the tuning of <code>targetNumHits</code> should follow the
+<a href="reference/query-language-reference.html#weakand">weakAnd</a> guide lines.
+A score threshold can be specified when using <em>wand</em>.
+The internal dot product score for a document must be larger than <code>scoreThreshold</code>
+in order to be considered a match. Default value is 0.0.
+Refer to the <a href="reference/query-language-reference.html#weakand">reference</a> for details.
 </p>
