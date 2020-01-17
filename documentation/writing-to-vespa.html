@@ -4,76 +4,104 @@ title: "Writing to Vespa"
 ---
 
 <p>
-Vespa documents are created according to the
-<a href="reference/document-json-format.html">Document JSON Format</a>
-or constructed programmatically - options:
-<ul><li>
-  <a href="document-api.html">RESTified Document Operation API</a>:
-  REST API for get, put, remove, update, visit.
-</li><li>
-  <a href="vespa-http-client.html">The Vespa HTTP client</a>.
-  A standalone jar which feeds to Vespa either by method calls in Java or from the command line.
-  It provides a simple API while achieving high performance
-  by using multiplexing and multiple parallel async connections.
-  It is recommended in all cases when feeding from a node outside the Vespa cluster. 
-</li><li>
-  <a href="document-api-guide.html">The Document API</a>.
-  This provides direct read-and write access to Vespa documents using Vespa's internal communication layer.
-  Use this when accessing documents from Java components in Vespa
-  such as <a href="searcher-development.html">searchers</a> and
-  <a href="document-processing.html">document processors</a>.
-</li><li>
-  <a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a> is a utility to feed data with high performance.
-  <a href="reference/vespa-cmdline-tools.html#vespa-get">vespa-get</a> gets single documents,
-  <a href="reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> gets multiple.
-</li></ul>
-Refer to <a href="performance/sizing-feeding.html">feed sizing guide</a> for feeding performance.
-</p><p>
-CRUD operations:
+<a href="documents.html">Documents</a> are stored in <em>content</em> clusters.
+Updates (PUT, UPDATE, DELETE) and reads (GET) pass through a <em>container</em> cluster -
+Refer to <a href="elastic-vespa.html#writing-documents">elastic Vespa</a> for a more detailed flow:
 </p>
+<img src="img/overview/vespa-overview.svg" style="padding:10px">
+<p>
+This guide covers the <em>functional</em> aspects of updating documents in Vespa.
+</p><p>
+Vespa's indexing structures is built for high-rate, memory-only operations for field updates.
+Refer to the <a href="performance/sizing-feeding.html">feed sizing guide</a> for write performance.
+</p><p>
+Vespa supports <a href="parent-child.html">parent/child</a> for de-normalized data.
+This can be used to simplify the code to update application data,
+as one write will update all children documents.
+</p><p>
+Read more on write operation <a href="content/content-nodes.html#ordering">ordering</a>
+and <a href="content/consistency.html">consistency</a>.
+</p>
+
+
+
+<h2 id="reads-and-writes">Reads and writes</h2>
 <table class="table">
-<thead>
-</thead><tbody>
+<tbody>
 <tr>
-  <td><strong>Put</strong></td>
-  <td>
-    <a href="reference/document-json-format.html#put">Put</a> is used to write a <a href="documents.html">document</a>.
-    A document is a set of name-value pairs referred to as <em>fields</em>.
-    The fields available for a given document is given by the document type,
-    provided by the application's <a href="search-definitions.html">search definition</a> -
-    see <a href="reference/search-definitions-reference.html#field">field types</a>.
-    A document is overwritten if a document with the same document ID exists
-    and without a <a href="reference/document-json-format.html#test-and-set">test and set</a> condition.
-  </td>
+  <td><a href="document-api.html#get">Get</a></td>
+  <td><p>
+    Returns the newest document instance.
+  </p></td>
 </tr><tr>
-  <td><strong>Remove</strong></td>
-  <td>
-    <a href="reference/document-json-format.html#remove">Remove</a> removes a document.
+  <td><a href="reference/document-json-format.html#put">Put</a></td>
+  <td><p>
+    Write a <a href="documents.html">document</a> by ID -
+    a document is overwritten if a document with the same document ID exists.
+  </p></td>
+</tr><tr>
+  <td><a href="reference/document-json-format.html#remove">Remove</a></td>
+  <td><p>
+    Remove a document by ID.
     Later requests to access the document will not find it - read
     more about <a href="elastic-vespa.html#data-retention-vs-size">remove-entries</a>.
     If the document to be removed is not found, this is returned in the reply.
     This is not considered a failure.
-    Like the put and update operations, a
-    <a href="reference/document-json-format.html#test-and-set">
-    test and set</a> condition can be specified for remove operations,
-    only removing the document when the condition is true.
-  </td>
+  </p></td>
 </tr><tr>
-  <td><strong>Update</strong></td>
-  <td>
-    <a href="reference/document-json-format.html#update">Update</a>
-    is also referred to as <em>partial update</em> as it updates parts of a document.
+  <td><a href="reference/document-json-format.html#update">Update</a></td>
+  <td><p>
+    Also referred to as <em>partial update</em>, as it updates some/all fields of a document by ID.
     If the document to update does not exist, the update returns a reply
     stating that no document was found.
-    A <a href="reference/document-json-format.html#test-and-set">
-    test and set</a> condition can be specified for updates.
-    Example usage is updating only documents with given timestamps.
-  </td>
-</tr><tr>
-  <td><strong>Get</strong></td>
-  <td>
-    <a href="document-api.html#get">Get</a> returns the newest document instance.
-    The <em>get</em> reply includes the last-updated <a href="#timestamps">timestamp</a> of the document. <!-- ToDo check this -->
+    </p><p>
+    Update supports <a href="#create-if-nonexistent">create if nonexistent</a>.
+    </p><p>
+    All data structures (<a href="attributes.html">attribute</a>,
+    <em>index</em> and <a href="document-summaries.html">summary</a>) are updatable.
+    Note that only <em>assign</em> and <em>remove</em> are idempotent -
+    message re-sending can apply updates more than once.
+    Use conditional writes for stronger consistency.
+    </p>
+    <table class="table">
+      <tr>
+        <td><strong>All field types</strong></td>
+        <td><ul>
+            <li><code><a href="reference/document-json-format.html#assign">assign</a></code> (may also be used to clear fields)</li>
+        </ul></td>
+      </tr><tr>
+        <td><strong>Numeric field types</strong></td>
+        <td><ul>
+            <li><code><a href="reference/document-json-format.html#arithmetic">increment</a></code></li>
+            <li><code><a href="reference/document-json-format.html#arithmetic">decrement</a></code></li>
+            <li><code><a href="reference/document-json-format.html#arithmetic">multiply</a></code></li>
+            <li><code><a href="reference/document-json-format.html#arithmetic">divide</a></code></li>
+        </ul></td>
+      </tr><tr>
+        <td><strong>Composite types</strong></td>
+        <td><ul>
+            <li><code><a href="reference/document-json-format.html#add">add</a></code>
+              For <em>array</em> and <em>weighted set</em>.
+              To put into a <em>map</em>,
+              see the <a href="reference/document-json-format.html#assign">assign</a> section</li>
+            <li><code><a href="reference/document-json-format.html#remove">remove</a></code></li>
+            <li><code><a href="reference/document-json-format.html#match">match</a></code>
+              Pick element from collection, then apply given operation to matched element</li>
+            <li><a href="reference/document-json-format.html#fieldpath">
+              accessing elements within a composite field using fieldpaths</a></li>
+        </ul></td>
+      </tr><tr>
+        <td><strong>Tensor types</strong></td>
+        <td><ul>
+            <li><code><a href="reference/document-json-format.html#tensor-modify">modify</a></code>
+              Modify individual cells in a tensor - can replace, add or multiply cell values</li>
+            <li><code><a href="reference/document-json-format.html#tensor-add">add</a></code>
+              Add cells to mapped or mixed tensors</li>
+            <li><code><a href="reference/document-json-format.html#tensor-remove">remove</a></code>
+              Remove cells from mapped or mixed tensors</li>
+        </ul></td>
+      </tr>
+    </table>
   </td>
 </tr>
 </tbody>
@@ -81,9 +109,98 @@ CRUD operations:
 
 
 
+<h2 id="conditional-writes">Conditional writes</h2>
+<p>
+A <em>test and set</em> <em>condition</em> can be added to Put, Remove and Update operations.
+The <em>condition</em> is a <a href="reference/document-select-language.html">document selection</a>.
+Refer to the <a href="reference/document-json-format.html#test-and-set">test-and-set reference</a>.
+</p><p>
+Example: Increment the <em>sales</em> field only if it is already equal to 999:
+<pre>
+{
+    "update": "id:music:music::BestOf",
+        "condition": "music.sales==999",
+        "fields": {
+            "sales": {
+                "increment": 1
+            }
+    }
+}
+</pre>
+<strong>Note:</strong> Use <em>documenttype.fieldname</em> (e.g. music.sales) in the condition,
+not only <em>fieldname</em>.
+</p><p>
+<strong>Note:</strong> If the condition is not met, an error is returned.
+<strong>ToDo:</strong> There is a discussion whether to change to not return error,
+and instead return a <em>condition-not-met</em> in the response.
+</p>
+
+
+
+<h2 id="create-if-nonexistent">Create if nonexistent</h2>
+<p>
+Updates to nonexistent documents are supported using
+<a href="reference/document-json-format.html#create">create</a>.
+An empty document is created on the content nodes, before the update is applied.
+This simplifies client code in the case of multiple writers.
+Java example using the <a href="document-api-guide.html">Document API</a>:
+<pre>
+public DocumentUpdate createUpdate(DocumentType musicType) {
+    DocumentUpdate update = new DocumentUpdate(musicType, "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf");
+    update.setCreateIfNonExistent(true);
+    return update;
+}
+</pre>
+<em>create</em> can be used in combination with a
+<a href="#conditional-writes">condition</a>.
+If the document does not exist, the condition will be ignored
+and a new document with the update applied is automatically created.
+Otherwise, the condition must match for the update to take place.
+</p><p>
+<strong>Caution:</strong> if all existing replicas of a document are missing <!-- ToDo: rewrite this / move to elastic-vespa details ... -->
+when an update with <em>"create": true</em> is executed,
+a new document will always be created.
+This happens even if a condition has been given.
+If the existing replicas become available later,
+their version of the document will be overwritten by the newest update since it has a higher timestamp.
+</p>
+
+
+
+<h2 id="api-and-utilities">API and utilities</h2>
+<p>
+Documents are created using <a href="reference/document-json-format.html">JSON</a> or in
+<a href="https://github.com/vespa-engine/vespa/blob/master/document/src/main/java/com/yahoo/document/Document.java">Java</a>:
+<table class="table">
+  <tr>
+    <td><a href="document-api.html">/document/v1/</a></td>
+    <td>API for get, put, remove, update, visit.</td>
+  </tr><tr>
+    <td><a href="vespa-http-client.html">Vespa HTTP client</a></td>
+    <td>Jar writing to Vespa either by method calls in Java or from the command line.
+      It provides a simple API while achieving high performance
+      by using multiplexing and multiple parallel async connections.
+      It is recommended in all cases when feeding from a node outside the Vespa cluster.</td>
+  </tr><tr>
+    <td style="white-space: nowrap"><a href="document-api-guide.html">Java Document API</a></td>
+    <td>Provides direct read-and write access to Vespa documents using Vespa's internal communication layer.
+      Use this when accessing documents from Java components in Vespa
+      such as <a href="searcher-development.html">searchers</a> and
+      <a href="document-processing.html">document processors</a>.</td>
+  </tr><tr>
+    <td><a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a></td>
+    <td>Utility to feed data with high performance.
+      <a href="reference/vespa-cmdline-tools.html#vespa-get">vespa-get</a> gets single documents,
+      <a href="reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> gets multiple.</td>
+  </tr>
+</table>
+</p>
+
+
+
 <h2 id="feed-block">Feed block</h2>
 <p>
-Feed operations fail when a cluster is at disk or memory capacity.
+Write operations fail when a cluster is at disk or memory capacity.
 Configure <a href="reference/services-content.html#resource-limits">resource-limits</a> to tune this -
 the defaults block feeding before disk or memory is full.
 </p><p>
@@ -119,15 +236,16 @@ Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
 
 
 <h2 id="batch-delete">Batch delete</h2>
+<!-- Mention / link to auto-expiry here, which is often a better method -->
 <p>
 Options for batch deleting documents:
-<ol>
+<ul>
     <li><strong>Find documents using search, delete, repeat</strong>. Pseudocode:
 <pre>
 while True; do
    query and read document ids, if empty exit
    delete document ids using <a href="document-api.html#delete">/document/v1</a>
-   wait a sec
+   wait a sec # optional, add wait to reduce load while deleting
 </pre>
     </li><li><strong>Like 1. but use the <a href="vespa-http-client.html">Java client</a></strong>.
     Instead of deleting one-by-one, stream remove operations to the API (write a Java program for this),
@@ -144,49 +262,6 @@ $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --h
 &lt;/documents&gt;
 </pre>
     </li>
-</ol>
+</ul>
 <!-- ToDo: find out about using global documents / if references will work -->
-</p>
-
-
-
-<h2 id="ordering">Ordering</h2>
-<p>
-The Document API uses the document identifier to implement ordering.
-Documents with the same identifier will have the same serialize id,
-and a Document API client will ensure that only one operation with a given
-serialize id is pending at the same time.
-This ensures that if a client sends multiple operations for the
-same document, they will be processed in a defined order.
-</p><p>
-<strong>Note:</strong> If sending two <em>put</em> operations to the same
-document, and the first operation fails, the second operation that was
-enqueued is sent. If the client chooses to just resend the failed request,
-the order of operations has been switched.
-</p><p>
-If <em>different</em> clients have pending operations on the same document,
-the order is undefined.
-</p>
-
-
-
-<h2 id="timestamps">Timestamps</h2>
-<p>
-Write operations like <em>put</em>, <em>update</em> and <em>remove</em>,
-have a timestamp assigned, passing through the
-<a href="content/content-nodes.html#distributor">distributor</a>.
-The timestamp is guaranteed to be unique within the
-<a href="content/buckets.html">bucket</a> where it is stored.
-The timestamp is used by the content layer to decide which operation is newest.
-These timestamps may be used when <a href="content/visiting.html">visiting</a>,
-to only process/retrieve documents within a given timeframe.
-To guarantee unique timestamps, they are in microseconds,
-and the microsecond part may be generated or altered to avoid conflicts with other documents.
-</p><p>
-The internal timestamp is often referred to as the last modified time.
-This is the time of the last write operation going through the <em>distributor</em>.
-If documents are migrated from cluster to cluster,
-the target cluster will have new timestamps for their entries,
-and when reprocessing documents within a cluster,
-documents will have new timestamps even if not modified.
 </p>

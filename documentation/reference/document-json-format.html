@@ -367,7 +367,6 @@ and similarly for "blocks" (where this specifies the same tensor as the "blocks"
 
 
 <h3 id="empty-fields">Empty fields</h3>
-
 <p>
 In general, fields that have not received a value during feeding will be ignored
 when rendering the document. They are considered as empty fields. However, certain
@@ -376,31 +375,11 @@ the empty string ("") is considered empty, as well as the empty array ([]). See 
 table for more information for each type.
 </p>
 
+
+
 <h2 id="document-operations">Document operations</h2>
 <p>
-Manage documents using:
-<ul>
-  <li>Put - insert / overwrite document with same ID</li>
-  <li>Get - get a document by ID</li>
-  <li>Remove - remove a document by ID</li>
-  <li>Update - update fields in a document by ID.
-    Updates are partial, submit new values for fields to update.
-    If the document does not exist, a new is created document if
-    <a href="#create">create if nonexistent</a> is used - otherwise, returns error.
-    There are three basic operation on <em>field</em> level:
-    <ul>
-      <li><em>Assign</em>: Replace the content of the field,
-        by value or by using arithmetic operations</li>
-      <li><em>Add</em>: Add a new value to a field (array, weightedset, tensor etc).
-        <strong>Note:</strong> Messages can be re-sent by Vespa's Message Bus.
-        This can cause unexpected results for all operations except <em>assign</em> and <em>remove</em>!
-        If greater consistency is needed,
-        use a <a href="#test-and-set">conditional update</a> instead.</li>
-      <li><em>Remove</em>: Remove a value from a field.</li>
-      <li><em>Modify</em>: Modify cells in tensors.</li>
-    </ul>
-  </li>
-</ul>
+Refer to <a href="../writing-to-vespa.html">writing to Vespa</a> for details.
 The are two methods for document operations:
 <ul>
   <li>
@@ -413,6 +392,8 @@ The are two methods for document operations:
     This synchronous API accepts one operation per request - the document ID is encoded in the URL
   </li>
 </ul>
+
+
 <table class="table">
   <tr>
     <td colspan="2"><h3 id="put">PUT</h3>
@@ -441,7 +422,7 @@ http <span style="background-color: yellow;">POST</span> /document/v1/music/musi
   </tr><tr>
     <td>Vespa HTTP client:
 <pre>
-# not supported - use vespa-get
+# not supported - use <a href="vespa-cmdline-tools.html#vespa-get">vespa-get</a>
 </pre>
     </td><td>Document API:
 <pre>
@@ -498,10 +479,10 @@ http <span style="background-color: yellow;">PUT</span> /document/v1/music/music
 
 <h2 id="test-and-set">Test and set</h2>
 <p>
-An optional <em>condition</em> can be added to operations to specify a <em>test and set</em> condition.
-The value of the condition is a <a href="document-select-language.html">document selection</a> encoded as a string.
-The <em>put/update/remove</em> operation is only applied
-if the condition matches an already existing document with that id.
+An optional <em>condition</em> can be added to operations to specify a <em>test and set</em> condition -
+see <a href="../writing-to-vespa.html#conditional-writes">writing to Vespa</a>.
+The value of the <em>condition</em> is a <a href="document-select-language.html">document selection</a>,
+encoded as a string.
 Example: Increment the <em>sales</em> field only if it is already equal to 999:
 <table class="table">
   <tr>
@@ -542,54 +523,22 @@ and instead return a <em>condition-not-met</em> in the response.
 
 
 
-<h2 id="update">Update</h2>
+<h2 id="create">create (create if nonexistent)</h2>
 <p>
-Vespa supports making changes to an existing document without submitting the full document.
-This is called <em>partial update</em>.
-A partial update consists of the id of the existing document to update,
-and the operation(s) to execute on the fields.
-</p><p>
-Documents can be auto-created on updates using <a href="#create">create if nonexistent</a>.
-All data structures (<a href="../attributes.html">attribute</a>,
-<em>index</em> and <a href="../document-summaries.html">summary</a>) are updatable.
-The following operations are supported:
+Updates to nonexistent documents are supported using <em>create</em>.
+Refer to <a href="../writing-to-vespa.html#create-if-nonexistent">writing to Vespa</a> for semantics.
+<pre>
+{
+    "update": "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf",
+    <span style="background-color: yellow;">"create": true,</span>
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+</pre>
 </p>
-<table class="table">
-    <thead></thead><tbody>
-    <tr>
-        <td><strong>All field types</strong></td>
-        <td><ul>
-            <li><code><a href="#assign">assign</a></code> (may also be used to clear fields)</li>
-        </ul></td>
-    </tr><tr>
-        <td><strong>Numeric field types</strong></td>
-        <td><ul>
-            <li><code><a href="#arithmetic">increment</a></code></li>
-            <li><code><a href="#arithmetic">decrement</a></code></li>
-            <li><code><a href="#arithmetic">multiply</a></code></li>
-            <li><code><a href="#arithmetic">divide</a></code></li>
-        </ul></td>
-    </tr><tr>
-        <td><strong>Composite types</strong></td>
-        <td><ul>
-            <li><code><a href="#add">add</a></code> (works for array and weighted set.
-                To put into a map, see the <a href="#assign">assign</a> section)</li>
-            <li><code><a href="#remove">remove</a></code></li>
-            <li><code><a href="#match">match</a></code> (pick element from collection,
-                then apply given operation to matched element) </li>
-            <li><a href="#fieldpath">accessing elements within a composite field using fieldpaths</a></li>
-        </ul></td>
-    </tr><tr>
-        <td><strong>Tensor types</strong></td>
-        <td><ul>
-            <li><code><a href="#tensor-modify">modify</a></code> Modify individual cells in a
-            tensor. Can either replace, add or multiply cell values.</li>
-            <li><code><a href="#tensor-add">add</a></code> Add cells to mapped or mixed tensors.</li>
-            <li><code><a href="#tensor-remove">remove</a></code> Remove cells from mapped or mixed tensors.</li>
-        </ul></td>
-    </tr>
-    </tbody>
-</table>
 
 
 
@@ -1182,46 +1131,6 @@ field tensorfield type tensor(x{},y[3]) {
     }
 }
 </pre>
-
-
-<h2 id="create">create (create if nonexistent)</h2>
-<p>
-Updates to nonexistent documents are supported using the <em>create</em> field.
-An empty document is created on the content nodes before the update is applied.
-This simplifies client code in the case of multiple writers:
-<pre>
-{
-    "update": "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf",
-    <span style="background-color: yellow;">"create": true,</span>
-    "fields": {
-        "title": {
-            "assign": "The best of Bob Dylan"
-        }
-    }
-}
-</pre>
-Java example using the <a href="../document-api-guide.html">Document API</a>:
-<pre>
-public DocumentUpdate createUpdate(DocumentType musicType) {
-    DocumentUpdate update = new DocumentUpdate(musicType, "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf");
-    update.setCreateIfNonExistent(true);
-    return update;
-}
-</pre>
-<a href="#create">create</a> may be used in combination with
-<a href="#test-and-set">condition</a>.
-If the document does not exist, the condition will be ignored
-and a new document with the update applied is automatically created.
-Otherwise, the condition must match for the update to take place.
-</p>
-<p class="alert alert-warning">
-<strong>Caution:</strong> if all existing replicas of a document are missing
-when an update with <code>create: true</code> is executed,
-a new document will always be created.
-This happens even if a condition has been given.
-If the existing replicas become available later,
-their version of the document will be overwritten by the newest update since it has a higher timestamp.
-</p>
 
 
 
