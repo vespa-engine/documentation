@@ -201,14 +201,14 @@ Documents are created using <a href="reference/document-json-format.html">JSON</
 <h2 id="feed-block">Feed block</h2>
 <p>
 Write operations fail when a cluster is at disk or memory capacity.
-Configure <a href="reference/services-content.html#resource-limits">resource-limits</a> to tune this -
-the defaults block feeding before disk or memory is full.
-</p><p>
 The <a href="performance/attribute-memory-usage.html#multivalue-mapping-enum-store">attribute multivalue mapping and enum store</a>
 can also go full and block feeding.
 </p><p>
-To remedy, add nodes to the content cluster or use nodes with higher capacity.
+To remedy, add nodes to the content cluster, or use nodes with higher capacity.
 The data will <a href="elastic-vespa.html">auto-redistribute</a>, and feeding is unblocked.
+Configure <a href="reference/services-content.html#resource-limits">resource-limits</a> to tune this.
+Temporarily increasing <em>resource-limits</em> (e.g. from 0.8 to 0.9) is an alternative if the cluster is stuck.
+</p><p>
 These metrics indicate whether feeding is blocked (set to 1 when blocked):
 <table class="table">
   <tr>
@@ -222,7 +222,7 @@ These metrics indicate whether feeding is blocked (set to 1 when blocked):
 </table>
 When feeding is blocked, events are logged - examples:
 <pre>
-Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
+java.lang.RuntimeException: ReturnCode(NO_SPACE, Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
   action: \"add more content nodes\",
   reason: \"disk used (0.85) &gt; disk limit (0.8)\",
   capacity: 100000000000,
@@ -231,6 +231,18 @@ Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
   diskLimit: 0.8
 }'
 </pre>
+</p>
+
+
+
+<h2 id="dropped-writes-document-expiry">Dropped writes - document expiry</h2>
+<p>
+Applications can <a href="documents.html#document-expiry">auto-expire documents</a>.
+This feature also blocks PUTs to documents that are already expired -
+see <a href="indexing.html#document-selection">indexing</a> and
+<a href="reference/services-content.html#documents">document selection</a>.
+This is a common problem when feeding test data with timestamps,
+and the writes a silently dropped.
 </p>
 
 
@@ -253,7 +265,7 @@ while True; do
 <pre>
 $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --host document-api-host &lt; deletes.json
 </pre>
-    </li><li><strong>Use a <a href="reference/services-content.html#documents">document selection</a></strong>.
+    </li><li><strong>Use a <a href="documents.html#document-expiry">document selection</a></strong> to expire documents.
         This deletes all documents <em>not</em> matching the expression.
         The content node will iterate over the corpus and delete documents (that are later compacted out):
 <pre>
