@@ -4,6 +4,209 @@ title: "Vespa Feed Sizing Guide"
 ---
 
 <p>
+Vespa is optimized to sustain a high feed load while serving -
+also during planned and unplanned changes to the instance.
+Vespa supports feed rates at memory speed,
+this guide goes through how to configure, test and size the application
+for optimal feed performance.
+</p><p>
+Read <a href="../writing-to-vespa.html">writing to Vespa</a> first.
+This has an overview of Vespa, where the key takeaway is the <em>stateless container cluster</em>
+and the <em>stateful content cluster</em>.
+The processing of documents PUT to Vespa is run in the <em>container</em> cluster,
+and includes both Vespa-internal processing like <a href="../linguistics.html#tokenization">tokenization</a>
+and application custom code in <a href="../document-processing.html">document processing</a>.
+The stateless cluster is primarily CPU bound,
+read <a href="../indexing.html#multiple-container-clusters">indexing</a>
+for how to separate search and write to different container clusters.
+Other than that, make sure the container cluster has enough memory to avoid excessive GC,
+and allocate enough CPU for the indexing load.
+</p><p>
+The remainder of this document concerns how to configure the application
+to optimize feed performance on the content node.
+</p>
+
+
+
+<h2 id="content-node">Content node</h2>
+<p>
+The content node runs the <a href="../proton.html">proton</a> process - overview:
+</p>
+<img src="../content/img/proton_feed.png" alt="Proton overview"/>
+<p>
+As there are multiple components and data structures involved,
+this guide starts with the simplest examples and then adds optimizations and complexity.
+Flushing of index structures is covered at the end of this guide.
+</p>
+
+
+
+<h2 id="streaming-search">Streaming search</h2>
+<p>
+The simplest for of indexing is <strong>no indexing</strong>.
+In Vespa, this is called <em>streaming search</em> indexing mode.
+Streaming search is optimized for write performance - the tradeoff is slow search.
+Streaming search is hence great for applications like personal search, where data size <em>searched</em> is small -
+read more in the <a href="../streaming-search.html">streaming search</a> guide.
+</p><p>
+Documents are written to the <a href="../document-summaries.html#document-store">document store</a> in all indexing modes -
+this is where the copy of the PUT document is persisted.
+See <em>Summary Manager + Document store</em> in illustration above.
+In short, this is append operations to large files,
+and (simplified) each PUT is one write.
+</p><p>
+PUT-ing documents to the document store can hence be thought of as appending to files using sequential IO,
+expecting a high write rate, using little memory and CPU.
+Writing a new version of a document (PUT a document that already exists) is the same as non-existent -
+the index on the document is updated to point to the latest version isn both cases.
+</p><p>
+A partial UPDATE to a document incurs a read from the document store to get the current fields.
+Then the new field values are applied and the new version or the document is written.
+Hence, like a PUT with an extra read.
+</p>
+
+
+
+<h2 id="indices">Index</h2>
+<p>
+The majority of Vespa use cases operate on the full data set,
+using <a href="../reference/services-content.html#document">indexed mode</a>:
+<pre>
+search music {
+    document music {
+        field artist type string {
+            indexing: summary | index
+        }
+</pre>
+Observe that documents are written to summary (i.e. document store) as in streaming mode,
+but there is also an <em>index</em>.
+See <em>Index Manager + Index</em> in illustration above.
+</p><p>
+Refer to proton <a href="../proton.html#index">index</a> for the index write.
+In short, it updates the memory index, which is flushed regularly.
+The PUT to the index is hence a memory only operation, but uses CPU to update the index.
+</p><p>
+A partial UPDATE is as in streaming search, plus the memory index update.
+</p>
+
+
+
+<h2 id="attribute">Attribute</h2>
+<p>
+Some applications have a limited set of documents,
+with a high change rate to fields in the documents
+(e.g. stock prices - number of stocks is almost fixed, prices changes constantly).
+Such applications are easily write bound.
+</p><p>
+To real-time update fields in high volume, use <a href="../attributes.html">attribute</a> fields:
+<pre>
+search ticker {
+    document ticker {
+        field price type float {
+            indexing: summary | attribute
+        }
+</pre>
+Attribute fields are not stored in the document store, there is hence no IO (except sequential flushing).
+This enables application to write at memory speed to vespa - a 10k update rate per node is possible.
+</p>
+
+
+<h3 id="redundancy-settings">Redundancy settings</h3>
+<p>
+To achieve memory-only updates,
+make sure all attributes to update are <a href="../proton.html#sub-databases">ready</a>,
+meaning the content node has loaded the attribute into memory:
+<ul>
+  <li>
+    One way to ensure this is to set
+    <a href="../reference/services-content.html#searchable-copies">searchable copies</a> equal to
+    <a href="../reference/services-content.html#redundancy">redundancy</a> -
+    i.e. all nodes that has a replica of the document has loaded it as searchable
+  </li><li>
+    Another way is by setting
+    <a href="../reference/search-definitions-reference.html#attribute">fast-access</a> on each attribute to update
+  </li>
+</ul>
+</p>
+
+
+<h3 id="debugging-performance">Debugging performance</h3>
+<p>
+When debugging update performance, it is useful to know if an update hits the
+<a href="../document-summaries.html#document-store">document store</a> or not.
+Enable <em>spam</em> log level and look for <em>SummaryAdapter::put</em> - then do an update:
+<pre>
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-logctl">vespa-logctl</a> searchnode:proton.server.summaryadapter spam=on
+.proton.server.summaryadapter    ON  ON  ON  ON  ON  ON OFF  ON
+
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-logfmt">vespa-logfmt</a> -l all -f | grep 'SummaryAdapter::put'
+[2019-10-10 12:16:47.339] SPAM    : searchnode       proton.proton.server.summaryadapter	summaryadapter.cpp:45 SummaryAdapter::put(serialnum = '12', lid = 1, stream size = '199')
+</pre>
+Existence of such log messages indicates that the update was accessing the document store.
+</p>
+<!-- ToDo: when we have log for get and remove as well, add to documentation
+https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/proton/server/summaryadapter.cpp#L75
+-->
+
+
+
+<h2 id="batch-using-visibility-delay">Batch using visibility-delay</h2>
+<p>
+To improve feed throughput, trading off freshness, increase
+<a href="../reference/services-content.html#visibility-delay">visibility-delay</a>
+to batch writes on the content nodes for higher write performance.
+This trades off latency -
+writes will take effect in search results after <em>visibility-delay</em> seconds.
+This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
+</p><p>
+The throughput improvement comes from doing multiple operations in once
+when updating the B-trees for memory indexes.
+<!-- ToDo: does visibility-delay also affect attributes? -->
+</p>
+
+<p>
+Updating memory structures like the memory index, attributes and data structures om top of attributes like fast-search
+</p>
+
+
+<h2 id="client-roundtrips">Client roundtrips</h2>
+<p>
+Consider the difference when sending two fields assignments to the same document:
+<pre>
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{1}" : { "assign" : { "timestamp" : 1570187817 } }
+        "myMap{2}" : { "assign" : { "timestamp" : 1570187818 } }
+    }
+}
+</pre>
+
+<pre>
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{1}" : { "assign" : { "timestamp" : 1570187817 } }
+    }
+}
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{2}" : { "assign" : { "timestamp" : 1570187818 } }
+    }
+}
+</pre>
+In the first case, <em>one</em> update operation is sent from the <a href="../vespa-http-client.html">vespa-http-client</a> -
+in the latter, the client will send the second update operation <em>after</em> receiving and ack for the first.
+When updating multiple fields, put the updates in as few operations as possible.
+See <a href="../content/content-nodes.html#ordering">Ordering details</a>.
+</p>
+
+
+<hr />
+
+<h2 id="feeding">Feeding</h2> <!-- temporary heading while rewriting the doc -->
+<p>
 When updating (put/update/remove), consider:
 <ul>
   <li><a href="../proton.html#transaction-log">transaction log</a></li>
@@ -16,18 +219,6 @@ depending on the <a href="../search-definitions.html">search definition</a>.
 The transaction log is always written. General notes:
 <ol>
 <li>
-<em>Putting</em> a document will always update the <em>document store</em>, a file append.
-</li><li>
-A partial update on an <em>indexed</em> field will read the document from the <em>document store</em>,
-change the field, and write it back - and also update the memory index.
-</li><li>
-To improve feed throughput, trading off freshness, increase
-<a href="../reference/services-content.html#visibility-delay">visibility-delay</a>
-to batch writes on the content nodes for higher write performance.
-This trades off latency -
-writes will take effect in search results after <em>visibility-delay</em> seconds.
-This is particularly useful when batch feeding, like initial bootstrap or grid jobs.
-</li><li>
 Configure the CPU allocation for feeding vs. searching in
 <a href="../reference/services-content.html#feeding">concurrency</a>.
 </li><li>
@@ -42,55 +233,6 @@ for feeding (<em>&lt;document-api&gt;</em>) and searching (<em>&lt;search&gt;</e
 </ol>
 
 
-<h2 id="document-updates">Document updates</h2>
-<p>
-Consider the difference when sending two fields assignments two the same document:
-<pre>
-{
-    "update" : "id:namespace:doctype::1",
-    "fields" : {
-        "myMap{1}" : {
-            "assign" : {
-                "timestamp" : 1570187817
-            }
-        }
-        "myMap{2}" : {
-            "assign" : {
-                "timestamp" : 1570187818
-            }
-        }
-    }
-}
-</pre>
-
-<pre>
-{
-    "update" : "id:namespace:doctype::1",
-    "fields" : {
-        "myMap{1}" : {
-            "assign" : {
-                "timestamp" : 1570187817
-            }
-        }
-    }
-}
-{
-    "update" : "id:namespace:doctype::1",
-    "fields" : {
-        "myMap{2}" : {
-            "assign" : {
-                "timestamp" : 1570187818
-            }
-        }
-    }
-}
-</pre>
-In the first case, <em>one</em> update operation is sent from the vespa-http-client - in the latter,
-the client will send the second update operation <em>after</em> receiving and ack for the first.
-<a href="../content/content-nodes.html#ordering">Ordering details</a>.
-</p>
-
-
 
 <h2 id="feed-updates-with-high-throughput">Feed updates with high throughput</h2>
 <p>
@@ -99,14 +241,6 @@ given that all data to be updated is in memory.
 Complete step 3-5 in previous section - then:
 <ol>
   <li>Make sure all fields that are updated are <a href="../attributes.html">attributes</a>.</li>
-  <li>Make sure all attributes to update are <a href="../proton.html#sub-databases">ready</a>,
-    meaning the content node has loaded the attribute into memory.
-    One way to ensure this is to set
-    <a href="../reference/services-content.html#searchable-copies">searchable copies</a> equal to
-    <a href="../reference/services-content.html#redundancy">redundancy</a> -
-    i.e. all nodes that has a replica of the document has loaded it as searchable.
-    Another way is by setting
-    <a href="../reference/search-definitions-reference.html#attribute">fast-access</a> on each attribute to update.</li>
   <li>Update to array of struct/map and map of struct/map requires a read from the
     <a href="../document-summaries.html#document-store">document store</a> and will hence reduce update rate -
       see <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.</li>
@@ -252,25 +386,6 @@ vds.idealstate.merge_bucket.done_ok
 vds.idealstate.merge_bucket.done_failed
 </pre>
 </p>
-
-
-<h3 id="document-store">Document Store</h3>
-<p>
-When debugging update performance, it is useful to know if an update hits the
-<a href="../document-summaries.html#document-store">document store</a> or not.
-Enable <em>spam</em> log level and look for <em>SummaryAdapter::put</em> - then do an update:
-<pre>
-$ vespa-logctl searchnode:proton.server.summaryadapter spam=on
-.proton.server.summaryadapter    ON  ON  ON  ON  ON  ON OFF  ON
-
-$ vespa-logfmt -l all -f | grep 'SummaryAdapter::put'
-[2019-10-10 12:16:47.339] SPAM    : searchnode       proton.proton.server.summaryadapter	summaryadapter.cpp:45 SummaryAdapter::put(serialnum = '12', lid = 1, stream size = '199')
-</pre>
-Existence of such log messages indicates that the update was accessing the document store.
-</p>
-<!-- ToDo: when we have log for get and remove as well, add to documentation
-https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/proton/server/summaryadapter.cpp#L75
--->
 
 
 <h3 id="conditional-updates">Conditional updates</h3>
