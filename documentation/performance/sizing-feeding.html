@@ -19,8 +19,12 @@ and application custom code in <a href="../document-processing.html">document pr
 The stateless cluster is primarily CPU bound,
 read <a href="../indexing.html#multiple-container-clusters">indexing</a>
 for how to separate search and write to different container clusters.
-Other than that, make sure the container cluster has enough memory to avoid excessive GC,
-and allocate enough CPU for the indexing load.
+Other than that, make sure the container cluster has enough memory to avoid excessive GC -
+the <a href="container-tuning.html">heap</a> must be big enough.
+Allocate enough CPU for the indexing load.
+</p><p>
+All updates are written to the <a href="../proton.html#transaction-log">transaction log</a>.
+This is sequential IO and rarely impacts write performance - and hence not covered in this guide.
 </p><p>
 The remainder of this document concerns how to configure the application
 to optimize feed performance on the content node.
@@ -111,6 +115,7 @@ This enables application to write at memory speed to vespa - a 10k update rate p
 </p>
 
 
+
 <h3 id="redundancy-settings">Redundancy settings</h3>
 <p>
 To achieve memory-only updates,
@@ -148,6 +153,42 @@ Existence of such log messages indicates that the update was accessing the docum
 <!-- ToDo: when we have log for get and remove as well, add to documentation
 https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/proton/server/summaryadapter.cpp#L75
 -->
+
+
+
+<h2 id="multivalue-attribute">Multivalue attribute</h2>
+<p>
+<a href="../reference/search-definitions-reference.html#field">Multivalued attributes</a> are
+<em>weightedset</em>, <em>array of struct/map</em>, <em>map of struct/map</em> and <em>tensor</em>.
+The attributes have different characteristics, which affects write performance.
+Generally, updates to multivalue fields are more expensive as the field size grows.
+<table class="table">
+<tr>
+  <th>weightedset</th>
+  <td>
+    Memory-only operation when updating: read full set, update, write back.
+    Make the update as inexpensive as possible using numeric types instead of strings, where possible
+    Example: a weighted set of string with many (1000+) elements.
+    Adding an element to the set means an enum store lookup/add and add/sort of the attribute multivalue map -
+    details in <a href="../attributes.html">attributes</a>.
+    Use a numeric type instead to speed this up - this has no string comparisons.
+  </td>
+</tr><tr>
+  <th style="white-space: nowrap">array/map of struct/map</th>
+  <td>
+    Update to array of struct/map and map of struct/map requires a read from the
+    <a href="../document-summaries.html#document-store">document store</a> and will hence reduce update rate -
+    see <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
+  </td>
+</tr><tr>
+  <th>tensor</th>
+  <td>
+    Updating tensor cell values is a memory-only operation: copy tensor, update, write back.
+    For large tensors, this implicates reading and writing a large chunk of memory for single cell updates.
+  </td>
+</tr>
+</table>
+</p>
 
 
 
@@ -205,54 +246,13 @@ See <a href="../content/content-nodes.html#ordering">Ordering details</a>.
 </p>
 
 
-<hr />
 
-<h2 id="feeding">Feeding</h2> <!-- temporary heading while rewriting the doc -->
+<h2 id="feed-vs-search">Feed vs search</h2>
 <p>
-When updating (put/update/remove), consider:
-<ul>
-  <li><a href="../proton.html#transaction-log">transaction log</a></li>
-  <li><a href="../document-summaries.html#document-store">document store</a></li>
-  <li><a href="../attributes.html">attributes</a></li>
-  <li><a href="../proton.html#index">indexes</a></li>
-</ul>
-These data structures might or might not be updated,
-depending on the <a href="../search-definitions.html">search definition</a>.
-The transaction log is always written. General notes:
-<ol>
-<li>
+A content node normally has a fixed set of resources (CPU, memory, disk).
 Configure the CPU allocation for feeding vs. searching in
-<a href="../reference/services-content.html#feeding">concurrency</a>.
-</li><li>
-The feeding endpoint is run in a <a href="../overview.html">stateless container cluster</a>.
-Documents flow from this cluster to the content node cluster.
-Hence both this cluster and the content node cluster must be evaluated to find the bottleneck.
-For the stateless cluster, check CPU usage and GC metrics -
-the <a href="container-tuning.html">heap</a> must not be too low.
-Some applications use separate container clusters
-for feeding (<em>&lt;document-api&gt;</em>) and searching (<em>&lt;search&gt;</em>).
-</li>
-</ol>
-
-
-
-<h2 id="feed-updates-with-high-throughput">Feed updates with high throughput</h2>
-<p>
-A Vespa content node can sustain a high document update rate,
-given that all data to be updated is in memory.
-Complete step 3-5 in previous section - then:
-<ol>
-  <li>Make sure all fields that are updated are <a href="../attributes.html">attributes</a>.</li>
-  <li>Update to array of struct/map and map of struct/map requires a read from the
-    <a href="../document-summaries.html#document-store">document store</a> and will hence reduce update rate -
-      see <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.</li>
-  <li>Updates to <a href="../reference/search-definitions-reference.html#field">multivalue fields</a>
-      are more expensive as the size grows. Example: a weighted set of string with many (1000+) elements.
-      Adding an element to the set means an enum store lookup/add and add/sort of the attribute multivalue map -
-      details in <a href="../attributes.html">attributes</a>.
-      Use a numeric type instead to speed this up - this has no string comparisons.
-      </li>
-</ol>
+<a href="../reference/services-content.html#feeding">concurrency</a> -
+value from 0 to 1.0 - a higher value means more CPU resources for feeding.
 </p>
 
 
@@ -261,7 +261,7 @@ Complete step 3-5 in previous section - then:
 <p>
 When testing for feeding capacity:
 <ol>
-  <li>Use the <a href="../vespa-http-client.html">Java HTTP client</a> in asynchronous mode.</li>
+  <li>Use the <a href="../vespa-http-client.html">vespa-http-client</a> in asynchronous mode.</li>
   <li>Test using one content node to find its capacity</li>
   <li>Test feeding performance by adding feeder instances.
     Make sure network and CPU (content and container node) usage increases, until saturation.</li>
