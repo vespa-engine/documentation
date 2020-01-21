@@ -219,19 +219,13 @@ allowing an old master to have some time to realize it is no longer the master.
 
 <h2 id="distributor">Distributor</h2>
 <p>
-Document operations are mapped to content nodes based on bucket locations -
-each put/update/get/remove is mapped to a <a href="buckets.html">bucket</a>
-and sent to the right content nodes.
-To manage the document set as it grows and nodes change, buckets move.
-I.e, sets of documents (a bucket) is copied between nodes for redundancy /
-redistribution for growth / node failures.
-</p><p>
 Buckets are mapped to distributors using the <a href="idealstate.html">ideal state algorithm</a>.
 As the cluster state changes, buckets are re-mapped immediately.
-The mapping does not overlap - a bucket is owned by one distributor.
+The mapping does not overlap -
+a bucket is owned by <span style="text-decoration: underline">one</span> distributor.
 </p><p>
 Distributors do not persist the bucket database,
-the bucket-to-content-node mapping is stored in memory in the distributor.
+the bucket-to-content-node mapping is kept in memory in the distributor.
 Document count, persisted size and a metadata checksum per bucket is stored as well.
 At distributor (re)start, content nodes are polled for bucket information,
 and return which buckets are owned by this distributor (using the ideal state algorithm).
@@ -240,14 +234,57 @@ Likewise, at any distributor cluster state change,
 content nodes are polled for bucket handover -
 a distributor will then handle a new set of buckets.
 </p><p>
-Document API clients do not interface with the cluster controller,
-and does hence not know the cluster start at startup.
-A random distributor is used first.
+Document operations are mapped to content nodes based on bucket locations -
+each put/update/get/remove is mapped to a <a href="buckets.html">bucket</a>
+and sent to the right content nodes.
+To manage the document set as it grows and nodes change, buckets move between content nodes.
+</p><p>
+Document API clients (i.e. container nodes with
+<a href="../reference/services-container.html#document-api">&lt;document-api&gt;</a>)
+do not interface with the cluster controller,
+and do not know the cluster state at startup.
+Clients hence do not know which distributor to use at startup.
+A random distributor is therefore used first.
 If the document operation hit the wrong distributor,
-<em>WRONG_DISTRIBUTION</em> is returned, with the current cluster state.
+<em>WRONG_DISTRIBUTION</em> is returned, with the current cluster state in the response.
 <em>WRONG_DISTRIBUTION</em> is hence expected and normal at cold start / state change events.
+</p>
+
+
+<h3 id="timestamps">Timestamps</h3>
+<p>
+<a href="../writing-to-vespa.html">Write operations</a>
+have a <em>last modified time</em> timestamp assigned when passing through the distributor.
+The timestamp is guaranteed to be unique within the
+<a href="buckets.html">bucket</a> where it is stored.
+The timestamp is used by the content layer to decide which operation is newest.
+These timestamps can be used when <a href="visiting.html">visiting</a>,
+to process/retrieve documents within a given time range.
+To guarantee unique timestamps, they are in microseconds -
+the microsecond part is generated to avoid conflicts with other documents.
 </p><p>
+If documents are migrated <em>between</em> clusters,
+the target cluster will have new timestamps for their entries.
+Also, when <a href="../document-processing.html">reprocessing documents</a> <em>within</em> a cluster,
+documents will have new timestamps, even if not modified.
+</p>
+
+
+<h3 id="ordering">Ordering</h3>
+<p>
+The Document API uses the <a href="../documents.html#document-ids">document ID</a> to order operations.
+A Document API client ensures that only one operation is pending at the same time.
+This ensures that if a client sends multiple operations for the same document,
+they will be processed in a defined order.
 </p><p>
+<strong>Note:</strong> If sending two write operations to the same document,
+and the first operation fails,
+the second operation that was enqueued is sent.
+If the client chooses to just resend the failed request,
+the order of operations has been switched.
+</p><p>
+If <em>different</em> clients have pending operations on the same document,
+the order is undefined.
 </p>
 
 
@@ -266,58 +303,9 @@ A stable system has all buckets located per the ideal state:
       the buckets are split or joined to remove such overlapping buckets.
       Read more on <a href="buckets.html">inconsistent buckets</a>.</li> <!-- ToDo: change this to a proper anchor within buckets.html - this needs a dedicated section, relevant to point to from visiting -->
   <li>If buckets are too small/large, they will be joined or split.</li>
-  <li>In clusters a with document type marked as
-      <a href="../reference/services-content.html#document">mode="index"</a>,
-      the distributor will ensure that only one of a bucket's replicas within a group
-      will be used when processing search queries.
-      Otherwise search results would contain duplicates.
-      This is known as an <a href="../proton.html#sub-databases">active</a> replica,
-      the rest being <em>inactive</em> and available for failover
-      if the currently active node should become unavailable,
-      or the ideal state changes.</li>
 </ul>
 The maintenance operations have different priorities.
 If no maintenance operations are needed, the cluster is said to be in the <em>ideal state</em>.
 The distributors synchronize maintenance load with user load,
 e.g. to remap requests to other buckets after bucket splitting and joining.
-</p>
-
-
-<h3 id="ordering">Ordering</h3>
-<p>
-The Document API uses the document identifier to implement ordering.
-Documents with the same identifier will have the same serialize id,
-and a Document API client will ensure that only one operation with a given
-serialize id is pending at the same time.
-This ensures that if a client sends multiple operations for the
-same document, they will be processed in a defined order.
-</p><p>
-<strong>Note:</strong> If sending two <em>put</em> operations to the same
-document, and the first operation fails, the second operation that was
-enqueued is sent. If the client chooses to just resend the failed request,
-the order of operations has been switched.
-</p><p>
-If <em>different</em> clients have pending operations on the same document,
-the order is undefined.
-</p>
-
-
-<h3 id="timestamps">Timestamps</h3>
-<p>
-Write operations like <em>put</em>, <em>update</em> and <em>remove</em>,
-have a timestamp assigned, passing through the distributor.
-The timestamp is guaranteed to be unique within the
-<a href="buckets.html">bucket</a> where it is stored.
-The timestamp is used by the content layer to decide which operation is newest.
-These timestamps may be used when <a href="visiting.html">visiting</a>,
-to only process/retrieve documents within a given timeframe.
-To guarantee unique timestamps, they are in microseconds,
-and the microsecond part may be generated or altered to avoid conflicts with other documents.
-</p><p>
-The internal timestamp is often referred to as the last modified time.
-This is the time of the last write operation going through the distributor.
-If documents are migrated from cluster to cluster,
-the target cluster will have new timestamps for their entries,
-and when reprocessing documents within a cluster,
-documents will have new timestamps even if not modified.
 </p>
