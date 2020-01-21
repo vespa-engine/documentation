@@ -212,6 +212,34 @@ and the content of the documents.
 </p>
 
 
+
+<h2 id="conditional-updates">Conditional updates</h2>
+<p>
+A conditional update looks like:
+<pre>
+{
+    "update" : "id:namespace:myDoc::1",
+    "condition" : "myDoc.myField == \"abc\"",
+    "fields" : { "myTimestamp" : { "assign" : 1570187817 } }
+}
+</pre>
+If the <a href="../document-summaries.html#document-store">document store</a>
+is accessed when evaluating the condition, performance drops.
+Conditions should be evaluated using attribute values for high performance -
+in the example above, <em>myField</em> should be an attribute.
+</p><p>
+Note: If the condition uses struct or map, values are read from the document store:
+<pre>
+    "condition" : "myDoc.myMap{1} == 3"
+</pre>
+This is true even though all struct fields are defined as attribute.
+Improvements to this is tracked in
+<a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
+</p>
+<!-- ToDo: can probably use the "SummaryAdapter::get" log message above, once made -->
+
+
+
 <h2 id="client-roundtrips">Client roundtrips</h2>
 <p>
 Consider the difference when sending two fields assignments to the same document:
@@ -274,28 +302,28 @@ during state changes, during query load.
 
 
 <h2 id="troubleshooting">Troubleshooting</h2>
-<p>
-Find a non-exhaustive list of things to check below:
-</p>
-
-
-<h3 id="metrics">Metrics</h3>
-<p>
-Use <a href="../reference/metrics.html#process-metrics-api">metrics</a> from content nodes and look at queues -
-queue wait time and queue size (all metrics in milliseconds):
+<table class="table">
+<tr id="metrics">
+  <th>Metrics</th>
+  <td>
+    <p>
+    Use <a href="../reference/metrics.html#process-metrics-api">metrics</a> from content nodes and look at queues -
+    queue wait time and queue size (all metrics in milliseconds):
 <pre>
 vds.filestor.alldisks.averagequeuewait.sum
 vds.filestor.alldisks.queuesize
 </pre>
-Check content node metrics across all nodes to see if there are any outliers. Also check
+    Check content node metrics across all nodes to see if there are any outliers. Also check
 <pre>
 vds.filestor.alldisks.allthreads.update.sum.latency
 </pre>
-</p>
-
-
-<h3 id="failure-rates">Failure rates</h3>
-<p>
+    </p>
+  </td>
+</tr><tr id="failure-rates">
+  <th>Failure rates</th>
+  <td>
+    <p>
+    Inspect these metrics for failures during load testing:
 <pre>
 vds.distributor.updates.sum.latency
 vds.distributor.updates.sum.ok
@@ -307,61 +335,66 @@ vds.distributor.removes.sum.latency
 vds.distributor.removes.sum.ok
 vds.distributor.removes.sum.failures.total
 </pre>
-</p>
-
-
-<h3 id="blocked-feeding">Blocked feeding</h3>
+    </p>
+  </td>
+</tr><tr id="blocked-feeding">
+  <th>Blocked feeding</th>
+  <td>
 <p>
-Should be 0 everywhere -
-refer to <a href="../writing-to-vespa.html#feed-block">feed block</a>:
+This metric should be 0 - refer to <a href="../writing-to-vespa.html#feed-block">feed block</a>:
 <pre>
 content.proton.resource_usage.feeding_blocked
 </pre>
 </p>
-
-
-<h3 id="concurrent-mutations">Concurrent mutations</h3>
-<p>
+  </td>
+</tr><tr id="concurrent-mutations">
+  <th style="white-space: nowrap">Concurrent mutations</th>
+  <td>
+    <p>
+    Multiple clients updating the same document concurrently will stall writes:
 <pre>
 vds.distributor.updates.sum.failures.concurrent_mutations
 </pre>
-Mutating client operations towards a given document ID are sequenced on the distributors.
-If an operation is already active towards a document,
-a subsequently arriving one will be bounced back to the client with a transient failure code.
-Usually this happens when users send feed from multiple clients concurrently without synchronisation.
-Note that feed operations sent by a single client are sequenced client-side,
-so this should not be observed with a single client only.
-Bounced operations are never sent on to the backends and should not cause elevated latencies there,
-although the client will observe higher latencies due to automatic retries with back-off.
-</p>
-
-
-<h3 id="wrong-distribution">Wrong distribution</h3>
-<p>
+    Mutating client operations towards a given document ID are sequenced on the
+    <a href="../content/content-nodes.html#distributor">distributors</a>.
+    If an operation is already active towards a document,
+    a subsequently arriving one will be bounced back to the client with a transient failure code.
+    Usually this happens when users send feed from multiple clients concurrently without synchronisation.
+    Note that feed operations sent by a single client are sequenced client-side,
+    so this should not be observed with a single client only.
+    Bounced operations are never sent on to the backends and should not cause elevated latencies there,
+    although the client will observe higher latencies due to automatic retries with back-off.
+    </p>
+  </td>
+</tr><tr id="wrong-distribution">
+  <th>Wrong distribution</th>
+  <td>
+    <p>
 <pre>
 vds.distributor.updates.sum.failures.wrongdistributor
 </pre>
-Indicates that clients keep sending to the wrong distributor.
-Normally this happens infrequently
-(but is <em>does</em> happen on client startup or distributor state transitions),
-as clients update and cache all state required to route directly to the correct distributor
-(Vespa uses a deterministic CRUSH-based algorithmic distribution).
-Some potential reasons for this:
-<ol>
-  <li>Clients are being constantly re-created with no cached state.</li>
-  <li>The system is in some kind of flux where the underlying state keeps changing constantly.</li>
-  <li>The client distribution policy has received so many errors
-      that it throws away its cached state to start with a clean slate to
-      e.g. avoid the case where it only has cached information for the bad side of a network partition.</li>
-  <li>The system has somehow failed to converge to a shared cluster state,
-      causing parts of the cluster to have a different idea of the correct state than others.</li>
-</ol>
-</p>
-
-
-<h3 id="cluster-out-of-sync">Cluster out of sync</h3>
-<p>
-<em>update_puts/gets</em> indicate "two-phase" updates: <!-- ToDo: explain two-phase updates / link -->
+    Indicates that clients keep sending to the wrong distributor.
+    Normally this happens infrequently
+    (but is <em>does</em> happen on client startup or distributor state transitions),
+    as clients update and cache all state required to route directly to the correct distributor
+    (Vespa uses a deterministic CRUSH-based algorithmic distribution).
+    Some potential reasons for this:
+    <ol>
+      <li>Clients are being constantly re-created with no cached state.</li>
+      <li>The system is in some kind of flux where the underlying state keeps changing constantly.</li>
+      <li>The client distribution policy has received so many errors
+        that it throws away its cached state to start with a clean slate to
+        e.g. avoid the case where it only has cached information for the bad side of a network partition.</li>
+      <li>The system has somehow failed to converge to a shared cluster state,
+        causing parts of the cluster to have a different idea of the correct state than others.</li>
+    </ol>
+    </p>
+  </td>
+</tr><tr id="cluster-out-of-sync">
+  <th>Cluster out of sync</th>
+  <td>
+    <p>
+    <em>update_puts/gets</em> indicate "two-phase" updates: <!-- ToDo: explain two-phase updates / link -->
 <pre>
 vds.distributor.update_puts.sum.latency
 vds.distributor.update_puts.sum.ok
@@ -370,51 +403,24 @@ vds.distributor.update_gets.sum.ok
 vds.distributor.update_gets.sum.failures.total
 vds.distributor.update_gets.sum.failures.notfound
 </pre>
-If replicas are out of sync,
-updates cannot be applied directly on the replica nodes
-as they risk ending up with diverging state.
-In this case, Vespa performs an explicit read-consolidate-write (write repair) operation on the distributors.
-This is usually a lot slower than the regular update path because it doesn’t happen in parallel.
-It also happens in the write path of other operations,
-so risks blocking these if the updates are expensive in terms of CPU.
-</p><p>
-Replicas being out of sync is by definition not the expected steady state of the system.
-For example, replica divergence can happen if one or more replica nodes are unable to process or persist operations.
-Track (pending) merges:
+    If replicas are out of sync,
+    updates cannot be applied directly on the replica nodes
+    as they risk ending up with diverging state.
+    In this case, Vespa performs an explicit read-consolidate-write (write repair) operation on the distributors.
+    This is usually a lot slower than the regular update path because it doesn’t happen in parallel.
+    It also happens in the write path of other operations,
+    so risks blocking these if the updates are expensive in terms of CPU.
+    </p><p>
+    Replicas being out of sync is by definition not the expected steady state of the system.
+    For example, replica divergence can happen if one or more replica nodes are unable to process or persist operations.
+    Track (pending) merges:
 <pre>
 vds.idealstate.buckets
 vds.idealstate.merge_bucket.pending
 vds.idealstate.merge_bucket.done_ok
 vds.idealstate.merge_bucket.done_failed
 </pre>
-</p>
-
-
-<h3 id="conditional-updates">Conditional updates</h3>
-<p>
-A conditional update looks like:
-<pre>
-{
-    "condition" : "myDoc.myField == \"abc\"",
-    "update" : "id:namespace:myDoc::1",
-    "fields" : {
-        "myTimestamp" : {
-            "assign" : 1570187817
-        }
-    }
-}
-</pre>
-If the <a href="../document-summaries.html#document-store">document store</a>
-is accessed when evaluating the condition, performance drops.
-Conditions should be evaluated using attribute values for high performance -
-in the example above, <em>myField</em> should be an attribute.
-</p><p>
-Note: If the condition uses struct or map, values are read from the document store:
-<pre>
-    "condition": "myDoc.myMap{1} == 3"
-</pre>
-This is true even though all struct fields are defined as attribute.
-Improvements to this is tracked in
-<a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
-</p>
-<!-- ToDo: can probably use the "SummaryAdapter::get" log message above, once made -->
+    </p>
+  </td>
+</tr>
+</table>
