@@ -1,25 +1,80 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Troubleshooting OSGi Bundles"
+title: "Bundle troubleshooting"
 ---
 
 <p>
-This document describes how to troubleshoot and fix the most common errors we encounter when
-working with OSGi bundles, namely:
+This document describes how to troubleshoot the most common errors  when working with bundles:
 <ul>
-  <li><a href="#class-not-found">Class Not Found</a></li>
-  <li><a href="#unresolved-constraint">Unresolved Constraint</a></li>
-  <li><a href="#multiple-implementations">Multiple Implementations of the Same Class</a></li>
+  <li><a href="#could-not-create-component">Could not create component</a></li>
+  <li><a href="#class-not-found">Class not found</a></li>
+  <li><a href="#unresolved-constraint">Unresolved constraint</a></li>
+  <li><a href="#multiple-implementations-of-the-same-class">Multiple implementations of the same class</a></li>
 </ul>
-For general information on OSGi bundles for JDisc, please refer to the introduction on how
-to <a href="developing-osgi-bundles.html">develop OSGi bundles</a>. We also recommend
-Richard S. Hall's presentation on <a
- href="http://felix.apache.org/site/presentations.data/Learning_to_ignore_OSGi.pdf">using
-OSGi as a means to achieve modularity</a>, which explains a lot about how OSGi works, and why.
+For general information on OSGi bundles for Vespa, refer to the introduction on how
+to <a href="developing-osgi-bundles.html">develop OSGi bundles</a>.
+Richard S. Hall's presentation on
+<a href="http://felix.apache.org/site/presentations.data/Learning_to_ignore_OSGi.pdf">
+using OSGi as a means to achieve modularity</a> is recommended - it explains a lot about how OSGi works, and why.
 </p>
 
 
-<h2 id="class-not-found">Class Not Found</h2>
+<h2 id="could-not-create-component">Could not create component</h2>
+<p>
+The Container fails to start if it cannot load bundles.
+Example, using wrong bundle name in the
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/multiple-bundles">multiple-bundles</a>
+sample app:
+<pre>
+ &lt;services version="1.0"&gt;
+     &lt;container id="fibonacci" version="1.0"&gt;
+-        &lt;component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles-lib" /&gt;
++        &lt;component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles<span style="background: yellow">-typo</span>" /&gt;
+</pre>
+Looking at what is actually deployed in <em>multiple-bundles</em>:
+<pre>
+$ ls -1 target/*.jar
+  target/multiple-bundles-1.0.0-deploy.jar
+  target/multiple-bundles-1.0.0-without-dependencies.jar
+  target/multiple-bundles-lib-1.0.1-deploy.jar
+</pre>
+Error in log:
+<pre>
+[2020-01-23 14:28:01.367] WARNING : qrserver         Container.com.yahoo.container.di.Container
+	Failed to set up new component graph. Retaining previous component generation.
+	exception=
+	java.lang.IllegalArgumentException: <span style="background: yellow">Could not create a component with id 'com.mydomain.lib.FibonacciProducer'.
+        Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo.</span>
+        If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	at com.yahoo.osgi.OsgiImpl.resolveFromClassPath(OsgiImpl.java:74)
+	at com.yahoo.osgi.OsgiImpl.resolveClass(OsgiImpl.java:65)
+	at com.yahoo.container.di.Container.addNodes(Container.java:228)
+	at com.yahoo.container.di.Container.createComponentsGraph(Container.java:217)
+	at com.yahoo.container.di.Container.getConfigAndCreateGraph(Container.java:160)
+	at com.yahoo.container.di.Container.getNewComponentGraph(Container.java:84)
+	at com.yahoo.container.core.config.HandlersConfigurerDi.getNewComponentGraph(HandlersConfigurerDi.java:145)
+	at com.yahoo.container.jdisc.ConfiguredApplication.lambda$startReconfigurerThread$1(ConfiguredApplication.java:275)
+	at java.base/java.lang.Thread.run(Thread.java:834)
+	
+[2020-01-23 14:28:01.367] ERROR   : qrserver         Container.com.yahoo.container.jdisc.ConfiguredApplication
+	Reconfiguration failed, your application package must be fixed, unless this is a JNI reload issue: Could not create a component with id 'com.mydomain.lib.FibonacciProducer'. Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo. If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	exception=
+	java.lang.IllegalArgumentException: Could not create a component with id 'com.mydomain.lib.FibonacciProducer'. Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo. If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	at com.yahoo.osgi.OsgiImpl.resolveFromClassPath(OsgiImpl.java:74)
+	at com.yahoo.osgi.OsgiImpl.resolveClass(OsgiImpl.java:65)
+	at com.yahoo.container.di.Container.addNodes(Container.java:228)
+	at com.yahoo.container.di.Container.createComponentsGraph(Container.java:217)
+	at com.yahoo.container.di.Container.getConfigAndCreateGraph(Container.java:160)
+	at com.yahoo.container.di.Container.getNewComponentGraph(Container.java:84)
+	at com.yahoo.container.core.config.HandlersConfigurerDi.getNewComponentGraph(HandlersConfigurerDi.java:145)
+	at com.yahoo.container.jdisc.ConfiguredApplication.lambda$startReconfigurerThread$1(ConfiguredApplication.java:275)
+	at java.base/java.lang.Thread.run(Thread.java:834)
+</pre>
+Make sure that the jar files (i.e. bundles) are actually deployed with correct names per <em>services.xml</em>.
+</p>
+
+
+<h2 id="class-not-found">Class not found</h2>
 <p>
 All classes that are referred to in a user bundle must either be embedded in the bundle,
 or imported from another bundle by an <code>Import-Package</code> statement in the bundle
@@ -51,7 +106,8 @@ with libraries for pluggable frameworks, for which we have a separate <a
 </p>
 
 
-<h2 id="unresolved-constraint">Unresolved Constraint</h2>
+
+<h2 id="unresolved-constraint">Unresolved constraint</h2>
 <p>
 If the bundle has an Import-Package for a package that is not available at runtime,
 the OSGi framework will report an unresolved constraint error. The symptom as seen in the
@@ -77,9 +133,7 @@ available at runtime, there are two options:
   a goal called 'copy-dependencies' to help with this.
   </li>
 </ul>
-</p>
-
-<p>
+</p><p>
 If the missing jar is a transitive dependency, maven can help visualize the dependency
 graph of your project:
 <pre>
@@ -88,7 +142,8 @@ $ mvn dependency:tree
 </p>
 
 
-<h2 id="multiple-implementations">Multiple Implementations of the Same Class</h2>
+
+<h2 id="multiple-implementations-of-the-same-class">Multiple implementations of the same class</h2>
 <p>
 When two bundles interact via their public APIs, it is crucial that both bundles resolve
 each and every participating class to the same <code>Class</code> object. If not, we will
@@ -121,7 +176,8 @@ Usually, the "duplicate" package is pulled in by the user bundle transitively fr
 library dependency.
 </p>
 
-<h3 id="multiple-implementations-example">Troubleshooting Example</h3>
+
+<h3 id="multiple-implementations-example">Multiple implementations example</h3>
 <p>
 Let's take a look at an example resolving the duplicate <span style="background:
 yellow">javax.xml.namespace.QName</span> class from the error message above.
@@ -188,7 +244,8 @@ $ mvn dependency:tree -Dverbose
 </ol>
 </p>
 
-<h3 id="multiple-implementations-example-slf4j">Troubleshooting Example slf4j-api</h3>
+
+<h3 id="multiple-implementations-example-slf4j-api">Multiple implementations example slf4j-api</h3>
 <p>
 This is similar to the previous example, but logging libraries are maybe the most common
 problem teams encounter. Here we will see the symptom, use dependency:tree and add an exclusion.
