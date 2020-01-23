@@ -73,23 +73,48 @@ CPU fraction for indexing per Vespa node is <a href="reference/services-content.
 </p>
 
 
-<h3 id="writing-documents">Writing documents</h3>
+<h3 id="consistency">Consistency</h3>
 <p>
-Documents enter Vespa using the <a href="api.html">Document API</a>,
-using <a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a>,
-<a href="document-api.html">Document API</a>,
-the <a href="vespa-http-client.html">Vespa Feeding Client API</a> or
-<a href="document-api-guide.html">Java Document API</a> (all binaries use the Java Document API).
-If no <a href="routing.html">route</a> is set, clients feed to the <em>default</em> route.
-Next is <a href="document-processing.html">document processing</a> (round-robin)
-where documents are prepared for indexing, before entering the <em>distributor</em>.
-The distributor maps the document to bucket, and sends it to <em>content nodes</em>:
-</p><img src="content/img/elastic-feed.svg" height="340" width="310"/><p>
+Consistency is maintained at bucket level.
+Content nodes calculate checksums based on the bucket contents,
+and the distributors compare checksums among the bucket replicas.
+A <em>bucket merge</em> is issued to resolve inconsistency, when detected.
+While there are inconsistent bucket replicas, the distributors route operations to the "best" replica.
+</p><p>
+As buckets are split and joined, it is possible for replicas of a bucket to be split at different levels.
+A node may have been down while its buckets have been split or joined.
+This is called <em>inconsistent bucket splitting</em>.
+Bucket checksums can not be compared across buckets with different split levels.
+Consequently, distributors do not know whether all documents exist in enough replicas in this state.
+Due to this, inconsistent splitting is one of the highest maintenance priorities.
+After all buckets are split or joined back to the same level,
+the distributors can verify that all the replicas are consistent and fix any detected issues with a merge.
+<a href="content/consistency.html">Read more</a>.
 </p>
+
+
+
+<h2 id="writing-documents">Writing documents</h2>
+<p>
+Applications use the <a href="vespa-http-client.html">vespa-http-client</a>
+or <a href="document-api.html">/document/v1/</a> API to write to Vespa.
+Alternatively, use <a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a> to feed files
+or the Java <a href="api.html">Document API</a> directly - see illustration below and
+<a href="writing-to-vespa.html">writing to Vespa</a>.
+</p><p>
+Next is <a href="indexing.html">indexing</a>
+and/or <a href="document-processing.html">document processing</a>
+where documents are prepared for indexing (and optionally processed using custom code),
+before sent to a <em>distributor</em>.
+The distributor maps the document to bucket, and sends it to <em>content nodes</em>:
+</p>
+<img src="content/img/elastic-feed-container.svg" height="410" width="340"/>
+<img src="content/img/elastic-feed-vespafeeder.svg" height="410" width="340"/>
+<p></p>
 <table class="table">
   <thead></thead><tbody>
     <tr id="document-processing">
-      <th>Document processing</th>
+      <th style="white-space: nowrap">Document processing</th>
       <td>
         The <a href="document-processing.html">document processing chain</a>
         is a chain of processors that manipulate documents before they are stored.
@@ -106,14 +131,21 @@ The distributor maps the document to bucket, and sends it to <em>content nodes</
     </tr><tr id="distributor">
       <th>Distributor</th>
       <td>
+        <p>
         The <a href="content/content-nodes.html#distributor">distributor</a> keeps track of
-        which content nodes that stores replicas of each bucket,
-        based on the <em>redundancy</em> and information from the <em>cluster controller</em>.
+        which content nodes that stores replicas of each bucket (maximum one replica each),
+        based on the <a href="reference/services-content.html#redundancy">Redundancy</a>
+        and information from the <em>cluster controller</em>.
         A bucket maps to one distributor only.
         A distributor keeps a bucket database with bucket metadata.
         The metadata holds which content nodes store replicas of the buckets,
         the checksum of the bucket content and the number of documents and meta entries within the bucket.
         Each document is algorithmically mapped to a bucket and forwarded to the correct content nodes.
+        The distributors detect whether there are enough bucket replicas on the
+        content nodes and add/remove as needed.
+        Write operations wait for replies from every replica
+        and fail if less than redundancy are persisted within timeout.
+        </p>
       </td>
     </tr><tr id="cluster-controller">
       <th>Cluster controller</th>
@@ -127,7 +159,7 @@ The distributor maps the document to bucket, and sends it to <em>content nodes</
     </tr><tr id="content-node">
       <th>Content node</th>
       <td>
-        The content node has a <em>bucket management system</em>,
+        The <a href="content/content-nodes.html">content node</a> has a <em>bucket management system</em>,
         which sends requests to a set of <em>document databases</em>,
         which each consists of three <em>sub-databases</em>.
         In short, this node activates and deactivates buckets for search.
@@ -136,64 +168,18 @@ The distributor maps the document to bucket, and sends it to <em>content nodes</
     </tr>
   </tbody>
 </table>
-<p>
-Other aspects of feeding:
-</p>
-<table class="table">
-  <thead></thead><tbody>
-    <tr id="redundancy">
-      <th>Redundancy</th>
-      <td>
-        <p>
-        <a href="reference/services-content.html#redundancy">Redundancy</a>
-        configures how many content nodes stores replicas of the same bucket.
-        No node may store more than one replica of a bucket.
-        The distributors detect whether there are enough bucket replicas on the
-        content nodes and add/remove as needed.
-        Write operations wait for replies from every replica
-        and fail if less than redundancy are persisted within timeout.
-        </p><p>
-        <a href="reference/services-content.html#searchable-copies">Searchable-copies</a>
-        configures how many replicas to keep in the
-        <a href="/documentation/proton.html#sub-databases">Ready sub-database</a>.
-        </p>
-      </td>
-    </tr><tr id="consistency">
-      <th>Consistency</th>
-      <td>
-        <p>
-        Consistency is maintained at bucket level.
-        Content nodes calculate checksums based on the bucket contents,
-        and the distributors compare checksums among the bucket replicas.
-        A <em>bucket merge</em> is issued to resolve inconsistency, when detected.
-        While there are inconsistent bucket replicas, the distributors route operations to the "best" replica.
-        </p><p>
-        As buckets are split and joined, it is possible for replicas of a bucket to be split at different levels.
-        A node may have been down while its buckets have been split or joined.
-        This is called <em>inconsistent bucket splitting</em>.
-        Bucket checksums can not be compared across buckets with different split levels.
-        Consequently, distributors do not know whether all documents exist in enough replicas in this state.
-        Due to this, inconsistent splitting is one of the highest maintenance priorities.
-        After all buckets are split or joined back to the same level,
-        the distributors can verify that all the replicas are consistent and fix any detected issues with a merge.
-        <a href="content/consistency.html">Read more</a>.
-        </p>
-      </td>
-    </tr>
-  </tbody>
-</table>
-<p>
-Detailed process overview:
-</p><p>
+
+
+<h3 id="detailed-process-overview">Detailed process overview</h3>
 <img src="img/reference/flow/feed1.png"/>
-</p><p>
+<p>
 Content node expanded:
-</p><p>
-<img src="img/reference/flow/feed2.png" />
 </p>
+<img src="img/reference/flow/feed2.png" />
 
 
-<h3 id="retrieving-documents">Retrieving documents</h3>
+
+<h2 id="retrieving-documents">Retrieving documents</h2>
 <p>
 Retrieving documents is done by specifying an id to <em>get</em>,
 or use a <a href="reference/document-select-language.html">selection expression</a>
