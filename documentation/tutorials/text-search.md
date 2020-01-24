@@ -165,7 +165,7 @@ Some notes about the elements above:
 
 - `<container>` defines the [container](../jdisc/index.html) cluster for document, query and result processing
 - `<search>` sets up the [search](../search-api.html) endpoint for Vespa queries.  The default port is 8080.
-- `<document-api>` sets up the [document](../document-api.html) endpoint for feeding.
+- `<document-api>` sets up the [document](../reference/document-v1-api-reference.html) endpoint for feeding.
 - `<content>` defines how documents are stored and searched
 - `<redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _search definition_ — the

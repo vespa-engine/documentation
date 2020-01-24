@@ -246,7 +246,7 @@ search mydocument {
 1. Add a reference to the same global variable document from all your documents.
 All documents should contain the value "id:mynamespace:myvariables::1" in the
 myvariables_ref field. You can add this value to all documents by doing an
-<a href="document-api.html#update">update</a> on each document with the JSON
+<a href="reference/document-v1-api-reference.html#update">update</a> on each document with the JSON
 ```
 {
     "fields": {
@@ -283,7 +283,7 @@ java -cp model-integration-jar-with-dependencies.jar ai.vespa.rankingexpression.
 or, if you do this from Java, call ai.vespa.rankingexpression.importer.tensorflow.VariableConverter.importVariable
 with the same arguments.
 
-1. Update the global document. Use e.g the <a href="document-api.html">document API</a> to PUT a new value for your variable:
+1. Update the global document. Use e.g <a href="reference/document-v1-api-reference.html">/document/v1/</a> to PUT a new value for your variable:
 ```
 curl -X PUT -H "Content-Type:application/json" --data-binary @update.json http://hostname:8080/document/v1/mynamespace/myvariables/docid/1
 ```
