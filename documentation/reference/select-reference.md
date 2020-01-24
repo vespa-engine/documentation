@@ -71,11 +71,11 @@ Which is equivalent with the YQL.
 
 ### Grouping
 
-One or more [gruping statements](../grouping.html), can be set as a JSON array in the `grouping` field.
+One or more [grouping statements](../grouping.html), can be set as a JSON array in the `grouping` field.
 Each array item is a grouping statement represented as JSON where
 - Each grouping function is represented by a JSON object where the name of the function is the field
-  name and the value if the function content.
-- Lists of a arguments are represented as JSON lists.
+  name and the value is the function content.
+- Lists of arguments are represented as JSON arrays.
 
 Examples:
 
