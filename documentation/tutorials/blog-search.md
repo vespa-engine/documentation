@@ -214,7 +214,7 @@ document, query and result processing
 `<search>` sets up the [search](../search-api.html) endpoint for Vespa queries.
 The default port is 8080.
 
-`<document-api>` sets up the [document](../document-api.html) endpoint for
+`<document-api>` sets up the [document](../reference/document-v1-api-reference.html) endpoint for
 feeding.
 
 `<nodes>` defines the nodes required per service.  (See the
