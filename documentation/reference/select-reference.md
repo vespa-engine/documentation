@@ -71,15 +71,21 @@ Which is equivalent with the YQL.
 
 ### Grouping
 
-Instead of paratheses as in the [YQL Grouping](../grouping.html), the `GROUPING` parameter uses curly brackets to symbolise the tree-structure between the different grouping/aggregation-functions, and colons to assign function-arguments.
+One or more [grouping statements](../grouping.html), can be set as a JSON array in the `grouping` field.
+Each array item is a grouping statement represented as JSON where
+- Each grouping function is represented by a JSON object where the name of the function is the field
+  name and the value is the function content.
+- Lists of arguments are represented as JSON arrays.
 
-A grouping, that will group first by year and then by month, can be written as such:
+Examples:
+
+Grouping statement:
 
 ```
 | all(group(time.year(a)) each(output(count())
     all(group(time.monthofyear(a)) each(output(count())))
 ```
-, and equivalent written with the `GROUPING`-parameter.
+equivalent JSON `grouping`-argument:
 
 ```
 "grouping" : [
@@ -96,6 +102,24 @@ A grouping, that will group first by year and then by month, can be written as s
 ]
 ```
 
+Grouping statement:
+
+```
+all(group(predefined(foo, bucket[1, 2>, bucket[3, 4>)))
+```
+equivalent JSON `grouping`-argument:
+
+```
+"grouping" : [ 
+  { 
+    "all" : { 
+      "group" : { 
+        "predefined" : [ "foo", { "bucket": [1,2]}, { "bucket": [3,4]} ] 
+      } 
+    } 
+  } 
+]
+```
 
 
 ### A complete example
