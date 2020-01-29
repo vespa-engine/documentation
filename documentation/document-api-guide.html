@@ -47,16 +47,10 @@ A <a href="documents.html">document</a> is a composite object that consists of:
     identifier. The field object for a given field name can be
     retrieved using the <code>getField(&lt;fieldname&gt;)</code>
     method in the <code>DocumentType</code>.
-    </p><p>
-    For most data types, simply assign a value object directly to a document.
-    For the complex data type <a href="#datatype.weightedset">DataType.WEIGHTEDSET</a>
-    there are special classes that must be used to wrap the data.
     </p></li>
 </ul>
 <p>
-To construct a document one must first retrieve the document type from
-the document manager, construct a unique identifier, and then pass
-both of those objects to the constructor of the <code>Document</code> class:
+Construct a document - example:
 <pre>
 DocumentAccess access = DocumentAccess.createDefault();
 DocumentType type = access.getDocumentTypeManager().getDocumentType("music");
@@ -65,28 +59,57 @@ Document document = new Document(type, id);
 //Do great stuff, then remember to shutdown the Access instance  
 access.shutdown();
 </pre>
-To get and set the value of a field in a document, use
-the <code>getValue()</code> and <code>setValue()</code> method:
-<pre>
-document.setFieldValue(document.getType().getField("myIntField"), 100);
-FieldValue value = document.getFieldValue(document.getType().getField("myIntField"));
-int val = ((IntegerFieldValue) value).getInteger();
-</pre>
 </p>
 
 
-<h3 id="datatype.weightedset">DataType.WEIGHTEDSET</h3>
+
+<h2 id="fields">Fields</h2>
 <p>
-This type is used to hold a set of other field values of any one given
-data type with an associated integer weight. This is implemented as a
-generic so that any other data type can be contained in it:
+Examples:
 <pre>
-WeightedSetDataType dataType =
-        (WeightedSetDataType) document.getType().getField("myweightedset").getDataType();
-WeightedSet&lt;String&gt; val = new WeightedSet&lt;String&gt;(dataType);
-    val.put("foo", 100);
-    val.put("bar", 101);
-    assert (val.get("foo") == 100);
+doc.setFieldValue("aByte", (byte)1);
+doc.setFieldValue("aInt", (int)1);
+doc.setFieldValue("aLong", (long)1);
+doc.setFieldValue("aFloat", 1.0);
+doc.setFieldValue("aDouble", 1.0);
+doc.setFieldValue("aBool", new BoolFieldValue(true));
+doc.setFieldValue("aString", "Hello Field!");
+
+doc.setFieldValue("unknownField", "Will not see me!");
+
+Array&lt;IntegerFieldValue&gt; intArray = new Array&lt;&gt;(doc.getField("aArray").getDataType());
+intArray.add(new IntegerFieldValue(11));
+intArray.add(new IntegerFieldValue(12));
+doc.setFieldValue("aArray", intArray);
+
+Struct pos = PositionDataType.valueOf(1,2);
+       pos = PositionDataType.fromString("N0.000002;E0.000001");  // two ways to set same value
+doc.setFieldValue("aPosition", pos);
+
+doc.setFieldValue("aPredicate", new PredicateFieldValue("aLong in [10..20]"));
+
+byte[] rawBytes = new byte[100];
+for (int i = 0; i &lt; rawBytes.length; i++) {
+    rawBytes[i] = (byte)i;
+}
+doc.setFieldValue("aRaw", new Raw(ByteBuffer.wrap(rawBytes)));
+
+Tensor tensor = Tensor.Builder.of(TensorType.fromSpec("tensor&lt;float&gt;>(x[2],y[2])")).
+        cell().label("x", 0).label("y", 0).value(1.0).
+        cell().label("x", 0).label("y", 1).value(2.0).
+        cell().label("x", 1).label("y", 0).value(3.0).
+        cell().label("x", 1).label("y", 1).value(5.0).build();
+doc.setFieldValue("aTensor", new TensorFieldValue(tensor));
+
+MapFieldValue&lt;StringFieldValue, StringFieldValue&gt; map = new MapFieldValue&lt;&gt;(new MapDataType(DataType.STRING, DataType.STRING));
+map.put(new StringFieldValue("key1"), new StringFieldValue("foo"));
+map.put(new StringFieldValue("key2"), new StringFieldValue("bar"));
+doc.setFieldValue("aMap", map);
+
+WeightedSet&lt;StringFieldValue&gt; wset = new WeightedSet&lt;&gt;(DataType.getWeightedSet(DataType.STRING));
+wset.put(new StringFieldValue("strval 1"), 5);
+wset.put(new StringFieldValue("strval 2"), 10);
+doc.setFieldValue("aWeightedset", wset);
 </pre>
 </p>
 
@@ -95,98 +118,20 @@ WeightedSet&lt;String&gt; val = new WeightedSet&lt;String&gt;(dataType);
 <h2 id="document-updates">Document updates</h2>
 <p>
 A document update is a request to modify a document.
-The update contains a document id to identify which document to update,
-a list of field updates, and a list of field path updates.
-</p>
-
-
-<h3 id="field-updates">Field updates</h3>
-<p>
-Each field update contains a field id to identify which field of the
-document to update (this id is retrieved from the document type
-using <code>getField(&lt;name&gt;).getId()</code>),
-and a list of value updates to perform.
-A value update can be any of the following:
-</p>
-<table class="table">
-  <thead></thead><tbody>
-    <tr id="addvalueupdate">
-      <th>AddValueUpdate</th>
-      <td>Adds its content to the target field value.</td>
-    </tr><tr>
-      <th>ArithmeticValueUpdate</th>
-      <td>
-        <p>
-        An arithmetic value update is an update to a numerical field
-        value. This can also be used in combination with
-        the <em>MapValueUpdate</em> below to modify
-        weights in weighted sets. This update has an operator (available by
-        the <code>getOperator()</code> and <code>setOperator()</code> methods)
-        and a numerical operand (available by the <code>getOperand()</code>
-        and <code>setOperand()</code> methods).
-        </p><p>
-        Note: Vespa provides <em>at least once</em> semantics.
-        Due to the non-idempotent nature of arithmetic updates,
-        situations that e.g. cause re-sending of messages
-        may result in the final value of the updated document field to differ from the expected value.
-        </p>
-      </td>
-    </tr><tr id="assigndvalueupdate">
-      <th>AssignValueUpdate</th>
-      <td>Assigns its content to the target field value.</td>
-    </tr><tr id="clearvalueupdate">
-      <th>ClearValueUpdate</th>
-      <td>Clears the target field value.</td>
-    </tr><tr id="mapvalueupdate">
-      <th>MapValueUpdate</th>
-      <td>
-        <p>
-        Since value updates are concerned with updating only a single field
-        value it is necessary for the update to be able to indicate which
-        value to modify in complex field data types such as weighted
-        sets. This is the purpose of the <code>MapValueUpdate</code> class. It
-        contains a value target (available by the
-        <code>setValue()</code> and <code>getValue()</code>) which is the
-        identifier of the value to update, and a value update (available by
-        the <code>getUpdate()</code> and <code>setUpdate()</code> methods)
-        which is the update to perform.
-        </p><p>
-        For simplicity, the <code>FieldUpdate</code> class contains factory
-        methods to create the most common maps. For example, if one was to
-        assign 100 as the weight to the &ldquo;foo&rdquo; key in the document
-        field &ldquo;myStrWSet&rdquo; (a weighted set of strings), the value
-        update in would be created as follows:
-        </p>
-<pre>
-DocumentAccess access = DocumentAccess.createDefault();
-DocumentType type = access.getDocumentTypeManager().getDocumentType("music");
-DocumentId id = new DocumentId("id:music:music::0");
-DocumentUpdate upd = new DocumentUpdate(type, id);
-
-upd.addFieldUpdate(FieldUpdate.createMap(type.getField("myStrWSet"), "foo", new AssignValueUpdate(100)));
-</pre>
-      </td>
-    </tr><tr id="removevalueupdate">
-      <th>RemoveValueUpdate</th>
-      <td>Removes the target field value.</td>
-    </tr>
-  </tbody>
-</table>
-
-
-<h3 id="field-path-updates">Field Path Updates</h3>
-<p>
-Field path updates are used to simplify updates to complex data structures,
-using maps, structs, arrays, and so on.
-A field path update uses a <a href="reference/document-field-path.html">field path</a>
-to designate what part of the document is to be changed.
-This can be combined with a <em>where clause</em>,
-which is a <a href="reference/document-select-language.html">document selection expression</a>.
-The <em>where clause</em> decides whether the document is to be changed at all,
-and also sets variables to use in the field path
-when deciding which parts of the document to change.
-</p>
-<p>
+See <a href="writing-to-vespa.html#reads-and-writes">writing to Vespa</a> for update operations.
+</p><p>
+Primitive, and some multivalue fields (WeightedSet and Array&lt;primitive&gt;), are updated using a
+<a href="http://javadoc.io/page/com.yahoo.vespa/document/latest/com/yahoo/document/update/FieldUpdate.html">
+FieldUpdate</a>.
+</p><p>
+Complex, multivalue fields like Map and Array&lt;struct&gt; are updated using
+<a href="http://javadoc.io/page/com.yahoo.vespa/document/latest/com/yahoo/document/fieldpathupdate/AddFieldPathUpdate.html">
+AddFieldPathUpdate</a>,
+<a href="http://javadoc.io/page/com.yahoo.vespa/document/latest/com/yahoo/document/fieldpathupdate/AssignFieldPathUpdate.html">
+AssignFieldPathUpdate</a> and
+<a href="http://javadoc.io/page/com.yahoo.vespa/document/latest/com/yahoo/document/fieldpathupdate/RemoveFieldPathUpdate.html">
+RemoveFieldPathUpdate</a>.
+<!-- ToDo: Rewrite -->
 Field path updates are only supported on non-attribute
 <a href="reference/search-definitions-reference.html#field">fields</a>,
 <a href="reference/search-definitions-reference.html#index">index</a> fields,
@@ -195,26 +140,62 @@ or fields containing
 If a field is both an index field and an attribute, then the document is updated in the document store,
 the index is updated, but the attribute is not updated.
 Thus you can get old values in document summary requests and old values being used in ranking and grouping.
-</p>
+A <a href="reference/document-field-path.html">field path</a> string identifies fields to update - example:
+<pre>
+upd.addFieldPathUpdate(new AssignFieldPathUpdate(type, "<span style="background-color: yellow">myMap{key2}</span>", new StringFieldValue("abc")));
+</pre>
+<em>FieldUpdate</em> examples: <!-- ToDo: move this to a document processing sample app -->
+<pre>
+// Simple assignment
+Field intField = type.getField("aInt");
+IntegerFieldValue intFieldValue = new IntegerFieldValue(2);
+FieldUpdate assignUpdate = FieldUpdate.createAssign(intField, intFieldValue);
+upd.addFieldUpdate(assignUpdate);
 
-<p>
-There are three different field path updates:
+// Arithmetic
+FieldUpdate addUpdate = FieldUpdate.createIncrement(type.getField("aLong"), 3);
+upd.addFieldUpdate(addUpdate);
+
+// Composite - add one array element
+upd.addFieldUpdate(FieldUpdate.createAdd(type.getField("aArray"),
+        new IntegerFieldValue(13)));
+
+// Composite - add two array elements
+upd.addFieldUpdate(FieldUpdate.createAddAll(type.getField("aArray"),
+        List.of(new IntegerFieldValue(14), new IntegerFieldValue(15))));
+
+// Composite - add weightedset element
+upd.addFieldUpdate(FieldUpdate.createAdd(type.getField("aWeightedset"),
+        new StringFieldValue("add_me"),101));
+
+// Composite - add set to set
+WeightedSet<StringFieldValue> wset = new WeightedSet<>(DataType.getWeightedSet(DataType.STRING));
+wset.put(new StringFieldValue("a1"), 3);
+wset.put(new StringFieldValue("a2"), 4);
+upd.addFieldUpdate(FieldUpdate.createAddAll(type.getField("aWeightedset"), wset));
+
+// Composite - update array element
+upd.addFieldUpdate(FieldUpdate.createMap(type.getField("aArray"),
+        new IntegerFieldValue(1), // array index
+        new AssignValueUpdate(new IntegerFieldValue(2))));  // value at index
+
+// Composite - update weightedset element
+upd.addFieldUpdate(FieldUpdate.createMap(type.getField("aWeightedset"),
+        new StringFieldValue("element1"), // value
+        new AssignValueUpdate(new IntegerFieldValue(30))));  // weight
+</pre>
+<em>FieldPathUpdate</em> examples: <!-- ToDo: move this to a document processing sample app -->
+<pre>
+// Add an element to a map
+Array stringArray = new Array(DataType.getArray(DataType.STRING));
+stringArray.add(new StringFieldValue("my-val"));
+AddFieldPathUpdate addElement = new AddFieldPathUpdate(type, "aMap{key1}", stringArray);
+upd.addFieldPathUpdate(addElement);
+
+// Modify an element in a map
+upd.addFieldPathUpdate(new AssignFieldPathUpdate(type, "aMap{key2}", new StringFieldValue("abc")));
+</pre>
 </p>
-<table class="table">
-  <thead></thead><tbody>
-    <tr id="assignfieldpathupdate">
-      <th>AssignFieldPathUpdate</th>
-      <td>Modify a value in any part of the document,
-        or add values to maps or weighted sets</td>
-    </tr><tr id="addfieldpathupdate">
-      <th>AddFieldPathUpdate</th>
-      <td>Add values to arrays</td>
-    </tr><tr id="removefieldpathupdate">
-      <th>RemoveFieldPathUpdate</th>
-      <td>Remove values from the document</td>
-    </tr>
-  </tbody>
-</table>
 
 
 <h3 id="update-reply-semantics">Update reply semantics</h3>
@@ -222,12 +203,12 @@ There are three different field path updates:
 Sending in an update for which the system can not find a corresponding
 document to update is <em>not</em> considered an error.
 These are returned with a successful status code
-(assuming that no actual error occurred during the update processing).
-If one cares about whether the update was known to have been applied, use the
-<code>boolean UpdateDocumentReply.wasFound()</code> method.
+(assuming that no actual error occurred during the update processing). Use
+<a href="http://javadoc.io/page/com.yahoo.vespa/documentapi/latest/com/yahoo/documentapi/UpdateResponse.html#wasFound()">
+UpdateDocumentReply.wasFound()</a> to check if the update was known to have been applied.
 </p><p>
-If the update returns with an error reply, the update <em>may or may not</em>
-have been applied, depending on where in the platform stack the error occurred.
+If the update returns with an error reply, the update <em>may or may not</em> have been applied,
+depending on where in the platform stack the error occurred.
 </p>
 
 
@@ -560,6 +541,6 @@ Use maven <a href="https://mvnrepository.com/artifact/com.yahoo.vespa/documentap
   &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
   &lt;artifactId&gt;documentapi&lt;/artifactId&gt;
   &lt;version&gt;7.25.26&lt;/version&gt; &lt;!-- Find latest version at <a href="https://search.maven.org/search?q=g:com.yahoo.vespa%20a:documentapi">search.maven.org/search?q=g:com.yahoo.vespa%20a:documentapi</a> --&gt;
-  &lt;/dependency&gt;
+&lt;/dependency&gt;
 </pre>
 </p>
