@@ -261,23 +261,41 @@ ranking.features.query(myvalue)=0.1
 </pre>
 to the query - see the <a href="reference/search-api-reference.html#ranking.features">Search API</a>.
 </p><p>
+<b>Query tensors must be defined in application package</b>
+In order to use request tensors one must define the tensor type of the query feature in a query profile type and 
+modify the default query-profile to use the correct query profile type.
+
+In the following example the tensor type of the tensor <em>query(user_profile)</em> is 
+defined to have one mapped dimension <em>cat</em> and is of type <em>float</em>.
+Also see the
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/src/main/application/search/query-profiles/">
+Sample app user tensor configuration</a></p>
+<p>
+In <em>search/query-profiles/types/</em> one need a file named <b>root.xml</b> with the tensor type definitions:
+<pre>
+&lt;query-profile-type id="root"&gt;
+    &lt;field name="ranking.features.query(user_profile)" type="tensor&amp;lt;float&amp;gt;(cat{})" /&gt;
+&lt;/query-profile-type&gt;
+</pre> and <em>search/query-profiles/default.xml</em> must be updated to specify the correct query profile type:
+<pre>
+&lt;query-profile id="default" type="root"&gt;
+&lt;/query-profile&gt;
+</pre> 
+Without the correct tensor type and definition the passed <em>query(user_profile</em> is handled as a string rank feature which is converted to a scalar. 
+ 
+Refer to <a href="reference/query-profile-reference.html#field-type">query profile field type reference</a>.
+</p>
+<p>
 Use the <a href="reference/tensor.html#tensor-literal-form">tensor literal form</a> to send a tensor -
 here send <em>user_profile</em> as <em>{% raw %}{{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}{% endraw %}</em>:
 <pre>
 ranking.features.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D
 </pre>
-In order to use this feature you must define the tensor type of the query feature in a query profile type.
-Refer to <a href="reference/query-profile-reference.html#field-type">query profile field type reference</a>.
-In the following example the tensor type is defined to have one mapped dimension <em>x</em>
-(also see the
-<a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/src/main/application/search/query-profiles/types/root.xml">
-sample application</a>):
-<pre>
-&lt;query-profile-type id="myProfileType"&gt;
-    &lt;field name="ranking.features.query(tensor_feature)" type="tensor&lt;float&gt;(x{})" /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-A query tensor can also be made in a <a href="searcher-development.html">Searcher</a>.
+</p>
+<p>
+A query tensor can also be made in a <a href="searcher-development.html">Searcher</a>. The same restriction applies for programmatic generated tensors, their
+type must be defined in the application package as described in the section above. 
+
 Set the tensor value using the
 <a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/query/ranking/RankFeatures.java">
 RankFeatures</a> instance associated with
@@ -296,6 +314,7 @@ import com.yahoo.tensor.TensorType;
 public class TensorInQuerySearcher extends Searcher {
     @Override
     public Result search(Query query, Execution execution) {
+        //The Tensor type must also be in the application package as described in the above section
         query.getRanking().getFeatures().put("query(tensor_feature)",
             new MappedTensor.Builder(TensorType.fromSpec("tensor&lt;float&gt;(x{})")).cell().label("x", "foo").value(500).build());
         return execution.search(query);
