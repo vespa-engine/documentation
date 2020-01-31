@@ -5,7 +5,6 @@ title: "Document API"
 
 <p>
 This is an introduction to how to build and compile Vespa clients using the Document API.
-This is a high-level interface that gives access to data in Vespa content clusters.
 It can be used for feeding, updating and retrieving documents,
 or removing documents from the repository. See also the
 <a href="http://javadoc.io/doc/com.yahoo.vespa/documentapi">Java reference</a>.
@@ -17,7 +16,6 @@ or removing documents from the repository. See also the
 <p>
 All data fed, indexed and searched in Vespa are instances of the <code>Document</code> class.
 A <a href="documents.html">document</a> is a composite object that consists of:
-</p>
 <ul>
 <li><p>A <code>DocumentType</code> that defines the set of fields that
     can exist in a document. A document can only have a single
@@ -50,14 +48,75 @@ A <a href="documents.html">document</a> is a composite object that consists of:
     </p></li>
 </ul>
 <p>
-Construct a document - example:
+Use <a href="http://javadoc.io/page/com.yahoo.vespa/documentapi/latest/com/yahoo/documentapi/DocumentAccess.html">
+DocumentAccess</a> javadoc. Sample app:
 <pre>
-DocumentAccess access = DocumentAccess.createDefault();
-DocumentType type = access.getDocumentTypeManager().getDocumentType("music");
-DocumentId id = new DocumentId("id:music:music::0");
-Document document = new Document(type, id);
-//Do great stuff, then remember to shutdown the Access instance  
-access.shutdown();
+&lt;dependencies&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+        &lt;artifactId&gt;documentapi&lt;/artifactId&gt;
+        &lt;version&gt;7.168.4&lt;/version&gt; &lt;!-- Find latest version at <a href="https://search.maven.org/search?q=g:com.yahoo.vespa%20a:documentapi">search.maven.org/search?q=g:com.yahoo.vespa%20a:documentapi</a> --&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt; &lt;!-- ToDo: remove this once ImmutableList is removed --&gt;
+        &lt;groupId&gt;>com.google.guava&lt;/groupId&gt;
+        &lt;artifactId&gt;guava&lt;/artifactId&gt;
+        &lt;version&gt;28.2-jre&lt;/version&gt;
+    &lt;/dependency&gt;
+&lt;dependencies&gt;
+</pre>
+<pre>
+import com.yahoo.document.DataType;
+import com.yahoo.document.Document;
+import com.yahoo.document.DocumentId;
+import com.yahoo.document.DocumentPut;
+import com.yahoo.document.DocumentType;
+import com.yahoo.document.DocumentUpdate;
+import com.yahoo.document.datatypes.StringFieldValue;
+import com.yahoo.document.datatypes.WeightedSet;
+import com.yahoo.document.update.FieldUpdate;
+import com.yahoo.documentapi.DocumentAccess;
+import com.yahoo.documentapi.SyncParameters;
+import com.yahoo.documentapi.SyncSession;
+
+public class DocClient {
+
+    public static void main(String[] args) {
+
+        DocumentAccess access = DocumentAccess.createDefault();
+        DocumentType type = access.getDocumentTypeManager().getDocumentType("music");
+        DocumentId id = new DocumentId("id:namespace:music::0");
+        Document doc = new Document(type, id);
+        SyncSession session = access.createSyncSession(new SyncParameters.Builder().build());
+
+        // Put document with a1,1
+        WeightedSet&lt;StringFieldValue&gt; wset = new WeightedSet&lt;&gt;(DataType.getWeightedSet(DataType.STRING));
+        wset.put(new StringFieldValue("a1"), 1);
+        doc.setFieldValue("aWeightedset", wset);
+        DocumentPut put = new DocumentPut(doc);
+        System.out.println(doc.toJson());
+        session.put(put);
+
+        // Update document with a1,10 and a2,20
+        DocumentUpdate upd1 = new DocumentUpdate(type, id);
+        WeightedSet&lt;StringFieldValue&gt; wset1 = new WeightedSet&lt;&gt;(DataType.getWeightedSet(DataType.STRING));
+        wset1.put(new StringFieldValue("a1"), 10);
+        wset1.put(new StringFieldValue("a2"), 20);
+        upd1.addFieldUpdate(FieldUpdate.createAddAll(type.getField("aWeightedset"), wset1));
+        System.out.println(upd1.toString());
+        session.update(upd1);
+
+        session.destroy();
+        access.shutdown();
+    }
+}
+</pre>
+To test using the <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-selfhosted">sample apps</a>,
+enable more ports for client to connect to config server and other processes on localhost - change docker command:
+<pre>
+$ docker run --detach --name vespa --hostname <span style="background-color: yellow;">localhost</span> --privileged \
+  --volume $VESPA_SAMPLE_APPS:/vespa-sample-apps --publish 8080:8080 \
+  <span style="background-color: yellow;">--publish 19070:19070 --publish 19071:19071 --publish 19090:19090 --publish 19099:19099 --publish 19101:19101</span> \
+  vespaengine/vespa
 </pre>
 </p>
 
@@ -179,10 +238,10 @@ upd.addFieldUpdate(FieldUpdate.createMap(type.getField("aArray"),
         new IntegerFieldValue(1), // array index
         new AssignValueUpdate(new IntegerFieldValue(2))));  // value at index
 
-// Composite - update weightedset element
-upd.addFieldUpdate(FieldUpdate.createMap(type.getField("aWeightedset"),
+// DO NOT USE - createMap can cause crash / missing updates TODO FIXME
+<span style="text-decoration: line-through">upd.addFieldUpdate(FieldUpdate.createMap(type.getField("aWeightedset"),
         new StringFieldValue("element1"), // value
-        new AssignValueUpdate(new IntegerFieldValue(30))));  // weight
+        new AssignValueUpdate(new IntegerFieldValue(30))));</span>
 </pre>
 <em>FieldPathUpdate</em> examples: <!-- ToDo: move this to a document processing sample app -->
 <pre>
@@ -529,18 +588,4 @@ public class MyClient {
 </pre>
 The first optional argument to this client is the <a href="routing.html">route</a> of the cluster to visit.
 The second is the <a href="documents.html#fieldsets">fieldset</a> set to retrieve.
-</p>
-
-
-
-<h2 id="compiling-and-linking">Compiling and linking</h2>
-<p>
-Use maven <a href="https://mvnrepository.com/artifact/com.yahoo.vespa/documentapi">com.yahoo.vespa:documentapi</a> :
-<pre>
-&lt;dependency&gt;
-  &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
-  &lt;artifactId&gt;documentapi&lt;/artifactId&gt;
-  &lt;version&gt;7.25.26&lt;/version&gt; &lt;!-- Find latest version at <a href="https://search.maven.org/search?q=g:com.yahoo.vespa%20a:documentapi">search.maven.org/search?q=g:com.yahoo.vespa%20a:documentapi</a> --&gt;
-&lt;/dependency&gt;
-</pre>
 </p>
