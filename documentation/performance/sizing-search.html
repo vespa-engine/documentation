@@ -15,10 +15,11 @@ The question you try to answer during a sizing exercise is
 This document helps sizing an application correctly with as low cost as possible.
 Vespa is used to implement many use cases, and this document is relevant for all of them:
 <ul>
-  <li>Serving a <a href="../text-ranking.html">text ranking</a> use case 
+  <li>Serving a <a href="../text-ranking.html">text ranking</a> use case
     or a <a href="..//tutorials/blog-recommendation.html">recommendation</a> use case</li>
   <li>Serving a Machine Learned Model, e.g a <a href="../tensorflow.html">Tensorflow</a>,
-    <a href="../onnx.html">ONNX</a> or <a href="../xgboost.html">XGBoost</a> model</li>
+    <a href="../onnx.html">ONNX</a>, <a href="../xgboost.html">XGBoost</a>, or
+    <a href="../lightgbm.html">LightGBM</a> model</li>
 </ul>
 With Vespa it is possible to do benchmarking on a few nodes
 to infer the overall performance and cost of the chosen deployment architecture,
@@ -105,7 +106,7 @@ Configure availability vs cost:
     <tr id="redundancy">
       <th><a href="../reference/services-content.html#redundancy">redundancy</a></th>
       <td>
-        Defines the total number of copies of each piece of data the cluster will store and maintain to avoid data loss. 
+        Defines the total number of copies of each piece of data the cluster will store and maintain to avoid data loss.
         Example: with a redundancy of 2, the system tolerates 1 node failure
         before any further node failures may cause data to become unavailable.
       </td>
@@ -129,7 +130,7 @@ Configure availability vs cost:
 <img src="../img/proton_database.svg" height="420" width="840"/>
 </figure>
 <p>
-The above figure illustrates the three 
+The above figure illustrates the three
 <a href="/documentation/proton.html#sub-databases">sub-databases</a> inside a Vespa content node.
 <ul>
   <li>The documents in the <strong>Ready</strong> DB are indexed,
@@ -172,10 +173,10 @@ The hits are returned to the stateless container for merging
 and potentially blending when multiple content clusters are involved.
 </p><p>
 When the global top ranking documents are found,
-the second protocol phase fetch the summary data for the global best hits 
-(e.g. summary snippets, the original field contents, and ranking features). 
-By doing the query in two protocol 
-phases one avoids transferring summary data for hits which will not make it into the global best hits. 
+the second protocol phase fetch the summary data for the global best hits
+(e.g. summary snippets, the original field contents, and ranking features).
+By doing the query in two protocol
+phases one avoids transferring summary data for hits which will not make it into the global best hits.
 </p><p>
 Components Involved in Query Execution:
 <ul>
@@ -222,7 +223,7 @@ The detailed execution inside Proton during the matching and ranking first proto
       and estimate the number of hits each term and parts of the query tree will produce.
       Terms which searches attribute fields without <em>fast-search</em> will be given a hit count estimate
       equal to the total number of documents.</li>
-  <li>Optimize and re-arrange the query tree for most efficient performance trying to move terms or 
+  <li>Optimize and re-arrange the query tree for most efficient performance trying to move terms or
       operators with the lowest hit ratio estimate first in the query tree.</li>
   <li>Prepare for query execution, by fetching posting lists from the index and B-tree structures.</li>
   <li>Multi-threaded execution per search starts using the above information.
@@ -252,8 +253,8 @@ where the work of matching and ranking is parallelized across a set of nodes and
 The speedup we can get by altering the number of nodes in a Vespa content group follows
 <a href="https://en.wikipedia.org/wiki/Amdahl%27s_law">Amdahl's law</a>,
 which is a formula used to find the maximum improvement possible by improving a particular part of a system.
-In parallel computing, <em>Amdahl's law</em> is mainly used to predict the theoretical 
-maximum speedup for program processing using multiple processors. 
+In parallel computing, <em>Amdahl's law</em> is mainly used to predict the theoretical
+maximum speedup for program processing using multiple processors.
 In Vespa, as in any parallel computing system,
 there is work which can be parallelized and work which cannot.
 The relationship between these two work types determine how to best scale the system,
@@ -264,7 +265,7 @@ We introduce the following concepts:
     <td><strong>static query work</strong></td>
     <td>
       Portion of the query work on a content node that does not depend on the
-      number of documents indexed on the node.  
+      number of documents indexed on the node.
       This is an administrative overhead caused by system design and abstractions,
       e.g. number of memory allocations per query term.
       Typically a large query tree means higher static work,
@@ -276,9 +277,9 @@ We introduce the following concepts:
     <td>
       Portion of the query work on a content node that depends on the number
       of documents indexed and active on the node.
-      This portion of the work scales mostly linearly with the number of matched documents. 
-      The dynamic query work can be parallelized over multiple processors and nodes. 
-      Referenced later as <em>DQW</em>. 
+      This portion of the work scales mostly linearly with the number of matched documents.
+      The dynamic query work can be parallelized over multiple processors and nodes.
+      Referenced later as <em>DQW</em>.
       The <em>DQW</em> also depends on the phase two protocol summary fill
       where the actual contents of the global best documents is fetched from the content nodes
       which produced the hit in the first protocol phase.
@@ -296,7 +297,7 @@ but does not reduce the static query work (<em>SQW</em>).
 The overall system cost also increases as you need to rent another node.</p>
 Since <em>DQW</em> depends and scales almost linearly with the number of documents  on the content nodes,
 we can try to distribute the work over more nodes.
-<em>Amdahl's law</em> specifies that the maximum speedup we achieve by parallelizing the 
+<em>Amdahl's law</em> specifies that the maximum speedup we achieve by parallelizing the
 dynamic work (<em>DQW</em>) is given by the formula:
 </p><p><!-- depends on mathjax -->
   $$\text{max_speedup}_{\text{group}} = \frac{1}{1 - \frac{DQW}{SQW+DQW}}$$
@@ -317,9 +318,9 @@ which increases almost linearly with number of nodes.
 </p><p>
 Two different <em>DQW/(DQW+SQW)</em> factors are are illustrated in the figures below.
 The overall query work <em>TQW</em> is the same for both cases (10 ms),
-but the <em>DQW</em> portion of the <em>TQW</em> is different. 
+but the <em>DQW</em> portion of the <em>TQW</em> is different.
 The throughput (QPS) is a function of the latency (<a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's Law</a>)
-and the number of cpu cores * nodes. 
+and the number of cpu cores * nodes.
 Using 1 node with 24 v-cpu cores and 10 ms service time (<em>TQW</em>),
 we expect to reach close to 2400 QPS at 100% utilization
 (unless there are other bottlenecks like network or stateless container processing).
@@ -362,8 +363,8 @@ Given the theoretical explanation above we can provide two rules of thumb for sc
 
 <h2 id="scaling-latency">Scaling latency in a content group</h2>
 <p>
-Whether we have a single group (flat distribution) or multiple groups, 
-the serving latency depends on the factors already described; <em>DQW</em> and <em>SQW</em>. 
+Whether we have a single group (flat distribution) or multiple groups,
+the serving latency depends on the factors already described; <em>DQW</em> and <em>SQW</em>.
 For use cases where <em>DQW</em> dominates the total query work <em>TQW</em>,
 we can effectively scale latency down by parallelizing the <em>DQW</em> over more nodes per group.
 </p><p>
@@ -425,13 +426,13 @@ as that gives the best resource usage measured as cpu/query.
 The optimal threads per search depends on the query use case,
 and should be evaluated by benchmarking.
 </p><p>
-The threads per search settings globally is tuned by 
+The threads per search settings globally is tuned by
 <a href="../reference/services-content.html#requestthreads-persearch">persearch</a>.
 This can be overridden to a lower value in
-<a href="../reference/search-definitions-reference.html#num-threads-per-search">rank profiles</a> 
+<a href="../reference/search-definitions-reference.html#num-threads-per-search">rank profiles</a>
 so that different query use cases can use different number of threads per search.
-Using multiple threads per search allows better utilization of 
-multi-core cpu architectures for low query volume applications.  
+Using multiple threads per search allows better utilization of
+multi-core cpu architectures for low query volume applications.
 </p>
 
 
@@ -443,12 +444,12 @@ One want to fit as many documents as possible into a node given the node constra
 <ul>
   <li>The targeted search latency SLA</li>
   <li>The targeted feed and update rate, and feed latency</li>
-</ul> 
+</ul>
 With the latency SLA in mind, benchmark with increasing number of documents per node
 and watch system level metrics and Vespa metrics.
 If latency is within the stated latency SLA and  the system meets the targeted sustained feed rate,
 overall cost is reduced by fitting more documents into each node
-(e.g. by increasing memory, cpu and disk constraints set by the node flavor). 
+(e.g. by increasing memory, cpu and disk constraints set by the node flavor).
 </p><p>
 Vespa will block feed operations
 if <a href="../reference/services-content.html#resource-limits">resource limits</a> have been reached.
@@ -465,7 +466,7 @@ The simplest way to determine the disk usage is to simply index documents
 and watch the disk usage along with the relevant metrics.
 The <em>redundancy</em> (number of copies) impact the disk usage footprint, obviously.
 </p><p>
-Note that <a href="../proton.html#proton-maintenance-jobs">content node maintenance jobs</a> 
+Note that <a href="../proton.html#proton-maintenance-jobs">content node maintenance jobs</a>
 temporarily increases disk usage.
 E.g. <em>index fusion</em> is an example, where new index files are written,
 causing an increase in used disk space while running.
@@ -484,7 +485,7 @@ as both index and summary files are mapped into memory using mmap
 and pages are paged into memory as needed.
 </p><p>
 The memory usage per document depends on the number of fields,
-the raw size of the documents and how many of the fields are defined as 
+the raw size of the documents and how many of the fields are defined as
 <a href="https://docs.vespa.ai/documentation/attributes.html">attributes</a>.
 See <a href="attribute-memory-usage.html">attribute memory usage sizing</a>
 and see <a href="#metrics-for-capacity-plan">metrics for capacity planning</a>.
@@ -501,7 +502,7 @@ with high static query work portion
 or a flat distribution for high dynamic query work portion,
 we should identify how much throughput the total system supports.
 </p><p>
-Finding where the latency starts climbing exponentially versus throughput 
+Finding where the latency starts climbing exponentially versus throughput
 is important in order to make sure that the deployed system is scaled well below this throughput threshold.
 Also, that it has capacity to absorb load increases over time,
 as well as having sufficient capacity to sustain node outages during peak traffic.
@@ -543,7 +544,7 @@ See also <a href="../graceful-degradation.html">graceful degradation</a>.
 
 <h2 id="metrics-for-capacity-plan">Metrics for Vespa Sizing</h2>
 <p>
-The relevant <a href="../reference/metrics.html">Vespa Metrics</a> for measuring the cost factors, 
+The relevant <a href="../reference/metrics.html">Vespa Metrics</a> for measuring the cost factors,
 in addition to system level metrics like cpu util, are:
 </p>
 <em>Metric capturing static query work (SQW) at content nodes </em>
