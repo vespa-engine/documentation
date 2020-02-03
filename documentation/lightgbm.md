@@ -138,7 +138,7 @@ search test {
             expression: attribute(doc_attrib)
         }
         function feature_2() {
-            expression: query(qurey_value)
+            expression: query(query_value)
         }
         first-phase {
             expression: lightgbm("lightgbm_model.json")
@@ -185,4 +185,35 @@ will result in the category values being "1", "2", ... "n", and sending in "a" i
 this case for model evaluation will probably result in an erroneous result. To ensure
 that categorical variables are properly handled, construct training data based
 on Pandas tables and use the `category` dtype on categorical columns.
+
+In Vespa categorical features are strings, so mapping the above feature
+for instance to a document field would be:
+
+```
+search test {
+    document test {
+        field numeric_attrib type double {
+            indexing: summary | attribute
+        }
+        field string_attrib type string {
+            indexing: summary | attribute
+        }
+    }
+    rank-profile classify inherits default {
+        function numerical() {
+            expression: attribute(numeric_attrib)
+        }
+        function categorical() {
+            expression: attribute(string_attrib)
+        }
+        first-phase {
+            expression: lightgbm("lightgbm_model.json")
+        }
+    }
+}
+
+```
+
+Here, the string value of the document would be used as the feature value when evaluating
+this model for every document.
 
