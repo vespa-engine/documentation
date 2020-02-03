@@ -76,7 +76,7 @@ both ranking and [stateless model evaluation](stateless-model-evaluation.html).
 Vespa has a special [ranking
 feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
 called `lightgbm`. This ranking feature specifies the model to use in a ranking
-expression.  Consider the following example:
+expression, relative under the `models` directory. Consider the following example:
 
 ```
 search test {
@@ -88,10 +88,10 @@ search test {
 }
 ```
 
-Here, we specify that the model `lightgbm_model.json` is applied to all
-documents matching a query which uses rank-profile `classify`. One important
-issue to consider is how to map features in the model to features that are
-available for Vespa to use in ranking.
+Here, we specify that the model `lightgbm_model.json` (directly under the
+`models` directory) is applied to all documents matching a query which uses
+rank-profile `classify`. One important issue to consider is how to map features
+in the model to features that are available for Vespa to use in ranking.
 
 Take a look at the JSON file dumped from the example above:
 
