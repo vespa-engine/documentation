@@ -158,11 +158,19 @@ to train a model directly. For more information, see [learning to
 rank](learning-to-rank.html).  Even though that page contains an example of
 using XGBoost, it is valid for LightGBM as well.
 
+## Objective functions
+
 If you have used XGBoost with Vespa previously, you might have noticed you
 have to wrap the `xgboost` feature in for instance a `sigmoid` function if you
 are using a binary classifier. That should not be needed in LightGBM as that
 information is passed along in the model dump as seen in the `objective` section
 in the JSON output above.
+
+Currently, Vespa supports regression, binary log loss and cross-entropy
+applications. Multi-class and ranking will soon be available.
+
+For more information on LightGBM and objective functions, see:
+https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective
 
 ## Using categorical features
 
