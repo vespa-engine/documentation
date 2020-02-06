@@ -221,7 +221,41 @@ be removed, as the expression will evaluate to invalid instead of <code>false</c
 </p>
 <p>
 To work around this issue, "short-circuiting" using a field presence check may be used:
-<code>foo.expires_at_time and foo.expires_at_time > now()</code>.
+<code>(foo.expires_at_time != null) and (foo.expires_at_time > now())</code>.
+</p>
+<h5 id="null-behavior-with-imported-fields">Null behavior with imported fields</h5>
+<p>
+If your selection references imported fields, <code>null</code> will be returned for any imported field when
+the selection is evaluated in a context where the referenced document can't be retrieved. For GC
+expressions this will happen in the client as part of the feed routing logic and it may also happen
+on backend nodes whose parent document set is incomplete (in case of node failures etc). It is therefore
+important that you have this in mind when writing GC selections using imported fields.
+</p><p>
+When you specify a selection criteria in a <code>&lt;document&gt;</code> tag, you're stating what
+a document must satisfy in order to be fed into the content cluster and to be kept there.
+</p><p>
+As an example, imagine a document type <code>music_recording</code> with an imported field
+<code>artist_is_cool</code> that points to a boolean field <code>is_cool</code> in a parent
+<code>artist</code> document.
+If you only want your cluster to retain recordings from artists that are certifiably cool,
+you might be tempted to write a selection like the following:
+</p>
+<pre>
+&lt;document type="music_recording" selection="music_recording.artist_is_cool == true"&gt;
+</pre>
+<p>
+<strong>This won't work as expected</strong>, because this expression is evaluated as part of the feeding pipeline to figure
+out if a cluster should accept a given document. At that point in time, there is no access to the parent document.
+Consequently, the field will return <code>null</code> and the document won't be routed to the cluster.
+</p><p>
+Instead, write your expressions to handle the case where the parent document <em>may not exist</em>:
+</p>
+<pre>
+&lt;document type="music_recording" selection="(music_recording.artist_is_cool == null) or (music_recording.artist_is_cool == true)"&gt;
+</pre>
+<p>
+With this selection, we explicitly let a document be accepted into the cluster if its imported field
+is <em>not</em> available. However, if it <em>is</em> available, we allow it to be used for GC.
 </p>
 
 <h3>Locale / Character sets</h3>
@@ -389,7 +423,80 @@ or in a selection expression for a visitor.
 Often used in <a href="services-content.html#documents">garbage collection selection</a>.
 </p>
 
-
+<h2 id="using-imported-fields-in-selections">Using imported fields in selections</h2>
+<p>
+When using <a href="../parent-child.html">parent-child</a> you can refer to simple imported
+fields (i.e. top-level primitive fields) in selections as if they were regular fields
+in the child document type. Complex fields (collections, structures etc) are not supported.
+</p><p>
+<strong>Important:</strong>
+special care needs to be taken when using document selections referencing imported fields,
+especially if using these are part of garbage collection expressions. If an imported field
+references a document that cannot be accessed at evaluation time, the imported field behaves
+as if it had been a regular, non-present field in the child document.
+In other words, it will return the special <code>null</code> value.
+</p><p>
+See <a href="#comparisons-with-missing-fields-null-values">comparisons with missing fields (null values)</a>
+for a more detailed discussion of null-semantics and how to write selections that handle these
+in a well-defined manner. In particular, read <a href="#null-behavior-with-imported-fields"> null
+behavior with imported fields</a> if you're writing GC selections.
+</p>
+<h3>Example</h3>
+<p>
+The following is an example of a very simple 3-level parent-child hierarchy.
+</p>
+<p>Grandparent schema:</p>
+<pre>
+search grandparent {
+  document grandparent {
+    field a1 type int {
+      indexing: attribute | summary
+    }
+  }
+}
+</pre>
+<p>Parent schema, with reference to grandparent:</p>
+<pre>
+search parent {
+  document parent {
+    field a2 type int {
+      indexing: attribute | summary
+    }
+    field ref type reference<grandparent> {
+      indexing: attribute | summary
+    }
+  }
+  import field ref.a1 as a1 {}
+}
+</pre>
+<p>Child schema, with reference to parent and (transitively) grandparent:</p>
+<pre>
+search child {
+  document child {
+    field a3 type int {
+      indexing: attribute | summary
+    }
+    field ref type reference<parent> {
+      indexing: attribute | summary
+    }
+  }
+  import field ref.a1 as a1 {}
+  import field ref.a2 as a2 {}
+}
+</pre>
+<p>Using these in document selection expressions is easy:</p>
+<p>Find all child docs whose grandparents have an <code>a1</code> greater than 5:</p>
+<p><code>child.a1 &gt; 5</code></p>
+<p>Find all child docs whose parents have an <code>a2</code> of 10 and grandparents have <code>a1</code> of 4:</p>
+<p><code>child.a1 == 10 and child.a2 == 4</code></p>
+<p>Find all child docs where the parent document cannot be found (or where the referenced field is not set in the parent):</p>
+<p><code>child.a2 == null</code></p>
+<p>Note that when visiting <code>child</code> documents we only ever access imported fields via the
+<strong>child</strong> document type itself.</p>
+<p>A much more complete list usage examples for the above document schemas and
+reference relations can be found in the
+<a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/parent_child/imported_fields_in_selections.rb">
+imported fields in selections</a> system test. This test covers both the visiting and GC cases.</p>
 
 <h2 id="constraints">Constraints</h2>
 <p>
