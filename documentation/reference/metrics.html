@@ -4,25 +4,110 @@ title: "Metrics"
 ---
 
 <p>
-Vespa exposes APIs for service <em>metrics</em> and <em>health</em>.
-The <a href="#node-metrics-api">node metrics API</a> allows integration
-with graphing and alerting services.
+Vespa provides various HTTP APIs to expose service <em>metrics</em> and <em>health</em> in
+json format:
+<ul>
+  <li>The <a href="#metrics-api">metrics API</a> exposes a
+  <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">selected
+  set of metrics</a> for the whole application, or for a single node, to allow integration
+  with graphing and alerting services.</li>
+  <li>Each service exposes its health status via the <a href="#process-health-api">process health api.</a></li>
+  <li>The <a href="#process-metrics-api">process metrics api</a> exposes all metrics from an individual service.</li>
+</ul>
+</p>
+
+
+<h2 id="metrics-api">Metrics API</h2>
+<p>
+The Vespa container (or your <em>endpoint</em> in hosted Vespa) exposes a selected set of
+metrics for every service on all nodes for the application. The metrics API can, for
+example, be used to
+<a href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch">
+pull Vespa metrics to Cloudwatch</a> using an AWS lambda function.
 </p><p>
-Each service also exposes health status and all its metrics from the
-<a href="#process-health-api">process health api</a>
-and <a href="#process-metrics-api">process metrics api</a>, respectively.
+For self-hosted Vespa, the URL is:
+<em>http://&lt;container-host&gt;:&lt;port&gt;/metrics/v2/values</em>, where
+the <em>port</em> is the same as for searching, e.g. 8080.
+</p><p>
+For hosted Vespa, just append <em>/metrics/v2/values</em> to your endpoint URL.
+</p><p>
+The response is a <code>nodes</code> list, where each element
+represents a node in the application and contains:
+<ul>
+  <li>The node's <code>hostname</code>.</li>
+  <li>The node's <code>role</code> in the Vespa application.</li>
+  <li>A <code>node</code> element containing the node's system metrics, e.g. cpu
+  usage.</li>
+  <li>A <code>services</code> list containing metrics for the node's services. The format
+  of this list is described <a href="#node-metrics-api">below.</a></li>
+</ul>
+For example:
+<pre>
+{
+  "nodes": [
+    {
+      "hostname": "x1234.aws-us-east-1c.vespa-external.aws.oath.cloud",
+      "role": "content/music/0/0",
+      "node": {
+        "timestamp": 1581325707,
+        "metrics": [
+          {
+            "values": {
+              "cpu.util": 5.0390590408805,
+              "cpu.sys.util": 1.69256381798,
+              "cpu.vcpus": 2,
+            },
+            "dimensions": {
+              "applicationId": "user.album.default",
+              "host": "x1234.aws-us-east-1c.vespa-external.aws.oath.cloud",
+              "zone": "aws-us-east-1c",
+              "clusterId": "content/music"
+            }
+          }
+        ]
+      },
+      "services": [
+        {
+          "name": "vespa.distributor",
+          "timestamp": 1581325707,
+          "status": {
+            "code": "up",
+            "description": "Data collected successfully"
+          },
+          "metrics": [
+            {
+              "values": {
+                "serverActiveThreads.average": 8,
+                "mem.heap.free.average": 33107668
+              },
+              "dimensions": {
+                "zone": "dev.aws-us-east-1c",
+                "applicationId": "user.album.default",
+                "serviceId": "container-clustercontroller",
+                "clusterId": "content/music"
+              }
+            }
+          ]  // end metrics
+        }
+      ]  // end services
+    }
+  ]  // end nodes
+}
+</pre>
+
+Comments are added for clarity, although not legal json.
 </p>
 
 
 
-<h2 id="node-metrics-api">Node Metrics API</h2>
+<h3 id="node-metrics-api">Metrics for a single node</h3>
 <p>
-To integrate with monitoring systems, Vespa runs a <em>metrics proxy</em> on all nodes.
-The metrics proxy exposes a selected set of metrics from each service running on the node,
-at <em>http://host:19092/metrics/v1/values</em>.
-</p><p>
-The output from the node metrics API is a list of <code>service</code> elements,
-with name, status and metrics for that service - example:
+Vespa provides a <em>node metrics API</em> on each node at
+<em>http://&lt;host&gt;:19092/metrics/v1/values</em>. This API can be used for monitoring
+self hosted Vespa in e.g. <a href="#prometheus-integration">Prometheus</a> and
+<a href="#datadog-integration">DataDog</a>. The response contains a selected set of
+metrics from each service running on the node. The output is a list of
+<code>service</code> elements, with name, status and metrics for that service - example:
 <pre>
 {
   "services": [
