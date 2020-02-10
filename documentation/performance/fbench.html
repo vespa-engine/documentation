@@ -16,24 +16,41 @@ a tool used for benchmarking the capacity of a Vespa system. Description:
 
 <h2 id="synopsis">Synopsis</h2>
 <p>
-<strong>vespa-fbench</strong> [-<strong>n</strong> <em>numClients</em>]
-[-<strong>c</strong> <em>cycleTime</em>] [-<strong>l</strong>
-<em>limit</em>] [-<strong>i</strong> <em>ignoreCount</em>] [-<strong>s</strong> <em>seconds</em>] [-<strong>q</strong>
-<em>queryFilePattern</em>] [-<strong>o</strong> <em>outputFilePattern</em>] [-<strong>r</strong>
-<em>restartLimit</em>] [-<strong>m</strong> <em>maxLineSize</em>]
-[-<strong>p</strong> <em>seconds</em>] [-<strong>k</strong>] [-<strong>x</strong>] [-<strong>y</strong>]
-[-<strong>z</strong>] &lt;hostname&gt; &lt;port&gt;
+<strong>vespa-fbench</strong> [options] &lt;hostname&gt; &lt;port&gt;
 </p>
 
 
 <h2 id="options">Options</h2>
-<p>
-Some options described below, use <em>vespa-fbench -h</em> for a complete list:
-</p>
+
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:200px">-n <em>numClients</em></th>
+
+<th>-H <em>header</em></th>
+<td>
+append extra header to each get request.
+</td>
+    </tr><tr>
+
+<th>-A <em>assign autority</em></th>
+<td>
+<str> hostname:port. Overrides Host: header sent.
+</td>
+    </tr><tr>
+
+<th>-P</th>
+<td>
+use POST for requests instead of GET
+</td>
+</tr><tr>
+
+<th>-a <em>str</em></th>
+<td>
+append string to each query
+</td>
+    </tr><tr>
+
+<th style="width:200px">-n <em>numClients</em></th>
 <td>
 Run vespa-fbench with <em>numClients</em> clients in parallel.  If not
 specified, vespa-fbench will use a default value of <em>10</em> clients.
@@ -105,6 +122,12 @@ enable HTTP keep-alive.
 </td>
     </tr><tr>
 
+<th>-d</th>
+<td>
+Base64 decode POST request content
+</td>
+    </tr><tr>
+
 <th>-x</th>
 <td>
 write benchmarkdata-reporting to output file.
@@ -122,16 +145,31 @@ write data on coverage to output file (must used with -x).
 use single query file to be distributed between clients.
 </td>
     </tr><tr>
-      
-      <th>-P</th>
-      <td>
-        use POST for requests instead of GET
-      </td>
+
+<th>-T <em>file</em></th>
+<td>
+CA certificate file to verify peer against.
+Use to benchmark https enabled port. (e.g <em>-T /etc/ssl/certs/ca-bundle.crt</em>)
+</td>
     </tr><tr>
-      <th>-T CA certificate file to verify peer against</th>
-      <td>
-        use to benchmark https enabled port. (e.g <em>-T /etc/ssl/certs/ca-bundle.crt</em>)  
-      </td>
+
+<th>-C <em>file</em></th>
+<td>
+client certificate file name
+</td>
+    </tr><tr>
+
+<th>-K <em>file</em></th>
+<td>
+client private key file name
+</td>
+    </tr><tr>
+
+<th>-D</th>
+<td>
+use TLS configuration from environment if T/C/K is not used
+</td>
+
     </tr>
   </tbody>
 </table>
@@ -140,67 +178,75 @@ use single query file to be distributed between clients.
 
 <h2 id="using-prepare">Preparing query files</h2>
 <p>
-vespa-fbench uses <em>query files</em>, which are files where each line
-is a query following the pattern:
-</p>
-<pre>/search/?query=<em>sddocname:music</em></pre>
-
-<p>
+vespa-fbench uses <em>query files</em>,
+which are files where each line is a query following the pattern:
+<pre>
+/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20%22music%22%3B
+</pre>
 When using the -X (HTTP POST) option vespa-fbench expects the following format:
-
 <pre>
 /search/
-{"yql" : "select * from sources * where default contains \"bad\" order by year desc;"} 
+{"yql" : "select * from sources * where sddocname contains music;"}
 </pre>
-Any line starting with "/" will be taken as an URL path, with the following lines taken as the content (these lines can NOT start with "/").
+Any line starting with "/" will be taken as an URL path,
+with the following lines taken as the content (these lines can NOT start with "/").
 With json body payload you also need to specify the content type by <em>-H "Content-Type: application/json" </em>
 </p>
+
+
 
 <h2 id="using-fbench">Run vespa-fbench</h2>
 <p>It is recommended to run multiple tests by changing the value in
 <code>-n</code> parameter to measure how the system might sustain
 query load and still meet the QPS and/or latency requirements. For
-example, starting from 1 client, 10, 20, etc.</p>
-
-<p>A typical vespa-fbench command looks like:</p>
+example, starting from 1 client, 10, 20, etc.
+</p><p>
+A typical vespa-fbench command looks like:
 <pre>
 $ vespa-fbench -n 10 -q query%03d.txt -s 300 -c 0 -o output%03d.txt -xy test.domain.com 8080
 </pre>
-
-
-<p>This creates 10 clients which will run for 300 seconds (5 minutes). The
+A more complex example, using docker, hitting a Vespa Cloud endpoint:
+<pre>
+$ docker run -v /Users/myself/tmp:/testfiles \
+      -w /testfiles --entrypoint '' vespaengine/vespa \
+      /opt/vespa/bin/vespa-fbench \
+          -C data-plane-public-cert.pem -K data-plane-private-key.pem -T /etc/ssl/certs/ca-bundle.crt \
+          -n 10 -q query%03d.txt -o output%03d.txt -xy -s 300 -c 0 \
+          myapp.mytenant.aws-us-east-1c.public.vespa.oath.cloud 443
+</pre>
+This creates 10 clients which will run for 300 seconds (5 minutes). The
 <code>-c</code> parameter states that each client will wait for 0
 milliseconds between each request. Each client would use a query and
 output file given by the given pattern and it's client number,
-i.e. client 1 will use query file query001.txt and output file output001.txt.</p>
-
-<p>The options <code>-xy</code> makes vespa-fbench clients output
-benchmarking data to it's output files</p>
-
-<p class="alert alert-success">
+i.e. client 1 will use query file query001.txt and output file output001.txt.
+</p><p>
+The options <code>-xy</code> makes vespa-fbench clients output
+benchmarking data to it's output files.
+</p><p>
 It is possible to list several hostnames and ports. The different
 hostnames will be distributed to the clients in a round-robin manner,
 such that, with two hosts, client 0, 2, &hellip;, 38 would make requests to
 the first host while client 1, 3, &hellip;, 39 would make requests to the
 second host.
-</p>
-
-<p class="alert alert-success">
+</p><p>
 Note that saving all responses to disk might impact the performance of
 the benchmarking itself. If only the summary is needed it is
 recommended to not use output files.
 </p>
 
+
+
 <h2 id="using-post">Using vespa-fbench results</h2>
 <p>
-After running vespa-fbench you will have a summary written to stdout and an
-output file from each client.
+After running vespa-fbench you will have a summary written to stdout
+and an output file from each client.
 </p>
 
 
 <h3 id="results">Understanding benchmarking results</h3>
-<p>After a test run has completed, vespa-fbench outputs various test
-results. This section will explain what each of these numbers mean. Notes:</p>
+<p>
+After a test run has completed, vespa-fbench outputs various test results.
+This section will explain what each of these numbers mean. Notes:
 <ul>
   <li>
     'system utilization' provides no information about the Vespa
@@ -222,6 +268,7 @@ results. This section will explain what each of these numbers mean. Notes:</p>
   </li><li>
     If many of the queries return zero results, the average latency will be low</li>
 </ul>
+</p>
 
 
 <h3 id="results-basic">Basic results</h3>
@@ -329,11 +376,13 @@ time spent on the failed request.</td>
   </tbody>
 </table>
 
+
 <h3 id="results-extended">Extended results</h3>
 
 <h4 id="results-extended-1"><code>-x</code> Activate benchmarkdata-reporting</h4>
 <p>
-This results will be added to the output file if the <code>-x</code> switch is active(activate benchmarkdata-reporting) is used.
+This results will be added to the output file
+if the <code>-x</code> switch is active(activate benchmarkdata-reporting) is used.
 </p>
 
 <table class="table">
@@ -402,4 +451,60 @@ These results will be added to the output file if the <code>-y</code> switch is 
 <td>1 if true, 0 if false</td>
     </tr>
   </tbody>
+</table>
+
+
+
+<h2 id="utilities">Utilities</h2>
+<table class="table">
+<tr>
+    <th>vespa-fbench-filter-file</th>
+    <td>
+<pre>
+usage: vespa-fbench-filter-file [-a] [-h] [-m maxLineSize]
+
+Read concatenated fastserver logs from stdin and write
+extracted query urls to stdout.
+
+ -a       : all parameters to the original query urls are preserved.
+            If the -a switch is not given, only 'query' and 'type'
+            parameters are kept in the extracted query urls.
+ -h       : print this usage information.
+ -m &lt;num&gt; : max line size for input/output lines.
+            Can not be less than the default [10240]
+</pre>
+    </td>
+</tr><tr>
+    <th>vespa-fbench-geturl</th>
+    <td>
+<pre>
+usage: vespa-fbench-geturl &lt;host&gt; &lt;port&gt; &lt;url&gt;
+</pre>
+    </td>
+</tr><tr>
+    <th>vespa-fbench-result-filter.pl</th>
+    <td>
+<pre>
+
+</pre>
+    </td>
+</tr><tr>
+    <th>vespa-fbench-split-file</th>
+    <td>
+<pre>
+usage: vespa-fbench-split-file [-p pattern] [-m maxLineSize] &lt;numparts&gt; [&lt;file&gt;]
+
+Reads from &lt;file&gt; (stdin if &lt;file&gt; is not given) and
+randomly distributes each line between &lt;numpart&gt; output
+files. The names of the output files are generated by
+combining the &lt;pattern&gt; with sequential numbers using
+the sprintf function.
+
+ -p pattern : output name pattern ['query%03d.txt']
+ -m &lt;num&gt;   : max line size for input/output lines.
+              Can not be less than the default [10240]
+ &lt;numparts&gt; : number of output files to generate.
+</pre>
+    </td>
+</tr>
 </table>
