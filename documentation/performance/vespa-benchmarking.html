@@ -174,3 +174,61 @@ Notes: <!-- ToDo: clean this up -->
     If many of the queries return zero results, the average latency will be low</li>
 </ul>
 </p>
+
+
+
+<h2 id="benchmark">Benchmark</h2>
+<p>
+Strategy: find optimal <em>requestthreads</em> number,
+then find capacity by increasing number of parallel test clients:
+<ol>
+    <li>
+        <p>
+        Test with single client (n=1), single thread to find a latency baseline
+        </p>
+    </li><li>
+        <p>
+        Find sweet spot based on latency and CPU usage.
+        Using a single client,
+        increase <a href="../reference/services-content.html#requestthreads">threads</a>:
+<pre>
+&lt;content id="search" version="1.0"&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;tuning&gt;
+        &lt;searchnode&gt;
+            &lt;requestthreads&gt;
+                &lt;persearch&gt;<span style="background-color: yellow;">1</span>&lt;/persearch&gt;
+            &lt;/requestthreads&gt;
+</pre>
+        use 1, 2, 4, 8, ... threads and measure query latency (vespa-fbench output) and CPU usage (metric).
+        Note: after deploying the thread config change,
+        <a href="../proton.html">proton</a> must be restarted for new thread setting to take effect
+        (look for ONLINE):
+<pre>
+$ vespa-stop-services && vespa-start-services && sleep 60 && vespa-proton-cmd --local getProtonStatus
+   ...
+  "matchengine","OK","state=ONLINE",""
+  "documentdb:search","OK","state=ONLINE configstate=OK",""
+</pre>
+        </p>
+    </li><li>
+        <p>
+        use #threads sweet spot, then increase number of clients, observe latency and CPU.
+        Rule of thumb: not exceed 70% CPU
+        </p>
+    </li>
+</ol>
+
+Notes:
+<ul>
+    <li>
+        Allow a 1-2 minute warmup after proton restart.
+        Alternatively, let each test run use 5-10 minutes, and use stable latency values
+    </li>
+    <li>
+        Normally, looking at CPU metrics for the node running <em>proton</em> suffice -
+        but make sure the node running the <em>container</em> is not saturated
+    </li>
+</ul>
+</p>
