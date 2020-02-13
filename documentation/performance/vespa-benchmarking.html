@@ -9,27 +9,33 @@ how well the test configuration performs.
 Thus, benchmarking is an essential part of sizing a search cluster itself.
 Benchmarking a cluster can answer the following questions:
 <ul>
-  <li>What throughput and latency can you expect from a search node?</li>
+  <li>What throughput and latency to expect from a search node?</li>
   <li>Which resource is the bottleneck in the system?</li>
 </ul>
 These in turn indirectly answers other questions such as how many nodes are needed,
-and if it will help to upgrade your disk or CPU.
+and if it will help to upgrade disk or CPU.
 Thus, benchmarking will help in finding the optimal Vespa configuration,
 using all resources optimally, which in turn lowers costs.
-But when should one benchmark?
+</p><p>
 A good rule is to benchmark whenever the workload changes.
 Benchmarking should also be done when adding new features to queries.
 </p><p>
+Having an understanding of the query mix and SLA will help setting the test parameters.
 Before benchmarking, consider:
 <ul>
-<li>What is the expected query mix?
+  <li>
+    What is the expected query mix?
     Having a representative query mix to test with is essential in order to get valid results.
     Splitting up in different types of queries
-    is also a useful way to get an idea of which query is the heaviest.</li>
-<li>What is the expected SLA, both in terms of latency and throughput?</li>
-<li>How important is real-time behavior? What is the rate of incoming documents, if any?</li>
+    is also a useful way to get an idea of which query is the heaviest.
+  </li><li>
+    What is the expected SLA, both in terms of latency and throughput?
+  </li><li>
+    How important is real-time behavior? What is the rate of incoming documents, if any?
+  </li>
 </ul>
-Having an understanding of the query mix and SLA will help setting the test parameters.
+If benchmarking using Vespa Cloud, see <a href="https://cloud.vespa.ai/benchmarking">
+Vespa Cloud Benchmarking</a>.
 </p>
 
 
@@ -50,10 +56,18 @@ Note: It is possible to list several hostnames and ports.
 The different hostnames will be distributed to the clients in a round-robin manner,
 such that, with two hosts, client 0, 2, &hellip;, 38 makes requests to the first host,
 while client 1, 3, &hellip;, 39 makes requests to the second host.
+</p><p>
+<strong>Disclaimer:</strong> <em>vespa-fbench</em> is a tool to drive load for benchmarking and tuning.
+It is <span style="text-decoration: underline">not</span> a tool for finding the maximum load
+or latencies in a production setting.
+This is due to the way it is implemented: It is run with <code>-n</code> number of clients per run.
+It is good for testing, as proton can be observed at different levels of concurrency.
+In the real world, the number of active clients will follow a different distribution,
+and impact 95p / 99p percentiles.
 </p>
 
 
-<h3 id="preparing-queries">Preparing queries</h3>
+<h3 id="prepare-queries">Prepare queries</h3>
 <p>
 vespa-fbench uses <em>query files</em> for GET and POST queries -
 see the <a href="../reference/vespa-cmdline-tools.html#vespa-fbench">reference</a> - examples:
@@ -86,15 +100,14 @@ A typical vespa-fbench command looks like:
 <pre>
 $ vespa-fbench -n 8 -q query%03d.txt -s 300 -c 0 myhost.mydomain.com 8080
 </pre>
-This starts 8 clients, each using queries from a query file
-prefixed with <code>query</code>, followed by the client number.
+This starts 8 clients, each using queries from a query file prefixed with <code>query</code>,
+followed by the client number.
 This way, client 1 will use <code>query000.txt</code> etc.
 The <code>-s</code> parameter indicates that the benchmark will run for 300 seconds.
 The <code>-c</code> parameter, states that each
 client should wait for 0 milliseconds between each query.
-This enables you to control user interactivity.
 The last two parameters are container hostname and port.
-Multiple hosts and ports may be provided,
+Multiple hosts and ports can be provided,
 and the clients will be uniformly distributed to query the containers round robin.
 </p><p>
 A more complex example, using docker, hitting a Vespa Cloud endpoint:
@@ -112,8 +125,7 @@ $ docker run -v /Users/myself/tmp:/testfiles \
 
 <h3 id="post-processing">Post Processing</h3>
 <p>
-After running vespa-fbench you will have a summary written to stdout
-(and possibly an output file from each client) - example output:
+After each run, a summary is written to stdout (and possibly an output file from each client) - example:
 <pre>
 ***************** Benchmark Summary *****************
 clients:                      30
@@ -140,36 +152,29 @@ Take note of the number of <em>failed requests</em>,
 as a high number here can indicate that the system is overloaded,
 or that the queries are invalid.
 </p><p>
-The options <code>-xy</code> makes vespa-fbench clients output
-benchmarking data to it's output files.
-Note that saving all responses to disk might impact the performance of
-the benchmarking itself. If only the summary is needed it is
-recommended to not use output files.
+The <code>-xy</code> options outputs benchmarking data to output files, one per client.
+Note that saving all responses to disk might impact the performance of the benchmarking itself.
+If only the summary is needed, it is recommended to not use output files.
 </p><p>
-There are also tools to format the vespa-fbench output into something more
-manageable for plotting.
-<a href="../reference/vespa-cmdline-tools.html#vespa-fbench-result-filter.pl">
-vespa-fbench-result-filter.pl</a> formats the above output into a space-separated format.
+Use <a href="../reference/vespa-cmdline-tools.html#vespa-fbench-result-filter.pl">
+vespa-fbench-result-filter.pl</a> to format the above output into a space-separated format -
+this simplifies import to spreadsheets of plotting.
 </p><p>
 Notes: <!-- ToDo: clean this up -->
 <ul>
   <li>
-    'system utilization' provides no information about the Vespa
-  system under test and should not be used for benchmarking
-  </li><li>
-    In some modes of operation, vespa-fbench waits before sending the next query
-  </li><li>
-    'system utilization' represents the time that vespa-fbench is
-    sending queries and waiting for responses. For example,
-    a 'system utilization' of 50% means that vespa-fbench is stress testing the system 50% of the time,
+    In some modes of operation, vespa-fbench waits before sending the next query.
+    "utilization" represents the time that vespa-fbench is sending queries and waiting for responses.
+    For example, a 'system utilization' of 50%
+    means that vespa-fbench is stress testing the system 50% of the time,
     and is doing nothing the remaining 50% of the time
   </li><li>
-    Do not run vespa-fbench on the same machine as the container
-    or the search node because it will impact the performance of vespa system
+    Do not run vespa-fbench on the same machine as the search node,
+    as it can impact the performance of vespa system.
+    If running on the container node, track CPU usage to make sure impact is minimal.
   </li><li>
     vespa-fbench latency results include network latency.
     Measure and subtract network latency to obtain the true vespa query latency.
-    See also <a href="../reference/vespa-cmdline-tools.html#vespa-fbench">vespa-fbench -xy</a> options
   </li><li>
     If many of the queries return zero results, the average latency will be low</li>
 </ul>
@@ -184,13 +189,8 @@ then find capacity by increasing number of parallel test clients:
 <ol>
     <li>
         <p>
-        Test with single client (n=1), single thread to find a latency baseline
-        </p>
-    </li><li>
-        <p>
-        Find sweet spot based on latency and CPU usage.
-        Using a single client,
-        increase <a href="../reference/services-content.html#requestthreads">threads</a>:
+        Test with single client (n=1), single thread to find a <em>latency baseline</em>.
+        For each test run, increase <a href="../reference/services-content.html#requestthreads">threads</a>:
 <pre>
 &lt;content id="search" version="1.0"&gt;
   &lt;engine&gt;
@@ -201,7 +201,8 @@ then find capacity by increasing number of parallel test clients:
                 &lt;persearch&gt;<span style="background-color: yellow;">1</span>&lt;/persearch&gt;
             &lt;/requestthreads&gt;
 </pre>
-        use 1, 2, 4, 8, ... threads and measure query latency (vespa-fbench output) and CPU usage (metric).
+        use 1, 2, 4, 8, ... threads and measure query latency (vespa-fbench output)
+        and CPU utilization (<a href="#metrics">metric</a> - below).
         Note: after deploying the thread config change,
         <a href="../proton.html">proton</a> must be restarted for new thread setting to take effect
         (look for ONLINE):
@@ -219,16 +220,40 @@ $ vespa-stop-services && vespa-start-services && sleep 60 && vespa-proton-cmd --
         </p>
     </li>
 </ol>
-
 Notes:
 <ul>
     <li>
         Allow a 1-2 minute warmup after proton restart.
         Alternatively, let each test run use 5-10 minutes, and use stable latency values
-    </li>
-    <li>
+    </li><li>
         Normally, looking at CPU metrics for the node running <em>proton</em> suffice -
         but make sure the node running the <em>container</em> is not saturated
+    </li><li>
+        Test validity: When scaling down from full data set to single-node,
+        make sure to extract data that are representative.
+        I.e. the number of ranked hits per node should be the same as for in full data set.
+        Look at <em>zero hit queries</em> in fbench output to evaluate
+    </li><li>
+        <!-- ToDo: this is not well formulated -->
+        Grouping is multi-phase, so behavior in a larger system will be different, based on data set
     </li>
 </ul>
+</p>
+
+
+<h3 id="metrics">Metrics</h3>
+<p>
+The <em>container</em> nodes expose the
+<a href="../reference/metrics.html">/metrics/v2/values</a> interface -
+use this to dump metrics during benchmarks.
+Example - output all metrics from content node:
+<pre>
+$ curl http://localhost:8080/metrics/v2/values | \
+  jq '.nodes[] | select(.role=="content/mysearchcluster/0/0") | .node.metrics[].values'
+</pre>
+Output CPU util:
+<pre>
+$ curl http://localhost:8080/metrics/v2/values | \
+  jq '.nodes[] | select(.role=="content/mysearchcluster/0/0") | .node.metrics[].values."cpu.util"'
+</pre>
 </p>
