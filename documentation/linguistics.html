@@ -157,6 +157,43 @@ The language parameter only affects the transformation of query terms that hit t
 </p>
 
 
+<h3 id="multiple-languages">Multiple languages</h3>
+<p>
+Approaches:
+<ol>
+    <li>
+        Use semantic retrieval using a sentence encoder,
+        which has been trained on multi-lingual corpus like the one used in
+        <a href="https://docs.vespa.ai/documentation/semantic-qa-retrieval.html">Semantic QA retrieval</a>.
+        Sentence-Bert is another. First phase matching is then done using approximate nearest neighbor:
+        <a ref="https://github.com/vespa-engine/vespa/issues/9747">#9747</a>.
+        Query terms can also be passed down for fine tuning of precision.
+    </li><li>
+        Stem and tokenize the query using the relevant languages,
+        build a query tree using <a href="reference/query-language-reference.html#weakand">weakAnd</a> /
+        <a href="reference/query-language-reference.html#or">or</a>
+        and using <a href="reference/query-language-reference.html#equiv">equiv</a> per stem variant.
+        This is easiest done in a custom <a href="searcher-development.html">Searcher</a> as mentioned in
+        <a href="https://github.com/vespa-engine/vespa/issues/12154">#12154</a>.
+    </li>
+</ol>
+Example:
+</p><p>
+lang=fr machine learning =&gt; machin learn<br/>
+lang=en machine learning =&gt; machine learn
+</p><p>
+Using <em>weakAnd</em> here as example as that technique is already mentioned in #12154:
+<pre>
+select * from sources* where rank(weakAnd(default contains equiv("machin", "machine"), default contains "learn)), default contains "machine", default contains "learning")
+</pre>
+We now retrieve using all possible stems/baseforms with <em>weakAnd</em>,
+and use the <a href="reference/query-language-reference.html#rank">rank</a> operator
+to pass in the original query form, so that ranking can rank literal matches (original) higher.
+Benefit of <em>equiv</em> is that it allows multiple term variants to share the same position,
+so that proximity ranking does not become broken by this approach.
+</p>
+
+
 
 <h2 id="tokenization">Tokenization</h2>
 <p>
