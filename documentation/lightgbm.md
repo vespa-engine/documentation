@@ -11,6 +11,8 @@ categorical features. If you have models that are trained with
 [LightGBM](https://github.com/microsoft/LightGBM), Vespa can import the models
 and use them directly.
 
+
+
 ## Exporting models from LightGBM
 
 Vespa supports importing LightGBM's
@@ -18,7 +20,6 @@ Vespa supports importing LightGBM's
 This dumps the tree model and other useful data such as feature names,
 objective functions, and values of categorical features to a JSON file.  An
 example of training and saving a model suitable for use in Vespa is as follows.
-
 
 ```
 import json
@@ -45,19 +46,19 @@ model = lgb.train(params, training_set, num_boost_round=5)
 # Save the model
 with open("lightgbm_model.json", "w") as f:
     json.dump(model.dump_model(), f, indent=2)
-
 ```
 
 While this particular model isn't doing anything really useful, the output
-file `lightgbm_model.json`, can be imported directly into Vespa.
+file `lightgbm_model.json` can be imported directly into Vespa.
+
+
 
 ## Importing LightGBM models
 
-To import the LightGBM model into Vespa, add the model file to your
-application package under a specific directory named `models`, or a
-subdirectory under `models`.  For instance, for the above model `lightgbm_model.json`, you
-would add it to the application package resulting in a directory structure
-like this:
+To import the LightGBM model into Vespa, add the model file to the
+application package under a directory named `models`, or a
+subdirectory under `models`.  For instance, for the above model `lightgbm_model.json`,
+add it to the application package resulting in a directory structure like this:
 
 ```
 ├── models
@@ -71,10 +72,11 @@ Note that an application package can have multiple models. After putting the
 model somewhere under the `models` directory, it is then available for use in
 both ranking and [stateless model evaluation](stateless-model-evaluation.html).
 
+
+
 ## Ranking with LightGBM models
 
-Vespa has a special [ranking
-feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
+Vespa has a  [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
 called `lightgbm`. This ranking feature specifies the model to use in a ranking
 expression, relative under the `models` directory. Consider the following example:
 
@@ -152,37 +154,39 @@ Here, when Vespa evaluates the model, it retrieves the value of `feature_1`
 from a document attribute called `doc_attrib`, and the value if `feature_2`
 from a query value passed along with the query.
 
-You could also use `attribute(doc_attrib)` directly as a feature name when
-training your LightGBM model. This allows you to dump rank features from Vespa
+One can also use `attribute(doc_attrib)` directly as a feature name when
+training the LightGBM model. This allows dumping rank features from Vespa
 to train a model directly. For more information, see [learning to
 rank](learning-to-rank.html).  Even though that page contains an example of
 using XGBoost, it is valid for LightGBM as well.
 
+
+
 ## Objective functions
 
 If you have used XGBoost with Vespa previously, you might have noticed you
-have to wrap the `xgboost` feature in for instance a `sigmoid` function if you
-are using a binary classifier. That should not be needed in LightGBM as that
+have to wrap the `xgboost` feature in for instance a `sigmoid` function if
+using a binary classifier. That should not be needed in LightGBM, as that
 information is passed along in the model dump as seen in the `objective` section
 in the JSON output above.
 
 Currently, Vespa supports regression, binary log loss and cross-entropy
 applications. Multi-class and ranking will soon be available.
 
-For more information on LightGBM and objective functions, see:
-https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective
+For more information on LightGBM and objective functions, see
+[`objective`](https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective).
+
+
 
 ## Using categorical features
 
-LightGBM has the option of directly training on categorical features. An example
-is as follows:
+LightGBM has the option of directly training on categorical features. Example:
 
 ```
 features = pd.DataFrame({
             "numerical":   np.random.random(5),
             "categorical": pd.Series(np.random.permutation(["a", "b", "c", "d", "e"])), dtype="category"),
            })
-
 ```
 
 Here, the `categorical` feature is marked with the Pandas dtype `category`. This
@@ -219,9 +223,7 @@ search test {
         }
     }
 }
-
 ```
 
 Here, the string value of the document would be used as the feature value when evaluating
 this model for every document.
-
