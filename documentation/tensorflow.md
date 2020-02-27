@@ -162,7 +162,7 @@ you can pass tensors in HTTP requests by using the HTTP parameter
     <field name="ranking.features.query(myTensor)" type="tensor<float>(d0[1],d1[784])" />
 
 A tensor example can be found in the
-[sample application](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation).
+[sample application](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/album-recommendation).
 
 #### Batch dimensions
 
