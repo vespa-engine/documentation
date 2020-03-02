@@ -4,8 +4,8 @@ Job for indexing Vespa cloud and open source documentation.
 
 Steps:
 
-1. Clone [vespa/documentation](github.com/vespa/documentation)
-  and [vespa/cloud](github.com/vespa/cloud) to get documentation source
+1. Clone [vespa/documentation](https://github.com/vespa/documentation)
+  and [vespa/cloud](https://github.com/vespa/cloud) to get documentation source
 
 1. Build a Vespa feed from the source:
     1. Use Jekyll to generate HTML from the content (some files are in [Markdown](https://daringfireball.net/projects/markdown/))
@@ -21,3 +21,4 @@ Steps:
     
 1. Automate these steps using GitHub Actions
     1. Store the keys required to feed data as secrets in Github
+    1. Find workflow at [.github/workflows/feed.yml](https://github.com/vespa-engine/documentation/blob/master/.github/workflows/feed.yml)
