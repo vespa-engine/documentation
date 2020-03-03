@@ -7,14 +7,14 @@ module Jekyll
         priority :lowest
 
         def generate(site)
-            doctype = site.config["search"]["doctype"]
+            namespace = site.config["search"]["namespace"]
             operations = []
             site.pages.each do |page|
                 if page.data["index"] == true
                     operations.push({
                         :fields => {
                             :path => page.url,
-                            :doctype => doctype,
+                            :namespace => namespace,
                             :title => page.data["title"],
                             :content => extract_text(page)
                         }
@@ -23,7 +23,7 @@ module Jekyll
             end
 
             json = JSON.pretty_generate(operations)
-            File.open(doctype + "_index.json", "w") { |f| f.write(json) }
+            File.open(namespace + "_index.json", "w") { |f| f.write(json) }
         end
 
         def extract_text(page)
