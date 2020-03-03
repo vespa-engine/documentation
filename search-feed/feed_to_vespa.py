@@ -15,7 +15,7 @@ def find(json, path, separator = "."):
     return find(json[head], rest) if head in json else None
 
 
-# extract <id> from form id:doc:doc::<id>
+# extract <id> from form id:open:doc::<id>
 def get_document_id(id):
     return id[id.rfind(":")+1:]
 
@@ -24,22 +24,6 @@ def call(args):
     proc = subprocess.Popen(args, stdout=subprocess.PIPE)
     (out, err) = proc.communicate()
     return out
-
-
-def get_token():
-    token_file_path = "vespa_athens_token"
-    if not os.path.isfile(token_file_path):
-        response = json.loads(call([
-            "curl",
-            "-s",
-            "--key", "/tokens/key",
-            "--cert", "/tokens/cert",
-            "https://zts.athens.yahoo.com:4443/zts/v1/domain/vespa.vespa/token",
-            ]))
-        with open(token_file_path, "w") as f:
-            f.write(response["token"])
-    with open(token_file_path, "r") as f:
-        return f.read()
 
 
 def get_private_key_path():
@@ -89,7 +73,7 @@ def vespa_delete(endpoint, operation, options):
 
 def vespa_post(endpoint, doc, docid):
     endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
-    url = "{0}/document/v1/doc/doc/docid/{1}".format(endpoint, docid)
+    url = "{0}/document/v1/open/doc/docid/{1}".format(endpoint, docid)
     return call([
         "curl",
         "-sS",
@@ -107,7 +91,7 @@ def vespa_visit(endpoint, continuation = None):
     options.append("wantedDocumentCount=500")
     if continuation is not None and len(continuation) > 0:
         options.append("&continuation={0}".format(continuation))
-    response = vespa_get(endpoint, "document/v1/doc/doc/docid", options)
+    response = vespa_get(endpoint, "document/v1/open/doc/docid", options)
     try:
         return json.loads(response)
     except:
@@ -120,7 +104,7 @@ def vespa_remove(endpoint, doc_ids):
     options = []
     for doc_id in doc_ids:
         id = get_document_id(doc_id)
-        vespa_delete(endpoint, "document/v1/doc/doc/docid/{0}".format(id), options)
+        vespa_delete(endpoint, "document/v1/open/doc/docid/{0}".format(id), options)
 
 
 def vespa_feed(endpoint, feed):
@@ -128,9 +112,11 @@ def vespa_feed(endpoint, feed):
         document_id = find(doc, "fields.doctype") +  find(doc, "fields.path")
         print(vespa_post(endpoint, json.dumps(doc), document_id))
 
+
 def get_docs(index):
     file = open(index, "r", encoding='utf-8')
     return json.load(file)
+
 
 def get_indexed_docids(endpoint):
     docids = set()
@@ -150,7 +136,7 @@ def get_indexed_docids(endpoint):
 def get_feed_docids(feed):
     with open(feed, "r", encoding='utf-8') as f:
         feed_json = json.load(f)
-    return set([ "id:doc:doc::" + find(doc, "fields.doctype") + find(doc, "fields.path") for doc in feed_json ])
+    return set([ "id:open:doc::" + find(doc, "fields.doctype") + find(doc, "fields.path") for doc in feed_json ])
 
 
 def print_header(msg):

@@ -22,3 +22,8 @@ File locations below refer to this repo's root.
 1. Automate these steps using GitHub Actions
     1. Store the keys required to feed data as secrets in Github
     1. Find workflow at [.github/workflows/feed.yml](/.github/workflows/feed.yml)
+
+Local development:
+
+    bundle exec jekyll build
+    cd search-feed && ./feed_to_vespa.py # put data-plane-private/public-key.pem in this dir
