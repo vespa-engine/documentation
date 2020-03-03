@@ -26,4 +26,4 @@ File locations below refer to this repo's root.
 Local development:
 
     bundle exec jekyll build
-    cd search-feed && ./feed_to_vespa.py
+    cd search-feed && ./feed_to_vespa.py # put data-plane-private/public-key.pem in this dir
