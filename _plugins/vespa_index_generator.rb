@@ -3,7 +3,7 @@ require 'nokogiri'
 
 module Jekyll
 
-    class VespaIndexGenerator < Generator
+    class VespaIndexGenerator < Jekyll::Generator
         priority :lowest
 
         def generate(site)
@@ -24,7 +24,6 @@ module Jekyll
 
             json = JSON.pretty_generate(operations)
             File.open(doctype + "_index.json", "w") { |f| f.write(json) }
-
         end
 
         def extract_text(page)
