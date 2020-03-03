@@ -51,13 +51,14 @@ def get_private_key_path():
             f.write("-----BEGIN PRIVATE KEY-----\n" + private_key  + "\n-----END PRIVATE KEY-----")
     return private_key_path
 
+
 def get_public_cert_path():
     public_cert_path = "data-plane-public-key.pem"
     if not os.path.isfile(public_cert_path):
-        public_key_raw = os.environ['DATA_PLANE_PUBLIC_KEY']
-        public_key = public_key_raw.replace(" ", "\n")
+        public_cert_raw = os.environ['DATA_PLANE_PUBLIC_KEY']
+        public_cert = public_cert_raw.replace(" ", "\n")
         with open(public_cert_path, "w") as f:
-            f.write("-----BEGIN CERTIFICATE-----\n" + public_key  + "\n-----END CERTIFICATE-----")
+            f.write("-----BEGIN CERTIFICATE-----\n" + public_cert  + "\n-----END CERTIFICATE-----")
     return public_cert_path
 
 
