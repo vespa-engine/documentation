@@ -147,7 +147,7 @@ def print_header(msg):
 
 
 def read_config():
-    with open("../_config.yml", "r") as f:
+    with open("_config.yml", "r") as f:
         return yaml.safe_load(f)
 
 
