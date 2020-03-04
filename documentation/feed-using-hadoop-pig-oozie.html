@@ -27,8 +27,6 @@ If jobs fail due to <em>NoSuchFieldErrors</em> or similar,
 try adding <code>-Dmapreduce.job.user.classpath.first=true</code>.
 </p>
 
-
-
 <h2 id="pig">Pig</h2>
 <p>
 <a href="https://pig.apache.org/">Apache Pig</a> is a platform for
@@ -41,8 +39,10 @@ transform data, and store that data into various types of destinations.
 Tip: try the <a href="tutorials/blog-recommendation.html">blog recommendation</a>
 tutorial for Pig usage.
 </p><p>
+
 The <em>vespa-hadoop</em> library provides the <code>VespaStorage</code> class
 which provides a simple way of storing data into a Vespa endpoint. Basic usage:
+
 <pre>
 REGISTER path/to/vespa-hadoop.jar
 
@@ -54,20 +54,26 @@ A = LOAD '&lt;path&gt;' [USING &lt;storage&gt;] [AS &lt;schema&gt;];
 
 STORE A INTO '$ENDPOINT' USING VespaStorage();
 </pre>
+<p>
 To run the above Pig script, specify <a href="#vespa.feed.endpoint">endpoint</a>.
-The endpoint is whatever Vespa endpoint to feed to.
-<code>VespaStorage</code> supports feeding to multiple endpoints.
-To specify multiple endpoints, separate them by commas.
+The endpoint is the Vespa endpoint (hostname) to feed to.
 Importantly, the endpoint should be defined as it is for the
 <a href="vespa-http-client.html">Vespa HTTP client</a>,
-which means the endpoint host name, without 'http://' and port number.
+which means the endpoint is equal to the hostname, without schema ('http(s)://' and without port number.
 Port 4080 currently the default setting, to override the port use <samp>-Dvespa.feed.defaultport=8080</samp>.
+</p>
+<p>
+<code>VespaStorage</code> supports feeding to <a href="vespa-http-client.html#feeding-multiple-clusters">multiple clusters</a>.
+To specify multiple endpoints, separate them by commas. The VespaStorage will write the operations to all clusters and wait for a reply/ack from all, hence it's a blocking implementation. If
+one cluster is down for some reason (e.g maintenance) also the remaining healthy clusters stops getting operations.
+
 As an example, assume the above script is called <code>feed.pig</code>.
 Run it from a Hadoop node to two Vespa instances
 (add <a href="#vespa.feed.proxy.host">vespa.feed.proxy.host/port</a> as needed):
+</p>
 <pre>
 pig -x local -f feed.pig
-    -p ENDPOINT=endpoint-1,endpoint-2
+    -p ENDPOINT=hostname-of-endpoint-1,hostname-of-endpoint-2
     -Dvespa.feed.proxy.host=proxy-host
     -Dvespa.feed.proxy.port=proxy-port
     -Dvespa.feed.defaultport=8080
@@ -77,18 +83,34 @@ pig -x local -f feed.pig
 
 <h3 id="feeding-preconstructed-operations">Feeding preconstructed operations</h3>
 <p>
-In the case where the data already has the required <a href="reference/document-json-format.html">JSON format</a>,
+In the case where the document operations are already formatted using the Vespa <a href="reference/document-json-format.html">JSON format</a>, one can
 feed this directly to a Vespa endpoint:
 <pre>
 REGISTER vespa-hadoop.jar
-
 DEFINE VespaStorage com.yahoo.vespa.hadoop.pig.VespaStorage();
 
 -- Load data - one column for json data
-data = LOAD '&lt;source&gt;' AS (json:chararray);
+data = LOAD 'feed-dump.data' AS (json:chararray);
 
 -- Store into Vespa
 STORE data INTO '$ENDPOINT' USING VespaStorage();
+</pre>
+The source, e.g 'feed-dump.data' needs to contain exactly one valid JSON document operation per line, e.g 
+<pre>
+{"put": "id:namespace:music::0","fields": {"title":"foo"}}
+{"put": "id:namespace:music::1","fields": {"title":"foo"}}
+{"update": "id:namespace:music::2","fields": { "title": { "assign":"bar"}}}
+</pre>
+To store multi-line formatted JSON operations use the <em>VespaSimpleJsonLoader</em>:
+<pre>
+REGISTER vespa-hadoop.jar
+DEFINE VespaJsonLoader com.yahoo.vespa.hadoop.pig.VespaSimpleJsonLoader();
+DEFINE VespaStorage com.yahoo.vespa.hadoop.pig.VespaStorage();
+
+DATA = LOAD 'operations_multiline_data.json' USING VespaJsonLoader() AS (data:chararray);
+
+-- Store into Vespa
+STORE DATA INTO '$ENDPOINT' USING VespaStorage();
 </pre>
 </p>
 
@@ -258,8 +280,10 @@ Output(s):
 Successfully stored 100001 records in: "&lt;endpoint&gt;"
 ...
 </pre>
-Here, Pig reports that is Successfully stored 100001 records,
-but <code>VespaStorage</code> skipped one probably due to a formatting error.
+Here, Pig reports that it successfully stored 100001 records,
+but <code>VespaStorage</code> skipped one operation, probably due to a formatting error and only 100000 operations was sent. 
+The skipped counter is incremented if <code>VespaStorage</em>
+could not find a valid document id in the read record (e.g due to JSON formatting issues).
 Any errors can be found in the job logs.
 </p>
 
