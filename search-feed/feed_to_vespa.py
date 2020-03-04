@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 
-import os
-import sys
 import json
-import yaml
-import time
-import urllib.request, urllib.parse, urllib.error
+import os
 import subprocess
+import sys
+import yaml
 
 
 def find(json, path, separator = "."):
@@ -149,19 +147,14 @@ def print_header(msg):
 
 
 def read_config():
-    with open("_config.yml", "r") as f:
-        return yaml.safe_load(f)
-
-
-def read_main_config():
     with open("../_config.yml", "r") as f:
         return yaml.safe_load(f)
 
 
-def update_endpoint(endpoint, config, main_config):
-    do_remove_index = config["do_index_removal_before_feed"]
-    do_feed = config["do_feed"]
-    namespace = main_config["search"]["namespace"]
+def update_endpoint(endpoint, config):
+    do_remove_index = config["search"]["do_index_removal_before_feed"]
+    do_feed = config["search"]["do_feed"]
+    namespace = config["search"]["namespace"]
 
     endpoint_url = endpoint["url"]
     endpoint_indexes = endpoint["indexes"]
@@ -205,9 +198,8 @@ def update_endpoint(endpoint, config, main_config):
 
 def main():
     config = read_config()
-    main_config = read_main_config()
-    for endpoint in config["endpoints"]:
-        update_endpoint(endpoint, config, main_config)
+    for endpoint in config["search"]["feed_endpoints"]:
+        update_endpoint(endpoint, config)
 
 
 if __name__ == "__main__":
