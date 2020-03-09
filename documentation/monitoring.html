@@ -1,0 +1,108 @@
+---
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Monitoring"
+---
+
+<p>
+    This document describes how to monitor the state and performance of Vespa via an external metrics system.
+    Vespa provides custom integrations to CloudWatch, Datadog and Prometheus, as well as a generic HTTP API
+    to retrieve metrics in json format.
+</p>
+
+<p>
+    There are two main approaches to transfer metrics to an external system:
+</p>
+<ul>
+    <li>Have the external system <em>pull</em> metrics from Vespa</li>
+    <li>Make Vespa <em>push</em> metrics to the external system</li>
+</ul>
+<p>
+    Below, we'll take a look at the two approaches.
+</p>
+
+
+<h2 id="pulling-metrics">Pulling metrics from Vespa</h2>
+<p>
+    All pull based solutions use Vespa's <a href="reference/metrics.html#metrics-api">metrics API</a> which provides
+    metrics in json format, either for the full system or for a single node.
+</p>
+
+
+<h3 id="pulling-into-cloudwatch">Pulling metrics into CloudWatch</h3>
+<p>
+    Metrics can be pulled into CloudWatch from both hosted Vespa and self-hosted systems.
+    The recommended solution is to use an AWS lambda function, as described in our guide
+    <a href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch">
+        Pulling Vespa metrics to Cloudwatch</a>.
+</p>
+
+
+<h3 id="pulling-into-datadog">Pulling metrics into Datadog</h3>
+<p class="alert alert-success">
+    This method currently works for self-hosted Vespa only.
+</p>
+<p>
+    The Vespa team has created a Datadog Agent integration to allow real-time monitoring of
+    Vespa in Datadog. The <a href="https://docs.datadoghq.com/integrations/vespa/">Datadog Vespa</a> integration is
+    not packaged with the agent, but is included in Datadog's
+    <a href="https://github.com/DataDog/integrations-extras">integrations-extras</a> repository
+    on github.
+    To use it, clone the repository and follow the steps in the
+    <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/README.md">README</a>.
+</p>
+
+
+<h3 id="pulling-into-prometheus">Pulling metrics into Prometheus</h3>
+<p class="alert alert-success">
+    This method currently works for self-hosted Vespa only.
+</p>
+<p>
+    The metrics API on each host exposes metrics in a text based
+    <a href="https://prometheus.io/docs/instrumenting/exposition_formats/">format</a> that can be
+    scraped by <a href="https://prometheus.io/docs/introduction/overview/">Prometheus</a> at
+    <code>http://host:19092/prometheus/v1/values</code>.
+</p>
+
+
+<h2 id="pushing-metrics">Pushing Vespa metrics to an external system</h2>
+<p>
+    Vespa has built-in support for pushing metrics to CloudWatch.
+</p>
+
+
+<h3 id="pushing-to-cloudwatch">Pushing metrics to CloudWatch</h3>
+<p class="alert alert-success">
+    This method currently works for self-hosted Vespa only.
+</p>
+<p>
+    This is presumably the most convenient way to monitor Vespa in CloudWatch. You will need to have the following
+    available:
+</p>
+<ul>
+    <li>An IAM user that only has the <em>putMetricData</em> permission.</li>
+    <li>Store the credentials for the above user in a
+        <a href="https://docs.aws.amazon.com/ses/latest/DeveloperGuide/create-shared-credentials-file.html">
+            shared credentials file</a> on each Vespa node.</li>
+    <li>Configure Vespa to push metrics to CloudWatch as shown below.</li>
+</ul>
+<p>
+    Here is an example configuration for the <a href="reference/services-admin.html">admin</a> section
+    of your application's <em>services.xml</em>:
+</p>
+<pre class="code">
+    &lt;metrics&gt;
+      &lt;consumer id="my-cloudwatch"&gt;
+        &lt;metric-set id="default" /&gt;
+        &lt;cloudwatch region="us-east-1" namespace="my-vespa-metrics"&gt;
+          &lt;shared-credentials file="/path/to/credentials-file" /&gt;
+        &lt;/cloudwatch&gt;
+      &lt;/consumer&gt;
+    &lt;/metrics&gt;
+</pre>
+
+<p>
+    This configuration sends the default set of Vespa metrics to the CloudWatch namespace
+    <code>my-vespa-metrics</code> in the <code>us-east-1</code> region. The complete list of metrics
+    in the <code>default</code> metric set can be found
+    <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">here</a>.
+</p>
