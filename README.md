@@ -16,6 +16,7 @@ Documentation is written in HTML or Markdown.
 We use a single Jekyll template (_layouts/default.html) to add header, footer and layout.
 With Jekyll installed (follow the link above), use
 
+    bundle install
     bundle exec jekyll serve
 
 to set up a local server at localhost:4000 to see the pages as they will look when served.
