@@ -13,13 +13,15 @@ with
 To edit documentation, check out and work off the master branch in this repository.
 
 Documentation is written in HTML or Markdown.
-We use a single Jekyll template (_layouts/default.html) to add header, footer and layout.
-With Jekyll installed (follow the link above), use
+We use a single Jekyll template [_layouts/default.html](_layouts/default.html) to add header, footer and layout.
+
+Install [bundler](https://bundler.io/), then
 
     bundle install
-    bundle exec jekyll serve
+    bundle exec jekyll serve --incremental --drafts --trace
 
 to set up a local server at localhost:4000 to see the pages as they will look when served.
+The output will highlight rendering/other problems when starting serving.
 
 The layout is written in Bootstrap, documents refers directly to the Bootstrap CSS.
 Refer to [Bootstrap documentation](http://getbootstrap.com/css/) to
