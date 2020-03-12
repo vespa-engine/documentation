@@ -85,10 +85,15 @@ If this algorithmic transformation is followed it is possible to link to this se
 * Link to javadoc for a package: http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/federation/vespa/package-summary.html
 * Link to javadoc for a class: http://javadoc.io/page/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/config/ConnectionParams.Builder.html
 
+*By Jon Bratseth in June 2016*
 
-## Vespa Documentation Search
 
-Job for indexing Vespa cloud and open source documentation.
+## Appendix: Vespa Documentation Search
+
+See [Vespa Documentation Search](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/vespa-documentation-search)
+sample application for architecture.
+
+Below is a description of the job for indexing this repository's documentation.
 File locations below refer to this repo's root.
 
 1. Build a Vespa feed from the source in this repo:
@@ -114,6 +119,4 @@ File locations below refer to this repo's root.
 Local development:
 
     bundle exec jekyll build
-    cd search-feed && ./feed_to_vespa.py # put data-plane-private/public-key.pem in this dir
-
-*By Jon Bratseth in June 2016*
+    ./feed_to_vespa.py   # put data-plane-private/public-key.pem in this dir in advance
