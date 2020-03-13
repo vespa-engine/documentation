@@ -90,6 +90,8 @@ If this algorithmic transformation is followed it is possible to link to this se
 
 ## Appendix: Vespa Documentation Search
 
+[![Vespa Documentation Search Feed](https://github.com/vespa-engine/documentation/workflows/Vespa%20Documentation%20Search%20Feed/badge.svg?branch=master)](https://github.com/vespa-engine/documentation/actions?query=workflow%3A%22Vespa+Documentation+Search+Feed%22)
+
 See [Vespa Documentation Search](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/vespa-documentation-search)
 sample application for architecture.
 
