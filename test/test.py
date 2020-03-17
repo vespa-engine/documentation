@@ -231,7 +231,7 @@ def run_config():
         raise RuntimeError("Could not find configuration file")
 
     with open(config_file, "r") as f:
-        config = yaml.load(f)
+        config = yaml.safe_load(f)
         for url in config["urls"]:
             try:
                 run_url(url)
