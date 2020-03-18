@@ -84,7 +84,7 @@ Each result will contain a field called `rankfeatures` containing the set of def
 ### Chose and process specific rank features
 
 If instead of returning the default ranking features you want to select [specific ones](../reference/rank-features.html),
-you can add a new _ranking-profile_ (let's call it `collect_rank_features`) to our _msmarco.sd_ search definition
+you can add a new _ranking-profile_ (let's call it `collect_rank_features`) to our _msmarco.sd_ schema definition
 and disable the default ranking features by adding `ignore-default-rank-features` to the new _ranking-profile_.
 In addition, we can specify the desired features within the `rank-features` element.
 In the example below we explicitly configured Vespa to only return `bm25(title)`, `bm25(body)`, `nativeRank(title)` and `nativeRank(body)`.

@@ -40,9 +40,9 @@ not cause unexpected results.
 
 ### Highlighted features
 
-* [Multiple document types](https://docs.vespa.ai/documentation/search-definitions.html)
+* [Multiple document types](https://docs.vespa.ai/documentation/schemas.html)
 
-    Vespa models data as documents, which are configured in search definitions
+    Vespa models data as documents, which are configured in schemas
     that defines how documents should be stored, indexed, ranked, and searched.
     In Vespa you can have multiple documents types, which can be defined in
     `services.xml` how these should be distributed around the content clusters.
@@ -108,11 +108,11 @@ not cause unexpected results.
 
     Rank profiles are profiles containing instructions on how to score
     documents for a given query. The most important part of rank profiles are
-    the ranking expressions. The search definitions for the item and review
+    the ranking expressions. The schemas for the item and review
     document types contain different ranking profiles to sort or score the
     data.
 
-* [Ranking functions](https://docs.vespa.ai/documentation/reference/search-definitions-reference.html#function-rank)
+* [Ranking functions](https://docs.vespa.ai/documentation/reference/schema-reference.html#function-rank)
 
     Ranking functions are contained in ranking profiles and can be referenced
     as part of any ranking expression from either first phase, second phase or

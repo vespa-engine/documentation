@@ -65,12 +65,12 @@ $ mkdir application
 </pre>
 
 
-### Search definition
+### Schema
 
-A [search definition](../search-definitions.html) is a configuration of a document type and how it should be stored, indexed, ranked, searched and presented. For this application we define a document type called `msmarco`. Write the following to `application/searchdefinitions/msmarco.sd`:
+A [schema](../schemas.html) is a configuration of a document type and what we should compute over it. For this application we define a document type called `msmarco`. Write the following to `application/searchdefinitions/msmarco.sd`:
 
 <pre data-test="file" data-path="sample-apps/text-search/application/searchdefinitions/msmarco.sd">
-search msmarco {
+schema msmarco {
     document msmarco {
         field id type string {
             indexing: attribute | summary
@@ -111,15 +111,15 @@ search msmarco {
 }
 </pre>
 
-Here, we define the `msmarco` search definition, which includes primarily two things: a definition of fields the `msmarco` document type should have, and a definition on how Vespa should rank documents given a query.
+Here, we define the `msmarco` schema, which includes primarily two things: a definition of fields the `msmarco` document type should have, and a definition on how Vespa should rank documents given a query.
 
-The `document` section contains the fields of the document, their types and how Vespa should index them. The field property `indexing` configures the _indexing pipeline_ for a field. For more information see [search definitions - indexing](https://docs.vespa.ai/documentation/search-definitions.html#indexing). Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body` by including `index: enable-bm25` in the respective fields. This is a necessary step to allow us to use them in the `bm25` ranking profile.
+The `document` section contains the fields of the document, their types and how Vespa should index them. The field property `indexing` configures the _indexing pipeline_ for a field. For more information see [schemas - indexing](https://docs.vespa.ai/documentation/schemas.html#indexing). Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body` by including `index: enable-bm25` in the respective fields. This is a necessary step to allow us to use them in the `bm25` ranking profile.
 
-Next, the [document summary class](../document-summaries.html) `minimal` is defined. Document summaries are used to control what data is returned for a query. The `minimal` summary here only returns the document id, which is useful for speeding up relevance testing as less data needs to be returned. The default document summary is defined by which fields are indexed with the `summary` command, which in this case are all the fields. In addition, we've set up the `body` field to show a dynamic summary, meaning that Vespa will try to extract relevant parts of the document. For more information, refer to the [the reference documentation on document summaries](https://docs.vespa.ai/documentation/reference/search-definitions-reference.html#summary).
+Next, the [document summary class](../document-summaries.html) `minimal` is defined. Document summaries are used to control what data is returned for a query. The `minimal` summary here only returns the document id, which is useful for speeding up relevance testing as less data needs to be returned. The default document summary is defined by which fields are indexed with the `summary` command, which in this case are all the fields. In addition, we've set up the `body` field to show a dynamic summary, meaning that Vespa will try to extract relevant parts of the document. For more information, refer to the [the reference documentation on document summaries](https://docs.vespa.ai/documentation/reference/schema-reference.html#summary).
 
 Document summaries can be selected by using the `summary` query parameter.
 
-[Fieldsets](../reference/search-definitions-reference.html#fieldset) provide a way to group fields together to be able to search multiple fields. That way a query such as
+[Fieldsets](../reference/schema-reference.html#fieldset) provide a way to group fields together to be able to search multiple fields. That way a query such as
 
 ```
 curl -s http://localhost:8081/search/?query=what+is+dad+bod
@@ -168,7 +168,7 @@ Some notes about the elements above:
 - `<document-api>` sets up the [document](../reference/document-v1-api-reference.html) endpoint for feeding.
 - `<content>` defines how documents are stored and searched
 - `<redundancy>` denotes how many copies to keep of each document.
-- `<documents>` assigns the document types in the _search definition_ — the
+- `<documents>` assigns the document types in the _schema_ — the
 content cluster capacity can be increased by adding node elements — see
 [elastic Vespa](../elastic-vespa.html). (See also the
 [reference](../reference/services-content.html) for more on content cluster
@@ -231,7 +231,7 @@ $ curl -s --head http://localhost:8080/ApplicationStatus
 
 ### Feeding the data
 
-The data fed to Vespa must match the search definition for the document type. The file `vespa.json` generated by the `convert-msmarco.sh` script described in the [dataset section](#dataset) already has data in the appropriate format expected by Vespa. Feed it to Vespa using one of the tools Vespa provides for feeding, as for example the [Java feeding API](../vespa-http-client.html):
+The data fed to Vespa must match the document type in the schema. The file `vespa.json` generated by the `convert-msmarco.sh` script described in the [dataset section](#dataset) already has data in the appropriate format expected by Vespa. Feed it to Vespa using one of the tools Vespa provides for feeding, as for example the [Java feeding API](../vespa-http-client.html):
 
 <pre data-test="exec">
 $ docker exec vespa-msmarco bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
@@ -280,7 +280,7 @@ Following is a partial output of the query above when using the small dataset sa
 }
 ```
 
-As we can see, there was 3 documents that matched the query out of 1000 available in the corpus. The number of matched documents will be much larger when using the full dataset. The results are ranked by the relevance score, which in this case is delivered by the `nativeRank` algorithm that we defined as the default _ranking-profile_ in our search definition file.
+As we can see, there was 3 documents that matched the query out of 1000 available in the corpus. The number of matched documents will be much larger when using the full dataset. The results are ranked by the relevance score, which in this case is delivered by the `nativeRank` algorithm that we defined as the default _ranking-profile_ in our schema definition file.
 
 ## Compare and evaluate different ranking functions
 

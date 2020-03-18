@@ -216,7 +216,7 @@ Verify the vectors for the latent factors for users and posts:
 At this point, the vectors with latent factors can be added to posts and users.
 
 
-## Add vectors to search definitions using tensors
+## Add vectors to schemas using tensors
 
 Modern machine learning applications often make use of large, multidimensional
 feature spaces and perform complex operations on those features, such as in
@@ -249,10 +249,10 @@ TODO: Explain the indexing and attribute spec for the tensor type ... and explai
 we have a field has_user_item_cf for now.
 {% endcomment %}
 
-A new search definition `user.sd` defines a  document type named `user` to
+A new schema `user.sd` defines a  document type named `user` to
 hold information for users:
 
-    search user {
+    schema user {
         document user {
             field user_id type string {
                 indexing: summary | attribute
@@ -518,7 +518,7 @@ instead of manually picking hyperparameter values as was done in
       --numIterations 10 --output_path blog-job/user_item_cf_cv
 
 Feed the newly computed latent factors to Vespa as before. Note that we need to
-update the tensor specification in the search definition in case the size of
+update the tensor specification in the schema in case the size of
 the latent vectors change. We have used size 10 (rank = 10) in the [Compute
 user and item latent factors](#compute-user-and-item-latent-factors) section
 but our cross-validation algorithm above tries different values for rank (10,

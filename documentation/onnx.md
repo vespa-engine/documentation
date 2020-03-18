@@ -18,7 +18,7 @@ something like this:
 ```
 ├── models
 │   └── my_model.onnx
-├── searchdefinitions
+├── schemas
 │   └── main.sd
 └── services.xml
 ```
@@ -38,7 +38,7 @@ provided by a function with the same name as the input variable. Consider the
 following example:
 
 ```
-search onnx {
+schema onnx {
     document onnx {
         field document_tensor type tensor(d0[1],d1[784]) {
             indexing: attribute | summary
@@ -87,7 +87,7 @@ Note that if names have "/" in them, which is the case when for instance using
 name scopes in TensorFlow, these will be replaced with "\_" during import as
 slashes are illegal in Vespa ranking expression names.
 
-The types of document tensors are specified in the search definition as shown above.
+The types of document tensors are specified in the schema as shown above.
 If you specify the types of query tensors in the
 [query profile types](query-profiles.html#query-profile-types),
 you can pass tensors in HTTP requests by using the HTTP parameter

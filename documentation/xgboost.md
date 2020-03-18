@@ -74,7 +74,7 @@ like this:
 ```
 ├── models
 │   └── my_model.json
-├── searchdefinitions
+├── schemas
 │   └── main.sd
 └── services.xml
 ```
@@ -92,7 +92,7 @@ called `xgboost`. This ranking feature specifies the model to use in a ranking e
 Consider the following example:
 
 ```
-search xgboost {
+schema xgboost {
     rank-profile prediction inherits default {
         first-phase {
             expression: xgboost("my_model.json")
@@ -132,7 +132,7 @@ c.predict_proba(breast_cancer.data)[:,1]
 To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa we need to use the [sigmoid function](reference/ranking-expressions.html):
 
 ```
-search xgboost {
+schema xgboost {
     rank-profile prediction-binary inherits default {
         first-phase {
             expression: sigmoid(xgboost("binary_breast_cancer.json"))
