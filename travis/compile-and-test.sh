@@ -7,8 +7,8 @@ set -e
 source /etc/profile.d/jdk-env.sh
 
 # Install same docker as in our host on travis
-curl -sLOf "https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-17.09.1.ce-1.el7.centos.x86_64.rpm"
-yum localinstall -y docker-ce-17.09.1.ce-1.el7.centos.x86_64.rpm 
+curl -sLOf "https://download.docker.com/linux/centos/7/x86_64/stable/Packages/docker-ce-18.06.0.ce-3.el7.x86_64.rpm"
+yum localinstall -y docker-ce-18.06.0.ce-3.el7.x86_64.rpm
 
 # Install python 3 and requirements for the tests
 yum install -y python36-pip
