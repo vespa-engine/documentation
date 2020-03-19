@@ -14,6 +14,8 @@ yum localinstall -y docker-ce-17.09.1.ce-1.el7.centos.x86_64.rpm
 yum install -y python36-pip
 pip3 install -r test/requirements.txt --user
 
+# Some procedures use openssl
+yum install -y openssl
+
 # Run all tests
 ./test/test.py
-
