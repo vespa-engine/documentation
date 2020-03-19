@@ -17,5 +17,7 @@ pip3 install -r test/requirements.txt --user
 # Some procedures use openssl
 yum install -y openssl
 
+export VESPA_TEAM_API_KEY
+
 # Run all tests
 ./test/test.py
