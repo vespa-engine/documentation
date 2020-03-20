@@ -3,12 +3,22 @@
 title: "Semantic Text Search: Quick start "
 ---
 
-TODO: Work on introduction
-*  The point here is to provide out of the box semantic search. Little or no fine-tuning.
+The main goal of this tutorial is to investigate and report on the possibility of providing out of the box semantic search capabilities to text applications with as little application specific tunning as possible. In order to do that, we will first describe the data used, the metrics of interest and important baselines that will be used to judge our results. 
+
+Once that is done we will show how to use pre-trained text embeddings to match documents based on the distance between query and document embeddings by using the Vespa operator that implements nearest neighbor search. It is shown that the pre-trained embeddings indeed carry significant information about query-document relevance. 
+
+However, in an unexpected turn of events, our analysis start to show that the [MS MARCO dataset](https://microsoft.github.io/msmarco/) is more biased toward term-matching signals than we thought was the case at the beginning of our experiments. We try our best to show the evidence we found to support this claim and are open to discuss with the research community and re-evaluate this conclusion based on feedback.
+
+We then show how an efficient Vespa implementation of the WAND algorithm called [weakAND](/using-wand-with-vespa.html#weakand) is extremely effective when dealing with datasets biased towards term-matching signals. We conclude that, although pre-trained semantic vectors indeed show promising results for out of the box semantic search, we ideally want to investigate their power and limitations on datasets that are less biased towards term-matching signals.
 
 ## A note on the data
 
-TODO: Data used ...
+This tutorial uses a sample of the [MS MARCO dataset](https://microsoft.github.io/msmarco/). The main reason was to allow others to follow the same steps in their local machines, as the different embeddings used will increase the disk, memory and processing required for the application.
+
+The entire dataset as well as the code to process it were described in the first part of our [text search tutorial](text-search.html#dataset). For the sample used here, we randomly selected 1.000 queries and 100.000 documents. The relevant documents to the queries are guaranteed to be in the corpus used.
+
+TODO: 
+* Add code to sample the data
 
 ## A note on metrics
 
@@ -16,7 +26,7 @@ We will use three metrics on the experiments reported here. They are:
 
 1. Matched docs: The total number of documents matched by the query.
 2. Recall @ 100: The number of relevant documents retrieved in the first 100 positions divided by the number of queries.
-3. MRR @ 100: The mean reciprocal rank metric computed by the considering the first 100 documents returned by each query.
+3. MRR @ 100: The [mean reciprocal rank metric](https://en.wikipedia.org/wiki/Mean_reciprocal_rank) computed by the considering the first 100 documents returned by each query.
 
 If we think about an end-to-end application we probably care the most about the `Matched docs` and `MRR @ 100`. The smaller the `Matched docs` the faster and cheaper is our application. The higher the `MRR @ 100` the better we are placing the relevant documents right at the top where we want them. 
 
@@ -42,7 +52,7 @@ The match operator `AND` means that we are only maching documents that contain a
 }
 ```
 
-The match operator `OR` means that we are matching documents that contain any of the query terms either in the title or in the body. The only different is the inclusion of the `[{"grammar": "any"}]` in the [YQL](https://docs.vespa.ai/documentation/query-language.html) expression. 
+The match operator `OR` means that we are matching documents that contain any of the query terms either in the title or in the body. The only difference is the inclusion of the `[{"grammar": "any"}]` in the [YQL](https://docs.vespa.ai/documentation/query-language.html) expression:
 
 ```
 {
@@ -51,7 +61,7 @@ The match operator `OR` means that we are matching documents that contain any of
 }
 ```
 
-The baselines are two obvious choices that also represent to extremes that are interesting to analyse. The `AND` operator is too restrictive, matching very few documents. The consequence is that it end up missing the relavant documents in the first 100 position for approximately half of the queries. The `OR` operator on the other hand, match the majority of the documents in the corpus and recall the relevant document for most of the queries.
+The baselines are two obvious choices that also represent two extremes that are interesting to analyse. The `AND` operator is too restrictive, matching very few documents. The consequence is that it end up missing the relavant documents in the first 100 position for approximately half of the queries. The `OR` operator on the other hand, match the majority of the documents in the corpus and recall the relevant document for most of the queries.
 
 ## Pre-trained vector embeddings
 
@@ -60,11 +70,13 @@ While performing the experiments reported here, we evaluated different types of 
 2. Universal sentence encoder (avaialble via [TensorFlow Hub](https://tfhub.dev/google/universal-sentence-encoder/4))
 3. Sentence BERT (available via the python [sentence-transformers library](https://github.com/UKPLab/sentence-transformers))
 
-The approach used here was to create one vector for title and one vector for body for each document and to create one query vector for each query. It might not make sense to use large texts such as the body of the documents to create embedding vectors based on sentence models. However, testing how far we can go without tailoring the application too much is part of our experiment goals. In order words, how well can we create out of the box text application by adding semantic search cababilities for arbitrary chunks of text, with as little pre-processing as possible.
+The approach used was to create one vector for the title and one vector for the body for each document and to create one query vector for each query. It might not make sense to use large texts such as the body of the documents to create embedding vectors based on sentence models. However, testing how far we can go without tailoring the application too much is part of our experiment goals. In order words, the goal is to find out how well we can create out of the box text applications by adding semantic search cababilities for arbitrary chunks of text, with as little pre-processing as possible.
 
 ## From text to embeddings methodology
 
-We also do not claim to have built query and document vectors in the most optimal way. However, we do think that we have followed what most people getting started in the NLP landscape would do given how repositories and libraries like tensorflow hub and sentence-transformers library are presented.
+We follow the examples available in the model's repositories and libraries to create the query and document vectors. We do not claim that this is the best way to construct them but we believe that this is what most people replicating this would do based on the information available to them. Improving on text to embedding construction could be a nice topic to explore elsewhere.
+
+For example, this is how it is presented at [the Universal Sentence Encoder page](https://tfhub.dev/google/universal-sentence-encoder/4) in TensorFlow Hub.
 
 ```
 From tensorflow hub
@@ -79,6 +91,8 @@ embeddings = embed([
 print embeddings
 ```
 
+The following comes from the [sentence-transformers library](https://github.com/UKPLab/sentence-transformers#getting-started).
+
 ```
 From sentence-transformers library
 
@@ -91,9 +105,14 @@ sentences = ["This framework generates embeddings for each input sentence",
 sentence_embeddings = model.encode(sentences)
 ```
 
+We have followed a similar pattern when creating the embeddings used here.
+
+TODO:
+* Include code used to generate the embeddings
+
 ## Approximate Nearest Neighbor (ANN) operator
 
-Vespa can now match documents based on distance metrics between query and document vectors. This is a long awaited feature that will make it possible to implement strategies like semantic search at scale due to techniques such as Approximate Nearest Neighbor (ANN). Discussing ANN theory and implementation is beyond the scope of this tutorial. Instead we want to show how it can be used for semantic search.
+Vespa can match documents based on distance metrics between query and document vectors. This feature makes it possible to implement strategies like semantic search at scale due to techniques such as Approximate Nearest Neighbor (ANN). Discussing ANN theory and implementation is beyond the scope of this tutorial. Instead we want to show how it can be used for semantic search.
 
 There are only two steps required to perform ANN with embeddings in Vespa:
 * Define the document embedding fields in the search definition file.
@@ -103,7 +122,7 @@ Once that is done, we can feed document embeddings to Vespa, use the ANN operato
 
 ### Query profile type
 
-https://docs.vespa.ai/documentation/query-profiles.html#query-profile-types
+Following is the [query profile type](../query-profiles.html#query-profile-types) that is located in the `src/main/application/search/query-profiles/types/root.xml` file. It defines a query feature named `tensor_bert`. It is a [tensor](../tensor-user-guide.html) of type float with indexed dimension of size 768. 
 
 ```
 <query-profile-type id="root">
@@ -111,7 +130,19 @@ https://docs.vespa.ai/documentation/query-profiles.html#query-profile-types
 </query-profile-type>
 ```
 
+Once the query profile type is in place we can send the query embeddings via the `ranking.features.query(tensor_bert)` parameter as shown below:  
+
+```
+{
+  "yql": ...,
+  "ranking.features.query(tensor_bert)": "[0.013267785266013195, -0.021684982513878254, ..., -0.007751454443551412]",
+  ...
+}
+```
+
 ### Search definition
+
+The document embeddings can be defined by adding the following fields in the `src/main/application/searchdefinitions/msmarco.sd` file:
 
 ```
 field title_bert type tensor<float>(x[768]) {
@@ -122,6 +153,10 @@ field body_bert type tensor<float>(x[768]) {
     indexing: attribute
 }
 ```
+
+The code above defines one field for the title embedding and one for the text body embedding. Both are tensors of type float with indexed dimension of size 768, similar to the query embedding. The `indexing: attribute` indicates that the tensor fields above will be [kept in memory](../search-definitions.html#indexing) to be used by the matching and the ranking framework.
+
+At this point, it is already possible to match documents based on the distance between the query and document tensors via the `nearestNeighbor` operator that will be discussed in the next section. However, it could be interesting to use those tensors to rank the documents as well. This can be accomplished by defining a `rank-profile`:
 
 ```
 rank-profile bert_title_body_all inherits default {
@@ -137,7 +172,11 @@ rank-profile bert_title_body_all inherits default {
 }
 ```
 
+The [rank-profile](../reference/search-definitions-reference.html#rank-profile) `bert_title_body_all` will sort all the matched documents according to the sum of the dot-products between query and title and query and body vectors. Different rank-profiles can be defined for experimentation.
+
 ### ANN operator
+
+Once that query and document tensors as well as rank-profiles that uses them are all defined, it is possible to use the embeddings to match and to rank the documents by using the `nearestNeighbor` operator together with the appropriate rank-profile.
 
 ```
 {
@@ -152,9 +191,12 @@ rank-profile bert_title_body_all inherits default {
 } 
 ```
 
+The query above uses the `nearestNeighbor` operator to match documents based on the euclidean distance between the title embedding (`title_bert`) and the query embedding (`tensor_bert`). It is possible to annotate the `nearestNeighbor` with properties such as `targetNumHits` that defines the target number of documents to be matched. In addition, we specificy that the matched documents will be ranked by the `bert_title_body_all` rank-profile. 
+
+
 ## ANN results
 
-The table below show results obtained by matching the closest 1.000 document vectors to the query vector in terms of the Euclidena distance. Even though we use the Vespa `ANN` operator, we set the method to be brute force to remove the approximation error from the analysis. This means that the documents matched were indeed the closest ones to the query. `ANN(title, bert)` means that we matched documents by comparing the document title embedding to the query embedding where the embeddings were created by the sentence BERT model. 
+The table below show results obtained by matching the closest 1.000 document vectors to the query vector in terms of the Euclidean distance. Even though Vespa support approximate nearest neighbor search, we set the method to be brute force to remove the approximation error from the analysis in this tutorial. This means that the documents matched were indeed the closest ones to the query. The `ANN(title, bert)` in the table below means that we matched documents by comparing the document title embedding to the query embedding where the embeddings were created by the sentence BERT model. 
 
 All the results involving embeddings in this tutorial are generated via the sentence BERT model. The results obtained with the Universal Sentence Encoder model were very similar and therefore omitted. On the other hand, the results obtained with the Word2Vec model were way worse than expected and were left out because they belong to a more post-mortem type of discussion.
 
@@ -164,10 +206,7 @@ In addition to matching documents based on the distance between document and que
 
 The results obtained are promising with respect to the relationship between matched documents and recall. We retrieved only around 6% of the documents which is more than the `AND` operator but much less than the `OR` operator while we increased the recall from 48% (obtained with `AND`) to 75%, which is great although we still have a good way to go to reach 96% (obtained with the `OR`).
 
-Since it is often mentioned that semantic search works better when combined with term-matching, it would be wise for us to check the metrics obtained when combining both. and semantic. But first, lets see some useful features related to term-matching that is available in Vespa.
-
-* TODO: Including BM25 here in the 1st phase does not make sense due to the lack of query terms in the YQL
-Similarly, I am excluding ANN(title, bert) + ANN(body, bert) since they retrieve all the documents
+Since it is often mentioned that semantic search works better when combined with term-matching, it would be wise for us to check the metrics obtained when combining both. But first, lets see some useful features related to term-matching that is available in Vespa.
 
 ## weakAND operator and its effectiveness
 
@@ -187,7 +226,7 @@ Below is a query example that uses the `weakAND` operator with an annotation tha
 }
 ```
 
-Remember that the `default` is the fieldset that included both the `title` and the `body` fields. 
+Remember that the `default` is the fieldset that includes both the `title` and the `body` fields. 
 
 ```
 fieldset default {
@@ -201,39 +240,43 @@ It was surprising to see the effectiveness of the WAND operator in this case:
 
 It matched much less documents than the `OR` operator (12.5% versus 85% respectvelly) while keeping a similar recall metric (92% versus 96% respectivelly). 
 
-If you are detail oriented, you might be wondering why the `weakAND` operator matched 12.5% of the documents if we set `targetNumHits` to be 1.000. The reason for that is that the algorithm starts with a initial list of 1.000 candidates and start to add new ones that are best than the documents already in the list. That way the 1.000 ends up being the lower bound of the documents matched.
+If you are detail oriented, you might be wondering why the `weakAND` operator matched 12.5% of the documents if we set `targetNumHits` to be 1.000. The reason for that is that the algorithm starts with a initial list of 1.000 candidates and start to add new ones that are best than the documents already in the list. That way the 1.000 ends up being the lower bound of the documents matched. The same is true for the `nearestNeighbor` operator.
 
 ## ANN and weakAND: Little improvement
 
-My second and perhaps more important surprise was how little the pre-trained sentence embeddings contributed in addition to what was delivered by WAND. 
+The second surprise was to see how little the pre-trained sentence embeddings contributed in addition to what was delivered by WAND. The table below shows that we are indeed matching documents that wouldn't be matched by the `weakAND` operator alone (16% matched documents by adding `ANN` vs. 12% by `weakAND` alone.). However, we see almost no improvement for Recall and MRR.
 
 <div style="text-align:center"><img src="images/weakAND_ANN_BM25.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
-You could argue that maybe the articles retrieved by ANN does not contain the query terms leading to zero BM25 scores, so we can add the (unscaled) dot-product in the 1st phase ranking
+It could be argued that the articles retrieved by `ANN` does not necessarily contain the query terms in the title nor the body of the document, leading to zero `BM25` scores. To address that we can add the (unscaled) dot-product in the 1st phase ranking. The results below show that we had a marginal reduction in Recall and a marginal increase in MRR.
 
 <div style="text-align:center"><img src="images/weakAND_ANN_BM25_dotP.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
-TODO: [MISSING: SCALE ONE CASE TO SEE IF THERE IS ANY IMPROVEMENTS ALSO CHECK DATA TO SEE IF THERE IS NO DISCONTINUITY IN THE DOT-PRODUCT VALUES]
+Another issue that must be addressed is that we should scale the BM25 scores and the embedding dot-products so that we take into consideration that they might have completelly different scales. In order to do that we need to collect a training dataset that take into account the appropriate match phase and fit a model (linear in our case) according to a listwise loss function, as described in our [text search tutorial with ML](text-search-ml.html) and summarized in [this blog post](https://medium.com/vespa/learning-to-rank-with-vespa-9928bbda98bf). 
+
+<div style="text-align:center"><img src="images/weakAND_ANN_BM25_dotP_scaled.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+
+The table above shows that we obtained a slight improvement in MRR and that the model increased the relative weight associated with the BM25 scores, even though the magniture of the BM25 scores are much bigger than the magnitude of the dot-product scores, as we will see in the next section. This again points towards the importance of term-match signals relative to the semantic search signals.
 
 ## MSMARCO: A biased dataset?
 
-We would of course expect a significant intersection between term-matching and semantic signals since both should contain information about query document relevance. However, the semantic signals need to complement the term-matching signals for it to be valuable, given that they are more expensive to store and compute. This means that they should match relevant documents that would not otherwise be matched by term-matching signals. 
+The results obtained so far led us to investigate why the `weakAND` operator was so effective and why semantic vectors were not complementing it as we thought they would, in the context of the MSMARCO dataset. We would of course expect a significant intersection between term-matching and semantic signals since both should contain information about query document relevance. However, the semantic signals need to complement the term-matching signals for it to be valuable, given that they are more expensive to store and compute. This means that they should match relevant documents that would not otherwise be matched by term-matching signals. 
 
 The results discussed so far did not show any significant improvement by adding (pre-trained) semantic vectors in addition to the term-matching signals. The important question is why not? One possibility is to say that the pre-trained semantic vectors are not informative enough in this context. However, the graph below indicates otherwise. The blue histogram shows the empirical distribution of embedding dot-product scores for the general population of (query, document) pairs. The red histogram shows the empirical distribution of embedding dot-product scores for the population of (query, relevant_document) pairs. So the dot-product scores are significantly higher for documents relevant to the query than they are for random documents. 
 
 <div style="text-align:center"><img src="images/dotP_hist.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
-This confirms the results we obtained when only using `ANN` operator to match the documents and the dot-product scores to rank them and shows that pre-trained embedding indeed carry relevant information about query document relevance. If that is the case, there is also the possibility that the dataset being used, MS MARCO dataset in our case, is biased towards term-matching signals. The next graph supports this hypotheses by showing that the empirical distribution of the relevant documents (red) is significantly higher in bm25 score than the distribution of a random documents.
+This confirms the results we obtained when only using `nearestNeighbor` operator to match the documents and the dot-product scores to rank them and shows that pre-trained embedding indeed carry relevant information about query document relevance. If that is the case, there is also the possibility that the dataset being used, MS MARCO dataset in our case, is biased towards term-matching signals. The next graph supports this hypotheses by showing that the empirical distribution of the relevant documents (red) is significantly higher in bm25 score than the distribution of random documents.
 
 <div style="text-align:center"><img src="images/bm25_hist.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
-In other words, there are very few documents that would not be matched by term-matching approaches. This explaing why the results obtained with the `weakAND` operator were outstanding. MS MARCO dataset turns out to be a favorable environement for this kind of algorithm. That also mean that after accounting for term-matching there are almost no relevant documents left to be matched by semantic signals. This is true even if the semantic embedding are informative. 
+In other words, there are very few documents that would not be matched by term-matching approaches. This explaing why the results obtained with the `weakAND` operator were outstanding. MS MARCO dataset turns out to be a favorable environement for this kind of algorithm. That also mean that after accounting for term-matching there are almost no relevant documents left to be matched by semantic signals. This is true even if the semantic embeddings are informative. 
 
 The best we can hope for in a biased dataset is for the bm25 scores and the embedding dot-product scores to be positive correlated, showing that both carry information about document relevance. This seems indeed to be the case in the scatter plot below that shows a much stronger correlation between bm25 scores and embedding scores for the relevant documents (red) than between the scores of the general population (black).
 
 <div style="text-align:center"><img src="images/bm25_dotP_scatter.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
-To be clear, there is no claim being made that the results and conclusions described here are valid across different NLP datasets and tasks. However, this problem might be more common than we would like to admit given the nature of how the datasets are created. For example, according to the [TODO: Add ref]MS MARCO paper, they built the dataset by:
+To be clear, there is no claim being made that the results and conclusions described here are valid across different NLP datasets and tasks. However, this problem might be more common than we would like to admit given the nature of how the datasets are created. For example, according to the MS MARCO dataset paper [^1], they built the dataset by:
 
 1. Sampling queries from Bing’s search logs.
 2. Filtering out non question queries.
@@ -241,18 +284,19 @@ To be clear, there is no claim being made that the results and conclusions descr
 4. Automatically extract relevant passages from those documents
 5. Human editos then annotate passages that contain useful and necessary information for answering the questions
 
-Looking at steps 3 and 4 (and maybe 5), it is not surprising to find bias in the dataset and bias is indeed recognized as an issue in the literature. But it was a bit surprising to see the degree of the bias and how this might affect experiments involving semantic search.
+Looking at steps 3 and 4 (and maybe 5), it is not surprising to find bias in the dataset. To be fair, this bias is recognized as an issue in the literature, but it was a bit surprising to see the degree of the bias and how this might affect experiments involving semantic search.
 
 ## Fine-tuning sentence embeddings: advantages and disadvantages
 
-At this point a common observation would be that we are talking about pre-trained embeddings and that we could get better results if we fine-tuned the embeddings to the specific application at hand. This might very well be the case but there are at least two important considerations to be taken into account, cost and overfitting. The resource/cost consideration is important but more obvious to be recognized. You either have the money to pursue it or not. If you do, you still should check to see if the improvement you get is worth the cost. 
+At this point a reasonable observation would be that we are talking about pre-trained embeddings and that we could get better results if we fine-tuned the embeddings to the specific application at hand. This might very well be the case but there are at least two important considerations to be taken into account, cost and overfitting. The resource/cost consideration is important but more obvious to be recognized. You either have the money to pursue it or not. If you do, you still should check to see if the improvement you get is worth the cost. 
 
-The main issue in this case relates to overfitting. It is not easy to avoid overfitting when using big and complex models such as Universal Sentence Encoder and sentence BERT. Even if we use the entire MS MARCO dataset, which is considered a big and important recent developments to help advance the research around NLP tasks, we only have around 3 million documents and 300 thousand labeled queries to work with. This is not necessarily big relative to such massive models. 
+The main issue in this case relates to overfitting. It is not easy to avoid overfitting when using big and complex models such as Universal Sentence Encoder and sentence BERT. Even if we use the entire MS MARCO dataset, which is considered a big and an important recent developments to help advance the research around NLP tasks, we only have around 3 million documents and 300 thousand labeled queries to work with. This is not necessarily big relative to such massive models. 
 
-Another important observation is that BERT-related architectures have dominated the [TODO: link] MSMARCO leaderboards for quite some time. Anna Rogers [wrote a good piece](https://hackingsemantics.xyz/2019/leaderboards/) about some of the challenges involved on the current trend of using leaderboards to measure model performance in NLP tasks. 
+Another important observation is that BERT-related architectures have dominated [the MSMARCO leaderboards](https://microsoft.github.io/msmarco/) for quite some time. Anna Rogers [wrote a good piece](https://hackingsemantics.xyz/2019/leaderboards/) about some of the challenges involved on the current trend of using leaderboards to measure model performance in NLP tasks. The big takeaway is that we should be careful when interpreting those results as it becomes hard to understand if the performance comes from architecture innovation or excessive resources (read overfitting) being deployed to solve the task.
 
-But despite all those remarks, the most important point here is that if we want to investigate to power and limitations of semantic vectors (pre-trained or not), we should ideally prioritize datasets that are less biased towards term-matching signals. 
+But despite all those remarks, the most important point here is that if we want to investigate the power and limitations of semantic vectors (pre-trained or not), we should ideally prioritize datasets that are less biased towards term-matching signals. 
 
+[^1]: Bajaj, Payal and Campos, Daniel and Craswell, Nick and Deng, Li and Gao, Jianfeng and Liu, Xiaodong and Majumder, Rangan and McNamara, Andrew and Mitra, Bhaskar and Nguyen, Tri and others, 2018. MS MARCO: A human generated machine reading comprehension dataset.
 
 <script>
 function processFilePREs() {
