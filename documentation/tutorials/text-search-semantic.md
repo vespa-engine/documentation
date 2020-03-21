@@ -3,7 +3,7 @@
 title: "Semantic Text Search: Quick start "
 ---
 
-The main goal of this tutorial is to investigate and report on the possibility of providing out of the box semantic search capabilities to text applications with as little application specific tunning as possible. In order to do that, we will first describe the data used, the metrics of interest and important baselines that will be used to judge our results. 
+The main goal of this tutorial is to investigate the possibility of providing out of the box semantic search capabilities to text applications with as little application specific tunning as possible. In order to do that, we will first describe the data used, the metrics of interest and important baselines that will be used to judge our results. 
 
 Once that is done we will show how to use pre-trained text embeddings to match documents based on the distance between query and document embeddings by using the Vespa operator that implements nearest neighbor search. It is shown that the pre-trained embeddings indeed carry significant information about query-document relevance. 
 
