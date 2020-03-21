@@ -17,9 +17,6 @@ This tutorial uses a sample of the [MS MARCO dataset](https://microsoft.github.i
 
 The entire dataset as well as the code to process it were described in the first part of our [text search tutorial](text-search.html#dataset). For the sample used here, we randomly selected 1.000 queries and 100.000 documents. The relevant documents to the queries are guaranteed to be in the corpus used.
 
-TODO: 
-* Add code to sample the data
-
 ## A note on metrics
 
 We will use three metrics on the experiments reported here. They are: 
@@ -106,9 +103,6 @@ sentence_embeddings = model.encode(sentences)
 ```
 
 We have followed a similar pattern when creating the embeddings used here.
-
-TODO:
-* Include code used to generate the embeddings
 
 ## Approximate Nearest Neighbor (ANN) operator
 
@@ -282,7 +276,7 @@ To be clear, there is no claim being made that the results and conclusions descr
 2. Filtering out non question queries.
 3. Retrieve relevant documents for each question using Bing from its large-scale web index.
 4. Automatically extract relevant passages from those documents
-5. Human editos then annotate passages that contain useful and necessary information for answering the questions
+5. Human editors then annotate passages that contain useful and necessary information for answering the questions
 
 Looking at steps 3 and 4 (and maybe 5), it is not surprising to find bias in the dataset. To be fair, this bias is recognized as an issue in the literature, but it was a bit surprising to see the degree of the bias and how this might affect experiments involving semantic search.
 
