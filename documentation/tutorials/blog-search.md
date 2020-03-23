@@ -403,8 +403,8 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'
 
 Fetch documents by document id using the [Document API](../api.html):
 
-<pre data-test="exec" data-test-assert-contains="id:blog-search:blog_post::1750271">
-$ curl -s 'http://localhost:8080/document/v1/blog-search/blog_post/docid/1750271' | python -m json.tool
+<pre data-test="exec" data-test-assert-contains="id:blog-search:blog_post::507823">
+$ curl -s 'http://localhost:8080/document/v1/blog-search/blog_post/docid/507823' | python -m json.tool
 </pre>
 
 
