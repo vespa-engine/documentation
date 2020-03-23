@@ -9,7 +9,7 @@ Once that is done we will show how to use pre-trained text embeddings to match d
 
 However, in an unexpected turn of events, our analysis start to show that the [MS MARCO dataset](https://microsoft.github.io/msmarco/) is more biased toward term-matching signals than we thought was the case at the beginning of our experiments. We try our best to show the evidence we found to support this claim and are open to discuss and get feedback from the research community.
 
-We then show how an efficient Vespa implementation of the WAND algorithm called [weakAND](/using-wand-with-vespa.html#weakand) is extremely effective when dealing with datasets biased towards term-matching signals. We conclude that, although pre-trained semantic vectors indeed show promising results for out-of-the-box semantic search, we ideally want to investigate their power and limitations on datasets that are less biased towards term-matching signals.
+We then show how an efficient Vespa implementation of the WAND algorithm called [weakAND](../using-wand-with-vespa.html#weakand) is extremely effective when dealing with datasets biased towards term-matching signals. We conclude that, although pre-trained semantic vectors indeed show promising results for out-of-the-box semantic search, we ideally want to investigate their power and limitations on datasets that are less biased towards term-matching signals.
 
 ## A note on the data
 
