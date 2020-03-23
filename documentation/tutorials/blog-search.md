@@ -73,7 +73,7 @@ training data that consists of 5 weeks of posts as well as all the 'like'
 actions that occurred during those 5 weeks.
 
 [This first release of training data is available
-here](https://www.kaggle.com/c/predict-wordpress-likes/download/trainPosts.zip)
+here](https://www.kaggle.com/c/predict-wordpress-likes/download/q5iqpPaOzadMgmYFEGmv%2Fversions%2Fp5evQDmqvlDqpq9UwsGL%2Ffiles%2FtrainPosts.zip)
 - once downloaded, unzip it. The 1,196,111 line trainPosts.json will be our
 practice document data. This file is around 5GB in size.
 
@@ -403,8 +403,8 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local getState'
 
 Fetch documents by document id using the [Document API](../api.html):
 
-<pre data-test="exec" data-test-assert-contains="id:blog-search:blog_post::1750271">
-$ curl -s 'http://localhost:8080/document/v1/blog-search/blog_post/docid/1750271' | python -m json.tool
+<pre data-test="exec" data-test-assert-contains="id:blog-search:blog_post::507823">
+$ curl -s 'http://localhost:8080/document/v1/blog-search/blog_post/docid/507823' | python -m json.tool
 </pre>
 
 
