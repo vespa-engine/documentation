@@ -72,7 +72,7 @@ something like this:
 │           └── variables
 │               ├── variables.data-00000-of-00001
 │               └── variables.index
-├── searchdefinitions
+├── schemas
 │   └── main.sd
 └── services.xml
 ```
@@ -92,7 +92,7 @@ input to the computation must be provided by a function with the same
 name as the input variable. Consider the following example:
 
 ```
-search tf {
+schema tf {
     document tf {
         field document_tensor type tensor<float>(d0[1],d1[784]) {
             indexing: attribute | summary
@@ -151,7 +151,7 @@ starting with `"d0"` for the first dimension, and increasing for each dimension
 (i.e. `"d1"`, `"d2"`, etc). The result of the evaluation will likewise be
 a tensor with names `"d0"`, `"d1"`, etc.
 
-The types of document tensors are specified in the search definition as shown above.
+The types of document tensors are specified in the schema as shown above.
 If you specify the types of query tensors in the
 [query profile types](query-profiles.html#query-profile-types),
 you can pass tensors in HTTP requests by using the HTTP parameter
@@ -218,7 +218,7 @@ the &lt;documents&gt; list in your services.xml.
 (one per TensorFlow variable to make updateable), using the type spec found
 in step 1 and any name:
 ```
-search myvariables {
+schema myvariables {
     document myvariables {
         field my_tf_variable type tensor<float>(y[10],x[20]) {
             indexing: attribute
@@ -230,10 +230,10 @@ search myvariables {
 
 ### 3. Refer to the global document from your regular document type
 
-1. Add a <a href="search-definitions.html#document-references">reference</a>
+1. Add a <a href="schemas.html#document-references">reference</a>
 to the global document and import the fields:
 ```
-search mydocument {
+schema mydocument {
     document mydocument {
         field myvariables_ref type reference<myvariables> {
             indexing: attribute

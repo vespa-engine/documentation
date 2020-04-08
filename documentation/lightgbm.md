@@ -63,7 +63,7 @@ add it to the application package resulting in a directory structure like this:
 ```
 ├── models
 │   └── lightgbm_model.json
-├── searchdefinitions
+├── schemas
 │   └── main.sd
 └── services.xml
 ```
@@ -81,7 +81,7 @@ called `lightgbm`. This ranking feature specifies the model to use in a ranking
 expression, relative under the `models` directory. Consider the following example:
 
 ```
-search test {
+schema test {
     rank-profile classify inherits default {
         first-phase {
             expression: lightgbm("lightgbm_model.json")
@@ -129,7 +129,7 @@ You can also define functions (which are valid rank features) with the LightGBM
 feature name to perform the mapping. An example:
 
 ```
-search test {
+schema test {
     document test {
         field doc_attrib type double {
             indexing: summary | attribute
@@ -202,7 +202,7 @@ In Vespa categorical features are strings, so mapping the above feature
 for instance to a document field would be:
 
 ```
-search test {
+schema test {
     document test {
         field numeric_attrib type double {
             indexing: summary | attribute

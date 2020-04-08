@@ -1,0 +1,220 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "schemas"
+---
+
+<p>A schema defines a <a href="documents.html">document type</a> and what we want to compute over it.
+Schemas are mapped to one or more content clusters in the <a href="services.html">services.xml</a> file.
+These content clusters can then store and compute over data stored in the schema.
+Schemas are stored in files named the same as the schema, with the ending ".sd" (for schema definition),
+in the <code>schemas/</code> directory of the application package.</p>
+
+<p>See also the <a href="reference/scema-reference.html">schema reference</a>.</p>
+
+<p>Schemas may also be stored in the <code>searchdefinitions/</code> directory and use <code>search</code>
+instead of <code>schema</code> as the top level tag.</p>
+
+<p>Example:</p>
+
+<pre>
+schema music {
+    document music {
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field artistId type string {
+            indexing: summary | attribute
+        }
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field album type string {
+            indexing: index
+        }
+
+        field duration type int {
+            indexing: summary
+        }
+
+        field year type int {
+            indexing: summary | attribute
+        }
+
+        field popularity type int {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: artist, title, album
+    }
+
+    rank-profile song inherits default {
+        first-phase {
+            expression:nativeRank(artist,title,album) + if(isNan(attribute(popularity)) == 1, 0,attribute(popularity))
+        }
+    }
+}
+</pre>
+</p>
+
+
+<h2 id="field">field</h2>
+
+<p>A field has a type, like string or double - see <a href="reference/schema-reference.html#field">
+field reference</a> for a full list.</p>
+
+<p>Documents may have relations, and field values can be imported from
+<a href="parent-child.html">parent documents</a>.</p>
+
+
+<h3 id="multivalue-fields">Multivalue fields</h3>
+<p>
+A field can be <em>single value</em>, like a string, or <em>multivalue</em>, like an array of strings -
+see the  <a href="reference/schema-reference.html#field">field type list</a>.
+</p><p>
+Most multivalue fields can be used in <a href="reference/grouping-syntax.html#multivalue-attributes">grouping</a>.
+</p><p>
+When searching in array or map of struct,
+<a href="reference/query-language-reference.html#sameelement">sameElement()</a> is a useful query operator
+to restrict matches to same struct element.
+Note that the document summary will not contain which element(s) matched.
+</p><p>
+Accessing attributes in maps and arrays of struct in ranking is not possible.
+</p><p>
+The rank feature <a href="reference/rank-features.html#attribute(name).count">attribute(name).count</a>
+can be used in ranking to <em>rank</em> based on number of elements in a multivalue attribute.
+To <em>filter</em> based on number of elements, create a
+<a href="ranking-expressions-features.html#if-function-and-string-equality-tests">strict tiering rank function</a>
+combined with a <a href="reference/schema-reference.html#rank-score-drop-limit">rank-score-drop-limit</a>.
+Then use a <a href="ranking-expressions-features.html#using-query-variables">query variable</a> for number of elements.
+Note that doing this filtering is more expensive to evaluate than just having a separate field for the count.
+</p><p>
+
+
+
+<h2 id="indexing">indexing</h2>
+<p>
+<code>indexing</code> configures how to process data of a field during indexing -
+the most important ones are:
+<table class="table">
+  <thead></thead><tbody>
+    <tr>
+      <td><code>index</code></td><td>
+        For unstructured text: Create a text index for this field. Text matching and all text ranking features become available.
+        Indexes are disk backed and do not need to fit in memory.
+        <a href="reference/schema-reference.html#indexing">Reference</a> /
+        <a href="proton.html#index">index details</a></td>
+    </tr><tr>
+      <td><code>attribute</code></td><td>
+        For structured data: Keep this field in memory in a forward structure. This makes the field available for grouping,
+        sorting and ranking. Attributes may also be searched by complete match (word or exact), or (for numerical fields)
+        by range. Optionally a B-tree in memory can also be created by adding the fast-search option. This improves
+        performance if the attribute is a strong criterion in queries (i.e filters out many documents).
+        <a href="reference/schema-reference.html#attribute">Reference</a> /
+        <a href="attributes.html">attribute details</a></td>
+    </tr><tr>
+      <td><code>summary</code></td><td>
+        Include this field in the document summary in search result sets.
+        <a href="reference/schema-reference.html#summary">Reference</a> /
+        <a href="document-summaries.html">document summary details</a></td>
+    </tr>
+  </tbody>
+</table>
+Indexing instructions have pipeline semantics similar to unix shell
+commands, with data flowing from left to right.
+They can perform complex transformations on field values,
+or just send the field value unchanged to the next sections of the index structure - example:
+<pre>
+indexing: summary | attribute | index
+</pre>
+The data is first added to the document summary, then added as an
+in-memory attribute and finally indexed.
+The indexing language offers more functionality than this,
+like filter field values, combine field values, select on different values.
+Learn more in the <a href="reference/advanced-indexing-language.html">
+indexing language</a> reference.
+</p>
+
+
+
+<h2 id="fieldset">fieldset</h2>
+<p>
+A <code>fieldset</code> groups fields together for searching - example:
+<pre>
+search/?query=title:sometitle default:someword
+</pre>
+This query returns documents having <em>sometitle</em> in the field <em>title</em>,
+and <em>someword</em> in one or more of the fields in the fieldset <em>default</em>.
+If no field/field set name is given for a search term, the fieldset named <em>default</em> is searched.
+Find details in the <a href="reference/schema-reference.html#fieldset">fieldset reference</a>.
+</p>
+
+
+
+<h2 id="rank-profile">rank-profile</h2>
+<p>
+Vespa has built-in rank profiles, and/or such profiles can be configured,
+by hand or using machine learning.
+Read more in the <a href="ranking.html">ranking</a> documentation.
+</p>
+
+
+
+<h2 id="multiple-schemas">Multiple schemas</h2>
+
+<p>Many application define multiple kinds of data - each in their own schema.
+Multiple schemas can either be mapped to a single content cluster, or one
+can define a separate content cluster for each schema to be able to scale differently for each kind of data.
+A single container cluster can be used to query all the data types in both these configurations.</p>
+
+
+<h2 id="document-inheritance">Document Inheritance</h2>
+
+<p>Fields shared by multiple document types can be defined in inherited supertypes.</p>
+This is convenient, but also ensures that such fields will be defined consistently, which
+is crucial when a field is accessed in a query to be evaluated over multiple types.
+
+<p>
+To let a document inherit another add <code>inherits [document-name]</code> after the document name.
+Multiple inheritance and multiple levels of inheritance is supported. Example:
+<pre>
+document cod inherits food, fish {
+    &hellip;
+}
+</pre>
+
+<p>Inheriting a document type defined in another content cluster is allowed.</p>
+<p>Overriding fields defined in supertypes is not allowed.</p>
+
+
+<h2 id="querying-multiple-document-types">Querying multiple document types</h2>
+
+<p>In an application with multiple types of data, each query may decide which types are
+to be searched by each query.
+The details on how this works are in <a href="federation.html">federation</a>.
+In summary, the following always apply:
+<ul>
+<li>Vespa will by default query all document types and all clusters in parallel,
+and blend results based on score.
+<li>To limit the query to a subset of the types inside a content cluster,
+set <a href="reference/search-api-reference.html#model.restrict">restrict</a> to
+a comma-separated list of schema names:
+<pre>
+/search/?query=lotr&amp;<span style="background-color: yellow;">restrict=music,book</span>
+</pre></li>
+
+<li>To limit the query to a subset of the content clusters,
+set <a href="reference/search-api-reference.html#model.sources">sources</a> to
+a comma-separated list of content cluster names.
+<pre>
+/search/?query=lotr&amp;<span style="background-color: yellow;">sources=music_cluster,book_cluster</span>
+</pre>
+Both these parameters can be combined to search both a subset of types and clusters.
+</li>
+</ul>
+
+<p>Queries are evaluated in parallel over all selected document types and all clusters.</p>

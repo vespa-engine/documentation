@@ -122,7 +122,7 @@ In terms of data, Vespa operates with the notion of
 [documents](../documents.html).  A document represents a single, searchable
 item in your system, e.g., a blog post, a photo, or a news article. Each
 document type must be defined in the Vespa configuration through a [search
-definition](../search-definitions.html).  Think of a search definition as being
+definition](../schemas.html).  Think of a the document type in a schema as being
 similar to a table definition in a relational database; it consists of a set of
 fields, each with a given name, a specific type, and some optional properties.
 
@@ -143,7 +143,7 @@ the document type `blog_post` with the following fields:
 </tbody>
 </table>
 
-The data fed into Vespa must match the structure of the search definition, and
+The data fed into Vespa must match the structure of the schema, and
 the hits returned when searching will be on this format as well.
 
 
@@ -153,7 +153,7 @@ A Vespa [application package](../cloudconfig/application-packages.html) is the
 set of configuration files and Java plugins that together define the behavior
 of a Vespa system: what functionality to use, the available document types, how
 ranking will be done and how data will be processed during feeding and
-indexing.  The search definition, e.g., `blog_post.sd`, is a required part of
+indexing.  The schema, e.g., `blog_post.sd`, is a required part of
 an application package — the other required files are `services.xml` and
 `hosts.xml`.
 
@@ -225,7 +225,7 @@ setup.)
 
 `<redundancy>` denotes how many copies to keep of each document.
 
-`<documents>` assigns the document types in the _search definition_ — the
+`<documents>` assigns the document types in the _schema_ — the
 content cluster capacity can be increased by adding node elements — see
 [elastic Vespa](../elastic-vespa.html). (See also the
 [reference](../reference/services-content.html) for more on content cluster
@@ -248,15 +248,14 @@ uses a single node. Write the following to `application/hosts.xml`:
 </hosts>
 </pre>
 
-### Search Definition
+### Schema
 
 The `blog_post` document type mentioned in the `services.xml` file above is
-defined in the search definition.  Write the following to
-`application/searchdefinitions/blog_post.sd`, as it contains the search
-definition for a document of type `blog_post`:
+defined in the schema.  Write the following to
+`application/schemas/blog_post.sd`, as it contains the schema for a document of type `blog_post`:
 
-<pre data-test="file" data-path="application/searchdefinitions/blog_post.sd">
-search blog_post {
+<pre data-test="file" data-path="application/schemas/blog_post.sd">
+schema blog_post {
     document blog_post {
         field date_gmt type string {
             indexing: summary
@@ -355,7 +354,7 @@ $ curl -s --head http://localhost:8080/ApplicationStatus
 
 ## Feeding data
 
-The data fed to Vespa must match the search definition for the document type.
+The data fed to Vespa must match the schema for the document type.
 The data downloaded from Kaggle, contained in <em>trainPosts.json</em>, must be
 converted to a valid Vespa document format before it can be fed to Vespa.  Find
 a parser in the [utility
@@ -425,7 +424,7 @@ or with a JSON-query, which documentation can be found in the [Search API](../se
 The only mandatory parameter is the query, using `yql=<yql query>`.  More
 details can be found in the [Search API](../search-api.html).
 
-Given the above search definition, where the fields `title` and `content` are
+Given the above schema, where the fields `title` and `content` are
 part of the `fieldset default`, any document containing the word "music" in one
 or more of these two fields matches the queries below:
 
@@ -481,7 +480,7 @@ them.
 
 This is a single-term query in the special field `sddocname` for the value
 "blog_post".  This is a common and useful Vespa trick to get the number of
-indexed documents for a certain document type (search definition): `sddocname`
+indexed documents for a certain document type: `sddocname`
 is a special and reserved field which is always set to the name of the document
 type for a given document. The documents are all of type `blog_post`, and will
 therefore automatically have the field sddocname set to that value.
@@ -590,8 +589,8 @@ search blog_post {
 }
 </pre>
 
-Notes (more information can be found in the [search definition
-reference](../reference/search-definitions-reference.html#rank-profile)):
+Notes (more information can be found in the [schema
+reference](../reference/schema-reference.html#rank-profile)):
 
 - `rank-profile post_popularity inherits default`
 
@@ -848,15 +847,15 @@ know is *not* present in the document set, and as such will match no documents
 
 Attributes are kept in memory at all time, as opposed to normal indexes where
 the data is mostly kept on disk.  Even with large search nodes, one will notice
-that it is not practical to define all the search definition fields as
+that it is not practical to define all the document type fields as
 attributes, as it will heavily restrict the number of documents per search
-node.  Some Vespa installations have more than 1 billion documents per node —
-having megabytes of text in memory per document is not an option.
+node.  Some Vespa applications have more than 1 billion documents per node —
+having megabytes of text in memory per document is not cost effective.
 
 #### Matching
 
 Another limitation is the way *matching* is done for attributes.  Consider the
-field `blogname` from our search definition, and the document for the blog
+field `blogname` from our schema, and the document for the blog
 called "Thinking about museums". In the original input, the value for
 `blogname` is a string built of up the three words "Thinking", "about", and
 "museums", with a single whitespace character between them. How should we be

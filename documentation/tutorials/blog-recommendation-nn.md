@@ -112,7 +112,7 @@ number for each document, the rank score, and sorts the documents by this
 number.
 
 The rank score can be any function that takes as arguments parameters sent by
-the query, document attributes defined in search definitions and global
+the query, document attributes defined in schemas and global
 parameters not directly linked to query or document parameters. One example of
 rank score is the output of the neural network model defined in this tutorial.
 The model takes the latent factor $$u$$ associated with a specific
@@ -134,11 +134,11 @@ The reranking phase, if specified, will by default be run on the 100 best hits
 on each search node, after matching and before information is returned upwards
 to the search container. The number of hits to rerank can be turned up or down as needed.
 Below is a toy example showing how to configure first and second phase ranking
-expressions in the rank profile section of search definitions where the second
+expressions in the rank profile section of schemas where the second
 phase rank expression is run on the 200 best hits from first phase on each
 search node.
 
-	search myapp {
+	schema myapp {
 	    ...
 	    rank-profile default inherits default {
 
@@ -160,7 +160,7 @@ search node.
 
 In order to evaluate the neural network model trained with TensorFlow in the
 previous section, we need to import the TensorFlow model and use it in the
-`blog_post` search definition. To honor a low-latency response, we will take
+`blog_post` schema. To honor a low-latency response, we will take
 advantage of the two phase ranking available in Vespa and define the first
 phase ranking to be the same ranking function used in the Vespa tutorial pt. 2,
 which is a dot-product between the user and latent factors. After the documents
@@ -168,14 +168,14 @@ have been sorted by the first phase ranking function, we will rerank the top
 200 document from each search node using the second phase ranking given by the
 neural network model presented above.
 
-Note that we define two ranking profiles in the search definition below. This
+Note that we define two ranking profiles in the schema below. This
 allow us to decide which ranking profile to use at query time. We define a
 ranking profile named `tensor` which only applies the dot-product between
 user and document latent factors for all matching documents and a ranking
 profile named `nn_tensor`, which rerank the top 200 documents using the
 neural network model discussed in the previous section.
 
-We will walk through each part of the `blog_post` search definition, see
+We will walk through each part of the `blog_post` schema, see
 [blog_post.sd](https://github.com/vespa-engine/sample-apps/tree/master/blog-recommendation/src/main/application/searchdefinitions/blog_post.sd).
 
 We define a ranking profile named `tensor` which ranks all the matching
