@@ -6,4 +6,4 @@ set -e
 
 echo "Docker version: $(docker --version)"
 
-docker run --rm --net=host -v/var/run/docker.sock:/var/run/docker.sock -v $(pwd):$(pwd) -w $(pwd) --entrypoint $(pwd)/travis/compile-and-test.sh vespaengine/vespa-pipeline
+docker run --rm -e VESPA_TEAM_API_KEY --net=host -v/var/run/docker.sock:/var/run/docker.sock -v $(pwd):$(pwd) -w $(pwd) --entrypoint $(pwd)/travis/compile-and-test.sh vespaengine/vespa-pipeline

@@ -542,7 +542,10 @@ where%20dotProduct%28description%2C%20%7B%22a%22%3A1%2C%20%22b%22%3A2%7D%29%3B
     </tr><tr>
         <th>Ranking</th>
         <td>Dot product score between the weights of the matched query tokens and field tokens.
-            This score is available using <code>rawScore</code> or <code>itemRawScore</code> rank features.</td>
+            This score is available using
+            <a href="rank-features.html#rawScore(field)">rawScore</a> or
+            <a href="rank-features.html#itemRawScore(label)">itemRawScore</a>
+            rank features.</td>
     </tr><tr>
         <th style="white-space:nowrap;">Java Query Item</th>
         <td><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/DotProductItem.html">DotProductItem</a></td>
@@ -651,7 +654,10 @@ where%20%5B%20%7B%22scoreThreshold%22%3A%200.13%2C%20%22targetNumHits%22%3A%207%
     </tr><tr>
         <th>Ranking</th>
         <td>Dot product score between the weights of the matched query tokens and field tokens.
-            This score is available using <code>rawScore</code> or <code>itemRawScore</code> rank features.
+            This score is available using
+            <a href="rank-features.html#rawScore(field)">rawScore</a> or
+            <a href="rank-features.html#itemRawScore(label)">itemRawScore</a>
+            rank features.
             Note that the top-k best hits are only guaranteed to be returned
             when using this internal score as the final ranking expression.
         </td>
@@ -715,7 +721,10 @@ where%20%5B%7B%22scoreThreshold%22%3A%200%2C%20%22targetNumHits%22%3A%207%7D%5Dw
             (same as when using <a href="#and">and</a> or <a href="#or">or</a>),
             so an arbitrary ranking expression can be used in combination with this operator.
             Note that the ranking expression used should correlate with this internal ranking score.
-            <code>nativeFieldMatch</code> and <code>nativeDotProduct</code> are good starting points.
+            <a href="rank-features.html#bm25">bm25</a>,
+            <a href="rank-features.html#nativeFieldMatch">nativeFieldMatch</a> and
+            <a href="rank-features.html#nativeDotProduct(field)">nativeDotProduct</a>
+            rank features are good starting points.
         </td>
     </tr><tr>
         <th style="white-space:nowrap;">Java Query Item</th>
@@ -724,6 +733,76 @@ where%20%5B%7B%22scoreThreshold%22%3A%200%2C%20%22targetNumHits%22%3A%207%7D%5Dw
     </tbody>
     </table>
   </td></tr>
+
+  <tr id="nearestneighbor"><th>nearestNeighbor</th><td>
+    <p>
+    <em>nearestNeighbor</em> matches the top-k nearest neighbors in a multi-dimensional vector space.
+    Points in the vector space are specified as
+    <a href="../tensor-user-guide.html">tensors</a> with one indexed dimension,
+    where the size of that dimension is equal to the dimensionality of the vector space.
+    The document positions are stored in a tensor attribute, and the query position is sent with the query request.
+    Euclidean distance is used as the distance function and the exact nearest neighbors are returned.
+    Example:
+
+<pre class="urlunencode" oncopy="">
+where%20%5B%7B%22targetNumHits%22%3A%2010%7D%5D%20nearestNeighbor%28doc_vector%2C%20query_vector%29%3B&amp;ranking.features.query%28query_vector%29=%5B3%2C5%2C7%5D
+</pre>
+    </p>
+    <p>
+    In this example we search for the top 10 nearest neighbors in a 3-dimensional vector space.
+    <em>targetNumHits</em> specifies the wanted top-k nearest neighbors to find. This parameter is required.
+    The first parameter of <em>nearestNeighbor</em> is the name of the tensor attribute containing the document positions (<em>doc_vector</em>).
+    The second parameter is the name of the tensor sent with the query request (<em>query_vector</em>).
+    Specifying <em>query_vector</em> as the name means the query request must set this tensor as
+    <em>ranking.features.query(query_vector)</em>.
+    The document tensor attribute is defined as follows:
+<pre>
+field doc_vector type tensor&lt;float&gt;(x[3]) {
+    indexing: attribute | summary
+}
+</pre>
+    </p>
+    <p>
+    The last part of the example specifies the query tensor.
+    See <a href="../ranking-expressions-features.html#using-query-variables">Using query variables</a>
+    for information on how to set the tensor type of the query tensor.
+    This must have the same type as the document tensor.
+    </p>
+
+    <table class="table">
+    <thead></thead><tbody>
+    <tr>
+        <th>Field type</th>
+        <td>Tensor attribute with one indexed dimension of size N.</td>
+    </tr><tr>
+        <th>Query model</th>
+        <td>Tensor with one indexed dimension of size N.</td>
+    </tr><tr>
+        <th>Matching</th>
+        <td>Returns documents where the euclidean distance between the document tensor
+        and the query tensor is less than the greatest distance among the current top-k best hits.
+        This means that typically more than top-k documents are matched and
+        returned for ranking. This is similar to the behavior of
+        <a href="#wand">wand</a>.</td>
+    </tr><tr>
+        <th>Ranking</th>
+        <td>Calculates a closeness score that is defined as
+        <code>1 / (1 + d)</code>, where <code>d</code> is the euclidean distance
+        between the document tensor and query tensor.
+        This score is available using
+        <a href="rank-features.html#rawScore(field)">rawScore</a>,
+        <a href="rank-features.html#itemRawScore(label)">itemRawScore</a>, or
+        <a href="rank-features.html#closeness(dimension,name)">closeness</a> rank features.
+        The euclidean distance is available using the
+        <a href="rank-features.html#distance(dimension,name)">distance</a> rank feature.</td>
+    </tr><tr>
+        <th style="white-space:nowrap;">Java Query Item</th>
+        <td><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NearestNeighborItem.html">NearestNeighborItem</a></td>
+    </tr>
+    </tbody>
+    </table>
+  </td></tr>
+
   <tr id="nonempty"><th>nonEmpty</th><td>
     <p>
     <em>nonEmpty</em> takes as its only argument an arbitrary search expression.
@@ -883,7 +962,7 @@ and phrase() and near() and also the string argument to the "contains" operator.
 <p>
 These annotations are supported by strings and by the functions which
 are handled like leaf nodes internally in the query tree:
-phrase(), near(), onear(), range(), equiv(), weightedSet(), weakAnd() and wand().
+phrase(), near(), onear(), range(), equiv(), dotProduct(), weightedSet(), weakAnd(), wand() and nearestNeighbor().
 </p>
 <table class="table">
 <tr><td>"id": int</td>

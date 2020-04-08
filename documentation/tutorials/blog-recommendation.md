@@ -14,6 +14,7 @@ expect to obtain a blog post recommendation list containing 100 blog posts
 tailored for that specific user.
 
 Prerequisites:
+- jdk8 (Java 8) installed and active
 - Install and build files - code source and build instructions for sbt and Spark is found at
   [Vespa Tutorial pt. 2](https://github.com/vespa-engine/sample-apps/tree/master/blog-tutorial-shared#vespa-tutorial-pt-2)
 - Install [Pig and Hadoop](#vespa-and-hadoop)
