@@ -148,9 +148,16 @@ field body_bert type tensor<float>(x[768]) {
 }
 ```
 
-The code above defines one field for the title embedding and one for the text body embedding. Both are tensors of type float with indexed dimension of size 768, similar to the query embedding. The `indexing: attribute` indicates that the tensor fields above will be [kept in memory](../search-definitions.html#indexing) to be used by the matching and the ranking framework.
+The code above defines one field for the title embedding and one for the text body embedding.
+Both are tensors of type float with indexed dimension of size 768, similar to the query embedding.
+The `indexing: attribute` indicates that the tensor fields above will be
+[kept in memory](../schemas.html#indexing) to be used by the matching and the ranking framework.
 
-At this point, it is already possible to match documents based on the distance between the query and document tensors via the `nearestNeighbor` operator that will be discussed in the next section. However, it could be interesting to use those tensors to rank the documents as well. This can be accomplished by defining a `rank-profile`:
+At this point, it is already possible to match documents
+based on the distance between the query and document tensors via the `nearestNeighbor` operator
+that will be discussed in the next section.
+However, it could be interesting to use those tensors to rank the documents as well.
+This can be accomplished by defining a `rank-profile`:
 
 ```
 rank-profile bert_title_body_all inherits default {
@@ -166,11 +173,15 @@ rank-profile bert_title_body_all inherits default {
 }
 ```
 
-The [rank-profile](../reference/search-definitions-reference.html#rank-profile) `bert_title_body_all` will sort all the matched documents according to the sum of the dot-products between query and title and query and body vectors. Different rank-profiles can be defined for experimentation.
+The [rank-profile](../reference/schema-reference.html#rank-profile) `bert_title_body_all` will sort all the matched documents
+according to the sum of the dot-products between query and title and query and body vectors.
+Different rank-profiles can be defined for experimentation.
 
 ### ANN operator
 
-Once that query and document tensors as well as rank-profiles that use them are all defined, it is possible to use the embeddings to match and to rank the documents by using the `nearestNeighbor` operator together with the appropriate rank-profile.
+Once that query and document tensors as well as rank-profiles that use them are all defined,
+it is possible to use the embeddings to match and to rank the documents by using the `nearestNeighbor` operator
+together with the appropriate rank-profile.
 
 ```
 {
