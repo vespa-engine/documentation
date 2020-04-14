@@ -194,7 +194,7 @@ Pig data types and JSON Vespa types are as follows:
 In this case, the first row in data above will be transformed to the following JSON:
 <pre>
 {
-    "put": "id:namespace:music::Michael Jackson-1987"
+    "put": "id:namespace:music::Michael Jackson-1987",
     "fields": {
         "album": "Bad",
         "artist": "Michael Jackson",
@@ -255,8 +255,126 @@ Parameters for <code>VespaStorage</code> and <code>VespaDocumentOperation</code>
       <td></td>
       <td>A list of fields to exclude when creating document operation.
       The field is still available for document id template</td></tr>
+    <tr><th>exclude-fields</th>
+        <td></td>
+        <td>A list of fields to exclude when creating document operation.
+            The field is still available for document id template</td></tr>
+    <tr><th>update-map-fields</th>
+        <td></td>
+        <td>A list of map-type fields to update individual entries in the map when creating document operation.
+        </td></tr>
+    <tr><th>remove-map-fields</th>
+        <td></td>
+        <td>A list of map-type fields to remove individual entries in the map when creating document operation.
+        </td></tr>
+    <tr><th>update-tensor-fields</th>
+        <td></td>
+        <td>A list of tensor-type fields to add or overwrite individual tensor cells when creating document operation.
+        </td></tr>
+    <tr><th>remove-tensor-fields</th>
+        <td></td>
+        <td>A list of tensor-type fields to remove existing tensor fields in a document when creating document operation.
+        </td></tr>
   </tbody>
 </table>
+</p>
+
+Example on using parameters to update map and tensor fields. Example schema:
+<pre>
+search album {
+    document album {
+        struct Song {
+            field name type string {}
+            field duration type int {}
+        }
+        field songs type map&lt;int, Song&gt; { indexing: summary }
+        field song_popularity type tensor&lt;float&gt;(Song{}) { indexing: attribute | summary }
+    }
+}
+</pre>
+Use update parameters on specific fields:
+<pre>
+REGISTER vespa-hadoop.jar
+
+-- Transform tabular data to a Vespa document operation JSON format
+DEFINE VespaStorage
+       com.yahoo.vespa.hadoop.pig.VespaStorage(
+            'create-document-operation=true',
+            'operation=update',
+            'docid=id:namespace:song::&lt;docId&gt;',
+            'update-map-fields=songs',
+            'update-tensor-fields=song_popularity'
+       );
+
+-- Load data from any source - here we load using PigStorage
+data = LOAD '&lt;source&gt;' AS (&lt;schema&gt;);
+
+-- output : {docId: chararray,songs: {t: (key: int,value: (name: chararray,duration: int))},song_popularity: map[]}
+DESCRIBE data;
+
+-- output: (1,{(1,(Together Forever,132))},[Song:1#10.5])
+DUMP data;
+
+</pre>
+In this case, the data above will be transformed to the following JSON:
+<pre>
+{
+    "update": "id:namespace:album::1",
+    "create": true,
+    "fields": {
+        "songs{1}": {
+            "assign": {
+                "name": "Together Forever",
+                "duration": 132
+            }
+        },
+        "song_popularity": {
+            "add": {
+                "cells": [
+                    {
+                        "address": {
+                            "Song": 1
+                        },
+                        "value": 10.5
+                    }
+                ]
+            }
+        }
+    }
+}
+</pre>
+For the same data in update operation, different parameters can be passed to VespaStorage to generate remove tensor and map fields operation:
+<pre>
+REGISTER vespa-hadoop.jar
+
+-- Transform tabular data to a Vespa document operation JSON format
+DEFINE VespaStorage
+       com.yahoo.vespa.hadoop.pig.VespaStorage(
+            'operation=update',
+            'docid=id:namespace:people::&lt;docId&gt;',
+            'remove-map-fields=mapField',
+            'remove-tensor-fields=tensorField',
+            'exclude-fields-name,duration'
+       );
+</pre>
+In this case, the following JSON is generated:
+<pre>
+{
+    "update": "id:namespace:song::1",
+    "fields": {
+        "songs{1}": {
+            "remove": 0
+        },
+        "song_popularity": {
+            "remove": {
+                "addresses": [
+                    {"Song": "1"}
+                ]
+            }
+        }
+    }
+}
+</pre>
 </p>
 
 
