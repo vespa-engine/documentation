@@ -515,7 +515,7 @@ specialized rank expressions.
 
 It is time to include the notion of blog popularity into the ranking function.
 Do this by including the `post_popularity` rank profile below at the bottom of
-`src/main/application/searchdefinitions/blog_post.sd`, just below the `post`
+`src/main/application/schemas/blog_post.sd`, just below the `post`
 rank profile.
 
     rank-profile post_popularity inherits default {
@@ -530,7 +530,7 @@ Also, add a `popularity` field at the end of the `document` definition:
             indexing: summary | attribute
         }
 
-<pre style="display:none" data-test="file" data-path="application/searchdefinitions/blog_post.sd">
+<pre style="display:none" data-test="file" data-path="application/schemas/blog_post.sd">
 search blog_post {
     document blog_post {
         field date_gmt type string {
