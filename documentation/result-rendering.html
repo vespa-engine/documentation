@@ -1,60 +1,168 @@
 ---
 # Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Search Result Renderers"
+title: "Result Renderers"
 ---
 
 <p>
-Vespa provides a default JSON format for queryresults.
-If a separate format is desired, <i>renderers</i> can be configured
-to implement custom formats. Both binary and text format may be implemented in a renderer.
+Vespa provides a default JSON format for query results.
+<em>Renderers</em> can be configured to implement custom formats,
+like binary and text format.
 Renderers should not be used to implement business logic -
-that should go in Searchers, Handlers or Processors.
-</p><p>
-The documentation of renderers assumes familiarity with
+that should go in <a href="searcher-development.html">Searchers</a>,
+<a href="jdisc/developing-request-handlers.html">Handlers</a> or
+<a href="jdisc/processing.html">Processors</a>.
+This guide assumes familiarity with
 <a href="getting-started-vespa-applications.html">Vespa applications</a>.
-</p>
-
-<p>
-Renderers are implemented by subclassing <a
-href="http://javadoc.io/page/com.yahoo.vespa/container-core/latest/com/yahoo/processing/rendering/AsynchronousSectionedRenderer.html">com.yahoo.processing.rendering.AsynchronousSectionedRenderer&lt;Result&gt;</a>
-or <a
-href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/rendering/Renderer.html">com.yahoo.search.rendering.Renderer</a>
-or <a
-href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/rendering/SectionedRenderer.html">com.yahoo.search.rendering.SectionedRenderer</a>.
-SectionedRenderer differs from Renderer by providing each part to be rendered in
-separate steps.  It is therefore easier to implement a SectionedRenderer than a
-regular Renderer. AsynchronousSectionedRenderer has a similar API to
-SectionedRenderer, but supports asynchronously fetched hit contents, so if
-supporting slow clients or backends is a priority, this offers some advantages.
+</p><p>
+Renderers are implemented by subclassing one of:
+<ul>
+  <li><a
+href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/rendering/Renderer.html">
+    com.yahoo.search.rendering.Renderer</a></li>
+  <li><a
+href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/rendering/SectionedRenderer.html">
+    com.yahoo.search.rendering.SectionedRenderer</a></li>
+  <li><a
+href="http://javadoc.io/page/com.yahoo.vespa/container-core/latest/com/yahoo/processing/rendering/AsynchronousSectionedRenderer.html">
+    com.yahoo.processing.rendering.AsynchronousSectionedRenderer&lt;Result&gt;</a></li>
+</ul>
+SectionedRenderer differs from Renderer by providing each part to be rendered in separate steps.
+It is therefore easier to implement a SectionedRenderer than a regular Renderer.
+AsynchronousSectionedRenderer has a similar API to SectionedRenderer,
+but supports asynchronously fetched hit contents,
+so if supporting slow clients or backends is a priority, this offers some advantages.
 AsynchronousSectionedRenderer also exposes an OutputStream instead of a Writer,
-so if the backend data contains e.g. data encoded the same way as the output
-from the container (often UTF-8), notable performance gains are possible.
+so if the backend data contains data encoded the same way as the output from the container
+(often UTF-8), performance gains are possible.
 </p><p>
-All renderers are components; They are built and deployed like all
-other search container components, and
-supports <a href="configuring-components.html">custom config.</a>
+All renderers are <a href="jdisc/container-components.html">components</a>.
+They are built and deployed like all other container components,
+and supports <a href="configuring-components.html">custom config</a>.
 </p><p>
-Renderers do <em>not</em> need to be thread safe; They can safely use
-and store state during rendering in member variables. The container
-supports this by cloning the renderers just before rendering the
-search result.  To support cloning correctly, the renderers are
-required to obey the following contract:
-</p>
+Renderers do <em>not</em> need to be thread safe -
+they can safely use and store state during rendering in member variables.
+The container supports this by cloning the renderers just before rendering the search result.
+To support cloning correctly, the renderers are required to obey the following contract:
 <ol>
   <li>At construction time, only final members shall be initialized,
-      and these must refer to immutable data only. </li>
-  <li>State mutated during rendering shall be initialized in the init
-      method.</li>
+      and these must refer to immutable data only.</li>
+  <li>State mutated during rendering shall be initialized in the init method.</li>
 </ol>
+To enable a renderer, add to <a href="reference/services-container.html">services.xml</a>:
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;services version="1.0"&gt;
+  &hellip;
+  &lt;container version="1.0"&gt;
+    &lt;search&gt;
+      <span style="background-color: yellow;">&lt;renderer id="MyRenderer" class="com.yahoo.mysearcher.MyRenderer" bundle="mybundle" /&gt;</span>
+    &lt;/search&gt;
+    &hellip;
+  &lt;/container&gt;
+  &hellip;
+&lt;/services&gt;
+</pre>
+To use the renderer, add
+<a href="reference/search-api-reference.html#presentation.format">&amp;presentation.format=[id]</a>
+to queries - in this case <em>&amp;presentation.format=MyRenderer</em>.
+</p>
+
+
+
+<h2 id="renderer">Renderer</h2>
+<p>
+The simplest form of a renderer is extending <code>Renderer</code>.
+The <code>render</code> method does all the work -
+the derived class is expected to extract all the entities of interest itself and render them.
+Simple example:
+<pre>
+public class SimpleRenderer extends Renderer {
+    @Override
+    public void render(Writer writer, Result result) throws IOException {
+        writer.write("The result contains " + result.getHitCount() + " hits.");
+    }
+
+    @Override
+    public String getEncoding() {
+        return "utf-8";
+    }
+
+    @Override
+    public String getMimeType() {
+        return "text/plain";
+    }
+}
+</pre>
+More complex example:
+<pre>
+/**
+ * Render result sets as plain text. First line is whether an error occurred,
+ * second rendering initialization time stamp, then each line is the ID of each
+ * document returned, and the last line is time stamp for when the renderer was finished.
+ */
+public class DemoRenderer extends Renderer {
+    private String heading;
+
+    /**
+     * No global, shared state to set.
+     */
+    public DemoRenderer() {
+    }
+
+    @Override
+    protected void render(Writer writer, Result result) throws IOException {
+        if (result.hits().getErrorHit() == null) {
+            writer.write("OK\n");
+        } else {
+            writer.write("Oops!\n");
+        }
+        writer.write(heading + "\n");
+        renderHits(writer, result.hits());
+        writer.write("Rendering finished work: " + System.currentTimeMillis() + "\n");
+    }
+
+    private void renderHits(Writer writer, HitGroup hits) throws IOException {
+        for (Iterator&lt;Hit&gt; i = hits.deepIterator(); i.hasNext();) {
+            Hit h = i.next();
+            if (h.types().contains("summary")) {
+                String id = h.getDisplayId();
+                if (id != null) {
+                    writer.write(id + "\n");
+                }
+            }
+        }
+    }
+
+    @Override
+    public String getEncoding() {
+        return "utf-8";
+    }
+
+    @Override
+    public String getMimeType() {
+        return "text/plain";
+    }
+
+    /**
+     * Initialize mutable, per-result set state here.
+     */
+    @Override
+    public void init() {
+        long time = System.currentTimeMillis();
+        heading = "Renderer initialized: " + time;
+    }
+
+}
+</pre>
+</p>
 
 
 
 <h2 id="sectionedrenderer">SectionedRenderer</h2>
 <p>
-To create a SectionedRenderer, you need to subclass it and implement
-all its abstract methods.  For each non-compound entity such as
-regular hits and query contexts there are an associated method with
-the same name.
+To create a SectionedRenderer, subclass it and implement all its abstract methods.
+For each non-compound entity such as regular hits and query contexts,
+there are an associated method with the same name:
 <pre>
 public class DemoRenderer extends SectionedRenderer&lt;Writer&gt; {
 
@@ -64,9 +172,9 @@ public class DemoRenderer extends SectionedRenderer&lt;Writer&gt; {
     }
 }
 </pre>
-For each compound entity such as hit groups and the result itself
-there are pairs of methods, named begin&lt;name&gt; and
-end&lt;name&gt;.
+For each compound entity, such as hit groups and the result itself,
+there are pairs of methods, named <code>begin&lt;name&gt;</code>
+and <code>end&lt;name&gt;</code>:
 <pre>
 public class DemoRenderer extends SectionedRenderer&lt;Writer&gt; {
 
@@ -86,9 +194,9 @@ public class DemoRenderer extends SectionedRenderer&lt;Writer&gt; {
 }
 </pre>
 For a compound entity, a method will be called for each of its members
-after its begin method and before its end method has been called.
+after its begin method and before its end method has been called:
 <pre>
-                           Sequence of calls
+                          Call sequence
                           -------------------
 Result {                  1. beginResult()
     HitGroup {            2. beginHitGroup()
@@ -98,26 +206,30 @@ Result {                  1. beginResult()
     }                     6. endHitGroup()
 }                         7. endResult()
 </pre>
-  For <a href="grouping.html">grouping results</a>, there is a dedicated set of callbacks available;
-  <tt>beginGroup()</tt>, <tt>endGroup()</tt>, <tt>beginGroupList()</tt>, <tt>endGroupList()</tt>,
-  <tt>beginHitList()</tt> and <tt>endHitList()</tt>.
-</p><p class="note">
-  All of <tt>GroupList</tt>, <tt>Group</tt> and <tt>HitList</tt> are subclasses of <tt>HitGroup</tt>, and the default
-  implementation of the above methods is provided that calls <tt>beginHitGroup()</tt> and <tt>endHitGroup()</tt>
-  respectively. Furthermore, since all of the attributes of those classes are regular fields as defined by the
-  root <tt>Hit</tt> class, you will get reasonable output by simply implementing <tt>beginHitGroup()</tt>,
-  <tt>endHitGroup()</tt>, and <tt>hit()</tt>.
+For <a href="grouping.html">grouping results</a>, there is a dedicated set of callbacks available:
+<ul>
+  <li><code>beginGroup()</code> / <code>endGroup()</code>
+  <li><code>beginGroupList()</code> / <code>endGroupList()</code>
+  <li><code>beginHitList()</code> / <code>endHitList()</code>
+</ul>
+All of <code>Group</code>, <code>GroupList</code> and <code>HitList</code>
+are subclasses of <code>HitGroup</code>,
+and the default implementation of the above methods is provided that calls
+<code>beginHitGroup()</code> and <code>endHitGroup()</code>, respectively.
+Furthermore, since all of the attributes of those classes are regular fields
+as defined by the root <code>Hit</code> class,
+reasonable output is made by simply implementing <code>beginHitGroup()</code>,
+<code>endHitGroup()</code>, and <code>hit()</code>.
 </p>
 
 
-
-<h2 id="json-example">JSON example</h2>
+<h3 id="json-example">JSON example</h3>
 <p>
-JSON is the default output format. Read the
-<a href="reference/default-result-format.html">default JSON result format</a>
+Read the <a href="reference/default-result-format.html">default JSON result format</a>
 before implementing custom JSON renderers.
-</p><p>
-The following example renders a set of fields containing JSON data as a JSON array:
+Example: Render a set of fields containing JSON data as a JSON array.
+In other words, dump a variable length array containing all available data,
+ignore everything else and silently ignore error states (i.e. good for prototyping):
 <pre>
 package com.yahoo.mysearcher;
 
@@ -198,67 +310,18 @@ public class MyRenderer extends SectionedRenderer&lt;Writer&gt; {
     }
 }
 </pre>
-In other words, dump a variable length array containing all available
-data, ignore everything else and silently ignore error states. In
-other words, this is not suitable for production, but it is enough for a prototype.
-</p><p>
-To make the above renderer available, add to <em>services.xml</em>:
-<pre>
-&lt;?xml version="1.0" encoding="utf-8" ?&gt;
-&lt;services version="1.0"&gt;
-  &hellip;
-  &lt;container version="1.0"&gt;
-    &lt;search&gt;
-      <span style="background-color: yellow;">&lt;renderer id="MyRenderer" class="com.yahoo.mysearcher.MyRenderer" bundle="mybundle" /&gt;</span>
-    &lt;/search&gt;
-    &hellip;
-  &lt;/container&gt;
-  &hellip;
-&lt;/services&gt;
-</pre>
-To use the renderer, add <em>&amp;presentation.format=[id]</em> to queries -
-in this case <em>&amp;presentation.format=MyRenderer</em>
-</p><p>
-The renderer itself needs to be distributed to the container nodes as an OSGi bundle.
-The steps for creating a valid bundle for this use, are the same as for
-<a href="getting-started-vespa-applications.html">building any other component bundle</a>.
-</p>
-
-
-
-<h2 id="renderer">Renderer</h2>
-<p>
-SectionedRenderers are feed each part of the result separately.
-But sometimes this scaffolding is unnecessary; you just want to pull out
-the parts of the results yourself.
-<pre>
-public class SimpleRenderer extends Renderer {
-    @Override
-    public void render(Writer writer, Result result) throws IOException {
-        writer.write("The result contains " + result.getHitCount() + " hits.");
-    }
-
-    @Override
-    public String getEncoding() {
-        return "utf-8";
-    }
-
-    @Override
-    public String getMimeType() {
-        return "text/plain";
-    }
-}
-</pre>
-Here, the render method is expected to do all the work; the derived
-class is expected to extract all the entities of interest itself and render them.
 </p>
 
 
 
 <h2 id="asynchronoussectionedrenderer">AsynchronousSectionedRenderer&lt;Result&gt;</h2>
 <p>
-This is exactly the same as for the <a href="jdisc/processing.html#response-rendering">processing framework</a>.
-It is conceptually very similar to SectionedRenderer, but has no special
-cases for search results as such. The utility method getResponse() has a parametrized return type, though,
+This is the same as for the <a href="jdisc/processing.html#response-rendering">processing framework</a>.
+It is conceptually similar to SectionedRenderer,
+but has no special cases for search results as such.
+The utility method getResponse() has a parametrized return type, though,
 so templating the renderer on <code>Result</code> takes away some of the hassle.
+</p><p>
+Find an example in <a href="https://github.com/vespa-engine/sample-apps/blob/master/http-api-using-request-handlers-and-processors/src/main/java/com/mydomain/demo/DemoRenderer.java">
+    DemoRenderer.java</a>.
 </p>
