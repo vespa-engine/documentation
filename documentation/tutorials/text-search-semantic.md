@@ -109,7 +109,7 @@ We have followed a similar pattern when creating the embeddings used here.
 Vespa can match documents based on distance metrics between query and document vectors. This feature makes it possible to implement strategies like semantic search at scale due to techniques such as Approximate Nearest Neighbor (ANN). Discussing ANN theory and implementation is beyond the scope of this tutorial. Instead we want to show how it can be used for semantic search.
 
 There are only two steps required to perform ANN with embeddings in Vespa:
-* Define the document embedding fields in the search definition file.
+* Define the document embedding fields in the schema.
 * Define the query embedding field in a query profile type.
 
 Once that is done, we can feed document embeddings to Vespa, use the ANN operator to match documents based on the distance between document and query embeddings and use the embeddings in ranking functions.
@@ -134,9 +134,10 @@ Once the query profile type is in place we can send the query embeddings via the
 }
 ```
 
-### Search definition
+### Schema
 
-The document embeddings can be defined by adding the following fields in the `src/main/application/searchdefinitions/msmarco.sd` file:
+The document embeddings can be defined by adding the following fields in
+`src/main/application/schemas/msmarco.sd`:
 
 ```
 field title_bert type tensor<float>(x[768]) {

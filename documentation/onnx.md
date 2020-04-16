@@ -74,8 +74,8 @@ the input tensors.
 
 Vespa expects a function to be specified for each input tensor, and the name of
 the function should be the same as as the input name. In this case, the name of
-the function should be `Placeholder`, which is illustrated in the example search
-definition above. The input function can retrieve the tensor value from any valid
+the function should be `Placeholder`, which is illustrated in the example schema above.
+The input function can retrieve the tensor value from any valid
 source: a document field as shown here, a value sent along with the query, a
 constant value or a parent value. However, the tensor type from the function must
 match the tensor type expected in the model.  The input tensors must have
