@@ -1444,12 +1444,32 @@ Tune the query dispatch behavior - child elements:
   <thead>
     <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
   </thead><tbody>
+    <tr id="max-hits-per-partition"><th>max-hits-per-partition</th>
+      <td>optional</td>
+      <td>Integer</td>
+      <td>No capping: Return all</td>
+      <td><p>
+        Maximum number of hits to return from a content node.
+        By default, a query returns the requested number of hits +
+        offset from every content node to the container.
+        The container orders the hits globally according to the query,
+        then discards all hits beyond the number requested.
+        </p><p>
+        In a system with a large fan-out,
+        this consumes network bandwidth and the container nodes easily network saturated.
+        Containers will also sort and discard more hits than optimal.
+        </p><p>
+        When there are sufficiently many search nodes,
+        assuming an even distribution of the hits,
+        it suffices to only return a fraction of the request number of hits from each node.
+        Note that changing this number will have global ordering impact.
+        See <em>top-k-probability</em> below for improving performance with less hits.</p></td></tr>
     <tr id="top-k-probability"><th>top-k-probability</th>
       <td>optional</td>
       <td>Double</td>
       <td>1.0</td>
       <td><p>
-        Declares a required probability that the top K hits will be the globally best.
+        Probability that the top K hits will be the globally best.
         Based on this probability, the dispatcher will fetch enough hits from each node to achieve this.
         The only way to guarantee a probability of 1.0 (default) is to fetch K hits from each partition.
         However, by reducing the probability from 1.0 to 0.99999, one can significantly reduce number of hits fetched
@@ -1459,28 +1479,11 @@ Tune the query dispatch behavior - child elements:
         $${q}={\frac{k}{n}}+{qT}({p},{30})&times;{\sqrt{ {k}&times;{\frac{1}{n}}&times;({1}-{\frac{1}{n}}) }}$$
         </p><p>
         where qT is a Student's t-distribution.
-        With n=10, k=200 and p=0.99999, only 45 hits per partition is needed,
-        as opposed to 200 when p = 1.0.</p></td></tr>
-    <tr id="max-hits-per-partition"><th>max-hits-per-partition</th>
-      <td>optional</td>
-      <td>Integer</td>
-      <td>No capping: Return all</td>
-      <td><p>
-        Declares a maximum number of hits to return from a single node.
-        By default, a query returns the requested number of hits +
-        offset from every search node up to the container,
-        which in turns orders them globally according to the query,
-        then discards all hits beyond the number requested.
-        In a system with a large fan-out, this can consume a lot of network bandwidth and the container nodes
-        are easily network saturated even if the query is performed in multiple phases. 
-        See <a href="../performance/sizing-search.html">Vespa Serving Scaling Guide</a>.
+        With n=10 partitions, k=200 hits and p=0.99999, only 45 hits per partition is needed,
+        as opposed to 200 when p=1.0.
         </p><p>
-        When there are sufficiently many search nodes,
-        assuming an even distribution of the hits,
-        it should suffice to only return some fraction of the request number of hits from each node.
-        Note that changing this number will have global ordering impact.
-        How much is determined by the total number of search nodes involved in the query
-        and the magnitude of the hits/offset parameters.</p></td></tr>
+        Use this option to reduce network and container cpu/memory in clusters with many nodes per group -
+        see <a href="../performance/sizing-search.html">Vespa Serving Scaling Guide</a>.</p></td></tr>
     <tr id="dispatch-policy"><th>dispatch-policy</th>
       <td>optional</td>
       <td>round-robin / adaptive</td>
