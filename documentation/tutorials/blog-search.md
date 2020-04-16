@@ -121,10 +121,10 @@ Functional specification:
 In terms of data, Vespa operates with the notion of
 [documents](../documents.html).  A document represents a single, searchable
 item in your system, e.g., a blog post, a photo, or a news article. Each
-document type must be defined in the Vespa configuration through a [search
-definition](../schemas.html).  Think of a the document type in a schema as being
-similar to a table definition in a relational database; it consists of a set of
-fields, each with a given name, a specific type, and some optional properties.
+document type must be defined in the Vespa configuration through a [schema](../schemas.html).
+Think of a the document type in a schema as being
+similar to a table definition in a relational database -
+it consists of a set of fields, each with a given name, a specific type, and some optional properties.
 
 As an example, for this simple blog post search application, we could create
 the document type `blog_post` with the following fields:
