@@ -208,18 +208,17 @@ Write the following to `application/services.xml`:
 </services>
 </pre>
 
-`<container>` defines the [container](../jdisc/index.html) cluster for
+`<container>` defines the [container cluster](../jdisc/index.html) for
 document, query and result processing
 
-`<search>` sets up the [search](../search-api.html) endpoint for Vespa queries.
+`<search>` sets up the [query endpoint](../query-api.html).
 The default port is 8080.
 
-`<document-api>` sets up the [document](../reference/document-v1-api-reference.html) endpoint for
-feeding.
+`<document-api>` sets up the
+[document endpoint](../reference/document-v1-api-reference.html) for feeding.
 
 `<nodes>` defines the nodes required per service.  (See the
-[reference](../reference/services-container.html) for more on container cluster
-setup.)
+[reference](../reference/services-container.html) for more on container cluster setup.)
 
 `<content>` defines how documents are stored and searched
 
@@ -228,8 +227,7 @@ setup.)
 `<documents>` assigns the document types in the _schema_ — the
 content cluster capacity can be increased by adding node elements — see
 [elastic Vespa](../elastic-vespa.html). (See also the
-[reference](../reference/services-content.html) for more on content cluster
-setup.)
+[reference](../reference/services-content.html) for more on content cluster setup.)
 
 `<nodes>` defines the hosts for the content cluster.
 
@@ -316,7 +314,7 @@ indexing pipeline is separated by the pipe character '|':
 - `index:` Create a search index for this field
 - `attribute:` Store this field in memory as an [attribute](../attributes.html)
   — for [sorting](../reference/sorting.html),
-    [searching](../search-api.html) and [grouping](../grouping.html)
+    [querying](../query-api.html) and [grouping](../grouping.html)
 - `summary:` Let this field be part of the
     [document summary](../document-summaries.html) in the result set
 
@@ -413,7 +411,7 @@ Searching with Vespa is done using HTTP GET or HTTP POST requests, like:
 
     <host:port>/<search>?<yql=value1>&<param2=value2>...
 
-or with a JSON-query, which documentation can be found in the [Search API](../search-api.html) <br/>
+or with a JSON-query, which documentation can be found in the [Query API](../query-api.html) <br/>
 
     {
     	"yql" : value1,
@@ -421,8 +419,8 @@ or with a JSON-query, which documentation can be found in the [Search API](../se
     	...
     }
 
-The only mandatory parameter is the query, using `yql=<yql query>`.  More
-details can be found in the [Search API](../search-api.html).
+The only mandatory parameter is the query, using `yql=<yql query>`.
+More details can be found in the [Query API](../query-api.html).
 
 Given the above schema, where the fields `title` and `content` are
 part of the `fieldset default`, any document containing the word "music" in one
