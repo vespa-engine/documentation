@@ -163,9 +163,9 @@ Write the following to `application/services.xml`:
 
 Some notes about the elements above:
 
-- `<container>` defines the [container](../jdisc/index.html) cluster for document, query and result processing
-- `<search>` sets up the [search](../search-api.html) endpoint for Vespa queries.  The default port is 8080.
-- `<document-api>` sets up the [document](../reference/document-v1-api-reference.html) endpoint for feeding.
+- `<container>` defines the [container cluster](../jdisc/index.html) for document, query and result processing
+- `<search>` sets up the [query endpoint](../query-api.html).  The default port is 8080.
+- `<document-api>` sets up the [document endpoint](../reference/document-v1-api-reference.html) for feeding.
 - `<content>` defines how documents are stored and searched
 - `<redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_ — the
