@@ -1,6 +1,6 @@
 ---
 # Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Text Ranking"
+title: "Text Matching and Ranking"
 ---
 
 <p>
@@ -10,6 +10,140 @@ See the <a href="tutorials/text-search.html">text search</a> and
 Also relevant is the guide for
 <a href="semantic-qa-retrieval.html">Semantic Retrieval for Question Answering Applications</a>.
 </p><p>
+Refer to <a href="linguistics.html">Linguistics</a> for details.
+</p>
+
+
+<h2 id="matching">Matching</h2>
+<p>
+Use the <a href="vespa-quick-start.html">quick start</a> guide and stop after the feeding step.
+Make sure to feed all 5 albums with titles:
+<pre>
+$ cat sample-apps/album-recommendation-selfhosted/src/test/resources/*.json | grep album
+        "album": "A Head Full of Dreams",
+        "album": "Hardwired...To Self-Destruct",
+        "album": "Liebe ist für alle da",
+        "album": "Love Is Here To Stay",
+        "album": "When We All Fall Asleep, Where Do We Go?",
+</pre>
+Flush and dump index data (file name can change for subsequent flushes):
+<pre>
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush &amp;&amp; \
+    /opt/vespa/bin/<a href="reference/vespa-cmdline-tools.html#vespa-index-inspect">vespa-index-inspect</a> dumpwords \
+    --indexdir /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/index/index.flush.1 \
+    --field album'
+
+a	1
+all	2
+asleep	1
+da	1
+destruct	1
+do	1
+dream	1
+fall	1
+full	1
+fur	1
+go	1
+hardwire	1
+head	1
+here	1
+is	1
+ist	1
+lieb	1
+love	1
+of	1
+self	1
+stay	1
+to	2
+we	1
+when	1
+where	1
+</pre>
+Observe the <a href="linguistics.html">linguistic transformations</a> to the data before indexed:
+<table class="table">
+<tr>
+  <td>Hardwired...To &#x2192; Hardwired To</td><td>Tokenization - split terms on non-characters</td>
+</tr><tr>
+  <td>Head &#x2192; head</td><td>Lowercasing</td>
+</tr><tr>
+  <td>für &#x2192; fur</td><td>Normalizing</td>
+</tr><tr>
+  <td>dreams &#x2192; dream</td><td>Stemming</td>
+</tr>
+</table>
+The <em>album</em> field has <a href="reference/schema-reference.html#indexing">index</a> mode.
+For text fields, this enables the transformations above, and increases recall.
+Text search use cases normally uses this mode.
+</p><p>
+Then, change string fields from <em>index</em> to <em>attribute</em>
+in <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation-selfhosted/src/main/application/schemas/music.sd">
+src/main/application/schemas/music.sd</a>:
+<pre>
+         field artist type string {
+-            indexing: summary | index
++            indexing: summary | attribute
+         }
+
+         field album type string {
+-            indexing: summary | index
++            indexing: summary | attribute
+         }
+</pre>
+Run the tutorial again using the new schema, this time dumping data from the attributes
+(snapshot name can change with flushes):
+<pre>
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush &amp;&amp; \
+  /opt/vespa/bin/<a href="reference/vespa-cmdline-tools.html#vespa-attribute-inspect">vespa-attribute-inspect</a> -p \
+  /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album/snapshot-10/album &amp;&amp; \
+  cat /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album/snapshot-10/album.out'
+
+doc 0: valueCount(1)
+    0: []
+doc 1: valueCount(1)
+    0: [A Head Full of Dreams]
+doc 2: valueCount(1)
+    0: [Love Is Here To Stay]
+doc 3: valueCount(1)
+    0: [Hardwired...To Self-Destruct]
+doc 4: valueCount(1)
+    0: [Liebe ist für alle da]
+doc 5: valueCount(1)
+    0: [When We All Fall Asleep, Where Do We Go?]
+</pre>
+</p>
+The most important observation is that the strings are added as-is to attributes.
+Hence, values must be matched <span style="text-decoration: underline">exactly</span>,
+including whitespace, with some exceptions:
+<ul>
+  <li>When searching attributes, both query terms and attribute data are lowercased</li>
+</ul>
+</p>
+
+
+<h3 id="query-trace">Query Trace</h3>
+<p>
+Adding <a href="reference/query-api-reference.html#tracelevel">tracelevel=2</a>
+gives insight when testing queries - example attribute lowercasing:
+<pre>
+http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20album%20contains%20%22Liebe+ist+f%C3%BCr+alle+da%22%3B&tracelevel=2
+
+http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20album%20contains%20%22liebe+ist+f%C3%BCr+alle+da%22%3B&tracelevel=2
+</pre>
+Also try query tracing to see how query parsing changes with
+<em>index</em> and <em>attribute</em> indexing modes.
+</p>
+
+
+<!-- ToDo: prefix/substring -->
+<!-- ToDo: streaming search note -->
+<!-- ToDo: refer to
+  https://docs.vespa.ai/documentation/reference/schema-reference.html#match
+  https://docs.vespa.ai/documentation/reference/schema-reference.html#indexing
+  and write some guidance -->
+
+
+<h2 id="ranking">Ranking</h2>
+<p>
 The default ranking is <code>nativeRank</code> in the first phase and no second phase re-ranking.
 The <code>nativeRank</code> is a feature which gives a reasonably good rank score,
 while being fast enough to be suitable for first phase ranking.
@@ -42,8 +176,7 @@ like freshness, the quality of the document, or any other property of the docume
 </p>
 
 
-
-<h2 id="weight-significance-and-connectedness">Weight, significance and connectedness</h2>
+<h3 id="weight-significance-and-connectedness">Weight, significance and connectedness</h3>
 <p>
 Modify the values of the match features from the query
 by sending weight, significance and connectedness with the query:
