@@ -4,12 +4,100 @@ title: "Query API"
 ---
 
 <p>
-This is the Vespa Query API guide - refer to the
-<a href="reference/query-api-reference.html">Query API reference</a> for details.
+Use the Vespa Query API to query, rank and organize data.
+Simplified, a query has the following components:
+<ul>
+  <li>Input data</li>
+  <li>Ranking and grouping specification</li>
+  <li>Results</li>
+  <li>Other execution parameters</li>
+</ul>
+This guide is an introduction to the more important elements in the API -
+refer to the <a href="reference/query-api-reference.html">Query API reference</a> for details.
+</p>
+
+
+<h2 id="input">Input</h2>
+<p>
+Input data is both structured data and unstructured data (the latter called "user input").
+Example (URL-decoded for readability):
+<pre>{% raw %}
+yql=select * from sources * where artist contains "Coldplay" and userInput(@inp);&amp;
+inp=paradise&amp;
+ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}
+{% endraw %}</pre>
+The first line is the <a href="query-language.html">YQL</a> query string,
+that has both structured input (artist=Coldplay)
+and a reference to unstructured user input.
+The user input is then given in the second line in the <em>inp</em> parameter.
 </p><p>
-Text search is described in more detail in <a href="text-matching-ranking.html">Text Matching and Ranking</a> -
+Separating the structured data from the unstructured relieves the application code from
+interpreting and sanitizing the input data - it is essentially a blob.
+Vespa can then use heuristics to deduct the user's intention.
+</p><p>
+Finally, input data can also be ranking query features -
+here the query feature is called <em>user_profile</em>.
+Query features are data, normally valid for this particular instance,
+that are used in the subsequent document ranking -
+this enables online decision making based on realtime data.
+</p>
+
+
+
+<h2 id="ranking-and-grouping">Ranking and Grouping</h2>
+<p>
+<a href="ranking.html">Ranking</a> assigns scores to documents,
+and returns documents ordered by score or <a href="reference/sorting.html">sorting</a>.
+An application can have multiple
+<a href="reference/query-api-reference.html#ranking.profile">rank profiles</a>.
+A rank profile is a specification for how to compute a document's score.
+Example, query specifies <em>rank_albums</em>, with its schema definition:
+<pre>
+ranking=rank_albums
+
+rank-profile rank_albums inherits default {
+    first-phase {
+        expression: sum(query(user_profile) * attribute(category_scores))
+    }
+}
+</pre>
+
+</p><p>
+<a href="grouping.html">Grouping</a> is a way to group documents in the result set after ranking.
+Example, return max 3 albums per artist,  grouped on artist:
+<pre>
+| all(group(artist) each(max(3) each(output(summary())) ) );
+</pre>
+Fields used in grouping (here: artist) must be attributes.
+The grouping expression is part of the QYL query string, appended at the end.
+</p><p>
+Applications can group <em>all</em> documents (select all documents in YQL).
+Using hits=0 will return grouping results only.
+</p><p>
+The above rank profile does not do text ranking -
+there are however such profiles built-in.
+Text search and ranking is described in more detail in
+<a href="text-matching-ranking.html">Text Matching and Ranking</a> -
 find information about normalizing, prefix search and linguistics there.
 </p>
+
+
+
+<h2 id="results">Results</h2>
+<p>
+All fields are returned in results by default.
+To specify a subset of fields, use <a href="/documentation/document-summaries.html">document summaries</a>.
+When searching text, having a static abstract of the document in a field, or
+using a <a href="/documentation/reference/schema-reference.html#summary">dynamic summary</a>
+can both improve the visual relevance of the search, as well as cut bandwidth used.
+</p><p>
+The default output format is <a href="./reference/default-result-format.html">JSON</a>.
+Write a custom <a href="result-rendering.html">Renderer</a> to generate results in other formats.
+</p><p>
+Read more on <a href="/documentation/jdisc/processing.html">request-response</a> processing -
+use this to write code to manipulate results.
+</p>
+
 
 
 <h2 id="http">HTTP</h2>
@@ -94,35 +182,16 @@ Stack Overflow question</a>.
 
 
 
-<h2 id="queries">Queries</h2>
+<h2 id="other">Other</h2>
 <p>
-The query string contains the specification of which results the search should return,
-typically some words which should be present in matching documents.
-Queries are formulated in <em>YQL</em>.
-Note: Also find the legacy
+The legacy
 <a href="reference/simple-query-language-reference.html">simple query language</a> reference.
-</p><p>
-If Vespa cannot generate a valid search expression from the query string,
-it will issue the error message <em>Null query</em>.
-To troubleshoot, add <a href="reference/query-api-reference.html#tracelevel">&amp;tracelevel=2</a> to the request.
-A missing <em>yql</em> parameter will also lead to this error message.
-</p><p>
-Examples: refer to <a href="query-language.html">YQL</a>, <a href="grouping.html">grouping</a> and the
-<a href="reference/sorting.html">sorting reference</a>.
 </p><p>
 Below is a list of query parameters to control aspects of queries -
 refer to the <a href="reference/query-api-reference.html">Query API reference</a>
 for the full list.
 <table class="table">
   <thead></thead><tbody>
-    </tr><tr>
-      <th>ranking</th>
-      <td>
-        Unless ordering is specified, results are ranked using the default rank profile
-        <a href="nativerank.html">nativerank</a>.
-        Vespa has a rich ranking framework, read more in <a href="ranking.html">ranking</a>.
-        Control result ranking using <a href="reference/query-api-reference.html#ranking.profile">rank profiles</a>
-      </td>
     </tr><tr>
       <th>searchChain</th>
       <td>
@@ -152,11 +221,6 @@ for the full list.
         Use cases are setting query properties for different markets, parameters that do not change, and so on.
         Query profiles can be nested, versioned and use inheritance
       </td>
-      <tr><th>tracelevel</th>
-      <td>
-        Set to a positive integer to see query <a href="reference/query-api-reference.html#tracelevel">tracing</a>.
-        Higher numbers produce more tracing output. Also see below
-      </td>
     </tr>
   </tbody>
 </table>
@@ -164,23 +228,16 @@ for the full list.
 
 
 
-<h2 id="results">Results</h2>
+<h2 id="troubleshooting">Troubleshooting</h2>
 <p>
-All fields are returned in results by default.
-To specify a subset of fields, use <a href="/documentation/document-summaries.html">document summaries</a>.
-When searching text, having a static abstract of the document in a field, or
-using a <a href="/documentation/reference/schema-reference.html#summary">dynamic summary</a>
-can both improve the visual relevance of the search, as well as cut bandwidth used.
-</p><p>
-The default output format is JSON, find details in the <a href="./reference/default-result-format.html">reference</a>.
-</p><p>
-Read more on <a href="/documentation/jdisc/processing.html">request-response</a> processing -
-use this to write code to manipulate results.
+If Vespa cannot generate a valid search expression from the query string,
+it will issue the error message <em>Null query</em>.
+To troubleshoot, add <a href="reference/query-api-reference.html#tracelevel">&amp;tracelevel=2</a> to the request.
+A missing <em>yql</em> parameter will also lead to this error message.
 </p>
 
 
-
-<h2 id="query-tracing">Query tracing</h2>
+<h3 id="query-tracing">Query tracing</h3>
 <p>
 Use <a href="reference/default-result-format.html#trace">query tracing</a> to debug query execution.
 Enable by using <a href="reference/query-api-reference.html#tracelevel">tracelevel=1</a> (or higher).
