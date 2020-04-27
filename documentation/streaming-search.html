@@ -25,7 +25,7 @@ Only data structures for document IDs are in memory,
 not <a href="attributes.html">attributes</a>.
 It matches documents to queries by streaming through them, similar to a grep.
 This is too costly for a global search but works fine for searching small subsets of the
-data. This means Vespa can avoid the overhead of maintaining reverse indexes.
+data. This means Vespa can avoid the overhead of maintaining indexes.
 Streaming mode is suitable when subsets are <em>on average</em> very small compared
 to the entire corpus. Vespa maintains low latency also for the occasional large
 subset (say, users with huge amounts of data) by automatically sharding the data
@@ -35,43 +35,7 @@ Streaming search uses the same implementation of most features in Vespa includin
 matching and grouping and supports the same features.
 However, streaming search does not support <a href="linguistics.html#stemming">stemming</a>
 but supports a wider range of term matching options,
-which can be specified either at query time or at configuration time:
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>Feature</th>
-      <th>Query language syntax</th>
-      <th>Schema syntax</th>
-      <th>Example</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>substring</td>
-      <td><a href="reference/simple-query-language-reference.html#substring-searching">*bla*</a></td>
-      <td><a href="reference/schema-reference.html#match">match:substring</a></td>
-      <td>/search/?query=*bla*</td>
-    </tr>
-    <tr>
-      <td>prefix</td>
-      <td><a href="reference/simple-query-language-reference.html#prefix-searching">bla*</a></td>
-      <td><a href="reference/schema-reference.html#match">match:prefix</a></td>
-      <td>/search/?query=bla*</td>
-    </tr>
-    <tr>
-      <td>suffix</td>
-      <td><a href="reference/simple-query-language-reference.html#suffix-searching">*bla</a></td>
-      <td><a href="reference/schema-reference.html#match">match:suffix</a></td>
-      <td>/search/?query=*bla</td>
-    </tr>
-    <tr>
-      <td>exact</td>
-      <td><a href="http://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/ExactStringItem.html">Exact string item</a></td>
-      <td><a href="reference/schema-reference.html#match">match:exact</a></td>
-      <td>Text ToDo</td>
-    </tr>
-  </tbody>
-</table>
+which can be specified either at query time or at configuration time.
 Summary:
 <ul>
   <li>Streaming search has low latency if the data searched per node is small.
@@ -82,29 +46,112 @@ Summary:
     It uses more CPU for search</li>
   <li>Streaming search does not have linguistic features like
     <a href="linguistics.html#stemming">stemming</a> and
-    <a href="linguistics.html#normalization">normalization</a></li>
+    <a href="linguistics.html#normalization">normalization</a>,
+    but does case-insensitive match</li>
 </ul>
 </p>
 
 
-<h3 id="using-streaming-mode">Using streaming mode</h3>
+<h2 id="using-streaming-search">Using streaming search</h2>
 <p>
-To enable streaming, set <a href="reference/services-content.html#document">streaming</a> mode
-(see the note on changing indexing mode):
+These are the minimal steps to get started using streaming search,
+based on the <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-selfhosted">
+sample apps</a>:
+<ol>
+  <li>
+    Set indexing mode to <a href="reference/services-content.html#document">streaming</a>:
 <pre>
 &lt;content id="mycluster" version="1.0"&gt;
   &lt;documents&gt;
-    &lt;document type="mytype" <span style="background-color: yellow;">mode="streaming"</span> /&gt;
+    &lt;document type="music" <span style="background-color: yellow;">mode="streaming"</span> /&gt;
 </pre>
-To run a streaming search query: <!-- ToDo: rewrite - use group or userid, not both -->
-<ul>
-  <li>specify the subset group membership of every document in the document id,
-    see groupname / user id in <a href="documents.html">document IDs</a></li>
-  <li>specify the subset to search in every query using the query request attribute
+  </li><li>
+    <a href="documents.html">Document IDs</a> must have a numeric id or string for the set of documents to search -
+    numeric example:
+<pre>
+$ curl -H "Content-Type:application/json" \
+  --data-binary @feedfile.json \
+  http://localhost:8080/document/v1/mynamespace/music/<span style="background-color: yellow">docid</span>/1
+
+$ curl -H "Content-Type:application/json" \
+  --data-binary @feedfile.json \
+  http://localhost:8080/document/v1/mynamespace/music/<span style="background-color: yellow">number/1234</span>/1
+</pre>
+  </li><li>
+    Specify the subset to search using the query request attribute
     <a href="reference/query-api-reference.html#streaming.groupname">streaming.groupname</a> or
-    <a href="reference/query-api-reference.html#streaming.userid">streaming.userid</a></li>
-</ul>
-Example: <em>http://hostname.com:8080/search?query=test&amp;hits=20&amp;streaming.userid=12345678&amp;timeout=10</em>
+    <a href="reference/query-api-reference.html#streaming.userid">streaming.userid</a>.
+    Example (URL decoded for readability):
+<pre>
+http://localhost:8080/search?yql=select * from sources * where artist contains "coldplay";&amp;<span style="background-color: yellow">streaming.userid=1234</span>
+</pre>
+  </li>
+</ol>
+Streaming mode is search in document store data.
+Changing from index to streaming mode hence requires refeeding all documents.
+Use <a href="reference/vespa-cmdline-tools.html#vespa-remove-index">vespa-remove-index</a>
+to drop documents on nodes before changing mode.
+</p>
+
+
+<h3 id="match-mode">Match mode</h3>
+<p>
+Next step is setting correct <a href="reference/schema-reference.html#match">match mode</a> for fields -
+example using default string tokenized matching:
+<pre>
+field artist type string {
+    indexing: summary | index
+}
+
+# Use <a href="reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a> to find the value for the -i argument below
+
+$ <a href="reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a> -n vespa.config.search.vsm.vsmfields -i music/search/cluster.music.music | egrep 'name|arg1'
+fieldspec[0].name "artist"
+fieldspec[0].arg1 ""
+</pre>
+
+</p><p>
+The <em>artist</em> field has default matching, arg1 is hence empty.
+To find "Coldplay" or "Billie Eilish":
+<pre>
+select * from sources * where artist contains "coldplay";
+select * from sources * where artist contains "billie";
+</pre>
+Without changing schema, one can do substring matching in tokens using
+<a href="reference/query-language-reference.html#annotations">annotations</a> - this matches "Coldplay":
+<pre>
+select * from sources * where artist contains ([{"prefix":true}]"col");
+select * from sources * where artist contains ([{"substring":true}]"old");
+select * from sources * where artist contains ([{"suffix":true}]"play");
+</pre>
+Instead of annotating query terms, enable prefix matching as default,
+and find that this query now also matches "Coldplay":
+<pre>
+field artist type string {
+    indexing: summary | index
+    match   : prefix
+}
+
+select * from sources * where artist contains "col";
+
+$ vespa-get-config -n vespa.config.search.vsm.vsmfields -i music/search/cluster.music.music | egrep 'name|arg1'
+fieldspec[0].name "artist"
+fieldspec[0].arg1 "prefix"
+</pre>
+To match a field <em>exactly</em>:
+<pre>
+field artist type string {
+    indexing: summary | index
+    match   : exact
+}
+
+select * from sources * where artist contains "billie eilish";
+
+# vespa-get-config -n vespa.config.search.vsm.vsmfields -i music/search/cluster.music.music | egrep 'name|arg1'
+fieldspec[0].name "artist"
+fieldspec[0].arg1 "exact"
+</pre>
+Observe that the full string field value is now required for match.
 </p>
 
 
