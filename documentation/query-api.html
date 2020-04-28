@@ -14,7 +14,9 @@ Simplified, a query has the following components:
 </ul>
 This guide is an introduction to the more important elements in the API -
 refer to the <a href="reference/query-api-reference.html">Query API reference</a> for details.
+See <a href="#query-execution">query execution</a> below for data flow.
 </p>
+
 
 
 <h2 id="input">Input</h2>
@@ -43,6 +45,17 @@ here the query feature is called <em>user_profile</em>.
 Query features are data, normally valid for this particular instance,
 that are used in the subsequent document ranking -
 this enables online decision making based on realtime data.
+</p><p>
+See <a href="#query-execution">query execution</a> below.
+Use <a href="reference/query-api-reference.html#searchChain">search chains</a>
+to implement custom query processing.
+This is the integration point to plug in code to enrich a query - example:
+Look up user profile data from a user ID in the request.
+Set <em>&amp;tracelevel=2</em> to inspect the search chain components.
+</p><p>
+An application can have multiple content clusters - Vespa searches in all by default.
+<a href="federation.html">Federation</a> controls how to query the clusters,
+<a href="reference/query-api-reference.html#model.sources">sources</a> names the clusters
 </p>
 
 
@@ -52,16 +65,16 @@ Use <a href="reference/query-api-reference.html#queryProfile">query profiles</a>
 query parameters in configuration.
 This makes query strings shorter, and makes it easy to modify queries by modifying configuration only.
 Use cases are setting query properties for different markets, parameters that do not change, and so on.
-Query profiles can be nested, versioned and use inheritance
+Query profiles can be nested, versioned and use inheritance.
 </p>
 
 
-<h3 id="geo-filter">Geo Filter</h3>
+<h3 id="geo-filter-and-ranking">Geo Filter and Ranking</h3>
 <p>
 Filter by position using latitude and longitude to implement <a href="geo-search.html">geo search</a>.
 User a square bounding box, or a position and radius.
-<a href="reference/rank-features.html#distanceToPath(name).distance">DistanceToPath</a> is an example
-of a <a href="ranking.html">rank function</a> based on closeness.
+<a href="reference/rank-features.html#distanceToPath(name).distance">DistanceToPath</a> is a
+<a href="ranking.html">rank function</a> based on closeness.
 Using <em>ranking</em> can often improve results instead of geo <em>filtering</em>.
 </p>
 
@@ -69,11 +82,11 @@ Using <em>ranking</em> can often improve results instead of geo <em>filtering</e
 
 <h2 id="ranking-and-grouping">Ranking and Grouping</h2>
 <p>
-<a href="ranking.html">Ranking</a> assigns scores to documents,
-and returns documents ordered by score or <a href="reference/sorting.html">sorting</a>.
-An application can have multiple
-<a href="reference/query-api-reference.html#ranking.profile">rank profiles</a>.
-A rank profile is a specification for how to compute a document's score.
+<a href="ranking.html">Ranking</a> specifies the computation of the query and data.
+It assigns scores to documents, and returns documents ordered by score.
+A <a href="reference/query-api-reference.html#ranking.profile">rank profile</a>
+is a specification for how to compute a document's score.
+An application can have multiple rank profiles, to run different computations.
 Example, query specifies <em>rank_albums</em>, with its schema definition:
 <pre>
 ranking=rank_albums
@@ -84,7 +97,7 @@ rank-profile rank_albums inherits default {
     }
 }
 </pre>
-
+Results can be ordered using <a href="reference/sorting.html">sorting</a> instead of ranking.
 </p><p>
 <a href="grouping.html">Grouping</a> is a way to group documents in the result set after ranking.
 Example, return max 3 albums per artist,  grouped on artist:
@@ -123,79 +136,184 @@ use this to write code to manipulate results.
 
 
 
+<h2 id="query-execution">Query execution</h2>
+<p>
+<img src="img/query-to-response.svg" height="390" width="458"/>
+</p><p>
+Phases:
+<ol>
+  <li><strong>Query processing</strong>:
+      Normalizations, rewriting and enriching. Custom logic in search chains</li>
+  <li><strong>Matching, ranking and grouping/aggregation:</strong>
+      This phase dispatches the query to content nodes</li>
+  <li><strong>Result processing, rendering:</strong> Content fetching
+      and snippeting of the top global hits found in the query phase</li>
+</ol>
+The above is an simplification - if the query also specifies <a href="grouping.html">result grouping</a>,
+the query phase might involve multiple phases or roundtrips between the container and content nodes.
+</p>
+
+
+<h3 id="query-processing-dispatch">Query processing and dispatch</h3>
+<ol>
+  <li>
+    A query is sent from a front-end application to a container node
+    using the <em>Query API</em> or in any custom request format handled by a
+    custom <a href="jdisc/developing-request-handlers.html">request handler</a>,
+    which translates the custom request format to native Vespa APIs.
+  </li><li>
+    Query pre-processing, like <a href="linguistics.html">linguistic processing</a>
+    and <a href="query-rewriting.html">query rewriting</a>,
+    is done in built-in and custom <a href="chained-components.html">chains</a>.
+  </li><li>
+    <p>
+    The query is sent from the container to
+    <a href="schemas.html#querying-multiple-document-types">selected</a> content clusters -
+    see <a href="federation.html">federation</a> for more details.
+    The illustration above has one content cluster but multiple is fully supported
+    and allows scaling <a href="schemas.html">document types</a> differently.
+    E.g. a <em>tweet</em> document type can be indexed in a separate content cluster
+    from a <em>user</em> document type, enabling independent scaling of the two.
+    </p><p>
+    <img src="img/reference/flow/query1.svg" height="193" width="368"/>
+    </p>
+  </li>
+</ol>
+
+
+<h3 id="matching-ranking-grouping">Matching, ranking, grouping</h3>
+<ol>
+  <li>
+    At this point the query enters one or more <a href="reference/services-content.html">content clusters</a>.
+    In a content cluster with <a href="elastic-vespa.html#grouped-distribution">grouped distribution</a>,
+    the query is dispatched to one group at a time using a
+    <a href="reference/services-content.html#dispatch-tuning">dispatch policy</a>,
+    while with a flat single group content cluster the query is dispatched to all content nodes.
+  </li><li>
+    <p>
+    The query arrives at the content nodes which performs matching,
+    <a href="ranking.html">ranking</a> and aggregation/grouping over the set of documents
+    in the <a href="proton.html">Ready sub database</a>.
+    <em>vespa-proton</em> does matching over the <em>ready</em> documents
+    and <a href="ranking.html">ranks</a> as specified with the request/schema.
+    Each content node matches and ranks a subset of the total document corpus
+    and returns the hits along with meta information
+    like total hits and sorting and grouping data, if requested.
+    </p><p>
+    <img src="content/img/elastic-query.svg" height="320" width="270"/>
+    </p>
+  </li><li>
+    Once the content nodes within the group have replied within the <a href="graceful-degradation.html">timeout</a>,
+    <a href="reference/services-content.html#dispatch-tuning">max-hits / top-k</a>
+    results are returned to the container for query phase result processing.
+    In this phase, the only per hit data available is the internal global document id (gid) and the ranking score.
+    There is also result meta information like coverage and total hit count.
+    Additional hit specific data, like the contents of fields,
+    is not available until the result processing phase has completed the content fetching.
+   </li>
+</ol>
+
+
+<h3 id="result-processing-fill-phase">Result processing (fill) phase</h3>
+<ol>
+  <li>
+    When the result from the query phase is available,
+    a custom chained <a href="searcher-development.html#multiphase-searching">searcher component</a>
+    can process the limited data available from the first search phase
+    before contents of the hits is fetched from the content nodes.
+    The fetching from content nodes is lazy and is not invoked before rendering the response,
+    unless asked for earlier by a custom searcher component.
+  </li><li>
+    Only fields in the requested <a href="document-summaries.html">document summaries</a> is fetched from content nodes.
+    The summary request goes directly to the content nodes that produced the result from the query phase.
+  </li><li>
+    After the content node requests have completed,
+    the full result set can be processed further by custom components
+    (e.g. doing result deduping, top-k re-ranking),
+    before <a href="result-rendering.html">rendering</a> the response.
+  </li>
+</ol>
+
+
+
 <h2 id="http">HTTP</h2>
 <p>
-  The <em>host:port</em> endpoint is the <a href="querying-vespa.html">Container</a>.
-  The general form of a GET-request is:
-<pre>
-http://host:port/search/?param1=value1&amp;param2=value2&amp;...
-</pre>
-  The general form of request with JSON-queries is:
-<pre>
-{
-  param1 : value1,
-  param2 : value2,
-  ...
-}
-</pre>
-  The format is based on the <a href="reference/query-api-reference.html">Query API reference</a>,
-  and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
-  <ul>
-    <li>
-      The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>.
-    </li><li>
-        Feel free to use the GUI for building queries at <a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a> (with Vespa running) which can help you build queries, with e.g. autocompletion of YQL, pasting of already built queries and conversion of JSON- to URL-queries
-    </li>
-  </ul>
-  Example:
-<pre>
-{
-  "yql" : "select * from sources * where default contains \"bad\";",
-  "offset" : 5,
-  "ranking" : {
-    "matchPhase" : {
-      "ascending" : true,
-      "maxHits" : 15
-    },
-  },
-  "presentation" : {
-    "bolding" : false,
-    "format" : "json"
-  }
-}
-</pre>
-  The only mandatory parameter is <em>yql</em>.
-</p><p>
-  Use GET or POST - Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
+Use GET or POST. Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
 <pre>
 $ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where default contains \"bad\";"}' \
+    --data '{"yql" : "select * from sources * where default contains \"coldplay\";"}' \
     http://localhost:8080/search/
 
-$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22%3B
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22coldplay%22%3B
 </pre>
-  <strong>Note: It is possible to write security filters that block GET and POST requests differently.
-    This can block POSTed queries.</strong>
-</p><p>
-  The Search Container uses Jetty for HTTP.
-  Configure the <a href="reference/services-http.html#server">http server</a> -
-  e.g. set <em>requestHeaderSize</em> to configure URL length (including headers):
+</p>
+
+
+<h3 id="using-post">Using POST</h3>
+<p>
+The general form of POST data is:
+<pre>
+{
+    param1 : value1,
+    param2 : value2,
+    ...
+}
+</pre>
+The format is based on the <a href="reference/query-api-reference.html">Query API reference</a>,
+and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
+<ul>
+  <li>
+    The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>.
+  </li><li>
+    Also try the GUI for building queries at
+    <a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a> (with Vespa running).
+    This helps building queries, with e.g. autocompletion of YQL, pasting of already built queries and
+    conversion of JSON- to URL-queries.
+  </li>
+</ul>
+Example:
+<pre>
+{
+    "yql" : "select * from sources * where default contains \"coldplay\";",
+    "offset"  : 5,
+    "ranking" : {
+        "matchPhase" : {
+            "ascending" : true,
+            "maxHits"   : 15
+        },
+    },
+    "presentation" : {
+        "bolding" : false,
+        "format"  : "json"
+    }
+}
+</pre>
+Note: Security filters can block GET and POST requests differently.
+This can block POSTed queries.
+</p>
+
+
+<h3 id="jetty">Jetty</h3>
+<p>
+The Search Container uses Jetty for HTTP.
+Configure the <a href="reference/services-http.html#server">http server</a> -
+e.g. set <em>requestHeaderSize</em> to configure URL length (including headers):
 <pre>
 &lt;container version="1.0"&gt;
-  &lt;http&gt;
-    &lt;server port="8080" id="myserver"&gt;
-      &lt;config name="jdisc.http.connector"&gt;
-        &lt;requestHeaderSize&gt;32768&lt;/requestHeaderSize&gt;
-      &lt;/config&gt;
-    &lt;/server&gt;
-  &lt;/http&gt;
+    &lt;http&gt;
+        &lt;server port="8080" id="myserver"&gt;
+            &lt;config name="jdisc.http.connector"&gt;
+                &lt;requestHeaderSize&gt;32768&lt;/requestHeaderSize&gt;
+            &lt;/config&gt;
+        &lt;/server&gt;
+    &lt;/http&gt;
 &lt;/container&gt;
 </pre>
-  HTTP keepalive is supported.
+HTTP keepalive is supported.
 </p><p>
-  Values must be encoded according to standard URL encoding.
-  Thus, space is encoded as +, + as %2b and so on -
-  see <a href="http://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>.
+Values must be encoded according to standard URL encoding.
+Thus, space is encoded as +, + as %2b and so on -
+see <a href="http://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>.
 </p><p>
 HTTP status codes are found in the
 <a href="reference/query-api-reference.html#http-status-codes">Query API reference</a>.
@@ -205,41 +323,12 @@ Stack Overflow question</a>.
 
 
 
-<h2 id="other">Other</h2>
-<p>
-Below is a list of query parameters to control aspects of queries -
-refer to the <a href="reference/query-api-reference.html">Query API reference</a>
-for the full list.
-<table class="table">
-  <thead></thead><tbody>
-    </tr><tr>
-      <th>searchChain</th>
-      <td>
-        Use <a href="reference/query-api-reference.html#searchChain">search chains</a>
-        to implement query processing.
-        Set <em>&amp;tracelevel=2</em> to inspect the search chain components.
-        Refer to <a href="chained-components.html">chained components</a>
-      </td>
-    </tr><tr>
-      <th>sources</th>
-      <td>
-        An application can have multiple content clusters - Vespa searches in all by default.
-        <a href="federation.html">Federation</a> controls how to query the clusters,
-        <a href="reference/query-api-reference.html#model.sources">sources</a> names the clusters
-      </td>
-    </tr>
-  </tbody>
-</table>
-</p>
-
-
-
 <h2 id="troubleshooting">Troubleshooting</h2>
 <p>
 If Vespa cannot generate a valid search expression from the query string,
 it will issue the error message <em>Null query</em>.
 To troubleshoot, add <a href="reference/query-api-reference.html#tracelevel">&amp;tracelevel=2</a> to the request.
-A missing <em>yql</em> parameter will also lead to this error message.
+A missing <em>yql</em> parameter will also emit this error message.
 </p>
 
 
@@ -256,26 +345,26 @@ http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+cont
     trace: {
         children: [
             {
-            message: "No query profile is used"
+                message: "No query profile is used"
             },
             {
-            message: "Resolved properties: tracelevel=6 (value from request) yql=select * from sources * where default contains "hi"; (value from request) trace.timestamps=true (value from request) "
+                message: "Resolved properties: tracelevel=6 (value from request) yql=select * from sources * where default contains "hi"; (value from request) trace.timestamps=true (value from request) "
             },
             {
-            message: "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -> com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -> ... -> federation@native]"
+                message: "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -> com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -> ... -> federation@native]"
             },
             {
             children: [
                 {
-                timestamp: 0,
-                message: "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'"
+                    timestamp: 0,
+                    message: "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'"
                 },
                 {
-                timestamp: 14,
-                message: "com.yahoo.prelude.statistics.StatisticsSearcher in native Dependencies{provides=[StatisticsSearcher, com.yahoo.prelude.statistics.StatisticsSearcher], before=[rawQuery], after=[]}"
+                    timestamp: 14,
+                    message: "com.yahoo.prelude.statistics.StatisticsSearcher in native Dependencies{provides=[StatisticsSearcher, com.yahoo.prelude.statistics.StatisticsSearcher], before=[rawQuery], after=[]}"
                 },
 </pre>
-In own code, use
+In custom code, use
 <a href="https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query.html">Query.trace</a>
 to add trace output.
 </p>
