@@ -237,11 +237,20 @@ the query phase might involve multiple phases or roundtrips between the containe
 
 <h2 id="http">HTTP</h2>
 <p>
-The general form of a GET-request is:
+Use GET or POST. Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
 <pre>
-http://host:port/search/?param1=value1&amp;param2=value2&amp;...
+$ curl -H "Content-Type: application/json" \
+    --data '{"yql" : "select * from sources * where default contains \"coldplay\";"}' \
+    http://localhost:8080/search/
+
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22coldplay%22%3B
 </pre>
-The general form of request with JSON-queries is:
+</p>
+
+
+<h3 id="using-post">Using POST</h3>
+<p>
+The general form of POST data is:
 <pre>
 {
   param1 : value1,
@@ -251,55 +260,52 @@ The general form of request with JSON-queries is:
 </pre>
 The format is based on the <a href="reference/query-api-reference.html">Query API reference</a>,
 and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
-  <ul>
-    <li>
-      The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>.
-    </li><li>
-        Feel free to use the GUI for building queries at <a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a> (with Vespa running) which can help you build queries, with e.g. autocompletion of YQL, pasting of already built queries and conversion of JSON- to URL-queries
-    </li>
-  </ul>
+<ul>
+  <li>
+    The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>.
+  </li><li>
+    Also try the GUI for building queries at
+    <a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a> (with Vespa running).
+    This helps building queries, with e.g. autocompletion of YQL, pasting of already built queries and
+    conversion of JSON- to URL-queries.
+  </li>
+</ul>
 Example:
 <pre>
 {
-  "yql" : "select * from sources * where default contains \"bad\";",
-  "offset" : 5,
-  "ranking" : {
-    "matchPhase" : {
-      "ascending" : true,
-      "maxHits" : 15
+    "yql" : "select * from sources * where default contains \"coldplay\";",
+    "offset"  : 5,
+    "ranking" : {
+        "matchPhase" : {
+            "ascending" : true,
+            "maxHits"   : 15
+        },
     },
-  },
-  "presentation" : {
-    "bolding" : false,
-    "format" : "json"
-  }
+    "presentation" : {
+        "bolding" : false,
+        "format"  : "json"
+    }
 }
 </pre>
-The only mandatory parameter is <em>yql</em>.
-</p><p>
-Use GET or POST - Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where default contains \"bad\";"}' \
-    http://localhost:8080/search/
+Note: Security filters can block GET and POST requests differently.
+This can block POSTed queries.
+</p>
 
-$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22%3B
-</pre>
-<strong>Note: It is possible to write security filters that block GET and POST requests differently.
-This can block POSTed queries.</strong>
-</p><p>
+
+<h3 id="jetty">Jetty</h3>
+<p>
 The Search Container uses Jetty for HTTP.
 Configure the <a href="reference/services-http.html#server">http server</a> -
 e.g. set <em>requestHeaderSize</em> to configure URL length (including headers):
 <pre>
 &lt;container version="1.0"&gt;
-  &lt;http&gt;
-    &lt;server port="8080" id="myserver"&gt;
-      &lt;config name="jdisc.http.connector"&gt;
-        &lt;requestHeaderSize&gt;32768&lt;/requestHeaderSize&gt;
-      &lt;/config&gt;
-    &lt;/server&gt;
-  &lt;/http&gt;
+    &lt;http&gt;
+        &lt;server port="8080" id="myserver"&gt;
+            &lt;config name="jdisc.http.connector"&gt;
+                &lt;requestHeaderSize&gt;32768&lt;/requestHeaderSize&gt;
+            &lt;/config&gt;
+        &lt;/server&gt;
+    &lt;/http&gt;
 &lt;/container&gt;
 </pre>
 HTTP keepalive is supported.
@@ -321,7 +327,7 @@ Stack Overflow question</a>.
 If Vespa cannot generate a valid search expression from the query string,
 it will issue the error message <em>Null query</em>.
 To troubleshoot, add <a href="reference/query-api-reference.html#tracelevel">&amp;tracelevel=2</a> to the request.
-A missing <em>yql</em> parameter will also lead to this error message.
+A missing <em>yql</em> parameter will also emit this error message.
 </p>
 
 
@@ -338,26 +344,26 @@ http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+cont
     trace: {
         children: [
             {
-            message: "No query profile is used"
+                message: "No query profile is used"
             },
             {
-            message: "Resolved properties: tracelevel=6 (value from request) yql=select * from sources * where default contains "hi"; (value from request) trace.timestamps=true (value from request) "
+                message: "Resolved properties: tracelevel=6 (value from request) yql=select * from sources * where default contains "hi"; (value from request) trace.timestamps=true (value from request) "
             },
             {
-            message: "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -> com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -> ... -> federation@native]"
+                message: "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -> com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -> ... -> federation@native]"
             },
             {
             children: [
                 {
-                timestamp: 0,
-                message: "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'"
+                    timestamp: 0,
+                    message: "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'"
                 },
                 {
-                timestamp: 14,
-                message: "com.yahoo.prelude.statistics.StatisticsSearcher in native Dependencies{provides=[StatisticsSearcher, com.yahoo.prelude.statistics.StatisticsSearcher], before=[rawQuery], after=[]}"
+                    timestamp: 14,
+                    message: "com.yahoo.prelude.statistics.StatisticsSearcher in native Dependencies{provides=[StatisticsSearcher, com.yahoo.prelude.statistics.StatisticsSearcher], before=[rawQuery], after=[]}"
                 },
 </pre>
-In own code, use
+In custom code, use
 <a href="https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query.html">Query.trace</a>
 to add trace output.
 </p>
