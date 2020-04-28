@@ -125,12 +125,12 @@ use this to write code to manipulate results.
 
 <h2 id="http">HTTP</h2>
 <p>
-  The <em>host:port</em> endpoint is the <a href="querying-vespa.html">Container</a>.
-  The general form of a GET-request is:
+The <em>host:port</em> endpoint is the <em>Container</em>.
+The general form of a GET-request is:
 <pre>
 http://host:port/search/?param1=value1&amp;param2=value2&amp;...
 </pre>
-  The general form of request with JSON-queries is:
+The general form of request with JSON-queries is:
 <pre>
 {
   param1 : value1,
@@ -138,8 +138,8 @@ http://host:port/search/?param1=value1&amp;param2=value2&amp;...
   ...
 }
 </pre>
-  The format is based on the <a href="reference/query-api-reference.html">Query API reference</a>,
-  and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
+The format is based on the <a href="reference/query-api-reference.html">Query API reference</a>,
+and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
   <ul>
     <li>
       The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>.
@@ -147,7 +147,7 @@ http://host:port/search/?param1=value1&amp;param2=value2&amp;...
         Feel free to use the GUI for building queries at <a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a> (with Vespa running) which can help you build queries, with e.g. autocompletion of YQL, pasting of already built queries and conversion of JSON- to URL-queries
     </li>
   </ul>
-  Example:
+Example:
 <pre>
 {
   "yql" : "select * from sources * where default contains \"bad\";",
@@ -164,9 +164,9 @@ http://host:port/search/?param1=value1&amp;param2=value2&amp;...
   }
 }
 </pre>
-  The only mandatory parameter is <em>yql</em>.
+The only mandatory parameter is <em>yql</em>.
 </p><p>
-  Use GET or POST - Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
+Use GET or POST - Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
 <pre>
 $ curl -H "Content-Type: application/json" \
     --data '{"yql" : "select * from sources * where default contains \"bad\";"}' \
@@ -174,12 +174,12 @@ $ curl -H "Content-Type: application/json" \
 
 $ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22bad%22%3B
 </pre>
-  <strong>Note: It is possible to write security filters that block GET and POST requests differently.
-    This can block POSTed queries.</strong>
+<strong>Note: It is possible to write security filters that block GET and POST requests differently.
+This can block POSTed queries.</strong>
 </p><p>
-  The Search Container uses Jetty for HTTP.
-  Configure the <a href="reference/services-http.html#server">http server</a> -
-  e.g. set <em>requestHeaderSize</em> to configure URL length (including headers):
+The Search Container uses Jetty for HTTP.
+Configure the <a href="reference/services-http.html#server">http server</a> -
+e.g. set <em>requestHeaderSize</em> to configure URL length (including headers):
 <pre>
 &lt;container version="1.0"&gt;
   &lt;http&gt;
@@ -191,11 +191,11 @@ $ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+defau
   &lt;/http&gt;
 &lt;/container&gt;
 </pre>
-  HTTP keepalive is supported.
+HTTP keepalive is supported.
 </p><p>
-  Values must be encoded according to standard URL encoding.
-  Thus, space is encoded as +, + as %2b and so on -
-  see <a href="http://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>.
+Values must be encoded according to standard URL encoding.
+Thus, space is encoded as +, + as %2b and so on -
+see <a href="http://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>.
 </p><p>
 HTTP status codes are found in the
 <a href="reference/query-api-reference.html#http-status-codes">Query API reference</a>.
@@ -279,3 +279,100 @@ In own code, use
 <a href="https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query.html">Query.trace</a>
 to add trace output.
 </p>
+
+
+
+
+<h2 id="appendix-query-execution">Appendix: Query execution</h2>
+<p>
+Query requests are sent using the <em>Query API</em> -
+components and data flow:
+</p><p>
+<img src="img/query-to-response.svg" height="390" width="458"/>
+</p><p>
+A query has two phases:
+<ol>
+  <li><strong>Query phase:</strong> Matching, ranking and grouping/aggregation.
+      This phase dispatches the query to content nodes</li>
+  <li><strong>Result processing phase:</strong> Content fetching
+      and snippeting of the top global hits found in the query phase</li>
+</ol>
+The above is an simplification - if the query also specifies <a href="grouping.html">result grouping</a>,
+the query phase might involve multiple phases or roundtrips between the container and content nodes.
+</p>
+
+
+
+<h3 id="query-phase">Query phase</h3>
+<ol>
+  <li>
+    A query is sent from a front-end application to a container node
+    using the <em>Query API</em> or in any custom request format handled by a
+    custom <a href="jdisc/developing-request-handlers.html">request handler</a>,
+    which translates the custom request format to native Vespa APIs.
+  </li><li>
+    Query pre-processing, like <a href="linguistics.html">linguistic processing</a>
+    and <a href="query-rewriting.html">query rewriting</a>,
+    is done in <a href="chained-components.html">chains</a>
+  </li><li>
+    <p>
+    The query is sent from the container to
+    <a href="schemas.html#querying-multiple-document-types">selected</a> content clusters -
+    see <a href="federation.html">federation</a> for more details.
+    The illustration above has one content cluster but multiple is fully supported
+    and allows scaling <a href="schemas.html">document types</a> differently.
+    E.g. a <em>tweet</em> document type can be indexed in a separate content cluster
+    from a <em>user</em> document type, enabling independent scaling of the two.
+    </p><p>
+    <img src="img/reference/flow/query1.svg" height="193" width="368"/>
+    </p>
+  </li><li>
+    At this point the query enters one or more <a href="reference/services-content.html">content clusters</a>.
+    In a content cluster with <a href="elastic-vespa.html#grouped-distribution">grouped distribution</a>,
+    the query is dispatched to one group at a time using a
+    <a href="reference/services-content.html#dispatch-tuning">dispatch policy</a>,
+    while with a flat single group content cluster the query is dispatched to all content nodes.
+  </li><li>
+    <p>
+    The query arrives at the content nodes which performs matching,
+    <a href="ranking.html">ranking</a> and aggregation/grouping over the set of documents
+    in the <a href="proton.html">Ready sub database</a>.
+    <em>vespa-proton</em> does matching over the <em>ready</em> documents
+    and <a href="ranking.html">ranks</a> as specified with the request/schema.
+    Each content node matches and ranks a subset of the total document corpus
+    and returns the hits along with meta information
+    like total hits and sorting and grouping data, if requested.
+    </p><p>
+    <img src="content/img/elastic-query.svg" height="320" width="270"/>
+    </p>
+  </li><li>
+    Once the content nodes within the group have replied within the <a href="graceful-degradation.html">timeout</a>,
+    <a href="reference/services-content.html#dispatch-tuning">max-hits / top-k</a>
+    results are returned to the container for query phase result processing.
+    In this phase, the only per hit data available is the internal global document id (gid) and the ranking score.
+    There is also result meta information like coverage and total hit count.
+    Additional hit specific data, like the contents of fields,
+    is not available until the result processing phase has completed the content fetching.
+   </li>
+</ol>
+
+
+<h3 id="result-processing-fill-phase">Result processing (fill) phase</h3>
+<ul>
+  <li>
+    When the result from the query phase is available,
+    a custom chained <a href="searcher-development.html#multiphase-searching">searcher component</a>
+    can process the limited data available from the first search phase
+    before contents of the hits is fetched from the content nodes.
+    The fetching from content nodes is lazy and is not invoked before rendering the response,
+    unless asked for earlier by a custom searcher component.
+  </li><li>
+    Only fields in the requested <a href="document-summaries.html">document summaries</a> is fetched from content nodes.
+    The summary request goes directly to the content nodes that produced the result from the query phase.
+  </li><li>
+    After the content node requests have completed,
+    the full result set can be processed further by custom components
+    (e.g. doing result deduping, top-k re-ranking),
+    before <a href="result-rendering.html">rendering</a> the response.
+  </li>
+</ul>
