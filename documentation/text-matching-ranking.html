@@ -207,6 +207,69 @@ ull	1
 
 
 
+<h2 id="match-configuration">Match Configuration</h2>
+<p>
+Indexed and streaming search differ in execution
+and the match-configuration differs.
+Some times it is useful to inspect generated configuration
+to understand or validate the match configuration.
+Run this to find the value of the -i argument below:
+<pre>
+$ <a href="reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a>
+</pre>
+</p>
+
+
+<h3 id="indexed-search">Indexed Search</h3>
+<p>
+Note the difference for the <em>artist</em> and <em>album</em> fields:
+<pre>
+field artist type string {
+    indexing: summary | index
+    match   : exact
+}
+field album type string {
+    indexing: summary | index
+}
+
+$ <a href="reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a> -n vespa.configdefinition.ilscripts \
+    -i container/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor
+maxtermoccurrences 100
+fieldmatchmaxlength 1000000
+ilscript[0].doctype "music"
+ilscript[0].docfield[0] "artist"
+ilscript[0].docfield[1] "album"
+ilscript[0].docfield[2] "year"
+ilscript[0].docfield[3] "category_scores"
+ilscript[0].docfield[4] "tags"
+ilscript[0].content[0] "clear_state | guard { input artist | exact                          | summary artist | index artist; }"
+ilscript[0].content[1] "clear_state | guard { input album  | tokenize normalize stem:"BEST" | summary album | index album; }"
+ilscript[0].content[2] "clear_state | guard { input year | summary year | attribute year; }"
+ilscript[0].content[3] "clear_state | guard { input category_scores | summary category_scores | attribute category_scores; }"
+ilscript[0].content[4] "input tags | passthrough tags"
+</pre>
+</p>
+
+
+<h3 id="streaming-search">Streaming Search</h3>
+<p>
+See examples in <a href="streaming-search.html">streaming search</a>.
+The first example is using default (i.e. string tokenized) matching,
+the <em>artist</em> field has default matching, arg1 is hence empty.
+The second example uses <em>match: exact</em>:
+<pre>
+$ <a href="reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a> -n vespa.config.search.vsm.vsmfields -i music/search/cluster.music.music | egrep 'name|arg1'
+fieldspec[0].name "artist"
+fieldspec[0].arg1 ""
+
+# vespa-get-config -n vespa.config.search.vsm.vsmfields -i music/search/cluster.music.music | egrep 'name|arg1'
+fieldspec[0].name "artist"
+fieldspec[0].arg1 "exact"
+</pre>
+Use <a href="reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a>
+to find the value for the -i argument above.
+</p>
+
 
 
 <h2 id="ranking">Ranking</h2>
