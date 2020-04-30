@@ -62,41 +62,18 @@ schema music {
 </p>
 
 
+
 <h2 id="field">field</h2>
-
-<p>A field has a type, like string or double - see <a href="reference/schema-reference.html#field">
-field reference</a> for a full list.</p>
-
-<p>Documents may have relations, and field values can be imported from
-<a href="parent-child.html">parent documents</a>.</p>
-
-
-<h3 id="multivalue-fields">Multivalue fields</h3>
 <p>
-A field can be <em>single value</em>, like a string, or <em>multivalue</em>, like an array of strings -
-see the  <a href="reference/schema-reference.html#field">field type list</a>.
+A field has a type, like string or double - see <a href="reference/schema-reference.html#field">
+field reference</a> for a full list.
 </p><p>
-Most multivalue fields can be used in <a href="reference/grouping-syntax.html#multivalue-attributes">grouping</a>.
-</p><p>
-When searching in array or map of struct,
-<a href="reference/query-language-reference.html#sameelement">sameElement()</a> is a useful query operator
-to restrict matches to same struct element.
-Note that the document summary will not contain which element(s) matched.
-</p><p>
-Accessing attributes in maps and arrays of struct in ranking is not possible.
-</p><p>
-The rank feature <a href="reference/rank-features.html#attribute(name).count">attribute(name).count</a>
-can be used in ranking to <em>rank</em> based on number of elements in a multivalue attribute.
-To <em>filter</em> based on number of elements, create a
-<a href="ranking-expressions-features.html#if-function-and-string-equality-tests">strict tiering rank function</a>
-combined with a <a href="reference/schema-reference.html#rank-score-drop-limit">rank-score-drop-limit</a>.
-Then use a <a href="ranking-expressions-features.html#using-query-variables">query variable</a> for number of elements.
-Note that doing this filtering is more expensive to evaluate than just having a separate field for the count.
-</p><p>
+Documents can have relations, and field values can be imported from
+<a href="parent-child.html">parent documents</a>.
+</p>
 
 
-
-<h2 id="indexing">indexing</h2>
+<h3 id="indexing">indexing</h3>
 <p>
 <code>indexing</code> configures how to process data of a field during indexing -
 the most important ones are:
@@ -104,15 +81,18 @@ the most important ones are:
   <thead></thead><tbody>
     <tr>
       <td><code>index</code></td><td>
-        For unstructured text: Create a text index for this field. Text matching and all text ranking features become available.
+        For unstructured text: Create a text index for this field.
+        <a href="text-matching-ranking.html">Text matching</a> and all text ranking features become available.
         Indexes are disk backed and do not need to fit in memory.
         <a href="reference/schema-reference.html#indexing">Reference</a> /
         <a href="proton.html#index">index details</a></td>
     </tr><tr>
       <td><code>attribute</code></td><td>
-        For structured data: Keep this field in memory in a forward structure. This makes the field available for grouping,
-        sorting and ranking. Attributes may also be searched by complete match (word or exact), or (for numerical fields)
-        by range. Optionally a B-tree in memory can also be created by adding the fast-search option. This improves
+        For structured data: Keep this field in memory in a forward structure.
+        This makes the field available for grouping, sorting and ranking.
+        Attributes may also be searched by complete match (word or exact),
+        or (for numerical fields) by range.
+        Optionally a B-tree in memory can also be created by adding the fast-search option - this improves
         performance if the attribute is a strong criterion in queries (i.e filters out many documents).
         <a href="reference/schema-reference.html#attribute">Reference</a> /
         <a href="attributes.html">attribute details</a></td>
@@ -137,6 +117,58 @@ The indexing language offers more functionality than this,
 like filter field values, combine field values, select on different values.
 Learn more in the <a href="reference/advanced-indexing-language.html">
 indexing language</a> reference.
+</p>
+
+
+<h3 id="matching">Matching</h3>
+<p>
+<a href="text-matching-ranking.html">Text matching</a> describes the different ways / modes
+to match queries to documents per field.
+Query tracing and match configuration inspection is useful to analyze matching.
+</p><p>
+Make sure the query did not time out when analyzing matches.
+The <a href="graceful-degradation.html#timeouts">soft timeout</a>
+will return the matches found at timeout, possibly eliminating matches.
+</p><p>
+Ensure that the configuration of chains and providers is correct with respect to indexing.
+Example: querying this provider will not lowercase / stem terms:
+<pre>
+&lt;provider id="myProvider" type="local" cluster="mydocs" inherits="vespa"
+    excludes="com.yahoo.prelude.searcher.BlendingSearcher
+              com.yahoo.prelude.querytransform.StemmingSearcher
+              com.yahoo.search.querytransform.VespaLowercasingSearcher"&gt;
+</pre>
+In case of using multiple document types, review
+<a href="reference/query-api-reference.html#model.restrict">restrict</a> /
+<a href="reference/query-api-reference.html#model.sources">sources</a> settings
+to make sure queries hit the right document types.
+</p><p>
+See <a href="performance/feature-tuning.html#indexing-strings">indexing strings</a>
+for how to efficiently match strings with UUIDs (e.g. <em>123e4567-e89b-12d3-a456-426655440000</em>).
+</p>
+
+
+<h3 id="multivalue-fields">Multivalue fields</h3>
+<p>
+A field can be <em>single value</em>, like a string, or <em>multivalue</em>, like an array of strings -
+see the  <a href="reference/schema-reference.html#field">field type list</a>.
+</p><p>
+Most multivalue fields can be used in <a href="reference/grouping-syntax.html#multivalue-attributes">grouping</a>.
+</p><p>
+When searching in array or map of struct,
+<a href="reference/query-language-reference.html#sameelement">sameElement()</a> is a useful query operator
+to restrict matches to same struct element.
+Note that the document summary will not contain which element(s) matched.
+</p><p>
+Accessing attributes in maps and arrays of struct in ranking is not possible.
+</p><p>
+The rank feature <a href="reference/rank-features.html#attribute(name).count">attribute(name).count</a>
+can be used in ranking to <em>rank</em> based on number of elements in a multivalue attribute.
+To <em>filter</em> based on number of elements, create a
+<a href="ranking-expressions-features.html#if-function-and-string-equality-tests">strict tiering rank function</a>
+combined with a <a href="reference/schema-reference.html#rank-score-drop-limit">rank-score-drop-limit</a>.
+Then use a <a href="ranking-expressions-features.html#using-query-variables">query variable</a> for number of elements.
+Note that doing this filtering is more expensive to evaluate than just having a separate field for the count.
 </p>
 
 
