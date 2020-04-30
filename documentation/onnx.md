@@ -141,7 +141,7 @@ opsets. In general, use ONNX opset 8 or above.
       <td><b>Operator</b></td>
       <td><b>Supported opsets</b></td>
     </tr>
-    <tr><td>abs</td>               <td>[6, 11]</td></tr>
+    <tr><td>abs</td>                <td>[6, 11]</td></tr>
     <tr><td>acos</td>               <td>[7, 11]</td></tr>
     <tr><td>add</td>                <td>[7, 11]</td></tr>
     <tr><td>asin</td>               <td>[7, 11]</td></tr>
