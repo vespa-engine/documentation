@@ -141,12 +141,13 @@ opsets. In general, use ONNX opset 8 or above.
       <td><b>Operator</b></td>
       <td><b>Supported opsets</b></td>
     </tr>
-    <tr><td>abs </td>               <td>[6, 11]</td></tr>
+    <tr><td>abs</td>               <td>[6, 11]</td></tr>
     <tr><td>acos</td>               <td>[7, 11]</td></tr>
     <tr><td>add</td>                <td>[7, 11]</td></tr>
     <tr><td>asin</td>               <td>[7, 11]</td></tr>
     <tr><td>atan</td>               <td>[7, 11]</td></tr>
     <tr><td>div</td>                <td>[7, 11]</td></tr>
+    <tr><td>cast</td>               <td>[1, 11]</td></tr>
     <tr><td>ceil</td>               <td>[6, 11]</td></tr>
     <tr><td>cos</td>                <td>[7, 11]</td></tr>
     <tr><td>concat</td>             <td>[4, 11]</td></tr>
@@ -154,6 +155,7 @@ opsets. In general, use ONNX opset 8 or above.
     <tr><td>equal</td>              <td>[7, 11]</td></tr>
     <tr><td>exp</td>                <td>[6, 11]</td></tr>
     <tr><td>floor</td>              <td>[6, 11]</td></tr>
+    <tr><td>gather</td>             <td>[1, 11]</td></tr>
     <tr><td>greater</td>            <td>[7, 11]</td></tr>
     <tr><td>gemm</td>               <td>[7, 11]</td></tr>
     <tr><td>identity</td>           <td>[1, 11]</td></tr>
@@ -183,12 +185,17 @@ opsets. In general, use ONNX opset 8 or above.
     <tr><td>shape</td>              <td>[1, 11]</td></tr>
     <tr><td>sigmoid</td>            <td>[6, 11]</td></tr>
     <tr><td>sin</td>                <td>[7, 11]</td></tr>
+    <tr><td>slice</td>              <td>[1, 11]</td></tr>
     <tr><td>softmax</td>            <td>[1, 11]</td></tr>
+    <tr><td>split</td>              <td>[2, 11]</td></tr>
     <tr><td>sqrt</td>               <td>[6, 11]</td></tr>
     <tr><td>squeeze</td>            <td>[1, 11]</td></tr>
     <tr><td>sub</td>                <td>[7, 11]</td></tr>
     <tr><td>tan</td>                <td>[7, 11]</td></tr>
     <tr><td>tanh</td>               <td>[6, 11]</td></tr>
+    <tr><td>tile</td>               <td>[6, 11]</td></tr>
+    <tr><td>transpose</td>          <td>[1, 11]</td></tr>
+    <tr><td>unsqueeze</td>          <td>[1, 11]</td></tr>
     <tr><td>where</td>              <td>[1, 11]</td></tr>
   </tbody>
 </table>
