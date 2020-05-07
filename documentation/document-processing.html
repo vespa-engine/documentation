@@ -4,30 +4,28 @@ title: "Document Processing"
 ---
 
 <p>
-This document describes how to develop and deploy <em>Document Processors</em>.
+This document describes how to develop and deploy <em>Document Processors</em>,
+often called <em>docproc</em> in this documentation.
 Document processing is a framework to create <a href="chained-components.html">chains</a>
 of configurable <a href="jdisc/container-components.html">components</a>,
 that read and modify document operations.
 </p><p>
-The input source, typically a crawler, a stream of incoming mail,
-data generated from user actions, products or basically anything else,
-splits the input data into logical units called <a href="documents.html">documents</a>.
+The input source splits the input data into logical units called <a href="documents.html">documents</a>.
 A <a href="writing-to-vespa.html">feeder application</a>
 sends the documents into a document processing chain.
 This chain is an ordered list of document processors.
 Document processing examples range from language detection,
 HTML removal and natural language processing to mail attachment processing,
 character set transcoding and image thumbnailing.
-At the end of the processing chain, extracted data will typically be
-set in some fields in the document, which will continue into a Vespa Content node.
+At the end of the processing chain, extracted data will typically be set in some fields in the document.
 </p><p>
-The motivation for Document processing is that code and configuration is atomically deployed,
+The motivation for document processing is that code and configuration is atomically deployed,
 as like all Vespa components.
 It is also easy to build components that access data in Vespa as part of processing.
 </p><p>
-To get started with development,
-see <a href="getting-started-vespa-applications.html">Vespa Applications</a>.
-Read <a href="indexing.html">indexing</a> first to understand deployment and routing.
+To get started, see the
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/album-recommendation-docproc">sample application</a>.
+Read <a href="indexing.html">indexing</a> to understand deployment and routing.
 As document processors are chained components just like Searchers,
 read <a href="searcher-development.html">Searcher Development</a>.
 For reference, see the
@@ -130,9 +128,17 @@ Return codes:
   </tr><tr>
     <td><code>Progress.FAILED</code></td>
     <td>
+      <p>
       Processing failed and the input message should return a <em>fatal</em>
       failure back to the feeding application,
-      meaning that this application will not try to re-feed this document operation
+      meaning that this application will not try to re-feed this document operation.
+      Return an error message/reason by calling <code>withReason()</code>:
+<pre>
+if (op instanceof DocumentPut) {
+    return Progress.FAILED.withReason("PUT is not supported");
+}
+</pre>
+      </p>
     </td>
   </tr><tr>
     <td><code>Progress.LATER</code></td>
@@ -157,12 +163,6 @@ Return codes:
   </tr>
 </tbody>
 </table>
-Return an error message/reason by calling <code>withReason()</code>:
-<pre>
-if (op instanceof DocumentPut) {
-    return Progress.FAILED.withReason("PUT is not supported");
-}
-</pre>
 A document processor can throw an exception:
 <table class="table">
 <thead></thead><tbody>
@@ -188,24 +188,23 @@ A document processor can throw an exception:
 
 <h2 id="Chains">Chains</h2>
 <p>
-The call stack mentioned above is another name for a <em>document
-processor chain</em>. Document processor chains are a special case of
-the general <a href="chained-components.html">component chains</a> -
+The call stack mentioned above is another name for a <em>document processor chain</em>.
+Document processor chains are a special case of the general
+<a href="chained-components.html">component chains</a> -
 to avoid confusion some concepts are explained here as well.
-A document processor chain is nothing more than a list of document
-processor instances, having an id, and represented as a stack. The
-document processor chains are typically not created for every
-processing, but are part of the configuration.  Multiple ones may
-exist at the same time, the chain to execute will be specified by the
-message bus destination of the incoming message. The same document
-processor instance may exist in multiple document processor chains,
+A document processor chain is nothing more than a list of document processor instances,
+having an id, and represented as a stack.
+The document processor chains are typically not created for every processing,
+but are part of the configuration.
+Multiple ones may exist at the same time,
+the chain to execute will be specified by the message bus destination of the incoming message.
+The same document processor instance may exist in multiple document processor chains,
 which is why the <code>CallStack</code> of the <code>Processing</code>
-is responsible for knowing the next document processor to invoke in a
-particular message.
+is responsible for knowing the next document processor to invoke in a particular message.
 </p><p>
 The execution order of the document processors in a chain are not ordered explicitly,
-but by <a href="chained-components.html#ordering-components">ordering
-constraints</a> declared in the document processors or their configuration.
+but by <a href="chained-components.html#ordering-components">ordering constraints</a>
+declared in the document processors or their configuration.
 </p>
 
 
@@ -268,15 +267,13 @@ A document processor doing a high-latency operation should use a pattern like th
 <li>If no:
     <ol>
     <li>We have been given a Processing object fresh off the network,
-        we have not seen this before. Process it up until the
-        high-latency operation.</li>
-    <li>Start the high-latency operation (possibly in a separate
-        thread).</li>
-    <li>Save the state of the operation in a self-defined context
-        variable in the Processing.</li>
-    <li>Return <code>Progress.LATER</code>. This Processing is the appended to the
-        back of the input queue, and we will be called again
-        later.</li>
+        we have not seen this before.
+        Process it up until the high-latency operation.</li>
+    <li>Start the high-latency operation (possibly in a separate thread).</li>
+    <li>Save the state of the operation in a self-defined context variable in the Processing.</li>
+    <li>Return <code>Progress.LATER</code>.
+        This Processing is the appended to the back of the input queue,
+        and we will be called again later.</li>
     </ol></li>
 <li>If yes:
    <ol>
@@ -295,50 +292,34 @@ threads to perform more work at the same time.
 <p>
 Any state in the document processor for the particular Processing
 should be kept as local variables in the process method,
-while state which should be shared by all Processings should
-be kept as member variables. As the latter kind will be accessed by
-multiple threads at any one time, the state of such member variables
-must be <em>threadsafe</em>.
+while state which should be shared by all Processings
+should be kept as member variables.
+As the latter kind will be accessed by multiple threads at any one time,
+the state of such member variables must be <em>threadsafe</em>.
 This critical restriction is similar to those of e.g. the Servlet API.
 Options for implementing a multithread-safe document processor with instance variables:
 <ol>
-<li>Use immutable (and preferably final) objects: they never change
-    after they are constructed; no modifications to their state occurs
-    after the DocumentProcessor constructor returns</li>
+<li>Use immutable (and preferably final) objects:
+    they never change after they are constructed;
+    no modifications to their state occurs after the DocumentProcessor constructor returns</li>
 <li>Use a single instance of a thread-safe class</li>
-<li>Create a single instance and synchronize access to it across all
-    threads (but this will severely limit your scalability)</li>
-<li>Arrange for each thread to have its own instance, e.g. with
-    a <code>ThreadLocal</code></li>
+<li>Create a single instance and synchronize access to it across all threads
+    (but this will severely limit scalability)</li>
+<li>Arrange for each thread to have its own instance, e.g. with a <code>ThreadLocal</code></li>
 </ol>
 </p>
 
 
 <h3 id="processing-context-variables">Processing Context Variables</h3>
 <p>
-The <code>Processing</code> has a map <code>String -&gt; Object</code>
-that can be used to pass information between document processors. It
-is also very useful when using <code>Progress.LATER</code>, as
-discussed above, to save the state of a processing.
-<pre>
-/** Returns a context variable, or null if it is not set */
-public Object getVariable(String name);
-
-/** Returns an iterator of all context variables that are set */
-public Iterator&lt;Map.Entry&lt;String, Object&gt;&gt; getVariableAndNameIterator();
-
-/** Clears all context variables that have been set */
-public void clearVariables();
-
-/** Sets a context variable. */
-public void setVariable(String name, Object value);
-
-/** Removes a context variable. */
-public Object removeVariable(String name);
-
-/** Returns true if this variable is present, even if it is null */
-public boolean hasVariable(String name);
-</pre>
+<code>Processing</code> has a map <code>String -&gt; Object</code>
+that can be used to pass information between document processors.
+It is also useful when using <code>Progress.LATER</code> to save the state of a processing - see
+<a href="https://github.com/vespa-engine/vespa/blob/master/docproc/src/main/java/com/yahoo/docproc/Processing.java">
+Processing.java</a> for <code>get/setVariable</code> and more.
+</p><p>
+The <a href="https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/album-recommendation-docproc">
+sample application</a> uses such context variables, too.
 </p>
 
 
@@ -379,13 +360,14 @@ $ <a href="reference/vespa-cmdline-tools.html#vespa-sentinel-cmd">vespa-sentinel
 </p>
 
 
+
 <h2 id="class-diagram">Class diagram</h2>
 <figure>
   <img src="img/docproc/docproccore.gif" alt="Document processing core class diagram" />
 </figure>
 <p>
-The framework core supports asynchronous processing, processing one or
-multiple documents or document updates at the same time,
+The framework core supports asynchronous processing,
+processing one or multiple documents or document updates at the same time,
 document processors that makes dynamic decisions about the processing flow and
 passing of information between processors outside the document or document update:
 </p>
