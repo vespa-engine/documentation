@@ -1,0 +1,72 @@
+---
+# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Healthchecks"
+---
+
+<p>
+This is the reference for loadbalancer healthchecks to <a href="../jdisc">containers</a>.
+</p><p>
+By default, a container configures an instance of
+<code><a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/java/com/yahoo/container/handler/VipStatusHandler.java">
+VipStatusHandler</a></code>
+to serve <code>/status.html</code>.
+This responds with status code 200 and text <em>OK</em>
+if content clusters are UP.
+See <code><a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/java/com/yahoo/container/handler/VipStatus.java">
+VipStatus.java</a></code> for details.
+</p><p>
+Applications with multiple content clusters should implement custom handlers for healthchecks,
+if the built-in logic is inadequate for the usage.
+Also refer to <a href="../federation.html">federation</a> for how to manage data sources.
+</p>
+
+
+
+<h2 id="override-using-a-status-file">Override using a status file</h2>
+<p>
+Use <code>container.core.vip-status</code>
+to make <code>VipStatusHandler</code> use a file for health status:
+<pre>
+&lt;container&gt;
+    &lt;config name="container.core.vip-status"&gt;
+        &lt;accessdisk&gt;true&lt;/accessdisk&gt;
+        &lt;statusfile&gt;/full-path-to/status-response.html&lt;/statusfile&gt;
+    &lt;/config&gt;
+</pre>
+If the file exists, its contents will be served on <code>/status.html</code>,
+otherwise an error message will be generated
+(it is hence independent from the path in the URI).
+To remove a container from service, delete or rename the file to serve.
+</p>
+
+
+
+<h2 id="alternative-multiple-paths">Alternative / multiple paths</h2>
+<p>
+<code>VipStatusHandler</code> only looks at a single file path by default.
+As it is independent from the URI path,
+it is possible to configure multiple handler instances
+to serve alternative or custom messages - example:
+<pre>
+&lt;handler id="vipFreshness" class="com.yahoo.container.handler.VipStatusHandler"&gt;
+    &lt;binding&gt;http://*:*/docproc/freshness-data.xml&lt;/binding&gt;
+    &lt;config name="container.core.vip-status"&gt;
+        &lt;accessdisk&gt;true&lt;/accessdisk&gt;
+        &lt;statusfile&gt;/full-path-to/freshness-data.xml&lt;/statusfile&gt;
+    &lt;/config&gt;
+&lt;/handler&gt;
+&lt;handler id="vipClustering" class="com.yahoo.container.handler.VipStatusHandler"&gt;
+    &lt;binding&gt;http://*:*/docproc/ClusteringDocproc.status&lt;/binding&gt;
+    &lt;config name="container.core.vip-status"&gt;
+        &lt;accessdisk&gt;true&lt;/accessdisk&gt;
+        &lt;statusfile&gt;/full-path-to/ClusteringDocproc.status&lt;/statusfile&gt;
+    &lt;/config&gt;
+&lt;/handler&gt;
+</pre>
+The paths <code>/docproc/freshness-data.xml</code> and
+<code>/docproc/ClusteringDocproc.status</code> serves the files located at
+<code>/full-path-to/freshness-data.xml</code> and
+<code>/full-path-to/ClusteringDocproc.status</code>, respectively.
+As the handler instances are independent,
+a container can be taken out of one type of rotation without affecting another.
+</p>
