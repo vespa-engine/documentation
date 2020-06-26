@@ -23,11 +23,12 @@ Vespa supports multiple rank phases:
       using a custom <a href="searcher-development.html">searcher component</a></li>
   <li>Re-ranking at each content node using two phase ranking configured by rank profiles
       with ranking expressions working on scalars, tensors or matching features</li>
-  <li>Ranking with query operators like <a href="https://dl.acm.org/citation.cfm?id=956944">WAND/Weak And</a>
-      which speeds up retrieval of top matches of a disjunction query (OR)</li>
+  <li>Retrieval and Ranking with query operators like <a href="using-wand-with-vespa.html">WAND/Weak And</a>
+      which speeds up retrieval of top matches of a disjunction query (OR) or <a href="nearest-neighbor-search.html">Nearest Neighbor Search</a>.</li>
 </ul>
 </p>
-
+<p>
+<img src="img/phased-ranking.png"/>
 
 
 <h2 id="container-top-matches-re-ranking">Container top matches re-ranking</h2>
@@ -65,7 +66,9 @@ as <a href="reference/schema-reference.html#summary-features">summary-features</
 As the example above is executed in a single thread iterating over the top hits,
 the number of hits and complexity of the re-ranking need to be adjusted per the given latency budget.
 The number of <em>hits</em> is limited by the query api <a href="reference/query-api-reference.html#hits">hits</a> parameter
-and <a href="reference/query-api-reference.html#queryProfile">maxHits</a> setting.
+and <a href="reference/query-api-reference.html#queryProfile">maxHits</a> setting. The hits available for container level re-ranking is
+the global top ranking hits after content nodes have retrieved and ranked the hits and global top ranking hits have been found by merging the responses
+from the content nodes).
 </p>
 
 
@@ -107,13 +110,13 @@ a trained <a href="xgboost.html">xgboost</a> model.
 
 
 
-<h2 id="top-k-query-operator-weak-and">Top-K Query Operator/Weak And</h2>
+<h2 id="top-k-query-operator">Top-K Query Operators</h2>
 <p>
 If the first-phase ranking function can be approximated as a simple linear function,
 and the query mode is <em>any</em>,
-the <a href="https://dl.acm.org/citation.cfm?id=956944">Weak And/WAND</a> implementations in Vespa
+the <a href="using-wand-with-vespa.html">Weak And/WAND</a> implementations in Vespa
 allows avoiding fully evaluating all the documents matching the query with the <em>first-phase</em> function.
-Instead, only the Top N hits using the internal operator ranking will be exposed
+Instead, only the top K hits using the internal operator ranking will be exposed
 to the <em>first-phase</em> ranking function.
 </p><p>
 Both wand implementations accepts a targeted number of hits (top N).
@@ -123,11 +126,12 @@ The skipped set are the ones that matches the query,
 but which cannot outperform any of the already collected hits on the internal scoring heap.
 Due to not fully evaluating all documents matching the query,
 the total hit count becomes inaccurate when using weakAnd/Wand.
-</p><p>
-Find more details in <a href="using-wand-with-vespa.html">Wand with Vespa</a>.
+<p>
+
+<p>
+The <a href="nearest-neighbor-search.html">nearest neighbor search</a> operator is also a top k retrieval operator which does ranking (by distance) and retrieval 
+in one process and exposes only a small subset of the matching documents to the <em>first-phase</em> ranking function. 
 </p>
-
-
 
 <h2 id="choosing-functions">Choosing phased ranking functions</h2>
 <p>
@@ -144,4 +148,9 @@ by deploying the second phase function as the first phase function in a test ran
 and comparing the results to the production rank profile.
 During such evaluation, the timeout should be adjusted for the increased resource usage
 with using the second order function over all matching candidates.
+</p>
+<p>
+If one is lucky enough to have a dataset with query and document judgements one can evaluate the <em>first-phase</em> ranking function by it's effectiveness to retrieve relevant documents 
+at a given position (e.g <a href="https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Recall">Recall@100</a>.</p> 
+
 </p>
