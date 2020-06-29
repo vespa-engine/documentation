@@ -8,23 +8,21 @@ For example, in Computer Vision, searching for close data points in high dimensi
 In Information Retrieval, large pre-trained natural language Transformer models like BERT, allows representing text sentences in dense embedding space, 
 where nearest neighbor search could serve as an effective multilingual neural retrieval function.
 </p><p>
-In many of these real word applications of (approximate) nearest neighbor search, the search is constrained by real time query filters 
+In many of these real word applications of nearest neighbor search, the search is constrained by real time query filters 
 applied over the data points metadata. For example, in E-Commerce search applications with constantly evolving metadata, 
 a search for nearest products for a query in vector space would typically be constrained by inventory status and price. 
 </p><p>
 Expressing the search for nearest neighbors as a query operator allows combining the search for nearest neighbors with traditional query filters using boolean query operators.
-
-Since tensor are just regular fields in Vespa one can define multiple tensor fields
-in the same document schema.
 </p>
 
 <h2 id="using-vespas-nearest-neighbor-search">Using Vespa's nearest neighbor search</h2>
-<p>The following sections demonstrates how to use the nearest neighbor search operator with Vespa, the examples uses the brute force variant which has
+<p>The following sections demonstrates how to use the nearest neighbor search operator in Vespa. 
+The examples uses the brute force variant which has
 perfect accuracy but which is computationally expensive for large document volumes as the distance needs to be calculated for every document which matches 
 the boolean query filters in the query. See how to speed up evaluation of nearest neighbor search by adding a <em>HNSW</em> index in
 the <a href="approximate-nn-hnsw.html">Approximate Nearest Neighbor Search</a>. 
 
-<p>We demonstrate how to use the nearestNeighbor query operator using a <a href="use-case-shopping.html">E-Commerce search use cases</a>: 
+<p>We demonstrate how to use the <em>nearestNeighbor</em> query operator using a <a href="use-case-shopping.html">E-Commerce search use case</a>: 
 
 <ul>
   <li>Related products by product image similarity using SIFT image encodings</li>
@@ -78,14 +76,16 @@ search product {
  
 <p>The <em>image_sift_encoding</em> is used to store the 
 <a href="https://en.wikipedia.org/wiki/Scale-invariant_feature_transform">scale-invariant feature transform (SIFT)</a> encoding of an product catalog image.
-The tensor definition specifies that it's dense [] and has exactly 128 dimensions and uses float value precision. 
-When searching for nearest neighbors in the SIFT vector space we use <em>euclidean</em> distance as our distance metric.</p>
+The tensor definition specifies that it's indexed (dense) [] and has exactly 128 dimensions and uses float value precision. 
+When searching for nearest neighbors in the SIFT vector space we use <a href="reference/schema-reference.html#distance-metric"><em>euclidean</em></a>
+ distance as our distance metric.</p>
 
 <p>The <em>title_bert_embedding</em> is used to store the  
-<a href="https://www.aclweb.org/anthology/D19-1410/">sentence-BERT embedding</a> which has 768 dimensions and we use <em>angular</em> as our distance-metric. 
+<a href="https://www.aclweb.org/anthology/D19-1410/">sentence-BERT embedding</a> which has 768 dimensions and we 
+use <a href="reference/schema-reference.html#distance-metric"><em>angular</em></a> as our distance-metric. 
 There are different approaches
-for using embeddings from large transformer natural language models like BERT for search but that is out of scope for this document, 
-please see the referenced paper for details on how to use BERT as a representation model where query and document text can be encoded independently. 
+for using embeddings from large transformer natural language models like BERT for search but that is out of scope for this document. 
+Please see the referenced paper for details on how to use BERT as a representation model where query and document text can be encoded independently. 
 </p>
 
 <p>We already introduced <em>distance-metric</em> and this metric defines what distance measure is used when searching for the nearest neighbors. 
@@ -116,14 +116,15 @@ We start easy and define a rank profile which rank products by how similar the g
 <pre>
   rank-profile image-similarity inherits default {
     first-phase {
-      expression: closeness("field", image_sift_encoding) 
+      expression: closeness(field, image_sift_encoding) 
     }
   }
 </pre>
 <p>
-As we recall, we configured the tensor <em>distance-metric</em> as <em>euclidean</em> and the <em>closeness("field",image_sift_encoding)</em> Vespa rank feature 
-produce the score <em>1/(1+distance)</em> which takes the value 1.0 
-if the document vector has distance 0, if the distance is larger than 0 the score will be in the range &lt;0,1]. 
+As we recall, we configured the tensor <em>distance-metric</em> as <em>euclidean</em> and the <em>closeness(field, image_sift_encoding)</em> Vespa rank feature 
+produce the score <em>1/(1+distance)</em>.  This function returns the value 1.0 
+if the distance is 0 and 0 if the distance is infinite. If the distance is larger than 0 the score will be in the range &lt;0,1]. </p>
+<p>
 This inversion is done since Vespa sorts documents by decreasing relevancy score and
 we want the closest documents to be ranked highest.
 The relevancy score is assigned by an expression configured in the ranking profile. 
@@ -140,7 +141,7 @@ and hence reduces latency and cost.</p>
 <h3 id="indexing-product-data">Indexing product data</h3>
 <p>Once we have deployed the document schema one 
 can <a href="writing-to-vespa.html">index</a> the data using the <a href="reference/document-json-format.html">json feed format</a>. 
-In the example below we feed two documents using the indexed (dense) tensors short form. Documents feed becomes visible in search immediately (real time indexing). 
+In the example below we feed two documents using the indexed tensors short form. Documents feed becomes visible in search immediately (real time indexing). 
 </p>
 <pre>
 [
@@ -251,7 +252,7 @@ returned in the response. If the documents are partitioned over multiple content
 In our example the <em>first-phase</em> expression is simply the <em>closeness()</em> as calculated by the nearest neighbor 
 operator and hence the hits are not re-ordered but assigned the same score as calculated in the zero-phase by nearest neighbor search operator.
 
-We could re-order hits by changing the first-phase ranking function, for the following would re-rank the nearest neighbors which are in stock using 
+We could re-order hits by changing the first-phase ranking function, and the following would <em>re-rank</em> the nearest neighbors which are in stock using 
 the price:</p>
 
 <pre>
@@ -261,20 +262,20 @@ rank-profile image-similarity-price {
   }
 }
 </pre>
-<p>In this example the ranking profile simply ignores the closeness score assigned by the nns operator and instead re-orders the 
+<p>In this example the ranking profile simply ignores the closeness score assigned by the <em>nearestNeighbor</em> operator and instead re-rank the 
 most similar images by their <em>price</em>, ranked in decreasing order. </p>
 
 <p>
 A more advanced example is given below where we retrieve the closest neighbors in SIFT-encoding vector space (with in stock filter)
-and ranks the those neighbors using a combination of the euclidean distance rank and the product popularity 
-(e.g. calculated offline based on past user behavior with the production) and finally re-ranks the top 100 hits per node 
+and ranks those neighbors using a combination of the euclidean distance rank and the product popularity 
+(e.g. calculated offline based on past user behavior with the product) and finally re-ranks the top 100 hits per node 
 using a more advanced <a href="onnx.html">ONNX</a> imported Machine Learned (ML) model. These are examples of multi-stage or <a href="phased-ranking.html">phased ranking</a>.
 </p>
 
 <pre>
 rank-profile image-similarity-with-onnx-stage {
   first-phase {
-    expression: closeness("field", image_sift_encoding)*attribute(popularity) 
+    expression: closeness(field, image_sift_encoding)*attribute(popularity) 
   }
   second-phase {
     rerank-count: 100
@@ -284,22 +285,22 @@ rank-profile image-similarity-with-onnx-stage {
 </pre>
 <p>With the above multi-stage ranking profiles there are three stages: 
 <ul>
-<li>The zero-phase nearest neighbor search which only ranks documents by the closeness feature using <em>angular-distance</em></li>
-<li>The <em>first-phase</em> which re-ranks the top <em>targetHits</em> from zero-phase</li>
+<li>The zero-phase nearest neighbor search which only rank documents by the closeness feature using <em>angular-distance</em></li>
+<li>The <em>first-phase</em> which ranks the top <em>targetHits</em> from zero-phase</li>
 <li>the <em>second-phase</em> which re-ranks the top 100 hits from <em>first-phase</em> ranking stage</li>
 </ul>
 <p>
 <b>Related Products using BERT Text Embedding Similarity</b>
 <p>As an alternative to using product image similarity to find related items we look at using the BERT embedding from the product title instead. 
 Similar to the image similarity case we assume that we
-have the BERT embedding tensor representation for the product we want to find related or similar items for 
-and we can use this to search for similar products using the angular distance.  We define our
+have the BERT embedding tensor representation for the product we want to find related or similar items for,  
+and can use this to search for similar products using the <em>angular</em> distance metric.  We define our
 ranking function:</p>
 
 <pre>
 rank-profile title-similarity-using-bert {
   first-phase {
-    expression: closeness("field", title_bert_embedding)
+    expression: closeness(field, title_bert_embedding)
   }
 }
 </pre> 
@@ -329,12 +330,12 @@ our ranking function as a weighted linear combination of the closeness scores pr
 <pre>
 rank-profile hybrid-similarity {
   first-phase {
-    expression: query(bert_weight)*closeness("field", title_bert_embedding) + (1 - query(bert_weight))* closeness("field", image_sift_encoding)
+    expression: query(bert_weight)*closeness(field, title_bert_embedding) + (1 - query(bert_weight))* closeness(field, image_sift_encoding)
   }
 }
 </pre>
-<p>Our search request need to pass both the BERT embedding tensor and the SIFT encoding tensor and we use logical disjunction (OR) to combine the
-two nearest neighbor search operators, our search request becomes: </p>
+<p>The search request need to pass both the BERT embedding tensor and the SIFT encoding tensor and we use logical disjunction (OR) to combine the
+two nearest neighbor search operators. Our search request becomes: </p>
 <pre>
 {
   "yql": "select title, price from sources products where (([{\"targetNumHits\": 10}]nearestNeighbor(title_bert_embedding,query_vector_bert)) 
@@ -363,7 +364,7 @@ which in total will expose at least 20 documents to the
 <h3 id="hybrid-neural-term-retrieval">Hybrid Neural Term Retrieval</h3>
 <p>In the following example we have a user input query (for example 'white trousers for woman') and we search for both products which matches 
 the query terms and for the nearest neighbors using the neural BERT embedding space.  In this case we need to produce the BERT embedding 
-of the input text query and we use logical disjunction, this allows also retrieving documents which does not use the exact same vocabulary as 
+of the input text query and we use logical disjunction. This allows also retrieving documents which does not use the exact same vocabulary as 
 in the user query. Our search request becomes: </p>
 <pre>
 {
@@ -385,7 +386,7 @@ in the user query. Our search request becomes: </p>
 <pre>
   rank-profile hybrid-term-neural-retrieval {
     first-phase {
-      expression: 0.5*fieldMatch(title) + 0.5*closeness("field", title_bert_embedding)
+      expression: 0.5*fieldMatch(title) + 0.5*closeness(field, title_bert_embedding)
     }
   }
 </pre>
@@ -394,12 +395,12 @@ and the <a href="/reference/string-segment-match.html">fieldMatch</a> which is a
 text matching feature which also takes term proximity into account when computing the text ranking score.</p>
 
 <h3 id="programatic-usage">Using Nearest Neighbor from a Searcher Component</h3>
-<p>As with all query operators in Vespa one also build the query tree programmatically 
+<p>As with all query operators in Vespa one can also build the query tree programmatically 
 in a custom <a href="searcher-development.html">Searcher component</a>.</p>
 <p>In the example below we execute 
 the incoming query and fetch the Tensor of the top ranking hit ranked by whatever rank-profile was specified in the search request.
 We read the <em>image_sift_encoding</em> Tensor from the top ranking hit and uses it as the input for the nearest neighbor search operator to find 
-related products (Using the rank profile described in earlier sections).</p>
+related products (using the rank profile described in earlier sections).</p>
 
 <pre>
 package ai.vespa.example.searcher;
