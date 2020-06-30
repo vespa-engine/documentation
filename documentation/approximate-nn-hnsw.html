@@ -1,0 +1,98 @@
+---
+# Copyright 2020 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. 
+title: "Approximate Nearest Neighbor Search using HNSW Index"
+---
+<p>For an introduction to nearest neighbor search see <a href="nearest-neighbor-search.html">Nearest Neighbor Search</a> documentation. 
+This document 
+describes how to speed up searches for nearest neighbors by adding a <em>HNSW</em> index to the tensor. 
+Vespa implements a version of
+The Hierarchical Navigable Small World (HNSW) graph algorithm (<a href="https://arxiv.org/abs/1603.09320">paper</a>). The implementation in Vespa supports: 
+<ul>
+<li>Meta data filtering, the search for nearest neighbors can be constrained by query filters as the nearest neighbor search in Vespa is expressed as a query operator
+which can be combined with other filters or query terms using the powerful Vespa query language.</li>
+<li>Real Time Indexing - Add/remove/updates vectors from the index with low latency.</li>
+<li>The HNSW Index is mutable so no query overhead from having to search multiple <em>HNSW</em> graphs</li>
+<li>Multi-threaded Indexing</li>
+<li>Multi-threaded Searching - Several threads per query </li>
+</ul>
+
+<h2 id="using-vespas-approximate-nearest-neighbor-search">Using Vespa's approximate nearest neighbor search</h2>
+The query examples in <a href="nearest-neighbor-search.html">nearest neighbor search</a> uses the brute force variant which has
+perfect accuracy but which is computationally expensive for large document volumes as the distance needs to be calculated for every document which matches 
+the boolean query filters in the query. 
+
+To enable fast approximate matching we need to alter our document schema and add an <em>index</em> section to our tensor definitions. The same document type can have multiple <em>HNSW</em> indexes (per field) :
+<pre>
+ field image_sift_encoding type tensor<float>(x[128]) {
+  indexing: attribute |index
+  attribute {
+    distance-metric {
+      euclidean
+    }
+  }
+  index {
+    hnsw {
+      max-links-per-node: 16
+      neighbors-to-explore-at-insert: 500
+    }
+  }
+ }
+
+ field title_bert_embedding type tensor<float>(x[768]) {
+  indexing: summary | attribute
+  attribute {
+    distance-metric {
+      angular 
+    }
+  }
+  index {
+    hnsw {
+      max-links-per-node: 24
+      neighbors-to-explore-at-insert: 500
+    }
+  }
+ }
+</pre>
+<p>In the example above we enable fast approximate search by building an hnsw index over the image_sift_encoding tensor
+
+<ul>
+<li><b>max-links-per-node</b> Specifies how many links per HNSW node to select when building the graph. In <a href="https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md">HNSWlib</a>
+this parameter is known as <em>M</em> </li>
+<li><b>neighbors-to-explore-at-insert</b> Specifies how many neighbors to explore when inserting a document in the HNSW graph. In HNSWlib this parameter is called <em>ef_construction</em></li>
+</ul>
+
+<p>Choosing the value of these parameters affects both accuracy, query speed and also indexing performance. </p>
+
+<h3 id="approximate-nearest-neighbor-query">Using approximate (fast) nearest neighbor search in query</h3>
+<p>With a hnsw index enabled on the tensor we can chose if we want to use approximate or exact matching by the <em>approximate</em> annotation:</p>
+
+<pre>
+{
+  "yql": "select title,price from sources * where ([{\"targetNumHits\": 10, \"approximate\":false}]nearestNeighbor(image_sift_encoding,query_vector_sift)) and in_stock = true;",
+  "hits": 100
+  "ranking.features.query(query_vector_sift): [0.21,0.12,....],
+  "ranking.profile": "image_similarity" 
+}
+</pre>
+<p>By default, <em>approximate</em> is true when searching a tensor with a <em>hnsw</em> index. 
+The <em>approximate</em> parameter allows us to compute the accuracy loss by having the ability to compute the exact neighbors and compare with
+the approximation to compute the recall@k. In addition to the K (<em>targetNumHits</em>) there is a <em>hnsw.exploreAdditionalHits</em> parameter 
+which controls how many extra nodes in the graph (in addition to <em>targetNumHits</em>) should be explored before selecting the best closest k hits. 
+Using a greater number gives better quality (accuracy as compared with the brute force) but worse performance.
+
+<pre>
+{
+  "yql": "select title,price from sources * where ([{\"targetNumHits\": 10, \"hnsw.\":false}]nearestNeighbor(image_sift_encoding,query_vector_sift)) and in_stock = true;
+  "hits": 100
+  "ranking.features.query(query_vector_sift): [0.21,0.12,....],
+  "ranking.profile": "image_similarity" 
+}
+</pre>
+
+
+<h2 id="nearest-neighbor-search-considerations">Nearest Neighbor Search Considerations</h2>
+<ul>
+<li>When using the <em>nearestNeighbor</em> operator the total hit count is not accurate. This is similar to the behavior with weakAnd. This is true for both approximate and brute force.</li>
+<li>When using the <em>nearestNeighbor</em> operator the <a href="grouping.html">grouping</a> count is not accurate. </li>
+<li>Changing the <em>distance-metric</em> for tensor with hnsw index requires re-indexing, similar changing the <em>max-links-per-node</em> and <em>neighbors-to-explore-at-insert</em> requires re-indexing.</li>
+</ul>
