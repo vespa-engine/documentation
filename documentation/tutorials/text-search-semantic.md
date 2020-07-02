@@ -186,7 +186,7 @@ together with the appropriate rank-profile.
 
 ```
 {
-	"yql":"select * from sources * where ([{"targetNumHits": 1000, "label": "nns"}]nearestNeighbor(title_bert, tensor_bert));"
+	"yql":"select * from sources * where ([{"targetHits": 1000, "label": "nns"}]nearestNeighbor(title_bert, tensor_bert));"
 	"userQuery":"what types of plate boundaries cause deep sea trenches"
 	"ranking":{
 		"profile":"bert_title_body_all"
@@ -197,7 +197,7 @@ together with the appropriate rank-profile.
 } 
 ```
 
-The query above uses the `nearestNeighbor` operator to match documents based on the euclidean distance between the title embedding (`title_bert`) and the query embedding (`tensor_bert`). It is possible to annotate the `nearestNeighbor` with properties such as `targetNumHits` that defines the target number of documents to be matched. In addition, we specify that the matched documents will be ranked by the `bert_title_body_all` rank-profile. 
+The query above uses the `nearestNeighbor` operator to match documents based on the euclidean distance between the title embedding (`title_bert`) and the query embedding (`tensor_bert`). It is possible to annotate the `nearestNeighbor` with properties such as `targetHits` that defines the target number of documents to be matched. In addition, we specify that the matched documents will be ranked by the `bert_title_body_all` rank-profile. 
 
 
 ## ANN results
@@ -222,7 +222,7 @@ Below is a query example that uses the `weakAND` operator with an annotation tha
 
 ```
 {
-	"yql":"select * from sources * where ([{"targetNumHits": 1000}]weakAnd(default contains "what", default contains "types", default contains "of", default contains "plate", default contains "boundaries", default contains "cause", default contains "deep", default contains "sea", default contains "trenches"));"
+	"yql":"select * from sources * where ([{"targetHits": 1000}]weakAnd(default contains "what", default contains "types", default contains "of", default contains "plate", default contains "boundaries", default contains "cause", default contains "deep", default contains "sea", default contains "trenches"));"
 	"userQuery":"what types of plate boundaries cause deep sea trenches"
 	"ranking":{
 		"profile":"bm25"
@@ -246,7 +246,7 @@ It was surprising to see the effectiveness of the WAND operator in this case:
 
 It matched much less documents than the `OR` operator (12.5% versus 85% respectively) while keeping a similar recall metric (92% versus 96% respectively). 
 
-If you are detail oriented, you might be wondering why the `weakAND` operator matched 12.5% of the documents if we set `targetNumHits` to be 1.000. The reason for that is that the algorithm starts with an initial list of 1.000 candidates and starts to add new ones that are better than the documents already in the list. That way the 1.000 ends up being the lower bound of the documents matched. The same is true for the `nearestNeighbor` operator.
+If you are detail oriented, you might be wondering why the `weakAND` operator matched 12.5% of the documents if we set `targetHits` to be 1.000. The reason for that is that the algorithm starts with an initial list of 1.000 candidates and starts to add new ones that are better than the documents already in the list. That way the 1.000 ends up being the lower bound of the documents matched. The same is true for the `nearestNeighbor` operator.
 
 ## ANN and weakAND: Little improvement
 

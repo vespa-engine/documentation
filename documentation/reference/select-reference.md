@@ -397,7 +397,7 @@ Format of this in JSON:
 
 Another example:
 
-YQL: `where [ {"scoreThreshold": 13, "targetNumHits": 7} ]wand(description, {"a":1, "b":2})`.
+YQL: `where [ {"scoreThreshold": 13, "targetHits": 7} ]wand(description, {"a":1, "b":2})`.
 
 Format of this in JSON:
 
@@ -405,7 +405,7 @@ Format of this in JSON:
 "where" : {
   "wand" : {
     "children" : [ "description", {"a" : 1, "b":2} ],
-    "attributes" : {"scoreThreshold": 13, "targetNumHits": 7}
+    "attributes" : {"scoreThreshold": 13, "targetHits": 7}
   }
 }
 ```
@@ -433,7 +433,7 @@ Format of this in JSON:
 ```
 
 ###### weakAnd
-YQL: `where [{"scoreThreshold": 41, "targetNumHits": 7}]weakAnd(a contains "A", b contains "B")`.
+YQL: `where [{"scoreThreshold": 41, "targetHits": 7}]weakAnd(a contains "A", b contains "B")`.
 
 Format of this in JSON:
 
@@ -441,7 +441,7 @@ Format of this in JSON:
 "where" : {
   "weakAnd" : {
     "children" : [ { "contains" : ["a", "A"] }, { "contains" : ["b", "B"] } ],
-    "attributes" : {"scoreThreshold": 41, "targetNumHits": 7}
+    "attributes" : {"scoreThreshold": 41, "targetHits": 7}
 	}
 }
 ```
