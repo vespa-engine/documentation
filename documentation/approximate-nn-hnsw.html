@@ -2,30 +2,42 @@
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. 
 title: "Approximate Nearest Neighbor Search using HNSW Index"
 ---
-<p>For an introduction to nearest neighbor search see <a href="nearest-neighbor-search.html">Nearest Neighbor Search</a> documentation. 
-This document 
-describes how to speed up searches for nearest neighbors by adding a <em>HNSW</em> index to the tensor. 
-Vespa implements a version of
-The Hierarchical Navigable Small World (HNSW) graph algorithm (<a href="https://arxiv.org/abs/1603.09320">paper</a>). The implementation in Vespa supports:</p> 
+<p>For an introduction to nearest neighbor search see
+<a href="nearest-neighbor-search.html">Nearest Neighbor Search</a> documentation.
+This document describes how to speed up searches for nearest neighbors by adding a
+<a href="reference/schema-reference.html#index-hnsw">HNSW index</a> to the tensor field.
+Vespa implements a modified version of
+the Hierarchical Navigable Small World (HNSW) graphs algorithm (<a href="https://arxiv.org/abs/1603.09320">paper</a>).
+The implementation in Vespa supports:</p>
 <ul>
-<li>Meta data filtering. The search for nearest neighbors can be constrained by query filters as the nearest neighbor search in Vespa is expressed as a query operator
-which can be combined with other filters or query terms using the powerful Vespa query language.</li>
-<li>Real Time Indexing - Add/remove/updates vectors from the index with low latency.</li>
-<li>The HNSW Index is mutable so no query overhead from having to search multiple <em>HNSW</em> graphs</li>
-<li>Multi-threaded Indexing</li>
-<li>Multi-threaded Searching - Several threads per query </li>
+<li><strong>Meta Data Filtering</strong> - The search for nearest neighbors can be constrained by query filters
+as the nearest neighbor search in Vespa is expressed as a query operator.
+This can be combined with other filters or query terms using the powerful
+<a href="query-language.html">Vespa query language</a>.</li>
+<li><strong>Real Time Indexing</strong> - Add, remove and update vectors in the index with very low latency,
+using the <a href="reference/document-json-format.html#tensor">document JSON format for tensors</a>.</li>
+<li><strong>Mutable HNSW Index</strong> - This ensures no query overhead from having to search multiple <em>HNSW</em> indexes.</li>
+<li><strong>Multi-threaded Indexing</strong> - The costly part when doing changes to the index is searching the graph layers
+to find which parts to change. This is handled by multiple threads, controlled by the
+<a href="reference/services-content.html#feeding-concurrency">feeding concurrency</a> setting.</li>
+<li><strong>Multi-threaded Searching</strong> - Several threads can be used per query.
+See
+<a href="performance/sizing-search.html#scaling-latency">Scaling latency in a content group</a>
+for details.</li>
 </ul>
 
 <h2 id="using-vespas-approximate-nearest-neighbor-search">Using Vespa's approximate nearest neighbor search</h2>
 <p>
 The query examples in <a href="nearest-neighbor-search.html">nearest neighbor search</a> uses the brute force variant which has
-perfect accuracy but which is computationally expensive for large document volumes as the distance needs to be calculated for every document which matches 
-the boolean query filters in the query. 
+perfect accuracy but which is computationally expensive for large document volumes
+as the distance needs to be calculated for every document which matches
+the query filters in the query.
 
-To enable fast approximate matching we need to alter our document schema and add an <em>index</em> section to our tensor definitions. The same document type can have multiple <em>HNSW</em> indexes (one per tensor field):</p>
+To enable fast approximate matching we need to alter our document schema and add an <em>index</em> section to our tensor definitions.
+The same document type can have multiple <em>HNSW</em> indexes (one per tensor field):</p>
 <pre>
- field image_sift_encoding type tensor<float>(x[128]) {
-  indexing: attribute |index
+field image_sift_encoding type tensor<float>(x[128]) {
+  indexing: summary | attribute | index
   attribute {
     distance-metric: euclidean 
   }
@@ -35,10 +47,10 @@ To enable fast approximate matching we need to alter our document schema and add
       neighbors-to-explore-at-insert: 500
     }
   }
- }
+}
 
- field title_bert_embedding type tensor<float>(x[768]) {
-  indexing: summary | attribute
+field title_bert_embedding type tensor<float>(x[768]) {
+  indexing: summary | attribute | index
   attribute {
     distance-metric: angular
   }
@@ -48,22 +60,19 @@ To enable fast approximate matching we need to alter our document schema and add
       neighbors-to-explore-at-insert: 500
     }
   }
- }
+}
 </pre>
-<p>In the example above we enable fast approximate search by building an hnsw index over the <em>image_sift_encoding tensor</em> and the <em>title_bert_embedding</em>. We use different <em>distance-metri</em> 
-and <em>max-links-per-node</em> settings for the two tensor types.</p>
+<p>In the example above we enable fast approximate search by building an <em>HNSW</em> index over the
+<em>image_sift_encoding</em> and the <em>title_bert_embedding</em> tensor fields.
+We use different
+<a href="reference/schema-reference.html#distance-metric">distance-metric</a>
+and <em>max-links-per-node</em> settings for the two tensor fields.
+See <a href="reference/schema-reference.html#index-hnsw">HNSW index reference</a> for details on the index parameters.
+Choosing the value of these parameters affects both accuracy, query speed and also indexing performance.</p>
 
-<ul>
-<li><b>max-links-per-node</b> Specifies how many links per HNSW node to select when building the graph. In <a href="https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md">HNSWlib</a>
-this parameter is known as <em>M</em> </li>
-<li><b>neighbors-to-explore-at-insert</b> Specifies how many neighbors to explore when inserting a document in the HNSW graph. In HNSWlib this parameter is called <em>ef_construction</em></li>
-</ul>
-
-<p>See <a href="reference/schema-reference.html#index-hnsw">hnsw index reference</a> for details on these two parameters.
-Choosing the value of these parameters affects both accuracy, query speed and also indexing performance. </p>
-
-<h3 id="approximate-nearest-neighbor-query">Using approximate (fast) nearest neighbor search in query</h3>
-<p>With a hnsw index enabled on the tensor we can chose if we want to use approximate or exact matching by the <em>approximate</em> annotation:</p>
+<h3 id="approximate-nearest-neighbor-query">Using fast approximate nearest neighbor search in query</h3>
+<p>With an <em>HNSW</em> index enabled on the tensor field we can chose if we want to use approximate
+or exact matching by using the <em>approximate</em> annotation:</p>
 
 <pre>
 {
@@ -73,15 +82,16 @@ Choosing the value of these parameters affects both accuracy, query speed and al
   "ranking.profile": "image_similarity" 
 }
 </pre>
-<p>By default, <em>approximate</em> is true when searching a tensor with a <em>hnsw</em> index. 
-The <em>approximate</em> parameter allows us to compute the accuracy loss by having the ability to compute the exact neighbors and compare with
-the approximation to compute the recall@k. In addition to the K (<em>targetHits</em>) there is a <em>hnsw.exploreAdditionalHits</em> parameter 
-which controls how many extra nodes in the graph (in addition to <em>targetHits</em>) should be explored before selecting the best closest k hits. 
+<p>By default, <em>approximate</em> is true when searching a tensor with a <em>HNSW</em> index.
+The <em>approximate</em> parameter allows us to compute the accuracy loss by having the ability to compute the exact neighbors and compare with the approximation to compute the recall@k.
+In addition to <em>targetHits</em>, there is a <em>hnsw.exploreAdditionalHits</em> parameter
+which controls how many extra nodes in the graph (in addition to <em>targetHits</em>)
+that should be explored before selecting the best closest k hits.
 Using a greater number gives better quality (accuracy as compared with the brute force) but worse performance.
 
 <pre>
 {
-  "yql": "select title,price from sources * where ([{\"targetHits\": 10, \"hnsw.exploreAdditionalHit\":100}]nearestNeighbor(image_sift_encoding,query_vector_sift)) and in_stock = true;
+  "yql": "select title,price from sources * where ([{\"targetHits\": 10, \"hnsw.exploreAdditionalHits\":100}]nearestNeighbor(image_sift_encoding,query_vector_sift)) and in_stock = true;
   "hits": 100
   "ranking.features.query(query_vector_sift): [0.21,0.12,....],
   "ranking.profile": "image_similarity" 
@@ -91,9 +101,21 @@ Using a greater number gives better quality (accuracy as compared with the brute
 
 <h2 id="nearest-neighbor-search-considerations">Nearest Neighbor Search Considerations</h2>
 <ul>
-<li>When using the <em>nearestNeighbor</em> operator the total hit count is not accurate. This is similar to the behavior with weakAnd. This is true for both approximate and brute force.</li>
-<li>When using the <em>nearestNeighbor</em> operator the <a href="grouping.html">grouping</a> count is not accurate. </li>
-<li>Changing the <em>distance-metric</em> for tensor with hnsw index requires <a href="reference/schema-reference.html#changes-that-require-restart-but-not-re-feed">re-starting</a>,
- similar changing the <em>max-links-per-node</em> and <em>neighbors-to-explore-at-insert</em> requires re-starting.</li>
-<li>Vespa tensor fields are in-memory data structures and so is the HNSW index. For large data sets the primary memory footprint driver is the raw tensor field</li>
+<li>When using the
+<a href="reference/query-language-reference.html#nearestneighbor">nearestNeighbor</a>
+operator the total hit count is not accurate.
+This is similar to the behavior with
+<a href="reference/query-language-reference.html#weakand">weakAnd</a> and
+<a href="reference/query-language-reference.html#wand">wand</a>.
+This is true for both approximate and brute force.</li>
+<li>When using the
+<a href="reference/query-language-reference.html#nearestneighbor">nearestNeighbor</a>
+operator the <a href="grouping.html">grouping</a> count is not accurate. </li>
+<li>Changing the
+<a href="reference/schema-reference.html#distance-metric">distance-metric</a>
+for a tensor field with an <em>HNSW</em> index requires
+<a href="reference/schema-reference.html#changes-that-require-restart-but-not-re-feed">re-starting</a>.
+Similar, changing the <em>max-links-per-node</em> and <em>neighbors-to-explore-at-insert</em> requires re-starting.</li>
+<li>Vespa tensor fields are in-memory data structures and so is the HNSW index.
+For large datasets the primary memory footprint driver is the raw tensor field.</li>
 </ul>
