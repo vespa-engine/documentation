@@ -56,9 +56,8 @@ a linear scan over all documents and thus very slow:
 <pre>
 select * from sources * where range(timestamp, 0, 100);
 </pre>
-But if this query term is <em>and</em>-ed with a more restrictive query term (see section below),
-the query optimizer will find that the second query term has a lower hit count estimate than the timestamp range
-and the query becomes fast and scales with number of documents that matches the uuid field.
+But if this query term is <em>and</em>-ed with another term which matches fewer documents, that term will determine
+the cost instead, and fast-search won't be necessary, for example:
 <pre>
 select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000";
 </pre>
@@ -74,41 +73,24 @@ Adding or removing <em>fast-search</em> requires restart.
 </p>
 
 
-<h2 id="indexing-strings">Indexing strings</h2>
-<p>
-When configuring <a href="../reference/schema-reference.html#type:string">string</a>
+<h2 id="indexing-uuids">Indexing uuids</h2>
+
+<p>When configuring <a href="../reference/schema-reference.html#type:string">string</a>
 type fields with <samp>index</samp>,
 the default <a href="../reference/schema-reference.html#match">match</a> mode is <samp>text</samp>.
-This means Vespa will <a href="../linguistics.html#tokenization">tokenize</a> the content and index the tokens.
-Example document definition:
-<pre>
-schema foo {
-    document foo {
-        field title type string {
-            indexing: summary | index
-        }
-        field uuid type string {
-            indexing: summary | index
-        }
-    }
-}
-</pre>
-The string representation of an <a href="https://en.wikipedia.org/wiki/Universally_unique_identifier">
+This means Vespa will <a href="../linguistics.html#tokenization">tokenize</a> the content and index the tokens.</p>
+
+<p>The string representation of an <a href="https://en.wikipedia.org/wiki/Universally_unique_identifier">
 Universally unique identifier</a> (UUID) is 32 hexadecimal (base 16) digits,
 in five groups, separated by hyphens, in the form 8-4-4-4-12,
-for a total of 36 characters (32 alphanumeric characters and four hyphens).
-</p><p>
-Example: Indexing <samp>123e4567-e89b-12d3-a456-426655440000</samp> with the above document definition,
-Vespa will tokenize this into 5 tokens: <samp>[123e4567,e89b,12d3,a456,426655440000]</samp>.
-</p><p>
-Phrase search is evaluated over positional indicies
-and has a higher cost compared to searching for a single word term.
-Vespa creates implicit phrases when terms are joined by hyphens.
-Hence <samp>/search/?query=uuid:123e4567-e89b-12d3-a456-426655440000</samp>
-becomes a phrase query: <samp>uuid:"123e4567 e89b12d3 a456 426655440000"</samp>.
-</p><p>
-Change the mode to <a href="../reference/schema-reference.html#word">match: word</a> to disable tokenization.
-This stores the input <samp>123e4567-e89b-12d3-a456-426655440000</samp> as one token and avoids implicit phrase search:
+for a total of 36 characters (32 alphanumeric characters and four hyphens).</p>
+
+<p>Example: Indexing <samp>123e4567-e89b-12d3-a456-426655440000</samp> with the above document definition,
+Vespa will tokenize this into 5 tokens: <samp>[123e4567,e89b,12d3,a456,426655440000]</samp> which will
+each of which will be matched independently, leading to incorrect matches.</p>
+
+<p>To avoid this, change the mode to <a href="../reference/schema-reference.html#word">match: word</a> to
+treat the entire uuid as <i>one</i> token:
 <pre>
 field uuid type string {
     indexing: summary | index
@@ -116,19 +98,13 @@ field uuid type string {
     rank:     filter
 }
 </pre>
-Also configure <samp>uuid</samp> as a <a href="../reference/schema-reference.html#filter">rank: filter</a> field -
-the field will then be represented as efficient as possible during search and ranking.
-</p><p>
-Summary: Review the string fields in the application:
-<ul>
-  <li>tokenized matching or not</li>
-  <li>used in ranking or not</li>
-</ul>
-The <samp>rank:filter</samp> behavior can also be triggered at query time on a per query item basis
-by the <samp>com.yahoo.prelude.query.Item.setRanked()</samp>
-in a <a href="../searcher-development.html">custom searcher</a>.
-</p>
+In addition, configure the <samp>uuid</samp> as a
+<a href="../reference/schema-reference.html#filter">rank: filter</a> field -
+the field will then be represented as efficient as possible during search and ranking.</p>
 
+<p>The <samp>rank:filter</samp> behavior can also be triggered at query time on a per query item basis
+by the <samp>com.yahoo.prelude.query.Item.setRanked()</samp>
+in a <a href="../searcher-development.html">custom searcher</a>.</p>
 
 
 <h2 id="parent-child-and-search-performance">Parent child and search performance</h2>
