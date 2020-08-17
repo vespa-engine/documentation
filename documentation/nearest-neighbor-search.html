@@ -38,7 +38,7 @@ We define the following product <a href="schemas.html">document schema</a>:
 </p>
 
 <pre>
-search product {
+schema product {
 
   document product {
    
@@ -58,14 +58,14 @@ search product {
       indexing: summary | attribute 
     }
 
-    field image_sift_encoding type tensor<float>(x[128]) {
+    field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
       indexing: summary | attribute
       attribute {
         distance-metric: euclidean
       }
     }
 
-    field title_bert_embedding type tensor<float>(x[768]) {
+    field title_bert_embedding type tensor&lt;float&gt;(x[768]) {
       indexing: summary | attribute
       attribute {
         distance-metric: angular
@@ -79,9 +79,11 @@ Fields like <em>title</em>, <em>in_stock</em>, <em>price</em> and <em>popularity
 <a href="tensor-user-guide.html">tensor</a> type fields needs more explanation. 
  
 <p>The <em>image_sift_encoding</em> field is used to store the
-<a href="https://en.wikipedia.org/wiki/Scale-invariant_feature_transform">scale-invariant feature transform (SIFT)</a> encoding of a product catalog image.
+<a href="https://en.wikipedia.org/wiki/Scale-invariant_feature_transform">scale-invariant feature transform (SIFT)</a>
+  encoding of a product catalog image.
 The tensor definition specifies that it's indexed (dense) and has exactly 128 dimensions and uses float value precision.
-When searching for nearest neighbors in the SIFT vector space we use <a href="reference/schema-reference.html#distance-metric"><em>euclidean</em></a>
+When searching for nearest neighbors in the SIFT vector space we use
+  <a href="reference/schema-reference.html#distance-metric"><em>euclidean</em></a>
  distance as our distance metric.</p>
 
 <p>The <em>title_bert_embedding</em> field is used to store the
@@ -92,7 +94,7 @@ for using embeddings from large transformer natural language models like BERT fo
 Please see the referenced paper for details on how to use BERT as a representation model where query and document text can be encoded independently. 
 </p>
 
-<p>Currently, Vespa supports 4 distance metrics to use when searching for nearest neighbors:
+<p>Vespa supports 4 distance metrics to use when searching for nearest neighbors:
 <ul>
   <li><b>euclidean</b></li> 
   <li><b>angular</b></li> 
@@ -100,20 +102,12 @@ Please see the referenced paper for details on how to use BERT as a representati
   <li><b>geodegrees</b></li> 
 </ul> 
 
-See <a href="reference/schema-reference.html#distance-metric">distance-metric reference documentation</a> for details on these.
-</p>
-<p>We also need to define the run time <a href="ranking-expressions-features.html#using-query-variables">query tensors</a> in the application package which
-are controlled outside of the document schema definition.  
+See <a href="reference/schema-reference.html#distance-metric">distance-metric reference documentation</a> for details.
 
-These are the run time tensors which is input to the <em>nearestNeighbor</em> query operator(s).</p>
-<pre>
-&lt;query-profile-type id="root"&gt;
-    &lt;field name="ranking.features.query(query_vector_sift)" type="tensor&amp;lt;float&amp;gt;(x[128])" /&gt;
-    &lt;field name="ranking.features.query(query_vector_bert)" type="tensor&amp;lt;float&amp;gt;(x[768])" /&gt;
-&lt;/query-profile-type&gt;
-</pre>
+<p>We also need to define the types of the query tensors in the application package, see
+  <a href="ranking-expressions-features.html#query-feature-types">query feature types</a>.</p>
 
-<p>We also need to configure how to <a href="ranking.html">rank</a> our products. 
+<p>Lastly, we need to configure how to <a href="ranking.html">rank</a> our products.
 We start easy and define a rank profile which rank products by how similar the given query image is in the SIFT vector space:</p>
  
 <pre>
@@ -123,17 +117,17 @@ We start easy and define a rank profile which rank products by how similar the g
     }
   }
 </pre>
-<p>
-As we recall, we configured the tensor <em>distance-metric</em> as <em>euclidean</em> and the <em>closeness(field, image_sift_encoding)</em> Vespa rank feature 
-produce the score <em>1/(1+distance)</em>.  This function returns the value 1.0 
-if the distance is 0 and 0 if the distance is infinite. If the distance is larger than 0 the score will be in the range &lt;0,1]. </p>
-<p>
-This inversion is done since Vespa sorts documents by decreasing relevancy score and
-we want the closest documents to be ranked highest.
-The relevancy score is assigned by an expression configured in the ranking profile. 
-See details on configuring ranking in Vespa in the <a href="ranking.html">ranking</a> documentation.</p>
 
-The <em>first-phase</em> is part of Vespa's <a href="phased-ranking.html">phased ranking</a> support. 
+<p>We configured the tensor <em>distance-metric</em> as <em>euclidean</em>, and the <em>closeness(field, image_sift_encoding)</em>
+Vespa rank feature which returns a value in the range [0, 1], where 0 is infinite distance,
+and 1 is zero distance.</p>
+
+<p>This is convenient because Vespa sorts documents by decreasing relevancy score and
+we want the closest documents to be ranked highest.
+This relevance score is decided by an expression configured in the ranking profile,
+see the <a href="ranking.html">ranking</a> documentation.</p>
+
+<p>The <em>first-phase</em> is part of Vespa's <a href="phased-ranking.html">phased ranking</a> support.
 Phased ranking or multi-stage document ranking enables re-ranking of the top k subset of the hits which are retrieved from the previous stage. 
 Highly efficient query
 operators like
@@ -434,15 +428,13 @@ public class FeedbackSearcher extends Searcher {
         Result result = execution.search(query);
         if (result.getTotalHitCount() == 0)
             return result;
-        execution.fill(result); //fetch summary data of top hits
+        execution.fill(result); // fetch the summary data of the hits if needed
         Hit bestHit = result.hits().get(0);
         Tensor sift_encoding = (Tensor) bestHit.getField("image_sift_encoding");
         Query relatedQuery = new Query();
         relatedQuery.getRanking().setProfile("image-similarity");
         relatedQuery.getRanking().getFeatures().put("query(query_vector_sift)", sift_encoding);
-        NearestNeighborItem nn = new NearestNeighborItem(
-                "image_sift_encoding",
-                "query_vector_sift");
+        NearestNeighborItem nn = new NearestNeighborItem("image_sift_encoding",  "query_vector_sift");
         nn.setTargetNumHits(10);
         relatedQuery.getModel().getQueryTree().setRoot(nn);
         return execution.search(relatedQuery);
