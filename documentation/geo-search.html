@@ -49,22 +49,27 @@ You can also build or modify the query programatically by adding a
 anywhere in the query tree.
 </p>
 <p>
-There is also a set of legacy parameters in the query API that may be used to
+There is also a set of <em>legacy</em> parameters in the query API that may be used to
 <a href="reference/query-api-reference.html#geographical-searches">restrict query results</a>,
 defining the allowed area using a position + radius or a bounding box.
-</p><p>
+<ul>
+<li>
 Restrict search results using <a href="reference/query-api-reference.html#pos.ll">pos.ll</a> and default radius (50km):
 <pre>
 $ curl -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
   http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683
 </pre>
+</li>
+<li>
 Set a different <a href="reference/query-api-reference.html#pos.radius">pos.radius</a>:
 <pre>
 $ curl -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
   http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5km
 </pre>
+</li>
+<li>
 Restrict search results using <a href="reference/query-api-reference.html#pos.bb">pos.bb</a> bounding box
 is also currently possible, but this feature is scheduled for removal in Vespa 8.
 Using a bounding box gives no meaningful data for distance ranking or summary-features,
@@ -74,6 +79,8 @@ $ curl -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where title contains \"pizza\";"}' \
   http://localhost:8080/search/?pos.bb=n=37.44899,s=37.3323,e=-121.98241,w=-122.06566
 </pre>
+</li>
+</ul>
 </p>
 
 
@@ -112,7 +119,20 @@ When converting to internal units (millionths of degrees), the Earth polar radiu
 so <code>degrees = 180.0 * meters / (Math.PI * 6356752.0);</code> is the basic conversion formula.
 </p>
 
-
+<h3 id="summary-features">summary-features</h3>
+<p>
+Instead of sending the position and the computed distance in a summary field,
+it may be more practical to add some of the associated rank features as
+<a href="reference/schema-reference.html#summary-features">summary-features</a>.
+In particular,
+<a href="reference/rank-features.html#distance(name).latitude">distance(<em>fieldname</em>).latitude</a>
+and
+<a href="reference/rank-features.html#distance(name).longitude">distance(<em>fieldname</em>).longitude</a>
+gives the geographical coordinates directly, in degrees.
+This is especially useful to use these programatically from a searcher, accessing
+<a href="ranking-expressions-features.html#accessing-feature-function-values-in-results">feature values in results</a>
+for further processing.
+</p>
 
 <h2>Using multiple position fields</h2>
 <p>
@@ -120,13 +140,12 @@ For some applications, it can be useful to have several position attributes that
 For example an address book application could use positions for home address and work address.
 This is possible to declare without any special considerations in the schema file,
 but needs some extra handling on the query side.
-A single query can only search in one of the position attributes,
-and must specify which attribute with a
+A single query item can only search in one of the position attributes,
+and with the legacy API must specify which attribute with a
 <a href="reference/query-api-reference.html#pos.attribute">pos.attribute</a> query parameter.
-If you want to have some searches that spans several fields,
-you must make a combined field (outside vespa or in a
-<a href="document-processing.html">document processor</a>
-before indexing) that holds them all. Example:
+If you want to have a search that spans several fields,
+use YQL to combine several <code>geoLocation</code> items inside an <code>or</code> clause,
+or combine several fields into a combined array field:
 <pre>
 schema address {
     document address {
@@ -154,7 +173,8 @@ schema address {
 Here we assume that the home fields will contain the address and position of your house,
 the work fields the address and position of your workplace,
 while the <em>bothlatlong</em> field is assumed to be filled with
-the positions of both house and workplace somehow.
+the positions of both house and workplace (before feeding data into Vespa, or in a
+document processor during feeding).
 In a query it's then possible to say
 <pre>
 search/?query=homeaddress:sunnyvale&amp;pos.attribute=homelatlong&amp;pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5km
