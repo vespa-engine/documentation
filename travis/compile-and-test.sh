@@ -12,8 +12,8 @@ yum localinstall -y docker-ce-18.06.0.ce-3.el7.x86_64.rpm
 
 # Install python 3 and requirements for the tests
 yum install -y python36-pip
-pip3 install --upgrade pip
-pip3 install -r test/requirements.txt --user
+pip3 install -qqq --upgrade pip
+pip3 install -qqq -r test/requirements.txt --user
 
 # Some procedures use openssl
 yum install -y openssl
