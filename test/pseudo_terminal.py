@@ -13,10 +13,12 @@ class Log:
     def __init__(self):
         self._log = None
         self._filter_pattern = None
+        self._verbose = False
         self.reset_log()
 
-    def reset_log(self):
+    def reset_log(self, verbose=False):
         self._log = []
+        self._verbose = verbose
 
     def stdout_filter(self, pattern):
         self._filter_pattern = pattern
@@ -27,7 +29,8 @@ class Log:
     def write(self, s):
         self._log.append(s)
         if re.match(self._filter_pattern, s) is None:
-            sys.stdout.write(s)
+            if self._verbose:
+                sys.stdout.write(s)
 
     def flush(self):
         sys.stdout.flush()
@@ -56,12 +59,12 @@ class PseudoTerminal:
     def stop(self):
         self._pty.close()
 
-    def run(self, command):
+    def run(self, command, verbose):
         command_id = random.randint(10e4, 10e5)
         sentinel = "sentinel-{0}> exit code: ".format(command_id)
         sentinel_pattern = re.compile(sentinel + "(\d+)")
 
-        self._log.reset_log()
+        self._log.reset_log(verbose)
         self._log.stdout_filter(sentinel_pattern)
         self._pty.sendline(command)
         self._pty.sendline("echo \"" + sentinel + "$?\"")
