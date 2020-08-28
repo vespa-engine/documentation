@@ -18,6 +18,7 @@ from pseudo_terminal import PseudoTerminal
 # Execution
 ################################################################################
 
+verbose = False
 project_root = os.getcwd()
 work_dir = os.path.join(project_root, "_work")
 
@@ -41,8 +42,9 @@ def exec_wait(cmd, pty):
     print_cmd_header(command, "Waiting for '{0}'".format(expect))
 
     waited = 0
+    output = ""
     while waited < max_wait:
-        exit_code, output = pty.run(command)
+        exit_code, output = pty.run(command, verbose)
         if output.find(expect) >= 0:
             return
         else:
@@ -51,6 +53,8 @@ def exec_wait(cmd, pty):
             print("Waited for {0}/{1} seconds...".format(waited, max_wait))
 
     if waited >= max_wait:
+        if not verbose:
+            print(output)
         raise RuntimeError("Expected output '{0}' not found in command '{1}'. Waited for {2} seconds.".format(expect, command, max_wait))
 
 
@@ -59,8 +63,10 @@ def exec_assert(cmd, pty):
     expect = cmd["contains"]
     print_cmd_header(command, "Expecting '{0}'".format(expect))
 
-    _, output = pty.run(command)
+    _, output = pty.run(command, verbose)
     if output.find(expect) == -1:
+        if not verbose:
+            print(output)
         raise RuntimeError("Expected output '{0}' not found in command '{1}'".format(expect, command))
 
 
@@ -82,8 +88,10 @@ def exec_default(cmd, pty):
     command = cmd["$"]
     print_cmd_header(command)
 
-    exit_code, _ = pty.run(command)
+    exit_code, output = pty.run(command, verbose)
     if exit_code != 0:
+        if not verbose:
+            print(output)
         raise RuntimeError("Command '{0}' returned code {1}".format(command, exit_code))
 
 
@@ -252,12 +260,23 @@ def run_file(file_name):
             process_page(f.read(), file_name)
 
 
+def run_with_arguments():
+    global verbose
+    file_to_run = ""
+    for i in range(1, len(sys.argv)):
+        if sys.argv[i] == "--verbose" or sys.argv[i] == "-v":
+            verbose = True
+        else:
+            file_to_run = sys.argv[i]
+    run_file(file_to_run)
+
+
 def main():
     create_work_dir()
 
     try:
         if len(sys.argv) > 1:
-            run_file(sys.argv[1])
+            run_with_arguments()
         else:
             run_config()
     except Exception as e:
