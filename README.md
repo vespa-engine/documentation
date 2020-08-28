@@ -23,6 +23,10 @@ Install [bundler](https://bundler.io/), then
 to set up a local server at localhost:4000 to see the pages as they will look when served.
 The output will highlight rendering/other problems when starting serving.
 
+Alternatively, use the docker image `jekyll/jekyll` to run the local server
+
+    docker run -ti --rm --name doc --publish 4000:4000 -e JEKYLL_UID=$UID -v $(pwd):/srv/jekyll jekyll/jekyll jekyll serve
+
 The layout is written in Bootstrap, documents refers directly to the Bootstrap CSS.
 Refer to [Bootstrap documentation](http://getbootstrap.com/css/) to
 add style effects to articles. Note that the entire documentation page content
