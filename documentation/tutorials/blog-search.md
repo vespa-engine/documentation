@@ -1,5 +1,5 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Blog Search Tutorial"
 ---
 
@@ -91,8 +91,7 @@ container:
 
 <pre data-test="exec">
 $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-    --privileged --volume `pwd`:/app \
-    --publish 8080:8080 --publish 19092:19092 vespaengine/vespa
+    --volume `pwd`:/app --publish 8080:8080 --publish 19092:19092 vespaengine/vespa
 </pre>
 
 Make sure that the configuration server is running - signified by a 200 OK response:
