@@ -72,6 +72,53 @@ which does not require any re-feeding, so testing the performance with and witho
 Adding or removing <em>fast-search</em> requires restart.
 </p>
 
+<h2 id="hybrid-taat-daat">Hybrid TAAT (term-at-a-time) and DAAT (document-at-a-time) query evaluation</h2>
+<p>
+Generally Vespa does <em>DAAT</em> (document-at-a-time) query evaluation and not <em>TAAT</em> (term-at-a time) so ranking and matching is not 
+fully two separate phases where one first find matches and later ranks them.
+Matching and first-phase score calculation is interleaved when using DAAT. 
+</p>
+
+<p>The first-phase ranking score is assigned to the hit when it satisfies the query constraints and 
+at that point the term iterators are positioned at the document id and one can unpack additional data from the term posting lists, 
+for example for term proximity scoring used by <a href="../nativerank.html">nativeRank</a> ranking feature which also requires unpacking of positions of the term within the document.
+
+Vespa can do a hybrid query evaluation combining TAAT and DAAT and using TAAT for sub-tree parts of the overall query tree which is not used for ranking, but used only for document filtering where 
+unpacking of posting lists is not needed. With <em>rank:filter</em> on a per field basis one can avoid unpacking on a per term/field basis while the TAAT evaluation works overall for the query sub tree. 
+
+Using TAAT can speed up query matching in some cases where the query tree is large and complex 
+and where only small parts of the query tree is used for ranking hits or ranking by a ranking expression only using <a href="../tensor-user-guide.html">attribute or tensor</a> features.
+
+For example for a query request where we take some user input from an end user by the userQuery() syntax 
+and combine it with business logic filters. In this example a language constraint and a market constraint:
+<pre>
+{
+  'hits': 10,
+  'ranking.profile': text-and-popularity",
+  'yql': 'select * from sources * where userQuery() and \
+   (language contains "en" or language contains "br") and \
+   (market contains "us" or market contains "eu" or market contains "apac" or market contains ".." ... ..... ..);'
+  'query': 'cat video'
+}
+</pre>
+
+With ranking profile <em>text-and-popularity</em> defined as 
+
+<pre>
+rank-profile text-and-popularity {
+  first-phase {
+    expression: attribute(popularity) + log10(bm25(title))
+  }
+}
+</pre>
+
+In this case the ranking profile only uses two signals, the popularity value and the <a href="../reference/bm25.html">bm25</a> score of the 
+title as calculated from the input userQuery() terms. The language and the market constraints in the query tree are not used in the 
+ranking score and that part of the query tree could be evaluated using <em>TAAT</em>.  The sub-tree result is then passed as a bit vector into the <em>DAAT</em>
+ query evaluation which could speed up the overall evaluation. Enabling hybrid <em>TAAT</em> is done by passing <em>ranking.matching.termwiselimit=0.01</em> as a request parameter 
+so one can evaluate if using the hybrid evaluation improves performance.
+</p>
+
 
 <h2 id="indexing-uuids">Indexing uuids</h2>
 
@@ -86,11 +133,11 @@ in five groups, separated by hyphens, in the form 8-4-4-4-12,
 for a total of 36 characters (32 alphanumeric characters and four hyphens).</p>
 
 <p>Example: Indexing <samp>123e4567-e89b-12d3-a456-426655440000</samp> with the above document definition,
-Vespa will tokenize this into 5 tokens: <samp>[123e4567,e89b,12d3,a456,426655440000]</samp> which will
-each of which will be matched independently, leading to incorrect matches.</p>
+Vespa will tokenize this into 5 tokens: <samp>[123e4567,e89b,12d3,a456,426655440000]</samp>, 
+each of which could be matched independently, leading to possible incorrect matches.</p>
 
 <p>To avoid this, change the mode to <a href="../reference/schema-reference.html#word">match: word</a> to
-treat the entire uuid as <i>one</i> token:
+treat the entire uuid as <i>one</i> token/word:
 <pre>
 field uuid type string {
     indexing: summary | index
