@@ -19,7 +19,8 @@ module Jekyll
                             :path => page.url,
                             :namespace => namespace,
                             :title => page.data["title"],
-                            :content => extract_text(page)
+                            :content => extract_text(page),
+                            :outlinks => extract_links(page)
                         }
                     })
                 end
@@ -40,6 +41,11 @@ module Jekyll
             doc.search('th,td').each{ |e| e.after "\n" }
             content = doc.xpath("//text()").to_s
             page_text = content.gsub("\r"," ").gsub("\n"," ")
+        end
+
+        def extract_links(page)
+            doc = Nokogiri::HTML(page.content)
+            links = doc.css('a').map { |link| link['href']}
         end
 
     end
