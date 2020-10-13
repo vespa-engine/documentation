@@ -3,7 +3,7 @@ title: FAQ - frequently asked questions
 style: faq
 ---
 
-Refer to [Vespa Support](support) for more support options.
+Refer to [Vespa Support](https://cloud.vespa.ai/support) for more support options.
 
 * TOC
 {:toc}
