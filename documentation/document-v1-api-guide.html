@@ -126,6 +126,65 @@ $ curl -X DELETE http://hostname:8080/document/v1/namespace/music/docid/1
 
 
 
+<h2 id="data-dump">Data dump</h2>
+<p>
+To iterate over documents, use <a href="content/visiting.html">visiting</a> - sample output:
+<pre>
+{
+    "pathId": "/document/v1/namespace/doc/docid",
+    "documents": [
+        {
+            "id": "id:namespace:doc::id-1",
+            "fields": {
+                "title": "Document title 1",
+                ...
+            }
+        },
+        ...
+    ],
+    "continuation": "AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA"
+}
+</pre>
+Note the <em>continuation</em> token - use this in the next request for more data.
+Sample script dumping all data using <a href="https://stedolan.github.io/jq/">jq</a> for JSON parsing:
+</p>
+<pre>
+#!/bin/bash
+
+set -x
+
+ENDPOINT="https://endpoint.vespa.oath.cloud"
+NAMESPACE=open
+DOCTYPE=doc
+CLUSTER=documentation
+CERT=data-plane-public-cert.pem
+KEY=data-plane-private-key.pem
+
+continuation=""
+idx=0
+
+while [ "$continuation" != "continuation=" ]
+do
+  ((idx+=1))
+  echo "$continuation"
+  printf -v out "%05g" $idx
+  filename=${NAMESPACE}-${DOCTYPE}-${out}.data.gz
+  echo "Fetching data..."
+  curl -s --cert ${CERT} --key ${KEY} \
+    "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=20&amp;concurrency=4&amp;cluster=${CLUSTER}&amp;${continuation}" \
+    | gzip > ${filename}
+  token=`jq -r .continuation &lt;(gunzip -c ${filename})`
+  if [ "${token}" != "null" ]
+  then
+    continuation="continuation=${token}"
+  else
+    continuation="continuation="
+  fi
+done
+</pre>
+
+
+
 <h2 id="using-fieldsets">Using fieldsets</h2>
 <p>
   <!-- ToDo: rewrite this.
