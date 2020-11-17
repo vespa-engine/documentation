@@ -1,5 +1,5 @@
 ---
-# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking With ONNX Models"
 ---
 
@@ -7,16 +7,15 @@ Vespa has support for advanced ranking models through it's tensor API. If you
 have your model in the [ONNX format](https://onnx.ai/), Vespa can import the
 models and use them directly.
 
-## Importing ONNX models
+## Importing ONNX model files
 
-To import the ONNX model to Vespa, add the directory containing the
-model to your application package under a specific directory named `models`.
-For instance, if you would like to call the model above as `my_model`, you
-would add it to the application package resulting in a directory structure
-something like this:
+Add the file containing the ONNX models somewhere under the application
+package. For instance, if your model file is `my_model.onnx` you could
+add it to the application package under a `files` directory something like
+this:
 
 ```
-├── models
+├── files
 │   └── my_model.onnx
 ├── schemas
 │   └── main.sd
@@ -30,62 +29,81 @@ see [deploying remote models](cloudconfig/application-packages.html#deploying-re
 
 ## Ranking with ONNX models
 
-Vespa has a special [ranking
-feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
-called `ONNX`. This ranking feature specifies the model and optionally the
-output to use in a ranking expression. The input to the computation must be
-provided by a function with the same name as the input variable. Consider the
-following example:
+To make the above model available for ranking, you define the model in the
+schema, and then you can refer to the model using the `onnx` (or `onnxModel`)
+ranking feature:
 
 ```
-schema onnx {
-    document onnx {
-        field document_tensor type tensor(d0[1],d1[784]) {
+schema my_schema {
+
+    document my_document {
+        field my_field type tensor(d0[1],d1[10]) {
             indexing: attribute | summary
         }
     }
-    rank-profile default inherits default {
-        function Placeholder() {
-            expression: attribute(document_tensor)
-        }
-        first-phase {
-            expression: sum(onnx("my_model.onnx", "add"))
-        }
+
+    onnx-model my_onnx_model {
+        file: files/my_model.onnx
+        input "model_input_0": attribute(my_field)
+        input "model_input_1": my_function
+        output "model_output_0": output_name
     }
+
+    rank-profile my_rank_profile {
+
+        function my_function() {
+            expression: tensor<float>(d0[1],d1[10])(d1)
+        }
+
+        first-phase {
+            expression: sum( onnx(my_onnx_model).output_name )
+        }
+
+    }
+
 }
+
 ```
 
-Here, we specify that the model `my_model.onnx` should be run, using the
-`add` output. The output is optional if the model only contains a single
-output.
+This defines the model called `my_onnx_model`. It is evaluated using the
+`onnx` [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html).
+This rank feature specifies which model to evaluate in the ranking expression
+and, optionally, which output to use from the model.
 
-ONNX models contain a computational graph. In the following, assume that
-the computational graph of the model `my_model.onnx` is as follows, as
-visualized by [Netron](https://github.com/lutzroeder/Netron):
+The `onnx-model` section defines three things:
 
-![ONNX model](img/onnx_model.png)
+1. The model's location under the applications package
+2. The inputs to use for evaluation and where they should come from
+3. The outputs to use for evaluation
 
-This is a very simple graph, illustrating a single layer (without the
-activation function) of a neural network. Here, we have a single input,
-`Placeholder` and a single output `add`. There are two constant tensors,
-the `B` inputs to the MatMul and Add nodes. For Vespa to calculate the
-value of the output, it requires the user to specify where to retrieve
-the input tensors.
+In the example above, the model should be found in `files/my_model.onnx`. This
+model has two inputs. For inputs, the first name specifies the input as
+named in the ONNX model file. The source is where the input should
+come from.  This can be either:
 
-Vespa expects a function to be specified for each input tensor, and the name of
-the function should be the same as as the input name. In this case, the name of
-the function should be `Placeholder`, which is illustrated in the example schema above.
-The input function can retrieve the tensor value from any valid
-source: a document field as shown here, a value sent along with the query, a
-constant value or a parent value. However, the tensor type from the function must
-match the tensor type expected in the model.  The input tensors must have
-dimension names starting with `"d0"` for the first dimension, and increasing
-for each dimension (i.e. `"d1"`, `"d2"`, etc). The result of the evaluation
-will likewise be a tensor with names `"d0"`, `"d1"`, etc.
+- A document field:  `attribute(field_name)`
+- A query parameter: `query(query_param)`
+- A constant: `constant(name)`
+- A user-defined function: `function_name`
 
-Note that if names have "/" in them, which is the case when for instance using
-name scopes in TensorFlow, these will be replaced with "\_" during import as
-slashes are illegal in Vespa ranking expression names.
+For outputs, the output name is the name used in Vespa to specify the output.
+If this is omitted, the first output in the ONNX file will be used.
+
+The output of a model is usually a tensor, however the rank score should result
+in a single scalar value. In the example above we use `sum` to sum all the elements
+of the tensor to a single value. You can also slice out parts of
+the result using Vespa's [tensor API](https://docs.vespa.ai/documentation/reference/ranking-expressions.html#tensor-functions).
+For instance, if the output of the example above is a tensor with the two dimensions `d0` and `d1`,
+and you want to extract the first value, this can be expressed by:
+
+```
+onnx(my_onnx_model).output_name{d0:0,d1:0}
+```
+
+The input tensors must have dimension names starting with `"d0"` for the first
+dimension, and increasing for each dimension (i.e. `"d1"`, `"d2"`, etc). The
+result of the evaluation will likewise be a tensor with names `"d0"`, `"d1"`,
+etc.
 
 The types of document tensors are specified in the schema as shown above.
 If you specify the types of query tensors in the
@@ -100,19 +118,18 @@ you can pass tensors in HTTP requests by using the HTTP parameter
 A tensor example can be found in the
 [sample application](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/album-recommendation).
 
+
 #### Batch dimensions
 
-When training your model you will typically have an input placeholder which
-contains a dimension for batches. In the example above, the Placeholder
-has size `[-1, 784]`, which signifies that the first dimension (of unknown
-size) is the batch dimension. This allows control over the batch size during
-training, and it is common to use a batch size much smaller than the entire
-training set (i.e. mini-batches) during training.
+When training your model you will typically have an input which contains a
+dimension for batches, for instance an input with sizes `[-1, 784]`.  Here, -1
+typically denotes the batch dimension. This allows control over the batch size
+during training, and it is common to use a batch size much smaller than the
+entire training set (i.e. mini-batches) during training.
 
 During run-time evaluation, Vespa typically does inference over a single
 exemplar. If this is the case in your network, take care to specifically
-set the batch dimension to size 1, as certain optimizations are done
-in Vespa to improve evaluation time. This is shown in the example above.
+set the batch dimension to size 1.
 
 
 ## Limitations on model size and complexity
@@ -127,83 +144,4 @@ document. Please be aware that this imposes some natural restrictions on the
 size and complexity of the models, particularly if the application has a large
 number of documents. However, effective use of the first and second phase can
 make running deep models feasible.
-
-## ONNX operation support
-
-The following is a list of operators currently supported with respective ONNX
-opsets. In general, use ONNX opset 8 or above.
-
-<table border="1" class="dataframe" style="text-align:center">
-  <col width="150">
-  <col width="150">
-  <tbody>
-    <tr>
-      <td><b>Operator</b></td>
-      <td><b>Supported opsets</b></td>
-    </tr>
-    <tr><td>abs</td>                <td>[6, 11]</td></tr>
-    <tr><td>acos</td>               <td>[7, 11]</td></tr>
-    <tr><td>add</td>                <td>[7, 11]</td></tr>
-    <tr><td>asin</td>               <td>[7, 11]</td></tr>
-    <tr><td>atan</td>               <td>[7, 11]</td></tr>
-    <tr><td>div</td>                <td>[7, 11]</td></tr>
-    <tr><td>cast</td>               <td>[1, 11]</td></tr>
-    <tr><td>ceil</td>               <td>[6, 11]</td></tr>
-    <tr><td>cos</td>                <td>[7, 11]</td></tr>
-    <tr><td>concat</td>             <td>[4, 11]</td></tr>
-    <tr><td>elu</td>                <td>[6, 11]</td></tr>
-    <tr><td>equal</td>              <td>[7, 11]</td></tr>
-    <tr><td>exp</td>                <td>[6, 11]</td></tr>
-    <tr><td>floor</td>              <td>[6, 11]</td></tr>
-    <tr><td>gather</td>             <td>[1, 11]</td></tr>
-    <tr><td>greater</td>            <td>[7, 11]</td></tr>
-    <tr><td>gemm</td>               <td>[7, 11]</td></tr>
-    <tr><td>identity</td>           <td>[1, 11]</td></tr>
-    <tr><td>leakyrelu</td>          <td>[6, 11]</td></tr>
-    <tr><td>less</td>               <td>[7, 11]</td></tr>
-    <tr><td>log</td>                <td>[6, 11]</td></tr>
-    <tr><td>max</td>                <td>[8, 11]</td></tr>
-    <tr><td>matmul</td>             <td>[1, 11]</td></tr>
-    <tr><td>mean</td>               <td>[8, 11]</td></tr>
-    <tr><td>min</td>                <td>[8, 11]</td></tr>
-    <tr><td>mul</td>                <td>[7, 11]</td></tr>
-    <tr><td>neg</td>                <td>[6, 11]</td></tr>
-    <tr><td>reciprocal</td>         <td>[6, 11]</td></tr>
-    <tr><td>reducel1</td>           <td>[1, 11]</td></tr>
-    <tr><td>reducel2</td>           <td>[1, 11]</td></tr>
-    <tr><td>reducelogsum</td>       <td>[1, 11]</td></tr>
-    <tr><td>reducelogsumexp</td>    <td>[1, 11]</td></tr>
-    <tr><td>reducemax</td>          <td>[1, 11]</td></tr>
-    <tr><td>reducemean</td>         <td>[1, 11]</td></tr>
-    <tr><td>reducemin</td>          <td>[1, 11]</td></tr>
-    <tr><td>reduceprod</td>         <td>[1, 11]</td></tr>
-    <tr><td>reducesum</td>          <td>[1, 11]</td></tr>
-    <tr><td>reducesumsquare</td>    <td>[1, 11]</td></tr>
-    <tr><td>relu</td>               <td>[6, 11]</td></tr>
-    <tr><td>reshape</td>            <td>[5, 11]</td></tr>
-    <tr><td>selu</td>               <td>[6, 11]</td></tr>
-    <tr><td>shape</td>              <td>[1, 11]</td></tr>
-    <tr><td>sigmoid</td>            <td>[6, 11]</td></tr>
-    <tr><td>sin</td>                <td>[7, 11]</td></tr>
-    <tr><td>slice</td>              <td>[1, 11]</td></tr>
-    <tr><td>softmax</td>            <td>[1, 11]</td></tr>
-    <tr><td>split</td>              <td>[2, 11]</td></tr>
-    <tr><td>sqrt</td>               <td>[6, 11]</td></tr>
-    <tr><td>squeeze</td>            <td>[1, 11]</td></tr>
-    <tr><td>sub</td>                <td>[7, 11]</td></tr>
-    <tr><td>tan</td>                <td>[7, 11]</td></tr>
-    <tr><td>tanh</td>               <td>[6, 11]</td></tr>
-    <tr><td>tile</td>               <td>[6, 11]</td></tr>
-    <tr><td>transpose</td>          <td>[1, 11]</td></tr>
-    <tr><td>unsqueeze</td>          <td>[1, 11]</td></tr>
-    <tr><td>where</td>              <td>[1, 11]</td></tr>
-  </tbody>
-</table>
-
-Currently, not [all operations in
-ONNX](https://github.com/onnx/onnx/blob/master/docs/Operators.md) are
-supported. Typical neural networks are supported, but convolutional and
-recurrent neural networks are not yet supported. Also, the [ML
-extensions](https://github.com/onnx/onnx/blob/master/docs/Operators-ml.md) for
-ONNX are currently not yet supported.
 
