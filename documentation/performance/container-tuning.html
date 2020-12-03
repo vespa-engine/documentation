@@ -16,20 +16,40 @@ generic config overrides</a>.
 
 <h2 id="container-worker-threads">Container worker threads</h2>
 <p>
-The worker threads for e.g. search queries is handled by a central Executor provider
-which is set up with the configuration named <em>threadpool</em>.
-The variable for controlling the max number is an integer variable named <em>maxthreads</em>,
-the default value is 500.
-Do note that e.g. federation will spawn off extra worker threads in addition to this number.
-The Executor provider will pre-start the worker threads,
-so even an idle container will report running several hundred threads.
-Note that tuning this upwards increases the risk of high GC pressure
-as concurrency becomes higher with more in-flight requests.
-The GC pressure is a function of number of in-flight requests,
-the time it takes to complete the request
-and the amount of garbage produced per request.
+    Most handlers use the jdisc default threadpool, which is controlled by a central Executor provider.
+    The Executor provider will pre-start the worker threads, so even an idle container will report running several hundred threads.
+    Some built-in handlers have separate threadpools, e.g search handler and http-client-api handler.
+    Do note that e.g. federation will spawn off extra worker threads separate from the search handler threadpool.
+    The default threadpool configuration can be overridden using the <em>config</em> element for <i>container.handler.threadpool</i> in services.xml
+    Handlers with dedicated threapools have separate syntax in services.xml (see example below).
+</p>
+<p>
+    Note that tuning the capacity upwards increases the risk of high GC pressure
+    as concurrency becomes higher with more in-flight requests.
+    The GC pressure is a function of number of in-flight requests,
+    the time it takes to complete the request
+    and the amount of garbage produced per request.
+<p>
 <pre>
 &lt;container id="container" version="1.0"&gt;
+  ...
+  &lt;search&gt;
+    &lt;threadpool&gt;
+      &lt;max-threads&gt;500&lt;/max-threads&gt;
+      &lt;min-threads&gt;500&lt;/min-threads&gt;
+      &lt;queue-size&gt;0&lt;/queue-size&gt;
+    &lt;/threadpool&gt;
+  &lt;/search&gt;
+  ...
+  &lt;document-api&gt;
+    &lt;http-client-api&gt;
+      &lt;threadpool&gt;
+        &lt;max-threads&gt;50&lt;/max-threads&gt;
+        &lt;min-threads&gt;10&lt;/min-threads&gt;
+        &lt;queue-size&gt;1000&lt;/queue-size&gt;
+      &lt;/threadpool&gt;
+    &lt;/http-client-api&gt;
+  &lt;/document-api&gt;
   ...
   &lt;config name="container.handler.threadpool"&gt;
     &lt;maxthreads&gt;200&lt;/maxthreads&gt;
