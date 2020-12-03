@@ -145,3 +145,17 @@ size and complexity of the models, particularly if the application has a large
 number of documents. However, effective use of the first and second phase can
 make running deep models feasible.
 
+## Examples
+
+The [Transformers](https://github.com/vespa-engine/sample-apps/tree/master/transformers)
+sample application uses an ONNX model to
+[re-rank documents](https://github.com/vespa-engine/sample-apps/blob/master/transformers/src/main/application/schemas/msmarco.sd).
+The model is [exported](https://github.com/vespa-engine/sample-apps/blob/master/transformers/src/python/setup-model.py)
+from [HuggingFace's Transformers](https://huggingface.co/transformers/index.html) library.
+
+The [Question-Answering](https://github.com/vespa-engine/sample-apps/tree/master/dense-passage-retrieval-with-ann)
+sample application uses two different ONNX models:
+
+- One for creating a dense vector representation of a query string for use in ANN retrieval
+- One for extracting an answer string from a relevant passage
+
