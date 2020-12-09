@@ -3,8 +3,6 @@
 title: "Using ZooKeeper"
 ---
 
-## Introduction
-
 The Vespa container supports [ZooKeeper](https://zookeeper.apache.org/), which
 allows distributed synchronization across nodes in a container cluster.
 
@@ -14,8 +12,10 @@ reconfiguring ZooKeeper members when nodes are added or removed from the
 container cluster.
 
 Note that Vespa enforces an optimal node limit for clusters with ZooKeeper.
-Application packages that violate this node count will be rejected. The
-recommended number of nodes is 3, 5 or 7.
+Application packages that violate this node count will be rejected.
+The valid number of nodes is 3, 5 or 7.
+See [#15762](https://github.com/vespa-engine/vespa/issues/15762) for other node counts.
+
 
 ## Configuration
 
@@ -32,6 +32,7 @@ configuration](reference/services-container.html#zookeeper).
      <scope>provided</scope>
    </dependency>
    ```
+
 
 ## Code example
 
