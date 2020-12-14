@@ -401,12 +401,15 @@ Prepares an application with the <a href="#session-id">session id</a> given.
             the application with this <a href="#session-id">session id</a>, if there were no errors.</li>
           <li>A list of actions (possibly empty) that must be performed in order to apply some config changes
             between the current active application and this next prepared application.
-            These actions are organized into two categories; <em>restart</em> and <em>refeed</em>:
+            These actions are organized into three categories; <em>restart</em>, <em>reindex</em>, and <em>refeed</em>:
             <ul>
               <li><em>Restart</em> actions are done after the application has been activated
                 and are handled by restarting all listed services.
                 See <a href="../reference/schema-reference.html#modifying-schemas">
                   schemas</a> for details.</li>
+              <li><em>Reindex</em> actions are special refeed actions that Vespa
+                <a href="/documentation/reindexing">handles automatically</a>, if the
+                <a href="#reindex">reindex</a> endpoint below is used.</li>
               <li><em>Refeed</em> actions require several steps to handle.
                 See <a href="../reference/schema-reference.html#modifying-schemas">schemas</a> for details.</li>
             </ul>
@@ -445,7 +448,7 @@ Example: <code>PUT /application/v2/tenant/mytenant/session/3/prepared</code>
                 "hostName": "myhost.mydomain.com"
             } ]
         } ],
-        "refeed": [ {
+        "reindex": [ {
             "documentType": "test",
             "clusterName": "mycluster",
             "messages": [ "Document type 'test': Field 'f1' changed: add index aspect" ],
@@ -604,6 +607,134 @@ Example: <code>GET /application/v2/tenant/mytenant/application/foo</code>
 }
 </pre>
 </p>
+
+
+
+<h2 id="reindexing">GET /application/v2/tenant/[<a href="#tenant">tenant name</a>]/application/[<a href="#application">application name</a>]/environment/prod/region/default/instance/default/reindexing</h2>
+<p>
+Returns reindexing status for the given application.
+<table class="table">
+  <thead>
+  </thead><tbody>
+    <tr><th>Parameters</th>
+      <td>
+        N/A
+      </td>
+    </tr>
+    <tr><th>Request body</th>
+      <td>
+        N/A
+      </td>
+    </tr>
+    <tr><th>Response</th>
+      <td>
+        JSON detailing current reindexing status for the application, with all its clusters and document types. 
+        <ul>
+          <li>Last time reindexing was triggered for the whole application.</li>
+          <li>Status for each content cluster in the application, by name:
+            <ul>
+              <li>Last time reindexing was triggered for this cluster specifically.</li>
+              <li>Status of each document type in the cluster, by name:
+                <ul>
+                  <li>Last time reindexing was triggered for this document type specifically.</li>
+                  <li>Current status of reindexing.</li>
+                  <li>Optional start time of reindexing.</li>
+                  <li>Optional end time of reindexing.</li>
+                  <li>Optional progress of reindexing, from 0 to 1.</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+Example: <code>POST /application/v2/tenant/mytenant/application/foo/environment/prod/region/default/instance/default/reindex?clusterId=foo,bar&amp;documentType=moo,baz</code>
+<pre>
+{
+  "status": {
+    "readyMillis": 1607325037059
+  },
+  "clusters": {
+    "db": {
+      "ready": {
+        "test_artifact": {
+          "readyMillis": 1607937250998,
+          "startedMillis": 1607940060012,
+          "state": "running",
+          "progress": 0.04013824462890625
+        },
+        "test_result": {
+          "readyMillis": 1607688477294,
+          "startedMillis": 1607690520026,
+          "endedMillis": 1607709294236,
+          "state": "successful"
+        },
+        "test_run": {
+          "readyMillis": 1607937250998,
+          "state": "pending"
+        }
+      },
+      "status": {
+        "readyMillis": 1607325037059
+      }
+    }
+  }
+}
+</pre>
+</p>
+
+
+
+<h2 id="reindex">POST /application/v2/tenant/[<a href="#tenant">tenant name</a>]/application/[<a href="#application">application name</a>]/environment/prod/region/default/instance/default/reindex</h2>
+<p>
+Triggers reindexing of specified document types in specified clusters of an application.
+Reindexing starts with the next redeployment of the application. 
+All document types in all clusters are reindexed unless restricted, using parameters as specified:
+<table class="table">
+  <thead>
+  </thead><tbody>
+    <tr><th>Parameters</th>
+      <td>
+      <table class="table">
+        <thead>
+          <tr><th>Name</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>clusterId</td>
+            <td>A comma-separated list of content clusters to limit reindexing to.
+              All clusters are reindexed if this is not present.</td>
+          </tr>
+          <tr>
+            <td>documentType</td>
+            <td>A comma-separated list of document types to limit reindexing to.
+              This also requires <em>clusterId</em> to be specified, to take effect.
+              All document types are reindexed if this is not present.</td>
+          </tr>
+        </tbody>
+      </table>
+      </td>
+    </tr>
+    <tr><th>Request body</th>
+      <td>
+        N/A
+      </td>
+    </tr>
+    <tr><th>Response</th>
+      <td>
+        A human-readable message indicating what reindexing was triggered.
+      </td>
+    </tr>
+  </tbody>
+</table>
+Example: <code>POST /application/v2/tenant/mytenant/application/foo/environment/prod/region/default/instance/default/reindex?clusterId=foo,bar&amp;documentType=moo,baz</code>
+<pre>
+{"message": "Reindexing document types moo, baz in clusters foo, bar of application mytenant.foo"}
+</pre>
+</p>
+
 
 
 <h2 id="get-application-content">GET /application/v2/tenant/[<a href="#tenant">tenant name</a>]/application/[<a href="#application">application name</a>]/environment/prod/region/default/instance/default/content/[<a href="#path">path</a>]</h2>
