@@ -288,7 +288,7 @@ For example, to specify the same tensor as in the "cells" example above:
 }
 </pre>
 
-<p>Short form for <b>tensors with a single sparse dimension</b>: May use an object to give cells or blocks where the sparse label is the
+<p>Short form for <b>tensors with a single mapped dimension</b>: May use an object to give cells or blocks where the label is the
 key to each value. E.g for "cells":</p>
 
 <pre>
@@ -913,6 +913,9 @@ Add cells to mapped or mixed tensors. Invalid for tensors with only indexed
 dimensions. Adding a cell that already exists will overwrite the cell value with the new value.
 The address must be fully specified, but cells with bound indexed dimensions not specified
 will receive the default value of <code>0.0</code>.
+See system test
+<a href="https://github.com/vespa-engine/system-test/tree/master/tests/search/tensor_feed/tensor_add_remove_update">tensor add update</a>
+for more examples.
 </p>
 
 <pre>
@@ -940,6 +943,25 @@ field tensorfield type tensor(x{},y[3]) {
 <p>
 In this example, cell <code>{"x":"b","y":"2"}</code> will implicitly be set will value 0.0.
 </p>
+
+<p>
+Prefer the <em>block short form</em> for mixed tensors instead. This also avoids the problem where cells with indexed dimensions are not specified:
+</p>
+
+<pre>
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "add": {
+                "blocks": [
+                    { "address": { "x": "b" }, "values": [2.0, 3.0, 5.0] }
+                ]
+            }
+        }
+    }
+}
+</pre>
 
 
 <h2 id="remove">remove</h2>
@@ -988,6 +1010,9 @@ Invalid for tensors with only indexed dimensions.
 Only mapped dimensions should be specified for tensors with both
 mapped and indexed dimensions, as all indexed cells the mapped
 dimensions point to will be removed implicitly.
+See system test
+<a href="https://github.com/vespa-engine/system-test/tree/master/tests/search/tensor_feed/tensor_add_remove_update">tensor remove update</a>
+for more examples.
 </p>
 
 <pre>
@@ -1016,6 +1041,34 @@ field tensorfield type tensor(x{},y[2]) {
 In this example, cells <code>{x:b,y:0},{x:b,y:1},{x:c,y:0},{x:c,y:1}</code>
 will be removed.
 </p>
+
+<p>
+It is also supported to specify only a subset of the mapped dimensions in the addresses.
+In that case, all cells that match the label values of the specified dimensions are removed.
+In the given example, all cells having label <code>b</code> for dimension <code>x</code> are removed.
+</p>
+
+<pre>
+field tensorfield type tensor(x{},y{},z[2]) {
+    indexing: attribute | summary
+}
+</pre>
+
+<pre>
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "remove": {
+                "addresses": [
+                    {"x": "b"}
+                ]
+            }
+        }
+    }
+}
+</pre>
+
 
 
 <h2 id="arithmetic">Arithmetic</h2>
@@ -1087,7 +1140,12 @@ The cells are modified according to the given operation:
     <li><code>multiply</code> - multiples a value with the cell</li>
 </ul>
 
-<p>Cells must be fully specified. If the cell does not exist, the update for that cell will be ignored.</p>
+<p>
+The addresses of cells must be fully specified. If the cell does not exist, the update for that cell will be ignored.
+See system test
+<a href="https://github.com/vespa-engine/system-test/tree/master/tests/search/tensor_feed/tensor_modify_update">tensor modify update</a>
+for more examples.
+</p>
 
 <pre>
 field tensorfield type tensor(x[3]) {
@@ -1112,7 +1170,13 @@ field tensorfield type tensor(x[3]) {
 }
 </pre>
 
-<p>For mixed tensors the <i>block short form</i> can also be used to modify entire dense subspaces:</p>
+<p>
+In this example, cell <code>{"x":"1"}</code> is replaced with value 7.0 and <code>{"x":"2"}</code> with value 8.0.
+If operation <code>add</code> or <code>multiply</code> was used instead,
+7.0 and 8.0 would be added or multiplied to the current values of cells <code>{"x":"1"}</code> and <code>{"x":"2"}</code>.
+</p>
+
+<p>For mixed tensors the <em>block short form</em> can also be used to modify entire dense subspaces:</p>
 
 <pre>
 field tensorfield type tensor(x{},y[3]) {
