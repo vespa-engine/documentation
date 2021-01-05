@@ -11,15 +11,21 @@ This documents tells you what you need to know to contribute.
 All work on Vespa happens directly on Github,
 using the [Github flow model](https://guides.github.com/introduction/flow/).
 We release the master branch a few times a week and you should expect it to almost always work.
-In addition to the [public Travis build](https://travis-ci.org/vespa-engine/vespa) 
+In addition to the [public Travis build](https://travis-ci.com/vespa-engine/vespa)
 we have a large acceptance and performance test suite which
-is also run continuously. We plan to add this to the open source code base later.
+is also run continuously.
 
+### Pull requets
 All pull requests are reviewed by a member of the Vespa Committers team.
 You can find a suitable reviewer in the OWNERS file upward in the source tree from
 where you are making the change (the OWNERS have a special responsibility for
 ensuring the long-term integrity of a portion of the code).
 If you want to become a committer/OWNER making some quality contributions is the way to start.
+
+We require all pull request checks to pass. If you have done changes involving the config model,
+OSGi bundles or dependency injection, we also require that the pull request is created with
+<strong>[run-systemtest]</strong> in the title. This will execute an extended test suite as
+part of the checks.
 
 ## Versioning
 Vespa uses semantic versioning - see
