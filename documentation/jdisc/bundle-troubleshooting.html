@@ -1,5 +1,5 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Bundle troubleshooting"
 ---
 
@@ -8,6 +8,7 @@ This document describes how to troubleshoot the most common errors  when working
 <ul>
   <li><a href="#could-not-create-component">Could not create component</a></li>
   <li><a href="#class-not-found">Class not found</a></li>
+  <li><a href="#slow-container-start">Slow Container start</a></li>
   <li><a href="#unresolved-constraint">Unresolved constraint</a></li>
   <li><a href="#multiple-implementations-of-the-same-class">Multiple implementations of the same class</a></li>
 </ul>
@@ -103,6 +104,43 @@ question is loaded by reflection,
 e.g. <code>Class.forName("com.acme.utils.Helper")</code>. This is quite common when working
 with libraries for pluggable frameworks, for which we have a separate <a
  href="pluggable-frameworks.html"> troubleshooting doc</a>.
+</p>
+
+
+
+<h2 id="slow-container-start">Slow Container start</h2>
+<p>
+  In the vespa log, a container startup looks like:
+</p>
+<pre>
+[2021-01-07 10:13:35.325] INFO    : container        Container.com.yahoo.container.core.config.ApplicationBundleLoader  Installed bundles: {[0]org.apache.felix.framework:6.0.3, [1]container-disc:7.335.22 ...
+...
+[2021-01-07 10:26:57.291] INFO    : container        Container.com.yahoo.container.jdisc.ConfiguredApplication  Switching to the latest deployed set of configurations and components. Application config generation: 1
+</pre>
+<p>
+  The container is ready at the last log line - note the long startup time.
+  To get more details on what the container is doing at startup, inspect the ComponentGraph debug log.
+  Find the container service name (here: "container"), set debug logging and restart the container:
+</p>
+<pre>
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-sentinel-cmd">vespa-sentinel-cmd</a> list
+vespa-sentinel-cmd 'sentinel.ls' OK.
+container state=RUNNING mode=AUTO pid=246585 exitstatus=0 id="default/container.0"
+
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-logctl">vespa-logctl</a> container:com.yahoo.container.di.componentgraph.core debug=on
+
+$ vespa-stop-services &amp;&amp; vespa-start-services
+
+# Find DEBUG log messages for component creation, like:
+
+[2021-01-07 10:13:37.006] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentGraph        Trying the fallback injector to create component of class com.yahoo.container.jdisc.messagebus.SessionCache to inject
+ into component 'chain.mychain in MbusServer' of type 'com.yahoo.container.jdisc.messagebus.MbusServerProvider'.
+
+[2021-01-07 10:14:14.082] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode Constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+[2021-01-07 10:26:54.669] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode Finished constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+</pre>
+<p>
+  In this particular example, query profile compilation takes a long time.
 </p>
 
 
