@@ -19,6 +19,8 @@ and inspected at the
 <a href="/documentation/cloudconfig/deploy-rest-api-v2.html#reindexing">reindexing endpoint</a>.
 </p>
 
+
+
 <h2 id="when-to-reindex">When to reindex</h2> 
 <p>
 When deployment results in a change in the indexing pipeline of an application, this is
@@ -35,7 +37,9 @@ the config generation that introduced the change. Reindexing then commences with
 deployment of the application. 
 </p>
 
-<h3 id="reindexing-progress">Reindexing progress</h3> 
+
+
+<h2 id="reindexing-progress">Reindexing progress</h2>
 <p>
 Reindexing is done by a component in each content cluster that
 <a href="/documentation/content/visiting.html">visits</a> 
@@ -61,3 +65,92 @@ triggered again. State <em>pending</em> indicates reindexing will start, or resu
 the cluster is ready, while <em>running</em> means it's currently progressing. Finally,
 <em>successful</em> means all documents of that type were successfully reindexed.
 </p>
+
+
+
+<h2 id="use-cases">Use cases</h2>
+<p>
+  Below are sample changes to the schema for different use cases,
+  or examples of operational steps for data manipulation.
+</p>
+<table class="table">
+  <tr id="clear-field">
+    <th >clear field</th>
+    <td>
+      <p>
+        To clear a field's data:
+<pre>
+# before
+field artist type string {
+    indexing:      summary | index
+}
+
+# after
+field artist type string {
+    indexing: "" | summary | index
+}
+</pre>
+      </p>
+    </td>
+  </tr>
+  <tr id="change-indexing-settings">
+    <th>change indexing settings</th>
+    <td>
+      <p>
+        Add a field <em>outside</em> of the document definition
+        and pipe content of the current field to it:
+<pre>
+search mydocs {
+
+    field title_non_stemmed type string {
+        indexing: input title | index | summary
+        stemming: none
+    }
+
+    document mydocs {
+        field title type string {
+            indexing: index | summary
+        }
+</pre>
+        Once reindexing is completed, switch queries to use the new field.
+      </p>
+    </td>
+  </tr>
+  <tr id="change-field-type">
+    <th>change field type</th>
+    <td>
+      <p>
+        Like changing indexing settings.
+        Create a new field and populate from current field:
+      <pre>
+search mydocs {
+
+    field songs type array&lt;string&gt; {
+        indexing: input song | to_array | index | summary
+    }
+
+    document mydocs {
+        field song type string {
+            indexing: index | summary
+        }
+</pre>
+      </p>
+    </td>
+  </tr>
+  <!-- ToDo: Once we can route through a custom docproc,
+             more examples here for really cool transformations-->
+</table>
+
+<p>
+  Relevant pointers:
+</p>
+<ul>
+  <li><a href="reference/advanced-indexing-language.html">Advanced indexing language</a></li>
+  <li><a href="schemas.html">Schemas</a></li>
+</ul>
+
+<!-- ToDo: There are some cases where reindexing inside the same cluster is not the best option.
+           Outline here which those are and how to implement.
+           * The changes are too radical, set up a new app instead based on data from here
+           * Large changes, but pipe to a new cluster in same app
+           * How to "reindex" and send data elsewhere (say AWS Kinesis) as part of the processing -->
