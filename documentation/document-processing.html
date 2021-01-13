@@ -41,19 +41,47 @@ Refer to<a href="https://github.com/vespa-engine/sample-apps/tree/master/vespa-c
 album-recommendation-docproc</a> to get started,
 <a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-docproc/src/main/java/ai/vespa/example/album/LyricsDocumentProcessor.java">
     LyricsDocumentProcessor.java</a> is a document processor example.
-Add the document processor in <a href="reference/services-docproc.html">services.xml</a>,
-using <em>"default"</em> to include it in the default indexing chain -
-find more details in <a href="indexing.html#document-processing">indexing</a>:
+Add the document processor in <a href="reference/services-docproc.html">services.xml</a>, and then
+add it to a <a href="#chains">chain</a>. The type of processing done by the processor dictates what
+chain it should be part of: 
+<ul>
+  <li>If it performs general data-processing, such as populating some document fields from others,
+    looking up data in external services, etc., it should be added to a general docproc chain.</li>
+  <li>If, and only if, it performs processing required for <em>indexing</em>, or requires this to
+    have already been run — e.g., for processing the <a href="/documentation/annotations">annotations</a>
+    created by the default indexing document processor — it should be added to a chain which
+    inherits the <em>indexing</em> chain, and which is used for indexing by a content cluster.</li>
+</ul>
+An example that adds a general document processor to the "default" chain, and an indexing related
+processor to the chain for a particular content cluster:
 <pre>
   &lt;container version="1.0" id="default"&gt;
-<span style="background-color: yellow;">    &lt;document-processing&gt;
-      &lt;chain id="default" inherits="indexing"&gt;
+    &lt;document-processing&gt;
+      <span style="background-color: yellow;">&lt;chain id="default"&gt;</span>
         &lt;documentprocessor id="ai.vespa.example.album.LyricsDocumentProcessor" bundle="albums-docproc"/&gt;
       &lt;/chain&gt;
-    &lt;/document-processing&gt;</span>
+      <span style="background-color: green;">&lt;chain id="my-indexing" inherits="indexing"&gt;</span>
+        &lt;documentprocessor id="ai.vespa.example.album.PostIndexingDocumentProcessor" bundle="albums-docproc"/&gt;
+      &lt;/chain&gt;
+    &lt;/document-processing&gt;
   &lt;/container&gt;
+
+  &lt;content version="1.0" id="content"&gt;
+    &lt;documents&gt;
+    ...
+      <span style="background-color: green;">&lt;document-processing cluster="default" chain="my-indexing"&gt;</span>
+    &lt;/documents&gt;
+  &lt;/content&gt;
 &lt;/services&gt;
 </pre>
+The "default" chain, if it exists, is run by default, before the chain used for indexing. The default indexing
+chain is called "indexing", and <em>must</em> be inherited by any chain that is to replace it.
+</p><p>
+To run through any chain, specify a <a href="/documentation/routing">route</a> which includes the chain.
+For example, the route <code>default/chain.my-chain indexing</code> would route feed operations
+through the chain "my-chain" in the "default" container cluster, and then to the "indexing" hop,
+which resolves to the specified indexing chain for each content cluster the document should be sent to. 
+More details can be found in <a href="indexing.html#document-processing">indexing</a>:
 </p>
 
 
