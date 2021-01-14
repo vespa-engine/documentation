@@ -1,43 +1,41 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Elastic Vespa"
 ---
 
-<p>Vespa allows application instances to grow (and shrink) while serving queries and accepting writes.
-To maintain a uniform data distribution, documents are automatically redistributed in the background,
-using minimal data movement.
-Change the configured <a href="/documentation/reference/services-content.html#nodes">nodes</a>
-and redeploy the application - no restarts needed.</p>
-
-<p>The elasticity mechanism is also used to recover from a node loss -
-new replicas of documents are auto-created to maintain redundancy.
-Failed nodes is hence not a problem that requires immediate attention -
-as long as the instance has sufficient capacity to handle the data and load,
-it self-heals from node failures.</p>
-
-<p>This article covers:
-<ul>
-  <li><a href="#storage-and-retrieval">storage and retrieval</a></li>
-  <li><a href="#search">search</a></li>
-  <li><a href="#resizing">resizing the instance</a></li>
-</ul>
+<p>
+  Vespa allows application instances to grow (and shrink) while serving queries and accepting writes.
+  To maintain a uniform data distribution, documents are automatically redistributed in the background,
+  using minimal data movement.
+  Change the configured <a href="/documentation/reference/services-content.html#nodes">nodes</a>
+  and redeploy the application - no restarts needed.
 </p>
+<img src="https://vespa.ai/assets/elastic-grow.svg" style="max-width: 300px;">
+<p>
+  The elasticity mechanism is also used to recover from a node loss -
+  new replicas of documents are auto-created to maintain redundancy.
+  Failed nodes is hence not a problem that requires immediate attention -
+  as long as the instance has sufficient capacity to handle the data and load,
+  it self-heals from node failures.
+</p>
+<img src="https://vespa.ai/assets/elastic-fail.svg" style="max-width: 300px;">
+
+<!-- ToDo: a little intro to bucket/no shards here -->
 
 
 
+<!-- ToDo: rewrite -->
 <h2 id="storage-and-retrieval">Storage and retrieval</h2>
-
-<p>The document distribution system in Vespa consists of two main components:
-<a href="content/content-nodes.html#distributor">distributors</a> and content nodes.
+<p>
+  The document distribution system in Vespa consists of two main components:
+<a href="content/content-nodes.html#distributor">distributors</a> and <a href="proton.html">proton</a>.
 Documents are accessed through a distributor.
 To handle a large number of documents, Vespa groups them in <a href="content/buckets.html">buckets</a>,
 using hashing or hints in the <a href="documents.html">document id</a>.
 </p><p>
-The content nodes provide a <em>Service Provider Interface</em> (SPI)
+  Proton provides a <em>Service Provider Interface</em> (SPI)
 that abstracts how documents are stored in the elastic system.
 The SPI is the link between the elastic bucket management system and the storage.
-The SPI is implemented by <a href="proton.html">proton</a> -
-<em>proton</em> and <em>content node</em> is used interchangeably in this documentation.
 </p><p>
 A document Put or Update is sent to all replicas of the bucket keeping the document.
 If bucket replicas are out of sync, a bucket merge operation is run to re-sync the bucket.
@@ -93,92 +91,7 @@ the distributors can verify that all the replicas are consistent and fix any det
 </p>
 
 
-
-<h2 id="writing-documents">Writing documents</h2>
-<p>
-Applications use the <a href="vespa-http-client.html">vespa-http-client</a>
-or <a href="reference/document-v1-api-reference.html">/document/v1/</a> API to write to Vespa.
-Alternatively, use <a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a> to feed files
-or the Java <a href="api.html">Document API</a> directly - see illustration below and
-<a href="writing-to-vespa.html">writing to Vespa</a>.
-</p><p>
-Next is <a href="indexing.html">indexing</a>
-and/or <a href="document-processing.html">document processing</a>
-where documents are prepared for indexing (and optionally processed using custom code),
-before sent to a <em>distributor</em>.
-The distributor maps the document to bucket, and sends it to <em>content nodes</em>:
-</p>
-<img src="content/img/elastic-feed-container.svg" height="410" width="340"/>
-<img src="content/img/elastic-feed-vespafeeder.svg" height="410" width="340"/>
-<p></p>
-<table class="table">
-  <thead></thead><tbody>
-    <tr id="document-processing">
-      <th style="white-space: nowrap">Document processing</th>
-      <td>
-        The <a href="document-processing.html">document processing chain</a>
-        is a chain of processors that manipulate documents before they are stored.
-        Document processors can be user defined.
-        When using indexed search, the final step in the chain prepares documents for indexing.
-        The Document API forwards requests to distributors.
-        It calculates the correct distributor using
-        the distribution algorithm and the <a href="content/content-nodes.html#cluster-state">cluster state</a>.
-        With no known cluster state, the client library will send requests to a random node,
-        which replies with the updated cluster state if the node was incorrect.
-        Cluster states are versioned, such that clients hitting outdated distributors do not override
-        updated states with old states.
-      </td>
-    </tr><tr id="distributor">
-      <th>Distributor</th>
-      <td>
-        <p>
-        The <a href="content/content-nodes.html#distributor">distributor</a> keeps track of
-        which content nodes that stores replicas of each bucket (maximum one replica each),
-        based on the <a href="reference/services-content.html#redundancy">Redundancy</a>
-        and information from the <em>cluster controller</em>.
-        A bucket maps to one distributor only.
-        A distributor keeps a bucket database with bucket metadata.
-        The metadata holds which content nodes store replicas of the buckets,
-        the checksum of the bucket content and the number of documents and meta entries within the bucket.
-        Each document is algorithmically mapped to a bucket and forwarded to the correct content nodes.
-        The distributors detect whether there are enough bucket replicas on the
-        content nodes and add/remove as needed.
-        Write operations wait for replies from every replica
-        and fail if less than redundancy are persisted within timeout.
-        </p>
-      </td>
-    </tr><tr id="cluster-controller">
-      <th>Cluster controller</th>
-      <td>
-        The <a href="content/content-nodes.html#cluster-controller">cluster controller</a>
-        manages the state of the distributor and content nodes.
-        This <em>cluster state</em> is used by the document processing chains
-        to know which distributor to send documents to,
-        as well as by the distributor to know which content nodes should have which bucket.
-      </td>
-    </tr><tr id="content-node">
-      <th>Content node</th>
-      <td>
-        The <a href="content/content-nodes.html">content node</a> has a <em>bucket management system</em>,
-        which sends requests to a set of <em>document databases</em>,
-        which each consists of three <em>sub-databases</em>.
-        In short, this node activates and deactivates buckets for search.
-        Refer to <a href="proton.html">proton</a> for details.
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-
-<h3 id="detailed-process-overview">Detailed process overview</h3>
-<img src="img/reference/flow/feed1.png"/>
-<p>
-Content node expanded:
-</p>
-<img src="img/reference/flow/feed2.png" />
-
-
-
+<!-- ToDo: remove from here -->
 <h2 id="retrieving-documents">Retrieving documents</h2>
 <p>
 Retrieving documents is done by specifying an id to <em>get</em>,
@@ -211,10 +124,10 @@ Overview:
 </table>
 
 
-
-<h2 id="search">Search</h2>
+<!-- ToDo: remove from here -->
+<h2 id="queries">Queries</h2>
 <p>
-Indexed search has a separate pathway through the system.
+  Queries has a separate pathway through the system.
 It does not use the distributor, nor has it anything to do with the SPI.
 It is orthogonal to the elasticity set up by the storage and retrieval described above.
 How queries move through the system:
@@ -388,12 +301,14 @@ This is supported using <a href="content/visiting.html#data-export-import">visit
 
 <h2 id="grouped-distribution">Grouped distribution</h2>
 <p>
-Documents can be uniformly distributed or in groups:
+  Documents can be uniformly distributed or in groups:
 </p>
-<img src="img/qps-scaling-content-cluster.svg" height="420" width="740" />
+<img src="img/flat_content_cluster.svg" style="max-width: 500px;"/>
+<img src="img/grouped_content_cluster.svg" style="max-width: 500px;"/>
 <p>
-The <a href="reference/services-content.html#group">group</a> element is used to distribute
-<a href="content/buckets.html">buckets</a> of documents - use cases:
+  The <a href="reference/services-content.html#group">group</a> element is used to distribute
+  <a href="content/buckets.html">buckets</a> of documents - use cases:
+</p>
 <table class="table">
 <thead></thead><tbody>
 <tr>
@@ -430,6 +345,7 @@ The <a href="reference/services-content.html#group">group</a> element is used to
 </tr>
 </tbody>
 </table>
+<p>
 By default, Vespa distributes <a href="content/buckets.html">buckets</a>
 uniformly across all distributor and storage nodes.
 Use grouped distribution to control where bucket copies are stored in relation to each other.
@@ -484,7 +400,7 @@ See <a href="performance/sizing-search.html">sizing search</a> for grouped distr
 <tr id="data-retention-vs-size"><th>Data retention vs size</th>
     <td><p>
     When a document is removed, the document data is not immediately purged.
-    Instead, proton keeps <em>remove-entries</em> (tombstones of removed documents)
+    Instead, <em>remove-entries</em> (tombstones of removed documents) are kept
     for a configurable amount of time. The default is two weeks, refer to
     <a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
     pruneremoveddocumentsage</a>.

@@ -1,12 +1,12 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Writing to Vespa"
 ---
 
 <p>
 <a href="documents.html">Documents</a> are stored in <em>content</em> clusters.
 Updates (PUT, UPDATE, DELETE) and reads (GET) pass through a <em>container</em> cluster -
-Refer to <a href="elastic-vespa.html#writing-documents">elastic Vespa</a> for a more detailed flow:
+Find a more detailed flow at the end of this article.
 </p>
 <img src="img/overview/vespa-overview.svg" style="padding:10px">
 <p>
@@ -290,21 +290,21 @@ and the writes a silently dropped.
 <h2 id="batch-delete">Batch delete</h2>
 <p>
 Options for batch deleting documents:
-<ul>
-    <li><strong>Find documents using search, delete, repeat</strong>. Pseudocode:
+<ol>
+    <li>Find documents using search, delete, repeat. Pseudocode:
 <pre>
 while True; do
    query and read document ids, if empty exit
    delete document ids using <a href="reference/document-v1-api-reference.html#delete">/document/v1</a>
    wait a sec # optional, add wait to reduce load while deleting
 </pre>
-    </li><li><strong>Like 1. but use the <a href="vespa-http-client.html">Java client</a></strong>.
+    </li><li>Like 1. but use the <a href="vespa-http-client.html">Java client</a>.
     Instead of deleting one-by-one, stream remove operations to the API (write a Java program for this),
     or append to a JSON file and use the binary:
 <pre>
 $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --host document-api-host &lt; deletes.json
 </pre>
-    </li><li><strong>Use a <a href="documents.html#document-expiry">document selection</a></strong> to expire documents.
+    </li><li>Use a <a href="documents.html#document-expiry">document selection</a> to expire documents.
         This deletes all documents <em>not</em> matching the expression.
         It is possible to use parent documents and imported fields for expiry of a document set.
         The content node will iterate over the corpus and delete documents (that are later compacted out):
@@ -314,5 +314,90 @@ $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --h
 &lt;/documents&gt;
 </pre>
     </li>
-</ul>
+</ol>
 </p>
+
+
+
+
+
+<h2 id="components">Components</h2>
+<p>
+  Applications use the <a href="vespa-http-client.html">vespa-http-client</a>
+  or <a href="reference/document-v1-api-reference.html">/document/v1/</a> API to write to Vespa.
+  Alternatively, use <a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a> to feed files
+  or the Java <a href="api.html">Document API</a> directly.
+  Next is <a href="indexing.html">indexing</a>
+  and/or <a href="document-processing.html">document processing</a>
+  where documents are prepared for indexing (and optionally processed using custom code),
+  before sent to a <em>distributor</em>.
+  The distributor maps the document to bucket, and sends it to <em>proton</em> nodes:
+</p>
+<img src="content/img/elastic-feed-container.svg" height="410" width="340"/>
+<img src="content/img/elastic-feed-vespafeeder.svg" height="410" width="340"/>
+<p></p>
+<table class="table">
+  <thead></thead><tbody>
+<tr id="document-processing">
+  <th style="white-space: nowrap">Document processing</th>
+  <td>
+    The <a href="document-processing.html">document processing chain</a>
+    is a chain of processors that manipulate documents before they are stored.
+    Document processors can be user defined.
+    When using indexed search, the final step in the chain prepares documents for indexing.
+    The Document API forwards requests to distributors.
+    It calculates the correct content node using
+    the distribution algorithm and the <a href="content/content-nodes.html#cluster-state">cluster state</a>.
+    With no known cluster state, the client library will send requests to a random node,
+    which replies with the updated cluster state if the node was incorrect.
+    Cluster states are versioned, such that clients hitting outdated distributors do not override
+    updated states with old states.
+  </td>
+</tr><tr id="distributor">
+  <th>Distributor</th>
+  <td>
+    <p>
+      The <a href="content/content-nodes.html#distributor">distributor</a> keeps track of
+      which content nodes that stores replicas of each bucket (maximum one replica each),
+      based on <a href="reference/services-content.html#redundancy">redundancy</a>
+      and information from the <em>cluster controller</em>.
+      A bucket maps to one distributor only.
+      A distributor keeps a bucket database with bucket metadata.
+      The metadata holds which content nodes store replicas of the buckets,
+      the checksum of the bucket content and the number of documents and meta entries within the bucket.
+      Each document is algorithmically mapped to a bucket and forwarded to the correct content nodes.
+      The distributors detect whether there are enough bucket replicas on the
+      content nodes and add/remove as needed.
+      Write operations wait for replies from every replica
+      and fail if less than redundancy are persisted within timeout.
+    </p>
+  </td>
+</tr><tr id="cluster-controller">
+  <th>Cluster controller</th>
+  <td>
+    The <a href="content/content-nodes.html#cluster-controller">cluster controller</a>
+    manages the state of the distributor and content nodes.
+    This <em>cluster state</em> is used by the document processing chains
+    to know which distributor to send documents to,
+    as well as by the distributor to know which content nodes should have which bucket.
+  </td>
+</tr><tr id="content-node">
+  <th>Proton</th>
+  <td>
+    <a href="proton.html">Proton</a> node has a <em>bucket management system</em>,
+    which sends requests to a set of <em>document databases</em>,
+    which each consists of three <em>sub-databases</em>.
+    In short, this node activates and deactivates buckets for search.
+  </td>
+</tr>
+</tbody>
+</table>
+
+<!-- ToDo: I _think_ we can just remove this section, with the images, will take another pass
+<h3 id="detailed-process-overview">Detailed process overview</h3>
+<img src="img/reference/flow/feed1.png"/>
+<p>
+  Content node expanded:
+</p>
+<img src="img/reference/flow/feed2.png" />
+-->
