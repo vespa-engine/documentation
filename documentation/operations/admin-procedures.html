@@ -1,5 +1,5 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Administrative Procedures"
 ---
 
@@ -254,6 +254,70 @@ Notes:
     for how to add or remove searchers and document processors.
   </li>
 </ul>
+
+
+<h3 id="add-or-remove-content-node">Add or remove content node</h3>
+<p>
+  An alternative to increasing cluster size is building a new cluster, then migrate documents to it.
+  This is supported using <a href="../content/visiting.html#data-export-import">visiting</a>.
+</p>
+<ol>
+  <li>
+    <strong>Node setup:</strong> Prepare nodes by installing software,
+    set up the file systems / directories and set configuration server(s).
+    <a href="../vespa-quick-start.html">Details</a>. Start the node.
+  </li><li>
+  <strong>Modify configuration:</strong>
+  Add/remove a <a href="../reference/services-content.html#node">node</a>-element in <em>services.xml</em>
+  and <a href="../reference/hosts.html">hosts.xml</a>.
+  Refer to <a href="/documentation/vespa-quick-start-multinode-aws.html">multinode install</a>.
+  It is key that the node's <em>distribution-key</em> is higher than the highest existing index.
+</li><li>
+  <strong>Deploy</strong>: <a href="#monitor-distance-to-ideal-state">
+  Observe metrics</a> to track progress as the cluster redistributes documents.
+  Use the <a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
+  to monitor the state of the cluster.
+</li><li>
+  <strong>Tune performance:</strong> Use
+  <a href="https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def">
+    maxpendingidealstateoperations</a> to tune concurrency of bucket merge operations from distributor nodes.
+  Likewise, tune <a href="../reference/services-content.html#merges">merges</a> -
+  concurrent merge operations per content node. The tradeoff is speed of bucket replication vs
+  use of resources, which impacts the applications' regular load.
+</li><li>
+  <strong>Finish:</strong> The cluster is done redistributing when <em>idealstate.merge_bucket.pending</em>
+  is zero on all distributors.
+</li>
+</ol>
+<p>
+  Do not remove more than <em>redundancy</em>-1 nodes at a time.
+  Observe <em>idealstate.merge_bucket.pending</em> to know bucket replica status,
+  when zero on all distributor nodes, it is safe to remove more nodes.
+  If <a href="../elastic-vespa.html#grouped-distribution">grouped distribution</a>
+  is used to control bucket replicas, remove all nodes in a group
+  if the redundancy settings ensure replicas in each group.
+</p><p>
+  To increase bucket redundancy level before taking nodes out,
+  <a href="../content/content-nodes.html">retire</a> nodes.
+  Again, track <em>idealstate.merge_bucket.pending</em> to know when done.
+  Use the <a href="../content/api-state-rest-api.html">State API</a> or
+  <a href="../reference/vespa-cmdline-tools.html#vespa-set-node-state">vespa-set-node-state</a>
+  to set a node to <em>retired</em>.
+  The <a href="../content/content-nodes.html#cluster-controller">cluster controller's</a>
+  status page lists node states.
+</p>
+
+
+<h3 id="merge-content-clusters">Merge content clusters</h3>
+<p>
+  To merge two content clusters, add nodes to the cluster like <em>add node</em> above, considering:
+<ul><li>
+  <a href="../reference/services-content.html#node">distribution-keys</a> must be unique.
+  Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
+</li><li>
+  Set <a href="../setting-vespa-variables.html">VESPA_CONFIGSERVERS</a>, then start the node.
+</li></ul>
+</p>
 
 
 <h3 id="add-or-remove-services-on-a-node">Add or remove services on a node</h3>

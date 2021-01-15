@@ -172,15 +172,16 @@ The QR-server issues one query per document type to the search nodes:
 
 <h2 id="resizing">Resizing</h2>
 <p>
-Resizing is orchestrated by the distributor, and happens gradually in the background.
-It uses a variation of the <em>RUSH algorithms</em> to distribute documents.
-Under normal circumstances, it makes a minimal number of documents move when nodes are added or removed.
+  Resizing is orchestrated by the distributor, and happens gradually in the background.
+  It uses a variation of the <em>RUSH algorithms</em> to distribute documents.
+  Under normal circumstances, it makes a minimal number of documents move when nodes are added or removed.
 </p><p>
-Modify the configuration to add/remove nodes,
-then <a href="cloudconfig/application-packages.html#deploy">deploy</a>.
-Add an elastic content cluster to the application by adding a
-<a href="reference/services-content.html">content</a> element
-in <a href="reference/services.html">services.xml</a>.
+  Modify the configuration to add/remove nodes,
+  then <a href="cloudconfig/application-packages.html#deploy">deploy</a>.
+  Add an elastic content cluster to the application by adding a
+  <a href="reference/services-content.html">content</a> element
+  in <a href="reference/services.html">services.xml</a>.
+  Read more in <a href="operations/admin-procedures.html">procedures</a>.
 </p>
 
 
@@ -215,36 +216,8 @@ This ensures minimal data movement when nodes come or go, and allows capacity to
 No buckets are moved between the existing nodes when a new node is added.
 Based on the pseudo-random sequences, some buckets change from primary to secondary, or are removed.
 Many nodes can be added in the same deployment. Adding more than one minimizes the total
-bucket redistribution, but increases the time to get to the <em>ideal state</em>. Procedure:
+bucket redistribution, but increases the time to get to the <em>ideal state</em>.
 </p>
-<ol>
-  <li>
-    <strong>Node setup:</strong> Prepare nodes by installing software,
-    set up the file systems / directories and set configuration server(s).
-    <a href="vespa-quick-start.html">Details</a>. Start the node.
-  </li><li>
-    <strong>Modify configuration:</strong>
-    Add a <a href="reference/services-content.html#node">node</a>-element in <em>services.xml</em>
-    and <a href="reference/hosts.html">hosts.xml</a>.
-    Refer to <a href="/documentation/vespa-quick-start-multinode-aws.html">multinode install</a>.
-    It is key that the node's <em>distribution-key</em> is higher than the highest existing index.
-  </li><li>
-    <strong>Deploy</strong>: <a href="operations/admin-procedures.html#monitor-distance-to-ideal-state">
-    Observe metrics</a> to track progress as the cluster redistributes documents.
-    Use the <a href="#cluster-controller">cluster controller</a> to monitor the state of the cluster.
-  </li><li>
-    <strong>Tune performance:</strong> Use
-    <a href="https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def">
-    maxpendingidealstateoperations</a> to tune concurrency of bucket merge operations from distributor nodes.
-    Likewise, tune <a href="reference/services-content.html#merges">merges</a> -
-    concurrent merge operations per content node. The tradeoff is speed of bucket replication vs
-    use of resources, which impacts the applications' regular load.
-    <strong>ToDo:</strong> add something on bucket-oriented summary store as well.
-  </li><li>
-    <strong>Finish:</strong> The cluster is done redistributing when <em>idealstate.merge_bucket.pending</em>
-    is zero on all distributors.
-  </li>
-</ol>
 
 
 <h3 id="removing-nodes">Removing nodes</h3>
@@ -261,40 +234,6 @@ All buckets that no longer have secondary replicas
 are merged to the remaining nodes according to their pseudo-random sequence.
 It is important that the nodes retain their original index;
 otherwise the buckets would all have to move to regain their ideal states.
-</p><p>
-Do not remove more than <em>redundancy</em>-1 nodes at a time.
-Observe <em>idealstate.merge_bucket.pending</em> to know bucket replica status,
-when zero on all distributor nodes, it is safe to remove more nodes.
-If <a href="#grouped-distribution">grouped distribution</a>
-is used to control bucket replicas, remove all nodes in a group
-if the redundancy settings ensure replicas in each group.
-</p><p>
-To increase bucket redundancy level before taking nodes out,
-<a href="content/content-nodes.html">retire</a> nodes.
-Again, track <em>idealstate.merge_bucket.pending</em> to know when done.
-Use the <a href="content/api-state-rest-api.html">State API</a> or
-<em>vespa-set-node-state</em><!-- ToDo: this tool should be documented somewhere -->
-to set a node to <em>retired</em>.
-The <a href="#cluster-controller">cluster controller's</a> status page lists node states.
-</p>
-
-
-<h3 id="merge-clusters">Merge clusters</h3>
-<p>
-To merge two content clusters, add nodes to the cluster like <em>add node</em> above, considering:
-<ul><li>
-  <a href="reference/services-content.html#node">distribution-keys</a> must be unique.
-  Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
-</li><li>
-  Set <a href="setting-vespa-variables.html">VESPA_CONFIGSERVERS</a>, then start the node.
-</li></ul>
-</p>
-
-
-<h3 id="migrate-clusters">Migrate clusters</h3>
-<p>
-An alternative to increasing cluster size is building a new cluster, then migrate documents to it.
-This is supported using <a href="content/visiting.html#data-export-import">visiting</a>.
 </p>
 
 
