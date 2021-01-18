@@ -1,36 +1,21 @@
 ---
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Document Attributes"
+title: "Attributes"
 ---
 
 <p>
-<em>Attributes</em> are in-memory structures for fields:
-</p><p>
-<img src="img/attributes.svg" height="420" width="558"/>
-</p><p>
-Attributes can be:
-<table class="table">
-<tr>
-  <th>Single-valued, fixed size</th>
-  <td>Like the "A" attribute, example a 32 bit integer attribute.
-      The element size is the size of the type, like 8 bit for a byte.
-      A memory buffer holding all values in an array.</td>
-</tr><tr>
-  <th style="white-space: nowrap">Multi-valued, fixed/variable size</th>
-  <td>Like the "B" attribute, example array of integer.
-      A memory buffer holding references (32 bit) to a memory structure
-      with objects for each size class.</td>
-</tr><tr>
-  <th>Single-valued, variable size</th>
-  <td>Like the "C" attribute, example string.
-      One large memory buffer holding references (32 bit) to a memory structure
-      with objects per unique value.</td>
-</tr>
-</table>
-The "A", "B" and "C" attribute memory buffers have attribute values in Local ID (LID) order -
-see <a href="performance/attribute-memory-usage.html#document-meta-store">document meta store</a> for details.
-</p><p>
- Use attribute when the field is used in:
+  <em>Attribute</em> is a keyword in <a href="reference/schema-reference.html#attribute">
+  schemas</a>, specifying the indexing for a field.
+  <em>Attributes</em> are in-memory structures:
+</p>
+<pre>
+field price type int {
+    indexing: attribute
+}
+</pre>
+<p>
+  Use attribute when the field is used in:
+</p>
 <ul>
   <li><a href="grouping.html">grouping</a></li>
   <li><a href="reference/sorting.html">sorting</a></li>
@@ -41,47 +26,475 @@ see <a href="performance/attribute-memory-usage.html#document-meta-store">docume
   <li><a href="document-summaries.html">document summaries</a></li>
   <li><a href="parent-child.html">document reference</a></li>
 </ul>
-Or, the other way around, use <a href="proton.html#index">index</a> for fields used for text search,
-with <a href="linguistics.html#stemming">stemming</a> and
-<a href="linguistics.html#normalization">normalization</a>.
-</p><p>
-<em>attribute</em> is a keyword in <a href="reference/schema-reference.html#attribute">
-schemas</a>, specifying the indexing for a document field -
-see the <a href="reference/advanced-indexing-language.html">indexing language</a>.
-</p><p>
-Attributes speed up query execution and document updates, trading off memory.
-As data structures are regularly optimized, consider both static and temporary resource usage -
-refer to the <a href="performance/attribute-memory-usage.html">attribute sizing guide</a>.
-</p><p>
-Use attributes in document summaries to limit accesses to storage to generate result sets.
-</p>
-
-
-
-<h2 id="fast-search">fast-search</h2>
 <p>
-Using attribute for a field means query matching works on memory structures only.
-An attribute is a linear array-like data structure -
-matching documents means scanning <em>all</em> attribute values.
-Setting <a href="reference/schema-reference.html#attribute">fast-search</a>
-generates a B-tree index structure for quicker lookup,
-using more memory, and more CPU when updating.
-See <a href="performance/feature-tuning.html#when-to-use-fast-search">when to use fast-search</a>.
+  Or, the other way around, use <a href="proton.html#index">index</a> for fields used for text search,
+  with <a href="linguistics.html#stemming">stemming</a> and
+  <a href="linguistics.html#normalization">normalization</a>.
+</p><p>
+  Attributes speed up query execution and document updates, trading off memory.
+  As data structures are regularly optimized, consider both static and temporary resource usage -
+  see <a href="#attribute-memory-usage.html">attribute memory usage</a> below.
+  Use attributes in document summaries to limit accesses to storage to generate result sets.
 </p>
 
 
 
-<h2 id="fast-access">fast-access</h2>
 <p>
-<a href="reference/schema-reference.html#attribute">fast-access</a> locks all replicas of the attribute in memory.
-See <a href="performance/sizing-feeding.html">sizing feeding</a> for details.
+  Configuration:
 </p>
+<table class="table">
+  <tr id="fast-search">
+    <th style="white-space:nowrap;">fast-search</th>
+    <td>
+        Use to speed up search -
+        see <a href="performance/feature-tuning.html#when-to-use-fast-search">when to use fast-search</a>.
+        An attribute is a linear array-like data structure -
+        matching documents hence means scanning <em>all</em> attribute values.
+        Setting <a href="reference/schema-reference.html#attribute">fast-search</a>
+        generates a B-tree index structure for quicker lookup,
+        using more memory, and more CPU when updating.
+        It increases steady state memory usage for all attribute types
+        and also add initialization overhead for numeric types.
+<pre>
+schema foo {
+    document bar {
+        field titles type array&lt;string&gt; {
+            indexing:  summary | attribute
+            attribute: fast-search
+        }
+    }
+}
+</pre>
+    </td>
+  </tr>
+  <tr id="fast-access">
+    <th style="white-space:nowrap;">fast-access</th>
+    <td>
+      For high-throughput updates, all nodes with a replica should have the attribute loaded in memory.
+      Depending on replication factor and other configuration, this is not always the case.
+      Use <a href="reference/schema-reference.html#attribute">fast-access</a>
+      to increase feed rates by having replicas on all nodes in memory.
+      Also see <a href="performance/sizing-feeding.html">sizing feeding</a>.
+      <pre>
+schema foo {
+    document bar {
+        field titles type array&lt;string&gt; {
+            indexing:  summary | attribute
+            attribute: fast-access
+        }
+    }
+}
+</pre>
+    </td>
+  </tr>
+</table>
 
 
 
-<h2 id="sizing-attribute-memory">Sizing attribute memory</h2>
+<h2 id="data-structures">Data structures</h2>
 <p>
-Attribute data can consume a lot of memory, especially when using <em>fast-access</em>,
-where <em>not ready</em> copies are brought into memory.
-Please see <a href="performance/attribute-memory-usage.html">attribute memory usage sizing</a>.
+  <img src="img/attributes.svg" width="400"/>
+</p><p>
+  Attributes can be:
 </p>
+<table class="table">
+  <tr>
+    <th>Type</th>
+    <th>Size</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td style="white-space:nowrap;">Single-valued</td>
+    <td>Fixed</td>
+    <td>
+      Like the "A" attribute, example a 32 bit integer attribute.
+      The element size is the size of the type, like 8 bit for a byte.
+      A memory buffer holding all values in an array.
+    </td>
+  </tr><tr>
+    <td>Multi-valued</td>
+    <td>Fixed</td>
+   <td>
+      Like the "B" attribute, example <code>array&lt;int&gt;</code> - a memory buffer holding values.
+    </td>
+  </tr><tr>
+    <td>Multi-valued</td>
+    <td>Variable</td>
+  <td>
+      Like the "B" attribute, example <code>array&lt;string&gt;</code>.
+      A memory buffer holding references (32 bit) to a memory structure with objects for each size class -
+      e.g. for an array&lt;string&gt; the string values are put in the <em>attribute enum store</em>
+      and referred to from the <em>attribute multivalue mapping</em>.
+    </td>
+  </tr><tr>
+    <td>Single-valued</td>
+    <td>Variable</td>
+    <td>
+      Like the "C" attribute, example string.
+      One large memory buffer holding references (32 bit) to a memory structure
+      with objects per unique value.
+    </td>
+  </tr>
+</table>
+<p>
+  The "A", "B" and "C" attribute memory buffers have attribute values in Local ID (LID) order -
+  see <a href="#document-meta-store">document meta store</a>.
+</p>
+<p>
+  When updating an attribute, the full value is written.
+  This also applies to multivalue fields - example adding an item to an array:
+</p>
+<ol>
+  <li>A new memory buffer is allocated</li>
+  <li>The current value is copied</li>
+  <li>The new element is written</li>
+</ol>
+<p>
+  This means that larger fields will copy more data at updates.
+  It also implies that updates to <a href="reference/schema-reference.html#type:weightedset">weighted sets</a>
+  are faster when using numeric keys (less memory and easier comparisons).
+</p>
+
+
+
+<h2 id="attribute-memory-usage.html">Attribute memory usage</h2>
+<p>
+  As attributes are stored in memory,
+  it is important to have enough memory to avoid swapping and general unresponsiveness.
+  Attribute structures are regularly optimized and this causes temporary resource usage -
+  read more in <a href="proton.html#proton-maintenance-jobs">Proton maintenance jobs</a>
+<p><p>
+  The memory footprint of an attribute depends on a few factors,
+  data type being the most important:
+</p>
+<ul>
+  <li>Numeric (int, long, byte, and double) and Boolean (bit) types  -
+    fixed length and fix cost per document</li>
+  <li>String type - the footprint depends on the length of the
+    strings and how many unique strings that needs to be
+    stored.</li>
+</ul>
+<p>
+  Collection types like array and weighted sets increases the memory
+  usage some, but the main factor is the average number of values per document.
+  String attributes are typically the largest attributes,
+  and requires most memory during initialization - use boolean/numeric types where possible.
+</p>
+<h3 id="example">Example</h3>
+<pre>
+schema foo {
+    document bar {
+        field titles type array&lt;string&gt; {
+            indexing: summary | attribute
+        }
+    }
+}
+</pre>
+<p>
+  Refer to formulas below.
+  Assume average 10 values per document, average string length 15, 100k unique strings and 20M documents.
+  Steady state memory usage is approx 1GB (20M*4*(6/5) + 20M*10*4*(6/5) + 100k*(15+1+4+4)*(6/5)).
+  During initialization (loading attribute from disk) an additional 2.4GB is allocated (20M*10*(4+4+4), for each
+  value we track the local document id, enum value and weight).
+  Increasing the average number of values per document to 20 (double) will also double the memory
+  footprint during initialization (4.8GB).
+  When doing the capacity planning, keep in mind the maximum footprint, which occurs during initialization.
+  For the steady state footprint, the number of unique values is very important for string attributes.
+</p><p>
+  Check the <a href="files/Attribute-memory-Vespa.xls">Example attribute sizing spreadsheet</a>,
+  with various data types and collection types.
+  It also contains estimates for how many documents a 48GB RAM node can hold, taking initialization into account.
+</p>
+<p>
+  <a href="schemas.html#multivalue-fields">Multivalue</a> attributes use an
+  adaptive approach in how data is stored in memory,
+  and up to 2 billion documents per node is supported.
+</p>
+
+
+
+<h2 id="sizing">Sizing</h2>
+<p>
+  Attribute sizing is not an exact science, rather an
+  approximation. The reason is that they vary in size. Both number of
+  documents, number of values and uniqueness of the values are
+  varying. The components of the attributes that occupy memory are
+  listed below - concepts:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Abbreviation</th>
+    <th>Concept</th>
+    <th>Comment</th>
+  </tr>
+  </thead>
+
+  <tbody>
+  <tr>
+    <td>D</td>
+    <td>Number of documents</td>
+    <td>Number of documents on the node, or rather the maximum number of local document ids allocated</td>
+  </tr>
+  <tr>
+    <td>V</td>
+    <td>Average number of values per document</td>
+    <td>Only applicable for arrays and weighted sets</td>
+  </tr>
+  <tr>
+    <td>U</td>
+    <td>Number of unique values</td>
+    <td>Only applies for strings or if
+      <a href="reference/schema-reference.html#attribute">fast-search</a> is set</td>
+  </tr>
+  <tr>
+    <td>FW</td>
+    <td>Fixed data width</td>
+    <td>sizeof(T) for numerics, 1 byte for strings, 1 bit for boolean</td>
+  </tr>
+  <tr>
+    <td>WW</td>
+    <td>Weight width</td>
+    <td>Width of the weight in a weighted set, 4 bytes. 0 bytes for arrays.</td>
+  </tr>
+  <tr>
+    <td>EIW</td>
+    <td>Enum index width</td>
+    <td>Width of the index into the enum store, 4 bytes. Used by all strings and other attributes if
+      <a href="reference/schema-reference.html#attribute">fast-search</a> is set</td>
+  </tr>
+  <tr>
+    <td>VW</td>
+    <td>Variable data width</td>
+    <td>strlen(s) for strings, 0 bytes for the rest</td>
+  </tr>
+  <tr>
+    <td>PW</td>
+    <td>Posting entry width</td>
+    <td>Width of a posting list entry, 4 bytes for singlevalue, 8 bytes for array and weighted sets.
+      Only applies if <a href="reference/schema-reference.html#attribute">fast-search</a> is set</td>.
+  </tr>
+  <tr>
+    <td>PIW</td>
+    <td>Posting index width</td>
+    <td>Width of the index into the store of posting lists; 4 bytes</td>
+  </tr>
+  <tr>
+    <td>MIW</td>
+    <td>Multivalue index width</td>
+    <td>Width of the index into the multivalue mapping; 4 bytes</td>
+  </tr>
+  <tr>
+    <td>ROF</td>
+    <td>Resize overhead factor</td>
+    <td>Default is 6/5. This is the average overhead in any dynamic vector due to
+      resizing strategy. Resize strategy is 50% indicating that
+      structure is 5/6 full on average.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+<h3 id="components">Components</h3>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Component</th>
+    <th>Formula</th>
+    <th>Approx Factor</th>
+    <th>Applies to</th>
+  </tr>
+  </thead>
+
+  <tbody>
+  <tr>
+    <td>Document vector</td>
+    <td>D * ((FW or EIW) or MIW)</td>
+    <td>ROF</td>
+    <td>FW for singlevalue numeric attributes and MIW for
+      multivalue attributes. EIW for singlevalue string or if the
+      attribute is singlevalue fast-search</td>
+  </tr>
+  <tr>
+    <td>Multivalue mapping</td>
+    <td>D * V * ((FW or EIW) + WW)</td>
+    <td>ROF</td>
+    <td>Applicable only for array or weighted sets. EIW if string or fast-search</td>
+  </tr>
+  <tr>
+    <td>Enum store</td>
+    <td>U * ((FW + VW) + 4 + ((EIW + PIW) or EIW))</td>
+    <td>ROF</td>
+    <td>Applicable for strings or if fast-search is set.
+      (EIW + PIW) if fast-search is set, EIW otherwise.</td>
+  </tr>
+  <tr>
+    <td>Posting list</td>
+    <td>D * V * PW</td>
+    <td>ROF</td>
+    <td>Applicable if fast-search is set</td>
+  </tr>
+  </tbody>
+</table>
+
+
+<h3 id="variants">Variants</h3>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Type</th>
+    <th>Components</th>
+    <th>Formula</th>
+  </tr>
+  </thead>
+
+  <tbody>
+  <tr>
+    <td>Numeric singlevalue plain</td>
+    <td>Document vector</td>
+    <td>D * FW * ROF</td>
+  </tr>
+  <tr>
+    <td>Numeric multivalue value plain</td>
+    <td>Document vector, Multivalue mapping</td>
+    <td>D * MIW * ROF + D * V * (FW+WW) * ROF </td>
+  </tr>
+  <tr>
+    <td>Numeric singlevalue fast-search</td>
+    <td>Document vector, Enum store, Posting List</td>
+    <td>D * EIW * ROF + U * (FW+4+EIW+PIW) * ROF + D * PW * ROF</td>
+  </tr>
+  <tr>
+    <td>Numeric multivalue value fast-search</td>
+    <td>Document vector, Multivalue mapping, Enum store, Posting List</td>
+    <td>D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
+  </tr>
+  <tr>
+    <td>Singlevalue string plain</td>
+    <td>Document vector, Enum store</td>
+    <td>D * EIW * ROF + U * (FW+VW+4+EIW) * ROF</td>
+  </tr>
+  <tr>
+    <td>Singlevalue string fast-search</td>
+    <td>Document vector, Enum store, Posting List</td>
+    <td>D * EIW * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * PW * ROF</td>
+  </tr>
+  <tr>
+    <td>Multivalue string plain</td>
+    <td>Document vector, Multivalue mapping, Enum store</td>
+    <td>D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+VW+4+EIW) * ROF</td>
+  </tr>
+  <tr>
+    <td>Multivalue string fast-search</td>
+    <td>Document vector, Multivalue mapping, Enum store, Posting list</td>
+    <td>D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * V * PW * ROF</td>
+  </tr>
+  <tr>
+    <td>Boolean singlevalue</td>
+    <td>Document vector</td>
+    <td>D * FW * ROF</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="multivalue-mapping-enum-store">Multivalue Mapping and Enum Store</h2>
+<!-- ToDo: Consider a sentence explaining what these components are used for:
+           multivalue mapping storing arrays of values for array and weighed set types,
+           and enum store storing all unique strings for all string attributes. -->
+<p>
+  The attribute Multivalue Mapping and Enum Store has upper limits, limiting the number of values in an attribute.
+<table class="table">
+  <thead>
+  <tr><th>resource</th><th>default</th><th>metric</th><th>description</th></tr>
+  </thead><tbody>
+<tr><td>attribute enum store</td>
+  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+    writefilter.attribute.enumstorelimit</a>
+  </td><td>content.proton.documentdb.attribute.resource_usage.enum_store</td>
+  <td>For string attribute fields or attribute fields with
+    <a href="#fast-search">fast-search</a>,
+    there is a max limit on the number of unique values that can be stored for that attribute.
+    The limit is approx 2 billion.
+    The component storing these values is called enum store</td></tr>
+<tr><td>attribute multivalue</td>
+  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+    writefilter.attribute.multivaluelimit</a>
+  </td><td>content.proton.documentdb.attribute.resource_usage.multi_value</td>
+  <td>For array or weighted set attribute fields,
+    there is a max limit on the number of documents that can have the same number of values.
+    The limit is 2 billion documents per node</td></tr>
+</tbody>
+</table>
+An error is emitted when exceeding the limit - sample:
+<pre>
+Detail resultType=FATAL_ERRORexception=
+'ReturnCode(NO_SPACE, Put operation rejected for document 'id:mynamespace:mydoc::123456' of type 'mydoc':
+'enumStoreLimitReached: {
+  action: "add more content nodes",
+  reason: "enum store address space used (0.92813) &gt; limit (0.9)",
+  enumStore: { used: 31890298144, dead: 0, limit: 34359738368},
+  attributeName: "text", subdb: "ready"}')'
+endpoint=vespa1:8080 ssl=false resultTimeLocally=1532685239428
+</pre>
+A similar message is emitted for too many values for a multivalue attribute.
+</p><p>
+  To fix a problem with too many values,
+  add content nodes to distribute documents with attributes over more nodes.
+</p><p>
+  Use metrics <em>content.proton.documentdb.attribute.resource_usage.enum_store.average</em> and
+  <em>content.proton.documentdb.attribute.resource_usage.multi_value.average</em>
+  to track usage.
+</p>
+
+
+
+<h2 id="document-meta-store">Document meta store (implicit attribute)</h2>
+<p>
+  The document meta store is an in-memory data structure used for bookkeeping about every
+  document stored on a node.
+</p><p>
+  The document meta store is an implicit attribute, and is
+  <a href="proton.html#lid-space-compaction">compacted</a> and
+  <a href="proton.html#attribute-flush">flushed</a>.
+  Memory usage for applications with small documents can be dominated by this attribute,
+  particularly for <em>store-only</em> and <em>streaming search</em> applications.
+</p><p>
+  The document meta store scales linearly with number of documents -
+  using approximately 30 bytes per document.
+  The metric <em>content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes</em> for
+  <em>"field": "[documentmetastore]"</em> is the size of the document meta store in memory - use the
+  <a href="reference/metrics.html#process-metrics-api">metric API</a> to find the size - example:
+<pre>
+{
+  "name": "content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes",
+  "description": "The number of allocated bytes",
+  "values": {
+    "average": 4.69736008E8,
+    "count": 12,
+    "rate": 0.2,
+    "min": 469736008,
+    "max": 469736008,
+    <span style="background-color: yellow;">"last": 469736008</span>
+  },
+  "dimensions": {
+    "documenttype": "doctype",
+    <span style="background-color: yellow;">"field": "[documentmetastore]"</span>
+  }
+},
+</pre>
+In the above example, the node has 9M ready documents with 52 bytes in memory per document.
+</p><p>
+  Note: the above is for the <em>ready</em> (i.e. indexed) documents -
+  also check <em>removed</em> and <em>notready</em> metrics.
+  For more information on what these different document categories mean for a search node, please
+  see the <a href="proton.html#sub-databases">document sub database</a> documentation.
+</p>
+
+
+
+<h2 id="further-reading">Further reading</h2>
+<ul>
+  <li><a href="reference/advanced-indexing-language.html">indexing language</a></li>
+</ul>
