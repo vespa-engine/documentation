@@ -1,5 +1,5 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Vespa Consistency Model"
 ---
 
@@ -110,16 +110,10 @@ become visible on the other replicas.
 The reconciliation operation is referred to as a "merge" in the rest of the Vespa
 documentation.
 
-<div class="alert alert-warning">
-<p>
 Tombstone entries have a configurable time-to-live before they are compacted away.
 Nodes that have been partitioned away from the network for a longer period of time
 than this TTL should ideally have their indexes removed before being allowed back into
 the cluster. Otherwise there is a risk of resurrecting previously removed documents.
 Vespa does not currently detect or handle this scenario automatically.
-</p>
-<p>
-See the documentation on <a href="../elastic-vespa.html#data-retention-vs-size">data-retention-vs-size</a>.
-</p>
-</div>
 
+See the documentation on [data-retention-vs-size](../operations/admin-procedures.html#data-retention-vs-size).

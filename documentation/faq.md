@@ -200,3 +200,10 @@ The high level procedure is found in <a href="operations/live-upgrade.html">live
 <a href="https://cloud.vespa.ai/reference/zones">Vespa Cloud</a> has integrated support - query a global endpoint.
 Writes will have to go to each zone.
 There is no auto-sync between zones.
+
+#### Can Vespa serve an Offline index?
+Building indexes offline requires the partition layout to be known in the offline system,
+which is in conflict with elasticity and auto-recovery
+(where nodes can come and go without service impact).
+It is also at odds with realtime writes.
+For these reasons, it is not recommended, and not supported.

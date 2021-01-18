@@ -5,8 +5,7 @@ title: "Elastic Vespa"
 
 <p>
   Vespa allows application instances to grow (and shrink) while serving queries and accepting writes.
-  To maintain a uniform data distribution, documents are automatically redistributed in the background,
-  using minimal data movement.
+  To maintain a uniform data distribution, documents are automatically redistributed with minimal data movement.
   Change the configured <a href="/documentation/reference/services-content.html#nodes">nodes</a>
   and redeploy the application - no restarts needed.
 </p>
@@ -19,85 +18,16 @@ title: "Elastic Vespa"
   it self-heals from node failures.
 </p>
 <img src="https://vespa.ai/assets/elastic-fail.svg" style="max-width: 300px;">
-
-<!-- ToDo: a little intro to bucket/no shards here -->
-
-
-
-<!-- ToDo: rewrite -->
-<h2 id="storage-and-retrieval">Storage and retrieval</h2>
 <p>
-  The document distribution system in Vespa consists of two main components:
-<a href="content/content-nodes.html#distributor">distributors</a> and <a href="proton.html">proton</a>.
-Documents are accessed through a distributor.
-To handle a large number of documents, Vespa groups them in <a href="content/buckets.html">buckets</a>,
-using hashing or hints in the <a href="documents.html">document id</a>.
-</p><p>
-  Proton provides a <em>Service Provider Interface</em> (SPI)
-that abstracts how documents are stored in the elastic system.
-The SPI is the link between the elastic bucket management system and the storage.
-</p><p>
-A document Put or Update is sent to all replicas of the bucket keeping the document.
-If bucket replicas are out of sync, a bucket merge operation is run to re-sync the bucket.
-A bucket contains <a href="#data-retention-vs-size">tombstones</a> of recently removed documents.
-Read more about document expiry and batch removes in
-<a href="documents.html#document-expiry">document expiry</a>.
-</p><p>
-Buckets are split when they grow too large, and joined when they shrink.
-<em>This is a key feature for high performance in very small to very large instances,
-and eliminates need for downtime or manual operations when scaling.</em>
-</p>
-
-
-<h3 id="offline-index">Offline index?</h3>
-<p>
-Building the index offline used to be attractive when CPU was the bottleneck for indexing.
-Bandwith is since more often the bottleneck,
-it is hence more important to limit data transfer to nodes.
-Memory bandwith is also an important factor, blowing cpu caches is a big deal -
-switching an entire index while serving has severe performance impact.
-</p><p>
-Serving systems want to smooth changes as much as possible
-and offline index build / deployment is the opposite extreme.
-Building indexes offline requires the partition layout to be known in the offline system,
-which is in conflict with elasticity and auto-recovery
-(where nodes can come and go without service impact).
-It conflicts with per colos/data center optimization.
-And - it is completely at odds with realtime writes.
-For these reasons, it is not recommended, and not supported.
-</p><p>
-To control the indexing/serving resource tradeoff,
-CPU fraction for indexing per Vespa node is <a href="reference/services-content.html#feeding">configurable</a>.
-</p>
-
-
-<h3 id="consistency">Consistency</h3>
-<p>
-Consistency is maintained at bucket level.
-Content nodes calculate checksums based on the bucket contents,
-and the distributors compare checksums among the bucket replicas.
-A <em>bucket merge</em> is issued to resolve inconsistency, when detected.
-While there are inconsistent bucket replicas, the distributors route operations to the "best" replica.
-</p><p>
-As buckets are split and joined, it is possible for replicas of a bucket to be split at different levels.
-A node may have been down while its buckets have been split or joined.
-This is called <em>inconsistent bucket splitting</em>.
-Bucket checksums can not be compared across buckets with different split levels.
-Consequently, distributors do not know whether all documents exist in enough replicas in this state.
-Due to this, inconsistent splitting is one of the highest maintenance priorities.
-After all buckets are split or joined back to the same level,
-the distributors can verify that all the replicas are consistent and fix any detected issues with a merge.
-<a href="content/consistency.html">Read more</a>.
+  The auto-elasticity is configured for a normal fail-safe operation,
+  but there are tradeoffs like recovery speed and resource usage.
+  Learn more in <a href="operations/admin-procedures.html#content-cluster-tradeoffs">procedures</a>.
 </p>
 
 
 
-<h2 id="resizing">Resizing</h2>
+<h2 id="adding-nodes">Adding nodes</h2>
 <p>
-  Resizing is orchestrated by the distributor, and happens gradually in the background.
-  It uses a variation of the <em>RUSH algorithms</em> to distribute documents.
-  Under normal circumstances, it makes a minimal number of documents move when nodes are added or removed.
-</p><p>
   Modify the configuration to add/remove nodes,
   then <a href="cloudconfig/application-packages.html#deploy">deploy</a>.
   Add an elastic content cluster to the application by adding a
@@ -105,223 +35,151 @@ the distributors can verify that all the replicas are consistent and fix any det
   in <a href="reference/services.html">services.xml</a>.
   Read more in <a href="operations/admin-procedures.html">procedures</a>.
 </p>
-
-
-<h3 id="bucket-distribution-algorithm">Bucket distribution algorithm</h3>
 <p>
-Central to the <a href="content/idealstate.html">ideal state distribution algorithm</a>
-is the assignment of a node sequence to each bucket.
-The illustration shows how each bucket uses a pseudo-random sequence
-of numbers to derive the node sequence.
-The pseudo-random generator is seeded with the bucket id, so each bucket will always get the same sequence:
-</p><img src="content/img/BucketNodeSequence.png"/><p>
-Each node is assigned a <em>distribution-key</em>, which is an index in the number sequence.
-The set of number/index pairs is sorted on descending numbers, and this new sequence of indexes determines
-which nodes the replicas are placed on, with the first node being host to the primary replica, i.e. the <em>active</em> replica.
-This specification of where to place a bucket is called the bucket's <em>ideal state</em>.
-</p>
-
-
-<h3 id="adding-nodes">Adding nodes</h3>
-<p>
-When adding a new node, new ideal states are calculated for all buckets.
-The buckets that should have a replica on the new node are moved, while the superfluous are removed.
-Redistribution example - add a new node to the system, with redundancy 2:
+  When adding a new node, new ideal states are calculated for all buckets.
+  The buckets that should have a replica on the new node are moved, while the superfluous are removed.
+  Redistribution example - add a new node to the system, with redundancy 2:
 </p><img src="content/img/AddNodeMoveBuckets.png"/><p>
-The distribution algorithm generates a random node sequence for each bucket.
-In this example with redundancy of two, the two nodes sorted first will store replicas of the data.
-The figure shows how random placement onto two nodes changes as a third node is introduced.
-The new node introduced takes over as primary for the buckets where it got sorted first in order,
-and as secondary for the buckets where it got sorted second.
-This ensures minimal data movement when nodes come or go, and allows capacity to be changed easily.
+  The distribution algorithm generates a random node sequence for each bucket.
+  In this example with redundancy of two, the two nodes sorted first will store replicas of the data.
+  The figure shows how random placement onto two nodes changes as a third node is introduced.
+  The new node introduced takes over as primary for the buckets where it got sorted first in order,
+  and as secondary for the buckets where it got sorted second.
+  This ensures minimal data movement when nodes come or go, and allows capacity to be changed easily.
 </p><p>
-No buckets are moved between the existing nodes when a new node is added.
-Based on the pseudo-random sequences, some buckets change from primary to secondary, or are removed.
-Many nodes can be added in the same deployment. Adding more than one minimizes the total
-bucket redistribution, but increases the time to get to the <em>ideal state</em>.
+  No buckets are moved between the existing nodes when a new node is added.
+  Based on the pseudo-random sequences, some buckets change from primary to secondary, or are removed.
+  Many nodes can be added in the same deployment. Adding more than one minimizes the total
+  bucket redistribution, but increases the time to get to the <em>ideal state</em>.
 </p>
 
 
-<h3 id="removing-nodes">Removing nodes</h3>
+
+<h2 id="removing-nodes">Removing nodes</h2>
 <p>
-Whether a node fails or is deliberately removed, the same redistribution happens.
-If the remove is planned, the node remains up until it has been drained.
-Example of redistribution after node failure, redundancy 2:
+  Whether a node fails or is deliberately removed, the same redistribution happens.
+  If the remove is planned, the node remains up until it has been drained.
+  Example of redistribution after node failure, redundancy 2:
 </p><img src="content/img/LoseNodeMoveBuckets.png"/><p>
-In the figure, node 2 fails. This node held the active replicas of bucket 2 and 6.
-Once the node fails the secondary replicas are set active.
-If they were already in a <em>ready</em> state, they can start serving queries immediately.
-Otherwise they will have to index their data.
-All buckets that no longer have secondary replicas
-are merged to the remaining nodes according to their pseudo-random sequence.
-It is important that the nodes retain their original index;
-otherwise the buckets would all have to move to regain their ideal states.
+  In the figure, node 2 fails. This node held the active replicas of bucket 2 and 6.
+  Once the node fails the secondary replicas are set active.
+  If they were already in a <em>ready</em> state, they can start serving queries immediately.
+  Otherwise they will have to index their data.
+  All buckets that no longer have secondary replicas
+  are merged to the remaining nodes according to their pseudo-random sequence.
+  It is important that the nodes retain their original index;
+  otherwise the buckets would all have to move to regain their ideal states.
 </p>
+<!-- ToDo: Add info on retiring nodes, the normal way to shrink a cluster ... -->
 
 
 
 <h2 id="grouped-distribution">Grouped distribution</h2>
 <p>
-  Documents can be uniformly distributed or in groups:
+  The <a href="reference/services-content.html#group">group</a> configuration
+  is used to distribute buckets of documents.
+  This enables replica placement for use cases listed below.
 </p>
-<img src="img/flat_content_cluster.svg" style="max-width: 500px;"/>
-<img src="img/grouped_content_cluster.svg" style="max-width: 500px;"/>
-<p>
-  The <a href="reference/services-content.html#group">group</a> element is used to distribute
-  <a href="content/buckets.html">buckets</a> of documents - use cases:
-</p>
+<img src="https://vespa.ai/assets/query-groups.svg" style="max-width: 400px;">
 <table class="table">
-<thead></thead><tbody>
+  <thead></thead><tbody>
 <tr>
-  <th style="white-space: nowrap">Cluster upgrade</th>
+  <th>Cluster upgrade</th>
   <td>
-    Use two (or more) groups  - then shut down one group in the cluster for upgrade.
-    This is quicker than doing it one by one node -
-    the tradeoff is that 50% of the nodes must sustain the full load (in case of two groups),
-    and one must always grow the cluster by two (or more) nodes, one in each group.
-    Latency per search node goes up with a larger index, such grouping will double the index size.
+    Take out a full group for upgrade, instead of a node at a time.
+    <a href="operations/live-upgrade.html">Read more</a>.
   </td>
 </tr><tr>
   <th style="white-space: nowrap">Query throughput</th>
   <td>
-    Applications with high query load on a small index can benefit of keeping the full index on all nodes -
-    i.e. configuring the same number of groups as nodes.
-    This confines queries to one node only,
-    so less <em>total</em> work is done per query in the cluster.
-    Hence the throughput increase.
-    This increases latency compared with splitting the index on many nodes.
-    It also limits options when growing the index size -
-    at some point, the query latency might grow too high,
-    and the only option then is to add nodes to the group.
+    Applications with high query rates / high static query cost
+    can confine queries to less nodes.
+    <a href="performance/sizing-search.html">Read more</a>.
   </td>
 </tr><tr>
-  <th style="white-space: nowrap">Cautious data placement</th>
+  <th>Topology</th>
   <td>
-    A way to reduce the risk of data unavailability,
-    is to spread the data copies across different locations,
-    like placing all the copies in different racks.
-    Furthermore, this data placement enables fast upgrade procedures without service interruption,
-    as entire groups can be upgraded at a time.
+    Place replicas based on network topology / racking of hosts
   </td>
 </tr>
 </tbody>
 </table>
 <p>
-By default, Vespa distributes <a href="content/buckets.html">buckets</a>
-uniformly across all distributor and storage nodes.
-Use grouped distribution to control where bucket copies are stored in relation to each other.
-For instance, if your cluster consists of 10 racks,
-you can define that for any given bucket,
-it should store 2 copies in one rack and 2 copies in another rack.
-That means that you can take down a whole rack,
-and you are still sure that all your data is available,
-because you know all data on that rack should have 2 copies on another rack.
+  Data redistribution after changing cluster topology is automatic,
+  however note that query coverage is reduced in the redistribution period.
+  Read more in <a href="performance/sizing-examples.html">sizing examples</a>.
 </p><p>
-Also, improved network bandwidth can be utilized.
-If a node has restarted and it needs to fetch some data that came in while restarting to get up to date,
-it can now choose to fetch that data from a node on the same rack,
-which has better connectivity as it is in the same rack.
-(Here you must of course define one group per rack,
-and add the nodes in the rack in the respective groups)
+  Tuning group sizes and node resources enables applications to find the latency/cost sweet spot,
+  the auto-elasticity makes the transitions easy.
+</p>
+<!-- ToDo: this section is a little thin, review -->
+
+
+
+<h2 id="buckets">Buckets</h2>
+<p>
+  To manage documents, Vespa groups them in <a href="content/buckets.html">buckets</a>,
+  using hashing or hints in the <a href="documents.html">document id</a>.
 </p><p>
-When configuring the groups, specify how data is to be distributed among the group children.
-Refer to the <a href="reference/services-content.html#group">group</a>
-documentation for details about how to configure storage groups.
+  A document Put or Update is sent to all replicas of the bucket with the document.
+  If bucket replicas are out of sync, a bucket merge operation is run to re-sync the bucket.
+  A bucket contains <a href="operations/admin-procedures.html#data-retention-vs-size">tombstones</a>
+  of recently removed documents.
 </p><p>
-Which groups are selected as primary, secondary and so on, groups for a
-given bucket is randomly determined using the same ideal state algorithm we
-use to pick nodes, described in more detail in the
-<a href="content/idealstate.html">ideal state</a> reference document.
-Each group is assigned an index, to be used in this algorithm.
-This will however likely create a bit worse skew globally compared to not using groups.
+  Buckets are split when they grow too large, and joined when they shrink.
+  This is a key feature for high performance in very small to very large instances,
+  and eliminates need for downtime or manual operations when scaling.
+  Read more in <a href="content/buckets.html">buckets</a>.
 </p><p>
-See <a href="performance/sizing-search.html">sizing search</a> for grouped distribution examples.
+  Buckets can be viewed as sophisticated shards, and are not configured, they are dynamic.
+  Query operations are run ignorant of buckets and makes query sizing independent of bucket distribution.
 </p>
 
 
 
-<h2 id="limitations-and-tradeoffs">Limitations and tradeoffs</h2>
-<table class="table">
-<thead></thead></tbody>
-<tr id="availability-vs-resources"><th>Availability vs resources</th>
-    <td><p>
-    Keeping index structures costs resources. Not all replicas of buckets are
-    necessarily searchable, unless configured using
-    <a href="reference/services-content.html#searchable-copies">searchable-copies</a>.
-    As Vespa indexes buckets on-demand, the most cost-efficient setting is 1,
-    if one can tolerate temporary coverage loss during node failures.
-    Note that <em>searchable-copies</em> does not apply to <a href="streaming-search.html">streaming search</a>
-    as this does not use index structures.
-    </p><p>
-    Distributing buckets using <a href="#grouped-distribution">groups</a>
-    helps implement policies for availability and
-    <a href="performance/sizing-search.html">query performance</a>.
-    </p></td>
-</tr>
-<tr id="data-retention-vs-size"><th>Data retention vs size</th>
-    <td><p>
-    When a document is removed, the document data is not immediately purged.
-    Instead, <em>remove-entries</em> (tombstones of removed documents) are kept
-    for a configurable amount of time. The default is two weeks, refer to
-    <a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
-    pruneremoveddocumentsage</a>.
-    This ensures that removed documents stay removed in a distributed system where nodes change state.
-    Entries are removed periodically after expiry.
-    Hence, if a node comes back up after being down for more than two weeks,
-    removed documents are available again, unless the data on the node is wiped first.
-    A larger <em>pruneremoveddocumentsage</em> will hence grow the storage size as this keeps
-    document and tombstones longer.
-    </p><p>
-    <strong>Note:</strong> The backend does not store remove-entries for nonexistent documents.
-    This to prevent clients sending wrong document identifiers from
-    filling a cluster with invalid remove-entries.
-    A side-effect is that if a problem has caused all replicas of a bucket to be unavailable,
-    documents in this bucket cannot be marked removed until at least one replica is available again.
-    Documents are written in new bucket replicas while the others are down -
-    if these are removed, then older versions of these will not re-emerge,
-    as the most recent change wins.
-    </p></td>
-</tr>
-<tr id="transition-time"><th style="white-space:nowrap;">Transition time</th>
-    <td>
-    See <a href="reference/services-content.html#transition-time">transition-time</a>
-    for tradeoffs for how quickly nodes are set down vs. system stability.
-    </td>
-</tr>
-<tr id="removing-unstable-nodes"><th>Removing unstable nodes</th>
-    <td>
-    One can configure how many times a node is allowed to crash before it will automatically be removed.
-    The crash count is reset if the node has been up or down continuously for more than the
-    <a href="reference/services-content.html#stable-state-period">stable state period</a>.
-    If the crash count exceeds
-    <a href="reference/services-content.html#max-premature-crashes">max premature crashes</a>, the node will be disabled.
-    Refer to <a href="operations/admin-procedures.html#troubleshooting">troubleshooting</a>.
-    </td>
-</tr>
-<tr id="minimal-amount-of-nodes-required-to-be-available"><th>Minimal amount of nodes required to be available</th>
-    <td>
-    A cluster is typically sized to handle a given load.
-    A given percentage of the cluster resources are required for normal operations,
-    and the remainder is the available resources that can be used if some of the nodes are no longer usable.
-    If the cluster loses enough nodes, it will be overloaded:
-    </p>
-    <ul>
-      <li>Remaining nodes may create disk full situation.
-        This will likely fail a lot of write operations, and if disk is shared with OS,
-        it may also stop the node from functioning.</li>
-      <li>Partition queues will grow to maximum size.
-        As queues are processed in FIFO order, operations are likely to get long latencies.</li>
-      <li>Many operations may time out while being processed,
-        causing the operation to be resent, adding more load to the cluster.</li>
-      <li>When new nodes are added, they cannot serve requests
-        before data is moved to the new nodes from the already overloaded nodes.
-        Moving data puts even more load on the existing nodes,
-        and as moving data is typically not high priority this may never actually happen.</li>
-    </ul>
-    To configure what the minimal cluster size is, use
-    <a href="reference/services-content.html#min-distributor-up-ratio">min-distributor-up-ratio</a> and
-    <a href="reference/services-content.html#min-storage-up-ratio">min-storage-up-ratio</a>.
-    </p></td>
-</tr>
-</tbody>
-</table>
+<h2 id="ideal-state-distribution-algorithm">Ideal state distribution algorithm</h2>
+<p>
+  The <a href="content/idealstate.html">ideal state distribution algorithm</a>
+  uses a variation of the <em>RUSH algorithms</em> to distribute documents.
+  Under normal circumstances, it makes a minimal number of documents move when nodes are added or removed.
+</p><p>
+  Central to the algorithm is the assignment of a node sequence to each bucket.
+  The illustration shows how each bucket uses a pseudo-random sequence of numbers to derive the node sequence.
+  The pseudo-random generator is seeded with the bucket id, so each bucket will always get the same sequence:
+</p>
+<img src="content/img/BucketNodeSequence.png"/>
+<p>
+  Each node is assigned a <em>distribution-key</em>, which is an index in the number sequence.
+  The set of number/index pairs is sorted on descending numbers, and this new sequence of indexes determines
+  which nodes the replicas are placed on, with the first node being host to the primary replica, i.e. the <em>active</em> replica.
+  This specification of where to place a bucket is called the bucket's <em>ideal state</em>.
+</p>
+
+
+
+<h2 id="consistency">Consistency</h2>
+<p>
+  Consistency is maintained at bucket level.
+  Content nodes calculate checksums based on the bucket contents,
+  and the distributors compare checksums among the bucket replicas.
+  A <em>bucket merge</em> is issued to resolve inconsistency, when detected.
+  While there are inconsistent bucket replicas, operations are routed to the "best" replica.
+</p><p>
+  As buckets are split and joined, it is possible for replicas of a bucket to be split at different levels.
+  A node may have been down while its buckets have been split or joined.
+  This is called <em>inconsistent bucket splitting</em>.
+  Bucket checksums can not be compared across buckets with different split levels.
+  Consequently, distributors do not know whether all documents exist in enough replicas in this state.
+  Due to this, inconsistent splitting is one of the highest maintenance priorities.
+  After all buckets are split or joined back to the same level,
+  the distributors can verify that all the replicas are consistent and fix any detected issues with a merge.
+  <a href="content/consistency.html">Read more</a>.
+</p>
+
+
+
+<h2 id="further-reading">Further reading</h2>
+<ul>
+  <li><a href="content/content-nodes.html">content nodes</a></li>
+  <li><a href="proton.html">proton</a></li>
+</ul>
