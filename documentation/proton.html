@@ -53,7 +53,7 @@ then handed to the appropriate sub-database, based on the request type.
 <h3 id="sub-databases">Sub-databases</h3>
 <p>
 There are three types of sub-databases, each with its own
-<a href="performance/attribute-memory-usage.html#document-meta-store">document meta store</a> and
+<a href="attributes.html#document-meta-store">document meta store</a> and
 <a href="document-summaries.html#document-store">document store</a>.
 The document meta store holds a map from the document id to a local
 id. This local id is used to address the document in the document
@@ -415,7 +415,7 @@ Metrics are available at the <a href="reference/metrics.html">Metrics API</a>.
         This is often triggered when a <a href="elastic-vespa.html">cluster grows</a> with more nodes,
         documents are redistributed to new nodes and each nodes has less documents -
         a LIDspace compaction is hence triggered. This inplace defragments the
-        <a href="performance/attribute-memory-usage.html#document-meta-store">document meta store</a>.
+        <a href="attributes.html#document-meta-store">document meta store</a>.
         Resources are freed on a subsequent <a href="#attribute-flush">attribute flush</a>.
         <table class="table">
           <thead>
@@ -470,3 +470,79 @@ Metrics are available at the <a href="reference/metrics.html">Metrics API</a>.
     </tr>
   </tbody>
 </table>
+
+
+<!-- ToDo: Moved from elastic doc, better fit here.
+           Merge with the 3 subdatabase section above -->
+<h2 id="retrieving-documents">Retrieving documents</h2>
+<p>
+  Retrieving documents is done by specifying an id to <em>get</em>,
+  or use a <a href="reference/document-select-language.html">selection expression</a>
+  to <em>visit</em> a range of documents - refer to the <a href="api.html">Document API</a>.
+  Overview:
+</p>
+<img src="content/img/elastic-visit-get.svg" height="550" width="500"/>
+<table class="table">
+<tr id="get">
+  <th>Get</th>
+  <td>
+    When the content node receives a get request,
+    it scans through all the document databases,
+    and for each one it checks all three sub-databases.
+    Once the document is found, the scan is stopped and the document returned.
+    If the document is found in a Ready sub-database,
+    the document retriever will apply any changes that is stored in the
+    <a href="attributes.html">attributes</a> before returning the document.
+  </td>
+</tr><tr id="visit">
+  <th>Visit</th>
+  <td>
+    A visit request creates an iterator over each candidate bucket.
+    This iterator will retrieve matching documents from all sub-databases of all document databases.
+    As for get, attributes values are applied to document fields in the Ready sub-database.
+  </td>
+</tr>
+</table>
+
+
+
+<h2 id="queries">Queries</h2>
+<p>
+  Queries has a separate pathway through the system.
+  It does not use the distributor, nor has it anything to do with the SPI.
+  It is orthogonal to the elasticity set up by the storage and retrieval described above.
+  How queries move through the system:
+</p><img src="content/img/elastic-query.svg" height="320" width="270"/><p>
+  A query enters the system through the <em>QR-server (query rewrite server)</em>
+  in the <a href="jdisc/">Vespa Container</a>.
+  The QR-server issues one query per document type to the search nodes:
+  <table class="table">
+  <tr id="container">
+    <th>Container</th>
+    <td>
+<p>
+  The Container knows all the document types and rewrites queries as a
+  collection of queries, one for each type.
+  Queries may have a <a href="reference/query-api-reference.html#model.restrict">restrict</a> parameter,
+  in which case the container will send the query only to the specified document types.
+</p><p>
+  It sends the query to content nodes and collect partial results.
+  It pings all content nodes every second to know whether they are alive,
+  and keeps open TCP connections to each one.
+  If a node goes down, the elastic system will make the documents available on other nodes.
+</p>
+</td>
+</tr><tr id="content-node-matching">
+  <th>Content node matching</th>
+  <td>
+    <p>
+      The <em>match engine</em> <!-- ToDo: link here to design doc / move it -->
+      receives queries and routes them to the right document database based on the document type.
+      The query is passed to the <em>Ready</em> sub-database, where the searchable documents are.
+      Based on information stored in the document meta store,
+      the query is augmented with a blocklist that ensures only <em>active</em> documents are matched.
+    </p>
+  </td>
+</tr>
+</table>
+</p>
