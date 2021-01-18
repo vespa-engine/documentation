@@ -537,3 +537,88 @@ the content layer has to assume that all TERM signals are the cause of controlle
 Thus, if the process keep being killed by kernel due to using too much memory,
 this will look like controlled shutdowns to the content layer.
 </p>
+
+
+
+
+<h2 id="content-cluster-tradeoffs">Content cluster tradeoffs</h2>
+<table class="table">
+  <thead></thead></tbody>
+  <tr id="availability-vs-resources"><th>Availability vs resources</th>
+    <td>
+      Keeping index structures costs resources. Not all replicas of buckets are
+      necessarily searchable, unless configured using
+      <a href="../reference/services-content.html#searchable-copies">searchable-copies</a>.
+      As Vespa indexes buckets on-demand, the most cost-efficient setting is 1,
+      if one can tolerate temporary coverage loss during node failures.
+      Note that <em>searchable-copies</em> does not apply to <a href="../streaming-search.html">streaming search</a>
+      as this does not use index structures.
+    </td>
+  </tr>
+  <tr id="data-retention-vs-size"><th>Data retention vs size</th>
+    <td><p>
+      When a document is removed, the document data is not immediately purged.
+      Instead, <em>remove-entries</em> (tombstones of removed documents) are kept
+      for a configurable amount of time. The default is two weeks, refer to
+      <a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+        pruneremoveddocumentsage</a>.
+      This ensures that removed documents stay removed in a distributed system where nodes change state.
+      Entries are removed periodically after expiry.
+      Hence, if a node comes back up after being down for more than two weeks,
+      removed documents are available again, unless the data on the node is wiped first.
+      A larger <em>pruneremoveddocumentsage</em> will hence grow the storage size as this keeps
+      document and tombstones longer.
+    </p><p>
+      <strong>Note:</strong> The backend does not store remove-entries for nonexistent documents.
+      This to prevent clients sending wrong document identifiers from
+      filling a cluster with invalid remove-entries.
+      A side-effect is that if a problem has caused all replicas of a bucket to be unavailable,
+      documents in this bucket cannot be marked removed until at least one replica is available again.
+      Documents are written in new bucket replicas while the others are down -
+      if these are removed, then older versions of these will not re-emerge,
+      as the most recent change wins.
+    </p></td>
+  </tr>
+  <tr id="transition-time"><th style="white-space:nowrap;">Transition time</th>
+    <td>
+      See <a href="../reference/services-content.html#transition-time">transition-time</a>
+      for tradeoffs for how quickly nodes are set down vs. system stability.
+    </td>
+  </tr>
+  <tr id="removing-unstable-nodes"><th>Removing unstable nodes</th>
+    <td>
+      One can configure how many times a node is allowed to crash before it will automatically be removed.
+      The crash count is reset if the node has been up or down continuously for more than the
+      <a href="../reference/services-content.html#stable-state-period">stable state period</a>.
+      If the crash count exceeds
+      <a href="../reference/services-content.html#max-premature-crashes">max premature crashes</a>, the node will be disabled.
+      Refer to <a href="#troubleshooting">troubleshooting</a>.
+    </td>
+  </tr>
+  <tr id="minimal-amount-of-nodes-required-to-be-available"><th>Minimal amount of nodes required to be available</th>
+    <td>
+      A cluster is typically sized to handle a given load.
+      A given percentage of the cluster resources are required for normal operations,
+      and the remainder is the available resources that can be used if some of the nodes are no longer usable.
+      If the cluster loses enough nodes, it will be overloaded:
+      </p>
+      <ul>
+        <li>Remaining nodes may create disk full situation.
+          This will likely fail a lot of write operations, and if disk is shared with OS,
+          it may also stop the node from functioning.</li>
+        <li>Partition queues will grow to maximum size.
+          As queues are processed in FIFO order, operations are likely to get long latencies.</li>
+        <li>Many operations may time out while being processed,
+          causing the operation to be resent, adding more load to the cluster.</li>
+        <li>When new nodes are added, they cannot serve requests
+          before data is moved to the new nodes from the already overloaded nodes.
+          Moving data puts even more load on the existing nodes,
+          and as moving data is typically not high priority this may never actually happen.</li>
+      </ul>
+      To configure what the minimal cluster size is, use
+      <a href="../reference/services-content.html#min-distributor-up-ratio">min-distributor-up-ratio</a> and
+      <a href="../reference/services-content.html#min-storage-up-ratio">min-storage-up-ratio</a>.
+      </p></td>
+  </tr>
+  </tbody>
+</table>
