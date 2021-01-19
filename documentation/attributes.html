@@ -93,8 +93,11 @@ schema foo {
 
 <h2 id="data-structures">Data structures</h2>
 <p>
-  <img src="img/attributes.svg" width="400"/>
-</p><p>
+  The <em>Attribute Multivalue Mapping</em> stores arrays of values for array and weighed set types,
+  the <em>Attribute Enum Store</em> stores all unique strings for all string attributes:
+</p>
+<img src="img/attributes.svg" width="400"/>
+<p>
   Attributes can be:
 </p>
 <table class="table">
@@ -153,6 +156,76 @@ schema foo {
   This means that larger fields will copy more data at updates.
   It also implies that updates to <a href="reference/schema-reference.html#type:weightedset">weighted sets</a>
   are faster when using numeric keys (less memory and easier comparisons).
+</p><p>
+  The data structures are bound, limiting the number of values in an attribute:
+</p>
+<table class="table">
+  <tr>
+    <th style="white-space:nowrap;">Attribute Multivalue Mapping</th>
+    <td>
+      <table class="table">
+        <tr>
+          <th>default</th>
+          <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+            writefilter.attribute.multivaluelimit</a></td>
+        </tr>
+        <tr>
+          <th>metric</th>
+          <td>Use <em>content.proton.documentdb.attribute.resource_usage.multi_value.average</em> to track usage.</td>
+        </tr>
+        <tr>
+          <th>description</th>
+          <td>
+            For array or weighted set attribute fields,
+            there is a max limit on the number of documents that can have the same number of values.
+            The limit is 2 billion documents per node.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <th style="white-space:nowrap;">Attribute Enum Store</th>
+    <td>
+      <table class="table">
+        <tr>
+          <th>default</th>
+          <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+            writefilter.attribute.enumstorelimit</a></td>
+        </tr>
+        <tr>
+          <th>metric</th>
+          <td>Use <em>content.proton.documentdb.attribute.resource_usage.enum_store.average</em> to track usage.</td>
+        </tr>
+        <tr>
+          <th>description</th>
+          <td>
+            For string attribute fields or attribute fields with
+            <a href="#fast-search">fast-search</a>,
+            there is a max limit on the number of unique values that can be stored for that attribute.
+            The limit is approx 2 billion.
+            The component storing these values is called enum store.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<p>
+  An error is emitted when limit are exceeded:
+<pre>
+Detail resultType=FATAL_ERRORexception=
+'ReturnCode(NO_SPACE, Put operation rejected for document 'id:mynamespace:mydoc::123456' of type 'mydoc':
+'enumStoreLimitReached: {
+    action: "add more content nodes",
+    reason: "enum store address space used (0.92813) &gt; limit (0.9)",
+    enumStore: { used: 31890298144, dead: 0, limit: 34359738368},
+    attributeName: "text", subdb: "ready"}')'
+endpoint=vespa1:8080 ssl=false resultTimeLocally=1532685239428
+</pre>
+  A similar message is emitted for too many values for a multivalue attribute.
+  To fix a problem with too many values,
+  add content nodes to distribute documents with attributes over more nodes.
 </p>
 
 
@@ -396,57 +469,6 @@ schema foo {
   </tr>
   </tbody>
 </table>
-
-
-
-<h2 id="multivalue-mapping-enum-store">Multivalue Mapping and Enum Store</h2>
-<!-- ToDo: Consider a sentence explaining what these components are used for:
-           multivalue mapping storing arrays of values for array and weighed set types,
-           and enum store storing all unique strings for all string attributes. -->
-<p>
-  The attribute Multivalue Mapping and Enum Store has upper limits, limiting the number of values in an attribute.
-<table class="table">
-  <thead>
-  <tr><th>resource</th><th>default</th><th>metric</th><th>description</th></tr>
-  </thead><tbody>
-<tr><td>attribute enum store</td>
-  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
-    writefilter.attribute.enumstorelimit</a>
-  </td><td>content.proton.documentdb.attribute.resource_usage.enum_store</td>
-  <td>For string attribute fields or attribute fields with
-    <a href="#fast-search">fast-search</a>,
-    there is a max limit on the number of unique values that can be stored for that attribute.
-    The limit is approx 2 billion.
-    The component storing these values is called enum store</td></tr>
-<tr><td>attribute multivalue</td>
-  <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
-    writefilter.attribute.multivaluelimit</a>
-  </td><td>content.proton.documentdb.attribute.resource_usage.multi_value</td>
-  <td>For array or weighted set attribute fields,
-    there is a max limit on the number of documents that can have the same number of values.
-    The limit is 2 billion documents per node</td></tr>
-</tbody>
-</table>
-An error is emitted when exceeding the limit - sample:
-<pre>
-Detail resultType=FATAL_ERRORexception=
-'ReturnCode(NO_SPACE, Put operation rejected for document 'id:mynamespace:mydoc::123456' of type 'mydoc':
-'enumStoreLimitReached: {
-  action: "add more content nodes",
-  reason: "enum store address space used (0.92813) &gt; limit (0.9)",
-  enumStore: { used: 31890298144, dead: 0, limit: 34359738368},
-  attributeName: "text", subdb: "ready"}')'
-endpoint=vespa1:8080 ssl=false resultTimeLocally=1532685239428
-</pre>
-A similar message is emitted for too many values for a multivalue attribute.
-</p><p>
-  To fix a problem with too many values,
-  add content nodes to distribute documents with attributes over more nodes.
-</p><p>
-  Use metrics <em>content.proton.documentdb.attribute.resource_usage.enum_store.average</em> and
-  <em>content.proton.documentdb.attribute.resource_usage.multi_value.average</em>
-  to track usage.
-</p>
 
 
 
