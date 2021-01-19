@@ -38,7 +38,7 @@ highly available in common datacenter networks.
 
 ### Write durability and consistency
 
-When a client receives a successful [write](../writing-to-vespa.html) response,
+When a client receives a successful [write](../reads-and-writes.html) response,
 the operation has been written to the OS. The replication level is configurable.
 Operations are by default written on _all_ replicas before sending a response.
 

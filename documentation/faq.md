@@ -53,7 +53,7 @@ Which one to chose depends on use case, see discussion the the latter link.
 
 #### Does a whole document need to be updated and re-indexed?
 E.g, price and quantity available per store may change often vs the actual product attributes.
-Vespa supports <a href="writing-to-vespa.html">partial updates</a> of documents.
+Vespa supports [partial updates](reads-and-writes.html) of documents.
 Also, the parent/child feature is implemented to support use-cases where child elements are updated frequently,
 while a more limited set of parent elements are updated less frequently.
 
