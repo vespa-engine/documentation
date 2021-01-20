@@ -4,9 +4,10 @@ title: "Elastic Vespa"
 ---
 
 <p>
-  Vespa allows application instances to grow (and shrink) while serving queries and accepting writes.
-  To maintain a uniform data distribution, documents are automatically redistributed with minimal data movement.
-  Change the configured <a href="/documentation/reference/services-content.html#nodes">nodes</a>
+  A Vespa instance can grow and shrink while serving queries, reads and writes.
+  To maintain a uniform data distribution due to changes in size or topology,
+  documents are automatically redistributed, with minimal data movement.
+  To resize, just change the <a href="/documentation/reference/services-content.html#nodes">nodes</a>
   and redeploy the application - no restarts needed.
 </p>
 <img src="https://vespa.ai/assets/elastic-grow.svg" style="max-width: 300px;">
@@ -18,6 +19,11 @@ title: "Elastic Vespa"
   it self-heals from node failures.
 </p>
 <img src="https://vespa.ai/assets/elastic-fail.svg" style="max-width: 300px;">
+<p>
+  Planned node retirements is done by marking nodes as <em>retired</em> -
+  this generates replicas on the other nodes, so the set of retired nodes can safely be shut down.
+  This makes it easy to migrate to a new node resource profile, like nodes with more memory.
+</p>
 <p>
   The auto-elasticity is configured for a normal fail-safe operation,
   but there are tradeoffs like recovery speed and resource usage.
@@ -36,49 +42,52 @@ title: "Elastic Vespa"
   Read more in <a href="operations/admin-procedures.html">procedures</a>.
 </p>
 <p>
-  When adding a new node, new ideal states are calculated for all buckets.
-  The buckets that should have a replica on the new node are moved, while the superfluous are removed.
-  Redistribution example - add a new node to the system, with redundancy 2:
-</p><img src="content/img/AddNodeMoveBuckets.png"/><p>
+  Documents are mapped to buckets, read more below.
+  When adding a new node, a new <em>ideal state</em> is calculated for all buckets.
+  The buckets mapped to the new node are moved, the superfluous are removed.
+  See redistribution example - add a new node to the system, with redundancy n=2:
+</p>
+<img src="content/img/AddNodeMoveBuckets.png"/>
+<p>
   The distribution algorithm generates a random node sequence for each bucket.
-  In this example with redundancy of two, the two nodes sorted first will store replicas of the data.
-  The figure shows how random placement onto two nodes changes as a third node is introduced.
-  The new node introduced takes over as primary for the buckets where it got sorted first in order,
+  In this example with n=2, replicas map to the two nodes sorted first.
+  The illustration shows how placement onto two nodes changes as a third node is added.
+  The new node takes over as primary for the buckets where it got sorted first,
   and as secondary for the buckets where it got sorted second.
-  This ensures minimal data movement when nodes come or go, and allows capacity to be changed easily.
+  This ensures minimal data movement when nodes come and go, and allows capacity to be changed easily.
 </p><p>
   No buckets are moved between the existing nodes when a new node is added.
   Based on the pseudo-random sequences, some buckets change from primary to secondary, or are removed.
-  Many nodes can be added in the same deployment. Adding more than one minimizes the total
-  bucket redistribution, but increases the time to get to the <em>ideal state</em>.
+  Multiple nodes can be added in the same deployment.
+  Adding more than one minimizes the total bucket redistribution,
+  but increases the time to get to the <em>ideal state</em>.
 </p>
 
 
 
 <h2 id="removing-nodes">Removing nodes</h2>
 <p>
-  Whether a node fails or is deliberately removed, the same redistribution happens.
-  If the remove is planned, the node remains up until it has been drained.
-  Example of redistribution after node failure, redundancy 2:
+  Whether a node fails or is <em>retired</em>, the same redistribution happens.
+  If the node is retired, replicas are generated on the other nodes
+  and the node stays up, but with no active replicas.
+  Example of redistribution after node failure, n=2:
 </p><img src="content/img/LoseNodeMoveBuckets.png"/><p>
-  In the figure, node 2 fails. This node held the active replicas of bucket 2 and 6.
+  Here, node 2 fails. This node held the active replicas of bucket 2 and 6.
   Once the node fails the secondary replicas are set active.
-  If they were already in a <em>ready</em> state, they can start serving queries immediately.
-  Otherwise they will have to index their data.
+  If they were already in a <em>ready</em> state, they start serving queries immediately,
+  otherwise they will index replicas,
+  see <a href="reference/services-content.html#searchable-copies">searchable-copies</a>.
   All buckets that no longer have secondary replicas
-  are merged to the remaining nodes according to their pseudo-random sequence.
-  It is important that the nodes retain their original index;
-  otherwise the buckets would all have to move to regain their ideal states.
+  are merged to the remaining nodes according to the ideal state.
 </p>
-<!-- ToDo: Add info on retiring nodes, the normal way to shrink a cluster ... -->
 
 
 
 <h2 id="grouped-distribution">Grouped distribution</h2>
 <p>
-  The <a href="reference/services-content.html#group">group</a> configuration
-  is used to distribute buckets of documents.
-  This enables replica placement for use cases listed below.
+  Use the <a href="reference/services-content.html#group">group</a> configuration
+  to build a topology of the nodes.
+  This enables replica placement for use cases listed below:
 </p>
 <img src="https://vespa.ai/assets/query-groups.svg" style="max-width: 400px;">
 <table class="table">
@@ -109,10 +118,9 @@ title: "Elastic Vespa"
   however note that query coverage is reduced in the redistribution period.
   Read more in <a href="performance/sizing-examples.html">sizing examples</a>.
 </p><p>
-  Tuning group sizes and node resources enables applications to find the latency/cost sweet spot,
-  the auto-elasticity makes the transitions easy.
+  Tuning group sizes and node resources enables applications to easily find the latency/cost sweet spot,
+  the elasticity operations are automatic and queries / reads / writes work as usual - no downtime!
 </p>
-<!-- ToDo: this section is a little thin, review -->
 
 
 
@@ -149,7 +157,7 @@ title: "Elastic Vespa"
 </p>
 <img src="content/img/BucketNodeSequence.png"/>
 <p>
-  Each node is assigned a <em>distribution-key</em>, which is an index in the number sequence.
+  Each node has a <em>distribution-key</em>, which is an index in the number sequence.
   The set of number/index pairs is sorted on descending numbers, and this new sequence of indexes determines
   which nodes the replicas are placed on, with the first node being host to the primary replica, i.e. the <em>active</em> replica.
   This specification of where to place a bucket is called the bucket's <em>ideal state</em>.
@@ -161,7 +169,7 @@ title: "Elastic Vespa"
 <p>
   Consistency is maintained at bucket level.
   Content nodes calculate checksums based on the bucket contents,
-  and the distributors compare checksums among the bucket replicas.
+  and the content nodes compare checksums among the bucket replicas.
   A <em>bucket merge</em> is issued to resolve inconsistency, when detected.
   While there are inconsistent bucket replicas, operations are routed to the "best" replica.
 </p><p>
@@ -169,10 +177,10 @@ title: "Elastic Vespa"
   A node may have been down while its buckets have been split or joined.
   This is called <em>inconsistent bucket splitting</em>.
   Bucket checksums can not be compared across buckets with different split levels.
-  Consequently, distributors do not know whether all documents exist in enough replicas in this state.
+  Consequently, content nodes do not know whether all documents exist in enough replicas in this state.
   Due to this, inconsistent splitting is one of the highest maintenance priorities.
   After all buckets are split or joined back to the same level,
-  the distributors can verify that all the replicas are consistent and fix any detected issues with a merge.
+  the content nodes can verify that all the replicas are consistent and fix any detected issues with a merge.
   <a href="content/consistency.html">Read more</a>.
 </p>
 
@@ -181,5 +189,5 @@ title: "Elastic Vespa"
 <h2 id="further-reading">Further reading</h2>
 <ul>
   <li><a href="content/content-nodes.html">content nodes</a></li>
-  <li><a href="proton.html">proton</a></li>
+  <li><a href="proton.html">proton</a> - see <em>ready</em> state</li>
 </ul>
