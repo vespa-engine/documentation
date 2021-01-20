@@ -4,14 +4,14 @@ title: "Reads and writes"
 ---
 
 <p>
-  This guide covers the aspects of updating <a href="documents.html">documents</a> in Vespa.
+  This guide covers the aspects of accessing <a href="documents.html">documents</a> in Vespa.
   Documents are stored in <em>content</em> clusters.
   Writes (PUT, UPDATE, DELETE) and reads (GET) pass through a <em>container</em> cluster.
   Find a more detailed flow at the end of this article.
 </p>
 <img src="img/overview/vespa-overview.svg" style="padding:10px">
 <p>
-Vespa's indexing structures is built for high-rate, memory-only operations for field updates.
+Vespa's indexing structures are built for high-rate, memory-only operations for field updates.
 Refer to the <a href="performance/sizing-feeding.html">feed sizing guide</a> for write performance.
 <!-- ToDo: once partial-update.html is done, link there -->
 </p><p>
@@ -19,32 +19,28 @@ Vespa supports <a href="parent-child.html">parent/child</a> for de-normalized da
 This can be used to simplify the code to update application data,
 as one write will update all children documents.
 </p><p>
-Applications can add custom feed document processors and multiple container clusters -
-see <a href="indexing.html">indexing</a> for details.
-</p><p>
-  See the <a href="reference/document-v1-api-reference.html">/document/v1 API reference</a>.
+  Applications can add custom feed <a href="document-processing.html">document processors</a>
+  and multiple container clusters - see <a href="indexing.html">indexing</a> for details.
 </p>
 <table class="table">
 <tbody>
 <tr>
   <th>Get</th>
   <td><p>
-    Returns the newest document instance.
+    Get a document by ID.
   </p></td>
 </tr><tr>
   <th>Put</th>
   <td><p>
-    Write a <a href="documents.html">document</a> by ID -
-    a document is overwritten if a document with the same document ID exists.
+    Write a document by ID - a document is overwritten if a document with the same document ID exists.
   </p></td>
 </tr><tr>
   <th>Remove</th>
   <td><p>
     Remove a document by ID.
-    Later requests to access the document will not find it - read
-    more about <a href="operations/admin-procedures.html#data-retention-vs-size">remove-entries</a>.
-    If the document to be removed is not found, this is returned in the reply.
-    This is not considered a failure.
+    If the document to be removed is not found, it is not considered a failure -
+    the call returns a reply stating that no document was found.
+    Read more about <a href="operations/admin-procedures.html#data-retention-vs-size">data-retention</a>.
   </p></td>
 </tr><tr>
   <th>Update</th>
@@ -59,7 +55,7 @@ see <a href="indexing.html">indexing</a> for details.
     <a href="proton.html#index">index</a> and <a href="document-summaries.html">summary</a>) are updatable.
     Note that only <em>assign</em> and <em>remove</em> are idempotent -
     message re-sending can apply updates more than once.
-    Use conditional writes for stronger consistency.
+    Use <em>conditional writes</em> for stronger consistency.
     </p>
     <table class="table">
       <tr>
@@ -143,7 +139,7 @@ Updates to nonexistent documents are supported using
 <a href="reference/document-json-format.html#create">create</a>.
 An empty document is created on the content nodes, before the update is applied.
 This simplifies client code in the case of multiple writers.
-Java example using the <a href="document-api-guide.html">Document API</a>:
+Example using the <a href="document-api-guide.html">Java Document API</a>:
 <pre>
 public DocumentUpdate createUpdate(DocumentType musicType) {
     DocumentUpdate update = new DocumentUpdate(musicType, "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf");
@@ -197,8 +193,7 @@ Documents are created using <a href="reference/document-json-format.html">JSON</
   </tr><tr>
     <td><a href="vespa-http-client.html">Vespa HTTP client</a></td>
     <td>Jar writing to Vespa either by method calls in Java or from the command line.
-      It provides a simple API while achieving high performance
-      by using multiplexing and multiple parallel async connections.
+      It provides a simple API with high performance using multiplexing and multiple parallel async connections.
       It is recommended in all cases when feeding from a node outside the Vespa cluster.</td>
   </tr><tr>
     <td style="white-space: nowrap"><a href="document-api-guide.html">Java Document API</a></td>
@@ -220,8 +215,6 @@ Documents are created using <a href="reference/document-json-format.html">JSON</
 <h2 id="feed-block">Feed block</h2>
 <p>
 Write operations fail when a cluster is at disk or memory capacity.
-The <a href="attributes.html#data-structures">attribute multivalue mapping and enum store</a>
-can also go full and block feeding.
 </p><p>
 To remedy, add nodes to the content cluster, or use nodes with higher capacity.
 The data will <a href="elastic-vespa.html">auto-redistribute</a>, and feeding is unblocked.
@@ -235,8 +228,7 @@ These <a href="reference/metrics.html">metrics</a> indicate whether feeding is b
     <td>disk or memory</td>
   </tr><tr>
     <th>content.proton.documentdb.attribute.resource_usage.feeding_blocked</th>
-    <td><a href="attributes.html#data-structures">attribute enum store</a>
-      or <a href="schemas.html#multivalue-fields">multivalue</a></td>
+    <td><em>Attribute Multivalue Mapping</em> or <em>Attribute Enum Store</em></td>
   </tr>
 </table>
 When feeding is blocked, events are logged - examples:
@@ -250,6 +242,78 @@ java.lang.RuntimeException: ReturnCode(NO_SPACE, Put operation rejected for docu
   diskLimit: 0.8
 }'
 </pre>
+</p>
+
+<p>
+  The <em>Attribute Multivalue Mapping</em> or <em>Attribute Enum Store</em> can go full and block feeding -
+  see <a href="attributes.html#data-structures">attribute data structures</a>.
+</p>
+<table class="table">
+  <tr>
+    <th style="white-space:nowrap;">Attribute Multivalue Mapping</th>
+    <td>
+      <table class="table">
+        <tr>
+          <th>default</th>
+          <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+            writefilter.attribute.multivaluelimit</a></td>
+        </tr>
+        <tr>
+          <th>metric</th>
+          <td>Use <em>content.proton.documentdb.attribute.resource_usage.multi_value.average</em> to track usage.</td>
+        </tr>
+        <tr>
+          <th>description</th>
+          <td>
+            For array or weighted set attribute fields,
+            there is a max limit on the number of documents that can have the same number of values.
+            The limit is 2 billion documents per node.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <th style="white-space:nowrap;">Attribute Enum Store</th>
+    <td>
+      <table class="table">
+        <tr>
+          <th>default</th>
+          <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
+            writefilter.attribute.enumstorelimit</a></td>
+        </tr>
+        <tr>
+          <th>metric</th>
+          <td>Use <em>content.proton.documentdb.attribute.resource_usage.enum_store.average</em> to track usage.</td>
+        </tr>
+        <tr>
+          <th>description</th>
+          <td>
+            For string attribute fields or attribute fields with
+            <a href="#fast-search">fast-search</a>,
+            there is a max limit on the number of unique values that can be stored for that attribute.
+            The limit is approx 2 billion documents per node.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<p>
+  An error is emitted when an attribute limit is exceeded:
+<pre>
+Detail resultType=FATAL_ERRORexception=
+'ReturnCode(NO_SPACE, Put operation rejected for document 'id:mynamespace:mydoc::123456' of type 'mydoc':
+'enumStoreLimitReached: {
+    action: "add more content nodes",
+    reason: "enum store address space used (0.92813) &gt; limit (0.9)",
+    enumStore: { used: 31890298144, dead: 0, limit: 34359738368},
+    attributeName: "text", subdb: "ready"}')'
+endpoint=vespa1:8080 ssl=false resultTimeLocally=1532685239428
+</pre>
+To fix a problem with too many values,
+add content nodes to distribute documents with attributes over more nodes -
+i.e. reduce number of documents per node.
 </p>
 
 
@@ -315,14 +379,12 @@ $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --h
 
 
 
-
-
 <h2 id="components">Components</h2>
 <p>
   Applications use the <a href="vespa-http-client.html">vespa-http-client</a>
   or <a href="reference/document-v1-api-reference.html">/document/v1/</a> API to write to Vespa.
   Alternatively, use <a href="reference/vespa-cmdline-tools.html#vespa-feeder">vespa-feeder</a> to feed files
-  or the Java <a href="api.html">Document API</a> directly.
+  or the <a href="reference/document-v1-api-reference.html">Java Document API</a>.
   Next is <a href="indexing.html">indexing</a>
   and/or <a href="document-processing.html">document processing</a>
   where documents are prepared for indexing (and optionally processed using custom code),
@@ -388,3 +450,9 @@ $ java -jar $VESPA_HOME/lib/jars/vespa-http-client-jar-with-dependencies.jar --h
 </tr>
 </tbody>
 </table>
+
+
+<h2 id="further-reading">Further reading</h2>
+<ul>
+  <li><a href="content/visiting.html">Visiting</a></li>
+</ul>
