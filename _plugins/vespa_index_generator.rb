@@ -13,7 +13,7 @@ module Jekyll
             namespace = site.config["search"]["namespace"]
             operations = []
             site.pages.each do |page|
-                if page.data["index"] == true
+                if page.data["index"] == true && page.url.start_with?("/documentation") == false
                     operations.push({
                         :fields => {
                             :path => page.url,
