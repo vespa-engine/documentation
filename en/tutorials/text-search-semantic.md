@@ -31,7 +31,7 @@ However, assuming that we can deploy a multi-phased ranking system with cheaper 
 
 ## Baselines
 
-Before we proceed to more elaborate experiments we need to establish some obvious baselines. Here are the results obtained by using query terms to match documents and [BM25](https://docs.vespa.ai/documentation/reference/bm25.html) as 1st phase ranking:
+Before we proceed to more elaborate experiments we need to establish some obvious baselines. Here are the results obtained by using query terms to match documents and [BM25](../reference/bm25.html) as 1st phase ranking:
 
 <div style="text-align:center"><img src="images/semantic_baselines.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
@@ -49,7 +49,7 @@ The match operator `AND` means that we are only matching documents that contain 
 }
 ```
 
-The match operator `OR` means that we are matching documents that contain any of the query terms either in the title or in the body. The only difference is the inclusion of the `[{"grammar": "any"}]` in the [YQL](https://docs.vespa.ai/documentation/query-language.html) expression:
+The match operator `OR` means that we are matching documents that contain any of the query terms either in the title or in the body. The only difference is the inclusion of the `[{"grammar": "any"}]` in the [YQL](../query-language.html) expression:
 
 ```
 {
@@ -216,7 +216,7 @@ Since it is often mentioned that semantic search works better when combined with
 
 ## weakAND operator and its effectiveness
 
-The [weakAnd](https://docs.vespa.ai/documentation/using-wand-with-vespa.html) implementation scores documents by a simplified scoring function, which uses two core text rank features `term(n).significance` and `term(n).weight`.
+The [weakAnd](../using-wand-with-vespa.html) implementation scores documents by a simplified scoring function, which uses two core text rank features `term(n).significance` and `term(n).weight`.
 
 Below is a query example that uses the `weakAND` operator with an annotation that sets the target number of documents to be 1.000.
 

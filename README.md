@@ -1,4 +1,4 @@
-<!-- Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. -->
+<!-- Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. -->
 
 # Creating Vespa documentation
 
@@ -110,7 +110,7 @@ File locations below refer to this repo's root.
       [Jekyll Generator](https://jekyllrb.com/docs/plugins/generators/),
       see [_plugins/vespa_index_generator.rb](/_plugins/vespa_index_generator.rb)
     1. The generated _open_index.json_ can then be
-      [fed to Vespa](https://docs.vespa.ai/documentation/reference/document-json-format.html)
+      [fed to Vespa](https://docs.vespa.ai/en/reference/document-json-format.html)
 
 1. Feed changes to https://console.vespa.oath.cloud/tenant/vespa-team/application/vespacloud-docsearch
    using [feed_to_vespa.py](feed_to_vespa.py):
