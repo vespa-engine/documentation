@@ -1,5 +1,5 @@
 ---
-# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Contributing to Vespa"
 ---
 Contributions to [Vespa](http://github.com/vespa-engine/vespa)
@@ -29,7 +29,7 @@ part of the checks.
 
 ## Versioning
 Vespa uses semantic versioning - see
-[vespa versions](http://docs.vespa.ai/documentation/vespa-versions.html).
+[vespa versions](vespa-versions.html).
 Notice in particular that any Java API in a package having a @PublicAPI
 annotation in the package-info file cannot be changed in an incompatible way
 between major versions: Existing types and method signatures must be preserved

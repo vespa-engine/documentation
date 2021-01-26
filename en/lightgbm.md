@@ -76,7 +76,7 @@ both ranking and [stateless model evaluation](stateless-model-evaluation.html).
 
 ## Ranking with LightGBM models
 
-Vespa has a  [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
+Vespa has a  [ranking feature](reference/rank-features.html)
 called `lightgbm`. This ranking feature specifies the model to use in a ranking
 expression, relative under the `models` directory. Consider the following example:
 

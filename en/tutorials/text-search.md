@@ -1,5 +1,5 @@
 ---
-# Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Text Search Tutorial"
 ---
 
@@ -113,9 +113,9 @@ schema msmarco {
 
 Here, we define the `msmarco` schema, which includes primarily two things: a definition of fields the `msmarco` document type should have, and a definition on how Vespa should rank documents given a query.
 
-The `document` section contains the fields of the document, their types and how Vespa should index them. The field property `indexing` configures the _indexing pipeline_ for a field. For more information see [schemas - indexing](https://docs.vespa.ai/documentation/schemas.html#indexing). Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body` by including `index: enable-bm25` in the respective fields. This is a necessary step to allow us to use them in the `bm25` ranking profile.
+The `document` section contains the fields of the document, their types and how Vespa should index them. The field property `indexing` configures the _indexing pipeline_ for a field. For more information see [schemas - indexing](../schemas.html#indexing). Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body` by including `index: enable-bm25` in the respective fields. This is a necessary step to allow us to use them in the `bm25` ranking profile.
 
-Next, the [document summary class](../document-summaries.html) `minimal` is defined. Document summaries are used to control what data is returned for a query. The `minimal` summary here only returns the document id, which is useful for speeding up relevance testing as less data needs to be returned. The default document summary is defined by which fields are indexed with the `summary` command, which in this case are all the fields. In addition, we've set up the `body` field to show a dynamic summary, meaning that Vespa will try to extract relevant parts of the document. For more information, refer to the [the reference documentation on document summaries](https://docs.vespa.ai/documentation/reference/schema-reference.html#summary).
+Next, the [document summary class](../document-summaries.html) `minimal` is defined. Document summaries are used to control what data is returned for a query. The `minimal` summary here only returns the document id, which is useful for speeding up relevance testing as less data needs to be returned. The default document summary is defined by which fields are indexed with the `summary` command, which in this case are all the fields. In addition, we've set up the `body` field to show a dynamic summary, meaning that Vespa will try to extract relevant parts of the document. For more information, refer to the [the reference documentation on document summaries](../reference/schema-reference.html#summary).
 
 Document summaries can be selected by using the `summary` query parameter.
 

@@ -13,8 +13,8 @@ application, please follow the instructions in the
 This sample application is an implementation of the [Dense Passage
 Retriever](https://github.com/facebookresearch/DPR) system. Its full
 version contains 21 million passages from Wikipedia that are retrieved using
-either a sparse retrieval ([BM25](https://docs.vespa.ai/documentation/reference/bm25.html))
-or a dense retrieval ([ANN](https://docs.vespa.ai/documentation/approximate-nn-hnsw.html)).
+either a sparse retrieval ([BM25](reference/bm25.html))
+or a dense retrieval ([ANN](approximate-nn-hnsw.html)).
 It then uses a BERT model to re-rank the passages and extract the most probable correct
 answer.
 
@@ -29,7 +29,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
 
 ### Highlighted features
 
-* [Approximate nearest neighbors using an HNSW index](https://docs.vespa.ai/documentation/approximate-nn-hnsw.html)
+* [Approximate nearest neighbors using an HNSW index](approximate-nn-hnsw.html)
 
     Vespa supports approximate nearest neighbors (ANN) by using Hierarchical
     Navigable Small World (HNSW) indexes. This allows for efficient similarity
@@ -38,7 +38,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     index offline. It also supports additional query filters directly, thus
     avoiding the sub-optimal filtering after the ANN search.
 
-* [Ranking with Transformer models](https://docs.vespa.ai/documentation/onnx.html)
+* [Ranking with Transformer models](onnx.html)
 
     The Transformer architecture has revolutionized multiple fields after its
     introduction, starting with natural language understanding (NLU). This
@@ -46,7 +46,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     representation vector for ANN search, the other to re-rank and extract the
     actual answer to the question.
 
-* [ONNX model evaulation](https://docs.vespa.ai/documentation/onnx.html)
+* [ONNX model evaulation](onnx.html)
 
     The Transformer models are exported from [HuggingFace's Transformers
     library](https://huggingface.co/transformers/index.html) to ONNX models.
@@ -55,7 +55,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     Vespa imports ONNX models and evaluates them using ONNX Runtime, ensuring
     efficient and correct inference.
 
-* [Container components](https://docs.vespa.ai/documentation/jdisc/container-components.html)
+* [Container components](jdisc/container-components.html)
 
     In Vespa, you can set up custom document or search processors to perform
     any extra processing during document feeding or during a query. This
@@ -65,7 +65,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     query is converted to a token representation, which is used as input to the
     Transformer ONNX model inference.
 
-* [Custom configuration](https://docs.vespa.ai/documentation/configuring-components.html)
+* [Custom configuration](configuring-components.html)
 
     When creating custom components in Vespa, for instance, document processors,
     searchers, or handlers, one can use custom configuration to inject config
@@ -75,7 +75,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     injected to the component during construction. This application uses custom
     config to set up the token vocabulary used in tokenization.
 
-* [Multiple threads per query](https://docs.vespa.ai/documentation/reference/services-content.html#requestthreads)
+* [Multiple threads per query](reference/services-content.html#requestthreads)
 
     Vespa supports using multiple threads per query. This means that the
     ranking computation for handling a query can be split into multiple threads.
@@ -85,13 +85,13 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     Note that this is different from multi-threaded ranking, where multiple
     queries are processed in parallel.
 
-* [Text retrieval with BM25](https://docs.vespa.ai/documentation/reference/bm25.html)
+* [Text retrieval with BM25](reference/bm25.html)
 
     In addition to dense retrieval using ANN, this application shows, for
     comparison, text retrieval using BM25. The fields that have enabled
     a BM25 index (`enable-bm25`) use this index for retrieval.
 
-* [Multi-phased ranking](https://docs.vespa.ai/documentation/phased-ranking.html)
+* [Multi-phased ranking](phased-ranking.html)
 
     Vespa supports ranking over multiple phases. This is useful for expensive
     computation in ranking, for instance, when evaluating a large machine-learned
@@ -100,10 +100,9 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     uses a euclidean score from the ANN and only evaluates the large
     Transformer model on the top 10 candidates.
 
-* [Summary features](https://docs.vespa.ai/documentation/reference/schema-reference.html#summary-features)
+* [Summary features](reference/schema-reference.html#summary-features)
 
     Summary features allow for customizing what is included with each hit.
     This application uses this to return the start and end indexes of the
     potential answer to a custom searcher component that extracts the most
     probably answer substring.
-

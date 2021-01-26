@@ -108,7 +108,7 @@ rank-profile collect_rank_features inherits default {
 }
 ```
 
-The `random` global feature is explained in the [Rank Feature Reference](https://docs.vespa.ai/documentation/reference/rank-features.html)  documentation and will be useful in the next section when we describe our data collection process.
+The `random` global feature is explained in the [Rank Feature Reference](../reference/rank-features.html)  documentation and will be useful in the next section when we describe our data collection process.
 
 After adding the _rank-profile_ `collect_rank_features` to our _msmarco.sd_ file, you should redeploy the app:
 
