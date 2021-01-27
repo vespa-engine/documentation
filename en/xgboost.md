@@ -1,5 +1,5 @@
 ---
-# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking with XGBoost Models"
 ---
 
@@ -87,8 +87,8 @@ see [deploying remote models](cloudconfig/application-packages.html#deploying-re
 
 ## Ranking with XGBoost models
 
-Vespa has a special [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
-called `xgboost`. This ranking feature specifies the model to use in a ranking expression.
+Vespa has a special [ranking feature](reference/rank-features.html) called `xgboost`.
+This ranking feature specifies the model to use in a ranking expression.
 Consider the following example:
 
 ```
