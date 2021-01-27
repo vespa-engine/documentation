@@ -1,5 +1,5 @@
 ---
-# Copyright 2018 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking with TensorFlow Models"
 ---
 
@@ -85,11 +85,10 @@ see [deploying remote models](cloudconfig/application-packages.html#deploying-re
 
 ## Ranking with TensorFlow models
 
-Vespa has a special [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html)
-called `tensorflow`. This ranking feature specifies the model,
-the signature and the output to use in a ranking expression. The
-input to the computation must be provided by a function with the same
-name as the input variable. Consider the following example:
+Vespa has a special [ranking feature](reference/rank-features.html) called `tensorflow`.
+This ranking feature specifies the model, the signature and the output to use in a ranking expression.
+The input to the computation must be provided by a function with the same name as the input variable.
+Consider the following example:
 
 ```
 schema tf {
