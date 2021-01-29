@@ -2,6 +2,7 @@
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Contributing to Vespa"
 ---
+
 Contributions to [Vespa](http://github.com/vespa-engine/vespa)
 and the [Vespa documentation](http://github.com/vespa-engine/documentation)
 are welcome.
@@ -15,7 +16,7 @@ In addition to the [public Travis build](https://travis-ci.com/vespa-engine/vesp
 we have a large acceptance and performance test suite which
 is also run continuously.
 
-### Pull requets
+### Pull requests
 All pull requests are reviewed by a member of the Vespa Committers team.
 You can find a suitable reviewer in the OWNERS file upward in the source tree from
 where you are making the change (the OWNERS have a special responsibility for
