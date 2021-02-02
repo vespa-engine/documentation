@@ -7,7 +7,8 @@ title: "Text Search Tutorial"
 
 In this tutorial, we will guide you through the setup of a text search application built on top of Vespa. At the end you will be able to store text documents in Vespa and search them via text queries. The application built here will be the foundation to other tutorials that will add future improvements, such as creating ranking functions based on Machine Learning (ML) models.
 
-The main goal here is to setup a text search app based on simple term-match features such as BM25 [^1] and [nativeRank](../reference/nativerank.html). We will cover how to create, deploy and feed the Vespa application. We are going to go from raw data to a fully functional text search app. In addition we will showcase how easy it is to switch and experiment with different ranking functions in Vespa.
+The main goal here is to setup a text search app based on simple term-match features such as [BM25](../reference/bm25.html) [^1] and [nativeRank](../reference/nativerank.html). 
+We will cover how to create, deploy and feed the Vespa application. We are going to go from raw data to a fully functional text search app. In addition we will showcase how easy it is to switch and experiment with different ranking functions in Vespa.
 
 ## Preamble
 
@@ -18,11 +19,12 @@ $ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps/text-search
 </pre>
 
-This repository contains a fully-fledged Vespa application including a front-end search UI. This tutorial however will start with the basics and develop the application over multiple parts.
+This repository contains a fully-fledged Vespa application including a front-end search UI. 
+This tutorial however will start with the basics and develop the application over multiple parts.
 
 ## Dataset
 
-We use a dataset called [MS MARCO](http://msmarco.org) throughout this tutorial. MS MARCO is a collection of large scale datasets released by Microsoft with the intent of helping the advance of deep learning research related to search. There are many tasks associated with MS MARCO datasets, but here we are interested in the task of building an end-to-end search application capable of returning relevant documents to a text query.
+We use a dataset called [MS MARCO](https://microsoft.github.io/msmarco/) throughout this tutorial. MS MARCO is a collection of large scale datasets released by Microsoft with the intent of helping the advance of deep learning research related to search. There are many tasks associated with MS MARCO datasets, but here we are interested in the task of building an end-to-end search application capable of returning relevant documents to a text query.
 
 For the purposes of this tutorial we have included a small sample of the dataset under the `msmarco/sample` directory which contains only around 1000 documents. This is sufficient for following along with this tutorial, however if you want to experiment with the entire dataset of more than 3 million documents, download the data with the following command:
 
@@ -311,6 +313,9 @@ To stop and remove the Docker container for this application:
 <pre data-test="after">
 $ docker rm -f vespa-msmarco
 </pre>
+
+## Next steps
+Check out the [Improving Text Search through ML](text-search-ml.html).
 
 
 [^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.

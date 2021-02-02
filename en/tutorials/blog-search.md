@@ -655,10 +655,12 @@ An [_attribute_](../attributes.html) is an in-memory field - this is different
 from  _index_ fields, which may be moved to a disk-based index as more
 documents are added and the index grows.  Since attributes are kept in memory,
 they are excellent for fields which require fast access, e.g., fields used for
-sorting or grouping query results.  The downside is higher memory usage.  By
-default, no index is generated for attributes, and search over these defaults
-to a linear scan - to build an index for an attribute field, include
-`attribute:fast-search` in the field definition.
+sorting or grouping query results.  The downside is higher memory usage. 
+
+Attribute fields also supports true partial updates (in-place updates). This means that the *popularity* field can be updated with low latency (milliseconds)
+and high throughput without having to re-index the entire blog post for changes in the popularity.
+
+Attribute fields are searchable, see also [When to use fast-search option for attributes](performance/feature-tuning.html#when-to-use-fast-search). 
 
 ### Defining an attribute field
 
@@ -739,7 +741,7 @@ descending order:
 
 ### Query time data grouping
 
-_Grouping_ is the concept of looking through all matching documents at
+_Grouping_ or _faceted search_ is the concept of looking through all matching documents at
 query-time and then performing operations with specified fields across all the
 documents — some common use cases include:
 
@@ -875,15 +877,16 @@ to get a match.
 ### When to use attributes
 
 There are both advantages and drawbacks of using attributes — it enables
-sorting and grouping, but requires more memory and gives limited matching
-capabilities. When to use attributes depends on the application; in general,
+sorting and grouping and ranking, but requires more memory. See [Attributes in vespa](attributes.html). 
+
+When to use attributes depends on the application; in general,
 use attributes for:
 
+- fields which requires high volume of updates, e.g. the popularity
+- fields accessed in ranking expressions  
 - fields used for sorting, e.g., a last-update timestamp,
 - fields used for grouping, e.g., problem severity, and
 - fields that are not long string fields.
-
-Finally, all numeric fields should always be attributes.
 
 ## Clean environment by removing all documents
 
@@ -893,9 +896,6 @@ removes all documents:
 <pre data-test="exec">
 $ docker exec vespa bash -c '/opt/vespa/bin/vespa-stop-services && /opt/vespa/bin/vespa-remove-index -force && /opt/vespa/bin/vespa-start-services'
 </pre>
-
-Also see [vespa-configserver-remove-state](../cloudconfig/configuration-server.html#zookeeper-recovery).
-
 
 ## Conclusion
 
