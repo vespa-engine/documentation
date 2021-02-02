@@ -1,5 +1,5 @@
 ---
-# Copyright 2019 Oath Inc. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Improving Text Search through ML"
 ---
 
@@ -300,6 +300,14 @@ The figure below shows how frequently (over more than 5.000 test queries) those 
 
 Overall, on average, there is not much difference between those models (with respect to MRR), which was expected given the simplicity of the models described here. The point was simply to point out the importance of choosing better loss functions when dealing with LTR tasks and to give a quick start for those who want to give it a shot in their own applications. We expect the difference in MRR between pointwise and listwise loss functions to increase as we move on to more complex models.
 
+## Next steps
+In this tutorial we have looked at using a simple *linear* ranking function. 
+Vespa integrates with several popular machine learning libraries which can be used for Machine Learned Ranking: 
+
+ - [Ranking with XGBoost Models](../xgboost.html) 
+ - [Ranking with LightGBM Models](../lightgbm.html) 
+ - [Ranking with Tensorflow Models](../tensorflow.html) 
+ - [Ranking with ONNX Models](../onnx.html) 
 
 <script>
 function processFilePREs() {
