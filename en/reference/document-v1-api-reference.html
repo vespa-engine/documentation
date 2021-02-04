@@ -38,7 +38,7 @@ title: "/document/v1 API reference"
       <tr>
         <th>Get</th>
         <td>
-          Get a document:
+          Get a single document:
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 </pre>
@@ -50,28 +50,32 @@ title: "/document/v1 API reference"
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;text-group-id&gt;/&lt;document-id&gt;
 </pre>
+          Supported parameters: <code>cluster, fieldSet, timeout, tracelevel</code>
         </td>
       </tr>
-      <tr>
+      <tr id="visit">
         <th>Visit</th>
         <td>
           <p>
-            Visit iterates over all document or a set of documents, in chunks,
-            using <a href="#continuation">continuation</a> as a progress token.
+          Iterate over and get all documents, or a <a href="#selection">selection</a> of documents,
+          in chunks, using <a href="#continuation">continuation</a> tokens to track progress.
           </p><p>
-          A Document API request can only retrieve data from one content cluster,
+          Supported parameters: <code>bucketSpace, <strong>cluster</strong>, concurrency, continuation,
+            fieldSet, selection, timeout, tracelevel, wantedDocumentCount</code>
+          </p><p>
+          Visits should only retrieve data from <em>one</em> content cluster,
           so <a href="#cluster">cluster</a> <strong>must</strong> be specified
-          for requests at the root <code>/document/v1/</code> level.
+          for requests at the root <code>/document/v1/</code> level, or when there is ambiguity. 
           This is required even if the application has only one content cluster.
           </p>
           <ul>
             <li>
-            Visit all documents across all document types and namespaces stored in content cluster:
+            Visit all documents across all document types and namespaces stored in the given content cluster:
 <pre>
 /document/v1/?cluster=&lt;clustername&gt;
 </pre>
             </li><li>
-            Visit all documents in namespace and document type:
+            Visit all documents with given namespace and document type:
             <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid
 </pre>
@@ -84,10 +88,10 @@ title: "/document/v1 API reference"
             </li>
           </ul>
           <p>
-            Documents can be grouped, in order to access a subset -
+            Documents can be grouped to limit accesses to a subset —
             often used in <a href="../streaming-search.html">streaming-search</a>.
             Streaming-search itself does a visit to search documents.
-            A group is defined by a numeric ID or string - see <a href="../documents.html#id-scheme">id scheme</a>.
+            A group is defined by a numeric ID or string — see <a href="../documents.html#id-scheme">id scheme</a>.
           </p>
           <ul>
             <li>
@@ -104,7 +108,8 @@ title: "/document/v1 API reference"
             Parent documents are <a href="services-content.html#document">global</a>
             and in the <code>global</code> <a href="#bucketspace">bucket space</a>.
             By default, visit will visit non-global documents
-            in the <code>default</code> bucket space.
+            in the <code>default</code> bucket space, unless document type is indicated,
+            and is a global document type.
           </p>
           <ul>
             <li>
@@ -122,26 +127,108 @@ title: "/document/v1 API reference"
 </tr><tr id="post">
   <th>POST</th>
   <td>
-    Create a document. Use a <a href="#condition">condition</a> for conditional writes.
+    <table class="table">
+      <tr>
+        <th>Put</th>
+        <td>
+          Write the document contained in the request body in JSON format.
+          Use a <a href="#condition">condition</a> for conditional writes.
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 </pre>
+          Supported parameters: <code>condition, route, timeout, tracelevel</code>
+        </td>
+      </tr>
+      <tr id="copy">
+        <th>Copy</th>
+        <td>
+          <p>
+          Write documents visited in source <a href="#cluster">cluster</a> to the 
+          <a href="#destinationcluster">destinationCluster</a> in the same application.
+          A <a href="#selection">selection</a> is mandatory — typically the document type. 
+          Supported paths (see <a href="#visit">visit</a> above for semantics):
+<pre>
+/document/v1/
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
+</pre>
+          Supported parameters: <code>bucketSpace, <strong>cluster</strong>, continuation, <strong>destinationCluster</strong>,
+          <strong>selection</strong>, timeChunk, timeout, tracelevel</code>
+          </p>
+        </td>
+      </tr>
+    </table>
   </td>
 </tr><tr id="put">
   <th>PUT</th>
   <td>
-    Update a document. Use a <a href="#condition">condition</a> for conditional writes.
+    <table class="table">
+      <tr>
+        <th>Update</th>
+        <td>
+          Update a document with the partial update contained in the request body in JSON format.
+          Use a <a href="#condition">condition</a> for conditional writes, and 
+          <a href="create">create</a> for creating empty documents when updating non-existent ones. 
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 </pre>
+          Supported parameters: <code>condition, create, route, timeout, tracelevel</code>
+        </td>
+      </tr>
+      <tr id="update-where">
+        <th>Update where</th>
+        <td>
+          <p>
+          Update visited documents in <a href="#cluster">cluster</a> with the partial update
+          contained in the request body in JSON format.
+          A <a href="#selection">selection</a> is mandatory, and a document type must be specified.
+          Supported paths (see <a href="#visit">visit</a> above for semantics):
+<pre>
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
+</pre>
+          Supported parameters: <code>bucketSpace, <strong>cluster</strong>, continuation,
+          <strong>selection</strong>, timeChunk, timeout, tracelevel</code>
+          </p>
+        </td>
+      </tr>
+    </table>
   </td>
 </tr><tr id="delete">
   <th>DELETE</th>
   <td>
-    Delete a document.
+    <table class="table">
+      <tr>
+        <th>Remove</th>
+        <td>
+          Remove a document.
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 </pre>
+          Supported parameters: <code>condition, route, timeout, tracelevel</code>
+        </td>
+      </tr>
+      <tr id="delete-where">
+        <th>Delete where</th>
+        <td>
+          <p>
+          Delete visited documents from <a href="#cluster">cluster</a>.
+          A <a href="#selection">selection</a> is mandatory.
+          Supported paths (see <a href="#visit">visit</a> above for semantics):
+<pre>
+/document/v1/
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
+/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
+</pre>
+          Supported parameters: <code>bucketSpace, <strong>cluster</strong>, continuation,
+          <strong>selection</strong>, timeChunk, timeout, tracelevel</code>
+          </p>
+        </td>
+      </tr>
+    </table>
   </td>
 </tr>
 </table>
@@ -160,13 +247,13 @@ title: "/document/v1 API reference"
     When visiting a particular document type,
     the bucket space is automatically deduced based on the provided type name.
     When visiting at a root <code>/document/v1/</code> level this information is not available,
-    hence only the non-global ("default") bucket space is visited by default.
+    and the non-global ("default") bucket space is visited by default.
     Specify <code>global</code> to visit global documents instead.
     Supported values: <code>default</code> (for non-global documents) and <code>global</code>.
 </tr><tr id="cluster">
   <th>cluster</th>
   <td>String</td>
-  <td>Name of <a href="../content/content-nodes.html">content cluster</a> to GET from.</td>
+  <td>Name of <a href="../content/content-nodes.html">content cluster</a> to GET from, or visit.</td>
 </tr><tr id="concurrency">
   <th>concurrency</th>
   <td>Integer</td>
@@ -180,41 +267,54 @@ title: "/document/v1 API reference"
 </tr><tr id="condition">
   <th>condition</th>
   <td>String</td>
-  <td>Requires that this condition is true, otherwise a 4xx is returned.
+  <td>Allows performing a document operation conditionally — when this fails, a 4xx is returned.
     See <a href="document-json-format.html#test-and-set">
     conditional updates</a> for details.</td>
 </tr><tr id="continuation">
   <th>continuation</th>
   <td>String</td>
-  <td>When visiting, a continuation token is returned if the result set is chunked.
-    Use the token in the <em>continuation</em> parameter to get the next chunk of documents.</td>
+  <td>When visiting, a continuation token is returned as the <code>"continuation"</code> field
+    in the JSON response, as long as more documents remain.
+    Use this token as the <code>continuation</code> parameter to visit the next chunk of documents.</td>
 </tr><tr id="create">
   <th>create</th>
   <td>Boolean</td>
-  <td>If set to true, updates will create new document if not existing -
-    see <a href="../reads-and-writes.html#create-if-nonexistent">create if nonexistent</a>.</td>
+  <td>If <code>true<code>, updates to non-existent documents will create an empty document to update.
+    See <a href="../reads-and-writes.html#create-if-nonexistent">create if nonexistent</a>.</td>
+</tr><tr id="destinationcluster">
+  <th>destinationCluster</th>
+  <td>String</td>
+  <td>Name of <a href="../content/content-nodes.html">content cluster</a> to copy to, during a copy visit.</td>
 </tr><tr id="fieldset">
   <th>fieldSet</th>
   <td>String</td>
   <td>A <a href="../documents.html#fieldsets">field set string</a>
-    with the set of document fields to return.
-    Default is <code>&lt;visited document type&gt;:[document]</code>, returning all fields.
+    with the set of document fields to fetch from the backend.
+    Default is <code>&lt;document type&gt;:[document]</code>, returning all <em>document</em> fields,
+    when document type is part of the path, or <code>[all]</code> when visiting at the root level.
   </td>
 </tr><tr id="route">
   <th>route</th>
   <td>String</td>
-  <td>The route for document operations. Default value is <code>default</code>.
+  <td>The route for single document operations, and for operations generated
+    by <a href="#copy">copy</a>, <a href="#update-where">update</a> or
+    <a href="#delete-where">deletion</a> visits. Default value is <code>default</code>.
     See <a href="../routing.html">routes</a>.</td>
 </tr><tr id="selection">
   <th>selection</th>
   <td>String</td>
-  <td>Select only a subset of documents when <a href="../content/visiting.html">visiting</a> -
+  <td>Select only a subset of documents when <a href="../content/visiting.html">visiting</a> —
     details in <a href="document-select-language.html">document selector language</a>.</td>
+</tr><tr id="timechunk">
+  <th>timeChunk</th>
+  <td>String</td>
+  <td>Target time to spend on one chunk of a copy, update or remove visit; with optional ks, s, ms or µs unit.
+    Default value is 60.</td>
 </tr><tr id="timeout">
   <th>timeout</th>
   <td>String</td>
   <td>Request timeout in seconds, or with optional ks, s, ms or µs unit. Default value is 175s.
-    Visitor timeouts will be set to 5s less than this.</td>
+    Visitor timeouts will be set to 5s less than this for get visits.</td>
 </tr><tr id="tracelevel">
   <th>tracelevel</th>
   <td>Integer</td>
@@ -227,11 +327,11 @@ title: "/document/v1 API reference"
   <td>
     <p>
       Best effort attempt to not respond to the client before <code>wantedDocumentCount</code>
-      number of documents can be returned.
+      number of documents have been visited.
       Response may still contain fewer documents if there are not enough matching documents left
       to visit in the cluster, or if the visiting times out.
       This parameter is intended for the case when you have relatively few documents in your cluster
-      and where each GET operation otherwise would only return a handful of documents.
+      and where each visit request would otherwise process only a handful of documents.
     </p><p>
       Note that the maximum value of <code>wantedDocumentCount</code> is bounded
       by an implementation-specific limit to prevent excessive resource usage.
@@ -247,7 +347,7 @@ title: "/document/v1 API reference"
 
 <h2 id="request-body">Request body</h2>
 <p>
-  POST and PUT have a body.
+  POST and PUT requests must include a body for single document operations, and PUT for update visits.
   A field has a <em>value</em> for a POST and an <em>update operation object</em> for PUT.
   Documents and operations use the <a href="document-json-format.html">document format</a>.
   The document fields must match the <a href="../schemas.html">schema</a>:
@@ -296,6 +396,9 @@ title: "/document/v1 API reference"
 </tr><tr>
   <th>504</th>
   <td>Gateway timeout.</td>
+</tr><tr>
+  <th>507</th>
+  <td>Insufficient storage.</td>
 </tr>
 </table>
 
@@ -303,12 +406,18 @@ title: "/document/v1 API reference"
 
 <h2 id="response-format">Response format</h2>
 <p>
-  Successful responses always include the <em>path</em> used in the request and one of:
-  <table class="table">
-    <tr><th>id</th><td>Document ID</td></tr>
-    <tr><th>documents[]</th><td>Array of documents in a visit result</td></tr>
-  </table>
-  GET can include a <code>fields</code> object if a Document was found in a <em>Get</em> request
+Responses are in JSON format, with the following fields:
+<table class="table">
+  <tr><th>path</th><td>Request URL path — always included.</td></tr>
+  <tr><th>message</th><td>An error message — included for all failed requests.</td></tr>
+  <tr><th>id</th><td>Document ID — always included for single document operations, including <em>Get</em>.</td></tr>
+  <tr><th>fields</th><td>The requested document fields — included for successful <em>Get</em> operations.</td></tr>
+  <tr><th>documents[]</th><td>Array of documents in a visit result —
+      each document has the <em>id</em> and <em>fields</em>.</td></tr>
+  <tr><th>documentCount</th><td>Number of visited and selected documents.</td></tr>
+</table>
+</p><p>
+GET can include a <code>fields</code> object if a document was found in a <em>GET</em> request
 <pre>
 {
     "pathId": "&lt;pathid&gt;",
@@ -319,8 +428,8 @@ title: "/document/v1 API reference"
 }
 </pre>
 </p><p>
-  A GET <em>visit</em> result can include an array of <code>documents</code>
-  plus a <code><a href="#continuation">continuation</a></code>:
+A GET <em>visit</em> result can include an array of <code>documents</code>
+plus a <code><a href="#continuation">continuation</a></code>:
 <pre>
 {
     "pathId":    "&lt;pathid&gt;",
@@ -333,11 +442,12 @@ title: "/document/v1 API reference"
         },
         ...
     ],
-    "continuation": "&lt;continuation string&gt;"
+    "continuation": "&lt;continuation string&gt;",
+    "documentCount": 123
 }
 </pre>
 </p><p>
-  A <code>message</code> can be returned for failed operations:
+A <code>message</code> can be returned for failed operations:
 <pre>
 {
     "pathId":  "&lt;pathid&gt;",
