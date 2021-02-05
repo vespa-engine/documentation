@@ -163,23 +163,17 @@ KEY=data-plane-private-key.pem
 continuation=""
 idx=0
 
-while [ "$continuation" != "continuation=" ]
-do
+while
   ((idx+=1))
   echo "$continuation"
   printf -v out "%05g" $idx
   filename=${NAMESPACE}-${DOCTYPE}-${out}.data.gz
   echo "Fetching data..."
-  curl -s --cert ${CERT} --key ${KEY} \
-    "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=20&amp;concurrency=4&amp;cluster=${CLUSTER}&amp;${continuation}" \
-    | gzip &amp; ${filename}
-  token=$(jq -r .continuation &lt;(gunzip -c ${filename}))
-  if [ "${token}" != "null" ]
-  then
-    continuation="continuation=${token}"
-  else
-    continuation="continuation="
-  fi
+  token=$(curl -s --cert ${CERT} --key ${KEY} \
+          "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=20&amp;concurrency=4&amp;cluster=${CLUSTER}&amp;${continuation}" \
+          | tee &gt;(gzip &gt; ${filename}) | jq -re .continuation)
+do
+  continuation="continuation=${token}"
 done
 </pre>
 
