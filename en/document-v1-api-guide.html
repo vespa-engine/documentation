@@ -128,7 +128,7 @@ $ curl -X DELETE http://hostname:8080/document/v1/namespace/music/docid/1
 
 <h2 id="data-dump">Data dump</h2>
 <p>
-To iterate over documents, use <a href="content/visiting.html">visiting</a> - sample output:
+To iterate over documents, use <a href="content/visiting.html">visiting</a> — sample output:
 <pre>
 {
     "pathId": "/document/v1/namespace/doc/docid",
@@ -145,7 +145,7 @@ To iterate over documents, use <a href="content/visiting.html">visiting</a> - sa
     "continuation": "AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA"
 }
 </pre>
-Note the <em>continuation</em> token - use this in the next request for more data.
+Note the <em>continuation</em> token — use this in the next request for more data.
 Sample script dumping all data using <a href="https://stedolan.github.io/jq/">jq</a> for JSON parsing:
 </p>
 <pre>
@@ -163,23 +163,17 @@ KEY=data-plane-private-key.pem
 continuation=""
 idx=0
 
-while [ "$continuation" != "continuation=" ]
-do
+while
   ((idx+=1))
   echo "$continuation"
   printf -v out "%05g" $idx
   filename=${NAMESPACE}-${DOCTYPE}-${out}.data.gz
   echo "Fetching data..."
-  curl -s --cert ${CERT} --key ${KEY} \
-    "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=20&amp;concurrency=4&amp;cluster=${CLUSTER}&amp;${continuation}" \
-    | gzip > ${filename}
-  token=`jq -r .continuation &lt;(gunzip -c ${filename})`
-  if [ "${token}" != "null" ]
-  then
-    continuation="continuation=${token}"
-  else
-    continuation="continuation="
-  fi
+  token=$(curl -s --cert ${CERT} --key ${KEY} \
+          "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=20&amp;concurrency=4&amp;cluster=${CLUSTER}&amp;${continuation}" \
+          | tee &gt;(gzip &gt; ${filename}) | jq -re .continuation)
+do
+  continuation="continuation=${token}"
 done
 </pre>
 
@@ -195,6 +189,6 @@ done
   To avoid this, limit visiting to just one document type using <em>selection</em>
   and explicitly filter these internal fields away using <em>fieldSet</em>:
 <pre>
-curl http://hostname:8080/document/v1/?cluster=mycluster&amp;selection=mydoctype&amp;fieldSet=mydoctype:[document]
+curl http://hostname:8080/document/v1/?cluster=mycluster&amp;selection=mydoctype&amp;fieldSet=mydoctype:%5Bdocument%5D
 </pre>
 </p>
