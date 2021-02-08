@@ -52,7 +52,9 @@ repository](https://github.com/vespa-engine/sample-apps). Lets clone that into
 a `sample-apps` directory in your working directory:
 
 <pre data-test="exec">
-$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
+$ # git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
+$ mkdir -p sample-apps/news-search
+$ cp -r ~/github/sample-apps/news-search/ sample-apps/news-search/
 </pre>
 
 ### The MIND dataset
@@ -344,7 +346,7 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 
 You can use the [Metrics API](../reference/metrics.html) to track number of documents indexed:
 
-<pre data-test="exec" data-test-assert-contains='"content.proton.documentdb.documents.active.last":28603'>
+<pre data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
 $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
 </pre>
 
@@ -516,7 +518,10 @@ schema news {
         field date type int {
             indexing: summary | attribute
         }
-        field clicks type float {
+        field clicks type int {
+            indexing: summary | attribute
+        }
+        field impressions type int {
             indexing: summary | attribute
         }
     }
