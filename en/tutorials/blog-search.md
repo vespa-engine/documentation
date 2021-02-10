@@ -657,7 +657,8 @@ documents are added and the index grows.  Since attributes are kept in memory,
 they are excellent for fields which require fast access, e.g., fields used for
 sorting or grouping query results.  The downside is higher memory usage. 
 
-Attribute fields also supports true partial updates (in-place updates). This means that the *popularity* field can be updated with low latency (milliseconds)
+Attribute fields also support true partial updates (in-place updates).
+This means that the *popularity* field can be updated with low latency (milliseconds)
 and high throughput without having to re-index the entire blog post for changes in the popularity.
 
 Attribute fields are searchable, see also [When to use fast-search option for attributes](performance/feature-tuning.html#when-to-use-fast-search). 
