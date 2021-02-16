@@ -134,19 +134,39 @@ This returns a `200 OK` when it is ready for receiving traffic. Note here
 that we don't run the command inside the Docker container. The port `8080`
 was exposed when starting the Docker container, so we can query it directly.
 
+## Feeding to Vespa
+
+We must index data before we can search for it. This is called 'feeding', 
+and we'll get back to that in the next part of the tutorial. For now,
+we'll feed in a single test document. We'll use the `vespa-http-client` 
+Java feeder for this:
+
+<pre data-test="exec" >
+$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
+    --verbose --file /app/doc.json --host localhost --port 8080'
+</pre>
+
+This runs the `vespa-http-client` Java client with the file 
+`doc.json` file. This contains a single document which we'll 
+query for below.
+
+In later tutorials, when more data should be fed to the system,
+use this command while pointing to the correct feed file.
+
+
 ## Testing Vespa
 
 If everything is ok so far, our application should be up and running. We 
 can query the endpoint:
 
-<pre data-test="exec" data-test-assert-contains='"coverage":100'>
+<pre data-test="exec" data-test-assert-contains='Hello world!'>
 $ curl -s http://localhost:8080/search/?query=sddocname:news
 </pre>
 
 This uses the `search` API to search for all documents of type `news`.
-Naturally, this returns `0` results because we haven't sent 
-any documents to the system yet. This is called 'feeding', and we'll
-get back to that in the next part of the tutorial.
+This should return `1` result, which is the document we fed above.
+Well done!
+
 
 ## Stopping and starting Vespa
 
