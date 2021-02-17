@@ -46,15 +46,19 @@ users and train machine learning models for use in ranking.
 
 ## A minimal Vespa application
 
-Let's start by cloning the sample applications. All the code for this
-tutorial series is found under the `news` directory, under the different
-parts there.
+This tutorial has a [companion sample
+application](https://github.com/vespa-engine/sample-apps.git). Throughout
+the tutorial we will be using support code from this application.
+Also, the final state of each tutorial can be found in the various
+`app-...` sub-directories.
+
+Let's start by cloning the sample application. 
 
 <pre data-test="exec">
 $ git clone https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps
 $ git checkout lesters/add-news-tutorial-sample-app  # REMOVE me when merged
-$ cd news/getting-started
+$ cd news
 </pre>
 
 The `getting-started` directory contains a minimal Vespa application. There
@@ -91,11 +95,10 @@ $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationSt
 
 The `docker exec vespa bash -c '...'` runs the command inside the Docker
 container, so we don't have to expose the configuration server out from the
-container. With the config server up and running, we can deploy our
+container. With the config server up and running, we can deploy our application:
 
-application:
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/src/main/application && \
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-getting-started && \
     /opt/vespa/bin/vespa-deploy activate'
 </pre>
 

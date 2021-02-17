@@ -26,6 +26,9 @@ application and feed some data to it. We'll round off with some basic
 querying before moving on to the next part of the tutorial which is about
 searching for content.
 
+For reference, the final state of this tutorial can be found in the
+`app-feed-and-query` sub-directory of the `news` sample application.
+
 ## The Microsoft News Dataset
 
 During these tutorials we will use the [Microsoft News
@@ -62,7 +65,6 @@ $ cd news
 </pre>
 
 <pre data-test="exec" >
-$ cd feed-and-query
 $ ./bin/download-mind.sh demo
 </pre>
 
@@ -90,10 +92,15 @@ this tutorial, we won't be using this data, but feel free to download
 yourself.
 </p>
 
-Let's start building a Vespa application to make this data searchable.
+Let's start building a Vespa application to make this data searchable. We'll
+create the directory `my-app` under the `news` sample app directory to
+contain your Vespa application:c
 
+<pre data-test="exec">
+$ mkdir my-app
+</pre>
 
-## Application Packages
+# Application Packages
 
 A Vespa [application package](../cloudconfig/application-packages.html) is the
 set of configuration files and Java plugins that together define the behavior
@@ -110,9 +117,10 @@ services specification.
 
 The [services.xml](../reference/services.html) file defines the services that
 make up the Vespa application — which services to run and how many nodes per
-service. For this application, it looks like this:
+service. Write the following to `my-app/services.xml`:
 
-```
+<pre data-test="file" data-path="sample-apps/news/my-app/services.xml">
+<?xml version='1.0' encoding='UTF-8'?>
 <services version="1.0">
 
   <container id='default' version='1.0'>
@@ -134,7 +142,7 @@ service. For this application, it looks like this:
   </content>
 
 </services>
-```
+</pr>
 
 Quite a lot is set up here:
 
@@ -160,16 +168,16 @@ Quite a lot is set up here:
 
 The [hosts.xml](../reference/hosts.html) file contains a list of all the
 hosts/nodes that are part of the application, with an alias for each of them.
-This tutorial uses a single node:
+Write the following to `my-app/hosts.xml`:
 
-```
+<pre data-test="file" data-path="sample-apps/news/my-app/hosts.xml">
 <?xml version="1.0" encoding="utf-8" ?>
 <hosts>
   <host name="localhost">
     <alias>node1</alias>
   </host>
 </hosts>
-```
+</pre>
 
 This sets up the alias `node1` to represent the local host. You 
 saw this alias in the services specification above.
@@ -193,10 +201,10 @@ in a schema. Schemas are found under the `schemas` directory in the application
 package, and **must** have the same name as the document type mentioned 
 in `services.xml`.
 
-Give the MIND dataset described above, we'll set up the schema as follows, 
-`schemas/news.sd`:
+Give the MIND dataset described above, we'll set up the schema as follows.
+Write the following to `my-app/schemas/news.sd`:
 
-```
+<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
 schema news {
     document news {
         field category type string {
@@ -236,7 +244,7 @@ schema news {
     }
 
 }
-```
+</pre>
 
 The `document` is wrapped inside another element called `search`.  The name
 following these elements, here `news`, must be exactly the same for both.
@@ -281,7 +289,7 @@ $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
 $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
 </pre>
 <pre style="display:none" data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/src/main/application && /opt/vespa/bin/vespa-deploy activate'
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/my-app && /opt/vespa/bin/vespa-deploy activate'
 </pre>
 <pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
 $ curl -s --head http://localhost:8080/ApplicationStatus
