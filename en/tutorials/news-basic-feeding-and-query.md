@@ -207,6 +207,10 @@ Write the following to `my-app/schemas/news.sd`:
 <pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
 schema news {
     document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
         field category type string {
             indexing: summary | attribute
         }
