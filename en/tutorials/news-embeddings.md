@@ -177,7 +177,7 @@ The full code can be seen in the sample application, in `src/python/train.py`.
 Let's go ahead and generate the embeddings. Run the following:
 
 <pre data-test="exec">
-$ # ./src/python/train_mf.py mind 10
+$ ./src/python/train_mf.py mind 10
 </pre>
 
 This runs the training code for 10 epochs, and deposits the resulting
@@ -386,6 +386,13 @@ Self-Attention](https://www.aclweb.org/anthology/D19-1671.pdf), results in
 to create a better model for the user embedding. For the moment however,
 we are satisfied with these, and we'll use them going forward. Feel 
 free to experiment and see if you can achieve better results!
+
+<p class="alert alert-success"> 
+Note that these numbers are for the demo dataset, which is much
+smaller than the full dataset. For reference, in 
+[the MIND paper](https://msnews.github.io/assets/doc/ACL2020_MIND.pdf) 
+the baseline here achieves `0.6776` on the full dataset.
+</p>
 
 The training script writes these embeddings to the files
 `mind/user_embeddings.tsv` and `mind/news_embeddings.tsv`.
