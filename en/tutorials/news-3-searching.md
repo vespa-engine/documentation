@@ -423,9 +423,9 @@ we must specify the ranking profile to use with the `ranking` parameter.
 ## Conclusion
 
 After completing this part of the tutorial, you should now have a basic
-understanding of how you can load data into Vespa and effectively search
-for content. In the next part of the tutorial, we'll start with 
-the basics for transforming this into a recommendation system.
+understanding of how you can load data into Vespa and effectively search for
+content. In the [next part of the tutorial](news-4-embeddings.html), we'll
+start with the basics for transforming this into a recommendation system.
 
 <pre style="display:none" data-test="after">
 $ docker rm -f vespa

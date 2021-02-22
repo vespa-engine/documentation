@@ -460,7 +460,7 @@ a linear, brute-force scan for efficiency.
 We now have a basic recommendation system up and running. We can query 
 for a user, retrieve the embedding vector and use that for querying
 the news articles. Right now, this means two calls to Vespa. In 
-the next part of the tutorial, we will introduce `searchers` which 
+the [next part of the tutorial](news-6-recommendation-with-searchers.html), we will introduce `searchers` which 
 allows for custom logic during query processing, so we only 
 need one pass. 
 

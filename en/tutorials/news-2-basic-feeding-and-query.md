@@ -52,9 +52,8 @@ We'll start with developing a search application, so we'll focus on the
 news content at first. We'll use the impression data as we begin building 
 the recommendation system later in this series.
 
-Let's start by downloading the data. The subdirectory `feed-and-query`
-in the `news` sample app directory will be our starting point. We've 
-included a script to download the data for us:
+Let's start by downloading the data. The `news` sample app directory will 
+be our starting point. We've included a script to download the data for us:
 
 <pre style="display:none" data-test="exec" >
 $ git clone https://github.com/vespa-engine/sample-apps.git
@@ -91,7 +90,7 @@ yourself.
 
 Let's start building a Vespa application to make this data searchable. We'll
 create the directory `my-app` under the `news` sample app directory to
-contain your Vespa application:c
+contain your Vespa application:
 
 <pre data-test="exec">
 $ mkdir my-app
@@ -141,7 +140,7 @@ service. Write the following to `my-app/services.xml`:
   </content>
 
 </services>
-</pr>
+</pre>
 
 Quite a lot is set up here:
 
@@ -200,7 +199,7 @@ in a schema. Schemas are found under the `schemas` directory in the application
 package, and **must** have the same name as the document type mentioned 
 in `services.xml`.
 
-Give the MIND dataset described above, we'll set up the schema as follows.
+Given the MIND dataset described above, we'll set up the schema as follows.
 Write the following to `my-app/schemas/news.sd`:
 
 <pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
@@ -418,7 +417,7 @@ news", and as such, all documents in the index are returned.
 ## Conclusion
 
 We now have a Vespa application running with searchable data. In 
-the next part of the tutorial we'll, explore searching with 
+the [next part of the tutorial](news-3-searching.html), we'll explore searching with 
 sorting, grouping, and ranking results.
 
 <pre style="display:none" data-test="after">

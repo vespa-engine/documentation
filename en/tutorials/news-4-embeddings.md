@@ -281,7 +281,7 @@ Now that we have content-based embeddings for each news article,
 we can train the model to use them. The following figure illustrates
 the model we are training:
 
-![News content embeddings](images/embeddings.png)
+<img src="images/embeddings.png" width="768px" />
 
 So, we'll pass the 512-dimensional embeddings from the BERT model 
 through a typical neural network layer to reduce dimensions to 50.
@@ -402,7 +402,7 @@ the baseline here achieves `0.6776` on the full dataset.
 The training script writes these embeddings to the files
 `mind/user_embeddings.tsv` and `mind/news_embeddings.tsv`.
 
-## Mapping from inner-product search to Euclidean search
+## Mapping from inner-product search to euclidean search
 
 There is one more step we need to do before feeding these vectors 
 to Vespa. The vectors have been trained to maximize the inner product.
@@ -434,7 +434,7 @@ We are now ready to feed these vectors to Vespa.
 
 Now that we've generated user and document embeddings, we can start using 
 these to recommend news items to users. We'll start feeding these in 
-the next part of the tutorial.
+the [next part of the tutorial](news-5-recommendation.html).
 
 
 <script>
