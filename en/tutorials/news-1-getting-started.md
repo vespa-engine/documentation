@@ -47,10 +47,10 @@ users and train machine learning models for use in ranking.
 ## A minimal Vespa application
 
 This tutorial has a [companion sample
-application](https://github.com/vespa-engine/sample-apps.git). Throughout
-the tutorial we will be using support code from this application.
-Also, the final state of each tutorial can be found in the various
-`app-...` sub-directories.
+application](https://github.com/vespa-engine/sample-apps.git) found 
+under the `news` directory.. Throughout the tutorial we will be 
+using support code from this application. Also, the final state of 
+each tutorial can be found in the various `app-...` sub-directories.
 
 Let's start by cloning the sample application. 
 

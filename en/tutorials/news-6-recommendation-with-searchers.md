@@ -3,16 +3,12 @@
 title: "News search and recommendation tutorial - searchers"
 ---
 
+<!-- Temporary - for doc testing - display is "none" -->
 <pre style="display:none" data-test="exec" >
-$ # git clone https://github.com/vespa-engine/sample-apps.git
-$ # cd sample-apps
-$ # git checkout lesters/add-news-tutorial-sample-app  # REMOVE me when merged
-$ # cd news
-$ # ./bin/download-mind.sh demo
-$ # python3 src/python/convert_to_vespa_format.py mind
-$ mkdir sample-apps
-$ cp -r /Users/lesters/github/sample-apps/news sample-apps/
+$ git clone https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps/news
+$ ./bin/download-mind.sh demo
+$ python3 src/python/convert_to_vespa_format.py mind
 $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
     --volume `pwd`:/app --publish 8080:8080 vespaengine/vespa
 </pre>

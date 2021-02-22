@@ -58,9 +58,7 @@ included a script to download the data for us:
 
 <pre style="display:none" data-test="exec" >
 $ git clone https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps
-$ git checkout lesters/add-news-tutorial-sample-app  # REMOVE me when merged
-$ cd news
+$ cd sample-apps/news
 </pre>
 
 <pre data-test="exec" >
