@@ -54,12 +54,12 @@ application for personalized news recommendations. The parts are:
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
-In the previous part we set up a recommendation system that, given a user id,
-needed two requests to generate a recommendation. The first to retrieve the
-user embedding, and a second for finding the nearest neighbor news articles.
-In this part, we'll introduce `searchers`, which are processors that can
-modify queries before passing them along to search. These will allow
-us to pull the logic from the Python scripts into Vespa.
+In the previous part of this series, we set up a recommendation system that,
+given a user id, needed two requests to generate a recommendation. The first
+to retrieve the user embedding, and a second for finding the nearest neighbor
+news articles. In this part, we'll introduce `searchers`, which are
+processors that can modify queries before passing them along to search. These
+will allow us to pull the logic from the Python scripts into Vespa.
 
 For reference, the final state of this tutorial can be found in the
 `app-6-recommendation-with-searchers` sub-directory of the `news` sample application.
@@ -107,7 +107,7 @@ This shows a small sample of the additional output when using `tracelevel`. Note
 invocations of the searchers. Each searcher gets invoked along a chain, and the last 
 searcher in the chain sends the post-processed query to the search backend. When the
 results come back, the processing passes back up the chain. The searchers can then
-process the results before passing to the previous searcher, and ultimately back as 
+process the results before passing them to the previous searcher, and ultimately back as 
 a response to the query.
 
 <p class="alert alert-success"> 
@@ -117,10 +117,10 @@ generally very helpful when debugging vespa queries.
 
 So, [searchers](../searcher-development.html) are Java components that perform
 some kind of processing along the query chain; either modifying the query before 
-the actual search, modifying the results after search, or some combination of both.
+the actual search, modifying the results after the search, or some combination of both.
 Searchers are very flexible.
 
-Developers can provide their own searchers and inject them in the query chain.
+Developers can provide their own searchers and inject them into the query chain.
 We'll capitalize on this and create a searcher that performs essentially 
 the same task that our `src/python/user_search.py` script does: retrieve
 a user embedding and do a news article search based on that. In the process, 
@@ -221,20 +221,20 @@ from the user document.
 <p class="alert alert-success"> 
 Note that we explicitly call a `fill` on the results before returning. A query is
 usually passed to the search backend at least twice: one to retrieve the results, 
-and one to retrieve the `summary` data of the final result set. This is to avoid 
+another to retrieve the `summary` data of the final result set. This is to avoid 
 sending excess data between services. 
 
 For instance, if searching for the top 10 results with two search backends, each 
 backend will retrieve the top 10 results from the local content on that node. A 
-searcher will determine the "globally" top 10, and only issue a `fill` to retrieve 
+searcher will determine the "globally" top 10 and only issue a `fill` to retrieve 
 the summary features for those top 10.
 </p>
 
 Now that we've retrieved the user embedding, we programmatically set up a
-nearest neighbor search, and add the user embedding to the query as the
+nearest-neighbor search, and add the user embedding to the query as the
 ranking feature `query(user_embedding)`. The search is then passed along to
 the next searcher in the chain. We do not need to explicitly fill the 
-result here, as that is guaranteed to be done before ultimately returning
+result here, as that is guaranteed to happen before ultimately returning
 the results.
 
 Again, note that all this is pretty much the same as what we did in
@@ -265,11 +265,10 @@ code. In Vespa we use [Apache Maven](https://maven.apache.org/) for this,
 which requires a project object model, or `pom.xml`, to specify how to build
 this artifact. 
 
-We won't go through that here, please refer to the
+We won't go through that here; please refer to the
 `app-6-recommendation-with-searchers` sub-directory in the `news` sample
-application for details. Note that the directory structure for this
-application has changed in comparison to the previous parts in 
-the tutorial. The structure is now:
+application for details. Note that this application's directory structure has
+changed compared to the previous parts in the tutorial. The structure is now:
 
 ```
 .
@@ -305,13 +304,13 @@ $ mvn package
 The `pom.xml` is set up to create an artifact called `news-recommendation`, 
 which is what we referred to in `services.xml`. When the command 
 finishes, we can see this artifact in the `target` sub-directory. Also in 
-this directory we find a file `application.zip`. This contains the 
+this directory we find the `application.zip` file. This contains the 
 entire Vespa application with Java components.
 
 Until now, we've deployed the entire application directory. From now on 
 we deploy this `application.zip` file.
 
-After this file has been deployed, we are ready for testing this. Please 
+After this file has been deployed, we are ready to test this. Please 
 refer to [the searcher development guide](../searcher-development.html)
 for much more on searchers and the Java API.
 
@@ -324,8 +323,8 @@ the `user_id`:
 $ curl -s http://localhost:8080/search/?user_id=U33527&searchchain=user | python -m json.tool
 </pre>
 
-This should now return the top recommended news articles for this user. Indeed,
-if we now add a with a `&tracelevel=5` we see our searcher being invoked:
+This should now return the top 10 recommended news articles for this user. Indeed,
+if we now add a with a `&tracelevel=5`, we see our searcher being invoked:
 
 ```
 ...
@@ -351,17 +350,18 @@ be passed along with the query by adding it to the default query profile in
 
 <p class="alert alert-success"> 
 The `src/python/evaluate.py` script can now be modified to also use this searcher.
-However, the searcher needs to be modified to accept a list of news article id's
-and only recall those. We'll leave this as an exercise to the reader.
+However, to properly calculate the metrics, the searcher needs to be modified to 
+accept a list of news article id's and only recall those. We'll leave this as 
+an exercise to the reader.
 </p>
 
 ## Document processors
 
 As can be seen in the architecture overview above, there are other component 
 types as well. One is document processors, which are conceptually similar
-to searchers. When a document is fed to Vespa, it also goes through a 
-chain of document processors for pre-processing before being passed 
-to the content node for storage and indexing.
+to searchers. When a document is fed to Vespa, it goes through a 
+chain of document processors before being passed to the content node for 
+storage and indexing.
 
 Vespa also supports custom document processors. Please refer to 
 [the guide for document processing](../document-processing.html) for 
@@ -377,45 +377,44 @@ $ curl -s "http://localhost:8080/search/?user_id=U33527&hits=100" | \
       wc -l
 ```
 
-we see that all the hits are of category `sports` for this user. Actually,
+We see that all the hits are of category `sports` for this user. Actually,
 they are all from the `football_nfl` sub-category. Indeed, from inspection of
 the impressions file, this user has only clicked on `sports` articles. So,
-while this can seem as a success, we generally would like to give users 
-some form of diversity to keep the user interested. This is also to 
+while this can seem a success, we generally would like to give users 
+some form of diversity to keep them interested. This is also to 
 combat the negative effects of filter bubbles.
 
 One way to do this is to create searchers that perform multiple queries
-to the backend with various rank profiles. In the above we were only 
-retrieving results from the `recommendation` rank profile, but we can
+to the backend with various rank profiles. In the above, we were only 
+retrieving results from the `recommendation` rank profile. Still, we can
 have any number of rank profiles. By searching in multiple rank profiles, 
 we can blend the results from these sources before returning to the 
-user, and thus introduce some form of diversity. 
+user, and thus introduce diversity. 
 
 This is often called federation. Vespa supports federation both
 from internal and external sources. Please see 
 [the guide on federation](../federation.html) for more information.
 
 <p class="alert alert-success"> 
-If the same document can be returned from multiple sources it's
-important to perform some form of deduplication before returning
+If the same document can be returned from multiple sources, it's
+important to perform some form of de-duplication before returning
 the final results!
 </p>
 
 A common way of performing blending from multiple sources is to implement a specialized
-blending searcher. This searcher can for instance use an approach such 
+blending searcher. This searcher can, for instance, use an approach such 
 [reciprocal rank fusion](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.150.2291&rep=rep1&type=pdf) 
-which gives decent results. However, when it comes to diversity
+which gives decent results. However, when it comes to diversity,
 there are usually some goals or restrictions that needs to be controlled.
 In this case the business rules can be hand-written in the blending searcher.
 Searchers are flexible enough to perform any type of processing.
 
 ## Conclusion
 
-We now have a Vespa application up and running that takes a single 
-`user_id` and returns recommendation for that user. In the next 
-part of the tutorial we'll address the problem of what to 
-do when new users without any history visit our recommendation system.
-
+We now have a Vespa application up and running that takes a single `user_id`
+and returns recommendations for that user. In the next part of the tutorial,
+we'll address what to do when new users without any history visit our
+recommendation system.
 
 <pre style="display:none" data-test="after">
 $ docker rm -f vespa

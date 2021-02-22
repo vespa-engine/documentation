@@ -54,29 +54,30 @@ application for personalized news recommendations. The parts are:
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
-In this part of the series we'll introduce a new ranking signal: category
-click-through rate (CTR). The idea being that we can recommend popular
-content for for users which don't have a click history yet. Rather than just
-recommending on articles, we recommend based on categories. However, these
-global CTR values can change often so we need an efficient way to update this
-value for all documents. We'll do that by introducing parent-child
-relationships between documents in Vespa. We will also use sparse tensors
-directly in ranking.
+In this part of the series, we'll introduce a new ranking signal: category
+click-through rate (CTR). The idea is that we can recommend popular content
+for users that don't have a click history yet. Rather than just recommending
+based on articles, we recommend based on categories. However, these global
+CTR values can often change continuously, so we need an efficient way to
+update this value for all documents. We'll do that by introducing
+parent-child relationships between documents in Vespa. We will also use
+sparse tensors directly in ranking.
 
 For reference, the final state of this tutorial can be found in the
 `app-7-parent-child` sub-directory of the `news` sample application.
 
 ## Parent-child relationships in Vespa
 
-Recall that when ranking a document, most features come from either
-attributes in the document or parameters passed with the query. Parent-child
-relationships introduce the option of using attributes found in other documents.
-Parent-child relationships works as a form of scalable document joins.
+Recall that most features come from either attributes in the document or
+parameters passed with the query when ranking a document. Parent-child
+relationships introduce the option of using attributes found in other
+documents. Parent-child relationships work as a form of scalable document
+joins.
 
 For instance, assume we have a global CTR value for the sports category of `0.2`. 
 If we want to use this value during ranking, we could have a field in each 
 news article holding this value. However, when we need to update this value, we 
-then would need to issue a partial update to all documents, which seems wasteful.
+need to issue a partial update to all documents, which seems wasteful.
 
 Another way would be to take inspiration from our `UserProfileSearcher`, where 
 we retrieved the tensor embedding for a user in a search before passing that with 
@@ -111,7 +112,7 @@ schema category_ctr {
 
 This document holds a single field: a [tensor](../tensor-user-guide.html) of type
 `tensor<float>(category{})`. This is a tensor with a single sparse dimension, which
-is a bit different than the tensors we have seen so far. Sparse tensors have strings
+is slightly different from the tensors we have seen so far. Sparse tensors have strings
 as dimension addresses rather than a numeric index. More concretely, an example of 
 such a tensor is (using the [tensor literal form](../reference/tensor.html#tensor-literal-form)):
 
@@ -126,8 +127,8 @@ such a tensor is (using the [tensor literal form](../reference/tensor.html#tenso
 }
 ```
 
-So this tensor holds all the CTR scores for all the categories. When updating this tensor,
-we have the option of updating individual cells if we we don't need to update the whole tensor.
+This tensor holds all the CTR scores for all the categories. When updating this tensor,
+we can update individual cells if we don't need to update the whole tensor.
 This is called [tensor modify](../reference/document-json-format.html#tensor-modify) and 
 can be helpful when you have large tensors.
 
@@ -172,8 +173,8 @@ schema news {
 The field `category_ctr_ref` is a field of type `reference` of a
 `category_ctr` document type. When feeding this field, Vespa expects the
 fully qualified document id. For instance, if our global CTR document has the
-id `id:category_ctr:category_ctr::global`, this is what we need to feed to
-this field. Usually there are many parent documents that children can reference,
+id `id:category_ctr:category_ctr::global`, that is what this field must be 
+set to. Usually, there are many parent documents that children can reference,
 but our application will only hold one.
 
 <p class="alert alert-success"> 
@@ -193,11 +194,11 @@ the document referenced in the `category_ctr_ref` field. We name this as
 
 Up until this point, we've only used tensors as storage. We used tensors to
 hold news and user embeddings, and Vespa used these tensors to calculate the
-euclidean distances in our nearest neighbor search.
+euclidean distances in our nearest-neighbor search.
 
 However, Vespa has a [rich language](../tensor-user-guide.html#ranking-with-tensors)
-to perform calculations with tensors. We'll exploit that here by 
-looking up the `news` article's category in the global CTR tensor and use that 
+to perform calculations with tensors. We'll exploit that by 
+looking up the `news` article's category in the global CTR tensor and using that 
 as a feature in ranking.
 
 Our `news` document has a field currently that holds the `category` as a string. 
@@ -231,7 +232,7 @@ Given the global category CTR example above, this would result in the value
 `finance` in the `category` dimension of the example above had a value of
 `0.1`. The multiplication of these two tensors is conceptually an "inner
 join", so you can take the matching cells and multiply them together. Due to
-the sparseness of the tensor, only the `finance` cell matches and that value
+the sparseness of the tensor, only the `finance` cell matches, and that value
 is multiplied by the `1.0` in this document. So in this case, this would
 effectively work as a lookup.
 
@@ -263,13 +264,13 @@ rank-profile recommendation_with_global_category_ctr inherits recommendation {
 }
 ```
 
-Here, we've added a first phase ranking expression that multiplies the nearest neighbor 
+Here, we've added a first phase ranking expression that multiplies the nearest-neighbor 
 score with the category CTR score, implemented with the functions `nearest_neighbor` 
 and `category_ctr`, respectively. We've added a `sum` function around the `category_ctr` 
 expression - this is simply to unbox the single-value tensor to a double value suitable 
 for use in the first phase expression.
 
-Note that, as a first attempt we just multiply the nearest neighbor with the category CTR
+Note that, as a first attempt, we just multiply the nearest-neighbor with the category CTR
 score. This is not necessarily the correct way to combine these values, but we'll get back
 to that in a bit.
 
@@ -353,21 +354,21 @@ If we were to feed another value to the global CTR document, this updated value 
 immediately available. As such, the system responds quickly to changes in the global 
 parameters.
 
-Now, a simple multiplication between these features might not give us what we want. For instance, 
-these features have different ranges, different average values across the corpus and different
-standard deviations. Particularly, if we add multiple additional features, just multiplying 
-them together will probably not give a great user experience.
+Now, a simple multiplication between these features might not give us what we
+want. For instance, these features have different average values different
+standard deviations. Particularly, if we add multiple additional features,
+just multiplying them together will probably not give a great user
+experience.
 
-To remedy this we will try to learn a suitable weighting between features. We'll 
+To remedy this, we will try to learn a suitable weighting between features. We'll 
 address this in the next part of this series.
 
 ## Conclusion
 
-In this tutorial we introduced parent-child relationships and demonstrated it 
-use through a global CTR feature we used in ranking. As this feature was based 
-on tensors, we also introduced ranking with tensor expressions. In the 
-next part of the tutorial we will start using a machine learned model in
-ranking.
+This tutorial introduced parent-child relationships and demonstrated it
+through a global CTR feature we used in ranking. As this feature was based on
+tensors, we also introduced ranking with tensor expressions. In the next part
+of the tutorial, we will start using a machine-learned model in ranking.
 
 <pre style="display:none" data-test="after">
 $ docker rm -f vespa
