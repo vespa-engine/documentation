@@ -8,25 +8,25 @@ title: "News search and recommendation tutorial - embeddings"
 This is the fourth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. Getting started.
-2. A basic news search application - application packages, feeding, query.
-3. News search - sorting, grouping, and ranking.
-4. Generating embeddings for users and news articles.
-5. News recommendation - partial updates (news embeddings), ANNs, filtering
-6. News recommendation - custom searchers, doc processors
-7. News recommendation - parent-child, tensor ranking
+1. [Getting started](news-1-getting-started.html) - this part.
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
+3. [News search](news-3-searching) - sorting, grouping, and ranking.
+4. [Generating embeddings for users and news articles](news-4-embeddings.html).
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
 In this part, we'll start transforming our application from news search to
-recommendation. However, we won't be using Vespa at all in this part. Our
+recommendation. We won't be using Vespa at all in this part. Our
 focus is to generate news and user embeddings. We'll start using these
 embeddings in the next part. You can skip this part if you wish.
 
-The basic function of a recommendation system is to provide items of interest
+The primary function of a recommendation system is to provide items of interest
 to any given user. The more we know about the user, the better
 recommendations we can provide. We can view recommendation as search where
-the user profile is the query. So, in this tutorial we will build upon
+the query is the user profile. So, in this tutorial we will build upon
 the previous news search tutorial by creating user profiles and use 
 them to search for relevant news articles.
 
@@ -39,13 +39,24 @@ euclidean distance search before moving along to the next tutorial.
 Let's start with taking a look again at what data the MIND dataset provides
 for us.
 
+#### Requirements
+
+We start using some machine learning tools in this tutorial. Specifically,
+we need Numpy, Scikit-learn, PyTorch, and the HuggingFace Transformers 
+library. Make sure you have all the necessary dependencies by running the 
+following in the sample application directory:
+
+```
+$ pip3 install -r requirements.txt
+```
+
 ## The MIND dataset
 
 The MIND dataset, for our purposes in this series of tutorials, consists 
 of two main files: `news.tsv` and `behaviors.tsv`. We used the former 
 in the previous tutorial, as that contains all news article content.
 
-The `behaviors.tsv` file contains a set of impressions. An impression is a
+The `behaviors.tsv` file contains a set of impressions. An impression is an
 ordered list of news articles that was generated for a user. It includes
 which of those articles the user clicked, and conversely, which ones were
 not. We designate articles not clicked as "skips". Also included in the
@@ -62,28 +73,28 @@ time, the user had previously clicked on article `N2139`. We can
 cross-reference with the `news.tsv` and extract the content of these
 articles.
 
-We interpret a click as a positive signal for interest, and a skip as
+We interpret a click as a positive signal for interest and a skip as
 possibly a negative signal for interest. This is called implicit feedback, as
 the users haven't explicitly expressed their interests. However, using clicks
-and skips we can anyway start to infers the users' interests.
+and skips, we can still start to infer the users' interests.
 
 ## Collaborative filtering in recommendation systems
 
 A simple approach to provide recommendations to the above would be to extract
 the categories, subcategories, and/or entities the users have implicitly
 interacted with, and store these for each user. We can call this a sparse
-user profile, because we store the exact terms of entities or categories. We
+user profile because we store the exact terms of entities or categories. We
 could then use traditional information retrieval techniques to search for
 more articles with similar content.
 
 However, by doing this we miss out on a lot of information. For instance,
-some categories or entities are similar which could be of interest for the
+some categories or entities are similar, which could be of interest for the
 user. Also, users with similar interests tend to click on similar articles.
-So, if some type of content was interesting to one user, it would likely be
+If some type of content was interesting to one user, it would likely be
 interesting to similar users.
 
 Exploiting this information is called collaborative filtering, and the
-classical approach to this is matrix factorization. In this approach we
+classical approach to this is matrix factorization. In this approach, we
 create a large matrix with users along one axis and news articles along the
 other. We'll call this the interaction matrix. Then we factorize this matrix
 into two smaller matrices, where the product of these two smaller
@@ -92,39 +103,37 @@ approximates the original.
 ![Matrix factorization](images/mf.png)
 
 In the image above, you can see a user matrix with as many rows as there are
-users, and a news matrix with as many columns as there are news articles.
+users and a news matrix with as many columns as there are news articles.
 Each user row, or news column, has the same length, signified by the `k`
 dimension. The intuition is that the dot product of the `k` length vector for
-a user and news pair approximates the interest the user has for the news
-article. Since the information is compressed into the `k` vector, this works
+a user and news pair approximates the user's interest for the news
+article. Since the information is compressed into the `k` length vector, this works
 across users as well. Thus the "collaborative" filtering.
 
-These `k` length vectors can be extracted from the matrices, and associated
+These `k` length vectors can be extracted from the matrices and associated
 with the user or news article. So, when we want to recommend news articles to
 a user, we simply find the user's vector and find the articles with the
-highest dot products. In the following we will use this approach to generate
+highest dot products. In the following, we will use this approach to generate
 such embeddings for users and news articles.
 
-Please note however, for this problem domain of news recommendation,
-this approach would not work very well in practice. The reason is that a
-large part of news recommendation is to recommend **new** news articles,
-which might not have received any implicit feedback yet. This is called the
-"cold start" problem. For such problems we need to use additional content
-(often called "side information") of news articles to provide
-recommendations. 
-
-We'll tackle this "cold start" a bit later.
+Please note, however, this approach would not work very well in practice for
+news recommendation. The reason is that a large part of news recommendation
+is to recommend **new** news articles, which might not have received any
+implicit feedback yet. This is called the "cold start" problem. For such
+problems, we need to use additional content (often called "side information")
+of news articles to provide recommendations. We'll tackle this "cold start" a
+bit later.
 
 ## Generating embeddings 
 
-A common method for factorizing the interaction matrix is to use Alternating
-Least Squares. The idea is to randomly fill the user and news matrices, 
-and freeze the parameters of one of the matrices while solving for the other.
-By alternating between which matrix is fixed, this can be solved with a 
-traditional least squares problem. We can iterate the process until 
+A standard method for factorizing the interaction matrix is to use
+Alternating Least Squares. The idea is to randomly fill the user and news
+matrices and freeze one of the matrices' parameters while solving for the
+other. By alternating between which matrix is fixed, this can be solved with
+a traditional least-squares problem. We can iterate the process until
 convergence.
 
-The goal of this tutorial is to generate embeddings so that the dot product 
+This tutorial aims to generate embeddings so that the dot product 
 between a user and news vector signifies the probability of a click. Using 
 this signal we can rank news articles by click probability. To train the
 embedding vectors, we will use a stochastic gradient descent approach 
@@ -151,7 +160,7 @@ class MF(torch.nn.Module):
 
 We use the PyTorch's `Embedding` class to hold the user and news embeddings.
 The forward function is the forward pass of the gradient descent. First, the
-the users and items selected for a mini-batch update are extracted from their
+users and items selected for a mini-batch update are extracted from their
 embedding tables. Then we take the dot-product with a logistic function and
 return the value. This prediction for user and news pairs is then evaluated 
 against the click or skip labels:
@@ -165,12 +174,11 @@ against the click or skip labels:
     optimizer.step()
 ```
 
-This is done across a number of epochs. The `batch` here contains a batch of
+This is done across several of epochs. The `batch` here contains a batch of
 `user_id`s, `news_id`s, and `label`s used for training a mini-batch. For
 instance, from the example impression above, a training example would be
 `U11552, N23967, 1`. The code responsible for generating the training data
-samples 4 negative examples (skips) for each positive example (click). This
-is done across a number of epochs.
+samples 4 negative examples (skips) for each positive example (click). 
 
 The full code can be seen in the sample application, in `src/python/train.py`.
 
@@ -181,7 +189,7 @@ $ ./src/python/train_mf.py mind 10
 </pre>
 
 This runs the training code for 10 epochs, and deposits the resulting
-user and news vectors in the `mind` directory, where the rest if the 
+user and news vectors in the `mind` directory, where the rest of the 
 data is. This outputs something like the following (if run for 100 epochs):
 
 ```
@@ -203,19 +211,19 @@ this metric measures the probability of ranking relevant news higher than
 non-relevant news. A score of around `0.5` means that it is totally random.
 Thus, we haven't learned anything of use for the validation set.
 
-This is not overfitting, but rather an instance of the problem mentioned
-earlier. The validation set contains news articles shown to users a period
-after the data found in the training set. Thus, most news articles are new,
+This is not overfitting but rather an instance of the problem mentioned
+earlier. The validation set contains news articles shown to users a time period
+after the data in the training set. Thus, most news articles are new,
 and their embedding vectors are effectively random. 
 
-We'll address that next.
+We'll address this next.
 
 ## Addressing the cold start problem
 
 The approach above based itself on news articles that users interacted with
 in the training set period. Only the user id's and news article id's were
 used. To overcome the problem that new articles haven't been seen in the
-training set, we need to use the content features of each article. So, the
+training set, we need to use the article's content features. So, the
 predictions will be based on the similarity of content a user has previously
 interacted, rather than the actual news article id.
 
@@ -226,8 +234,8 @@ between a user embedding and news embedding, however the news embedding
 will be constructed from various content features.
 
 The MIND dataset has a few such features we can use. Each news article 
-has a `category`, a `subcategory` and zero or more `entities` that 
-have been extracted from the text. These features are categorical, meaning 
+has a `category`, a `subcategory` and zero or more `entities` 
+extracted from the text. These features are categorical, meaning 
 that they have a finite set of values they can take. To handle these, 
 we'll generate an embedding for each possible value, similar to how we 
 generated embeddings for the user id's and news id's above. These id's 
@@ -251,21 +259,18 @@ outputs = model(**tokens)
 embedding = outputs[0][0][0]
 ```
 
-<!-- add something more about BERT models? -->
-
-Here, we use a medium sized BERT model with 8 layers and a hidden dimension
+Here, we use a medium-sized BERT model with 8 layers and a hidden dimension
 size of 512. This means that the embedding will be a vector of 
 size 512. We use the vector from the first `CLS` token to represent
 the combined title and abstract.
 
 To generate these embeddings for all news content, run the following.
-This might take while, around an hour for all news articles in 
-the train and dev demo dataset.
+This might take a while, around an hour for all news articles in 
+the `train` and `dev` demo dataset.
 
-<!-- Skip this for document testing? -->
-<pre data-test="exec">
+```
 $ python3 src/python/create_bert_embeddings.py mind
-</pre>
+```
 
 This creates a `news_embeddings.tsv` file under the `mind/train` and
 `mind/dev` subdirectories.
@@ -281,8 +286,8 @@ the model we are training:
 So, we'll pass the 512-dimensional embeddings from the BERT model 
 through a typical neural network layer to reduce dimensions to 50.
 We then concatenate this representation with the 50 dimensional 
-embeddings for `category`, `subcategory` and `entity` (we use only 
-one entity for now). This representation is then sent through another 
+embeddings for `category`, `subcategory` and `entity`. We only use
+one entity for now. This representation is then sent through another 
 neural network layer to form the final representation for a news 
 article. Finally, the dot product is taken with the user embedding.
 
@@ -379,11 +384,11 @@ This is much better. The `AUC` score at epoch 9 is a respectable `0.6266`.
 Note that as we train further, the `AUC` for the dev set starts 
 dropping. This is a sign of overfitting, so we should stop training.
 
-For reference, the base-line model for the MIND competition, [Neural News
+For reference, the baseline model for the MIND competition, [Neural News
 Recommendation with Multi-Head
 Self-Attention](https://www.aclweb.org/anthology/D19-1671.pdf), results in
 `0.6362`. This model additionally uses the user history in each impression
-to create a better model for the user embedding. For the moment however,
+to create a better model for the user embedding. For the moment, however,
 we are satisfied with these, and we'll use them going forward. Feel 
 free to experiment and see if you can achieve better results!
 
@@ -416,7 +421,7 @@ See [Nearest Neighbor
 Search](https://docs.vespa.ai/en/nearest-neighbor-search.html) for more 
 information on nearest neighbor search and distance metrics in Vespa. 
 
-We've included a script to map the embeddings to a Euclidean space and create
+We've included a script to map the embeddings to euclidean space and create
 a feed suitable for Vespa:
 
 <pre data-test="exec">

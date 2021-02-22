@@ -1,8 +1,9 @@
 ---
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "News Recommendation Tutorial"
+title: "News search and recommendation tutorial - recommendations"
 ---
 
+<!-- Temporary - for doc testing - display is "none" -->
 <pre style="display:none" data-test="exec" >
 $ git clone https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps
@@ -17,7 +18,7 @@ $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
 $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
 </pre>
 <pre style="display:none" data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-recommendation && /opt/vespa/bin/vespa-deploy activate'
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-5-recommendation && /opt/vespa/bin/vespa-deploy activate'
 </pre>
 <pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
 $ curl -s --head http://localhost:8080/ApplicationStatus
@@ -39,13 +40,13 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the fifth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. Getting started.
-2. A basic news search application - application packages, feeding, query.
-3. News search - sorting, grouping, and ranking.
-4. Generating embeddings for users and news articles.
-5. News recommendation - partial updates (news embeddings), ANNs, filtering
-6. News recommendation - custom searchers, doc processors
-7. News recommendation - parent-child, tensor ranking
+1. [Getting started](news-1-getting-started.html) - this part.
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
+3. [News search](news-3-searching) - sorting, grouping, and ranking.
+4. [Generating embeddings for users and news articles](news-4-embeddings.html).
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
@@ -55,7 +56,7 @@ we'll start by modifying our application so we can feed the embeddings
 and start using them for searching.
 
 For reference, the final state of this tutorial can be found in the
-`app-recommendation` sub-directory of the `news` sample application.
+`app-5-recommendation` sub-directory of the `news` sample application.
 
 ## Indexing embeddings
 
@@ -91,7 +92,7 @@ more information.
 
 Here we have defined a dense tensor with a single dimension (`d0` - dimension
 0), which represents a vector. The distance metric is euclidean as we would
-like to use this field for nearest neighbor search.
+like to use this field for nearest-neighbor search.
 
 This is seen in the `recommendation` rank profile. Here, we've added a
 ranking expression using the
@@ -102,7 +103,7 @@ which we'll get back to below when searching. But for now, this expects
 a tensor in the query to be used as the initial search point.
 
 If you take a look at the file generated for the news embeddings,
-`mind/vespa_news_embeddings.json`, you'll see a number of lines with
+`mind/vespa_news_embeddings.json`, you'll see several lines with
 something like this:
 
 ```
@@ -118,11 +119,11 @@ something like this:
 }
 ```
 
-This is called a partial update. So, assuming you already have a system up
-and running from the previous search tutorial, you don't need to feed the
-entire corpus. With a partial update, you only need to update the fields. So,
-after training another set of embeddings you can partially feed them again.
-Please refer to [Vespa reads and
+This is a "partial update". So, assuming you already have a system up and
+running from the previous search tutorial, you don't need to feed the entire
+corpus. With a partial update, you only need to update the necessary fields.
+So, after training another set of embeddings you can partially feed them
+again. Please refer to [Vespa reads and
 writes](https://docs.vespa.ai/en/reads-and-writes.html) for more information
 on feeding formats.
 
@@ -144,8 +145,7 @@ schema user {
 ```
 
 This schema is set up so that we can search for a `user_id` and 
-retrieve the user's embedding vector. We don't need to set up
-any distance metric here, because we are not searching this field.
+retrieve the user's embedding vector. 
 
 We also need to let Vespa know we want to use this document type, so we
 modify `services.xml` and add it under `documents` in the `content` section:
@@ -172,12 +172,12 @@ feed the `mind/vespa_user_embeddings.json` and
 
 Before we can test the application, we need to add a query profile type. The
 `recommendation` rank profile above requires a tensor to be sent along with
-the query. For Vespa to be able to bind the correct types, it needs to know 
+the query. For Vespa to bind the correct types, it needs to know 
 the expected type of this query parameter. That is called a query profile type.
 
 [Query profiles](../query-profiles.html) are named sets of search request parameters
 that can be set as default so you don't have to pass them along with the query. We 
-don't use this in this sample application, but we need to set up a default 
+don't use this in this sample application. Still we need to set up a default 
 query profile to set up the types of query parameters we expect to pass. 
 
 So, write the following to `search/query-profiles/default.xml`:
@@ -200,8 +200,8 @@ query parameter `ranking.features.query(user_embedding)` is passed. We'll see
 how this works together with the `nearestNeighbor` search operator below.
 
 <p class="alert alert-success"> 
-Note that when sending a tensor as a query parameter, setting up 
-this query profile type is required. A common pitfall is to forget the 
+Note that setting up this query profile type is required when sending a 
+tensor as a query parameter. A common pitfall is to forget the 
 default query profile, but that is required to successfully set up
 the query profile type.
 </p>
@@ -254,9 +254,9 @@ $ ./src/python/user_search.py U33527 10
 This script first retrieves the user embedding using an HTTP `GET` query to
 Vespa. It then parses the tensor containing the embedding vector. Finally, it
 issues a `nearestNeighbor` search using a `POST` (however a `GET` would work
-just as well). Please see [the documentation for nearest neighbor
+just as well). Please see [the documentation for nearest-neighbor
 operator](https://docs.vespa.ai/en/reference/query-language-reference.html#nearestneighbor)
-for more on the syntax for nearest neighbor searches. The `nearestNeighbor`
+for more on the syntax for nearest-neighbor searches. The `nearestNeighbor`
 search looks like this:
 
 ```
@@ -277,10 +277,10 @@ so Vespa knows what to expect here.
 
 When Vespa receives this query, it will scan linearly through all documents
 in the system (28603 if you are using the MIND DEMO dataset), and score them
-using the ranking profile `recommendation` we set up above. Recall that we
+using the `recommendation` ranking profile we set up above. Recall that we
 converted the problem from maximum inner product to euclidean distance.
 However, Vespa sorts the final results by decreasing rank score. With a
-euclidean distance search we want to find the smallest distances. To invert
+euclidean distance search, we want to find the smallest distances. To invert
 the rank order, Vespa provides the `closeness` feature which is calculated as
 `1 / (1 + distance)`.
 
@@ -300,23 +300,23 @@ Train: {'auc': 0.8774, 'mrr': 0.5115, 'ndcg@5': 0.5842, 'ndcg@10': 0.6345}
 Valid: {'auc': 0.6308, 'mrr': 0.2935, 'ndcg@5': 0.3203, 'ndcg@10': 0.3789}
 ```
 
-This is in line with results from the training. So, the conversion 
+This is in line with the results from the training. So, the conversion 
 from inner product space to euclidean space works as intended. The
 resulting rank scores are different, but the transformation evidently 
 retains the same ordering.
 
 ## ANNs
 
-So far, we've been using nearest neighbor search. This is a linear scan 
-through all matching documents. For the MIND demo dataset we've been using
+So far, we've been using nearest-neighbor search. This is a linear scan 
+through all matching documents. For the MIND demo dataset we've been using,
 this isn't a problem as it only contains roughly 28000 documents, and 
 Vespa only uses a few milliseconds to scan through these. However, as 
 the index grows, the time spent becomes significant. 
 
-Unfortunately, there are no exact methods for finding the nearest neighbors
+Unfortunately, there are no exact methods for finding the nearest-neighbors
 efficiently. So we trade accuracy for efficiency in what is called
-approximate nearest neighbors (ANN). Vespa provides a unique implementation 
-of ANNs which uses the HNSW (hierarchical navigable small world) algorithm, 
+approximate nearest-neighbors (ANN). Vespa provides a unique implementation 
+of ANNs that uses the HNSW (hierarchical navigable small world) algorithm, 
 while still being compatible with other facets of the search such as filtering.
 We'll get back to this in the next section.
 
@@ -345,7 +345,7 @@ Here, `coverage` shows that Vespa did scan through all 28603 documents. The
 interesting piece here is the `totalCount`. This number is the number of 
 times a document has been put in the top 10 results during this linear scan.
 
-Let's switch to using approximate nearest neighbors. For this, we must 
+Let's switch to using approximate nearest-neighbors. For this, we must 
 instruct Vespa to create an index on the field we would like to use.
 This is simply a modification to the `embedding` field in `news.sd`:
 
@@ -384,7 +384,7 @@ $ ./src/python/user_search.py U33527 10
 Here, `coverage` is still 100%, but the `totalCount` has been reduced to 
 10 - the same number of hits we requested. By adding the index to this 
 field, Vespa built a HNSW graph structure for the values in this field.
-When used in an approximate nearest neighbor search, this graph 
+When used in an approximate nearest-neighbor search, this graph 
 is queried and only the closest points as determined by this graph is 
 added to the list. Thus, Vespa can stop searching early.
 
@@ -392,18 +392,18 @@ The particularly observant might have noticed that the result set
 has changed. Indeed, the third result when using exact nearest 
 neighbor search was news article `N438`. This was omitted from 
 the approximate search. As mentioned, we trade accuracy for efficiency 
-when using approximate nearest neighbor search.
+when using approximate nearest-neighbor search.
 
 It should also be mentioned that searching through this graph comes with a
 cost. In our case, since we only have a relatively small amount of documents,
-there isn't that much gain in efficient. However, as the number of documents
-grow this starts to pay off. See [Approximate nearest neighbor search in
+there isn't that much gain in efficiency. However, as the number of documents
+grow, this starts to pay off. See [Approximate nearest neighbor search in
 Vespa](https://blog.vespa.ai/approximate-nearest-neighbor-search-in-vespa-part-1/)
 for more of a discussion around this.
 
 The implementation of ANN using HNSW in Vespa has some nice features.
 Notice that we did not have to re-feed the corpus to enable ANN. Many 
-other approaches for ANNs require building an index offline, in a batch job.
+other approaches for ANNs require building an index offline in a batch job.
 HNSW allows for incrementally building this index, which is fully exploited 
 in Vespa.
 
@@ -412,8 +412,8 @@ during graph traversal, which we'll look at next.
 
 ## Filtering
 
-A common case when using approximate nearest neighbors is to combine 
-with some additional query filters. For instance, for retail search one
+A common case when using approximate nearest-neighbors is to combine 
+with some additional query filters. For instance, for retail search, one
 can imagine finding relevant products for a user. In this case, we should 
 not recommend products that are out of stock. So an additional query 
 filter would be to ensure that `in_stock` is true. 
@@ -422,7 +422,7 @@ Now, most implementations of ANNs come in the form of a library, so they are
 not integrated with the search at large. The natural approach is to first
 perform the ANN, the *post-filter* the results. Unfortunately, this often
 leads to sub-optimal results as relevant documents might not have been
-recalled. See [Using approximate nearest neighbor search in real world
+recalled. See [Using approximate nearest-neighbor search in real world
 applications](https://blog.vespa.ai/using-approximate-nearest-neighbor-search-in-real-world-applications/)
 for more of a discussion around this.
 
@@ -450,9 +450,9 @@ returned. Vespa still searches through the graph starting from the query
 point, however the search does not stop when we have 10 hits. In effect, 
 the graph search widens until 10 results fulfilling the filters are found.
 
-As a note, very strict filters that filters away a large part of the 
-corpus would entail that a lot of candidates in the graph are skipped 
-while searching for the results the fulfill the filters. This can take 
+As a note, very strict filters that filter away a large part of the 
+corpus would entail that many candidates in the graph are skipped 
+while searching for the results that fulfill the filters. This can take 
 an exponential amount of time. For this case, Vespa falls back to 
 a linear, brute-force scan for efficiency.
 
@@ -463,7 +463,7 @@ We now have a basic recommendation system up and running. We can query
 for a user, retrieve the embedding vector and use that for querying
 the news articles. Right now, this means two calls to Vespa. In 
 the next part of the tutorial, we will introduce `searchers` which 
-allows for custom logic during query processing so we only 
+allows for custom logic during query processing, so we only 
 need one pass. 
 
 <pre style="display:none" data-test="after">

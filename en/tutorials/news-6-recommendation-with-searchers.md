@@ -1,6 +1,6 @@
 ---
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "News Recommendation Tutorial"
+title: "News search and recommendation tutorial - searchers"
 ---
 
 <pre style="display:none" data-test="exec" >
@@ -20,9 +20,9 @@ $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
 $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
 </pre>
 <pre style="display:none" data-test="exec">
-$ cd app-recommendation-with-searchers
+$ cd app-6-recommendation-with-searchers
 $ mvn package
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-recommendation-with-searchers/target/application.zip && /opt/vespa/bin/vespa-deploy activate'
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-6-recommendation-with-searchers/target/application.zip && /opt/vespa/bin/vespa-deploy activate'
 </pre>
 <pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
 $ curl -s --head http://localhost:8080/ApplicationStatus
@@ -44,13 +44,13 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the sixth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. Getting started.
-2. A basic news search application - application packages, feeding, query.
-3. News search - sorting, grouping, and ranking.
-4. Generating embeddings for users and news articles.
-5. News recommendation - partial updates (news embeddings), ANNs, filtering
-6. News recommendation - custom searchers, doc processors
-7. News recommendation - parent-child, tensor ranking
+1. [Getting started](news-1-getting-started.html) - this part.
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
+3. [News search](news-3-searching) - sorting, grouping, and ranking.
+4. [Generating embeddings for users and news articles](news-4-embeddings.html).
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
@@ -62,7 +62,7 @@ modify queries before passing them along to search. These will allow
 us to pull the logic from the Python scripts into Vespa.
 
 For reference, the final state of this tutorial can be found in the
-`app-recommendation-with-searchers` sub-directory of the `news` sample application.
+`app-6-recommendation-with-searchers` sub-directory of the `news` sample application.
 
 ## Searchers and document processors
 
@@ -183,8 +183,12 @@ public class UserProfileSearcher extends Searcher {
 
             query.getModel().getQueryTree().setRoot(nn);
             query.getRanking().getFeatures().put("query(user_embedding)", userEmbedding);
-            query.getRanking().setProfile("recommendation");
             query.getModel().setRestrict("news");
+
+            // Override default ranking profile
+            if (query.getRanking().getProfile().equals("default")) {
+                query.getRanking().setProfile("recommendation");
+            }
         }
 
         return execution.search(query);
@@ -262,7 +266,7 @@ which requires a project object model, or `pom.xml`, to specify how to build
 this artifact. 
 
 We won't go through that here, please refer to the
-`app-recommendation-with-searcher` sub-directory in the `news` sample
+`app-6-recommendation-with-searchers` sub-directory in the `news` sample
 application for details. Note that the directory structure for this
 application has changed in comparison to the previous parts in 
 the tutorial. The structure is now:
@@ -414,7 +418,7 @@ do when new users without any history visit our recommendation system.
 
 
 <pre style="display:none" data-test="after">
-$ # docker rm -f vespa
+$ docker rm -f vespa
 </pre>
 
 <script>

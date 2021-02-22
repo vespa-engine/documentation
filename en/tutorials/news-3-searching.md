@@ -3,6 +3,7 @@
 title: "News search and recommendation tutorial - searching"
 ---
 
+<!-- Temporary - for doc testing - display is "none" -->
 <pre style="display:none" data-test="exec" >
 $ git clone https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps
@@ -17,7 +18,7 @@ $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
 $ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
 </pre>
 <pre style="display:none" data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-searching && /opt/vespa/bin/vespa-deploy activate'
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-3-searching && /opt/vespa/bin/vespa-deploy activate'
 </pre>
 <pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
 $ curl -s --head http://localhost:8080/ApplicationStatus
@@ -36,29 +37,29 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the third part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. Getting started.
-2. A basic news search application - application packages, feeding, query.
-3. News search - sorting, grouping, and ranking.
-4. Generating embeddings for users and news articles.
-5. News recommendation - partial updates (news embeddings), ANNs, filtering
-6. News recommendation - custom searchers, doc processors
-7. News recommendation - parent-child, tensor ranking
+1. [Getting started](news-1-getting-started.html) - this part.
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
+3. [News search](news-3-searching) - sorting, grouping, and ranking.
+4. [Generating embeddings for users and news articles](news-4-embeddings.html).
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
-In the previous part we converted the [Microsoft News
+In the previous part, we converted the [Microsoft News
 Dataset](https://msnews.github.io/) (MIND) to Vespa, and fed it to our
-application. In this part we'll issue searches in this content and take a
-look at sorting, grouping and ranking the results.
+application. In this part, we'll issue searches in this content and 
+look at sorting, grouping, and ranking the results.
 
 For reference, the final state of this tutorial can be found in the
-`app-searching` sub-directory of the `news` sample application.
+`app-3-searching` sub-directory of the `news` sample application.
 
 Conceptually, Vespa has two stages when determining the exact result to
 return. This first is "matching", where all the documents that match the
 query are found. This is a binary decision; either the document matches or it
 doesn't. For instance, when searching for a word, all documents that contain
-the word are selected as candidates in this stage.
+it are selected as candidates in this stage.
 
 The next stage determines the ordering of the results. We can think of the 
 results being ordered either by:
@@ -74,7 +75,7 @@ example is to group the results by a `category` attribute.
 Calculating a score to order by is generally called "ranking". As these 
 scores are usually dependent upon both query and document, they can also 
 be called "relevance". Such expressions can be arbitrarily complex, 
-but in general require some form of computation to find this score. Ranking 
+but in general, require some form of computation to find this score. Ranking 
 can be divided into multiple phases as well.
 
 We'll start by looking at attribute-based sorting and grouping before 
@@ -82,19 +83,19 @@ moving on to ranking.
 
 ## What is an attribute?
 
-We saw multiple examples of attributes in out `news.sd` schema, for instance:
+We saw multiple examples of attributes in the `news.sd` schema, for instance:
 
     field date type int {
         indexing: summary | attribute
     }
 
 Note that this `date` field has been defined as an `int` here, and when
-feeding document we convert the date to the format `YYYYMMDD`.
+feeding document, we convert the date to the format `YYYYMMDD`.
 
 An [_attribute_](../attributes.html) is an in-memory field - this is different
 from  _index_ fields, which may be moved to a disk-based index as more
 documents are added and the index grows.  Since attributes are kept in memory,
-they are excellent for fields which require fast access, e.g., fields used for
+they are excellent for fields that require fast access, e.g., fields used for
 sorting or grouping query results.  The downside is higher memory usage.  
 
 <p class="alert alert-success"> 
@@ -109,7 +110,7 @@ to a linear scan - to build an index for an attribute field, include
 
 This is a single-term query for the term _20191110_ in the `default` field
 set. In the search definition, the field `date` is not included in the
-`default` field set, so no results are found.
+`default` fieldset, so no results are found.
 
     {"yql" : "select * from sources * where date contains \"20191110\";"}
 
@@ -289,12 +290,12 @@ has some limitations.
 
 #### Memory usage
 
-Attributes are kept in memory at all time, as opposed to normal indexes where
+Attributes are kept in memory, as opposed to normal indexes where
 the data is mostly kept on disk.  Even with large search nodes, one will notice
 that it is not practical to define all the document type fields as
 attributes, as it will heavily restrict the number of documents per search
 node.  Some Vespa applications have more than 1 billion documents per node —
-having megabytes of text in memory per document is not cost effective.
+having megabytes of text in memory per document is not cost-effective.
 
 #### Matching
 
@@ -307,11 +308,13 @@ search this field?
 
 For normal index fields, Vespa [tokenizes](../linguistics.html#tokenization)
 the string.  In our case this means that the string above is split into the 14
-tokens, enabling Vespa to match this document both for the single-term queries
-such as "Michigan", "snow" and "roads", the exact phrase query "A little snow
-causes a big mess, more than 100 crashes on Minnesota roads", and a query with
-two or more tokens in either order (e.g. "minnesota crashes"). This is how we
-all have come to expect normal free text search to work.
+tokens, enabling Vespa to match this document for:
+
+- the single-term queries such as "Michigan", "snow" and "roads", 
+- the exact phrase query "A little snow causes a big mess, more than 100 crashes on Minnesota roads", 
+- a query with two or more tokens in either order (e.g. "minnesota crashes"). 
+
+This is how we all have come to expect normal free text search to work.
 
 However, there is a limitation in Vespa when it comes to attribute fields and
 matching; string attributes do not support normal token-based matching — only *exact
@@ -335,14 +338,14 @@ Finally, all numeric fields should always be attributes.
 ## Relevance and Ranking
 
 [Ranking](../ranking.html) and relevance were briefly mentioned above; what is
-really the relevance of a hit, and how can one change the relevance
-calculations?  It is time to introduce _rank profiles_ and _rank expressions_ —
+really the relevance of a hit? How can one change the relevance
+calculations? It is time to introduce _rank profiles_ and _rank expressions_ —
 simple, yet powerful methods for tuning the relevance.
 
 Relevance is a measure of how well a given document matches a query.  The
 default relevance is calculated by a formula that takes several factors into
-consideration, but it computes, in essence, how well the document matches the
-terms in the query.  Sample use cases for tweaking the relevance calculations:
+consideration. It computes, in essence, how well the document matches the
+terms in the query.  Some use cases for tweaking the relevance calculations:
 
 - Personalize search results based on some property; age, nationality,
   language, friends and friends of friends.
@@ -356,8 +359,8 @@ specialized rank expressions.
 
 ### News article popularity signal
 
-During conversion of the news dataset, the conversion script counted both the
-number of times a news article was shown (impressions) and the how many
+During the conversion of the news dataset, the conversion script counted both the
+number of times a news article was shown (impressions) and how many
 clicks it received. A high number of clicks relative to impressions indicates
 that the news article was generally popular. We can use this signal in our
 ranking.
@@ -390,7 +393,7 @@ We can do this by including a `popularity` rank profile below at the bottom of
 
 - `function popularity()`
 
-  This sets up a function which can be called from other expressions. This
+  This sets up a function that can be called from other expressions. This
   function calculates the number of clicks divided by impressions for indicating
   popularity. However, this isn't really the best way of calculating this as an
   article with a low number of impressions can score high on such a value, even
@@ -399,13 +402,12 @@ We can do this by including a `popularity` rank profile below at the bottom of
 - `expression: nativeRank + 100 * popularity`
 
   This expression is used to rank documents. Here, the default ranking
-  expression — the `nativeRank` of the `default` field set — is included to
-  make the query relevant, while the custom, second term calls
+  expression — the `nativeRank` of the `default` fieldset — is included to
+  make the query relevant, while the second term calls
   the `popularity` function. The weighted sum of these two terms is the 
   final relevance for each document. Note that the weight here, `100`, 
   is set by observation. A better approach would be to learn such values 
-  using machine learning, which we'll get back to in a later part of 
-  the tutorial.
+  using machine learning, which we'll get back to later in the tutorial.
 
 More information can be found in the [schema
 reference](../reference/schema-reference.html#rank-profile)):

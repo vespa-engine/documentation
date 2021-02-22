@@ -8,34 +8,33 @@ title: "News search and recommendation tutorial - applications, feeding and quer
 This is the second part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. Getting started.
-2. A basic news search application - application packages, feeding, query.
-3. News search - sorting, grouping, and ranking.
-4. Generating embeddings for users and news articles.
-5. News recommendation - partial updates (news embeddings), ANNs, filtering
-6. News recommendation - custom searchers, doc processors
-7. News recommendation - parent-child, tensor ranking
+1. [Getting started](news-1-getting-started.html) - this part.
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
+3. [News search](news-3-searching) - sorting, grouping, and ranking.
+4. [Generating embeddings for users and news articles](news-4-embeddings.html).
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
-In this part we will build upon the minimal Vespa application in the previous
-part. First, we'll take a look at the [Microsoft News
+In this part, we will build upon the minimal Vespa application in the
+previous part. First, we'll take a look at the [Microsoft News
 Dataset](https://msnews.github.io/) (MIND), which we'll be using throughout
 the tutorial. We'll use this to set up the search schema, deploy the
-application and feed some data to it. We'll round off with some basic
-querying before moving on to the next part of the tutorial which is about
-searching for content.
+application and feed some data. We'll round off with some basic querying
+before moving on to the next part of the tutorial: searching for content.
 
 For reference, the final state of this tutorial can be found in the
-`app-feed-and-query` sub-directory of the `news` sample application.
+`app-2-feed-and-query` sub-directory of the `news` sample application.
 
 ## The Microsoft News Dataset
 
-During these tutorials we will use the [Microsoft News
+During these tutorials, we will use the [Microsoft News
 Dataset](https://msnews.github.io/) (MIND).  This is a large-scale dataset for
 news recommendation research. It contains over 160.000 articles, 15 million
 impressions logs, and 1 million users. We will not use the full dataset in this
-tutorial. To make the tutorial easier to follow along we will use the much
+tutorial. To make the tutorial easier to follow along, we will use the much
 smaller DEMO part containing only 5000 users. However, readers are free to
 use the entire dataset (at their own discretion.
 
@@ -47,10 +46,10 @@ there are particularly two pieces of data that we will use:
 - News article content which contains data such as title, abstract, news
   category, and entities extracted from the title and abstract.
 - Impressions which contain a list of news articles that were shown to a user,
-  labelled with whether or not the user clicked on them.
+  labeled with whether or not the user clicked on them.
 
-We'll  start with developing a search application, so we'll focus on the 
-news content at first. We'll use the impression data as we start building 
+We'll start with developing a search application, so we'll focus on the 
+news content at first. We'll use the impression data as we begin building 
 the recommendation system later in this series.
 
 Let's start by downloading the data. The subdirectory `feed-and-query`
@@ -81,12 +80,12 @@ N16680  travel  traveltripideas The Most Beautiful Natural Wonder in Every State
 ```
 
 Here we see the news article id, a category, a subcategory, the title, an
-abstract, and a url to the article's content. The last two fields contain the 
+abstract, and a URL to the article's content. The last two fields contain the 
 identified entities in the title and abstract. This particular news item has no
 such entities.
 
 <p class="alert alert-success"> 
-Note that the body content of the news article is retrievable by the url. The 
+Note that the body content of the news article is retrievable by the URL. The 
 dataset repository contains tools to download this. For the purposes of 
 this tutorial, we won't be using this data, but feel free to download 
 yourself.
@@ -100,15 +99,17 @@ contain your Vespa application:c
 $ mkdir my-app
 </pre>
 
-# Application Packages
+## Application Packages
+
+![Vespa's overall architecture](../img/overview/vespa-overview.svg)
 
 A Vespa [application package](../cloudconfig/application-packages.html) is the
 set of configuration files and Java plugins that together define the behavior
 of a Vespa system: what functionality to use, the available document types, how
 ranking will be done and how data will be processed during feeding and
 indexing.  The schema, e.g., `news.sd`, is a required part of an
-application package — the other required files are `services.xml` and
-`hosts.xml`. We say these files in the previous part, but didn't really 
+application package — the other files needed are `services.xml` and
+`hosts.xml`. We mentioned these files in the previous part but didn't really 
 explain them at the time. We'll go through them here, starting with the
 services specification.
 
@@ -179,7 +180,7 @@ Write the following to `my-app/hosts.xml`:
 </hosts>
 </pre>
 
-This sets up the alias `node1` to represent the local host. You 
+This sets up the alias `node1` to represent the localhost. You 
 saw this alias in the services specification above.
 
 ### Schema
@@ -188,13 +189,13 @@ In terms of data, Vespa operates with the notion of
 [documents](../documents.html).  A document represents a single, searchable
 item in your system, e.g., a news article, a photo, or a user. Each document
 type must be defined in the Vespa configuration through a
-[schema](../schemas.html).  Think of the document type in a schema as being
+[schema](../schemas.html).  Think of the document type in a schema as 
 similar to a table definition in a relational database - it consists of a set
 of fields, each with a given name, a specific type, and some optional
 properties.
 
 The data fed into Vespa must match the structure of the schema, and the results
-returned when searching will be on this format as well.
+returned when searching will be in this format as well.
 
 The `news` document type mentioned in the `services.xml` file above is defined
 in a schema. Schemas are found under the `schemas` directory in the application 
@@ -253,7 +254,7 @@ schema news {
 The `document` is wrapped inside another element called `search`.  The name
 following these elements, here `news`, must be exactly the same for both.
 
-This document contains a number of fields. Each field has a
+This document contains several fields. Each field has a
 [type](../reference/schema-reference.html#field), such as `string`, `int`, or
 `tensor`. Fields also have properties. For instance, property `indexing`
 configures the _indexing pipeline_ for a field, which defines how Vespa will
@@ -271,7 +272,7 @@ indexing pipeline is separated by the pipe character '|':
 Here, we also use the
 [index](https://docs.vespa.ai/en/reference/schema-reference.html#index)
 property, which sets up parameters for how Vespa should index the field. For
-the `title`, `abstract`, and `body` fields we instruct Vespa to set up an
+the `title`, `abstract`, and `body` fields, we instruct Vespa to set up an
 index compatible with [bm25
 ranking](https://docs.vespa.ai/en/reference/rank-features.html#bm25) for text
 search.
@@ -280,7 +281,7 @@ search.
 
 With the three necessary files above, we are ready to deploy the 
 application package. For information on how this is done, please 
-refer to the first part of the tutorial, depending upon the 
+refer to the tutorial's first part, depending upon the 
 platform you are deploying to.
 
 Continue after the application is successfully deployed.
@@ -371,7 +372,7 @@ http://localhost:8080/search/ | python -m json.tool
 <p class="alert alert-success"> 
 Note that you can use the built-in query builder found at 
 [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/)
-which can help you build queries with for instance autocompletion of YQL.
+which can help you build queries with, for instance, autocompletion of YQL.
 </p>
 
 Looking at the output, please note:
@@ -382,7 +383,7 @@ Looking at the output, please note:
   document matches our query, using a pre-defined default ranking function. You
   have full control over ranking — more about ranking and ordering later. The
   hits are sorted by this value.
-- When multiple hits have the same relevance score their internal ordering is
+- When multiple hits have the same relevance score, their internal ordering is
   undefined. However, their internal ordering will not change unless the
   documents are re-indexed.
 - You can add `&tracelevel=9` to dump query parsing details.
@@ -393,10 +394,10 @@ Looking at the output, please note:
 
     {"yql" : "select title from sources * where title contains \"music\";"}
 
-Once more a search for the single term "music", but this time with the explicit
-field `title`. This means that we only want to match documents that contain the
+Again, this is a search for the single term "music", but this time explicitly in the 
+`title` field. This means that we only want to match documents that contain the
 word "music" in the field `title`. As expected, you will see fewer hits for
-this query, than for the previous one.
+this query than for the previous one.
 
     {"yql" : "select * from sources * where title contains \"music\" AND default contains \"festival\";"}
 
@@ -410,16 +411,16 @@ This is a single-term query in the special field `sddocname` for the value
 `"news"`.  This is a common and useful Vespa trick to get the number of indexed
 documents for a certain document type: `sddocname` is a special and reserved
 field which is always set to the name of the document type for a given
-document. The documents are all of type `news`, and will therefore
+document. The documents are all of type `news`, and will 
 automatically have the field `sddocname` set to that value.
 
 This means that the query above really means "return all documents of type
-news", and as such all documents in the index are returned.
+news", and as such, all documents in the index are returned.
 
 ## Conclusion
 
 We now have a Vespa application running with searchable data. In 
-the next part of the tutorial we'll explore searching with 
+the next part of the tutorial we'll, explore searching with 
 sorting, grouping, and ranking results.
 
 <pre style="display:none" data-test="after">

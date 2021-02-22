@@ -12,13 +12,13 @@ tutorial parts.
 
 The parts are:  
 
-1. Getting started - this part.
-2. A basic news search application - application packages, feeding, query.
-3. News search - sorting, grouping, and ranking.
-4. Generating embeddings for users and news articles.
-5. News recommendation - partial updates (news embeddings), ANNs, filtering
-6. News recommendation - custom searchers, doc processors
-7. News recommendation - parent-child, tensor ranking
+1. [Getting started](news-1-getting-started.html) - this part.
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
+3. [News search](news-3-searching) - sorting, grouping, and ranking.
+4. [Generating embeddings for users and news articles](news-4-embeddings.html).
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
 
@@ -40,7 +40,7 @@ In the next part of the tutorial, we'll start developing our application.
 - Architecture: x86_64
 - Minimum **6GB** memory dedicated to Docker (the default is 2GB on Macs)
 
-In the next part of this series, we will have some additional python
+In upcoming parts of this series, we will have some additional python
 dependencies as we use PyTorch to train vector representations for news and
 users and train machine learning models for use in ranking.
 
@@ -98,7 +98,7 @@ container, so we don't have to expose the configuration server out from the
 container. With the config server up and running, we can deploy our application:
 
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-getting-started && \
+$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-1-getting-started && \
     /opt/vespa/bin/vespa-deploy activate'
 </pre>
 
@@ -118,7 +118,7 @@ In the upcoming parts of the tutorials, we'll frequently deploy the
 application in this manner. 
 
 <p class="alert alert-success"> 
-Note here that we prepare the *directory* `src/main/application`. Both
+Note here that we prepare the application *directory*. Both
 application directories and a zip file containing the application are
 accepted. A zip file is created when compiling and packaging an
 application containing custom Java code. We'll get back to that in part 6 
@@ -139,10 +139,10 @@ was exposed when starting the Docker container, so we can query it directly.
 
 ## Feeding to Vespa
 
-We must index data before we can search for it. This is called 'feeding', 
-and we'll get back to that in the next part of the tutorial. For now,
-we'll feed in a single test document. We'll use the `vespa-http-client` 
-Java feeder for this:
+We must index data before we can search for it. This is called 'feeding', and
+we'll get back to that in more detail in the next part of the tutorial. For
+now, to test that everything is up and running, we'll feed in a single test
+document. We'll use the `vespa-http-client` Java feeder for this:
 
 <pre data-test="exec" >
 $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
@@ -155,7 +155,6 @@ query for below.
 
 In later tutorials, when more data should be fed to the system,
 use this command while pointing to the correct feed file.
-
 
 ## Testing Vespa
 
