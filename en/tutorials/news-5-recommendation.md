@@ -38,7 +38,7 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the fifth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. [Getting started](news-1-getting-started.html) - this part.
+1. [Getting started](news-1-getting-started.html).
 2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
 3. [News search](news-3-searching) - sorting, grouping, and ranking.
 4. [Generating embeddings for users and news articles](news-4-embeddings.html).
@@ -460,7 +460,7 @@ a linear, brute-force scan for efficiency.
 We now have a basic recommendation system up and running. We can query 
 for a user, retrieve the embedding vector and use that for querying
 the news articles. Right now, this means two calls to Vespa. In 
-the next part of the tutorial, we will introduce `searchers` which 
+the [next part of the tutorial](news-6-recommendation-with-searchers.html), we will introduce `searchers` which 
 allows for custom logic during query processing, so we only 
 need one pass. 
 

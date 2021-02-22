@@ -40,7 +40,7 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the sixth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. [Getting started](news-1-getting-started.html) - this part.
+1. [Getting started](news-1-getting-started.html).
 2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
 3. [News search](news-3-searching) - sorting, grouping, and ranking.
 4. [Generating embeddings for users and news articles](news-4-embeddings.html).
@@ -96,7 +96,7 @@ query:
     { "message": "Return searcher 'com.yahoo.prelude.querytransform.PhrasingSearcher in vespa'" },
     { "message": "Return searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
     { "message": "Return searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" 
-    ...
+...
 ```
 
 This shows a small sample of the additional output when using `tracelevel`. Note the
@@ -107,7 +107,7 @@ process the results before passing them to the previous searcher, and ultimately
 a response to the query.
 
 <p class="alert alert-success"> 
-Adding [tracelevel](../reference/query-api-reference.html#tracelevel) is 
+Adding a <a href="../reference/query-api-reference.html#tracelevel">tracelevel</a> is 
 generally very helpful when debugging vespa queries.
 </p>
 
@@ -215,14 +215,14 @@ unique, we only expect a single hit. We then extract the `embedding` tensor
 from the user document.
 
 <p class="alert alert-success"> 
-Note that we explicitly call a `fill` on the results before returning. A query is
+Note that we explicitly call a <em>fill</em> on the results before returning. A query is
 usually passed to the search backend at least twice: one to retrieve the results, 
-another to retrieve the `summary` data of the final result set. This is to avoid 
+another to retrieve the summary data of the final result set. This is to avoid 
 sending excess data between services. 
 
 For instance, if searching for the top 10 results with two search backends, each 
 backend will retrieve the top 10 results from the local content on that node. A 
-searcher will determine the "globally" top 10 and only issue a `fill` to retrieve 
+searcher will determine the "globally" top 10 and only issue a <em>fill</em> to retrieve 
 the summary features for those top 10.
 </p>
 
@@ -345,7 +345,7 @@ be passed along with the query by adding it to the default query profile in
 ```
 
 <p class="alert alert-success"> 
-The `src/python/evaluate.py` script can now be modified to also use this searcher.
+The <em>src/python/evaluate.py</em> script can now be modified to also use this searcher.
 However, to properly calculate the metrics, the searcher needs to be modified to 
 accept a list of news article id's and only recall those. We'll leave this as 
 an exercise to the reader.
@@ -408,7 +408,7 @@ Searchers are flexible enough to perform any type of processing.
 ## Conclusion
 
 We now have a Vespa application up and running that takes a single `user_id`
-and returns recommendations for that user. In the next part of the tutorial,
+and returns recommendations for that user. In the [next part of the tutorial](news-7-recommendation-parent-child.html),
 we'll address what to do when new users without any history visit our
 recommendation system.
 

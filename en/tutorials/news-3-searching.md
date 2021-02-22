@@ -35,7 +35,7 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the third part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. [Getting started](news-1-getting-started.html) - this part.
+1. [Getting started](news-1-getting-started.html).
 2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
 3. [News search](news-3-searching) - sorting, grouping, and ranking.
 4. [Generating embeddings for users and news articles](news-4-embeddings.html).
@@ -423,9 +423,9 @@ we must specify the ranking profile to use with the `ranking` parameter.
 ## Conclusion
 
 After completing this part of the tutorial, you should now have a basic
-understanding of how you can load data into Vespa and effectively search
-for content. In the next part of the tutorial, we'll start with 
-the basics for transforming this into a recommendation system.
+understanding of how you can load data into Vespa and effectively search for
+content. In the [next part of the tutorial](news-4-embeddings.html), we'll
+start with the basics for transforming this into a recommendation system.
 
 <pre style="display:none" data-test="after">
 $ docker rm -f vespa
