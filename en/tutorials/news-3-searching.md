@@ -99,7 +99,7 @@ sorting or grouping query results.  The downside is higher memory usage.
 <p class="alert alert-success"> 
 By default, no index is generated for attributes, and search over these defaults
 to a linear scan - to build an index for an attribute field, include
-`attribute:fast-search` in the field definition.
+<code>attribute: fast-search</code> in the field definition.
 </p>
 
 ### Example queries using attribute field
