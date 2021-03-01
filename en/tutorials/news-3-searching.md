@@ -289,7 +289,7 @@ has some limitations.
 #### Memory usage
 
 Attributes are kept in memory, as opposed to normal indexes where
-the data is mostly kept on disk.  Even with large search nodes, one will notice
+the data is mostly kept on disk.  Even with large content nodes, one will notice
 that it is not practical to define all the document type fields as
 attributes, as it will heavily restrict the number of documents per search
 node.  Some Vespa applications have more than 1 billion documents per node —
