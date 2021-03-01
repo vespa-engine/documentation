@@ -188,6 +188,14 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-services'
 
 If a restart is required due to changes in the application package,
 these two steps are what you need to do.
+To wipe the index and restart:
+
+<pre>
+$ docker exec vespa bash -c ' \
+  /opt/vespa/bin/vespa-stop-services && \
+  /opt/vespa/bin/vespa-remove-index -force && \
+  /opt/vespa/bin/vespa-start-services'
+</pre>
 
 You can stop and kill the Vespa Docker application like this:
 
