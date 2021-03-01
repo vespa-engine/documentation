@@ -160,7 +160,7 @@ If everything is ok so far, our application should be up and running. We
 can query the endpoint:
 
 <pre data-test="exec" data-test-assert-contains='Hello world!'>
-$ curl -s http://localhost:8080/search/?query=sddocname:news
+$ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddocname+contains+%22news%22;"
 </pre>
 
 This uses the `search` API to search for all documents of type `news`.
