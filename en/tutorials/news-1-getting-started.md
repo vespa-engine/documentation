@@ -50,11 +50,11 @@ users and train machine learning models for use in ranking.
 
 This tutorial has a [companion sample
 application](https://github.com/vespa-engine/sample-apps.git) found 
-under the `news` directory.. Throughout the tutorial we will be 
+under the `news` directory. Throughout the tutorial we will be
 using support code from this application. Also, the final state of 
 each tutorial can be found in the various `app-...` sub-directories.
 
-Let's start by cloning the sample application. 
+Let's start by cloning the sample application:
 
 <pre data-test="exec">
 $ git clone https://github.com/vespa-engine/sample-apps.git
@@ -118,7 +118,7 @@ In the upcoming parts of the tutorials, we'll frequently deploy the
 application in this manner. 
 
 <p class="alert alert-success"> 
-Note here that we prepare the application *directory*. Both
+Note here that we prepare the application <em>directory</em>. Both
 application directories and a zip file containing the application are
 accepted. A zip file is created when compiling and packaging an
 application containing custom Java code. We'll get back to that in part 6 
@@ -188,6 +188,7 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-services'
 
 If a restart is required due to changes in the application package,
 these two steps are what you need to do.
+
 To wipe the index and restart:
 
 <pre>

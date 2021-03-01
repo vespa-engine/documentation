@@ -36,7 +36,7 @@ news recommendation research. It contains over 160.000 articles, 15 million
 impressions logs, and 1 million users. We will not use the full dataset in this
 tutorial. To make the tutorial easier to follow along, we will use the much
 smaller DEMO part containing only 5000 users. However, readers are free to
-use the entire dataset (at their own discretion.
+use the entire dataset at their own discretion.
 
 The [MIND dataset
 description](https://github.com/msnews/msnews.github.io/blob/master/assets/doc/introduction.md)
@@ -368,7 +368,7 @@ http://localhost:8080/search/ | python -m json.tool
 
 <p class="alert alert-success"> 
 Note that you can use the built-in query builder found at 
-[http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/)
+<a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a>
 which can help you build queries with, for instance, autocompletion of YQL.
 </p>
 
