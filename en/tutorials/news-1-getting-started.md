@@ -35,7 +35,9 @@ In the next part of the tutorial, we'll start developing our application.
 
 - [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
   or Docker on Linux
-- [Git](https://git-scm.com/downloads)
+- [Git](https://git-scm.com/downloads) - or download the
+  [sample apps](https://github.com/vespa-engine/sample-apps/archive/master.zip)
+- python 3
 - Operating system: macOS or Linux
 - Architecture: x86_64
 - Minimum **6GB** memory dedicated to Docker (the default is 2GB on Macs)
