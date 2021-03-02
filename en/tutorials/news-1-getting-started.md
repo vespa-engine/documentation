@@ -12,12 +12,12 @@ tutorial parts.
 
 The parts are:  
 
-1. [Getting started](news-1-getting-started.html) - this part.
-2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
-3. [News search](news-3-searching.html) - sorting, grouping, and ranking.
-4. [Generating embeddings for users and news articles](news-4-embeddings.html).
-5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
-6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+1. [Getting started](news-1-getting-started.html) - this part
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query
+3. [News search](news-3-searching.html) - sorting, grouping, and ranking
+4. [Generating embeddings for users and news articles](news-4-embeddings.html)
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
@@ -35,7 +35,9 @@ In the next part of the tutorial, we'll start developing our application.
 
 - [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
   or Docker on Linux
-- [Git](https://git-scm.com/downloads)
+- [Git](https://git-scm.com/downloads) - or download the
+  [sample apps](https://github.com/vespa-engine/sample-apps/archive/master.zip)
+- python 3
 - Operating system: macOS or Linux
 - Architecture: x86_64
 - Minimum **6GB** memory dedicated to Docker (the default is 2GB on Macs)
@@ -48,11 +50,11 @@ users and train machine learning models for use in ranking.
 
 This tutorial has a [companion sample
 application](https://github.com/vespa-engine/sample-apps.git) found 
-under the `news` directory.. Throughout the tutorial we will be 
+under the `news` directory. Throughout the tutorial we will be
 using support code from this application. Also, the final state of 
 each tutorial can be found in the various `app-...` sub-directories.
 
-Let's start by cloning the sample application. 
+Let's start by cloning the sample application:
 
 <pre data-test="exec">
 $ git clone https://github.com/vespa-engine/sample-apps.git
@@ -116,7 +118,7 @@ In the upcoming parts of the tutorials, we'll frequently deploy the
 application in this manner. 
 
 <p class="alert alert-success"> 
-Note here that we prepare the application *directory*. Both
+Note here that we prepare the application <em>directory</em>. Both
 application directories and a zip file containing the application are
 accepted. A zip file is created when compiling and packaging an
 application containing custom Java code. We'll get back to that in part 6 
@@ -160,7 +162,7 @@ If everything is ok so far, our application should be up and running. We
 can query the endpoint:
 
 <pre data-test="exec" data-test-assert-contains='Hello world!'>
-$ curl -s http://localhost:8080/search/?query=sddocname:news
+$ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddocname+contains+%22news%22;"
 </pre>
 
 This uses the `search` API to search for all documents of type `news`.
@@ -186,6 +188,15 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-services'
 
 If a restart is required due to changes in the application package,
 these two steps are what you need to do.
+
+To wipe the index and restart:
+
+<pre>
+$ docker exec vespa bash -c ' \
+  /opt/vespa/bin/vespa-stop-services && \
+  /opt/vespa/bin/vespa-remove-index -force && \
+  /opt/vespa/bin/vespa-start-services'
+</pre>
 
 You can stop and kill the Vespa Docker application like this:
 

@@ -38,12 +38,12 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the fifth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. [Getting started](news-1-getting-started.html).
-2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
-3. [News search](news-3-searching.html) - sorting, grouping, and ranking.
-4. [Generating embeddings for users and news articles](news-4-embeddings.html).
-5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
-6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+1. [Getting started](news-1-getting-started.html)
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query
+3. [News search](news-3-searching.html) - sorting, grouping, and ranking
+4. [Generating embeddings for users and news articles](news-4-embeddings.html)
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models

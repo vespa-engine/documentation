@@ -8,12 +8,12 @@ title: "News search and recommendation tutorial - applications, feeding and quer
 This is the second part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. [Getting started](news-1-getting-started.html).
-2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
-3. [News search](news-3-searching.html) - sorting, grouping, and ranking.
-4. [Generating embeddings for users and news articles](news-4-embeddings.html).
-5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
-6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+1. [Getting started](news-1-getting-started.html)
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query
+3. [News search](news-3-searching.html) - sorting, grouping, and ranking
+4. [Generating embeddings for users and news articles](news-4-embeddings.html)
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
@@ -36,7 +36,7 @@ news recommendation research. It contains over 160.000 articles, 15 million
 impressions logs, and 1 million users. We will not use the full dataset in this
 tutorial. To make the tutorial easier to follow along, we will use the much
 smaller DEMO part containing only 5000 users. However, readers are free to
-use the entire dataset (at their own discretion.
+use the entire dataset at their own discretion.
 
 The [MIND dataset
 description](https://github.com/msnews/msnews.github.io/blob/master/assets/doc/introduction.md)
@@ -368,7 +368,7 @@ http://localhost:8080/search/ | python -m json.tool
 
 <p class="alert alert-success"> 
 Note that you can use the built-in query builder found at 
-[http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/)
+<a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a>
 which can help you build queries with, for instance, autocompletion of YQL.
 </p>
 

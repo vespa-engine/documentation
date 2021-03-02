@@ -35,12 +35,12 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 This is the third part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
-1. [Getting started](news-1-getting-started.html).
-2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query.
-3. [News search](news-3-searching.html) - sorting, grouping, and ranking.
-4. [Generating embeddings for users and news articles](news-4-embeddings.html).
-5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering.
-6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors.
+1. [Getting started](news-1-getting-started.html)
+2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query
+3. [News search](news-3-searching.html) - sorting, grouping, and ranking
+4. [Generating embeddings for users and news articles](news-4-embeddings.html)
+5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering
+6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
@@ -99,7 +99,7 @@ sorting or grouping query results.  The downside is higher memory usage.
 <p class="alert alert-success"> 
 By default, no index is generated for attributes, and search over these defaults
 to a linear scan - to build an index for an attribute field, include
-`attribute:fast-search` in the field definition.
+<code>attribute: fast-search</code> in the field definition.
 </p>
 
 ### Example queries using attribute field
@@ -289,7 +289,7 @@ has some limitations.
 #### Memory usage
 
 Attributes are kept in memory, as opposed to normal indexes where
-the data is mostly kept on disk.  Even with large search nodes, one will notice
+the data is mostly kept on disk.  Even with large content nodes, one will notice
 that it is not practical to define all the document type fields as
 attributes, as it will heavily restrict the number of documents per search
 node.  Some Vespa applications have more than 1 billion documents per node —
