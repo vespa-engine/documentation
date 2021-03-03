@@ -3,118 +3,62 @@
 title: "Container Component Reference"
 ---
 
-
-<h2 id="component-types">Component Types</h2>
 <p>
-  The container has a large number of different types of plug-ins available to a developer.
-  To start creating components, see the <a href="../developer-guide.html">Developer Guide</a>.
-</p><p>
-<img src="../img/container_components.svg">
-</p><p>
-  A client may or may not be a network client, so it is related to the network layer.
-  The network layer associates a Request with a <a href="#response-handlers">response handler</a>
-  and routes it to the correct type of <a href="#request-handlers">request handler</a>
-  (typically based on URI binding patterns).
-</p><p>
-  If an application needs lightweight request-response processing
-  using decomposition by a series of chained logical units,
-  the <a href="../jdisc/processing.html">processing framework</a>
-  is the correct family of components to use.
-  The request will be routed from ProcessingHandler through one or more chains of
-  <a href="#processor-instances">Processor</a> instances.
-  The exact format of the output is customizable using a <a href="#renderers">Renderer</a>.
-</p><p>
-  If doing search queries, SearchHandler will create a Query object,
-  route that to the pertinent chain of <a href="#searchers">Searcher</a> instances,
-  and associate the returned Result with the correct <a href="#renderers">Renderer</a> instance
-  for optional customization of the output format.
-</p><p>
-  The DocumentProcessingHandler is usually invoked from messagebus,
-  and used for feeding documents into an index or storage.
-  The incoming data is used to build a Document object,
-  and this is then feed through a chain of <a href="#document-processors">DocumentProcessor</a> instances.
-</p><p>
-  If building an application with custom HTTP APIs, for instance arbitrary REST APIs,
-  the easiest way is building a custom <a href="#request-handlers">RequestHandler</a>.
-  This gets the Request, which is basically a set of key-value pairs,
-  and returns a stream of arbitrary data back to the network.
-</p><p>
-  <a href="#components">Component</a> is the basic building block in the container.
-  A component may be injected into other components,
-  including all the different request handlers, document processors and so on mentioned above,
-  and will get a destructor like method invoked when no other component is using it any more.
+  A component is any Java class whose lifetime is controlled by the container,
+  see the <a href="../developer-guide.html">Developer Guide</a> for an introduction.
+  Components are specified and configured in services.xml and can have other components, and config
+  (represented by generated "Config" classes) <a href="../jdisc/injecting-components.html">injected</a>
+  at construction time, and in turn be injected
+  into other components.
 </p>
 
+<p>
+  Whenever a component or a resource your component depends on is changed by a redeployment,
+  your component is reconstructed. Once all changed components are reconstructed, new requests
+  are atomically switched to use the new set and the old ones are destructed.
+</p>
+
+<p>
+  If you have multiple constructors in your component, annotate the one to use for injection by
+  <code><a href="https://google.github.io/guice/api-docs/latest/javadoc/com/google/inject/Inject.html">@Inject</a></code>.
+</p>
+
+<p>
+  Identifiable components must implement com.yahoo.component.Component, and components that need to
+  destruct resources at removal must subclass com.yahoo.component.AbstractComponent and implement deconstruct().
+</p>
+
+
+<h2 id="component-types">Component Types</h2>
+
+<p>
+  Vespa defined various component types (superclasses) for common tasks:
+</p>
 
 <table class="table">
   <tr id="request-handlers">
     <th>Request handlers</th>
     <td>
       <p>
-        Request handlers are the easiest way to implement arbitrary REST services.
-        The incoming request is a set of key-value pairs and protocol specific information.
-        A request handler my fire off a request to e.g. the search handler,
-        but what it will get back is opaque.
-        If context sensitive result transformations are necessary,
-        the request handler must be paired with one or more <a href="#searchers">searchers</a>,
-        and if the output from the search needs to be customized,
-        a <a href="#renderers">renderer</a> for the search result is the correct way of doing it
-        (as opposed to trying to transform the search response in the request handler).
-      </p><p>
-        A request handler accepts a request, and returns a response.
-        All applications will use a request handler, either by implementing their own,
-        or indirectly by using the <a href="#processor-instances">processing framework</a>,
-        as the processing handler is a request handler as well.
-        A client provider is-a request handler.
-      </p><p>
-        Requests are modelled as key-value stores, as in many other systems,
-        while responses are meta information (like HTTP status)
-        and a binary stream of content (the <em>ContentChannel</em> API).
-      </p><p>
-        A content channel is the basic I/O building block of JDisc.
-        It is conceptually similar to a stream,
-        but the basic unit is the ByteBuffer instead of the native byte.
-        A content channel will take ownership of a ByteBuffer written to it.
+        Request handlers lets applications implement arbitrary HTTP API's.
+      </p>
+      <p>
+        A request handler accepts a request and returns a response.
+        In the most general case they are asynchronous.
+        com.yahoo.container.jdisc.ThreadedRequestHandler can be subclasses to use synchronous
+        request prcoessing.
       </p>
     </td>
   </tr>
-  <tr id="response-handlers">
-    <th>Response handlers</th>
+  <tr id="processors">
+    <th>Processors</th>
     <td>
       <p>
-        Response handlers are invoked by the request handlers after the client response is created.
-        The correct response handler is chosen from URI pattern bindings.
-        A Response is a more or less opaque data structure,
-        so a response handler is more suited to e.g. tracking return codes
-        than doing deep result inspections.
-      </p><p>
-        The response handler is passed along with the request,
-        it is <em>the link back to the external client</em>,
-        as it contains the infrastructure for passing binary data back to the network.
-      </p>
-    </td>
-  </tr>
-  <tr id="processor-instances">
-    <th>Processor instances</th>
-    <td>
-      <p>
-        The <a href="../jdisc/processing.html">processing framework</a> is to be used for light-weight solutions
-        where decomposition of the problem by partitioning the implementation into
-        (a) chain(s) of processors is useful.
+        The <a href="../jdisc/processing.html">processing framework</a> can be used to create general
+        composable synchronous request-response systems. Searchers and search chains are an instantiation
+        (through subclasses) of this general framework for a specific domain.
         Processors are invoked synchronously and the response is a tree of arbitrary data elements.
-        Custom output formats is achieved by adding <a href="#renderers">renderers</a>.
-      </p><p>
-        Processing is a light-weight, low latency request-response framework
-        built on decomposition by chaining.
-        It is a multi-threaded API, each processor must be written thread safe.
-      </p><p>
-        As a request handler, a processor accepts a response and returns a response.
-        There are two central differences in the processor API from request handler API.
-        First of all, a processor may invoke other processors directly,
-        as processors are organized in chains, like filters.
-        Second, processing responses are structured trees, as opposed to a binary stream.
-        This makes processors suited to both request and response transformation,
-        as working on both the request and response is possible.
+        Custom output formats can be defined by adding <a href="#renderers">renderers</a>.
       </p>
     </td>
   </tr>
@@ -122,16 +66,10 @@ title: "Container Component Reference"
     <th>Renderers</th>
     <td>
       <p>
-        Renderers are result formatters for the processing and search frameworks in the container.
-        They usually render responses as JSON or XML, but arbitrary MIME types may be used,
-        including binary formats.
+        Renderers convert a Response (or query Result) into  a serialized form sent over the network.
         Renderers are subclasses of
         <code><a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/java/com/yahoo/processing/rendering/Renderer.java">
         com.yahoo.processing.rendering.Renderer</a></code>.
-      </p><p>
-        As a processing response is a tree, there must be some way to transform that to a binary representation.
-        To support multiple output formats, the marshalling work is placed in the plug-in type Renderer.
-        A default JSON renderer is available.
       </p>
     </td>
   </tr>
@@ -139,10 +77,11 @@ title: "Container Component Reference"
     <th>Searchers</th>
     <td>
       <p>
-        Searchers are the only supported way of doing <em>structured</em> query
-        and result transforms in a search context.
-        If an application is performing searches and needs to look at single result documents (hits)
-        or needs to add terms to the parsed query, searchers are the only way to do this robustly.
+        Searchers processes Queries and their Results.
+        Since they are synchronous, they can issue multiple queries serially or in parallel to
+        e.g implement federation or decorate queries with information fetched from a content cluster.
+        Searchers are composed into <i>search chains</i> defined in services.xml.
+        A query request selects a particular search chain which implements the logic of that query.
       </p>
     </td>
   </tr>
@@ -150,26 +89,9 @@ title: "Container Component Reference"
     <th>Document processors</th>
     <td>
       <p>
-        Document processors are for documents what searchers are for queries.
-        They can access and transform documents robustly and structured.
-        If documents need some kind of transformations or annotations
-        before reaching an index or storage,
-        custom document processors are usually a better solution than manipulating the document feed.
-      </p>
-    </td>
-  </tr>
-  <tr id="components">
-    <th>Components</th>
-    <td>
-      <p>
-        Usually, any container plug-in is a component.
-        A component is usually a subclass of com.yahoo.component.AbstractComponent,
-        though com.yahoo.component.Component is an interface.
-        Components are the low-level wirings for using composition with injection in the container.
-        If building complex searchers or document processors,
-        shared resources or simply partitioning the code, is often needed.
-        The Component is an object with a controlled lifecycle which may be injected into other components,
-        such as searchers, renderers, document processors and request handlers.
+        Document processors processes incoming document operations.
+        Similar to Searchers and Processors they can be composed in chains,
+        but document processors are asynchronous.
       </p>
     </td>
   </tr>
@@ -177,8 +99,7 @@ title: "Container Component Reference"
     <th>Binding</th>
     <td>
       <p>
-        A binding is a pattern, or rule,
-        matching a URI which is used to route incoming requests
+        A binding matches a request URI
         to the correct <a href="#filter">filter chain</a> or <a href="#request-handlers">request handler</a>,
         and route outgoing requests to the correct <a href="#client">client</a>.
         For instance, the binding <em>http://*/*</em> would match any HTTP request,
@@ -240,12 +161,12 @@ Clickable illustration:
 <AREA COORDS="396,89,453,111" href="#binding" alt="binding">
 <AREA COORDS="401,39,448,64" href="#client" alt="client">
 <AREA COORDS="231,483,391,628" href="#request-handlers" alt="custom request handler">
-<AREA COORDS="13,483,212,628" href="#processor-instances" alt="processing">
-<AREA COORDS="46,700,97,722" href="#processor-instances" alt="processing request">
-<AREA COORDS="113,700,179,722" href="#processor-instances" alt="processing response">
-<AREA COORDS="83,801,143,823" href="#processor-instances" alt="processor">
-<AREA COORDS="83,747,143,769" href="#processor-instances" alt="processor">
-<AREA COORDS="83,653,143,675" href="#processor-instances" alt="processor">
+<AREA COORDS="13,483,212,628" href="#processors" alt="processing">
+<AREA COORDS="46,700,97,722" href="#processors" alt="processing request">
+<AREA COORDS="113,700,179,722" href="#processors" alt="processing response">
+<AREA COORDS="83,801,143,823" href="#processors" alt="processor">
+<AREA COORDS="83,747,143,769" href="#processors" alt="processor">
+<AREA COORDS="83,653,143,675" href="#processors" alt="processor">
 <AREA COORDS="218,382,413,417" href="#request-handlers" alt="JDisc request and response">
 <AREA COORDS="111,426,306,461" href="#request-handlers" alt="JDisc request and response">
 <AREA COORDS="7,382,202,417" href="#request-handlers" alt="JDisc request and response">
@@ -271,16 +192,58 @@ Clickable illustration:
 </p>
 
 
-<h2 id="injectable-components">Injectable Components</h2>
+<h2 id="component-configurations">Component configurations</h2>
+
 <p>
-  Resources are <a href="../jdisc/injecting-components.html">injected</a> into the component's constructor,
-  being configuration objects or other components.
-  Annotate the constructor to be used by the container with
-  <code><a href="https://google.github.io/guice/api-docs/latest/javadoc/com/google/inject/Inject.html">@Inject</a></code>.
+  This illustrates a typical component configuration set up by the Vespa container:
+  <img src="../img/container_components.svg">
 </p>
+
+<p>
+  The network layer associates a Request with a <a href="#response-handlers">response handler</a>
+  and routes it to the correct type of <a href="#request-handlers">request handler</a>
+  (typically based on URI binding patterns).
+</p>
+
+<p>
+  If an application needs lightweight request-response processing
+  using decomposition by a series of chained logical units,
+  the <a href="../jdisc/processing.html">processing framework</a>
+  is the correct family of components to use.
+  The request will be routed from ProcessingHandler through one or more chains of
+  <a href="#processors">Processor</a> instances.
+  The exact format of the output is customizable using a <a href="#renderers">Renderer</a>.
+</p>
+
+<p>
+  If doing queries, SearchHandler will create a Query object,
+  route that to the pertinent chain of <a href="#searchers">Searcher</a> instances,
+  and associate the returned Result with the correct <a href="#renderers">Renderer</a> instance
+  for optional customization of the output format.
+</p>
+
+<p>
+  The DocumentProcessingHandler is usually invoked from messagebus,
+  and used for feeding documents into an index or storage.
+  The incoming data is used to build a Document object,
+  and this is then feed through a chain of <a href="#document-processors">DocumentProcessor</a> instances.
+</p>
+
+<p>
+  If building an application with custom HTTP APIs, for instance arbitrary REST APIs,
+  the easiest way is building a custom <a href="#request-handlers">RequestHandler</a>.
+  This gets the Request, which is basically a set of key-value pairs,
+  and returns a stream of arbitrary data back to the network.
+</p>
+
+
+<h2 id="injectable-components">Injectable Components</h2>
+
+<p>These components are available from Vespa to applications in various contexts.</p>
+
 <table class="table">
   <tr>
-    <th colspan="2" style="background-color: lightgrey;">All components</th>
+    <th colspan="2" style="background-color: lightgrey;">Always available</th>
   </tr>
   <tr>
     <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/config-lib/src/main/java/com/yahoo/config/ConfigInstance.java">
@@ -315,21 +278,6 @@ Clickable illustration:
     </td>
   </tr>
   <tr>
-    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/jdisc/secretstore/SecretStore.java">
-      SecretStore</a></code></th>
-    <td>
-      Secret store interface - use to get secrets and list secret versions.
-      For use in Vespa Cloud.
-    </td>
-  </tr>
-  <tr>
-    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/hosted-zone-api/src/main/java/ai/vespa/cloud/SystemInfo.java">
-      SystemInfo</a></code></th>
-    <td>
-      For use in Vespa Cloud: Provides which zone the component runs in.
-    </td>
-  </tr>
-  <tr>
     <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/jdisc/athenz/AthenzIdentityProvider.java">
       AthenzIdentityProvider</a></code></th>
     <td>
@@ -348,42 +296,53 @@ Clickable illustration:
     </td>
   </tr>
   <tr>
-    <th colspan="2" style="background-color: lightgrey;">Searcher</th>
-  </tr>
-  <tr>
-    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/handler/SearchHandler.java">
-      SearchHandler</a></code></th>
-    <td>
-      Inject this to execute queries which are not initiated from an external request by using the <code>ExecutionFactory</code>.
-      <a href="../jdisc/developing-request-handlers.html#examples">Example code</a>.
-    </td>
-  </tr>
-  <tr>
-    <th colspan="2" style="background-color: lightgrey;">Document Processor</th>
-  </tr>
-  <tr>
-    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/DocumentAccess.java">
-      DocumentAccess</a></code></th>
-    <td>Inject this to use the <a href="../document-api-guide.html">Document API</a>
-      in a component like <a href="../document-processing.html">Document Processor</a>
-      <!-- ToDo: or <a href="../searcher-development.html">Searcher</a>-->.</td>
-  </tr>
-  <tr>
-    <th colspan="2" style="background-color: lightgrey;">Handler</th>
-  </tr>
-  <tr>
     <th><code><a href="https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/Executor.html">Executor</a></code></th>
     <td>Default threadpool for processing requests in threaded request handler</td>
   </tr>
   <tr>
-    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/container-accesslogging/src/main/java/com/yahoo/container/logging/AccessLog.java">
-      AccessLog</a></code></th>
-    <td>Must be injected to sub-classes of LoggingRequestHandler.
-      To be deprecated/removed</td>
+    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/java/com/yahoo/container/handler/VipStatus.java">
+      VipStatus</a></code></th>
+    <td>Use this to gain control overe the service status (up/down) to be emitted from this container.</td>
   </tr>
   <tr>
     <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/jdisc_core/src/main/java/com/yahoo/jdisc/Metric.java">
       Metric</a></code></th>
     <td>Jdisc core interface for metrics. Required by all sub-classes of ThreadedRequestHandler.</td>
+  </tr>
+  <tr>
+    <th colspan="2" style="background-color: lightgrey;">Available in containers having <code>search</code></th>
+  </tr>
+  <tr>
+    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/searchchain/ExecutionFactory.java">
+      ExecutionFactory</a></code></th>
+    <td>
+      To execute new queries from code.
+      <a href="../jdisc/developing-request-handlers.html#examples">Example code</a>.
+    </td>
+  </tr>
+  <tr>
+    <th colspan="2" style="background-color: lightgrey;">Available in containers having <code>document-api</code> or <code>document-processing</code></th>
+  </tr>
+  <tr>
+    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/DocumentAccess.java">
+      DocumentAccess</a></code></th>
+    <td>To use the <a href="../document-api-guide.html">Document API</a>.
+  </tr>
+  <tr>
+    <th colspan="2" style="background-color: lightgrey;">Available in the Vespa Cloud</th>
+  </tr>
+  <tr>
+    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/jdisc/secretstore/SecretStore.java">
+      SecretStore</a></code></th>
+    <td>
+      Secret store interface - use to get secrets and list secret versions.
+    </td>
+  </tr>
+  <tr>
+    <th><code><a href="https://github.com/vespa-engine/vespa/blob/master/hosted-zone-api/src/main/java/ai/vespa/cloud/SystemInfo.java">
+      SystemInfo</a></code></th>
+    <td>
+      Provides information about the environment the component is running in.
+    </td>
   </tr>
 </table>
