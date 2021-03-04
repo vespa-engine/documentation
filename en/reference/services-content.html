@@ -81,7 +81,7 @@ title: "services.xml - 'content'"
                                         <a href="#summary-store-logstore-chunk-compression-type">type</a>
                                         <a href="#summary-store-logstore-chunk-compression-level">level</a>
             <a href="#flush-on-shutdown">flush-on-shutdown</a>
-            <a href="#resource-limits">resource-limits</a>
+            <a href="#resource-limits-proton">resource-limits</a>
                 <a href="#disk">disk</a>
                 <a href="#memory">memory</a>
     <a href="#search">search</a>
@@ -549,7 +549,7 @@ This engine supports storage, indexed search and secondary indices.
 Optional sub-elements are <code><a href="#searchable-copies">searchable-copies</a></code>,
 <code><a href="#tuning-proton">tuning</a></code>,
 <code><a href="#flush-on-shutdown">flush-on-shutdown</a></code>, and
-<code><a href="#resource-limits">resource-limits</a></code>.
+<code><a href="#resource-limits-proton">resource-limits (in proton)</a></code>.
 </p>
 
 
@@ -740,12 +740,12 @@ Optional sub-elements:
         </li><li id="flushstrategy-native-conservative"><code>conservative</code>
         <ul>
             <li id="flushstrategy-native-conservative-memory-limit-factor"><code>memory-limit-factor</code>:
-            When <a href="#resource-limits">resource-limits</a> for memory is reached,
+            When <a href="#resource-limits-proton">resource-limits (in proton)</a> for memory is reached,
             flush more often by downscaling <code>total.maxmemorygain</code> and
             <code>component.maxmemorygain</code>, default 0.5
             </li>
             <li id="flushstrategy-native-conservative-disk-limit-factor"><code>disk-limit-factor</code>:
-            When <a href="#resource-limits">resource-limits</a> for disk is reached,
+            When <a href="#resource-limits-proton">resource-limits (in proton)</a> for disk is reached,
             flush more often by downscaling <code>transactionlog.maxsize</code>, default 0.5
             </li>
         </ul>
@@ -1089,12 +1089,21 @@ Refer to <a href="../proton.html#proton-maintenance-jobs">Proton maintenance job
 
 
 
-<h2 id="resource-limits">resource-limits</h2>
+<h2 id="resource-limits-proton">resource-limits (in proton)</h2>
 <p>
 Contained in <code><a href="#proton">proton</a></code>.
-Specifies resource limits used by proton to reject write operations when a limit is reached.
-Use this to implement a <a href="../reads-and-writes.html#feed-block">feed block</a>
-to avoid saturating content nodes. Elements:
+Specifies resource limits used by proton to reject both external and internal write operations (on this content node) when a limit is reached.
+Changing these should only be done by advanced users.
+Instead, change <a href="#resource-limits">resource-limits</a>
+that controls when external write operations are blocked in the entire content cluster.
+These local proton limits are derived from the cluster limits if not specified, using this formula:
+</p>
+<p><!-- depends on mathjax -->
+$${L_{proton}} = {L_{cluster}} + \frac{1-L_{cluster}}{2}$$
+</p>
+<p>
+
+Elements:
 <table class="table">
   <thead>
     <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
@@ -1102,14 +1111,12 @@ to avoid saturating content nodes. Elements:
     <tr id="disk"><th>disk</th>
       <td>optional</td>
       <td>float<br/>[0, 1]</td>
-      <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
-        writefilter.disklimit</a></td>
+      <td>0.9</td>
       <td>Fraction of total space on the disk partition used before put and update operations are rejected</td></tr>
     <tr id="memory"><th>memory</th>
       <td>optional</td>
       <td>float<br/>[0, 1]</td>
-      <td><a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">
-        writefilter.memorylimit</a></td>
+      <td>0.9</td>
       <td>Fraction of physical memory that can be resident memory in anonymous mapping by proton
         before put and update operations are rejected</td></tr>
   </tbody>
@@ -1118,7 +1125,7 @@ Example:
 <pre>
 &lt;proton&gt;
   &lt;resource-limits&gt;
-    &lt;disk&gt;0.90&lt;/disk&gt;
+    &lt;disk&gt;0.91&lt;/disk&gt;
     &lt;memory&gt;0.95&lt;/memory&gt;
 </pre>
 </p>
@@ -1435,6 +1442,38 @@ and adding the fixed component. Attributes:
 
 </p>
 
+
+<h2 id="resource-limits">resource-limits</h2>
+<p>
+Contained in <code><a href="#tuning">tuning</a></code>.
+Specifies resource limits used to decide whether external write operations should be blocked in the entire content cluster,
+based on the reported resource usage by content nodes.
+See <a href="../reads-and-writes.html#feed-block">feed block</a> for more details.
+Elements:
+<table class="table">
+  <thead>
+    <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr id="disk"><th>disk</th>
+      <td>optional</td>
+      <td>float<br/>[0, 1]</td>
+      <td>0.8</td>
+      <td>Fraction of total space on the disk partition used on a content node before feed is blocked</td></tr>
+    <tr id="memory"><th>memory</th>
+      <td>optional</td>
+      <td>float<br/>[0, 1]</td>
+      <td>0.8</td>
+      <td>Fraction of physical memory that can be resident memory in anonymous mapping on a content node before feed is blocked</td></tr>
+  </tbody>
+</table>
+Example:
+<pre>
+&lt;tuning&gt;
+  &lt;resource-limits&gt;
+    &lt;disk&gt;0.88&lt;/disk&gt;
+    &lt;memory&gt;0.85&lt;/memory&gt;
+</pre>
+</p>
 
 
 <h2 id="dispatch-tuning">dispatch</h2>
