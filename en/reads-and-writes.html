@@ -214,39 +214,51 @@ Documents are created using <a href="reference/document-json-format.html">JSON</
 
 <h2 id="feed-block">Feed block</h2>
 <p>
-Write operations fail when a cluster is at disk or memory capacity.
-</p><p>
+A content cluster blocks external write operations when at least one content node has reached the
+<a href="reference/services-content.html#resource-limits">resource limit</a>
+of disk or memory. This is done to avoid saturating content nodes.
+The <em>Cluster controller</em> monitors the resource usage of the content nodes
+and decides whether to block feeding.
+When feed is blocked, write operations are rejected by <em>Distributors</em>.
+All Put operations and most Update operations are rejected.
+These operations are still allowed:
+<ul>
+  <li>Remove operations</li>
+  <li>Update <code><a href="reference/document-json-format.html#assign">assign</a></code> operations to numeric single-value fields</li>
+</ul>
+</p>
+<p>
 To remedy, add nodes to the content cluster, or use nodes with higher capacity.
-The data will <a href="elastic-vespa.html">auto-redistribute</a>, and feeding is unblocked.
+The data will <a href="elastic-vespa.html">auto-redistribute</a>, and feeding is unblocked when all content nodes are below the limits.
 Configure <a href="reference/services-content.html#resource-limits">resource-limits</a> to tune this.
-Temporarily increasing <em>resource-limits</em> (e.g. from 0.8 to 0.9) is an alternative if the cluster is stuck.
-</p><p>
-These <a href="reference/metrics.html">metrics</a> indicate whether feeding is blocked (set to 1 when blocked):
+</p>
+<p>
+These <a href="reference/metrics.html">metrics</a> are used to monitor resource usage and whether feeding is blocked:
 <table class="table">
   <tr>
-    <th>content.proton.resource_usage.feeding_blocked</th>
-    <td>disk or memory</td>
-  </tr><tr>
-    <th>content.proton.documentdb.attribute.resource_usage.feeding_blocked</th>
-    <td><em>Attribute Multivalue Mapping</em> or <em>Attribute Enum Store</em></td>
+    <th>cluster-controller.resource_usage.nodes_above_limit</th>
+    <td>The number of content nodes that are above one or more resource limits. When above 0, feeding is blocked.</td>
+  </tr>
+  <tr>
+    <th>content.proton.resource_usage.disk</th>
+    <td>A number between 0 and 1, indicating how much disk (of total available) is used on the content node.</td>
+  </tr>
+  <tr>
+    <th>content.proton.resource_usage.memory</th>
+    <td>A number between 0 and 1, indicating how much memory (of total available) is used on the content node.</td>
   </tr>
 </table>
-When feeding is blocked, events are logged - examples:
+When feeding is blocked, error messages are returned in write operation replies - example:
 <pre>
-java.lang.RuntimeException: ReturnCode(NO_SPACE, Put operation rejected for document 'id:test:test::0': 'diskLimitReached: {
-  action: \"add more content nodes\",
-  reason: \"disk used (0.85) &gt; disk limit (0.8)\",
-  capacity: 100000000000,
-  free: 85000000000,
-  available: 85000000000,
-  diskLimit: 0.8
-}'
+ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
+                     memory on node 0 [my-vespa-node-0.example.com] (0.82 > 0.80))
 </pre>
 </p>
 
 <p>
-  The <em>Attribute Multivalue Mapping</em> or <em>Attribute Enum Store</em> can go full and block feeding -
-  see <a href="attributes.html#data-structures">attribute data structures</a>.
+The address space used in <em>Attribute Multivalue Mapping</em> or <em>Attribute Enum Store</em> can also go full and block feeding -
+see <a href="attributes.html#data-structures">attribute data structures</a>.
+This will very rarely happen.
 </p>
 <table class="table">
   <tr>
@@ -300,16 +312,10 @@ java.lang.RuntimeException: ReturnCode(NO_SPACE, Put operation rejected for docu
   </tr>
 </table>
 <p>
-  An error is emitted when an attribute limit is exceeded:
+An error is returned when an attribute limit is exceeded:
 <pre>
-Detail resultType=FATAL_ERRORexception=
-'ReturnCode(NO_SPACE, Put operation rejected for document 'id:mynamespace:mydoc::123456' of type 'mydoc':
-'enumStoreLimitReached: {
-    action: "add more content nodes",
-    reason: "enum store address space used (0.92813) &gt; limit (0.9)",
-    enumStore: { used: 31890298144, dead: 0, limit: 34359738368},
-    attributeName: "text", subdb: "ready"}')'
-endpoint=vespa1:8080 ssl=false resultTimeLocally=1532685239428
+ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
+                     attribute-enum-store:test.ready.a1 on node 0 [my-vespa-node-0.example.com] (0.91 > 0.90))
 </pre>
 To fix a problem with too many values,
 add content nodes to distribute documents with attributes over more nodes -
