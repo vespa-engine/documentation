@@ -7,20 +7,19 @@ It is critical that you understand the security requirements and limitations
 of any networked system. Vespa is no exception. This document gives the most
 important information related to security at the network and physical host levels.
  
-To keep your Vespa installation safe, follow the guidelines outlined below:
+To keep your self-hosted Vespa installation safe, follow the guidelines outlined below:
 
 1. Isolate the Vespa hosts
 2. Secure the application container with access control filters and TLS
 3. Lockdown directory permissions
 
 ## Isolating the Vespa hosts
-**Hosts running Vespa MUST NOT be directly exposed to the public internet or to
-untrusted networks. Failure to ensure this may lead to data exfiltration/infiltration
-or host compromise.**
+
+**When running your own Vespa instances, hosts running Vespa MUST NOT be directly exposed 
+to the public internet or to untrusted networks. Failure to ensure this may lead to data 
+exfiltration/infiltration or host compromise.**
  
-Why these stringent requirements?
- 
-Vespa's internal protocols are not authenticated and are therefore not safe
+Vespa's internal protocols are not authenticated by default and are therefore not safe
 in the face of untrusted network actors.
 When running Vespa in your own organization, or on the public cloud in particular, this
 is something you must take into account.
