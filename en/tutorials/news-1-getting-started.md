@@ -149,12 +149,14 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
     --verbose --file /app/doc.json --host localhost --port 8080'
 </pre>
 
-This runs the `vespa-http-client` Java client with the file 
-`doc.json` file. This contains a single document which we'll 
-query for below.
+This runs the `vespa-http-client` Java client with the file `doc.json` file.
+This contains a single document which we'll query for below.
 
 In later tutorials, when more data should be fed to the system,
 use this command while pointing to the correct feed file.
+`vespa-http-client` can also be obtained using:
+
+    $ curl -O https://repo.maven.apache.org/maven2/com/yahoo/vespa/vespa-http-client/7.369.27/vespa-http-client-7.369.27-jar-with-dependencies.jar
 
 ## Testing Vespa
 
