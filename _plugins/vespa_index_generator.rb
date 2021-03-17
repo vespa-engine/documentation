@@ -14,12 +14,15 @@ module Jekyll
             operations = []
             site.pages.each do |page|
                 if page.data["index"] == true && page.url.start_with?("/documentation") == false
+                    text = extract_text(page)
                     operations.push({
                         :fields => {
                             :path => page.url,
                             :namespace => namespace,
                             :title => page.data["title"],
-                            :content => extract_text(page),
+                            :content => text,
+                            :term_count => text.split.length(),
+                            :last_updated => Time.now.to_i,
                             :outlinks => extract_links(page)
                         }
                     })
