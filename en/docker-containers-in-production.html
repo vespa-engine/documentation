@@ -1,78 +1,102 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Docker Containers in Production"
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Docker containers in production"
 ---
 <p>
-This document describes tuning and adaptions that is useful when running Vespa Docker containers in production.
+This document describes tuning and adaptions for running Vespa Docker containers in production.
 </p>
 
-<h2 id="persistent-container-volumes">Mounting persistent volumes for container nodes</h2>
-The <a href="vespa-quick-start.html">quick start guide</a> and <a href="vespa-quick-start-multinode-aws-ecs.html">AWS ECS multi node guide</a> show how to run Vespa in docker containers. In these examples all the data get stored inside the container. This means that the data is lost if the container is deleted. When running Vespa inside Docker containers in production, volume mappings should be added to persist data and logs.
-<br/><br/>
-<strong>Two directories have to be mounted when creating the container:</strong>
-<ul>
-<li>/opt/vespa/var</li>
-<li>/opt/vespa/logs</li>
-</ul>
 
-<strong>Example mounting directories from the Docker host in the container instance:</strong>
+
+<h2 id="mounting-persistent-volumes">Mounting persistent volumes</h2>
+<p>
+  The <a href="vespa-quick-start.html">quick start</a>
+  and <a href="vespa-quick-start-multinode-aws-ecs.html">AWS ECS multi node</a> guides
+  show how to run Vespa in Docker containers.
+  In these examples, all the data is stored inside the container - the data is lost if the container is deleted.
+  When running Vespa inside Docker containers in production,
+  volume mappings to the parent host should be added to persist data and logs.
+</p>
+<ul>
+  <li>/opt/vespa/var</li>
+  <li>/opt/vespa/logs</li>
+</ul>
 <pre>
-$ mkdir -p /tmp/vespa/var
-$ export VESPA_VAR_STORAGE=/tmp/vespa/var
-$ mkdir -p /tmp/vespa/logs
-$ export VESPA_LOG_STORAGE=/tmp/vespa/logs
+$ mkdir -p /tmp/vespa/var;  export VESPA_VAR_STORAGE=/tmp/vespa/var
+$ mkdir -p /tmp/vespa/logs; export VESPA_LOG_STORAGE=/tmp/vespa/logs
 $ docker run --detach --name vespa --hostname vespa-container --privileged --volume $VESPA_VAR_STORAGE:/opt/vespa/var \
   --volume $VESPA_LOG_STORAGE:/opt/vespa/logs --publish 8080:8080 vespaengine/vespa
 </pre>
 
-<h2 id="system-limits-in-containers">System limits in docker containers</h2>
+
+
+<h2 id="system-limits">System limits</h2>
 <p>
-When Vespa starts inside Docker containers the startup scripts will set certain <a href="reference/files-processes-and-ports.html#vespa-system-limits">system limits</a>.
+  When Vespa starts inside Docker containers, the startup scripts will set
+  <a href="reference/files-processes-and-ports.html#vespa-system-limits">system limits</a>.
+  Make sure that the environment starting the Docker engine is setup in such a way
+  that these limits can be set inside the containers.
 </p>
 <p>
-Make sure that the environment starting the Docker engine is setup in such a way that these limits can be set inside the containers.
+  For a CentOS/RHEL base host Docker is usually started by
+  <a href="https://www.freedesktop.org/software/systemd/man/systemd.exec.html">systemd</a>.
+  In this case, LimitNOFILE, LimitNPROC and LimitCORE should be set to meet the minimum requirements in
+  <a href="reference/files-processes-and-ports.html#vespa-system-limits">system limits</a>.
 </p>
-<p>
-For a CentOS/RHEL base host Docker is usually started by <a href="https://www.freedesktop.org/software/systemd/man/systemd.exec.html">systemd</a>. In this case LimitNOFILE, LimitNPROC and LimitCORE should
-be set to meet the minimum requirements in <a href="reference/files-processes-and-ports.html#vespa-system-limits">system limits</a>.
-</p>
+
+
 
 <h2 id="controlling-which-services-to-start">Controlling which services to start</h2>
 <p>
-The docker image vespaengine/vespa can take a command that controls which services are started inside the container.
+  The docker image <a href="build-install-vespa.html">vespaengine/vespa</a>
+  takes a parameter that controls which services are started inside the container.
 </p>
-<strong>Starting a configserver container:</strong>
+<p>Starting a configserver container:</p>
 <pre>
-$ docker run &lt;other arguments&gt; --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; vespaengine/vespa configserver
+$ docker run &lt;other arguments&gt; \
+  --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; \
+  vespaengine/vespa configserver
 </pre>
-<strong>Starting a services container (configserver will not be started):</strong>
+<p>Starting a services container (configserver will not be started):</p>
 <pre>
-$ docker run &lt;other arguments&gt; --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; vespaengine/vespa services
+$ docker run &lt;other arguments&gt; \
+  --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; \
+  vespaengine/vespa services
 </pre>
 <p>
-<strong>Starting a container with both configserver and services:</strong>
+<p>Starting a container with both configserver and services:</p>
 <pre>
-$ docker run &lt;other arguments&gt; --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; vespaengine/vespa
+$ docker run &lt;other arguments&gt; \
+  --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; \
+  vespaengine/vespa
 </pre>
 <p>
-This is required in the case where the configserver container should run other services like an adminserver or logserver (see <a href="reference/services.html">services.html</a>)
+  This is required in the case where the configserver container should run other services
+  like an adminserver or logserver (see <a href="reference/services.html">services.html</a>)
 <p>
-If the VESPA_CONFIGSERVERS environment variable is not specified it will be set to the container hostname.</p>
-</h2>
+  If the VESPA_CONFIGSERVERS environment variable is not specified it will be set to the container hostname.
+</p>
 
 
-<h2 id="graceful-stop">Gracefully stop of running docker containers</h2>
-<p>Stopping a running <i>vespaengine/vespa</i> container will trigger a graceful shutdown which saves time when starting the container again. If the container is shutdown forcefully
-, the content nodes might need to restore the state from the transaction log which might be time consuming. There is no chance of data loss or data corruption as the data is always written and synched
-to persistent storage. 
 
-The default timeout for the docker daemon
-to wait for the shutdown might be too low for larger number of documents per node. 
-Below stop will wait at least 120 seconds before terminating the running container forcefully, if the stop is successfully
-performed before the timeout has passed the command takes less than the timeout. 
-
+<h2 id="graceful-stop">Graceful stop</h2>
+<p>
+  Stopping a running <em>vespaengine/vespa</em> container will trigger a graceful shutdown
+  which saves time when starting the container again.
+  If the container is shutdown forcefully,
+  the content nodes might need to restore the state from the transaction log which might be time consuming.
+  There is no chance of data loss or data corruption as the data is always written and sync'ed to persistent storage.
+</p>
+<p>
+  The default timeout for the Docker daemon to wait for the shutdown
+  might be too low for larger number of documents per node.
+  Below stop will wait at least 120 seconds before terminating the running container forcefully,
+  if the stop is successfully performed before the timeout has passed the command takes less than the timeout.
+</p>
 <pre>
 $ docker stop name -t 120
 </pre>
-
-It is also possible to configure the default docker daemon timeout, see <a href="https://docs.docker.com/engine/reference/commandline/dockerd/">--shutdown-timeout</a> parameter.
+<p>
+  It is also possible to configure the default docker daemon timeout,
+  see <a href="https://docs.docker.com/engine/reference/commandline/dockerd/">--shutdown-timeout</a> parameter.
+</p>
