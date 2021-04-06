@@ -15,11 +15,12 @@ This schema has a set of (contrived) ranking functions, to help learn Vespa rank
 
 
 ## Ranking using document features only
-Let's start with something simple: _Irrespective of the query, score documents by the number of in-links to it_.
+Let's start with something simple: _Irrespective of the query, score all documents by the number of in-links to it_.
 That is, for any query, return the documents with most in-links first in the result set:
 
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where sddocname contains "doc";&ranking=inlinks](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks)
 
+`where sddocname contains "doc"` which is a Vespa shorthand for _all documents of "doc" schema_.
 The score, named `relevance` in query results, is the size of the `inlinks` attribute array in the document,
 as configured in the `expression`:
 ```
@@ -249,29 +250,37 @@ Notes:
 ## Retrieval and ranking
 So far in this guide, we have run the ranking function over _all_ documents.
 This is a valid use case for many applications.
-However, ranking documents is generally expensive,
+However, ranking documents is generally CPU-expensive,
 optimizing by reducing the candidate set will increase performance.
 Example query using text matching,
 dumping [calculated rank features](https://docs.vespa.ai/en/reference/query-api-reference.html#ranking.listFeatures):
 
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where title contains "ranking";&ranking.listFeatures](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20title%20contains%20%22ranking%22%3B&ranking.listFeatures)
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where title contains "document";&ranking.listFeatures](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20title%20contains%20%22document%22%3B&ranking.listFeatures)
 
 See the **long** list of rank features calculated per result.
+However, the query filters on documents with "ranking" in the title,
+so the features are only calculated for the small set of matching documents.
 
-
-Example: instead of ranking _all_ documents in the examples above, apply a filter like document language
-or query terms that must occur in the documents.
-
-Running these filters is _document retrieval_. Another good example is web search -
+Running a filter like this is _document retrieval_. Another good example is web search -
 the user query terms are used to _retrieve_ the candidate set cheaply (from billions of documents),
 then one or more _ranking functions_ are applied to the much smaller candidate set to generate the ranked top-ten.
+Another way to look at it is:
+* In the retrieval (recall) phase, _find all relevant documents_
+* In the ranking phase, _show only relevant documents_.
 
-Splitting the ranking into two phases is an optimization to use an inexpensive function
-to filter out the least promising candidates
-before spending most resources on the candidates the end user will actually see.
-See [first-phase](reference/schema-reference.html#firstphase-rank).
+Still, the candidate set after retrieval can be big, a query can hit all documents.
+Ranking all candidates is not possible in many applications.
 
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where sddocname contains "doc";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks_twophase)
+Splitting the ranking into two phases is another optimization -
+use an inexpensive ranking expression to sort out the least promising candidates
+before spending most resources on the highest ranking candidates.
+In short, use increasingly more power per document as the candidate set shrinks:
+
+<img src="img/retrieval-ranking.svg" width="584" height="auto" alt="retrieval and ranking]"/>
+
+Let's try the same query again, with a two-phase rank-profile that also does an explicit rank score cutoff:
+
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where title contains "document";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20title%20contains%20%22document%22%3B&ranking=inlinks_twophase)
 
 ```
 rank-profile inlinks_twophase inherits inlinks_age {
@@ -286,26 +295,23 @@ rank-profile inlinks_twophase inherits inlinks_age {
 }
 ```
 
-In the results, observer that no document has a _rankingExpression(num_inlinks) < 10.0_,
+**Pro tip:** Note how using rank-profile `inherits` is a smart way to define functions once,
+then use in multiple rank-profiles.
+Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earlier:
+
+```
+    function num_inlinks() {
+        expression: attribute(inlinks).count
+    }
+```
+
+In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than 10.0,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
-
-**Pro tip:** Note how using rank-profile `inheritance` is a smart way to define functions once,
-then use in multiple rank-profiles
-
-In this query, the retrieval is `where sddocname contains "doc"` which is a Vespa shorthand for "all documents".
-A more restrictive filter can be filtering for "models" in the _default_ fieldset: `where default contains "models"`:
-
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where default contains "models";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20default%20contains%20%22models%22%3B&ranking=inlinks_twophase)
-
-In short, use increasingly more power per document as the candidate set shrinks:
-
-<img src="img/retrieval-ranking.svg" width="584" height="auto" alt="retrieval and ranking]"/>
-
-Another way to look at it is, in the recall phase, _find all relevant documents_
-and in the ranking phase, _show only relevant documents_.
+Normally, the `rank-score-drop-limit` is not used, as the `keep-rank-count` is most important.
 
 Two-phased ranking is a performance optimization - this guide is about functionality,
-so the rest of the examples will only be using first-phase ranking.
+so the rest of the examples will only be using one ranking phase.
+Read more in [first-phase](reference/schema-reference.html#firstphase-rank).
 
 <!--
 ToDo, bext steps:
