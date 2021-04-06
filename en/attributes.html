@@ -34,27 +34,13 @@ field price type int {
   Attributes speed up query execution and document updates, trading off memory.
   As data structures are regularly optimized, consider both static and temporary resource usage -
   see <a href="#attribute-memory-usage.html">attribute memory usage</a> below.
-  Use attributes in document summaries to limit accesses to storage to generate result sets.
-</p>
-
-
-
-<p>
-  Configuration:
+  Use attributes in document summaries to limit accesses to storage to generate result sets. Configuration:
 </p>
 <table class="table">
   <tr id="fast-search">
     <th style="white-space:nowrap;">fast-search</th>
     <td>
-        Use to speed up search -
-        see <a href="performance/feature-tuning.html#when-to-use-fast-search">when to use fast-search</a>.
-        An attribute is a linear array-like data structure -
-        matching documents hence means scanning <em>all</em> attribute values.
-        Setting <a href="reference/schema-reference.html#attribute">fast-search</a>
-        generates a B-tree index structure for quicker lookup,
-        using more memory, and more CPU when updating.
-        It increases steady state memory usage for all attribute types
-        and also add initialization overhead for numeric types.
+      Add an <a href="#index-structures">index structure</a> to improve query performance:
 <pre>
 schema foo {
     document bar {
@@ -168,6 +154,47 @@ schema foo {
 
 
 
+<h2 id="index-structures">Index structures</h2>
+<p>
+  Without <code>fast-search</code>, attribute access is a memory lookup,
+  being one value or all values, depending on query execution.
+  An attribute is a linear array-like data structure -
+  matching documents potentially means scanning <em>all</em> attribute values.
+</p>
+<p>
+  Setting <a href="reference/schema-reference.html#attribute">fast-search</a>
+  creates a dictionary, an index structure for quicker lookup.
+  This uses more memory, and also more CPU when updating documents.
+  It increases steady state memory usage for all attribute types
+  and also add initialization overhead for numeric types.
+  The default index structure is a b-tree of attribute <em>values</em>,
+  pointing to an <em>occurrence</em> b-tree of local doc IDs for each value:
+</p>
+<img src="img/attributes-indexes.svg" width="385" height="auto" />
+<p>
+Notes:
+</p>
+<ul>
+  <li>If a value occurs in many documents, the <em>occurrence</em> b-tree grows large.
+    For such values, a boolean-occurrence list (i.e. bitvector) is generated in addition to the b-tree</li>
+  <li>Setting <code>fast-search</code> is not observable in the files on disk, other than size</li>
+  <li>The <em>value</em> b-tree enables fast range-searches in numerical attributes</li>
+</ul>
+<p>
+  Using <code>fast-search</code> has many implications, read more in
+  <a href="performance/feature-tuning.html#when-to-use-fast-search">when to use fast-search</a>.
+</p>
+
+<!-- ToDo: add when feature is ready:
+field intfield type int {
+    indexing:   attribute | summary
+    attribute:  fast-search
+    dictionary: hash
+}
+-->
+
+
+
 <h2 id="attribute-memory-usage.html">Attribute memory usage</h2>
 <p>
   Attribute structures are regularly optimized and this causes temporary resource usage -
@@ -223,6 +250,11 @@ schema foo {
   <a href="schemas.html#multivalue-fields">Multivalue</a> attributes use an
   adaptive approach in how data is stored in memory,
   and up to 2 billion documents per node is supported.
+</p>
+<p>
+  <strong>Pro tip:</strong> The proton <em>/state/v1/</em> interface can be explored for attribute memory usage.
+  This is an undocumented debug-interface, subject to change at any moment - example:
+  <em>http://localhost:19110/state/v1/custom/component/documentdb/music/subdb/ready/attribute/artist</em>
 </p>
 
 
