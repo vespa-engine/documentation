@@ -240,8 +240,9 @@ sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
 ```
 
 Notes:
-* Query tensors can grow large. Applications will normally create the tensor in code using a _Searcher_,
-  see [example](ranking-expressions-features.html#query-feature-types).
+* Query tensors can grow large.
+  Applications will normally create the tensor in code using a [Searcher](searcher-development.html),
+  also see [example](ranking-expressions-features.html#query-feature-types).
 * Here the document tensor is created from a weighted set -
   a better way would be to store this in a tensor in the document to avoid the transformation.
 
