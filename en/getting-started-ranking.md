@@ -104,36 +104,6 @@ Using `summary-features` makes it easy to validate and develop the rank expressi
 
 
 
-## Two-phased ranking, rank-profile inheritance
-See [first-phase](reference/schema-reference.html#firstphase-rank).
-The purpose of two-phased ranking is to use a cheap rank function to eliminate most candidates
-using little resources in the first phase -
-then use a precise, resource intensive function in the second phase.
-
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where sddocname contains "doc";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks_twophase)
-
-Note how using rank-profile `inheritance` is a smart way to define functions once, then use in multiple rank-profiles:
-```
-rank-profile inlinks_twophase inherits inlinks_age {
-    first-phase {
-        keep-rank-count       : 50
-        rank-score-drop-limit : 10
-        expression            : num_inlinks
-    }
-    second-phase {
-        expression            : rank_score
-    }
-}
-```
-
-In the results, observer that no document has a _rankingExpression(num_inlinks) < 10.0_,
-meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
-
-Two-phased ranking is a performance optimization - this guide is about functionality,
-so the rest of the examples will only be using first-phase ranking.
-
-
-
 ## Ranking with query features
 Let's assume we want to find similar documents, and we define document similarity as having the same number of words.
 From most perspectives a poor similarity function, better functions are described later.
@@ -265,3 +235,65 @@ sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
 Notes:
 * Query tensors can grow large. Applications can create the tensor in code using a _Searcher_,
   see [example](ranking-expressions-features.html#query-feature-types).
+
+
+
+## Retrieval and ranking
+So far in this guide, we have run the ranking function over _all_ documents.
+This is a valid use case for many applications.
+However, ranking documents is generally expensive,
+optimizing by reducing the candidate set will increase performance.
+Example: instead of ranking _all_ documents in the examples above, apply a filter like document language
+or query terms that must occur in the documents.
+
+Running these filters is _document retrieval_. Another good example is web search -
+the user query terms are used to _retrieve_ the candidate set cheaply (from billions of documents),
+then one or more _ranking functions_ are applied to the much smaller candidate set to generate the ranked top-ten.
+
+Splitting the ranking into two phases is an optimization to use an inexpensive function
+to filter out the least promising candidates
+before spending most resources on the candidates the end user will actually see.
+See [first-phase](reference/schema-reference.html#firstphase-rank).
+
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where sddocname contains "doc";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks_twophase)
+
+Pro tip: Note how using rank-profile `inheritance` is a smart way to define functions once,
+then use in multiple rank-profiles:
+```
+rank-profile inlinks_twophase inherits inlinks_age {
+    first-phase {
+        keep-rank-count       : 50
+        rank-score-drop-limit : 10
+        expression            : num_inlinks
+    }
+    second-phase {
+        expression            : rank_score
+    }
+}
+```
+
+In the results, observer that no document has a _rankingExpression(num_inlinks) < 10.0_,
+meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
+
+In this query, the retrieval is `where sddocname contains "doc"` which is a Vespa shorthand for "all documents".
+A more restrictive filter can be filtering for "models" in the _default_ fieldset: `where default contains "models"`:
+
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where default contains "models";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20default%20contains%20%22models%22%3B&ranking=inlinks_twophase)
+
+In short, use increasingly more power per document as the candidate set shrinks:
+
+<img src="img/retrieval-ranking.svg" width="584" height="auto" alt="retrieval and ranking]"/>
+
+Another way to look at it is, in the recall phase, _find all relevant documents_
+and in the ranking phase, _show only relevant documents_.
+
+Two-phased ranking is a performance optimization - this guide is about functionality,
+so the rest of the examples will only be using first-phase ranking.
+
+<!--
+ToDo, bext steps:
+* look at retrieval, start easy with AND, then OR
+* OR degenerates quickly to _all_ documents, so describe WAND in layman terms
+* describe when rank features are calculated to illustrate importance of recall phase
+* from here, POST YQL for better readability
+-->
