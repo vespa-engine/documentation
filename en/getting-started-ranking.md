@@ -5,13 +5,13 @@ title: "Getting started with ranking"
 
 Learn how [ranking](ranking.html) works in Vespa by using the open [query API](query-api.html) of
 [vespa-documentation-search](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/vespa-documentation-search).
+In this article, find a set of queries invoking different `rank-profiles`, which is the ranking definition.
 
 Ranking is the user-defined computation that scores documents to a query,
-here configured in the schema [doc.sd](https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/vespa-documentation-search/src/main/application/schemas/doc.sd),
+here configured in [doc.sd](https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/vespa-documentation-search/src/main/application/schemas/doc.sd),
 also see [schema documentation](schemas.html).
 This schema has a set of (contrived) ranking functions, to help learn Vespa ranking.
 
-In this article, find a set of queries invoking different `rank-profiles`, which is the ranking definition.
 
 
 ## Ranking using document features only
@@ -20,7 +20,8 @@ That is, for any query, return the documents with most in-links first in the res
 
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where sddocname contains "doc";&ranking=inlinks](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks)
 
-The score, named `relevance` in query results, is the size of the `inlinks` attribute array in the document:
+The score, named `relevance` in query results, is the size of the `inlinks` attribute array in the document,
+as configured in the `expression`:
 ```
 rank-profile inlinks {
     first-phase {
@@ -34,15 +35,15 @@ rank-profile inlinks {
 
 
 Count the number of entries in `inlinks` in the result and compare with `relevance` - it will be the same.
-Observe that the ranking function does not use any features from the query.
+Observe that the ranking expression does not use any features from the query,
+it only uses `attribute(inlinks).count`,
+which is a [document feature](reference/rank-features.html#document-features).
 
 
 
 ## Observing values used in ranking
-When developing an application, it is useful to observe the input values to ranking.
-Use [summary-features](reference/schema-reference.html#summary-features)
-to output values in search results.
-
+When developing ranking expressions, it is useful to observe the input values.
+Output the input values using [summary-features](reference/schema-reference.html#summary-features).
 In this experiment, we will use another rank function, still counting in-links but scoring older documents lower:
 
 <br/>
@@ -52,6 +53,7 @@ In this experiment, we will use another rank function, still counting in-links b
 
 Also new is:
 * use of the `now` [ranking feature](reference/rank-features.html)
+* use `pow`, a mathematical function in [ranking expressions](reference/ranking-expressions.html)
 * use of constants and functions to write better code
 
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where sddocname contains "doc";&ranking=inlinks_age](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks_age)
@@ -86,7 +88,8 @@ rank-profile inlinks_age {
     }
 }
 ```
-In the query results, observe a document with 27 in-links, 9703 seconds old, get at relevance at 20.32:
+In the query results, here we observe a document with 27 in-links, 9703 seconds old, get at relevance at 20.32
+(the age of documents will vary with query time):
 ```
 "relevance": 20.325190122213748,
 ...
@@ -106,7 +109,7 @@ Using `summary-features` makes it easy to validate and develop the rank expressi
 
 ## Ranking with query features
 Let's assume we want to find similar documents, and we define document similarity as having the same number of words.
-From most perspectives a poor similarity function, better functions are described later.
+From most perspectives, this is a poor similarity function, better functions are described later.
 
 The documents have a `term_count` field - so let's add a `ranking.features.query` for term count as well:
 
@@ -139,7 +142,7 @@ This rank function will score documents [0-1>, closer to 1 is more similar:
     "query(q_term_count)": 1000.0,
 }
 ```
-The key learning here is how to transfer ranking values, or ranking features in the query.
+The key learning here is how to transfer ranking features in the query.
 Use different names for more query features.
 
 
@@ -149,9 +152,12 @@ Another similarity function can be overlap in in-links.
 We will map the inlinks [weightedset](reference/schema-reference.html#type:weightedset) into a
 [tensor](reference/schema-reference.html#type:tensor),
 query with a tensor of same type and create a scalar using a tensor product as the rank score.
-We use a [mapped](reference/tensor.html#general-literal-form) query tensor:
+We use a [mapped](reference/tensor.html#general-literal-form) query tensor,
+where the document name is the address in the tensor, using a value of 1 for each in-link:
 ```
-{% raw %}{{links:/en/query-profiles.html}:1,{links:/en/query-profiles.html}:1,{links:/en/query-profiles.html}:1}{% endraw %}
+{% raw %}{{links:/en/query-profiles.html}:1,
+ {links:/en/page-templates.html}:1,
+ {links:/en/overview.html}:1}{% endraw %}
 ```
 **Important:** Vespa cannot know the query tensor type from looking at it -
 it must be configured using a [query profile type](ranking-expressions-features.html#query-feature-types).
@@ -163,7 +169,7 @@ Explore the [configuration](https://github.com/vespa-engine/sample-apps/tree/mas
     └── types
         └── links.xml
 ```
-Pro tip: The query profile `default` is assumed if not set in the query.
+**Pro tip:** The query profile `default` is assumed if not set in the query.
 If your application has only _one_ query profile, you can call it `default.xml` and it is always invoked.
 
 As the in-link data is represented in a weightedset,
@@ -224,7 +230,7 @@ As all values are 1, all products are 1 and the sum is 2:
 </table>
 <br/>
 
-Change values in query tensor to see difference in rank score, setting different weights for links.
+Change values in the query tensor to see difference in rank score, setting different weights for links.
 
 Summary: The problem of comparing two lists of links is transformed into a numerical problem
 of multiplying two occurrence vectors,  summing co-occurences and ranking by this sum:
@@ -233,8 +239,10 @@ sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
 ```
 
 Notes:
-* Query tensors can grow large. Applications can create the tensor in code using a _Searcher_,
+* Query tensors can grow large. Applications will normally create the tensor in code using a _Searcher_,
   see [example](ranking-expressions-features.html#query-feature-types).
+* Here the document tensor is created from a weighted set -
+  a better way would be to store this in a tensor in the document to avoid the transformation.
 
 
 
@@ -243,6 +251,14 @@ So far in this guide, we have run the ranking function over _all_ documents.
 This is a valid use case for many applications.
 However, ranking documents is generally expensive,
 optimizing by reducing the candidate set will increase performance.
+Example query using text matching,
+dumping [calculated rank features](https://docs.vespa.ai/en/reference/query-api-reference.html#ranking.listFeatures):
+
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where title contains "ranking";&ranking.listFeatures](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20title%20contains%20%22ranking%22%3B&ranking.listFeatures)
+
+See the **long** list of rank features calculated per result.
+
+
 Example: instead of ranking _all_ documents in the examples above, apply a filter like document language
 or query terms that must occur in the documents.
 
@@ -257,8 +273,6 @@ See [first-phase](reference/schema-reference.html#firstphase-rank).
 
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from sources * where sddocname contains "doc";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20*%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks_twophase)
 
-Pro tip: Note how using rank-profile `inheritance` is a smart way to define functions once,
-then use in multiple rank-profiles:
 ```
 rank-profile inlinks_twophase inherits inlinks_age {
     first-phase {
@@ -274,6 +288,9 @@ rank-profile inlinks_twophase inherits inlinks_age {
 
 In the results, observer that no document has a _rankingExpression(num_inlinks) < 10.0_,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
+
+**Pro tip:** Note how using rank-profile `inheritance` is a smart way to define functions once,
+then use in multiple rank-profiles
 
 In this query, the retrieval is `where sddocname contains "doc"` which is a Vespa shorthand for "all documents".
 A more restrictive filter can be filtering for "models" in the _default_ fieldset: `where default contains "models"`:
