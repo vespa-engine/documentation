@@ -9,3 +9,6 @@ gem "github-pages"
 
 # Work-around because of https://github.com/jekyll/jekyll/issues/8523
 gem "webrick"
+
+gem 'rake'
+gem 'html-proofer'

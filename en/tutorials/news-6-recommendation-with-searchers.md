@@ -408,9 +408,9 @@ Searchers are flexible enough to perform any type of processing.
 ## Conclusion
 
 We now have a Vespa application up and running that takes a single `user_id`
-and returns recommendations for that user. In the [next part of the tutorial](news-7-recommendation-parent-child.html),
-we'll address what to do when new users without any history visit our
-recommendation system.
+and returns recommendations for that user.
+In the [next part of the tutorial](news-7-recommendation-with-parent-child.html),
+we'll address what to do when new users without any history visit our recommendation system.
 
 <pre style="display:none" data-test="after">
 $ docker rm -f vespa

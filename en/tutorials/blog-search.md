@@ -878,7 +878,7 @@ to get a match.
 ### When to use attributes
 
 There are both advantages and drawbacks of using attributes — it enables
-sorting and grouping and ranking, but requires more memory. See [Attributes in vespa](attributes.html). 
+sorting and grouping and ranking, but requires more memory. See [Attributes in vespa](../attributes.html). 
 
 When to use attributes depends on the application; in general,
 use attributes for:
