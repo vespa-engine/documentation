@@ -197,7 +197,7 @@ If you host Vespa yourself, you can do this, but need to implement the orchestra
 The high level procedure is found in <a href="operations/live-upgrade.html">live-upgrade</a>.
 
 #### Can Vespa be deployed multi-region?
-<a href="https://cloud.vespa.ai/reference/zones">Vespa Cloud</a> has integrated support - query a global endpoint.
+<a href="https://cloud.vespa.ai/en/reference/zones">Vespa Cloud</a> has integrated support - query a global endpoint.
 Writes will have to go to each zone.
 There is no auto-sync between zones.
 

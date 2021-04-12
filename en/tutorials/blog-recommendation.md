@@ -1,5 +1,5 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Vespa tutorial pt. 2: Blog recommendation"
 ---
 
@@ -329,8 +329,10 @@ A successful data join and feed will output:
     Successfully stored 286237 records in: "localhost"
 
 Sample blog post and user:
-- [localhost:8080/document/v1/blog-recommendation/user/docid/22702951](http://localhost:8080/document/v1/blog-recommendation/user/docid/22702951)
-- [localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008](http://localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008)
+<ul>
+  <li><a href="http://localhost:8080/document/v1/blog-recommendation/user/docid/22702951" data-proofer-ignore>localhost:8080/document/v1/blog-recommendation/user/docid/22702951</a></li>
+  <li><a href="http://localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008" data-proofer-ignore>localhost:8080/document/v1/blog-recommendation/blog_post/docid/1838008</a></li>
+</ul>
 
 
 ## Ranking
@@ -365,7 +367,8 @@ elements.  This is the same as the attribute, hence the dot product can be
 computed.
 
 Test recommendations by sending a tensor with latent factors:
-[localhost:8080/search/?yql=select+%2A+from+sources+blog_post+where+has_user_item_cf%3D1%3B&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Bd0%3A0%2Cd1%3A0%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A1%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A2%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A3%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A4%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A5%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A6%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A7%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A8%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A9%7D%3A0.1%7D](http://localhost:8080/search/?yql=select+%2A+from+sources+blog_post+where+has_user_item_cf%3D1%3B&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Bd0%3A0%2Cd1%3A0%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A1%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A2%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A3%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A4%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A5%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A6%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A7%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A8%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A9%7D%3A0.1%7D)
+<a href="http://localhost:8080/search/?yql=select+%2A+from+sources+blog_post+where+has_user_item_cf%3D1%3B&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Bd0%3A0%2Cd1%3A0%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A1%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A2%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A3%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A4%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A5%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A6%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A7%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A8%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A9%7D%3A0.1%7D" data-proofer-ignore>
+localhost:8080/search/?yql=select+%2A+from+sources+blog_post+where+has_user_item_cf%3D1%3B&ranking=tensor&ranking.features.query(user_item_cf)=%7B%7Bd0%3A0%2Cd1%3A0%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A1%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A2%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A3%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A4%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A5%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A6%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A7%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A8%7D%3A0.1%2C%7Bd0%3A0%2Cd1%3A9%7D%3A0.1%7D</a>
 
 The query string, decomposed:
 
@@ -500,10 +503,10 @@ The  searcher is configured in  in `services.xml`:
     </chain>
 
 Deploy, then query a user to get blog recommendations:
-[localhost:8080/search/?user_id=34030991&searchChain=user](http://localhost:8080/search/?user_id=34030991&searchChain=user).
+<a href="http://localhost:8080/search/?user_id=34030991&searchChain=user" data-proofer-ignore>localhost:8080/search/?user_id=34030991&searchChain=user</a>
 
 To refine recommendations, add query terms:
-[localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20\*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;](http://localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;)
+<a href="http://localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;" data-proofer-ignore>localhost:8080/search/?user_id=34030991&searchChain=user&yql=select%20\*%20from%20sources%20blog_post%20where%20content%20contains%20%22pegasus%22;</a>
 
 
 ## Model tuning and offline evaluation
