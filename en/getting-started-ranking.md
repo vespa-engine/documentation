@@ -297,7 +297,7 @@ rank-profile inlinks_twophase inherits inlinks_age {
 ```
 
 **Pro tip:** Note how using rank-profile `inherits` is a smart way to define functions once,
-then use in multiple rank-profiles.
+then use in multiple rank-profiles, read more on [document type inheritance](schemas.html#document-type-inheritance).
 Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earlier:
 
 ```
@@ -314,10 +314,57 @@ Two-phased ranking is a performance optimization - this guide is about functiona
 so the rest of the examples will only be using one ranking phase.
 Read more in [first-phase](reference/schema-reference.html#firstphase-rank).
 
+
+
+## Retrieval: AND, OR, weakAnd
+This guide will not go deep in query operators in the retrieval phase,
+see [query-api](query-api.html) for details.
+
+Consider a query like _"vespa documents about ranking and retrieval"_.
+* A query ANDing these terms hits less than 3% of the document corpus,
+  missing some of the documents about ranking and retrieval:
+  [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where (default contains "vespa" AND default contains "documents" AND default contains "about" AND default contains "ranking" AND default contains "and" AND default contains "retrieval");](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20AND%20default%20contains%20%22documents%22%20AND%20default%20contains%20%22about%22%20AND%20default%20contains%20%22ranking%22%20AND%20default%20contains%20%22and%22%20AND%20default%20contains%20%22retrieval%22)%3B)
+
+* Alternatively, ORing the terms hits more than 95% of the documents,
+  unable to filter out irrelevant documents in the retrieval phase:
+  [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where (default contains "vespa" OR default contains "documents" OR default contains "about" OR default contains "ranking" OR default contains "and" OR default contains "retrieval");](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20OR%20default%20contains%20%22documents%22%20OR%20default%20contains%20%22about%22%20OR%20default%20contains%20%22ranking%22%20OR%20default%20contains%20%22and%22%20OR%20default%20contains%20%22retrieval%22)%3B)
+
+Using a "weak AND" can address the problems of too few (AND) or too many (OR) hits in the retrieval phase.
+Think of it as an _optimized OR_, where the least relevant candidates are discarded from further evaluation.
+To find the least relevant candidates, a simple scoring function is used:
+
+    rank_score = sum_n(term(n).significance * term(n).weight)
+
+As the point of [weakAnd](reference/query-language-reference.html#weakand) is to early discard the worst candidates,
+_totalCount_ is an approximation:
+
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where [{"scoreThreshold": 0, "targetHits": 10}]weakAnd(default contains "vespa", default contains "documents", default contains "about", default contains "ranking", default contains "and", default contains "retrieval");](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22)%3B)
+
+Note that this blurs the distinction between filtering (retrieval) and ranking a little -
+here the `weakAnd` does <span style="text-decoration: underline">both</span> filtering and ranking
+to optimize the number of candidates for the later rank phases.
+The default rank-profile is used:
+```
+rank-profile documentation inherits default {
+    rank-properties {
+        $titleWeight: 2.0
+        $contentsWeight: 1.0
+    }
+    first-phase {
+        expression: query(titleWeight) * bm25(title) + query(contentsWeight) * bm25(content)
+    }
+}
+```
+Observe we are here using text matching rank features,
+which fits well with weakAnd's scoring function that also uses text matching features.
+
+Read more in [using weakAnd with Vespa](using-wand-with-vespa.html).
+
 <!--
-ToDo, bext steps:
+ToDo, next steps:
 * look at retrieval, start easy with AND, then OR
 * OR degenerates quickly to _all_ documents, so describe WAND in layman terms
 * describe when rank features are calculated to illustrate importance of recall phase
 * from here, POST YQL for better readability
+* explain, tracing ...
 -->
