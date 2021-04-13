@@ -1,5 +1,5 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Vespa tutorial pt. 3: Blog recommendation with Neural Network models"
 ---
 
@@ -176,7 +176,7 @@ profile named `nn_tensor`, which rerank the top 200 documents using the
 neural network model discussed in the previous section.
 
 We will walk through each part of the `blog_post` schema, see
-[blog_post.sd](https://github.com/vespa-engine/sample-apps/tree/master/blog-recommendation/src/main/application/searchdefinitions/blog_post.sd).
+[blog_post.sd](https://github.com/vespa-engine/sample-apps/tree/master/blog-recommendation/src/main/application/schemas/blog_post.sd).
 
 We define a ranking profile named `tensor` which ranks all the matching
 documents by the dot-product between the document latent factor and the user

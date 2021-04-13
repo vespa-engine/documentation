@@ -336,7 +336,7 @@ This prints that the application was activated successfully and also the
 checksum, timestamp and generation for this deployment (more on that later).
 
 After a short while, pointing a browser to
-[http://localhost:8080/ApplicationStatus](http://localhost:8080/ApplicationStatus)
+<a href="http://localhost:8080/ApplicationStatus" data-proofer-ignore>localhost:8080/ApplicationStatus</a>
 returns JSON-formatted information about the active application, including its
 checksum, timestamp and generation (and should be the same as the values when
 `vespa-deploy activate` was run).  The generation will increase by 1 each time
@@ -425,7 +425,9 @@ Given the above schema, where the fields `title` and `content` are
 part of the `fieldset default`, any document containing the word "music" in one
 or more of these two fields matches the queries below:
 
-Please copy the JSON-query below and paste it in the GUI for building queries at [http://localhost:8080/querybuilder/](http://localhost:8080/querybuilder/), which can help you build queries with e.g. autocompletion of YQL:
+Please copy the JSON-query below and paste it in the GUI for building queries at
+<a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>,
+which can help you build queries with e.g. autocompletion of YQL:
 
 	{ "yql" : "select * from sources * where default contains \"music\";" }
 
@@ -661,7 +663,8 @@ Attribute fields also support true partial updates (in-place updates).
 This means that the *popularity* field can be updated with low latency (milliseconds)
 and high throughput without having to re-index the entire blog post for changes in the popularity.
 
-Attribute fields are searchable, see also [When to use fast-search option for attributes](performance/feature-tuning.html#when-to-use-fast-search). 
+Attribute fields are searchable, see also
+[When to use fast-search option for attributes](../performance/feature-tuning.html#when-to-use-fast-search). 
 
 ### Defining an attribute field
 

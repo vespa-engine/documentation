@@ -229,7 +229,7 @@ schema myvariables {
 
 ### 3. Refer to the global document from your regular document type
 
-1. Add a <a href="schemas.html#document-references">reference</a>
+1. Add a <a href="reference/schema-reference.html#type:reference">reference</a>
 to the global document and import the fields:
 ```
 schema mydocument {
@@ -245,7 +245,7 @@ schema mydocument {
 1. Add a reference to the same global variable document from all your documents.
 All documents should contain the value "id:mynamespace:myvariables::1" in the
 myvariables_ref field. You can add this value to all documents by doing an
-<a href="reference/document-v1-api-reference.html#update">update</a> on each document with the JSON
+<a href="reference/document-v1-api-reference.html#put">update</a> on each document with the JSON
 ```
 {
     "fields": {
@@ -273,7 +273,7 @@ Whenever the TensorFlow model is retrained to produce new variable values,
 write them to Vespa as follows:
 
 1. Convert the Variable value to the Vespa document format:
-Obtain <a href="http://mvnrepository.com/artifact/com.yahoo.vespa/model-integration">model-integration.jar</a>
+Obtain <a href="https://mvnrepository.com/artifact/com.yahoo.vespa/model-integration">model-integration.jar</a>
 (with dependencies), and run
 ```
 java -cp model-integration-jar-with-dependencies.jar ai.vespa.rankingexpression.importer.tensorflow.VariableConverter \

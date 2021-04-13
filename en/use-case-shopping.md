@@ -3,8 +3,7 @@
 title: "Use Case - shopping"
 ---
 
-The [e-commerce, or shopping, use
-case](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping)
+The [e-commerce, or shopping, use case](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping)
 is an example of an e-commerce site complete with sample data and a web front
 end to browse product data and reviews. To quick start the application, follow
 the instructions in the
@@ -12,9 +11,8 @@ the instructions in the
 in the sample app.
 
 To browse the application, navigate to
-[http://localhost:8080/site](http://localhost:8080/site).  This site is
-implemented through a custom [request
-handler](jdisc/developing-request-handlers.html)
+<a href="http://localhost:8080/site" data-proofer-ignore>localhost:8080/site</<a>.
+This site is  implemented through a custom [request handler](jdisc/developing-request-handlers.html)
 and is meant to be a simple example of creating a front end / middleware that
 sits in front of the Vespa back end. As such it is fairly independent of Vespa
 features, and the code is designed to be fairly easy to follow and as
@@ -29,8 +27,7 @@ scripts to convert from the data set format to Vespa format. These are the
 `convert_meta.py` and `convert_reviews.py`. See the README file for example of
 use.
 
-When feeding reviews, there is a custom [document
-processor](document-processing.html)
+When feeding reviews, there is a custom [document processor](document-processing.html)
 that intercepts document writes and updates the parent item with the review
 rating, so the aggregated review rating is kept stored with the item. This is
 more an example of a custom document processor than a recommended way to do
