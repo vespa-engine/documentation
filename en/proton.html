@@ -21,8 +21,7 @@ consists of three <em>sub-databases</em>.
 
 <h3 id="bucket-management">Bucket management</h3>
 <p>
-When the node starts up it first needs to get an overview of what
-partitions it have, and what buckets each partition currently stores.
+When the node starts up it first needs to get an overview of what documents and hence buckets it has.
 Once it knows this, it is in initializing mode, able to handle load,
 but distributors do not yet know bucket metadata for all the buckets,
 and thus can't know whether buckets are consistent with copies on other nodes.
@@ -82,18 +81,20 @@ The sub-databases are:
       <td>
         Maintains an index of all <em>ready</em> documents and keeps them searchable.
         One of the ready copies is <em>active</em> while the rest are <em>not active:</em>
-        <ul>
-          <li><strong>Active: </strong>
-            There should always be exactly one active copy of each
+        <table class="table">
+          <tr>
+            <th>Active</th>
+            <td>There should always be exactly one active copy of each
             document in the system, though intermittently there may be more.
-            These documents produce results when queries are evaluated.
-          </li>
-          <li><strong>Not Active: </strong>
-            The ready copies that are not active are indexed but will not produce results.
+            These documents produce results when queries are evaluated.</td>
+          </tr>
+          <tr>
+          <th style="white-space:nowrap">Not Active</th>
+            <td>The ready copies that are not active are indexed but will not produce results.
             By being indexed, they are ready to take over immediately
-            if the node holding the active copy becomes unavailable.
-          </li>
-        </ul>
+            if the node holding the active copy becomes unavailable.</td>
+          </tr>
+        </table>
       </td>
     </tr><tr>
       <th>Removed</th>
@@ -130,36 +131,10 @@ like attribute vectors and memory index on shutdown, for quicker startup.
 
 <h2 id="index">Index</h2>
 <p>
-Index fields are string fields, used for text search.
-Other field types are <a href="attributes.html">attributes</a>.
+  Index fields are string fields, used for text search.
+  Other field types are <a href="attributes.html">attributes</a>
+  and <a href="document-summaries.html">summary fields</a>.
 </p>
-
-
-<h3 id="updates">Updates</h3>
-<p>
-For all <a href="reference/schema-reference.html#index">indexed fields</a>,
-proton has a memory index for the recent changes, implemented using B-trees.
-This is periodically <a href="#memory-index-flush">flushed</a> to a disk-based posting list index.
-Disk-based indexes are subsequently <a href="#disk-index-fusion">merged</a>.
-</p><p>
-Updating the in-memory B-trees is lock-free, implemented using copy-on-write semantics.
-This gives high performance, with a predictable steady-state CPU/memory use.
-The driver for this design is the requirement for a sustained, high change rate,
-with stable, predictable read latencies and small temporary increases in CPU/memory.
-This compared to index hierarchies, merging smaller real-time indices into larger,
-causing temporary hot-spots.
-</p><p>
-When updating an indexed field, the document is read from the
-<a href="document-summaries.html#document-store">document store</a>, the field is updated,
-and the full document is written back to the store.
-At this point, the change is searchable, and an ACK is returned to the client.
-Use <a href="attributes.html">attributes</a> to avoid such document disk accesses
-and hence increase performance for partial updates.
-Find more details in <a href="performance/sizing-feeding.html">feed performance</a>.
-</p>
-
-
-<h3 id="relevance">Relevance</h3>
 <p>
 Proton stores position information in text indices by default, for proximity relevance -
 <em>posocc</em> (below).

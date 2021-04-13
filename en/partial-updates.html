@@ -1,0 +1,197 @@
+---
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Partial Updates"
+---
+
+<p>
+  A partial update is an update to one or more fields in a document.
+  It also includes updating all index structures
+  so the effect of the partial update is immediately observable in queries.
+</p>
+<p>
+  In Vespa, all fields can be partially updated by default.
+  A field is index, attribute or summary or a combination of these,
+  and both index and attribute fields can be queried.
+  For index and summary fields, an update means a read-modify-write to the document store and limits throughput.
+  Overview:
+</p>
+<table class="table">
+  <thead>
+  <th>Field Setting</th><th>Searchable</th><th>Fast searchable</th><th>Matching</th><th>Ranking</th><th>Display in results</th>
+  </thead>
+  <tbody>
+  <tr>
+    <th>index</th><td>Y</td><td>Y</td><td>Text and Exact matching</td><td>Y</td><td>N</td>
+  </tr>
+  <tr>
+    <th>attribute</th><td>Y</td><td>Y with attribute:fast-search</td><td>Exact matching</td><td>Y</td><td>Y</td>
+  </tr>
+  <tr>
+    <th>summary</th><td>N</td><td>N</td><td>N</td><td>N</td><td>Y</td>
+  </tr>
+  </tbody>
+</table>
+<p>
+  Attribute fields do not require the document store read/write.
+  This increases write throughput by orders of magnitude.
+  This guide goes through the details of this feature and use cases for it.
+</p>
+<p>
+  Examples:
+</p>
+<table class="table">
+  <tr>
+    <td><pre>field score type int {
+    indexing: summary
+}</pre></td>
+    <td>Summary only field.
+      The field is stored in the document store, a partial update to the field will trigger read + write.
+      The field is not searchable.</td>
+  </tr>
+  <tr>
+    <td><pre>field score type int {
+    indexing: attribute
+}</pre></td>
+    <td>Attribute only field.
+      The field is stored in the attribute (in-memory) and a partial update will update the document in-place
+      and will be visible for queries, ranking, grouping and sorting immediately.</td>
+  </tr>
+</table>
+
+
+
+<h2 id="use-cases">Use cases</h2>
+<p>
+  Partial updates have many use cases.
+  <em>Functionally</em>, it enables updating a document without anything else than the ID,
+  simplifying logic in the upper levels of the serving stack.
+  <em>Performance-wise</em>, partial updates enables applications with a real-time update flow
+  in tens of thousands updates per second. Examples
+</p>
+<table class="table">
+  <tr>
+    <th>Filtering</th>
+    <td>Inventory updates: Update product price and inventory count in real time.
+    Do not show items out of stock.</td>
+  </tr>
+  <tr>
+    <th>Ranking</th>
+    <td>Update click / views / non-clicks: Feed usage data to use in ranking - rank popular items higher.</td>
+  </tr>
+</table>
+
+
+
+<h2 id="write-pipeline">Write pipeline</h2>
+<p>
+  Refer to <a href="proton.html">proton</a> for an overview of the write pipeline
+  and the Transaction Log Server (TLS).
+  As updating means a document is already there, the Document Meta Store has an entry,
+  so the FeedView needs to consider the field’s config for indexed, attribute and summary.
+</p>
+<table class="table">
+  <thead>
+  <th style="white-space:nowrap">Field Setting</th><th>Description</th>
+  </thead>
+  <tbody>
+  <tr>
+    <th>index</th><td>
+    <p>
+      For all <a href="reference/schema-reference.html#index">indexed fields</a>,
+      a memory index is used for the recent changes, implemented using B-trees.
+      This is periodically <a href="#memory-index-flush">flushed</a> to a disk-based posting list index.
+      Disk-based indexes are subsequently <a href="#disk-index-fusion">merged</a>.
+    </p>
+    <p>
+      Updating the in-memory B-trees is lock-free, implemented using copy-on-write semantics.
+      This gives high performance, with a predictable steady-state CPU/memory use.
+      The driver for this design is the requirement for a sustained, high change rate,
+      with stable, predictable read latencies and small temporary increases in CPU/memory.
+      This compared to index hierarchies, merging smaller real-time indices into larger, causing temporary hot-spots.
+    </p>
+    <p>
+      When updating an indexed field, the document is read from the
+      <a href="document-summaries.html#document-store">document store</a>, the field is updated,
+      and the full document is written back to the store.
+      At this point, the change is searchable, and an ACK is returned to the client.
+      Use <a href="attributes.html">attributes</a> to avoid such document disk accesses
+      and hence increase performance for partial updates.
+      Find more details in <a href="performance/sizing-feeding.html">feed performance</a>.
+    </p>
+    </td>
+  </tr>
+  <tr>
+    <th>attribute</th><td>
+    <p>
+    Attribute fields are in-memory fields, see <a href="attributes.html">attributes</a>.
+    Updates are memory operations only.
+    Persisted in TLS at write, and later flushed, see <a href="proton.html#attribute-flush">attribute-flush</a>.
+    This makes updates inexpensive and fast.
+    </p>
+    <p>
+
+    Note there is no transaction support. To support high rate, there is no coordination between threads - example:
+    </p>
+<pre>
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "firstName" : { "assign" : "John" }
+        "lastName"  : { "assign" : "Smith" }
+    }
+}
+</pre>
+    <p>
+      Above, the attributes <em>firstName</em> and <em>LastName</em> are updated in the same operation from the client,
+      whereas the update in the search core is non-transactional.
+      This is a throughput vs consistency tradeoff that enables the extreme update rates
+      without being a practical limitation for many applications.
+      More details in <a href="attributes.html">attributes</a>.
+    </p>
+    <p>
+      Note: if the attribute field is an array of map or struct,
+      values are written in the summary store and update rates hence lower -
+      refer to <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a> updates of array of map/struct.
+    </p>
+    <p>
+      Query execution time can be improved by adding an in-memory B-tree posting list structure using
+      <a href="performance/feature-tuning.html#when-to-use-fast-search">fast-search</a>.
+      This increases work when updating,
+      as both the value and the posting list is updated and hence decreases update throughput.
+    </p>
+    <p>
+      See <a href="performance/sizing-feeding.html#attribute">sizing-feeding</a>
+      for how to ensure an attribute is in memory on all nodes with a replica (searchable-copies or fast-access).
+    </p>
+    <p>
+      ToDo: Something here on what happens when updating a large tensor.
+    </p>
+    </td>
+  </tr>
+  <tr>
+    <th>summary</th><td>
+    <p>
+      Refer to <a href="document-summaries.html">document summaries</a>.
+      Need to document how an update to the summary store is.
+      I think it is read the current version, modify and write back.
+    </p>
+    <p>
+      Attribute fields that are also in summary get their values from the memory structures, not the summary store.
+      Use summary class with attributes only for applications with high write/query rates using memory only.
+      https://docs.vespa.ai/documentation/document-summaries.html#summary-classes-in-queries
+    </p>
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="further-reading">Further reading</h2>
+<ul>
+  <li><a href="reads-and-writes.html">reads and writes</a> - functional overview of the Document API</li>
+  <li><a href="performance/sizing-feeding.html">sizing-feeding</a> - troubleshooting</li>
+  <li><a href="attributes.html">attributes</a> - to understand all aspects of attributes</li>
+  <li><a href="proton.html">proton</a> - this should have the full write pipeline, go here for this</li>
+  <li><a href="parent-child.html">parent-child</a> - how to use parent attributes for even higher update rates</li>
+</ul>
