@@ -23,47 +23,6 @@ Tools to access config:
 </p>
 
 
-
-<h2 id="configuration">Configuration</h2>
-<p>
-To access config from a node not running the config system
-(e.g. doing feeding via the Document API),
-use the environment variable VESPA_CONFIG_SOURCES:
-<pre>
-$ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:12345,myadmin1.mydomain.com:12345"
-</pre>
-Alternatively, for Java programs, use the system property <em>configsources</em>
-and set it programmatically or on the command line with the <em>-D</em> option to Java.
-The syntax for the value is the same as for VESPA_CONFIG_SOURCES.
-</p>
-
-
-<h3 id="system-requirements">System requirements</h3>
-<p>
-The default heap size for the JVM it runs under is 1.5 Gb
-(which can be changed with a <a href="../performance/container-tuning.html">setting</a>).
-It writes a transaction log that is regularly purged of old items, so little disk space is required.
-Note that running on a server that has a lot of disk I/O
-will adversely effect performance and is not recommended.
-</p>
-
-
-<h3 id="ports">Ports</h3>
-<p>
-The config server RPC port can be changed by setting
-<a href="../setting-vespa-variables.html">VESPA_CONFIGSERVER_RPC_PORT</a> on all nodes in the system.
-Changing HTTP port requires changing the port in
-<em>$VESPA_HOME/conf/configserver-app/services.xml</em>:
-<pre>
-&lt;http&gt;
-  &lt;server port="12345" id="configserver" /&gt;
-&lt;/http&gt;
-</pre>
-When deploying, use the <em>-p</em> option, if port is changed from the default.
-</p>
-
-
-
 <h2 id="redundancy">Redundancy</h2>
 <p>
 The config servers are defined in <a href="../reference/services.html">services.xml</a>,
@@ -93,33 +52,31 @@ and <a href="../setting-vespa-variables.html">VESPA_CONFIGSERVERS</a>:
   &lt;/host&gt;
 &lt;/hosts&gt;
 
-# VESPA_CONFIGSERVERS - set on all nodes in the application
+# VESPA_CONFIGSERVERS - must be set on all nodes in the application
 VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.mydomain.com
 </pre>
 <p>
 Refer to the <a href="../reference/services-admin.html#configservers">admin model</a> reference.
-In addition, <a href="../setting-vespa-variables.html">VESPA_CONFIGSERVERS</a> must be set on all nodes.
+<a href="../setting-vespa-variables.html">VESPA_CONFIGSERVERS</a> must be set on all nodes.
 This is a comma or whitespace-separated list with the hostname of all configservers,
 like <em>myhost1.mydomain.com,myhost2.mydomain.com,myhost3.mydomain.com</em>.
 </p><p>
-When there are multiple config servers, the config clients
-(usually the <a href="../reference/config-proxy.html">config proxy</a>, if you have not configured the client to use another config source)
-will pick a config server based on a hash of their hostname and how many config servers there are.
-This uniformly loads the config servers.
-The config clients are fault-tolerant and will switch to another config server if it is unavailable
+When there are multiple config servers, the <a href="../reference/config-proxy.html">config proxy</a>
+will pick a config server based on a hash of their hostname and how many config servers there are
+(to achieve load balancing between config servers).
+The config proxy is fault-tolerant and will switch to another config server if it is unavailable
 or there is an error in the configuration it receives.
 With only one config server configured, it will continue using that in case of errors.
 </p><p>
 For the system to tolerate <em>n</em> failures,
 <a href="#zookeeper">ZooKeeper</a> by design requires using <em>(2*n)+1</em> nodes.
-Consequently, only odd numbers of nodes work,
-meaning minimum 3 nodes to have a fault tolerant config system.
+Consequently, only an odd numbers of nodes is useful, so you need minimum 3 nodes to have a fault tolerant config system.
 </p><p>
-It is important to remember that even when using one config server,
-the config system will not fail at once if that server fails.
-This is because all nodes runs a <em>config proxy</em> that caches every known config,
-and serves it to the components on that node.
-However, restarting a node when half or more config servers are unavailable
+Even when using just one config server the config system the application will still work if it goes down (you
+will of course be unable to deploy application changes).
+Since the  <em>config proxy</em> runs on every node and caches configs,
+it will continue to serve config to the services on that node.
+However, restarting a node when config servers are unavailable
 will lead to a failure of that node, since restarting a node means restarting the config proxy.
 </p>
 
@@ -140,6 +97,9 @@ this ensures uninterrupted functionality of the application. Procedure:
     Update <em>services.xml</em> and <em>hosts.xml</em> with the new set of config servers,
     then <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>
   </li>
+  <li>
+    Restart nodes one by one to start using the new config servers.
+  </li>
 </ol>
 Note: ZooKeeper will automatically redistribute the application data.
 </p>
@@ -147,11 +107,9 @@ Note: ZooKeeper will automatically redistribute the application data.
 <h4 id="scaling-up-by-majority">Scaling up by Majority</h4>
 <p>
 When increasing from 1 to 3 nodes or 3 to 7, the blank nodes constitutes a majority in the cluster.
-After restarting the config servers, they will not always contain old application data,
+After restarting the config servers, they will not contain the old application data,
 because the blank nodes might win the election - depending on restart timing.
-Get a new correct data set when repating <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>.
-If you do not wish to scratch your old application data like this,
-for instance to keep the history, the solution is to scale up by minor sets of the nodes - example:
+To avoid any issues with this, scale up by minor sets of the nodes - example:
 <ol>
   <li>Scale from 1 to 2</li>
   <li>Scale from 2 to 3</li>
@@ -164,12 +122,16 @@ for instance to keep the history, the solution is to scale up by minor sets of t
 Remove config servers from a cluster:
 <ol>
   <li>
-    remove config server hosts from <em>VESPA_CONFIGSERVERS</em> on <em>all</em> vespa nodes
-  </li><li>
+    Remove config server hosts from <em>VESPA_CONFIGSERVERS</em> on <em>all</em> vespa nodes
+  </li>
+  <li>
+    Restart nodes one by one to start using the new set of config servers.
+  </li>
+  <li>
     Restart config servers on the new subset
   </li><li>
     Verify that these nodes have data, by using <em>vespa-get-config</em>
-    or <em>zkCli.sh ls</em> (see below).
+    or <em>vespa-zkcli ls</em> (see below).
     If they are blank, redo <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>.
     Also see <a href="#health-checks">health checks</a>.
   </li><li>
@@ -204,10 +166,10 @@ by updating the pointer in <em>/config/v2/tenants/default/FIXME</em><!-- ToDo fi
 to refer to the active app's timestamp.
 It is at that point the other nodes get configured.
 </p><p>
-Use <em>zkCli.sh</em> to inspect state, replace with actual session id:
+Use <em>vespa-zkcli</em> to inspect state, replace with actual session id:
 <pre>
-$ ./zkCli.sh ls  /config/v2/tenants/default/sessions/[sessionid]/userapp
-$ ./zkCli.sh get /config/v2/tenants/default/sessions/[sessionid]/userapp/services.xml
+$ vespa-zkcli ls  /config/v2/tenants/default/sessions/[sessionid]/userapp
+$ vespa-zkcli get /config/v2/tenants/default/sessions/[sessionid]/userapp/services.xml
 </pre>
 </p><p>
 The ZooKeeper server logs to <em>$VESPA_HOME/logs/vespa/zookeeper.configserver.0.log (files are rotated with sequence number)</em>
@@ -251,16 +213,41 @@ to 600 (seconds) or higher, and restart the config servers.
 </p>
 
 
-<h3 id="zookeeper-ports">ZooKeeper ports</h3>
+<h2 id="configuration">Configuration</h2>
 <p>
-Set the ZooKeeper ports, prior to starting the config server.
-This is useful if running multiple instances on the same host:
-<ul>
-  <li>VESPA_CONFIGSERVER_ZOOKEEPER_CLIENT_PORT</li>
-  <li>VESPA_CONFIGSERVER_ZOOKEEPER_QUORUM_PORT</li>
-  <li>VESPA_CONFIGSERVER_ZOOKEEPER_ELECTION_PORT</li>
-</ul>
-Note that the two last ones are only used in a multi node config server cluster.
+To access config from a node not running the config system
+(e.g. doing feeding via the Document API),
+use the environment variable VESPA_CONFIG_SOURCES:
+<pre>
+$ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:12345,myadmin1.mydomain.com:12345"
+</pre>
+Alternatively, for Java programs, use the system property <em>configsources</em>
+and set it programmatically or on the command line with the <em>-D</em> option to Java.
+The syntax for the value is the same as for VESPA_CONFIG_SOURCES.
+</p>
+
+
+<h3 id="system-requirements">System requirements</h3>
+<p>
+The default heap size for the JVM it runs under is 1.5 Gb
+(which can be changed with a <a href="../performance/container-tuning.html">setting</a>).
+It writes a transaction log that is regularly purged of old items, so little disk space is required.
+Note that running on a server that has a lot of disk I/O
+will adversely effect performance and is not recommended.
+</p>
+
+<h3 id="ports">Ports</h3>
+<p>
+The config server RPC port can be changed by setting
+<a href="../setting-vespa-variables.html">VESPA_CONFIGSERVER_RPC_PORT</a> on all nodes in the system.
+Changing HTTP port requires changing the port in
+<em>$VESPA_HOME/conf/configserver-app/services.xml</em>:
+<pre>
+&lt;http&gt;
+  &lt;server port="12345" id="configserver" /&gt;
+&lt;/http&gt;
+</pre>
+When deploying, use the <em>-p</em> option, if port is changed from the default.
 </p>
 
 
@@ -271,7 +258,7 @@ Note that the two last ones are only used in a multi node config server cluster.
       <th>Health checks</th>
       <td>
         Verify that a config server is up and running using the <a href="../reference/metrics.html">Health and Metric APIs</a>, like
-        <a href="http://myserver0.mydomain.com:12345/state/v1/" data-proofer-ignore>http://myserver0.mydomain.com:12345/state/v1/</a>.
+        <a href="http://myserver0.mydomain.com:12345/state/v1/" data-proofer-ignore>http://myserver0.mydomain.com:12345/state/v1/health</a>.
         Metrics are found at
         <a href="http://myserver0.mydomain.com:12345/state/v1/metrics" data-proofer-ignore>http://myserver0.mydomain.com:12345/state/v1/metrics</a>.
         Use <a href="../reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a>
