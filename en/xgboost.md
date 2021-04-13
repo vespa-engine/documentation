@@ -9,9 +9,9 @@ and use them directly. See [Learning to Rank](learning-to-rank.html) for example
 
 ## Exporting models from XGBoost
 
-Vespa supports importing XGBoost's JSON model dump (E.g. Python API ([xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model)).
- When dumping
-the trained model, XGBoost allows users to set the `dump_format` to `json`,
+Vespa supports importing XGBoost's JSON model dump (E.g. Python API
+([xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model)).
+When dumping  the trained model, XGBoost allows users to set the `dump_format` to `json`,
 and users can specify the feature names to be used in `fmap`. 
 
 Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 1:
@@ -43,8 +43,10 @@ The training data is represented using [LibSVM text format](https://xgboost.read
 
 
 ## Feature mappings from XGBoost to Vespa
-XGBoost is trained on array or array like data structures where features are named based on the index in the array 
-as in the example above. To convert the XGBoost features we need to map feature indexes to actual Vespa features (native features or custom defined features):
+XGBoost is trained on array or array like data structures
+where features are named based on the index in the array  as in the example above.
+To convert the XGBoost features we need to map feature indexes to actual Vespa features
+(native features or custom defined features):
  
 ```
 cat feature-map.txt |egrep "fieldMatch\(title\).completeness|fieldMatch\(title\).importance"
@@ -54,7 +56,8 @@ cat feature-map.txt |egrep "fieldMatch\(title\).completeness|fieldMatch\(title\)
 In the feature mapping example, feature at index 36 maps to
 [fieldMatch(title).completeness](reference/rank-features.html#fieldMatch(name).completeness)
 and index 39 maps to [fieldMatch(title).importance](reference/rank-features.html#fieldMatch(name).importance).
-The feature mapping format is not well described in the XGBoost documentation, but the [sample demo for binary classification](https://github.com/dmlc/xgboost/tree/master/demo/binary_classification) writes:
+The feature mapping format is not well described in the XGBoost documentation,
+but the [sample demo for binary classification](https://github.com/dmlc/xgboost/tree/master/demo/CLI/binary_classification) writes:
 
 Format of ```feature-map.txt: <featureid> <featurename> <q or i or int>\n ```:
   - Feature id must be from 0 to number of features, in sorted order.
@@ -67,9 +70,8 @@ Format of ```feature-map.txt: <featureid> <featurename> <q or i or int>\n ```:
 
 To import the XGBoost model to Vespa, add the directory containing the
 model to your application package under a specific directory named `models`.
-For instance, if you would like to call the model above as `my_model`, you
-would add it to the application package resulting in a directory structure
-like this:
+For instance, if you would like to call the model above as `my_model`,
+you would add it to the application package resulting in a directory structure like this:
 
 ```
 ├── models
@@ -101,9 +103,10 @@ schema xgboost {
 }
 ```
 
-Here, we specify that the model `my_model.json` is applied to all documents matching a query which uses
-rank-profile prediction. One can also use [Phased ranking](phased-ranking.html) to control number of data points/documents which is ranked with the model. Generally the run time complexity is determined by 
-* The number of documents evaluated [per thread](performance/sizing-search.html) /number of nodes and the query filter
+Here, we specify that the model `my_model.json` is applied to all documents matching a query which uses rank-profile prediction.
+One can also use [Phased ranking](phased-ranking.html) to control number of data points/documents which is ranked with the model.
+Generally the run time complexity is determined by 
+* The number of documents evaluated [per thread](performance/sizing-search.html) / number of nodes and the query filter
 * The feature complexity (Features which are repeated over multiple trees/branches are not re-computed) 
 * The number of trees and the maximum depth per tree
 
@@ -114,8 +117,10 @@ There are two types of XGBoost models which can be deployed directly to Vespa:
 * Regression ```reg:squarederror``` / ```reg:logistic```
 * Classification ```binary:logistic```
 
-For `reg:logistic` and `binary:logistic` the raw margin tree sum (Sum of all trees) needs to be passed through the sigmoid function to represent the probability of class 1. For regular regression 
-the model can be directly imported but the base_score should be set 0 as the base_score used during the training phase is not dumped with the model. 
+For `reg:logistic` and `binary:logistic` the raw margin tree sum (Sum of all trees)
+needs to be passed through the sigmoid function to represent the probability of class 1.
+For regular regression the model can be directly imported
+but the base_score should be set 0 as the base_score used during the training phase is not dumped with the model. 
 
 An example model using the sklearn toy datasets is given below:
 
@@ -129,7 +134,8 @@ c.get_booster().dump_model("binary_breast_cancer.json", fmap='feature-map.txt', 
 c.predict_proba(breast_cancer.data)[:,1]
 ```
 
-To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa we need to use the [sigmoid function](reference/ranking-expressions.html):
+To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa,
+we need to use the [sigmoid function](reference/ranking-expressions.html):
 
 ```
 schema xgboost {
@@ -143,7 +149,8 @@ schema xgboost {
 
 
 ## Known issues 
-* When dumping XGBoost models 
-to a JSON representation some of the model information is lost (e.g the base_score or the optimal number of trees if trained with early stopping).  XGBoost also has different predict functions (e.g predict/predict_proba). The following
- [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost)
-demonstrates how to represent different type of XGBoost models in Vespa. 
+* When dumping XGBoost models to a JSON representation some of the model information is lost
+  (e.g the base_score or the optimal number of trees if trained with early stopping).
+  XGBoost also has different predict functions (e.g predict/predict_proba).
+  The following [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost)
+  demonstrates how to represent different type of XGBoost models in Vespa. 
