@@ -368,7 +368,7 @@ http://localhost:8080/search/ | python -m json.tool
 
 <p class="alert alert-success"> 
 Note that you can use the built-in query builder found at 
-<a href="http://localhost:8080/querybuilder/">http://localhost:8080/querybuilder/</a>
+<a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>
 which can help you build queries with, for instance, autocompletion of YQL.
 </p>
 
