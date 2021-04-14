@@ -27,28 +27,26 @@ field price type int {
   <li><a href="parent-child.html">document reference</a></li>
 </ul>
 <p>
-  Or, the other way around, use <a href="proton.html#index">index</a> for fields used for text search,
+  Or, the other way around, use <a href="proton.html#index">index</a> for fields used for
+  <a href="text-matching-ranking.html">text search</a>,
   with <a href="linguistics.html#stemming">stemming</a> and
   <a href="linguistics.html#normalization">normalization</a>.
 </p><p>
-  Attributes speed up query execution and document updates, trading off memory.
+  Attributes speed up query execution and <a href="partial-updates.html">document updates</a>, trading off memory.
   As data structures are regularly optimized, consider both static and temporary resource usage -
   see <a href="#attribute-memory-usage.html">attribute memory usage</a> below.
-  Use attributes in document summaries to limit accesses to storage to generate result sets. Configuration:
+  Use attributes in document summaries to limit accesses to storage to generate result sets. Configuration overview:
 </p>
 <table class="table">
   <tr id="fast-search">
     <th style="white-space:nowrap;">fast-search</th>
     <td>
+      Also see the <a href="reference/schema-reference.html#attribute">reference</a>.
       Add an <a href="#index-structures">index structure</a> to improve query performance:
 <pre>
-schema foo {
-    document bar {
-        field titles type array&lt;string&gt; {
-            indexing:  summary | attribute
-            attribute: fast-search
-        }
-    }
+field titles type array&lt;string&gt; {
+    indexing : summary | attribute
+    attribute: fast-search
 }
 </pre>
     </td>
@@ -59,14 +57,34 @@ schema foo {
       For high-throughput updates, all nodes with a replica should have the attribute loaded in memory.
       Depending on replication factor and other configuration, this is not always the case.
       Use <a href="reference/schema-reference.html#attribute">fast-access</a>
-      to increase feed rates by having replicas on all nodes in memory.
-      Also see <a href="performance/sizing-feeding.html">sizing feeding</a>.
-      <pre>
-schema foo {
-    document bar {
-        field titles type array&lt;string&gt; {
-            indexing:  summary | attribute
-            attribute: fast-access
+      to increase feed rates by having replicas on all nodes in memory -
+      see the <a href="reference/schema-reference.html#attribute">reference</a>
+      and  <a href="performance/sizing-feeding.html">sizing feeding</a>.
+<pre>
+field titles type array&lt;string&gt; {
+    indexing : summary | attribute
+    attribute: fast-access
+}
+</pre>
+    </td>
+  </tr><tr id="distance-metric">
+    <th style="white-space:nowrap;">distance-metric</th>
+    <td>
+      Features like <a href="nearest-neighbor-search.html">nearest neighbor search</a>
+      require a <code><a href="reference/schema-reference.html#distance-metric">distance-metric</a></code>,
+      and can also have an <code>hsnw index</code> to speed up queries.
+      Read more in <a href="approximate-nn-hnsw.html">approximate nearest neighbor</a>.
+      Pay attention to the field's <code>index</code> setting to enable the index:
+<pre>
+field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
+    indexing: summary | attribute | <span style="background-color: yellow;">index</span>
+    attribute {
+        distance-metric: euclidean
+    }
+    <span style="background-color: yellow;">index</span> {
+        hnsw {
+            max-links-per-node: 16
+            neighbors-to-explore-at-insert: 500
         }
     }
 }
@@ -82,7 +100,7 @@ schema foo {
   The <em>Attribute Multivalue Mapping</em> stores arrays of values for array and weighed set types,
   the <em>Attribute Enum Store</em> stores all unique strings for all string attributes:
 </p>
-<img src="img/attributes.svg" width="400"/>
+<img src="img/attributes.svg" width="445" height="auto"/>
 <p>
   Attributes can be:
 </p>
@@ -123,10 +141,18 @@ schema foo {
       One large memory buffer holding references (32 bit) to a memory structure
       with objects per unique value.
     </td>
+  </tr><tr>
+    <td>Tensor</td>
+    <td>Fixed / Variable</td>
+    <td>
+      Like the "D" attribute - a tensor is a datatype with mapped and indexed dimensions,
+      stored in the <em>tensor store</em>.
+      The memory layout in the tensor store depends on the tensor type.
+    </td>
   </tr>
 </table>
 <p>
-  The "A", "B" and "C" attribute memory buffers have attribute values in Local ID (LID) order -
+  The "A", "B", "C" and "D" attribute memory buffers have attribute values in Local ID (LID) order -
   see <a href="#document-meta-store">document meta store</a>.
 </p>
 <p>
@@ -143,9 +169,6 @@ schema foo {
   This means that larger fields will copy more data at updates.
   It also implies that updates to <a href="reference/schema-reference.html#type:weightedset">weighted sets</a>
   are faster when using numeric keys (less memory and easier comparisons).
-  <a href="tensor-user-guide.html">Tensors</a> are also attributes,
-  but have data structures slightly different from the data structures above.
-  The keys for mapped tensors use a different enum store for fast lookup.
 </p>
 <p>
   Whenever the <em>Attribute Multivalue Mapping</em> or <em>Attribute Enum Store</em> are full (they are bound),
@@ -443,10 +466,10 @@ schema foo {
 
 
 
-<h2 id="document-meta-store">Document meta store (implicit attribute)</h2>
+<h2 id="document-meta-store">Document meta store</h2>
 <p>
   The document meta store is an in-memory data structure for all documents on a node.
-  It is an implicit attribute, and is
+  It is an <em>implicit attribute</em>, and is
   <a href="proton.html#lid-space-compaction">compacted</a> and
   <a href="proton.html#attribute-flush">flushed</a>.
   Memory usage for applications with small documents can be dominated by this attribute,
@@ -482,10 +505,3 @@ schema foo {
   also check <em>removed</em> and <em>notready</em> -
   refer to <a href="proton.html#sub-databases">sub-databases</a>.
 </p>
-
-
-
-<h2 id="further-reading">Further reading</h2>
-<ul>
-  <li><a href="reference/advanced-indexing-language.html">indexing language</a></li>
-</ul>
