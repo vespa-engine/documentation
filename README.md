@@ -1,4 +1,6 @@
 <!-- Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. -->
+[![Vespa Documentation Search Feed](https://github.com/vespa-engine/documentation/actions/workflows/feed.yml/badge.svg)](https://github.com/vespa-engine/documentation/actions/workflows/feed.yml)
+[![/documentation link checker](https://cd.screwdriver.cd/pipelines/7021/link-checker-documentation/badge)](https://cd.screwdriver.cd/pipelines/7021/)
 
 # Creating Vespa documentation
 
@@ -89,12 +91,11 @@ If this algorithmic transformation is followed it is possible to link to this se
 * Link to javadoc for a package: https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/federation/vespa/package-summary.html
 * Link to javadoc for a class: https://javadoc.io/doc/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/config/ConnectionParams.Builder.html
 
-*By Jon Bratseth in June 2016*
+*By Jon Bratseth, June 2016*
+
 
 
 ## Appendix: Vespa Documentation Search
-
-[![Vespa Documentation Search Feed](https://github.com/vespa-engine/documentation/workflows/Vespa%20Documentation%20Search%20Feed/badge.svg?branch=master)](https://github.com/vespa-engine/documentation/actions?query=workflow%3A%22Vespa+Documentation+Search+Feed%22)
 
 See [Vespa Documentation Search](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/vespa-documentation-search)
 sample application for architecture.
