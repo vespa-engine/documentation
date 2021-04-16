@@ -4,7 +4,8 @@ title: "Tensor Guide"
 ---
 
 <p>
-Tensors allow Vespa to support advanced ranking models such as large logistic regression models and neural networks.
+Vespa provides a tensor data model and computation engine to support advanced computations over data,
+such as for example computing neural network ranking models.
 In this guide, tensors are introduced with some examples of use.
 For details, refer to the <a href="reference/tensor.html">tensor reference</a>.
 Also try the <a href="tutorials/blog-recommendation.html">blog recommendation tutorial</a>.
@@ -16,15 +17,14 @@ This guide goes through:
     <li>Ranking with tensors</li>
     <li>Constant tensors</li>
     <li><a href="https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">Tensor Java API</a></li>
-    <li>Common use cases</li>
     <li>Tensor concepts</li>
 </ul>
 For a quick introduction to tensors, refer to
 <a href="#tensor-concepts">tensor concepts</a>
 and <a href="reference/tensor.html">the tensor reference guide</a>.
 See also <a href="tensorflow.html">using TensorFlow models</a> or
-<a href="onnx.html">using ONNX models</a> which explains how to use TensorFlow or ONNX models directly in Vespa.
-</p>
+<a href="onnx.html">using ONNX models</a> which explains how to use TensorFlow or ONNX models directly in Vespa,
+and a collection of <a href="tensor-examples.html">examples of usages of tensors</a> to perform various computations.
 
 
 <h2 id="tensor-document-fields">Tensor document fields</h2>
@@ -211,100 +211,8 @@ The above expression combines three tensors: the query tensor, the document tens
 <h2 id="tensor-java-api">Tensor Java API</h2> -->
 
 
-
-<h2 id="use-cases">Use cases</h2>
-<p>
-In the following section, find common use cases that can be solved using tensor operations.
-</p>
-
-
-<h3 id="dot-product-between-query-and-document-vectors">Dot Product between query and document vectors</h3>
-<p>
-Assume we have a set of documents where each document contains a vector of size 4.
-We want to calculate the dot product between the document vectors and a vector passed down with the query
-and rank the results according to the dot product score.
-</p><p>
-The following sd-file defines an attribute tensor field
-with a tensor type that has one indexed dimension <code>x</code> of size 4.
-In addition we define a rank profile that calculates the dot product.
-<pre>
-schema example {
-  document example {
-    field document_vector type tensor&lt;float&gt;(x[4]) {
-      indexing: attribute | summary
-    }
-  }
-  rank-profile dot_product {
-    first-phase {
-      expression: sum(query(query_vector)*attribute(document_vector))
-    }
-  }
-}
-</pre>
-The tensor to pass down with query is defined in a query profile type with the same tensor type as the field in the document:
-<pre>
-&lt;query-profile-type id="myProfileType"&gt;
-  &lt;field name="ranking.features.query(query_vector)" type="tensor&amp;lt;float&amp;gt;(x[4])" /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-Example document with the vector [1.0, 2.0, 3.0, 5.0]:
-<pre>
-[
-  { "put": "id:example:example::0", "fields": {
-      "document_vector" : {
-        "cells": [
-          { "address" : { "x" : "0" }, "value": 1.0 },
-          { "address" : { "x" : "1" }, "value": 2.0 },
-          { "address" : { "x" : "2" }, "value": 3.0 },
-          { "address" : { "x" : "3" }, "value": 5.0 }
-        ]
-      }
-    }
-  }
-]
-</pre>
-Example query set in a searcher with the vector [1.0, 2.0, 3.0, 5.0]:
-<pre>
-public Result search(Query query, Execution execution) {
-    query.getRanking().getFeatures().put("query(query_vector)",
-        Tensor.Builder.of(TensorType.fromSpec("tensor&lt;float&gt;(x[4])")).
-        cell().label("x", 0).value(1.0).
-        cell().label("x", 1).value(2.0).
-        cell().label("x", 2).value(3.0).
-        cell().label("x", 3).value(5.0).build());
-    return execution.search(query);
-}
-</pre>
-</p>
-
-
-<h3 id="matrix-product-between-1d-vector-and-2d-matrix">Matrix Product between 1d vector and 2d matrix</h3>
-<p>
-Assume we have a 3x2 matrix represented in an attribute tensor field <code>document_matrix</code>
-with a tensor type <code>tensor&lt;float&gt;(x[3],y[2])</code> with content:
-<pre>
-{ {x:0,y:0}:1.0, {x:1,y:0}:3.0, {x:2,y:0}:5.0, {x:0,y:1}:7.0, {x:1,y:1}:11.0, {x:2,y:1}:13.0 }
-</pre>
-Also assume we have 1x3 vector passed down with the query as a tensor
-with type <code>tensor&lt;float&gt;(x[3])</code> with content:
-<pre>
-{ {x:0}:1.0, {x:1}:3.0, {x:2}:5.0 }
-</pre>
-that is set as <code>query(query_vector)</code> in a searcher
-as specified in <a href="ranking-expressions-features.html#using-query-variables">query feature</a>.
-</p><p>
-To calculate the matrix product between the 1x3 vector and 3x2 matrix (to get a 1x2 vector)
-use the following ranking expression:
-<pre>
-sum(query(query_vector) * attribute(document_matrix),x)
-</pre>
-This is a sparse tensor product over the shared dimension <code>x</code>,
-followed by a sum over the same dimension.
-</p>
-
-
-
 <h2 id="tensor-concepts">Tensor concepts</h2>
+
 <p>
 In Vespa, a tensor is a data structure which is a generalization of scalars, vectors and matrices.
 Tensors can have any order:
@@ -343,42 +251,6 @@ A combination of mapped and indexed dimensions is a mixed tensor:
 <pre>
 tensor&lt;float&gt;(x{},y[3])
 </pre>
-Vespa uses the type information to optimize execution plans at configuration time.
-For dense data the best performance is achieved with indexed dimensions.
-</p>
 
-
-
-<h2 id="tensor-examples">Tensor examples</h2>
-<p>
-The following examples uses the
-<a href="https://github.com/vespa-engine/sample-apps/tree/master/tensor-playground">tensor playground</a>
-to visualize tensor operations.
-Follow the readme and use <code><a href="http://localhost:8080/playground/index.html" data-proofer-ignore>
-localhost:8080/playground/index.html</a></code>.
-By clicking on the links below, a setup string will be copied to the clipboard -
-paste the string into the setup input box in the playground and press enter.
-</p>
-<script>
-function copyToClipboard(text) {
-    var textarea = document.createElement("textarea");
-    textarea.value = text;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-}
-</script>
-<p>
-The neural network example is quite a bit more involved.
-Here, the network has 3 input neurons, 5 hidden neurons and a single output neuron.
-An example of neural networks in action can be found in the
-<a href="tutorials/blog-recommendation-nn.html">blog recommendation tutorial part 3</a>.
-</p><p>
-<button onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJAAiyeqmRghMkrDAATEozBlYJFQFcqzdvgC+R42yL8O5SpABu3AJbwARgBtkrIxE7ckfb2J6JE9xAEEvAUEATzJQqAVUJQAKYWwAZgBdAEpIqKgHN114yGBgYQwARmMMAAYAOmrIQNMicyMrYhtxB1hnd08LAV8eAPyoYJRbACE8qMhGWJLElLSs3KH5wuLbMoramobKlnKqw-qAJmNmqNaTTYJA0gpxES00VEcSejniLlGsJ0OJMSr8OG9YB8vj9wmAAFRgWYtMwPIFQbpQCFQ75gqD-fyAwI+EG2XE+LGoT448SoXSIZJhOHTXLItqop4YyAUqk-B4+fG8QnjSAk8RkzHCd6U6G2SF6KjIZIAKxIjnoDJYiM10FSLGi2VScP12U1tMQLNuZjwmRAxiAA')">Dense tensor dot product</button></p><p>
-<button onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJADKXWKmRgh9VCVhgAJiUZgysEqoCuVZu3wBfYybZF+HcpUgA3bgEt4AIwA2yVsYiduSPh9ieiQvcQBBbwFBAE8yMKgFJVgACmFgEwBKKOioR3c9BMhgYGEMAEYTDAAGADpKyCCzIgtja2JbcUdYFw8vSwE-HkDcqBCUOwAhHOjIRjiipOU0jOyB2fzCuxKy6qq68pZSiv3agCYTRujm03WCINIKcRFtNFQnEnoZ4mkArHaOOMit8OC9YG8Pl8ImAAFRgaZNcx3AFQTpQMEQz4gqC-Xj-IK+IF2bG+DGod5Y8SoPSIFLhGGTFhgYTZREtZEPNGQMkUr53Xy4ka5SBE8Qk9HCV7kyF2cH6KjIFIAKxITnodKZjLA0DSLBimTSMP1mSZ1MQrOu5jwAF0QCYgA')">Sparse tensor dot product</button></p><p>
-<button onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJABqyKoxKwAtIniNYAS2FgysEgBMArjIB0kdvgC+ps2yL8O5SpABu3VfABGAG2StTETtyQ+X2J6JG9xCR8BQQBPMnCoIXpUOQAKYWwAZgBdAEoo6KhnDz0EyGBgYQwABjMawwBWFkqMAEY66sbmqoAmDsazE2iLIitTW2J7cWc1dy8Cji4eIMKoUJQHAFkFgUhGOLKklNhUqizslgyc-OtCp3gSsoqqGsuajuaX6rf2+tbP169fo9AH-Kq1Nqgn51VqGf7AF5gjB9NqGEEI5FvCHol4gqq-HpwgF45F1Ql9IYCEbmW4QCZ+KZQERaNCoVQkeg7PxLQJYekhMIOLnEZmwVnszniVB6RCpCRgABUYE2LDAwnywWpEDGNmCpAo4hodGQTGF-mWfOCfiEogcADkSEIwIwABbKZ0u5BgOQ6ZCwb3QMCIPQeRiqMgeVRUZQSsA6EhoegAckYQeUQlghjAAElU6pUB6vTpVAw2RznSQwNLEN7HH6Pe6lIwM6hjJrLLSCHrGZBReKOWaebxLatIOsysK-H3UGXJVBq6lNoqwBJVerKaMO+NuwamcIWTOJYOAsOu6Px0LOxxp7OHGL9FRkKkAFYkVT0OWqlVgaDpFgxXJ0mXADclVas1w1YZLDwbIQDMIA')">Vector-matrix product</button></p><p>
-<button onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJACiwpGQA2yMCWhh4YRPEawAlsIC06zTrBlYJACYBXKowB0kdvgC+Dx2yL8O5SpABu3LfAARvKsDhCc3Eh8YcT0SMjeAIKhAoIAnmQJ4kL0qCSwABTCwK5pJQCUKalQfrIWWVDAADr0wMIYAAwsaZ2OnSwtbf09AIx9HTYjA63tUz0dfVODs90YY2uTLY72qc5Erg4exF7iftpBIW4CETzR1VBxKN4AQlWpkIwZDR-IufkFZVcAC8Km9rrV6t5mq15iwgb1+oNYfD1ksYWs4QiJmjgKNMajNvRtjE9k4rhAjuETlARCY0KgtCR6GDwlxblhKbF4t4WcRabB6YzmeJEmAAFRgV4klzkggxUgUcT8wVM3k3KIcmLhR7fXnhZWoBmq8SoCyIAqiiXPFhgNKVaX7WWchXeA1G5my1mRXia+6QHU8z184R0w1C7wCyxUZAFABWJC09AtLGt0CK3XKRTFdvKLFNiAzOwEpIgpIAuiBHEA')">Matrix-matrix product</button></p><p>
-<button onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJADEEsABVk9VCVhgA5vOQJGASxL0WYACZaGqHfTCx5SLfRVh49A2Br0q8IfXdnI7fAF9fPzYifg5ySkgRMktUU11WXwhObiQ+ROJPFAiAQQSBYiiYuPoIj0VYAAotbABmAF0ASiqGn3yAoiDfUOJw8UK0YryBZJ40-KTM5AiAISH8yOFoge9xMqUq7AAmRqqAahqW9Pb-YPxupN6oftjvU44uUaxzjKQp8QBhOeHrwfEXN0YFWyLGmLC0hzagTuBHSpAofUWRVusIeqSe6QmrwiXw4PxWUEskwq730Wn0wghAmOEGOdRAfiAA')">Tensor generation, dimension renaming and concatenation</button></p><p>
-<button onclick="copyToClipboard('N4KABGBEBmBOCGBbApgZ0gLjAbXBMo++kA9gA6ZQDGJiKAdgC6QA0eRkZ8CilhRxRsgAezLJAByyAK4IANmHrJGAdxKwA1mBFIyc5JHb4AvkeNsi-DuUqQAbtwCW8AEb7WRiJ25I+n4vRIBuKO9GTSzBYCXowAnmTBUEL0qOoAFKHhjNgAzAC6AJQe0V4OctKJkMDAmREYAAzGDQB0AIwsNWF1rU31bR21jBgATL1txobRpkTmRlbENuIOsM5uBlEcXDx+JVCBKLYqABaOACanyPTFJZBxCbbJqbAZXdn5LCfnl9gArIXX0Xs8HKlWqnwu9AaLEGDSaAFo+gB2VoADgAnMMOuDLhh2jDGrjmmi0a1hiisWcISNoa9YS16gAWBmoilfSE5GlZOkItoo4YMjnAbGQhmcuoEvr1fnE1lU+pioY9FoANhRiJRP1lOLxtKVcNazWV-J+5KFlJxmJhSr6wxyyplZrZGA5VrGyp+iMRosdVNFrpaPzR7tNwqhMNGGH1zR+TOV3tDOq5EZtaPqjK1kMttOTbWVytamp9OJd2aaBq9rRyIfNIoVIzGOVaAp+E380xMGwI-lIFCWTlc7k7Xi2viw8w4+0qLmFAIEt3ilUe6WFv3+Q+IZQqtjBNbpNpRUsRGdxYylHsLoZzafq+ePOTGw3zrXaRZF8L6rTz9TRramZk745QIsUDLKsg7diOvBjv4XiToc0ChMCs4cHci6XE8aQrn8LAIYEcjYK0a4wSBwJbuIO5OvKuHAtyyrNHyPyqse7TUXI3LPtGPzDOqx6Yqx3KSo2aJHq+zo4YhbEEjknGIo+x6ivxBI8naiI5Iiv4CO2ECzJY3bAUCKwDusEE+FBXa7JAcHiC4rHIYIC4POh6SsQRREWZuoLAIpp7uoiyqNJMmn-nMem9tQtAMJEJnbNBFlCKItgAGKOLAqCMGAcjwLEyCwGA8BUIwjgOIVJCQoFMzBbpgL6SIZCwGgqCOKVdneDF5k3FZUB2V4tX1agjXNeIqDSIgLxZGAABUYDHDWLBgIMBRgAA1GA041uVJiVfggE9rYvUNU1Vzrq1o7tYCnWQJl2WwK03VQPt-WHbY9XlGkw2jYMk3TcKc0Lctq3CkUbZbRAO01cIdUHc1x2QTsHVBLYwJCLAgSFXYyAAPpXTlt3rj1EN9QNVziC90hpMIKgY3o0ioBjLhjREc0zWyc1rSz82vAUQN-jMAGhbYNB0JcUWArDsU3PFYhQMleEZVlOV5QVRXwCVZXA7zIXVWFkAPUTLVi2dc4XXdOsE1DxNQO9aTYzdX0qKxc2A-9NkSRt2kg4bXjg5Dj3Q9Fp2AbBCPiDbwwm7rT1DY4ADmiAkGcb0jdb8u21N9sSY7NaLStLt4dzQUa1Vc76YLkX66ZcOApLSUSWACD0FoqA0PVGBu2AWnt3zWt7WbvtHf7ZmB3swddXj9293rQ1J6H+cVXPYB5CAxhAA')">Neural network</button>
-</p>
+<p>Vespa uses the type information to optimize execution plans at configuration time.
+For dense data the best performance is achieved with indexed dimensions.</p>
