@@ -4,6 +4,7 @@
 import io
 import os
 import sys
+import getopt
 import json
 import time
 import yaml
@@ -230,9 +231,8 @@ def run_url(url):
     process_page(html, url)
 
 
-def run_config():
+def run_config(config_file):
     failed = []
-    config_file = "_test_config.yml"
     if not os.path.isfile(config_file):
         config_file = os.path.join("test",config_file)
     if not os.path.isfile(config_file):
@@ -262,23 +262,35 @@ def run_file(file_name):
 
 def run_with_arguments():
     global verbose
-    file_to_run = ""
-    for i in range(1, len(sys.argv)):
-        if sys.argv[i] == "--verbose" or sys.argv[i] == "-v":
+    config_file = ""
+    argv = sys.argv[1:]
+
+    try:
+        opts, args = getopt.getopt(argv, "vc:")
+    except getopt.GetoptError:
+        print("test.py [-v] [-c configfile] [file-to-run]")
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt in ("-v"):
             verbose = True
-        else:
-            file_to_run = sys.argv[i]
-    run_file(file_to_run)
+        elif opt in ("-c"):
+            config_file = arg
+
+    if(len(config_file)):
+        run_config(config_file)
+
+    if (args):
+        run_file(args[0])
+
+    run_config("_test_config.yml")
 
 
 def main():
     create_work_dir()
 
     try:
-        if len(sys.argv) > 1:
-            run_with_arguments()
-        else:
-            run_config()
+        run_with_arguments()
     except Exception as e:
         sys.stderr.write("ERROR: {0}\n".format(e))
         sys.exit(1)
