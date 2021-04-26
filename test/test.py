@@ -279,11 +279,10 @@ def run_with_arguments():
 
     if(len(config_file)):
         run_config(config_file)
-
-    if (args):
+    elif (args):
         run_file(args[0])
-
-    run_config("_test_config.yml")
+    else:
+        run_config("_test_config.yml")
 
 
 def main():
