@@ -39,14 +39,14 @@ highly available in common datacenter networks.
 ### Write durability and consistency
 
 When a client receives a successful [write](../reads-and-writes.html) response,
-the operation has been written to the OS. The replication level is configurable.
+the operation has been written and synced to disk. The replication level is configurable.
 Operations are by default written on _all_ replicas before sending a response.
 
 On each replica node, operations are persisted to a write-ahead log before
 being applied. The system will automatically recover after a crash by replaying
-logged operations. The transaction log is synced to disk at OS-specific intervals, which
-is typically 30 seconds. This means that if _all_ replicas go down at the same time,
-it is possible to lose the most recent non-synced data.
+logged operations. Writes are guaranteed to be synced to durable storage prior
+to sending a successful response to the client, so acknowledged writes are retained even
+in the face of sudden power loss.
 
 If a client receives a failure response for a write operation, the operation may or may not have taken
 place on a subset of the replicas. If not all replicas could be written to,

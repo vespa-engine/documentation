@@ -151,7 +151,7 @@ Write the following to `application/services.xml`:
   </container>
 
   <content id="msmarco" version="1.0">
-    <redundancy reply-after='1'>1</redundancy>
+    <redundancy>1</redundancy>
     <documents>
       <document type='msmarco' mode="index"></document>
       <document-processing cluster="text_search"></document-processing>
