@@ -18,6 +18,17 @@ To run this locally:
 If you want to run a test that is not in the above file, you can add the file
 path or URL as an argument and that test will be run.
 
-Alternatively, run in docker (like the travis tests do):
 
-    $ ./travis/start-docker-container.sh
+## Troubleshooting
+Dump `vespa.log` - add to guide being tested:
+
+    <pre data-test="exec">
+    $ docker exec vespa bash -c 'cat /opt/vespa/logs/vespa/vespa.log'
+    </pre>
+
+`test.py` supports verbose output using `-v`, modify `screwdriver.yaml`:
+
+    $SD_SOURCE_DIR/test/test.py -v -c $SD_SOURCE_DIR/test/_test_config.yml
+
+Use the log download button top-right in the screwdriver.cd view
+to make sure you see _all_ output.
