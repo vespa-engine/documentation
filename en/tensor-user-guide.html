@@ -168,12 +168,47 @@ the maximum throughput, with regards to pure memory bandwidth, is 9 queries per 
 Even though you would typically not do the above without reducing the
 search space first (using matching and first phase), it is important to consider
 the memory bandwidth and other hardware limitations when developing ranking expressions with tensors.
-</p><p>
+</p>
+<h3 id="cell-value-types">Performance considerations for cell value types</h3>
+<p>
 Using a smaller value type increases performance, trading off precision:
 <code>tensor&lt;float&gt;(x[1000])</code> uses 4 bytes per cell value.
+Usually one should use <code>float</code> for all tensors when scaling for production.
+(Note that other frameworks, like tensorflow, will also prefer 32-bit floats.)
+</p><p>
+If memory (or memory bandwidth) is still a concern, it's possible to
+change the most space-consuming tensors to use the
+<code>bfloat16</code> cell type.  This type has the range as a normal
+32-bit float but only 8 bits of precision, and can be thought of as
+"float with lossy compression".  See also
+<a href="https://en.wikipedia.org/wiki/Bfloat16_floating-point_format">bfloat16
+floating-point format</a> on Wikipedia.
+Some careful analysis of your data is required before using this type.
+</p><p>
+Note that when doing calculations <code>bfloat16</code> will act as if
+it was a 32-bit float, but the smaller size comes with a potential
+computation overhead. In most cases, the <code>bfloat16</code> needs
+to be converted to a 32-bit float before the actual calculation can
+take place; adding an extra conversion step.
+</p><p>
+In some cases, having tensors with <code>bfloat16</code> cells might
+bypass some build-in optimizations in the back-end (like matrix
+multiplication) that will be hardware accelerated only if the cells
+are the same type.  To avoid this last case, you can use the
+'cell_cast' tensor operation to make sure the cells are of the
+appropriate type before doing the more expensive operations.
+</p><p>
+If one uses machine-learning to generate a model with data
+quantization you can target the <code>int8</code> cell value
+type, which is a signed integer with range from -128 to +127 only.
+This is also treated like a "float with limited range and lossy
+compression" by the Vespa tensor framework, and gives results as if it
+was a 32-bit float when any calculation is done.  This type is also
+suitable when representing boolean values.  Note that if the input
+for an <code>int8</code> cell is not directly representable, the
+resulting cell value is undefined, so you should take care to only
+input numbers in the <code>[-128,+127]</code> range.
 </p>
-
-
 
 <h2 id="constant-tensors">Constant tensors</h2>
 <p>
