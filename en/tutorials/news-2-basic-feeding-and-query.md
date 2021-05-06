@@ -248,8 +248,8 @@ schema news {
 }
 </pre>
 
-The `document` is wrapped inside another element called `search`.  The name
-following these elements, here `news`, must be exactly the same for both.
+The `document` is wrapped inside another element called `schema`.
+The name following these elements, here `news`, must be exactly the same for both.
 
 This document contains several fields. Each field has a
 [type](../reference/schema-reference.html#field), such as `string`, `int`, or

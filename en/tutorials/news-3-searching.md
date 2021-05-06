@@ -408,7 +408,7 @@ We can do this by including a `popularity` rank profile below at the bottom of
   using machine learning, which we'll get back to later in the tutorial.
 
 More information can be found in the [schema
-reference](../reference/schema-reference.html#rank-profile)):
+reference](../reference/schema-reference.html#rank-profile).
 
 After you deploy the configuration, you can run a query such as:
 
