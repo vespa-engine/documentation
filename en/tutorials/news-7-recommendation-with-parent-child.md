@@ -233,9 +233,8 @@ is multiplied by the `1.0` in this document. So in this case, this would
 effectively work as a lookup.
 
 <p class="alert alert-success"> 
-Much more complex operations are available, please refer to [the tensor 
-user guide](../tensor-user-guide.html#ranking-with-tensors) for more
-information.
+Much more complex operations are available, please refer to <a href="../tensor-user-guide.html#ranking-with-tensors">
+the tensor user guide</a> for more information.
 </p>
 
 Let's add a new ranking profile to perform this calculation:
