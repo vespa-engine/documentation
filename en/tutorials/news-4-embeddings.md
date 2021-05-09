@@ -395,7 +395,7 @@ free to experiment and see if you can achieve better results!
 <p class="alert alert-success"> 
 Note that these numbers are for the demo dataset, which is much
 smaller than the full dataset. For reference, in 
-[the MIND paper](https://msnews.github.io/assets/doc/ACL2020_MIND.pdf) 
+<a href=https://msnews.github.io/assets/doc/ACL2020_MIND.pdf>the MIND paper</a> 
 the baseline here achieves `0.6776` on the full dataset.
 </p>
 
