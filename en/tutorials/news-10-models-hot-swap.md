@@ -1,6 +1,6 @@
 ---
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "News Recommendation Tutorial - models hot-swap"
+title: "News Recommendation Tutorial - models hot swap"
 ---
 
 ## Introduction
@@ -17,7 +17,7 @@ application for personalized news recommendations. The parts are:
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
-10. [Models hot-swap](news-10-models-hot-swap.html) - atomic model updates
+10. [Models hot swap](news-10-models-hot-swap.html) - atomic model updates
 
 This episode of the new recommendations tutorial describes ways to manage a real-world Vespa application, which is updated on a regular basis while users are performing searches (hot swap). It also extends the application to support multiple models while minimizing the amount of data duplication. Lastly, it demonstrates an efficient garbage collection mechanism, removing obsolete data from the application.
 
@@ -60,7 +60,7 @@ search config {
 
 Versioning is used as depicted below. The client running recommendation queries starts by obtaining the configuration of the target model. It then adds a filter clause to the following query, limiting it to the current internal version. On the feeding side, the configuration is also read first. Documents are then generated such that they have the next internal version and the alternative set. Once all documents are fed successfully, the configuration document is updated with the new internal version and set. From that point onward, any new search will target the newly fed model.
 
-![Hot-swap flow](images/hot-swap-flow.png)
+![Hot swap flow](images/hot-swap-flow.png)
 
 ## Supporting multiple models
 
@@ -157,7 +157,9 @@ Now, we can distinguish between up-to-date and obsolete documents by comparing t
     </documents>
 ```
 
-Note that the filter not only contains comparing the internal and the latest version but also a check whether the latest version is `null`. This is required as the filter is also applied during feeding. At that point, the reference to the configuration document isn't active yet, hence all imported fields will contain `null` values. Without the `null` check, all our documents will be filtered out during feeding.
+<p class="alert alert-success"> 
+Note that the filter not only compares the internal and the latest version but also checks whether the latest version is <code>null</code>. This is required as the filter is also applied during feeding. At that point, the reference to the configuration document isn't active yet, hence all imported fields will contain <code>null</code> values. Without the <code>null</code> check, all our documents will be filtered out during feeding.
+</p>
 
 ## Dealing with feeding failures
 
@@ -204,6 +206,6 @@ The solution to this problem is ensuring all Vespa queries required for a recomm
 
 The mechanisms described above introduce new types, fields, and relations to the application:
 
-![Hot-swap flow](images/hot-swap-schema.png)
+![Hot swap schema](images/hot-swap-schema.png)
 
 While these changes increase the complexity of the application, they enable features that are a must in any application that is highly available, updated often, lean, and efficient.
