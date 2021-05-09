@@ -148,15 +148,12 @@ Now, we can distinguish between up-to-date and obsolete documents by comparing t
 ```
     <documents garbage-collection="true" garbage-collection-interval="21600">
       <document mode='index' type='config' global='true'/>
-      <document mode='index' type='news' global='true' selection=
-               '(news.latest_version == null) or
-               (news.version >= news.latest_version - 2)'/>
-      <document mode='index' type='news_model' selection=
-               '(news_model.latest_version == null) or
-               (news_model.version >= news_model.latest_version - 2)'/>
-      <document mode='index' type='user' selection=
-               '(user.latest_version == null) or
-               (user.version >= user.latest_version - 2)'/>
+      <document mode='index' type='news' global='true'
+                selection='(news.latest_version == null) or (news.version >= news.latest_version - 2)'/>
+      <document mode='index' type='news_model'
+                selection='(news_model.latest_version == null) or (news_model.version >= news_model.latest_version - 2)'/>
+      <document mode='index' type='user'
+                selection='(user.latest_version == null) or (user.version >= user.latest_version - 2)'/>
     </documents>
 ```
 
