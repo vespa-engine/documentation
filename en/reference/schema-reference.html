@@ -1475,6 +1475,11 @@ distance-metric: [metric]
     but with a distance in the range [0,2] (since cosine similarity has range [1,-1],
     so the end result is 0.0 for same direction vectors,
     1.0 for a right angle, and 2.0 for vectors with exactly opposite directions).
+    NOTE: for some applications it's desirable to search for "maximal inner product"
+    with vectors that aren't normalized (where a vector of length 10 will give a double
+    score compared to a vector of length 5 in the same direction).  But this is impossible
+    using Nearest-Neighbor search, since this type of inner product cannot be used as
+    (or transformed into) a distance metric.
     </td>
   </tr>
   <tr>
@@ -1493,6 +1498,26 @@ distance-metric: [metric]
     <td><code>hamming</code></td>
     <td>
     <a href="https://en.wikipedia.org/wiki/Hamming_distance">Hamming distance</a> metric.
+    This isn't very useful for floating-point data since it only counts the number of dimensions
+    where the vectors have different coordinates, meaning you only get 1 bit of information
+    from each floating-point number.  Instead, it should be used for binary data where each
+    bit is considered a separate coordinate.  Practically, this means you should use the
+    <code>int8</code> <a href="../tensor-user-guide.html#cell-value-types">cell value type</a>
+    for your tensor, with the usual encoding from bit pattern to numerical value, for example:
+    <ul>
+      <li><code>00000000</code> &rarr;    <code>0</code> (hex <code>00</code>)</li>
+      <li><code>00010001</code> &rarr;   <code>17</code> (hex <code>11</code>)</li>
+      <li><code>00101010</code> &rarr;   <code>42</code> (hex <code>2A</code>)</li>
+      <li><code>01111111</code> &rarr;  <code>127</code> (hex <code>7F</code>)</li>
+      <li><code>10000000</code> &rarr; <code>-128</code> (hex <code>80</code>)</li>
+      <li><code>10000001</code> &rarr; <code>-127</code> (hex <code>81</code>)</li>
+      <li><code>11111110</code> &rarr;   <code>-2</code> (hex <code>FE</code>)</li>
+      <li><code>11111111</code> &rarr;   <code>-1</code> (hex <code>FF</code>)</li>
+    </ul>
+    Feeding data for this use case may want to use the
+    <a href="document-json-format#tensor-hex-dump">"hex dump"</a> format
+    instead of numbers in range <code>[-128,127]</code> both to have a more natural format
+    for representing binary data, and to avoid the overhead of parsing a large json array of numbers.
     </td>
   </tr>
 </tbody>
