@@ -109,7 +109,7 @@ File locations below refer to this repo's root.
     1. Use [Nokogiri](https://nokogiri.org/) to extract text from HTML
     1. Implement HTML-to-text in a Vespa feed file by using a
       [Jekyll Generator](https://jekyllrb.com/docs/plugins/generators/),
-      see [_plugins/vespa_index_generator.rb](/_plugins/vespa_index_generator.rb)
+      see [_plugins-vespafeed/vespa_index_generator.rb](/_plugins-vespafeed/vespa_index_generator.rb)
     1. The generated _open_index.json_ can then be
       [fed to Vespa](https://docs.vespa.ai/en/reference/document-json-format.html)
 
