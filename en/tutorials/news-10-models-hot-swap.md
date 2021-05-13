@@ -43,6 +43,8 @@ Every new feeding uploads a new model to Vespa. The central requirement for hot 
 1. **External versioning** - a set number is appended to each document ID. This separates documents belonging to the current model from the documents belonging to the next (or previous) model, allowing them to coexist without overwriting each other. Sets alternate between 0 and 1. This way, when a new model is being fed, it does not overwrite documents pertaining to the current model but does overwrite documents pertaining to the previous one, which is already obsolete.
 2. **Internal versioning** - a version number is stored inside each document belonging to the model. This model number is increased in every feeding, allowing queries to only target the current model, filtering our documents belonging to the next or previous one.
 
+In principle, to ensure atomic swap, we could have used (full) external versions (instead of just sets) and avoided internal versions. But this would create an abundance of obsolete versions for each document. By using a single set bit in the document ID, we ensure that no more than two versions of a document are stored at any given time. Using the internal version, we can filter out old versions that were not overwritten and hence still exist with a set bit that again became current.
+
 Versioning can be stored in a database or some configuration file, but the simplest place is probably the Vespa app itself, using a dedicated type:
 ```
 search config {
@@ -64,7 +66,7 @@ Versioning is used as depicted below. The client running recommendation queries 
 
 ## Supporting multiple models
 
-As said, we'd like our app to support multiple recommendation models - basic, recent news and only fully read articles, for instance. To separate those models, who all share the same news article and user schemas, we can use a model code: (1) in the document ID, to avoid documents from different models from overriding each other, and (2) inside the document, to allow us to filter out documents from other models in our queries.
+As said, we'd like our app to support multiple recommendation models - basic, recent news and only fully read articles, for instance. To separate those models, who all share the same news article and user schemas, we can use a model code, stored in two places: (1) in the document ID, to avoid documents from different models from overriding each other, and (2) inside the document, to allow us to filter out documents from other models in our queries.
 
 Since we're already storing an internal version in each model, it sounds reasonable to combine the version with the model code. However, as we'll soon see, we also use the internal version for garbage collection, so keeping the version and model apart simplifies other tasks.
 
