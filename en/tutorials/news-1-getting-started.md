@@ -21,12 +21,12 @@ The parts are:
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
-10. [Models hot swap](news-10-models-hot-swap.html) - atomic model updates
 
 There are different entry points to this tutorial. This one is for getting
 started using Docker on your local machine. Getting started on 
 [cloud.vespa.ai](https://cloud.vespa.ai) is coming soon. We will also have a
 version for [pyvespa](https://github.com/vespa-engine/pyvespa) soon.
+For atomic model updates, see the [Models hot swap](models-hot-swap.html) tutorial.
 
 In this part we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.

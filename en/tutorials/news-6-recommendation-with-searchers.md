@@ -49,7 +49,6 @@ application for personalized news recommendations. The parts are:
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
-10. [Models hot swap](news-10-models-hot-swap.html) - atomic model updates
 
 In the previous part of this series, we set up a recommendation system that,
 given a user id, needed two requests to generate a recommendation. The first
