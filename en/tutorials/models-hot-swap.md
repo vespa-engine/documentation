@@ -1,29 +1,17 @@
 ---
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "News Recommendation Tutorial - models hot swap"
+title: "Models hot swap tutorial"
 ---
 
-## Introduction
+This tutorial builds on the [news recommendation tutorial](news-1-getting-started.html).
+It describes ways to manage a real-world Vespa application,
+which is updated on a regular basis while users are performing searches (hot swap).
+It also extends the application to support multiple recommendation models while minimizing data duplication.
+Lastly, it demonstrates an efficient garbage collection mechanism, removing obsolete data from the application.
 
-This is the tenth part of the tutorial series for setting up a Vespa
-application for personalized news recommendations. The parts are:  
+In the news recommendation tutorial, we created a Vespa application that recommends news articles to a given user. Recommendations are based on a model consisting of two sets of embeddings - user and news. To obtain the recommendation, we first obtain the given user's embeddings, and then search for news whose embeddings are closest to the user's. The closest news articles are the most relevant ones for that particular user.
 
-1. [Getting started](news-1-getting-started.html)
-2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query
-3. [News search](news-3-searching.html) - sorting, grouping, and ranking
-4. [Generating embeddings for users and news articles](news-4-embeddings.html)
-5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering
-6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
-7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
-8. Advanced news recommendation - intermission - training a ranking model
-9. Advanced news recommendation - ML models
-10. [Models hot swap](news-10-models-hot-swap.html) - atomic model updates
-
-This episode of the new recommendations tutorial describes ways to manage a real-world Vespa application, which is updated on a regular basis while users are performing searches (hot swap). It also extends the application to support multiple recommendation models while minimizing data duplication. Lastly, it demonstrates an efficient garbage collection mechanism, removing obsolete data from the application.
-
-In the previous episodes of the news recommendation tutorial, we created a Vespa application that recommends news articles to a given user. Recommendations are based on a model consisting of two sets of embeddings - user and news. To obtain the recommendation, we first obtain the given user's embeddings, and then search for news whose embeddings are closest to the user's. The closest news articles are the most relevant ones for that particular user.
-
-This series started with an introduction to basic Vespa capabilities, proceeded to describe model-based recommendations, and moved to more advanced models relying on neural networks. This post is unrelated to the model generation and ranking specifications. Hence, for simplicity, we assume that embeddings are available along with some ranking function.
+This series started with an introduction to basic Vespa capabilities, proceeded to describe model-based recommendations, and moved to more advanced models relying on neural networks. This tutorial is unrelated to the model generation and ranking specifications. Hence, for simplicity, we assume that embeddings are available along with some ranking function.
 
 ## Real-world requirements
 
@@ -94,7 +82,7 @@ Each model is generated using a different dataset, hence it makes sense to separ
 
 In our example with three models, each document has 6 instances at any given moment - 3 different models * 2 sets. Most of the news article data is model agnostic, hence a single instance of that data can be used by all models. Further, the events used to create the prediction models (tuples like `<user ID, news ID, date, fully_read>`) come from a different source than the news article data, hence processing and feeding them separately is advantageous.
 
-In order to have all document instances share the model-agnostic data, we use Vespa's parent-child relations, also described in [part 7](news-7-recommendation-with-parent-child.html) of this series. Namely, we extract model-related fields into a new schema called `news_model`, leave all other fields in `news`, and add a reference from the model docs to the shared docs. This reference allows us to import fields from the parent (shared) doc to the child (model) doc, making them searchable and retrievable as if they were part of the model doc. The `news_model` schema should look as follows:
+In order to have all document instances share the model-agnostic data, we use Vespa's parent-child relations, also described in [part 7](news-7-recommendation-with-parent-child.html) in the series. Namely, we extract model-related fields into a new schema called `news_model`, leave all other fields in `news`, and add a reference from the model docs to the shared docs. This reference allows us to import fields from the parent (shared) doc to the child (model) doc, making them searchable and retrievable as if they were part of the model doc. The `news_model` schema should look as follows:
 
 ```
 schema news_model {
