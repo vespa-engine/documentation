@@ -3114,12 +3114,14 @@ schema example {
 
 <h2 id="modifying-schemas">Modifying schemas</h2>
 <p>
-This section describes how a schema in a live application can be modified - categories:
+This section describes how a schema in a live application can be modified—categories:
 <ol>
   <li><a href="#valid-changes-without-restart-or-re-feed">
     Valid changes without restart or re-feed</a></li>
   <li><a href="#changes-that-require-restart-but-not-re-feed">
     Changes that require restart but not re-feed</a></li>
+  <li><a href="#changes-that-require-reindexing">
+    Changes that require reindexing</a></li>
   <li><a href="#changes-that-require-re-feed">
     Changes that require re-feed</a></li>
 </ol>
@@ -3311,18 +3313,18 @@ In cluster 'mycluster' of type 'search':
 </p>
 
 
-<h3 id="changes-that-require-re-feed">Changes that require re-feed</h3>
+<h3 id="changes-that-require-reindexing">Changes that require reindexing</h3>
 <p>
-All of the changes listed below require re-feeding of all documents.
-Unless a change is listed in the above sections treat it as if it was listed here.
-Until re-feed is complete, affected fields will be empty
+All of the changes listed below require <a href="/documentation/reindexing.html">reindexing</a>
+of all documents. Unlike re-feed, which requires an external source of data, reindexing is done
+using documents stored in Vespa, and is automatic (once triggered). It can also run concurrently
+with feed and serving, but until reindexing is complete, affected fields will be empty
 or have potentially wrong annotations not matching the query processing. Procedure:
 <ol>
   <li>Run <code>vespa-deploy prepare</code> on the changed application.
-    Output specifies which re-feed actions are needed
-  <li>Stop feeding, wait until done</li>
+    Output specifies which reindexing actions are needed
   <li>Run <code>vespa-deploy activate</code></li>
-  <li>Re-feed all documents</li>
+  <li>Trigger reindexing for the indicated document types and clusters</li>
 </ol>
 Changes:
 <table class="table">
@@ -3330,16 +3332,6 @@ Changes:
   <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
   </thead>
   <tbody>
-      <tr><th>Change the data type or collection type of a document field</th><td>index, streaming</td>
-      <td>
-        Existing documents will no longer have any content for this field.
-        To populate the field, re-feed the existing documents using the new type for this field.
-        There will be no automatic conversion from old to new field type.
-        <br>
-        NOTE: If not re-feeding after such a change, serving works,
-        but searching this field will not give any results
-      </td></tr>
-
       <tr><th>Change index aspect of a document field</th><td>index</td>
       <td>
         This changes the document processing pipeline before documents arrive in the backend.
@@ -3374,13 +3366,9 @@ Changes:
         This changes the document processing pipeline before documents
         arrive in the backend, and what annotations are made for an indexed field.
         <br>
-        NOTE: If not re-feeding after such a change, serving works,
+        NOTE: If not reindexing after such a change, serving works,
         but recall is undefined as the index has been produced using one match mode
         while run-time is using a different match mode
-      </td></tr>
-
-      <tr><th>Change the tensor type of a tensor attribute</th><td>index</td>
-      <td><!-- ToDo -->
       </td></tr>
 
   </tbody>
@@ -3402,10 +3390,71 @@ schema test {
 }
 </pre>
 The following is output from <code>vespa-deploy prepare</code> -
+which reindex actions are needed:
+<pre>
+WARNING: Change(s) between active and new application that require re-index:
+Reindex document type 'test' in cluster 'mycluster' because:
+    1) Document type 'test': Field 'f1' changed: add index aspect, indexing script: '{ input f1 | summary f1; }' -&gt; '{ input f1 | tokenize normalize stem:"SHORTEST" | index f1 | summary f1; }'
+</pre>
+</p>
+
+
+<h3 id="changes-that-require-re-feed">Changes that require re-feed</h3>
+<p>
+All of the changes listed below require re-feeding of all documents.
+Unless a change is listed in the above sections treat it as if it was listed here.
+Until re-feed is complete, affected fields will be empty
+or have potentially wrong annotations not matching the query processing. Procedure:
+<ol>
+  <li>Run <code>vespa-deploy prepare</code> on the changed application.
+    Output specifies which re-feed actions are needed
+  <li>Stop feeding, wait until done</li>
+  <li>Run <code>vespa-deploy activate</code></li>
+  <li>Re-feed all documents</li>
+</ol>
+Changes:
+<table class="table">
+  <thead>
+  <tr><th>Change</th><th>Applicable for mode</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+      <tr><th>Change the data type or collection type of a document field</th><td>index, streaming</td>
+      <td>
+        Existing documents will no longer have any content for this field.
+        To populate the field, re-feed the existing documents using the new type for this field.
+        There will be no automatic conversion from old to new field type.
+        <br>
+        NOTE: If not re-feeding after such a change, serving works,
+        but searching this field will not give any results
+      </td></tr>
+
+      <tr><th>Change the tensor type of a tensor attribute</th><td>index</td>
+      <td><!-- ToDo -->
+      </td></tr>
+
+  </tbody>
+</table>
+Example: Given a content cluster <em>mycluster</em> with mode <em>index</em>:
+<pre>
+schema test {
+  document test {
+    field f1 type string { indexing: summary }
+  }
+}
+</pre>
+Then change field <code>f1</code> to hold an int:
+<pre>
+schema test {
+  document test {
+    field f1 type int { indexing: summary }
+  }
+}
+</pre>
+The following is output from <code>vespa-deploy prepare</code> -
 which re-feed actions are needed:
 <pre>
 WARNING: Change(s) between active and new application that require re-feed:
 Re-feed document type 'test' in cluster 'mycluster' because:
-    1) Document type 'test': Field 'f1' changed: add index aspect, indexing script: '{ input f1 | summary f1; }' -&gt; '{ input f1 | tokenize normalize stem:"SHORTEST" | index f1 | summary f1; }'
+    1) Document type 'test': Field 'f1' changed: data type: 'string' -&gt; 'int'
 </pre>
 </p>
