@@ -17,6 +17,7 @@ application for personalized news recommendations. The parts are:
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
+10. [Models hot swap](news-10-models-hot-swap.html) - atomic model updates
 
 In this part, we'll start transforming our application from news search to
 recommendation. We won't be using Vespa at all in this part. Our
@@ -395,7 +396,7 @@ free to experiment and see if you can achieve better results!
 <p class="alert alert-success"> 
 Note that these numbers are for the demo dataset, which is much
 smaller than the full dataset. For reference, in 
-[the MIND paper](https://msnews.github.io/assets/doc/ACL2020_MIND.pdf) 
+<a href=https://msnews.github.io/assets/doc/ACL2020_MIND.pdf>the MIND paper</a> 
 the baseline here achieves `0.6776` on the full dataset.
 </p>
 

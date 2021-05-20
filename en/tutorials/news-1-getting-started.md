@@ -21,6 +21,7 @@ The parts are:
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 8. Advanced news recommendation - intermission - training a ranking model
 9. Advanced news recommendation - ML models
+10. [Models hot swap](news-10-models-hot-swap.html) - atomic model updates
 
 There are different entry points to this tutorial. This one is for getting
 started using Docker on your local machine. Getting started on 
