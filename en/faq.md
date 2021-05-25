@@ -63,6 +63,21 @@ Vespa is not transactional in the traditional sense, it doesn't have strict ACID
 Vespa is designed for high performance use-cases with eventual consistency
 as an acceptable (and to some extent configurable) trade-off.
 
+#### Does vespa support wildcard fields? 
+Wildcard fields are not supported in vespa. Workaround would be to use maps to store the wildcard fields. Map needs 
+to be defined with indexing attribute and hence will be stored in memory. 
+Refer to [map](reference/schema-reference.html#type:map)
+
+#### What is the recommended redundant/searchable copy when using grouping distribution? 
+Grouping is used to reduce search latency. When using grouped distribution content is distributed to a configured set of groups, 
+such that the entire document collection is contained in each group. Setting the redundancy and searchable copies equal to the number 
+of groups ensures that data can be queried from all of the group.
+
+### Is there any size limitation in multivalued fields? 
+No limit, except memory
+
+#### Can we set a limit for the number of elements that can be stored in an array?
+Implement a [document processor](document-processing.html) for this.
 
 {:.faq-section}
 ### Query
@@ -89,6 +104,7 @@ See the <a href="https://github.com/vespa-engine/sample-apps/pull/335/files">sam
 for how to use <a href="reference/query-language-reference.html#annotations">filter terms</a>.
 
 <!-- Feed but cannot see - doc selection/expiry -->
+
 
 {:.faq-section}
 ### Text Search
@@ -117,6 +133,13 @@ creating the annotations that are consumed by the indexing operation.
 Since all that is Searchers and Docprocs which you can replace and/or add custom components before and after,
 you can also take full control over these things without modifying the platform itself.
 
+#### Does vespa provide any support for named entity extraction?
+It provides the building blocks but not an out of the box solution.
+We can write a [Searcher](searcher-development.html) to detect query-side entities and rewrite the query, 
+and a [DocProc](document-processing.html) if we want to handle them in some special way on the indexing side.
+
+#### Does vespa provide support for text extraction?
+You can write a document processor for text extraction but Vespa doesn’t provide it out of the box.
 
 {:.faq-section}
 ### Programming Vespa
@@ -170,6 +193,10 @@ is implemented in C++ and not memory constrained other than what the operating s
 <!--p id="performance-4"><strong>How to optimise feeding from a Grid?
 </p-->
 
+#### Get request for a document when document is not in sync in all the replica nodes? 
+If the replicas are in sync the request is only sent to the primary content node. Otherwise it's sent to several nodes, depending on replica metadata. 
+Example: if a bucket has 3 replicas A, B, C and A & B both have metadata state X and C has metadata state Y, a request will be sent to A and C (but not B since it has the same state as A and would therefore not return a potentially different document)
+
 {:.faq-section}
 ### Administration
 
@@ -207,3 +234,22 @@ which is in conflict with elasticity and auto-recovery
 (where nodes can come and go without service impact).
 It is also at odds with realtime writes.
 For these reasons, it is not recommended, and not supported.
+
+#### Does vespa give us any tool to browse the index and attribute data?
+No. Use [visiting](content/visiting.html) to dump all or a subset of documents.
+See [dumping-data](https://cloud.vespa.ai/en/dumping-data) for a sample script.
+
+#### What is the response when data is written only on some of the nodes and not on all of the replica nodes (Based on the redundancy count of the content cluster)? 
+Failure response will be given in case the document is not written on some of the replica nodes. 
+
+#### When the doc is not written to some of the nodes will the document become available due to replica reconciliation? 
+Primary behavior is that the write will be rolled back on the succeeding replicas, but there are edge case scenarios where you get 
+a failure response when the write ends up being persisted. This might happen when the document gets written to the content node 
+storing the active copy of the bucket.
+
+#### Does vespa provide soft delete functionality?
+Yes just add a "deleted" attribute, add [fast-search](attributes.html#fast-search) on it
+and create a searcher which adds an “andnot deleted” item to queries.
+
+#### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down? 
+You can set a [transition-time](reference/services-content.html#transition-time) in services.xml to tell the cluster controller how long a node is to be kept in maintenance mode before being automatically marked down.
