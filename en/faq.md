@@ -77,7 +77,7 @@ of groups ensures that data can be queried from all of the group.
 No limit, except memory
 
 #### Can we set a limit for the number of elements that can be stored in an array?
-We need to implement a document processor for this
+Implement a [document processor](document-processing.html) for this.
 
 {:.faq-section}
 ### Query
