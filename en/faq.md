@@ -134,7 +134,8 @@ Since all that is Searchers and Docprocs which you can replace and/or add custom
 you can also take full control over these things without modifying the platform itself.
 
 #### Does vespa provide any support for named entity extraction?
-It provides the building blocks but not an out of the box solution. We can write a Searcher to detect query-side entities and rewrite the query, 
+It provides the building blocks but not an out of the box solution.
+We can write a [Searcher](searcher-development.html) to detect query-side entities and rewrite the query, 
 and a DocProc if we want to handle them in some special way on the indexing side.
 
 #### Does vespa provide support for text extraction?
