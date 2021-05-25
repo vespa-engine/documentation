@@ -139,7 +139,7 @@ We can write a [Searcher](searcher-development.html) to detect query-side entiti
 and a [DocProc](document-processing.html) if we want to handle them in some special way on the indexing side.
 
 #### Does vespa provide support for text extraction?
-You can write a document procrssor for text extraction but Vespa doesn’t provide it out of th box.
+You can write a document processor for text extraction but Vespa doesn’t provide it out of the box.
 
 {:.faq-section}
 ### Programming Vespa
