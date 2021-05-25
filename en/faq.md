@@ -251,5 +251,4 @@ storing the active copy of the bucket.
 Yes just add a “deleted” attribute, add fast-sarch on it and create a searcher which adds an “andnot deleted” itm to queries.
 
 #### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down? 
-You can set a tuning value in services.xml to tell the cluster controller how long a node is to be kept in maintenance mode before being automatically marked down; 
-https://docs.vespa.ai/en/reference/services-content.html#transition-time
+You can set a [transition-time](reference/services-content.html#transition-time) in services.xml to tell the cluster controller how long a node is to be kept in maintenance mode before being automatically marked down.
