@@ -65,7 +65,8 @@ as an acceptable (and to some extent configurable) trade-off.
 
 #### Does vespa support wildcard fields? 
 Wildcard fields are not supported in vespa. Workaround would be to use maps to store the wildcard fields. Map needs 
-to be defined with indexing attribute and hence will be stored inthe memory. 
+to be defined with indexing attribute and hence will be stored in memory. 
+Refer to [map](reference/schema-reference.html#type:map)
 
 #### What is the recommended redundant/searchable copy when using grouping distribution? 
 Grouping is used to reduce search latency. When using grouped distribution content is distributed to a configured set of groups, 
