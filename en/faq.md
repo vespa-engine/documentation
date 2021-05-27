@@ -11,6 +11,8 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
 
 ---
 
+
+
 {:.faq-section}
 ### Ranking
 
@@ -36,6 +38,12 @@ album-recommendation-docproc</a>.
 #### How to create a tensor on the fly in the ranking expression?
 Create a tensor in the ranking function from arrays or weighted sets using <code>tensorFrom...</code> functions - see
 <a href="reference/rank-features.html#document-features">document features</a>.
+
+#### How to set a dynamic (query time) ranking drop threshold?
+Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
+see [retrieval and ranking](getting-started-ranking.html#retrieval-and-ranking).
+
+
 
 {:.faq-section}
 ### Documents
@@ -79,6 +87,8 @@ No limit, except memory
 #### Can we set a limit for the number of elements that can be stored in an array?
 Implement a [document processor](document-processing.html) for this.
 
+
+
 {:.faq-section}
 ### Query
 
@@ -104,6 +114,7 @@ See the <a href="https://github.com/vespa-engine/sample-apps/pull/335/files">sam
 for how to use <a href="reference/query-language-reference.html#annotations">filter terms</a>.
 
 <!-- Feed but cannot see - doc selection/expiry -->
+
 
 
 {:.faq-section}
@@ -141,6 +152,8 @@ and a [DocProc](document-processing.html) if we want to handle them in some spec
 #### Does vespa provide support for text extraction?
 You can write a document processor for text extraction but Vespa doesn’t provide it out of the box.
 
+
+
 {:.faq-section}
 ### Programming Vespa
 
@@ -167,6 +180,7 @@ and <a href="document-processing.html">Document Processors</a>.
   <li>Only new components are alive</li>
 </ol-->
 <!-- ToDo: move this to the doc itself and link from here - and add something useful ... -->
+
 
 
 {:.faq-section}
@@ -196,6 +210,8 @@ is implemented in C++ and not memory constrained other than what the operating s
 #### Get request for a document when document is not in sync in all the replica nodes? 
 If the replicas are in sync the request is only sent to the primary content node. Otherwise it's sent to several nodes, depending on replica metadata. 
 Example: if a bucket has 3 replicas A, B, C and A & B both have metadata state X and C has metadata state Y, a request will be sent to A and C (but not B since it has the same state as A and would therefore not return a potentially different document)
+
+
 
 {:.faq-section}
 ### Administration
