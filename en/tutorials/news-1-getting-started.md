@@ -41,7 +41,7 @@ In the next part of the tutorial, we'll start developing our application.
 - python 3
 - Operating system: macOS or Linux
 - Architecture: x86_64
-- Minimum **6GB** memory dedicated to Docker (the default is 2GB on Macs)
+- Minimum **10GB** memory dedicated to Docker (the default is 2GB on Macs)
 
 In upcoming parts of this series, we will have some additional python
 dependencies as we use PyTorch to train vector representations for news and
@@ -49,21 +49,20 @@ users and train machine learning models for use in ranking.
 
 ## A minimal Vespa application
 
-This tutorial has a [companion sample
-application](https://github.com/vespa-engine/sample-apps.git) found 
-under the `news` directory. Throughout the tutorial we will be
+This tutorial has a [companion sample application](https://github.com/vespa-engine/sample-apps.git)
+found under the `news` directory. Throughout the tutorial we will be
 using support code from this application. Also, the final state of 
 each tutorial can be found in the various `app-...` sub-directories.
 
 Let's start by cloning the sample application:
 
 <pre data-test="exec">
-$ git clone https://github.com/vespa-engine/sample-apps.git
+$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps/news
 </pre>
 
-The `getting-started` directory contains a minimal Vespa application. There
-are three files there:
+The `app-1-getting-started` directory contains a minimal Vespa application.
+There are three files there:
 
 - `services.xml` -  defines the services the application consists of
 - `hosts.xml` - defines which hosts or nodes the application will run on
@@ -79,7 +78,8 @@ application anyway by starting a Docker container to run it:
 <pre data-test="exec">
 $ docker pull vespaengine/vespa
 $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-    --volume `pwd`:/app --publish 8080:8080 vespaengine/vespa
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
 </pre>
 
 First, we pull the latest Vespa image from the Docker repository, then we
@@ -91,29 +91,26 @@ that the configuration service is running. This is signified by a `200 OK`
 response when querying the configuration service, running on port 19071:
 
 <pre data-test="exec" data-test-wait-for="200 OK">
-$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
+$ curl -s --head http://localhost:19071/ApplicationStatus
 </pre>
 
-The `docker exec vespa bash -c '...'` runs the command inside the Docker
-container, so we don't have to expose the configuration server out from the
-container. With the config server up and running, we can deploy our application:
+With the config server up and running, deploy the application:
 
 <pre data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-1-getting-started && \
-    /opt/vespa/bin/vespa-deploy activate'
+$ tar -C app-1-getting-started -cf - . | gzip | \
+  curl --header Content-Type:application/x-gzip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 
-This runs the `vespa-deploy` command inside the Docker container, as before.
-The `vespa-deploy prepare` command uploads the application and verifies the
-content. If anything is wrong with the application, this step will fail with
-a failure description. If everything is OK, the application can be activated by
-`vespa-deploy activate`, which switches the application to a live status.
+The command uploads the application and verifies the content.
+If anything is wrong with the application, this step will fail with a failure description,
+otherwise this switches the application to a live status.
 
-Whenever you have a new version of your application, you perform the same
-steps: `vespa-deploy prepare` and `vespa-deploy activate`. In most cases,
-there is no need to restart the application. Vespa takes care of
-reconfiguring the system. If a restart is required in some rare case,
-however, the `vespa-deploy prepare` will notify you.
+Whenever you have a new version of your application, 
+run the same command to deploy the application.
+In most cases, there is no need to restart the application.
+Vespa takes care of reconfiguring the system.
+If a restart is required in some rare case, however, the output will notify you.
 
 In the upcoming parts of the tutorials, we'll frequently deploy the 
 application in this manner. 
@@ -145,19 +142,19 @@ we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
 document. We'll use the `vespa-http-client` Java feeder for this:
 
+<pre>
+$ curl -L -o vespa-http-client-jar-with-dependencies.jar \
+  https://search.maven.org/classic/remotecontent?filepath=com/yahoo/vespa/vespa-http-client/7.391.28/vespa-http-client-7.391.28-jar-with-dependencies.jar
+</pre>
+
 <pre data-test="exec" >
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --verbose --file /app/doc.json --host localhost --port 8080'
+$ java -jar vespa-http-client-jar-with-dependencies.jar \
+  --verbose --file doc.json --endpoint http://localhost:8080
 </pre>
 
 This runs the `vespa-http-client` Java client with the file `doc.json` file.
 This contains a single document which we'll query for below.
 
-In later tutorials, when more data should be fed to the system,
-use this command while pointing to the correct feed file.
-`vespa-http-client` can also be obtained using:
-
-    $ curl -O https://repo.maven.apache.org/maven2/com/yahoo/vespa/vespa-http-client/7.369.27/vespa-http-client-7.369.27-jar-with-dependencies.jar
 
 ## Testing Vespa
 
@@ -209,6 +206,7 @@ $ docker rm -f vespa
 
 This will delete the Vespa application, including all data, so 
 don't do this unless you are sure.
+
 
 ## Conclusion
 

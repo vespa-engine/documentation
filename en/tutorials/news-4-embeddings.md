@@ -47,7 +47,7 @@ library. Make sure you have all the necessary dependencies by running the
 following in the sample application directory:
 
 ```
-$ pip3 install -r requirements.txt
+$ python3 -m pip install -r requirements.txt
 ```
 
 ## The MIND dataset

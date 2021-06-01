@@ -276,11 +276,20 @@ search.
 
 ## Deploy the Application Package
 
-With the three necessary files above, we are ready to deploy the 
-application package. For information on how this is done, please 
-refer to the tutorial's first part, depending upon the 
-platform you are deploying to.
+With the three necessary files above, we are ready to deploy the application package.
+Make sure it looks like this (use `ls` if `tree` is not installed):
+<pre>
+$ tree my-app/
+my-app/
+├── hosts.xml
+├── schemas
+│   └── news.sd
+└── services.xml
 
+$ tar -C my-app -cf - . | gzip | \
+  curl --header Content-Type:application/x-gzip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
 Continue after the application is successfully deployed.
 
 <pre style="display:none" data-test="exec">
@@ -312,7 +321,12 @@ The argument is where to find the downloaded data above, which was in the
 `mind` directory. This script creates a new file in that directory called
 `vespa.json`. This contains all 28603 news articles in the data set. This
 file can now be fed to Vespa. Use the method described in the previous part,
-using the `vespa-http-client`.
+using the `vespa-http-client`:
+
+<pre>
+$ java -jar vespa-http-client-jar-with-dependencies.jar \
+  --verbose --file mind/vespa.json --endpoint http://localhost:8080
+</pre>
 
 <pre style="display:none" data-test="exec" >
 $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
