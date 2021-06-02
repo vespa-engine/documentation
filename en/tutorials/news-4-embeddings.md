@@ -348,6 +348,7 @@ the sample app. Running this results in:
 
 ```
 $ python3 src/python/train_cold_start.py mind 10
+
 Total loss after epoch 1: 920.5855102539062 (0.703811526298523 avg)
 {'auc': 0.5391, 'mrr': 0.2367, 'ndcg@5': 0.2464, 'ndcg@10': 0.3059}
 {'auc': 0.5131, 'mrr': 0.2239, 'ndcg@5': 0.2296, 'ndcg@10': 0.2933}
@@ -395,12 +396,13 @@ free to experiment and see if you can achieve better results!
 <p class="alert alert-success"> 
 Note that these numbers are for the demo dataset, which is much
 smaller than the full dataset. For reference, in 
-<a href=https://msnews.github.io/assets/doc/ACL2020_MIND.pdf>the MIND paper</a> 
-the baseline here achieves `0.6776` on the full dataset.
+<a href="https://msnews.github.io/assets/doc/ACL2020_MIND.pdf">the MIND paper</a>
+the baseline here achieves <code>0.6776</code> on the full dataset.
 </p>
 
 The training script writes these embeddings to the files
 `mind/user_embeddings.tsv` and `mind/news_embeddings.tsv`.
+
 
 ## Mapping from inner-product search to euclidean search
 
@@ -413,8 +415,7 @@ later when discussing approximate nearest neighbors.
 
 To facilitate efficient retrieval, we need to map the MIPS problem to a
 Euclidean nearest neighbor search problem. We use the technique discussed in
-[Speeding Up the Xbox Recommender System Using a Euclidean Transformation for
-Inner-Product
+[Speeding Up the Xbox Recommender System Using a Euclidean Transformation for Inner-Product
 Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf). 
 
 See [Nearest Neighbor
@@ -425,10 +426,12 @@ We've included a script to map the embeddings to euclidean space and create
 a feed suitable for Vespa:
 
 <pre data-test="exec">
-$ python3 src/python/convert_embeddings_to_python_format.py mind
+$ python3 src/python/convert_embeddings_to_vespa_format.py mind
 </pre>
 
 We are now ready to feed these vectors to Vespa.
+
+
 
 ## Conclusion
 
