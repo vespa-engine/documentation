@@ -97,8 +97,8 @@ $ curl -s --head http://localhost:19071/ApplicationStatus
 With the config server up and running, deploy the application:
 
 <pre data-test="exec">
-$ tar -C app-1-getting-started -cf - . | gzip | \
-  curl --header Content-Type:application/x-gzip --data-binary @- \
+$ (cd app-1-getting-started && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 
