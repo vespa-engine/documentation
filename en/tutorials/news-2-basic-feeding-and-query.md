@@ -286,8 +286,8 @@ my-app/
 │   └── news.sd
 └── services.xml
 
-$ tar -C my-app -cf - . | gzip | \
-  curl --header Content-Type:application/x-gzip --data-binary @- \
+$ (cd my-app && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 Continue after the application is successfully deployed.
