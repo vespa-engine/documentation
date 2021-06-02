@@ -245,7 +245,7 @@ To add this searcher to Vespa, we need to modify `services.xml`:
   <container id='default' version='1.0'>
     <search>
       <chain id='user' inherits='vespa'>
-        <searcher bundle='news-recommendation' id='ai.vespa.example.UserProfileSearcher' />
+        <searcher bundle='news-recommendation-searcher' id='ai.vespa.example.UserProfileSearcher' />
       </chain>
     </search>
     ...
