@@ -432,6 +432,7 @@ $ python3 src/python/convert_embeddings_to_vespa_format.py mind
 We are now ready to feed these vectors to Vespa.
 
 
+
 ## Conclusion
 
 Now that we've generated user and document embeddings, we can start using 
