@@ -316,7 +316,7 @@ Now we can search for a user's recommended news articles directly from
 the `user_id`:
 
 <pre data-test="exec" data-test-assert-contains='"documents": 28603'>
-$ curl -s http://localhost:8080/search/?user_id=U33527&searchchain=user | python -m json.tool
+$ curl -s 'http://localhost:8080/search/?user_id=U33527&searchchain=user' | python -m json.tool
 </pre>
 
 This should now return the top 10 recommended news articles for this user. Indeed,
