@@ -80,7 +80,11 @@ No limit, except memory.
 #### Can we set a limit for the number of elements that can be stored in an array?
 Implement a [document processor](document-processing.html) for this.
 
-
+#### How to auto-expire documents / set up garbage collection?
+Set a selection criterium on the `document` element in `services.xml`.
+The criterium selects documents <span style="text-decoration: underline">to keep</span>.
+I.e. to purge documents "older than two weeks", the expression should be "newer than two weeks".
+Read more about [document expiry](documents.html#document-expiry).
 
 {:.faq-section}
 ### Query
@@ -104,6 +108,13 @@ Using [dot products](multivalue-query-operators.html) or [weak and](using-wand-w
 Vespa does not have a stop-word concept inherently.
 See the [sample app](https://github.com/vespa-engine/sample-apps/pull/335/files)
 for how to use [filter terms](reference/query-language-reference.html#annotations).
+
+#### How to extract more than 400 hits?
+Trying to request more than 400 hits in a query, getting this error:
+{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}.
+To increase max result set size,
+configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
+e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
 
 <!-- Feed but cannot see - doc selection/expiry -->
 
@@ -265,3 +276,6 @@ When using grouped distribution content is distributed to a configured set of gr
 such that the entire document collection is contained in each group.
 Setting the redundancy and searchable-copies equal to the number of groups
 ensures that data can be queried from all of the group.
+
+#### How to set up for disaster recovery / backup?
+Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
