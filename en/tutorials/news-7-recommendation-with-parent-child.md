@@ -288,13 +288,13 @@ $ ./src/python/create_category_ctrs.py mind
 
 This produces two files in the `mind` directory:
 
-1. `mind/global_category_ctrs.json` - a feed file for the global CTR document containing CTR 
+1. `mind/global_category_ctr.json` - a feed file for the global CTR document containing CTR 
    score for each category.
 2. `mind/news_category_ctr_update.json` - a feed file for partially updating the `news` 
    articles with the reference to the global CTR document as well as the category tensor. 
 
 These files can now be fed to Vespa, but note that the
-`mind/global_category_ctrs.json` need to be fed first because the global
+`mind/global_category_ctr.json` need to be fed first because the global
 document needs to exist before the child documents can reference it.
 
 <pre style="display:none" data-test="exec" >
