@@ -218,8 +218,8 @@ $ curl -s --head http://localhost:19071/ApplicationStatus
 Now, to deploy the Vespa application:
 
 <pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ tar -C application -cf - . | gzip | \
-  curl --header Content-Type:application/x-gzip --data-binary @- \
+$ (cd application && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 
