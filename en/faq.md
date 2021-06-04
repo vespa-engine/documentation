@@ -257,9 +257,7 @@ See [dumping-data](https://cloud.vespa.ai/en/dumping-data) for a sample script.
 Failure response will be given in case the document is not written on some of the replica nodes. 
 
 #### When the doc is not written to some of the nodes, will the document become available due to replica reconciliation?
-Primary behavior is that the write will be rolled back on the succeeding replicas,
-but there are edge case scenarios where you get a failure response when the write ends up being persisted.
-This might happen when the document gets written to the content node storing the active copy of the bucket.
+Yes, it will be available, eventually.
 
 #### Does vespa provide soft delete functionality?
 Yes just add a "deleted" attribute, add [fast-search](attributes.html#fast-search) on it
