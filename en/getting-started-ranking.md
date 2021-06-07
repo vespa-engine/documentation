@@ -306,9 +306,10 @@ Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earli
     }
 ```
 
-In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than 10.0,
+In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than or equal to 10.0,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
 Normally, the `rank-score-drop-limit` is not used, as the `keep-rank-count` is most important.
+Read more in the [reference](reference/schema-reference.html#rank-score-drop-limit).
 
 For a dynamic limit, pass a ranking feature like `query(threshold)`
 and use an `if` statement to check if the score is above the threshold or not -
