@@ -1,16 +1,13 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Config sentinel"
 ---
 
 <p>
 The config sentinel starts and stops services -
-and restart failed services unless are manually stopped
+and restart failed services unless are manually stopped.
+All nodes in a Vespa system has at least these running processes:
 </p>
-
-<h2 id="services-start">Services start</h2>
-<p>
-All nodes in a Vespa system has at least these running services:
 <table class="table">
   <thead></thead><tbody>
     <tr>
@@ -37,10 +34,10 @@ All nodes in a Vespa system has at least these running services:
     </tr>
   </tbody>
 </table>
-</p><p>
-<img src="img/reference/flow/deploy.png" />
-</p><p>
-Sequence:
+<p><img src="img/reference/flow/deploy.png" /></p>
+<p>
+  Start sequence:
+</p>
 <ol>
   <li>
     <em>config-proxy</em> is started.
@@ -79,9 +76,10 @@ Sequence:
     </ol>
   </li>
 </ol>
-When the <em>config-server</em> receives updated configuration for a running system,
-it propagates the changed configuration to nodes subscribing to it.
-In turn, these nodes reconfigure themselves accordingly.
+<p>
+  When new config is deployed to <em>config-servers</em>
+  they propagate the changed configuration to nodes subscribing to it.
+  In turn, these nodes reconfigure themselves accordingly.
 </p>
 
 
@@ -108,4 +106,39 @@ To learn more about the processes and services,
 see <a href="reference/files-processes-and-ports.html">files and processes</a>.
 Use <a href="reference/vespa-cmdline-tools.html#vespa-model-inspect">
     vespa-model-inspect host <em>hostname</em></a> to list services running on a node.
+</p>
+
+
+
+<h2 id="cluster-startup">Cluster startup</h2>
+<p>
+  One can configure Vespa to do a <em>Safe Cluster Startup</em>,
+  setting a minimum node available ratio.
+  Use this to control the Vespa cluster start sequence.
+  The config sentinel will not start services on a node unless it has connectivity to a minimum other nodes.
+</p>
+<p>
+  The safe mode is disabled by default,
+  enable it by setting configuration on top level in <em>services.xml</em> (since Vespa-7.415):
+</p>
+<pre>
+&lt;services&gt;
+    &lt;config name="cloud.config.sentinel"&gt;
+        &lt;connectivity&gt;
+            &lt;maxBadOutPercent&gt;60&lt;/maxBadOutPercent&gt;
+            &lt;maxBadReverseCount&gt;1&lt;/maxBadReverseCount&gt;
+        &lt;/connectivity&gt;
+    &lt;/config&gt;
+</pre>
+<p>
+  Example: <code>maxBadOutPercent 60</code> means that services will be started only if
+  less than or equal to 60% of nodes are out.
+  If there are 5 nodes (container + content nodes) in the application,
+  the first node started will not start its services -
+  when the second node is started, services will be started on both.
+</p>
+<p>
+  <code>maxBadReverseCount</code> is a check for connectivity
+  <span style="text-decoration: underline;">into</span> this node.
+  Normally, one-way connectivity means network configuration is broken and needs looking into.
 </p>
