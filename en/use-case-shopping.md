@@ -11,7 +11,7 @@ the instructions in the
 in the sample app.
 
 To browse the application, navigate to
-<a href="http://localhost:8080/site" data-proofer-ignore>localhost:8080/site</<a>.
+<a href="http://localhost:8080/site" data-proofer-ignore>localhost:8080/site</a>.
 This site is  implemented through a custom [request handler](jdisc/developing-request-handlers.html)
 and is meant to be a simple example of creating a front end / middleware that
 sits in front of the Vespa back end. As such it is fairly independent of Vespa
