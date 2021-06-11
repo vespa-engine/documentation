@@ -86,6 +86,8 @@ The criterium selects documents <span style="text-decoration: underline">to keep
 I.e. to purge documents "older than two weeks", the expression should be "newer than two weeks".
 Read more about [document expiry](documents.html#document-expiry).
 
+
+
 {:.faq-section}
 ### Query
 
@@ -116,7 +118,19 @@ To increase max result set size,
 configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
 e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
 
-<!-- Feed but cannot see - doc selection/expiry -->
+
+
+{:.faq-section}
+### Feeding
+
+#### How to debug document processing chain configuration?
+This configuration is a combination of content and container cluster configuration,
+see [indexing](indexing.html) and [feed troubleshooting](reads-and-writes.html#troubleshooting).
+
+#### I feed documents with no error, but they are not in the index
+This is often a problem if using [document expiry](documents.html#document-expiry),
+as documents already expired will not be persisted, they are silently dropped.
+Feeding stale test data with old timestamps can cause this.
 
 
 
