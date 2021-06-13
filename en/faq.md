@@ -118,6 +118,39 @@ To increase max result set size,
 configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
 e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
 
+#### How to make a sub-query to get data to enrich the query, like get a user profile?
+See the [UserProfileSearcher](https://github.com/vespa-engine/sample-apps/blob/master/news/app-6-recommendation-with-searchers/src/main/java/ai/vespa/example/UserProfileSearcher.java)
+for how to create a new query to fetch data -
+this creates a new Query, sets a new root and parameters - then `fill`s the Hits.
+
+#### How to create a cache that refreshes itself regularly
+<!-- ToDo: Maybe a bit long for the FAQ and such a component could be added to a sample app instead later -->
+See the sub-query question above, in addition add something like:
+````
+public class ConfigCacheRefresher extends AbstractComponent {
+...
+    private final ScheduledExecutorService configFetchService = Executors.newSingleThreadScheduledExecutor();
+    private Chain<Searcher> searcherChain;
+...
+    void initialize() {
+        Runnable task = () -> refreshCache();
+        configFetchService.scheduleWithFixedDelay(task, 1, 1, TimeUnit.MINUTES);
+        searcherChain = executionFactory.searchChainRegistry().getChain(new ComponentId("configDefaultProvider"));
+    }
+...
+    public void refreshCache() {
+        Execution execution = executionFactory.newExecution(searcherChain);
+        Query query = createQuery(execution);
+...
+    public void deconstruct() {
+        super.deconstruct();
+        try {
+            configFetchService.shutdown();
+            configFetchService.awaitTermination(1, TimeUnit.MINUTES);
+...
+    }
+````
+
 
 
 {:.faq-section}
