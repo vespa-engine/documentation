@@ -16,6 +16,7 @@ module Jekyll
                 if page.data["index"] == true && page.url.start_with?("/documentation") == false
                     text = extract_text(page)
                     operations.push({
+                        :put => "id:"+namespace+":doc::"+namespace+page.url,
                         :fields => {
                             :path => page.url,
                             :namespace => namespace,
