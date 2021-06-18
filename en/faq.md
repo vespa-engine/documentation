@@ -41,6 +41,14 @@ see [document features](reference/rank-features.html#document-features).
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
 see [retrieval and ranking](getting-started-ranking.html#retrieval-and-ranking).
 
+#### Does Vespa support early termination of matching and ranking?
+Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the ranking profile,  or by adding a range query item using *hitLimit* to the query tree, 
+see [capped numeric range search](reference/query-language-reference.html#numeric).  
+Both methods require an *attribute* field with *fast-search*. The capped range query is faster but beware that if there are other restrictive filters in the query one might end up with 0 hits. 
+The additional filters are applied as a post filtering step 
+step over hits returned from the capped range query. *match-phase* on the other hand is safe to use with filters, and also supports diversification which the capped range query term 
+does not support. 
+
 
 
 {:.faq-section}
