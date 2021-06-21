@@ -126,11 +126,11 @@ The documents have a `term_count` field - so let's add a `ranking.features.query
 ```
 rank-profile term_count_similarity {
     first-phase {
-            expression {
-                1 -
-                fabs(    attribute(term_count) - query(q_term_count) ) /
-                    (1 + attribute(term_count) + query(q_term_count) )
-            }
+        expression {
+            1 -
+            fabs(    attribute(term_count) - query(q_term_count) ) /
+                (1 + attribute(term_count) + query(q_term_count) )
+        }
     }
     summary-features {
         attribute(term_count)
