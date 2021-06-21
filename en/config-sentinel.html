@@ -1,16 +1,13 @@
 ---
-# Copyright 2017 Yahoo Holdings. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Config sentinel"
 ---
 
 <p>
 The config sentinel starts and stops services -
-and restart failed services unless are manually stopped
+and restart failed services unless they are manually stopped.
+All nodes in a Vespa system has at least these running processes:
 </p>
-
-<h2 id="services-start">Services start</h2>
-<p>
-All nodes in a Vespa system has at least these running services:
 <table class="table">
   <thead></thead><tbody>
     <tr>
@@ -37,10 +34,10 @@ All nodes in a Vespa system has at least these running services:
     </tr>
   </tbody>
 </table>
-</p><p>
-<img src="img/reference/flow/deploy.png" />
-</p><p>
-Sequence:
+<p><img src="img/reference/flow/deploy.png" /></p>
+<p>
+  Start sequence:
+</p>
 <ol>
   <li>
     <em>config-proxy</em> is started.
@@ -79,9 +76,10 @@ Sequence:
     </ol>
   </li>
 </ol>
-When the <em>config-server</em> receives updated configuration for a running system,
-it propagates the changed configuration to nodes subscribing to it.
-In turn, these nodes reconfigure themselves accordingly.
+<p>
+  When new config is deployed to <em>config-servers</em>
+  they propagate the changed configuration to nodes subscribing to it.
+  In turn, these nodes reconfigure themselves accordingly.
 </p>
 
 
@@ -109,3 +107,106 @@ see <a href="reference/files-processes-and-ports.html">files and processes</a>.
 Use <a href="reference/vespa-cmdline-tools.html#vespa-model-inspect">
     vespa-model-inspect host <em>hostname</em></a> to list services running on a node.
 </p>
+
+
+
+<h2 id="cluster-startup">Cluster startup</h2>
+<p>
+  One can configure Vespa to do a <em>Safe Cluster Startup</em>,
+  setting a minimum node available ratio.
+  Use this to control the Vespa cluster start sequence.
+  The config sentinel will not start services on a node unless it has connectivity to a minimum other nodes.
+</p>
+<p>
+  The safe mode is disabled by default,
+  enable it by setting configuration on top level in <em>services.xml</em> (since Vespa-7.415):
+</p>
+<pre>
+&lt;services&gt;
+    &lt;config name="cloud.config.sentinel"&gt;
+        &lt;connectivity&gt;
+            &lt;minOkPercent&gt;40&lt;/minOkPercent&gt;
+            &lt;maxBadCount&gt;1&lt;/maxBadCount&gt;
+        &lt;/connectivity&gt;
+    &lt;/config&gt;
+</pre>
+<p>
+  Example: <code>minOkPercent 40</code> means that services will be started only if
+  more than or equal to 40% of nodes are up.
+  If there are 5 nodes (container + content nodes) in the application,
+  the first node started will not start its services -
+  when the second node is started, services will be started on both.
+</p>
+<p>
+  <code>maxBadCount</code> is for connectivity checks where the other node is
+  is up, but we still do not have proper two-way connectivity.
+  Normally, one-way connectivity means network configuration is broken and needs looking into,
+  so this may be set very low (1 or even 0 are the recommended values).  If there are some
+  temporary problems (in the example below non-responding DNS which leads to various
+  issues at startup) the config sentinel will loop and retry, so the service startup will just
+  be slightly delayed.
+</p>
+<p>
+  Example log:
+</p>
+<pre>
+[2021-06-15 14:33:25] EVENT   : starting/1 name="sbin/vespa-config-sentinel -c hosts/le40808.ostk (pid 867)"
+[2021-06-15 14:33:25] EVENT   : started/1 name="config-sentinel"
+[2021-06-15 14:33:25] CONFIG  : Sentinel got 4 service elements [tenant(footest), application(bartest), instance(default)] for config generation 1001
+[2021-06-15 14:33:25] CONFIG  : Booting sentinel 'hosts/le40808.ostk' with [stateserver port 19098] and [rpc port 19097]
+[2021-06-15 14:33:25] CONFIG  : listening on port 19097
+[2021-06-15 14:33:25] CONFIG  : Sentinel got model info [version 7.420.21] for 35 hosts [config generation 1001]
+[2021-06-15 14:33:25] CONFIG  : connectivity.maxBadCount = 3
+[2021-06-15 14:33:25] CONFIG  : connectivity.minOkPercent = 40
+[2021-06-15 14:33:28] INFO    : Connectivity check details: 2086533.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le01287.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23256.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23267.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23297.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23312.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23317.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23319.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30550.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30553.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30556.ostk -> unreachable from me, but up
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30560.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30567.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40387.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40389.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40808.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40817.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40833.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40834.ostk -> unreachable from me, but up
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40841.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40858.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40860.ostk -> unreachable from me, but up
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40863.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40873.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40892.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40900.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40905.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40914.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: sm02318.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: sm02324.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: sm02340.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt40672.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt40712.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt40728.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt41329.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] WARNING : 8 of 35 nodes up but with network connectivity problems (max is 3)
+[2021-06-15 14:33:28] WARNING : Bad network connectivity (try 1)
+[2021-06-15 14:33:30] WARNING : slow resolve time: 'le30556.ostk' -> '1234:5678:90:123::abcd' (5.00528 s)
+[2021-06-15 14:33:30] WARNING : slow resolve time: 'le40834.ostk' -> '1234:5678:90:456::efab' (5.00527 s)
+[2021-06-15 14:33:30] WARNING : slow resolve time: 'le40860.ostk' -> '1234:5678:90:789::cdef' (5.00459 s)
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le23312.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le23319.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le30553.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le30556.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40834.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40841.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40860.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40863.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Enough connectivity checks OK, proceeding with service startup
+[2021-06-15 14:33:31] EVENT   : starting/1 name="searchnode"
+...
+</pre>
