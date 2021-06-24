@@ -52,7 +52,7 @@ rank-profile drop-low-score {
      if(my_score() < query(threshold), -1, my_score())
    }
 }
-<pre>
+</pre>
 
 #### Does Vespa support early termination of matching and ranking?
 Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the ranking profile,  or by adding a range query item using *hitLimit* to the query tree, 
