@@ -326,6 +326,7 @@ Failure response will be given in case the document is not written on some of th
 
 #### When the doc is not written to some of the nodes, will the document become available due to replica reconciliation?
 Yes, it will be available, eventually.
+Also try [Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode).
 
 #### Does vespa provide soft delete functionality?
 Yes just add a "deleted" attribute, add [fast-search](attributes.html#fast-search) on it
