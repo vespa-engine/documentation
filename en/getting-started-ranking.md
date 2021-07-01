@@ -18,6 +18,9 @@ This schema has a set of (contrived) ranking functions, to help learn Vespa rank
 Let's start with something simple: _Irrespective of the query, score all documents by the number of in-links to it_.
 That is, for any query, return the documents with most in-links first in the result set:
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="attribute(inlinks).count">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks'
+</pre>
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&ranking=inlinks](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks)
 
 `where sddocname contains "doc"` which is a Vespa shorthand for _all documents of "doc" schema_.
@@ -57,6 +60,9 @@ Also new is:
 * use `pow`, a mathematical function in [ranking expressions](reference/ranking-expressions.html)
 * use of constants and functions to write better code
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="summaryfeatures">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks'
+</pre>
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&ranking=inlinks_age](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks_age)
 ```
 rank-profile inlinks_age {
@@ -114,6 +120,9 @@ From most perspectives, this is a poor similarity function, better functions are
 
 The documents have a `term_count` field - so let's add a `ranking.features.query` for term count as well:
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="query(q_term_count)">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000'
+</pre>
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000)
 
 <br/>
@@ -192,6 +201,9 @@ rank-profile inlink_similarity {
 }
 ```
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="tensor&lt;float&gt;(links{})">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D'
+</pre>
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)={% raw %}{{inlinks:/en/query-profiles.html}:1,{inlinks:/en/page-templates.html}:1,{inlinks:/en/overview.html}:1}{% endraw %}](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D)
 
 Inspect relevance and summary-features:
@@ -260,6 +272,9 @@ optimizing by reducing the candidate set will increase performance.
 Example query using text matching,
 dumping [calculated rank features](https://docs.vespa.ai/en/reference/query-api-reference.html#ranking.listFeatures):
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="attributeMatch(inlinks)">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22%3B&ranking.listFeatures'
+</pre>
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where title contains "document";&ranking.listFeatures](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22%3B&ranking.listFeatures)
 
 See the **long** list of rank features calculated per result.
@@ -285,6 +300,9 @@ In short, use increasingly more power per document as the candidate set shrinks:
 
 Let's try the same query again, with a two-phase rank-profile that also does an explicit rank score cutoff:
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="attribute(inlinks).count">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22%3B&ranking=inlinks_twophase'
+</pre>
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where title contains "document";&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22%3B&ranking=inlinks_twophase)
 
 ```
@@ -330,6 +348,12 @@ Read more in [first-phase](reference/schema-reference.html#firstphase-rank).
 This guide will not go deep in query operators in the retrieval phase,
 see [query-api](query-api.html) for details.
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20AND%20default%20contains%20%22documents%22%20AND%20default%20contains%20%22about%22%20AND%20default%20contains%20%22ranking%22%20AND%20default%20contains%20%22and%22%20AND%20default%20contains%20%22retrieval%22)%3B'
+</pre>
+<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20OR%20default%20contains%20%22documents%22%20OR%20default%20contains%20%22about%22%20OR%20default%20contains%20%22ranking%22%20OR%20default%20contains%20%22and%22%20OR%20default%20contains%20%22retrieval%22)%3B'
+</pre>
 Consider a query like _"vespa documents about ranking and retrieval"_.
 * A query ANDing these terms hits less than 3% of the document corpus,
   missing some of the documents about ranking and retrieval:
@@ -348,6 +372,9 @@ To find the least relevant candidates, a simple scoring function is used:
 As the point of [weakAnd](reference/query-language-reference.html#weakand) is to early discard the worst candidates,
 _totalCount_ is an approximation:
 
+<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22)%3B'
+</pre>
 [https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where [{"scoreThreshold": 0, "targetHits": 10}]weakAnd(default contains "vespa", default contains "documents", default contains "about", default contains "ranking", default contains "and", default contains "retrieval");](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22)%3B)
 
 Note that this blurs the distinction between filtering (retrieval) and ranking a little -
