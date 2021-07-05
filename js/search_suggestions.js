@@ -1,7 +1,9 @@
 const input = document.getElementById("searchinput");
 const inputParent = input.parentElement;
 const dropdown = document.createElement("div");
+dropdown.className = "dropdown";
 inputParent.appendChild(dropdown);
+input.setAttribute( "autocomplete", "off" ); 
 
 // https://www.freecodecamp.org/news/javascript-debounce-example/
 const debounce = (func, timeout = 300) => {
@@ -73,5 +75,7 @@ const handleInput = (e) => {
   }
 };
 
+
 input.addEventListener("input", debounce(handleInput));
 input.addEventListener("focusout", handleUnfocus);
+
