@@ -1,7 +1,7 @@
 const input = document.getElementById("searchinput");
 const inputParent = input.parentElement;
 const dropdown = document.createElement("div");
-dropdown.className = "dropdown";
+dropdown.className = "dropdown hide";
 inputParent.appendChild(dropdown);
 input.setAttribute("autocomplete", "off");
 
