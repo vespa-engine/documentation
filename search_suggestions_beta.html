@@ -1,0 +1,85 @@
+---
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: ""
+index: false
+---
+
+<!-- Number of hits -->
+<div id="hits"></div>
+
+<!-- result div -->
+<div id="result"></div>
+
+<!-- powered by -->
+<div style="margin-top:40px;">
+    <b><em>Powered by <img src="img/vespa-logo-small.png" /> Vespa</em></b>
+</div>
+
+<script type="module" src="/js/search_suggestions.js"></script>
+<script>
+(function() {
+    var params = {};
+    decodeURIComponent(window.location.search.substr(1)).split("&").forEach( function(item) { var key = item.split("=")[0]; var val = item.split("=")[1]; params[key] = val; });
+    var query = params["q"];
+    if (query) {
+        query = decodeURI(query).replace(/\+/g, " ");
+    }
+
+    if (query && query.length > 0) {
+        $("#searchinput").attr("value", query);
+        $("#result").text("Searching for '" + query + "' ...");
+
+        var url = "https://doc-search.vespa.oath.cloud/search/?jsoncallback=?"
+        $.getJSON(url, {
+            yql: "select * from doc where userInput(@input);",
+            input: query,
+            hits: 400,
+            ranking: "documentation",
+            locale: "en-US"
+        })
+        .done(function( data ) {
+            $("#result").html("");
+            var hits = data.root.children;
+            if (hits && hits.length > 0) {
+                $("<p>").text(hits.length + " hit(s)").appendTo("#hits");
+
+                var ul = $("<ul>").addClass("media-list").appendTo("#result");
+                var base_url = {
+                    "open"      : "http://docs.vespa.ai",
+                    "cloud"     : "https://cloud.vespa.ai",
+                    "blog"      : "https://blog.vespa.ai",
+                    "vespaai"   : "https://vespa.ai",
+                    "vespaapps" : "https://github.com/vespa-engine/sample-apps/tree/master"
+                }
+                var source_name = {
+                    "open"      : "Documentation",
+                    "cloud"     : "Cloud",
+                    "blog"      : "Blog",
+                    "vespaai"   : "Vespa.ai",
+                    "vespaapps" : "Vespa Sample Apps"
+                }
+
+                $.each( data.root.children, function( i, item ) {
+                    var modified_url = base_url[item.fields.namespace] + item.fields.path;
+                    var re_sep = /<sep \/>/g;
+                    var re_hi1 = /<hi>/g;
+                    var re_hi2 = /<\/hi>/g;
+                    var modified_content = item.fields.content.replace(re_sep, " ... ").replace(re_hi1, "<mark>").replace(re_hi2, "</mark>");
+                    var modified_title = item.fields.title == "null" ? "No title" : item.fields.title;
+                    var link = "<h4><a href=\"" + modified_url + "\">" + modified_title + "</a></h4>";
+                    var content = "<p>" + modified_content + "<br /><small class=\"text-success\">" +
+                            source_name[item.fields.namespace] + ": " + item.fields.path + "</small></p>";
+                    $("<li>").addClass("media").html(link+content).appendTo(ul);
+                });
+
+            } else {
+                $("<p>").text("No hits found!").appendTo("#result");
+            }
+        });
+    }
+
+})();
+</script>
+
+</body>
+</html>
