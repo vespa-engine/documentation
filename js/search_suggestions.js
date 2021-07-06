@@ -3,7 +3,7 @@ const inputParent = input.parentElement;
 const dropdown = document.createElement("div");
 dropdown.className = "dropdown";
 inputParent.appendChild(dropdown);
-input.setAttribute( "autocomplete", "off" ); 
+input.setAttribute("autocomplete", "off");
 
 // https://www.freecodecamp.org/news/javascript-debounce-example/
 const debounce = (func, timeout = 300) => {
@@ -30,21 +30,17 @@ const handleSuggestClick = (e) => {
 const handleUnfocus = (e) => hideDropdown();
 
 const handleResults = (data) => {
-	console.log(data);
-
   if (data.root.children[0].children) {
-    const items = data.root.children[0].children[0].children
-      .map(child => ({
-        value: (child.value)
-      }));
+    const items = data.root.children[0].children[0].children.map((child) => ({
+      value: child.value,
+    }));
 
-    items.map(item => {
+    items.map((item) => {
       const p = document.createElement("p");
       p.innerHTML = item.value;
       p.addEventListener("mousedown", handleSuggestClick);
-      dropdown.appendChild(p)
+      dropdown.appendChild(p);
     });
-    
   }
 };
 
@@ -61,21 +57,15 @@ const handleInput = (e) => {
       )}%22%29%20%7C%20all%28group%28input%29%20max%2810%29%20order%28-avg%28relevance%28%29%29%20*%20count%28%29%29%20each%28max%281%29%29%29%3B`,
       {
         mode: "cors",
-        referrerPolicy: "origin",
       }
     )
-      .then((res) => {
-        console.log(res);
-        return res.json();
-      })
-      .then((data) => handleResults(data))
-      .catch((e) => console.error(e));
+      .then((res) => res.json())
+      .then(handleResults)
+      .catch(console.error);
   } else {
     hideDropdown();
   }
 };
 
-
 input.addEventListener("input", debounce(handleInput));
 input.addEventListener("focusout", handleUnfocus);
-
