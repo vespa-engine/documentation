@@ -17,32 +17,42 @@ title: "Administrative Procedures"
 
 <h2 id="system-status">System status</h2>
 <ul>
+  <li>Use <a href="../reference/vespa-cmdline-tools.html#vespa-config-status">vespa-config-status</a>
+    on all nodes in <a href="../reference/hosts.html">hosts.xml</a> to verify all services run with updated config</li>
+  <li>Make sure <a href="../setting-vespa-variables.html">
+    <code>VESPA_CONFIGSERVERS</code></a> is set and identical on all nodes in hosts.xml</li>
+  <li>Use the <em>cluster controller</em> status page (below)
+    to track the status of search/storage nodes.</li>
   <li>Check <a href="../reference/logs.html">logs</a></li>
   <li>Use performance graphs, System Activity Report (<em>sar</em>)
     or <a href="#status-pages">status pages</a> to track load</li>
   <li>Use <a href="../reference/query-api-reference.html#tracelevel">query tracing</a></li>
-  <li>Use <a href="../reference/services.html#clients">feed tracing</a></li>
-    <!-- ToDo: this works? must document ... -->
-  <li>Use the <em>cluster controller</em> status page (below)
-    to track the status of search/storage nodes.</li>
+  <li>Use <a href="../reference/services.html#clients">feed tracing</a></li><!-- ToDo: this works? must document ... -->
+  <li>Disk and/or memory might be exhausted and block feeding - recover from
+    <a href="../reads-and-writes.html#feed-block">feed block</a></li>
 </ul>
+<!-- ToDo: https://github.com/vespa-engine/vespa/issues/18555
+ Tool to check a cluster's status like Vespa Cloud's deploy output -->
 
 
 
 <h2 id="process-pid-files">Process PID files</h2>
 <p>
-All Vespa processes have a PID file <em>$VESPA_HOME/var/run/{service name}.pid</em>,
-where <em>{service name}</em> is the Vespa service name, e.g. <em>container</em> or <em>distributor</em>.
-It is the same name which is used in the administration interface
-in the <a href="../config-sentinel.html">config sentinel</a>.
+  All Vespa processes have a PID file <em>$VESPA_HOME/var/run/{service name}.pid</em>,
+  where <em>{service name}</em> is the Vespa service name, e.g. <em>container</em> or <em>distributor</em>.
+  It is the same name which is used in the administration interface
+  in the <a href="../config-sentinel.html">config sentinel</a>.
+</p><p>
+  Learn how to <a href="../reference/files-processes-and-ports.html#vespa-start-stop">start / stop</a> nodes.
 </p>
 
 
 
 <h2 id="status-pages">Status pages</h2>
 <p>
-Vespa service instances have status pages for debugging and testing.
-Status pages are subject to change at any time -  take care when automating. Procedure
+  Vespa service instances have status pages for debugging and testing.
+  Status pages are subject to change at any time - take care when automating. Procedure:
+</p>
 <ol>
   <li>
     <strong>Find the port:</strong>
@@ -66,7 +76,8 @@ $ vespa-model-inspect service [Options] &lt;service-name&gt;
     Try connecting to the root at the port, or /state/v1/metrics.
     The <em>distributor</em> and <em>storagenode</em> status pages are available at <code>/</code>:
 <pre>
-  $ vespa-model-inspect service searchnode
+$ vespa-model-inspect service searchnode
+
   searchnode @ myhost.mydomain.com : search
   search/search/cluster.search/0
   tcp/myhost.mydomain.com:19110 (STATUS ADMIN RTC RPC)
@@ -87,60 +98,62 @@ $ vespa-model-inspect service [Options] &lt;service-name&gt;
   $ curl http://myhost.mydomain.com:19118/
   ...
 </pre>
+  </li><li>
+    <strong>Use the cluster controller status page</strong>:
     A status page for the cluster controller is available at the status port at
-<code>http://hostname:port/clustercontroller-status/v1/<em>&lt;clustername&gt;</em></code>.
-If <em>clustername</em> is not specified, the available clusters will be listed.
-The cluster controller leader status page will show if any nodes are operating with differing cluster state versions.
-It will also show how many data buckets are pending merging (document set reconciliation)
-due to either missing or being out of sync.
+    <code>http://hostname:port/clustercontroller-status/v1/<em>&lt;clustername&gt;</em></code>.
+    If <em>clustername</em> is not specified, the available clusters will be listed.
+    The cluster controller leader status page will show if any nodes are operating with differing cluster state versions.
+    It will also show how many data buckets are pending merging (document set reconciliation)
+    due to either missing or being out of sync.
 <pre>
 $ <a href="../reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a> service container-clustercontroller | grep HTTP
 </pre>
-With multiple cluster controllers, look at the one with a "/0" suffix in its config ID;
-it is the preferred leader.
-</p><p>
-The cluster state version is listed under the <em>SSV</em> table column.
-Divergence here usually points to host or networking issues.
+    <p>
+    With multiple cluster controllers, look at the one with a "/0" suffix in its config ID;
+    it is the preferred leader.
+    </p><p>
+    The cluster state version is listed under the <em>SSV</em> table column.
+    Divergence here usually points to host or networking issues.
+    </p>
   </li>
 </ol>
-</p>
 
 
 
 <h2 id="cluster-state">Cluster state</h2>
 <p>
-Cluster and node state information is available through the
-<a href="../content/api-state-rest-api.html">State Rest API</a>.
-This API can also be used to set a <em>user state</em> for a node - alternatively use:
+  Cluster and node state information is available through the
+  <a href="../content/api-state-rest-api.html">State Rest API</a>.
+  This API can also be used to set a <em>user state</em> for a node - alternatively use:
+</p>
 <ul>
   <li><a href="../reference/vespa-cmdline-tools.html#vespa-get-cluster-state">vespa-get-cluster-state</a></li>
   <li><a href="../reference/vespa-cmdline-tools.html#vespa-get-node-state">vespa-get-node-state</a></li>
   <li><a href="../reference/vespa-cmdline-tools.html#vespa-set-node-state">vespa-set-node-state</a></li>
 </ul>
+<p>
+  Also see the cluster controller <a href="#status-pages">status page</a>.
 </p><p>
-Also see the cluster controller <a href="#status-pages">status page</a>.
-</p><p>
-Some state is persisted in a ZooKeeper cluster,
-restarting/changing a cluster controller preserves this:
+  State is persisted in a ZooKeeper cluster, restarting/changing a cluster controller preserves this:
+</p>
 <ul>
-  <li>The last cluster state version is stored, such that a cluster controller
-      taking over can continue the version numbers where the old one left of</li>
-  <li>The unit states (set by operators) are stored</li>
+  <li>Last cluster state version number, for new cluster controller handover at restarts</li>
+  <li>User states, set by operators - i.e. nodes manually set to down / maintenance</li>
 </ul>
-In case of state data lost, the cluster state is reset - see
-<a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
-for implications.
+<p>
+  In case of state data lost, the cluster state is reset - see
+  <a href="../content/content-nodes.html#cluster-controller">cluster controller</a> for implications.
 </p>
 
 
 
 <h2 id="cluster-controller-configuration">Cluster controller configuration</h2>
 <p>
-To configure the cluster controller, use
-<a href="../reference/services-content.html#cluster-controller">services.xml</a>
-and/or add
-<a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
-configuration</a> under the <em>services</em> element - example:
+  To configure the cluster controller, use
+  <a href="../reference/services-content.html#cluster-controller">services.xml</a> and/or add
+  <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
+  configuration</a> under the <em>services</em> element - example:
 <pre>
 &lt;services version="1.0"&gt;
     &lt;config name="vespa.config.content.fleetcontroller"&gt;
@@ -151,98 +164,27 @@ configuration</a> under the <em>services</em> element - example:
 
 
 
-<h2 id="Overload">Overload</h2>
+<h2 id="rate-limiting">Rate limiting</h2>
 <p>
-Disk and/or memory might be exhausted and block feeding - recover from
-<a href="../reads-and-writes.html#feed-block">feed block</a>
-</p><p>
-Prioritized partition queues on the content nodes.
-The metric to look out for is the <code>.filestor.alldisks.queuesize</code> metric,
-giving a total value for all the partitions.
-While queue size is the most dependable metric, operations can be queued elsewhere too,
-which may be able to hide the issue.
-There are some visitor related queues:
-<code>.visitor.allthreads.queuesize</code> and <code>.visitor.cv_queuesize</code>.
-</p><p>
-Many applications built on Vespa is used by multiple clients
-and faces the problem of protecting clients from abuse. Use the
-<a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchers/RateLimitingSearcher.html">
-RateLimitingSearcher</a> to rate limit load from each client type.
-</p><p>
-Monitor CPU, memory and IO usage.
-Note: A fully utilized resource does not necessarily indicate overload.
-As the content cluster supports prioritized operations,
-it will typically do as many low priority operations as it is able to
-when no high priority operations are in the queue.
-This means, that even if there's just a low priority reprocess
-or a load rebalancing effort going on after a node went down,
-the cluster may still use up all available resources to process these low priority tasks.
-</p><p>
-Track network bandwidth consumption and switch saturation.
+  Applications can have multiple clients and faces the problem of protecting clients from abuse. Use the
+  <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchers/RateLimitingSearcher.html">
+  RateLimitingSearcher</a> to rate limit load from each client type.
 </p>
 
 
 
 <h2 id="monitor-distance-to-ideal-state">Monitor distance to ideal state</h2>
 <p>
-Refer to the <a href="../content/idealstate.html">distribution algorithm</a>.
-Distributor <a href="#status-pages">status pages</a> can be viewed to manually inspect state metrics:
-<table class="table">
-  <thead></thead><tbody>
-    <tr>
-      <th>.idealstate.idealstate_diff</th><td>
-        This metric tries to create a single value indicating distance to the ideal state.
-        A value of zero indicates that the cluster is in the ideal state.
-        Graphed values of this metric gives a good indication for how
-        fast the cluster gets back to the ideal state after changes.
-        Note that some issues may hide other issues, so sometimes the graph
-        may appear to stand still or even go a bit up again, as resolving one
-        issue may have detected one or several others.</td>
-    </tr><tr>
-      <th>.idealstate.buckets_toofewcopies</th><td>
-        Specifically lists how many buckets have too few copies.
-        Compare to the <em>buckets</em> metric to see how big a portion of the cluster this is.</td>
-    </tr><tr>
-      <th>.idealstate.buckets_toomanycopies</th><td>
-        Specifically lists how many buckets have too many copies.
-        Compare to the <em>buckets</em> metric to see how big a portion of the cluster this is.</td>
-    </tr><tr>
-      <th>.idealstate.buckets</th><td>
-        The total number of buckets managed. Used by other metrics reporting
-        bucket counts to know how big a part of the cluster they relate to.</td>
-    </tr><tr>
-      <th>.idealstate.buckets_notrusted</th><td>
-        Lists how many buckets have no trusted copies.
-        Without trusted buckets operations against the bucket may have poor performance,
-        having to send requests to many copies to try and create consistent replies.</td>
-    </tr><tr>
-      <th>.idealstate.delete_bucket.pending</th><td>
-        Lists how many buckets that needs to be deleted.</td>
-    </tr><tr>
-      <th>.idealstate.merge_bucket.pending</th><td>
-        Lists how many buckets there are,
-        where we suspect not all copies store identical document sets.</td>
-    </tr><tr>
-      <th>.idealstate.split_bucket.pending</th><td>
-        Lists how many buckets are currently being split.</td>
-    </tr><tr>
-      <th>.idealstate.join_bucket.pending</th><td>
-        Lists how many buckets are currently being joined.</td>
-    </tr><tr>
-      <th>.idealstate.set_bucket_state.pending</th><td>
-        Lists how many buckets are currently altered for active state.
-        These are high priority requests which should finish fast,
-        so these requests should seldom be seen as pending.</td>
-    </tr>
-  </tbody>
-</table>
+  Refer to the <a href="../content/idealstate.html">distribution algorithm</a>.
+  Use distributor <a href="#status-pages">status pages</a> to inspect state metrics,
+  see <a href="../content/content-nodes.html#metrics">metrics</a>.
+  <code>idealstate.merge_bucket.pending</code> is the best metric to track,
+  it is 0 when the cluster is balanced - a non-zero value indicates buckets out of sync.
 </p>
 
 
 
-<h2 id="cluster-reconfig-restart">Cluster reconfig / restart</h2>
-<p>
-Notes:
+<h2 id="cluster-configuration">Cluster configuration</h2>
 <ul>
   <li>Running <code>vespa-deploy prepare</code> will not change served
     configurations until <code>vespa-deploy activate</code> is run.
@@ -251,50 +193,52 @@ Notes:
     Refer to <a href="../schemas.html">schemas</a> for how to add/change/remove these.
   </li><li>
     Refer to <a href="../elastic-vespa.html">elastic Vespa</a>
-    for details on how to add/remove capacity from a Vespa cluster.
+    for how to add/remove capacity from a Vespa cluster, procedure below.
   </li><li>
-    See  <a href="../chained-components.html">chained components</a>
+    See <a href="../chained-components.html">chained components</a>
     for how to add or remove searchers and document processors.
+  </li><li>
+    Refer to the <a href="../performance/sizing-examples.html">sizing examples</a>
+    for changing from a <em>flat</em> to <em>grouped</em> content cluster.
   </li>
 </ul>
 
 
-<h3 id="add-or-remove-content-node">Add or remove content node</h3>
-<p>
-  An alternative to increasing cluster size is building a new cluster, then migrate documents to it.
-  This is supported using <a href="../content/visiting.html#data-export-import">visiting</a>.
-</p>
+
+<h2 id="add-or-remove-a-content-node">Add or remove a content node</h2>
 <ol>
   <li>
-    <strong>Node setup:</strong> Prepare nodes by installing software,
-    set up the file systems / directories and set configuration server(s).
-    <a href="../vespa-quick-start.html">Details</a>. Start the node.
+    <strong>Node setup:</strong>
+    Prepare the node by installing software, set up the file systems/directories
+    and set <a href="../setting-vespa-variables.html"><code>VESPA_CONFIGSERVERS</code></a>.
+    <a href="../reference/files-processes-and-ports.html#vespa-start-stop">Start</a> the node.
   </li><li>
-  <strong>Modify configuration:</strong>
-  Add/remove a <a href="../reference/services-content.html#node">node</a>-element in <em>services.xml</em>
-  and <a href="../reference/hosts.html">hosts.xml</a>.
-  Refer to <a href="../vespa-quick-start-multinode-aws.html">multinode install</a>.
-  It is key that the node's <em>distribution-key</em> is higher than the highest existing index.
-</li><li>
-  <strong>Deploy</strong>: <a href="#monitor-distance-to-ideal-state">
-  Observe metrics</a> to track progress as the cluster redistributes documents.
-  Use the <a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
-  to monitor the state of the cluster.
-</li><li>
-  <strong>Tune performance:</strong> Use
-  <a href="https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def">
+    <strong>Modify configuration:</strong>
+    Add/remove a <a href="../reference/services-content.html#node">node</a>-element in <em>services.xml</em>
+    and <a href="../reference/hosts.html">hosts.xml</a>.
+    Refer to <a href="../vespa-quick-start-multinode-aws.html">multinode install</a>.
+    Make sure the <em>distribution-key</em> is unique.
+  </li><li>
+    <strong>Deploy</strong>: <a href="#monitor-distance-to-ideal-state">
+    Observe metrics</a> to track progress as the cluster redistributes documents.
+    Use the <a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
+    to monitor the state of the cluster.
+  </li><li>
+    <strong>Tune performance (optional):</strong>
+    Use <a href="https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def">
     maxpendingidealstateoperations</a> to tune concurrency of bucket merge operations from distributor nodes.
-  Likewise, tune <a href="../reference/services-content.html#merges">merges</a> -
-  concurrent merge operations per content node. The tradeoff is speed of bucket replication vs
-  use of resources, which impacts the applications' regular load.
-</li><li>
-  <strong>Finish:</strong> The cluster is done redistributing when <em>idealstate.merge_bucket.pending</em>
-  is zero on all distributors.
-</li>
+    Likewise, tune <a href="../reference/services-content.html#merges">merges</a> -
+    concurrent merge operations per content node. The tradeoff is speed of bucket replication vs
+    use of resources, which impacts the applications' regular load.
+  </li><li>
+    <strong>Finish:</strong>
+    The cluster is done redistributing when <code>idealstate.merge_bucket.pending</code>
+    is zero on all distributors.
+  </li>
 </ol>
 <p>
-  Do not remove more than <em>redundancy</em>-1 nodes at a time.
-  Observe <em>idealstate.merge_bucket.pending</em> to know bucket replica status,
+  Do not remove more than <em>redundancy</em>-1 nodes at a time, to avoid data loss.
+  Observe <code>idealstate.merge_bucket.pending</code> to know bucket replica status,
   when zero on all distributor nodes, it is safe to remove more nodes.
   If <a href="../elastic-vespa.html#grouped-distribution">grouped distribution</a>
   is used to control bucket replicas, remove all nodes in a group
@@ -302,148 +246,55 @@ Notes:
 </p><p>
   To increase bucket redundancy level before taking nodes out,
   <a href="../content/content-nodes.html">retire</a> nodes.
-  Again, track <em>idealstate.merge_bucket.pending</em> to know when done.
+  Again, track <code>idealstate.merge_bucket.pending</code> to know when done.
   Use the <a href="../content/api-state-rest-api.html">State API</a> or
   <a href="../reference/vespa-cmdline-tools.html#vespa-set-node-state">vespa-set-node-state</a>
   to set a node to <em>retired</em>.
   The <a href="../content/content-nodes.html#cluster-controller">cluster controller's</a>
   status page lists node states.
+</p><p>
+  An alternative to increasing cluster size is building a new cluster, then migrate documents to it.
+  This is supported using <a href="../content/visiting.html#data-export-import">visiting</a>.
+</p><p>
+  To <em>merge</em> two content clusters, add nodes to the cluster like above, considering:
 </p>
+<ul>
+  <li>
+    <a href="../reference/services-content.html#node">distribution-keys</a> must be unique.
+    Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
+  </li><li>
+    Set <a href="../setting-vespa-variables.html"><code>VESPA_CONFIGSERVERS</code></a>, then start the node.
+  </li>
+</ul>
 
 
-<h3 id="merge-content-clusters">Merge content clusters</h3>
+
+<h2 id="add-or-remove-services-on-a-node">Add or remove services on a node</h2>
 <p>
-  To merge two content clusters, add nodes to the cluster like <em>add node</em> above, considering:
-<ul><li>
-  <a href="../reference/services-content.html#node">distribution-keys</a> must be unique.
-  Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
-</li><li>
-  Set <a href="../setting-vespa-variables.html">VESPA_CONFIGSERVERS</a>, then start the node.
-</li></ul>
+  It is possible to run multiple Vespa services on the same host.
+  If changing the services on a given host,
+  stop Vespa on the given host before running <code>vespa-deploy activate</code>.
+  This is because the services are dynamically allocated port numbers,
+  depending on what is running on the host.
+  Consider if some of the services changed are used by services on other hosts.
+  In that case, restart services on those hosts too. Procedure:
 </p>
-
-
-<h3 id="add-or-remove-services-on-a-node">Add or remove services on a node</h3>
-<p>
-It is possible to run multiple Vespa services on the same host.
-If changing the services on a given host,
-stop Vespa on the given host before running <code>vespa-deploy activate</code>.
-This is because the services will be allocated port numbers depending on what is running on the host.
-Consider if some of the services changed are used by services on other hosts.
-In that case, restart services on those hosts too. Procedure:
 <ol>
   <li>Edit <em>services.xml</em> and <em>hosts.xml</em></li>
   <li>Stop Vespa on the nodes that have changes</li>
   <li>Run <code>vespa-deploy prepare</code> and <code>vespa-deploy activate</code></li>
   <li>Start Vespa on the nodes that have changes</li>
 </ol>
-</p>
 
 
-<h3 id="add-remove-modify-chains">Add/remove/modify chains</h3>
+
+<h2 id="add-remove-modify-chains">Add/remove/modify chains</h2>
 <p>
-Searcher, Document processing and Processing chains can be modified at runtime
-without restarts.
-Modification includes adding/removing processors in chains
-and changing names of chains and processors.
-Make the change and <a href="../cloudconfig/application-packages.html#deploy">deploy</a>.
-Some changes require a container restart, refer to
-<a href="../document-processing.html#reconfiguring-document-processing">
-reconfiguring document processing</a>.
-</p>
-
-
-<h3 id="restart-content-node">Configure grouped setup</h3>
-<p>
-Refer to the <a href="../performance/sizing-examples.html">sizing examples</a>
-for changing from a flat to grouped cluster.
-</p>
-
-
-<h3 id="restart-distributor-node">Restart distributor node</h3>
-<p>
-When a distributor stops, it will try to respond to any pending cluster state request first.
-New incoming requests after shutdown is commenced will fail immediately,
-as the socket is no longer accepting requests.
-Cluster controllers will thus detect processes stopping almost immediately.
-</p><p>
-The cluster state will be updated with the new state internally in the cluster controller.
-Then the cluster controller will wait for maximum
-<a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
-min_time_between_new_systemstates</a>
-before publishing the new cluster state - this to reduce short-term state fluctuations.
-</p><p>
-The cluster controller has the option of setting states to make other
-distributors take over ownership of buckets, or mask the change, making the
-buckets owned by the distributor restarting unavailable for the time being.
-Distributors restart fast, so the restarting distributor may transition
-directly from up to initializing.
-If it doesn't, current default behavior is to set it down immediately.
-</p><p>
-If transitioning directly from up to initializing, requests going through
-the remaining distributors will be unaffected.
-The requests going through the restarting distributor will immediately fail when it shuts down,
-being resent automatically by the client.
-The distributor typically restart within seconds,
-and syncs up with the service layer nodes to get metadata on buckets it owns,
-in which case it is ready to serve requests again.
-</p><p>
-If the distributor transitions from up to down, and then later to initializing,
-other distributors will request metadata from the service layer node to take
-over ownership of buckets previously owned by the restarting distributor.
-Until the distributors have gathered this new metadata from all the service
-layer nodes, requests for these buckets can not be served, and will fail back to client.
-When the restarting node comes back up and is marked initializing or up in the cluster state again,
-the additional nodes will dump knowledge of the extra buckets they previously acquired.
-</p><p>
-For requests with timeouts of several seconds,
-the transition should be invisible due to automatic client resending.
-Requests with a lower timeout might fail,
-and it is up to the application whether to resend or handle failed requests.
-</p><p>
-Requests to buckets not owned by the restarting distributor will not be affected.
-The other distributors will start to do some work though, affecting latency,
-and distributors will refetch metadata for all buckets they own,
-not just the additional buckets, which may cause some disturbance.
-</p>
-
-
-<h3 id="restart-content-node">Restart content node</h3>
-<p>
-When a content node restarts in a controlled fashion,
-it marks itself in the stopping state and rejects new requests.
-It will process its pending request queue before shutting down.
-Consequently, client requests are typically unaffected by content node restarts.
-The currently pending requests will typically be completed.
-New copies of buckets will be created on other nodes, to store new requests in appropriate redundancy.
-This happens whether node transitions through down or maintenance state.
-The difference being that if transitioning through maintenance state,
-the distributor will not start any effort of synchronizing new copies with existing copies.
-They will just store the new requests until the maintenance node comes back up.
-</p><p>
-When coming back up, content nodes will start with gathering information
-on what buckets it has data stored for.
-While this is happening, the service layer will expose that it is initializing,
-but not done with the bucket list stage.
-During this time, the cluster controller will not mark it initializing in cluster state yet.
-Once the service layer node knows what buckets it has,
-it reports that it is calculating metadata for the buckets,
-at which time the node may become visible as initializing in cluster state.
-At this time it may start process requests,
-but as bucket checksums have not been calculated for all buckets yet,
-there will exist buckets where the distributor doesn't know if they are in sync with other copies or not.
-</p><p>
-The background load to calculate bucket checksums has low priority,
-but load received will automatically create metadata for used buckets.
-With an overloaded cluster, the initializing step may not finish before all buckets
-have been initialized by requests.
-With a cluster close to max capacity, initializing may take quite some time.
-</p><p>
-The cluster is mostly unaffected during restart.
-During the initializing stage, bucket metadata is unknown.
-Distributors will assume other copies are more appropriate for serving read requests.
-If all copies of a bucket are in an initializing state at the same time,
-read requests may be sent to a bucket copy that does not have the most updated state to process it.
+  Searcher, Document processing and Processing chains can be modified at runtime without restarts.
+  Modification includes adding/removing processors in chains and changing names of chains and processors.
+  Make the change and <a href="../cloudconfig/application-packages.html#deploy">deploy</a>.
+  Some changes require a container restart, refer to
+  <a href="../document-processing.html#reconfiguring-document-processing">reconfiguring document processing</a>.
 </p>
 
 
@@ -462,7 +313,7 @@ read requests may be sent to a bucket copy that does not have the most updated s
 $ docker info | grep "Total Memory"
 </pre>
       OOM symptoms include
-      <pre>
+<pre>
 INFO: Problem with Handshake localhost:8080 ssl=false: localhost:8080 failed to respond
 </pre>
       The container is named <em>vespa</em> in the guides, for a shell do:
@@ -493,100 +344,21 @@ $ /opt/vespa/bin/vespa-logfmt -l warning,error
 </table>
 
 
-<h3>Distributor or content node not existing</h3>
+
+<h2 id="clean-start-mode">Clean start mode</h2>
 <p>
-Content cluster nodes will register in the <em>vespa-slobrok</em> naming service on startup.
-If the nodes have not been set up or fail to start required processes,
-the naming service will mark them as unavailable.
-</p><p>
-<strong>Effect on cluster:</strong>
-Calculations for how big percentage of a cluster that is available will
-include these nodes even if they never have been seen.
-If many nodes are configured, but not in fact available,
-the cluster may set itself offline due by concluding too many nodes are down.
-</p>
-
-
-<h3>Content node not available on the network</h3>
-<p>
-vespa-slobrok requires nodes to ping it periodically.
-If they stop sending pings, they will be set as down and the cluster will restore
-full availability and redundancy by redistribution load and data to the rest of the nodes.
-There is a time window where nodes may be unavailable but still not set down by slobrok.
-</p><p>
-<strong>Effect on cluster:</strong>
-Nodes that become unavailable will be set as down after a few seconds.
-Before that, document operations will fail and will need to be resent.
-After the node is set down, full availability is restored.
-Data redundancy will start to restore.
-</p>
-
-
-<h3 id="clean-mode">Clean mode</h3>
-<p>
-There has been rare occasions were we ended up with data that was internally inconsistent. This should be very rare
-and has only happend once. For those circumstances it is possible to start the node in a special
-<a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">validate_and_sanitize_docstore</a> mode.
-This will do its best to clean up inconsistent data. However detecting that this is required is not an easy feat.
-In order for this approach to work, all nodes must be stopped before enabling this feature.
-If not the poison pill might come back as they have the same redundancy as the rest of your documents.
-</p>
-
-
-<h3>Distributor or content node crashing</h3>
-<p>
-A crashing node restarts in much the same node as a controlled restart.
-A content node will not finish processing the currently pending requests,
-causing failed requests.
-Client resending might hide these failures,
-as the distributor should be able to process the resent request quickly,
-using other copies than the recently lost one.
-</p>
-
-
-<h3>Thrashing nodes</h3>
-<p>
-An example is OS disk using excessive amount of time to complete IO requests.
-Eventually the maximum number of files are open, and as the OS is so dependent on the filesystem,
-it ends up not being able to do much at all.
-</p><p>
-<em>get-node-state</em> requests from the cluster controller fetch node metrics from /proc
-and write this to a temp directory on the disk before responding.
-This causes a thrashing node to time out <em>get-node-state</em> requests,
-setting the node down in the cluster state.
-</p><p>
-<strong>Effect on cluster:</strong>
-This will have the same effects like the <em>not available on network</em> issue.
-</p>
-
-
-<h3>Constantly restarting distributor or service layer node</h3>
-<p>
-A broken node may end up with processes constantly restarting.
-It may die during initialization due to accessing corrupt files,
-or it may die when it starts receiving requests of a given type triggering a node local bug.
-This is bad for distributor nodes,
-as these restarts create constant ownership transfer between distributors,
-causing windows where buckets are unavailable.
-</p><p>
-The cluster controller has functionality for detecting such nodes.
-If a node restarts in a way that is not detected as a controlled shutdown, more than
-<a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
-max_premature_crashes</a>,
-the cluster controller will set the wanted state of this node to be down.
-</p><p>
-Detecting a controlled restart is currently a bit tricky.
-A controlled restart is typically initiated by sending a TERM signal to the process.
-Not having any other sign,
-the content layer has to assume that all TERM signals are the cause of controlled shutdowns.
-Thus, if the process keep being killed by kernel due to using too much memory,
-this will look like controlled shutdowns to the content layer.
+  There has been rare occasions were Vespa storead data that was internally inconsistent.
+  For those circumstances it is possible to start the node in a
+  <a href="https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/config/proton.def">validate_and_sanitize_docstore</a> mode.
+  This will do its best to clean up inconsistent data.
+  However detecting that this is required is not easy, consult the Vespa Team first.
+  In order for this approach to work, all nodes must be stopped before enabling this feature -
+  this to make sure the data is not redistributed.
 </p>
 
 
 
-
-<h2 id="content-cluster-tradeoffs">Content cluster tradeoffs</h2>
+<h2 id="content-cluster-configuration">Content cluster configuration</h2>
 <table class="table">
   <thead></thead></tbody>
   <tr id="availability-vs-resources"><th>Availability vs resources</th>

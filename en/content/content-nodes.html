@@ -1,6 +1,6 @@
 ---
 # Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Content nodes and states"
+title: "Content nodes, states and metrics"
 ---
 
 <p>
@@ -221,6 +221,30 @@ allowing an old master to have some time to realize it is no longer the master.
 </p>
 
 
+<h3>Constantly restarting node</h3>
+<p>
+  A broken node may end up with processes constantly restarting.
+  It may die during initialization due to accessing corrupt files,
+  or it may die when it starts receiving requests of a given type triggering a node local bug.
+  This is bad for distributor nodes,
+  as these restarts create constant ownership transfer between distributors,
+  causing windows where buckets are unavailable.
+</p><p>
+  The cluster controller has functionality for detecting such nodes.
+  If a node restarts in a way that is not detected as a controlled shutdown, more than
+  <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
+    max_premature_crashes</a>,
+  the cluster controller will set the wanted state of this node to be down.
+</p><p>
+  Detecting a controlled restart is currently a bit tricky.
+  A controlled restart is typically initiated by sending a TERM signal to the process.
+  Not having any other sign,
+  the content layer has to assume that all TERM signals are the cause of controlled shutdowns.
+  Thus, if the process keep being killed by kernel due to using too much memory,
+  this will look like controlled shutdowns to the content layer.
+</p>
+
+
 
 <h2 id="distributor">Distributor</h2>
 <p>
@@ -313,4 +337,145 @@ The maintenance operations have different priorities.
 If no maintenance operations are needed, the cluster is said to be in the <em>ideal state</em>.
 The distributors synchronize maintenance load with user load,
 e.g. to remap requests to other buckets after bucket splitting and joining.
+</p>
+
+
+<h2 id="metrics">Metrics</h2>
+<table class="table">
+  <thead></thead><tbody>
+<tr>
+  <th>.idealstate.idealstate_diff</th><td>
+  This metric tries to create a single value indicating distance to the ideal state.
+  A value of zero indicates that the cluster is in the ideal state.
+  Graphed values of this metric gives a good indication for how
+  fast the cluster gets back to the ideal state after changes.
+  Note that some issues may hide other issues, so sometimes the graph
+  may appear to stand still or even go a bit up again, as resolving one
+  issue may have detected one or several others.</td>
+</tr><tr>
+  <th>.idealstate.buckets_toofewcopies</th><td>
+  Specifically lists how many buckets have too few copies.
+  Compare to the <em>buckets</em> metric to see how big a portion of the cluster this is.</td>
+</tr><tr>
+  <th>.idealstate.buckets_toomanycopies</th><td>
+  Specifically lists how many buckets have too many copies.
+  Compare to the <em>buckets</em> metric to see how big a portion of the cluster this is.</td>
+</tr><tr>
+  <th>.idealstate.buckets</th><td>
+  The total number of buckets managed. Used by other metrics reporting
+  bucket counts to know how big a part of the cluster they relate to.</td>
+</tr><tr>
+  <th>.idealstate.buckets_notrusted</th><td>
+  Lists how many buckets have no trusted copies.
+  Without trusted buckets operations against the bucket may have poor performance,
+  having to send requests to many copies to try and create consistent replies.</td>
+</tr><tr>
+  <th>.idealstate.delete_bucket.pending</th><td>
+  Lists how many buckets that needs to be deleted.</td>
+</tr><tr>
+  <th>.idealstate.merge_bucket.pending</th><td>
+  Lists how many buckets there are,
+  where we suspect not all copies store identical document sets.</td>
+</tr><tr>
+  <th>.idealstate.split_bucket.pending</th><td>
+  Lists how many buckets are currently being split.</td>
+</tr><tr>
+  <th>.idealstate.join_bucket.pending</th><td>
+  Lists how many buckets are currently being joined.</td>
+</tr><tr>
+  <th>.idealstate.set_bucket_state.pending</th><td>
+  Lists how many buckets are currently altered for active state.
+  These are high priority requests which should finish fast,
+  so these requests should seldom be seen as pending.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+<h2 id="distributor-node-restart">Distributor node restart</h2>
+<p>
+  When a distributor stops, it will try to respond to any pending cluster state request first.
+  New incoming requests after shutdown is commenced will fail immediately,
+  as the socket is no longer accepting requests.
+  Cluster controllers will thus detect processes stopping almost immediately.
+</p><p>
+  The cluster state will be updated with the new state internally in the cluster controller.
+  Then the cluster controller will wait for maximum
+  <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
+    min_time_between_new_systemstates</a>
+  before publishing the new cluster state - this to reduce short-term state fluctuations.
+</p><p>
+  The cluster controller has the option of setting states to make other
+  distributors take over ownership of buckets, or mask the change, making the
+  buckets owned by the distributor restarting unavailable for the time being.
+  Distributors restart fast, so the restarting distributor may transition
+  directly from up to initializing.
+  If it doesn't, current default behavior is to set it down immediately.
+</p><p>
+  If transitioning directly from up to initializing, requests going through
+  the remaining distributors will be unaffected.
+  The requests going through the restarting distributor will immediately fail when it shuts down,
+  being resent automatically by the client.
+  The distributor typically restart within seconds,
+  and syncs up with the service layer nodes to get metadata on buckets it owns,
+  in which case it is ready to serve requests again.
+</p><p>
+  If the distributor transitions from up to down, and then later to initializing,
+  other distributors will request metadata from the service layer node to take
+  over ownership of buckets previously owned by the restarting distributor.
+  Until the distributors have gathered this new metadata from all the service
+  layer nodes, requests for these buckets can not be served, and will fail back to client.
+  When the restarting node comes back up and is marked initializing or up in the cluster state again,
+  the additional nodes will dump knowledge of the extra buckets they previously acquired.
+</p><p>
+  For requests with timeouts of several seconds,
+  the transition should be invisible due to automatic client resending.
+  Requests with a lower timeout might fail,
+  and it is up to the application whether to resend or handle failed requests.
+</p><p>
+  Requests to buckets not owned by the restarting distributor will not be affected.
+  The other distributors will start to do some work though, affecting latency,
+  and distributors will refetch metadata for all buckets they own,
+  not just the additional buckets, which may cause some disturbance.
+</p>
+
+
+
+<h2 id="content-node-restart">Content node restart</h2>
+<p>
+  When a content node restarts in a controlled fashion,
+  it marks itself in the stopping state and rejects new requests.
+  It will process its pending request queue before shutting down.
+  Consequently, client requests are typically unaffected by content node restarts.
+  The currently pending requests will typically be completed.
+  New copies of buckets will be created on other nodes, to store new requests in appropriate redundancy.
+  This happens whether node transitions through down or maintenance state.
+  The difference being that if transitioning through maintenance state,
+  the distributor will not start any effort of synchronizing new copies with existing copies.
+  They will just store the new requests until the maintenance node comes back up.
+</p><p>
+  When coming back up, content nodes will start with gathering information
+  on what buckets it has data stored for.
+  While this is happening, the service layer will expose that it is initializing,
+  but not done with the bucket list stage.
+  During this time, the cluster controller will not mark it initializing in cluster state yet.
+  Once the service layer node knows what buckets it has,
+  it reports that it is calculating metadata for the buckets,
+  at which time the node may become visible as initializing in cluster state.
+  At this time it may start process requests,
+  but as bucket checksums have not been calculated for all buckets yet,
+  there will exist buckets where the distributor doesn't know if they are in sync with other copies or not.
+</p><p>
+  The background load to calculate bucket checksums has low priority,
+  but load received will automatically create metadata for used buckets.
+  With an overloaded cluster, the initializing step may not finish before all buckets
+  have been initialized by requests.
+  With a cluster close to max capacity, initializing may take quite some time.
+</p><p>
+  The cluster is mostly unaffected during restart.
+  During the initializing stage, bucket metadata is unknown.
+  Distributors will assume other copies are more appropriate for serving read requests.
+  If all copies of a bucket are in an initializing state at the same time,
+  read requests may be sent to a bucket copy that does not have the most updated state to process it.
 </p>
