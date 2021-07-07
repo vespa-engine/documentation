@@ -38,10 +38,13 @@ title: "Administrative Procedures"
 
 <h2 id="process-pid-files">Process PID files</h2>
 <p>
-All Vespa processes have a PID file <em>$VESPA_HOME/var/run/{service name}.pid</em>,
-where <em>{service name}</em> is the Vespa service name, e.g. <em>container</em> or <em>distributor</em>.
-It is the same name which is used in the administration interface
-in the <a href="../config-sentinel.html">config sentinel</a>.
+  All Vespa processes have a PID file <em>$VESPA_HOME/var/run/{service name}.pid</em>,
+  where <em>{service name}</em> is the Vespa service name, e.g. <em>container</em> or <em>distributor</em>.
+  It is the same name which is used in the administration interface
+  in the <a href="../config-sentinel.html">config sentinel</a>.
+</p>
+<p>
+  Learn how to <a href="../reference/files-processes-and-ports.html#vespa-start-stop">start / stop</a> nodes.
 </p>
 
 
@@ -179,9 +182,7 @@ configuration</a> under the <em>services</em> element - example:
 
 
 
-<h2 id="cluster-reconfig-restart">Cluster reconfig / restart</h2>
-<p>
-Notes:
+<h2 id="cluster-configuration">Cluster configuration</h2>
 <ul>
   <li>Running <code>vespa-deploy prepare</code> will not change served
     configurations until <code>vespa-deploy activate</code> is run.
@@ -190,50 +191,48 @@ Notes:
     Refer to <a href="../schemas.html">schemas</a> for how to add/change/remove these.
   </li><li>
     Refer to <a href="../elastic-vespa.html">elastic Vespa</a>
-    for details on how to add/remove capacity from a Vespa cluster.
+    for how to add/remove capacity from a Vespa cluster, procedure below.
   </li><li>
-    See  <a href="../chained-components.html">chained components</a>
+    See <a href="../chained-components.html">chained components</a>
     for how to add or remove searchers and document processors.
   </li>
 </ul>
 
 
-<h3 id="add-or-remove-content-node">Add or remove content node</h3>
-<p>
-  An alternative to increasing cluster size is building a new cluster, then migrate documents to it.
-  This is supported using <a href="../content/visiting.html#data-export-import">visiting</a>.
-</p>
+<h2 id="add-or-remove-a-content-node">Add or remove a content node</h2>
 <ol>
   <li>
-    <strong>Node setup:</strong> Prepare nodes by installing software,
-    set up the file systems / directories and set configuration server(s).
-    <a href="../vespa-quick-start.html">Details</a>. Start the node.
+    <strong>Node setup:</strong>
+    Prepare the node by installing software, set up the file systems/directories
+    and set <a href="../setting-vespa-variables.html"><code>VESPA_CONFIGSERVERS</code></a>.
+    <a href="../reference/files-processes-and-ports.html#vespa-start-stop">Start</a> the node.
   </li><li>
-  <strong>Modify configuration:</strong>
-  Add/remove a <a href="../reference/services-content.html#node">node</a>-element in <em>services.xml</em>
-  and <a href="../reference/hosts.html">hosts.xml</a>.
-  Refer to <a href="../vespa-quick-start-multinode-aws.html">multinode install</a>.
-  It is key that the node's <em>distribution-key</em> is higher than the highest existing index.
-</li><li>
-  <strong>Deploy</strong>: <a href="#monitor-distance-to-ideal-state">
-  Observe metrics</a> to track progress as the cluster redistributes documents.
-  Use the <a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
-  to monitor the state of the cluster.
-</li><li>
-  <strong>Tune performance:</strong> Use
-  <a href="https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def">
+    <strong>Modify configuration:</strong>
+    Add/remove a <a href="../reference/services-content.html#node">node</a>-element in <em>services.xml</em>
+    and <a href="../reference/hosts.html">hosts.xml</a>.
+    Refer to <a href="../vespa-quick-start-multinode-aws.html">multinode install</a>.
+    Make sure the <em>distribution-key</em> is unique.
+  </li><li>
+    <strong>Deploy</strong>: <a href="#monitor-distance-to-ideal-state">
+    Observe metrics</a> to track progress as the cluster redistributes documents.
+    Use the <a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
+    to monitor the state of the cluster.
+  </li><li>
+    <strong>Tune performance (optional):</strong>
+    Use <a href="https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def">
     maxpendingidealstateoperations</a> to tune concurrency of bucket merge operations from distributor nodes.
-  Likewise, tune <a href="../reference/services-content.html#merges">merges</a> -
-  concurrent merge operations per content node. The tradeoff is speed of bucket replication vs
-  use of resources, which impacts the applications' regular load.
-</li><li>
-  <strong>Finish:</strong> The cluster is done redistributing when <em>idealstate.merge_bucket.pending</em>
-  is zero on all distributors.
-</li>
+    Likewise, tune <a href="../reference/services-content.html#merges">merges</a> -
+    concurrent merge operations per content node. The tradeoff is speed of bucket replication vs
+    use of resources, which impacts the applications' regular load.
+  </li><li>
+    <strong>Finish:</strong>
+    The cluster is done redistributing when <code>idealstate.merge_bucket.pending</code>
+    is zero on all distributors.
+  </li>
 </ol>
 <p>
-  Do not remove more than <em>redundancy</em>-1 nodes at a time.
-  Observe <em>idealstate.merge_bucket.pending</em> to know bucket replica status,
+  Do not remove more than <em>redundancy</em>-1 nodes at a time, to avoid data loss.
+  Observe <code>idealstate.merge_bucket.pending</code> to know bucket replica status,
   when zero on all distributor nodes, it is safe to remove more nodes.
   If <a href="../elastic-vespa.html#grouped-distribution">grouped distribution</a>
   is used to control bucket replicas, remove all nodes in a group
@@ -241,28 +240,30 @@ Notes:
 </p><p>
   To increase bucket redundancy level before taking nodes out,
   <a href="../content/content-nodes.html">retire</a> nodes.
-  Again, track <em>idealstate.merge_bucket.pending</em> to know when done.
+  Again, track <code>idealstate.merge_bucket.pending</code> to know when done.
   Use the <a href="../content/api-state-rest-api.html">State API</a> or
   <a href="../reference/vespa-cmdline-tools.html#vespa-set-node-state">vespa-set-node-state</a>
   to set a node to <em>retired</em>.
   The <a href="../content/content-nodes.html#cluster-controller">cluster controller's</a>
   status page lists node states.
+</p><p>
+  An alternative to increasing cluster size is building a new cluster, then migrate documents to it.
+  This is supported using <a href="../content/visiting.html#data-export-import">visiting</a>.
+</p><p>
+  To <em>merge</em> two content clusters, add nodes to the cluster like above, considering:
 </p>
+<ul>
+  <li>
+    <a href="../reference/services-content.html#node">distribution-keys</a> must be unique.
+    Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
+  </li><li>
+    Set <a href="../setting-vespa-variables.html"><code>VESPA_CONFIGSERVERS</code></a>, then start the node.
+  </li>
+</ul>
 
 
-<h3 id="merge-content-clusters">Merge content clusters</h3>
-<p>
-  To merge two content clusters, add nodes to the cluster like <em>add node</em> above, considering:
-<ul><li>
-  <a href="../reference/services-content.html#node">distribution-keys</a> must be unique.
-  Modify paths like <em>$VESPA_HOME/var/db/vespa/search/mycluster/n3</em> before adding the node.
-</li><li>
-  Set <a href="../setting-vespa-variables.html">VESPA_CONFIGSERVERS</a>, then start the node.
-</li></ul>
-</p>
 
-
-<h3 id="add-or-remove-services-on-a-node">Add or remove services on a node</h3>
+<h2 id="add-or-remove-services-on-a-node">Add or remove services on a node</h2>
 <p>
 It is possible to run multiple Vespa services on the same host.
 If changing the services on a given host,
@@ -468,7 +469,7 @@ this will look like controlled shutdowns to the content layer.
 
 
 
-<h2 id="content-cluster-tradeoffs">Content cluster tradeoffs</h2>
+<h2 id="content-cluster-configuration">Content cluster configuration</h2>
 <table class="table">
   <thead></thead></tbody>
   <tr id="availability-vs-resources"><th>Availability vs resources</th>
