@@ -394,13 +394,15 @@ Refer to <a href="../reads-and-writes.html">reads and writes</a> for details.
 The are two methods for document operations:
 <ul>
   <li>
-    <a href="../vespa-http-client.html">Vespa HTTP client</a>:
-    This is a Java API / command line tool to feed asynchronous document operations to Vespa.
-    Input is JSON with one or more document operations (for high throughput, batch operations).
-    The document ID is hence in the JSON feed.
+    <a href="../vespa-feed-client.html">Vespa feed client</a> or <a href="../vespa-http-client.html">Vespa HTTP client</a>:
+    These are Java APIs / command line tools to feed document operations asynchronously to Vespa, over HTTP.
+    Input is JSON with one or more document operations (for high throughput, batch operations), where
+    the document IDs are in the JSON feed—one for each operation. The Vespa feed client requires
+    <a href="../performance/http2.html">HTTP/2</a> to be enabled; the Vespa HTTP client still exists for compatibility reasons. 
   </li><li>
     <a href="document-v1-api-reference.html">/document/v1/</a>:
-    This synchronous API accepts one operation per request - the document ID is encoded in the URL
+    This API accepts one operation per request, with the document ID encoded in the URL.
+    This is the API used by the Vespa feed client, and is the recommendation for new feed clients using HTTP/2. 
   </li>
 </ul>
 
@@ -497,10 +499,10 @@ encoded as a string.
 Example: Increment the <em>sales</em> field only if it is already equal to 999:
 <table class="table">
   <tr>
-    <td>Vespa HTTP client:
+    <td>Vespa HTTP/feed client:
 <pre>
 {
-    "update": "id:music:music::BestOf",
+    "update": "id:music:music::bob/BestOf",
         "condition": "music.sales==999",
         "fields": {
             "sales": {
@@ -511,7 +513,7 @@ Example: Increment the <em>sales</em> field only if it is already equal to 999:
 </pre>
     </td><td>Document API:
 <pre>
-http PUT /document/v1/music/music/docid/BestOf?condition=music.sales=='999'
+http PUT /document/v1/music/music/docid/bob%2FBestOf?condition=music.sales%3D%3D%27999%27
 {
    "fields": {
        "sales": {
@@ -524,10 +526,10 @@ http PUT /document/v1/music/music/docid/BestOf?condition=music.sales=='999'
     </td>
   </tr>
 </table>
-<strong>Note:</strong> Use <em>documenttype.fieldname</em> in the condition,
-not only <em>fieldname</em>.
+<strong>Note:</strong> Use <em>documenttype.fieldname</em> in the condition, not only
+<em>fieldname</em>. Note also that the docid and condition were URL-encoded. 
 </p><p>
-<strong>Note:</strong> If the condition is not met, an error is returned.
+<strong>Note:</strong> If the condition is not met, an error response (code 412) is returned.
 <strong>ToDo:</strong> There is a discussion whether to change to not return error,
 and instead return a <em>condition-not-met</em> in the response.
 </p>
@@ -538,10 +540,13 @@ and instead return a <em>condition-not-met</em> in the response.
 <p>
 Updates to nonexistent documents are supported using <em>create</em>.
 Refer to <a href="../reads-and-writes.html#create-if-nonexistent">reads and writes</a> for semantics.
+<table class="table">
+  <tr>
+    <td>Vespa HTTP/feed client:
 <pre>
 {
-    "update": "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf",
-    <span style="background-color: yellow;">"create": true,</span>
+    "update": "id:mynamespace:music::bob/BestOf
+    "create": true,
     "fields": {
         "title": {
             "assign": "The best of Bob Dylan"
@@ -549,6 +554,21 @@ Refer to <a href="../reads-and-writes.html#create-if-nonexistent">reads and writ
     }
 }
 </pre>
+    </td><td>Document API:
+<pre>
+http PUT /document/v1/mynamespace/music/docid/bob%2FBestOf?create=true
+{
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+
+</pre>
+    </td>
+  </tr>
+</table>
 </p>
 
 
