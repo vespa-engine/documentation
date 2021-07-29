@@ -30,20 +30,18 @@ const handleSuggestClick = (e) => {
 const handleUnfocus = (e) => hideDropdown();
 
 const handleResults = (data) => {
-  console.log(data)
+  dropdown.innerHTML = "";
   if (data.root.children[0].children) {
     const items = data.root.children[0].children[0].children.map((child) => ({
       value: child.value,
     }));
-    console.log(items)
-    console.log(items.length)
     items.map((item) => {
       const p = document.createElement("p");
       p.innerHTML = item.value;
       p.addEventListener("mousedown", handleSuggestClick);
       dropdown.appendChild(p);
-      dropdown.classList.add("show"); //added
-      dropdown.classList.remove("hide"); //added
+      dropdown.classList.add("show");
+      dropdown.classList.remove("hide");
     });
   }
 };
@@ -51,7 +49,6 @@ const handleResults = (data) => {
 const handleInput = (e) => {
   dropdown.innerHTML = "";
   if (e.target.value.length > 0) {
-    
     fetch(
       `https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20query%20where%20default%20contains%20%28%5B%7B%22prefix%22%3Atrue%7D%5D%22${e.target.value.replaceAll(
         /[^a-zA-Z0-9 ]/g,
