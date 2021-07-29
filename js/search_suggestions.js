@@ -21,6 +21,11 @@ const hideDropdown = () => {
   dropdown.classList.add("hide");
 };
 
+const showDropdown = () => {
+  dropdown.classList.add("show");
+  dropdown.classList.remove("hide");
+};
+
 const handleSuggestClick = (e) => {
   e.preventDefault();
   e.stopPropagation();
@@ -40,14 +45,14 @@ const handleResults = (data) => {
       p.innerHTML = item.value;
       p.addEventListener("mousedown", handleSuggestClick);
       dropdown.appendChild(p);
-      dropdown.classList.add("show");
-      dropdown.classList.remove("hide");
+      showDropdown();
     });
+  }else{
+    hideDropdown();
   }
 };
 
 const handleInput = (e) => {
-  dropdown.innerHTML = "";
   if (e.target.value.length > 0) {
     fetch(
       `https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20query%20where%20default%20contains%20%28%5B%7B%22prefix%22%3Atrue%7D%5D%22${e.target.value.replaceAll(
