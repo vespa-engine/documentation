@@ -121,6 +121,217 @@ $ <a href="../reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-mode
 
 
 
+<h2 id="schema-changes">Schema changes</h2>
+<p>
+  Refer to <a href="../reference/schema-reference.html#modifying-schemas">modifying schemas</a>
+  for reference documentation for making changes to a schema, and actions required.
+  Find procedures below for a subset of such changes.
+</p>
+
+
+<h3 id="attribute-to-index">Attribute to index</h3>
+<p>
+  Changing between <code>index</code> and <code>attribute</code> is a common field change operation
+  to optimize performance.
+  Use the <a href="../reindexing.html">reindexing</a> feature to safely migrate data to/from index structures.
+</p>
+<p>
+  When the attribute aspect of a field is removed, the attribute data is dropped on next process restart.
+  Hence, doing a direct change from attribute to index is risky, as a node stop can incur field data loss.
+  A safer approach is to run with both in the transition.
+  The gist of this procedure is hence to add <code>index</code>, run a reindex - then remove attribute aspect:
+</p>
+<pre>
+# field configuration at start
+field artist type string {
+    indexing: summary | attribute
+    attribute: fast-search
+}
+
+-&gt;
+
+# intermediate step to populate index structure, keeping the data in the attribute
+field artist type string {
+    indexing: summary | attribute | index
+    match: word
+    stemming: none
+}
+
+-&gt;
+
+# final configuration, migrated to index
+field artist type string {
+    indexing: summary | index
+    match: word
+    stemming: none
+}
+</pre>
+<p>
+  Procedure - test this using the <a href="../vespa-quick-start.html">quick-start</a>,
+  changing the <code>artist</code> field to an attribute before running.
+  Also add a <a href="../reference/validation-overrides.html">validation override</a>
+  in <code>src/main/application/validation-overrides.xml</code>:
+</p>
+<pre>
+&lt;validation-overrides&gt;
+    &lt;allow until="2021-08-30">indexing-change&lt;/allow&gt;
+&lt;/validation-overrides&gt;
+</pre>
+<p>
+  Run the quick start, keep the Docker container up.
+  Run a query to validate data can be queried -
+  also dump current index structures, see <code>artist</code> as an attribute:
+</p>
+<pre>
+$ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22%3B"
+
+$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
+  docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
+</pre>
+<p>
+  Add index aspect and match/stemming settings to the field, deploy and observe output
+</p>
+<pre>
+field artist type string {
+  indexing: summary | attribute <span style="background-color: yellow;">| index
+    match    : word
+    stemming : none</span>
+}
+
+$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+
+{
+  "log": [
+    {
+      "time": 1628239290150,
+      "level": "WARNING",
+      "message": "Change(s) between active and new application that may require re-index:\nindexing-change:
+                  Consider re-indexing document type 'music' in cluster 'music' because:\n
+                  1) Document type 'music': Field 'artist' changed: add index aspect,
+                  indexing script: '{ input artist | summary artist | attribute artist; }' ->
+                                   '{ input artist | exact | summary artist | attribute artist | index artist; }'\n"
+    }
+  ],
+  "tenant": "default",
+  "url": "http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default",
+  "message": "Session 3 for tenant 'default' prepared and activated.",
+  "configChangeActions": {
+    "restart": [],
+    "refeed": [],
+    "reindex": [
+      {
+        "name": "indexing-change",
+        "documentType": "music",
+        "clusterName": "music",
+        "messages": [
+          "Document type 'music': Field 'artist' changed: add index aspect, indexing script: '{ input artist | summary artist | attribute artist; }' -> '{ input artist | exact | summary artist | attribute artist | index artist; }'"
+        ],
+        "services": [
+          {
+            "serviceName": "searchnode",
+            "serviceType": "searchnode",
+            "configId": "music/search/cluster.music/0",
+            "hostName": "vespa-container"
+          }
+        ]
+      }
+    ]
+  }
+}
+</pre>
+<p>
+  Trigger reindexing, deploy again, wait until done
+  (look for the log message / use the <code>reindexing</code> endpoint).
+  Dumping the index structures now show artist both in index and attribute.
+  Verify the query still works:
+</p>
+<pre>
+$ curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindex
+
+{
+  "generation": 3,
+  "applicationPackageFileReference": "",
+  "modelVersions": ["7.423.37"]
+}
+
+$ curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindexing
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {
+        "music": 3
+      },
+      "ready": {
+        "music": {}
+      }
+    }
+  }
+}
+
+$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+
+$ curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindexing
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {},
+      "ready": {
+        "music": {
+          "readyMillis": 1628241149710,
+          "startedMillis": 1628241179977,
+          "endedMillis": 1628241180525,
+          "state": "successful"
+        }
+      }
+    }
+  }
+}
+
+$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-logfmt | grep Reindexer'
+[2021-08-06 09:13:00.524] INFO    : container-clustercontroller Container.ai.vespa.reindexing.Reindexer
+                                    Completed reindexing of datatype music (code: 1412693671) after PT0.547121S
+
+$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
+  docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
+
+$ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22%3B"
+</pre>
+<p>
+  As data is now reindexed into the index data structures, deploy without attribute.
+  Observe changes to index files, now in index only.
+  Test query after restart:
+</p>
+<pre>
+field artist type string {
+  indexing: summary | index
+    match: word
+    stemming: none
+}
+
+$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+
+$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
+  docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
+
+$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-stop-services && /opt/vespa/bin/vespa-start-services'
+
+$ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22%3B"
+</pre>
+<p>
+  Notes:
+</p>
+<ul>
+  <li>The match/stemming settings above are set to the same at default attribute settings</li>
+  <li>After removing attribute, proton must be restarted to run without attribute memory usage</li>
+</ul>
+
+
+
 <h2 id="cluster-state">Cluster state</h2>
 <p>
   Cluster and node state information is available through the
