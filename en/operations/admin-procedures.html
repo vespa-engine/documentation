@@ -225,7 +225,11 @@ $ (cd src/main/application && zip -r - .) |   curl --header Content-Type:applica
         "documentType": "music",
         "clusterName": "music",
         "messages": [
-          "Document type 'music': Field 'artist' changed: add index aspect, indexing script: '{ input artist | summary artist | attribute artist; }' -> '{ input artist | exact | summary artist | attribute artist | index artist; }'"
+          "Document type 'music': Field 'artist' changed:
+             add index aspect, indexing script:
+               '{ input artist | summary artist | attribute artist; }'
+             ->
+               '{ input artist | exact | summary artist | attribute artist | index artist; }'"
         ],
         "services": [
           {
@@ -241,21 +245,16 @@ $ (cd src/main/application && zip -r - .) |   curl --header Content-Type:applica
 }
 </pre>
 <p>
-  Trigger reindexing, deploy again, wait until done
-  (look for the log message / use the <code>reindexing</code> endpoint).
-  Dumping the index structures now show artist both in index and attribute.
-  Verify the query still works:
+  Wait for the new configuration generation to be activated on the config server(s).
+  After that, allow up to 3 minutes for the config servers to set reindexing ready,
+  track this using the <code>reindexing</code> endpoint:
 </p>
 <pre>
-$ curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindex
+$ while true; do
+    curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindexing | jq .
+    sleep 10
+  done
 
-{
-  "generation": 3,
-  "applicationPackageFileReference": "",
-  "modelVersions": ["7.423.37"]
-}
-
-$ curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindexing
 {
   "enabled": true,
   "clusters": {
@@ -270,10 +269,8 @@ $ curl http://localhost:19071/application/v2/tenant/default/application/default/
   }
 }
 
-$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+...
 
-$ curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindexing
 {
   "enabled": true,
   "clusters": {
@@ -281,19 +278,65 @@ $ curl http://localhost:19071/application/v2/tenant/default/application/default/
       "pending": {},
       "ready": {
         "music": {
-          "readyMillis": 1628241149710,
-          "startedMillis": 1628241179977,
-          "endedMillis": 1628241180525,
-          "state": "successful"
+          "readyMillis": 1628665589516
+        }
+      }
+    }
+  }
+}
+</pre>
+When ready, deploy again to start reindexing:
+<pre>
+$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+<p>
+  Wait for reindexing to complete:
+</p>
+<pre>
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {},
+      "ready": {
+        "music": {
+          "readyMillis": 1628665589516
         }
       }
     }
   }
 }
 
+...
+
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {},
+      "ready": {
+        "music": {
+          "readyMillis": 1628665589516,
+          "startedMillis": 1628668739973,
+          "endedMillis": 1628668740536,
+          "state": "successful"
+        }
+      }
+    }
+  }
+}
+</pre>
+
+
+<p>
+  Dumping the index structures now show artist both in index and attribute.
+  Verify the query still works:
+</p>
+<pre>
 $ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-logfmt | grep Reindexer'
-[2021-08-06 09:13:00.524] INFO    : container-clustercontroller Container.ai.vespa.reindexing.Reindexer
-                                    Completed reindexing of datatype music (code: 1412693671) after PT0.547121S
+[2021-08-11 07:59:00.535] INFO    : container-clustercontroller Container.ai.vespa.reindexing.Reindexer
+                                    Completed reindexing of datatype music (code: 1412693671) after PT0.558683S
 
 $ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
   docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
