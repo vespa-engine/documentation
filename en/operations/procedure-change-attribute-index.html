@@ -43,36 +43,45 @@ field artist type string {
     stemming: none
 }
 </pre>
-<p>
-  Procedure - test this using the <a href="../vespa-quick-start.html">quick-start</a>,
-  changing the <code>artist</code> field to an attribute before running.
-  Also add a <a href="../reference/validation-overrides.html">validation override</a>
-  in <code>src/main/application/validation-overrides.xml</code>:
-</p>
+
+
+
+<h2 id="procedure">Procedure</h2>
+<ol>
+  <li>
+    <p>
+      Test this using the <a href="../vespa-quick-start.html">quick-start</a>,
+      changing the <code>artist</code> field to an attribute before running.
+      Also add a <a href="../reference/validation-overrides.html">validation override</a>
+      in <code>src/main/application/validation-overrides.xml</code>:
+    </p>
 <pre>
 &lt;validation-overrides&gt;
     &lt;allow until="2021-08-30">indexing-change&lt;/allow&gt;
 &lt;/validation-overrides&gt;
 </pre>
-<p>
-  Run the quick start, keep the Docker container up.
-  Run a query to validate data can be queried -
-  also dump current index structures, see <code>artist</code> as an attribute:
-</p>
+  </li>
+  <li>
+    <p>
+      Run the quick start, stop after feeding documents.
+      Run a query to validate data can be queried:
+    </p>
 <pre>
 $ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22%3B"
-
-$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
-  docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
 </pre>
-<p>
-  Add index aspect and match/stemming settings to the field, deploy and observe output
-</p>
+    <p>
+      One can also <a href="#appendix">dump current index structures</a>, see <code>artist</code> as an attribute.
+    </p>
+  </li>
+  <li>
+    <p>
+      Add index aspect and match/stemming settings to the field, deploy and observe output
+    </p>
 <pre>
 field artist type string {
-  indexing: summary | attribute <span style="background-color: yellow;">| index
-    match    : word
-    stemming : none</span>
+    indexing: summary | attribute <span style="background-color: yellow;">| index
+        match    : word
+        stemming : none</span>
 }
 
 $ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
@@ -121,11 +130,14 @@ $ (cd src/main/application && zip -r - .) |   curl --header Content-Type:applica
   }
 }
 </pre>
-<p>
-  Wait for the new configuration generation to be activated on the config server(s).
-  After that, allow up to 3 minutes for the config servers to set reindexing ready,
-  track this using the <code>reindexing</code> endpoint:
-</p>
+  </li>
+  <li>
+    <p>
+      Wait for the new configuration generation to be activated on the config server(s) -
+      this is normally quite immediate.
+      After that, allow up to 3 minutes for the config servers to set reindexing ready,
+      track this using the <code>reindexing</code> endpoint:
+    </p>
 <pre>
 $ while true; do
     curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindexing | jq .
@@ -162,15 +174,18 @@ $ while true; do
   }
 }
 </pre>
-When ready, deploy again to start reindexing:
+  </li>
+  <li>
+    <p>
+      When ready, deploy again to start reindexing,
+      wait for it to complete (use the loop in previous step):
+    </p>
 <pre>
 $ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
-</pre>
-<p>
-  Wait for reindexing to complete:
-</p>
-<pre>
+
+...
+
 {
   "enabled": true,
   "clusters": {
@@ -204,48 +219,64 @@ $ (cd src/main/application && zip -r - .) |   curl --header Content-Type:applica
   }
 }
 </pre>
-
-
-<p>
-  Dumping the index structures now show artist both in index and attribute.
-  Verify the query still works:
-</p>
+  </li>
+  <li>
+    <p>
+      Dumping the index structures now shows artist both in index and attribute, and there is an entry in vespa.log.
+      Verify the query still works:
+    </p>
 <pre>
 $ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-logfmt | grep Reindexer'
 [2021-08-11 07:59:00.535] INFO    : container-clustercontroller Container.ai.vespa.reindexing.Reindexer
                                     Completed reindexing of datatype music (code: 1412693671) after PT0.558683S
 
-$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
-  docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
-
 $ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22%3B"
 </pre>
-<p>
-  As data is now reindexed into the index data structures, deploy without attribute.
-  Observe changes to index files, now in index only.
-  Test query after restart:
-</p>
+  </li>
+  <li>
+    <p>
+      As data is now reindexed into the index data structures, deploy without attribute.
+      (Observe changes to index files, "artist" is now in index only).
+      Test query after restart:
+    </p>
 <pre>
 field artist type string {
-  indexing: summary | index
-    match: word
-    stemming: none
+    indexing: summary | index
+        match    : word
+        stemming : none
 }
 
 $ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 
-$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
-  docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
-
-$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-stop-services && /opt/vespa/bin/vespa-start-services'
-
 $ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22%3B"
 </pre>
+  </li>
+  <li>
+    <p>
+      Optional: restart Vespa - a restart will reclaim memory from the attribute:
+    </p>
+<pre>
+$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-stop-services && /opt/vespa/bin/vespa-start-services'
+</pre>
+  </li>
+</ol>
 <p>
   Notes:
 </p>
 <ul>
   <li>The match/stemming settings above are set to the same at default attribute settings</li>
-  <li>After removing attribute, proton must be restarted to run without attribute memory usage</li>
 </ul>
+
+
+
+<h2 id="appendix">Appendix</h2>
+<p>
+  To inspect attribute and index data (can be useful when troubleshooting),
+  use <a href="../reference/vespa-cmdline-tools.html#vespa-proton-cmd">vespa-proton-cmd</a>,
+  then list files:
+</p>
+<pre>
+$ docker exec vespa /usr/bin/sh -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush' && \
+  docker exec vespa /usr/bin/sh -c '/usr/bin/find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready'
+</pre>
