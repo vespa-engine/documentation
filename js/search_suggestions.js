@@ -49,6 +49,7 @@ const handleResults = (data) => {
       dropdown.appendChild(p);
       showDropdown();
     });
+    if (document.getElementById("searchinput").value <= 0) {hideDropdown();}
   } else {
     hideDropdown();
   }
