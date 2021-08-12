@@ -1,9 +1,10 @@
 const handleResults = (data) => {
   const result = document.getElementById("result");
+  console.log(data);
 
   result.innerHTML = "";
 
-  const hits = data.root.children;
+  const hits = data;
   if (hits && hits.length > 0) {
     document.getElementById("hits").innerHTML = `${hits.length} hit(s)`;
 
@@ -38,19 +39,13 @@ const handleResults = (data) => {
           path,
           content,
           title,
-          gram_content,
-          gram_title,
           summaryfeatures,
         },
       }) => {
         const modifiedURL = baseURL[namespace] + path;
 
         const modifiedContent = (
-          summaryfeatures["nativeRank(content)"] * highlightWeight <
-            summaryfeatures["nativeRank(gram_content)"] ||
-          (gram_content.match(/<\/hi/g) || []).length % 2 == 1
-            ? gram_content
-            : content
+          content
         )
           .replaceAll("<sep />", " ... ")
           .replaceAll("<hi>", "<mark>")
@@ -59,11 +54,7 @@ const handleResults = (data) => {
         const modifiedTitle =
           title == "null"
             ? "No title"
-            : (summaryfeatures["nativeRank(title)"] * highlightWeight >=
-              summaryfeatures["nativeRank(gram_title)"]
-                ? title
-                : gram_title
-              )
+            : title
                 .replaceAll("<hi>", "<mark>")
                 .replaceAll("</hi>", "</mark>");
 
