@@ -6,16 +6,16 @@ dropdown.className = "dropdown hide";
 inputParent.appendChild(dropdown);
 input.setAttribute("autocomplete", "off");
 
+
+//test predictive shadow text
+const suggestText = document.createElement("div");
+suggestText.className = "suggestText";
+suggestText.id = "textSuggest"
+inputParent.appendChild(suggestText);
+suggestText.innerHTML="";
+//
+
 // https://www.freecodecamp.org/news/javascript-debounce-example/
-const debounce = (func, timeout = 200) => {
-  let timer;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      func.apply(this, args);
-    }, timeout);
-  };
-};
 
 const hideDropdown = () => {
   dropdown.classList.remove("show");
@@ -36,10 +36,12 @@ const handleSuggestClick = (e) => {
 
 const handleUnfocus = (e) => hideDropdown();
 
-const handleResults = (data) => {
+const handleSuggestionResults = (data) => {
+  console.log(data);
+  suggestText.innerHTML = "";
   dropdown.innerHTML = "";
-  if (data.root.children) {
-    const items = data.root.children.map((child) => ({
+  if (data.length > 0) {
+    const items = data.map((child) => ({
       value: child.fields.term,
     }));
     items.map((item) => {
@@ -49,26 +51,16 @@ const handleResults = (data) => {
       dropdown.appendChild(p);
       showDropdown();
     });
+    suggestText.innerHTML = items[0].value;
+    document.getElementById("searchinput").placeholder = "";
+    if (document.getElementById("searchinput").value <= 0) {suggestText.innerHTML = ""; hideDropdown(); document.getElementById("searchinput").placeholder = "Search Documentation";}
   } else {
     hideDropdown();
+    suggestText.innerHTML= "";
+    document.getElementById("searchinput").placeholder = "Search Documentation";
   }
 };
 
-const handleInput = (e) => {
-  if (e.target.value.length > 0) {
-    fetch(
-      `https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20term%20where%20term%20contains%20%28%5B%7B%22prefix%22%3Atrue%7D%5D%22${e.target.value.replaceAll(
-        /[^a-zA-Z0-9 ]/g,
-        ""
-      )}%22%29%20and%20%28corpus_count%20>%201%20or%20query_count%20>%201%29%3B`
-    )
-      .then((res) => res.json())
-      .then(handleResults)
-      .catch(console.error);
-  } else {
-    hideDropdown();
-  }
-};
 
-input.addEventListener("input", debounce(handleInput));
-input.addEventListener("focusout", handleUnfocus);
+export default handleSuggestionResults;
+export {handleUnfocus, hideDropdown};
