@@ -104,10 +104,11 @@ Example:
 }
 ```
 
-We then set the environment variable:
+Set the environment variable, for example by appending to the
+[conf/vespa/default-env.txt](https://docs.vespa.ai/en/setting-vespa-variables.html) file in your Vespa installation:
 
 ```sh
-VESPA_TLS_CONFIG_FILE=/absolute/path/to/my-tls-config.json
+override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
 ```
 
 All file paths must be absolute. If a Vespa process cannot load one or more files, it will fail to start up.
@@ -125,7 +126,7 @@ These are consulted as part of every TLS handshake and must pass before any conn
 Authorization rules are specified as part of the JSON configuration file.
 
 #### Example
-Let us assume our Vespa cluster consists of many nodes, each with their own certificate signed by a shared Certificate Authority.
+Let's assume our Vespa cluster consists of many nodes, each with their own certificate signed by a shared Certificate Authority.
 Each certificate contains a Subject Alternate Name (SAN) DNS name entry of the form
 `<unique-node-id>.mycluster.vespa.example.com`, where *unique-node-id* is unique per cluster node.
 These nodes will be running the actual Vespa services and must all be able to talk to each other.
@@ -133,7 +134,7 @@ These nodes will be running the actual Vespa services and must all be able to ta
 Let's also assume there is a monitoring service that requires low-level access to the services.
 Certificates presented by nodes belonging to this service will always have a Common Name (CN) value of
 `vespa-monitoring.example.com` and a DNS SAN entry of the form `<instance>.<region>.monitor.example.com`.
-We want any monitoring instance in any us-east region to be able to access our cluster, but no others.
+Any monitoring instance in any us-east region must be able to access our cluster, but no others.
 
 Our TLS config file implementing these rules may look like this:
 
@@ -213,7 +214,7 @@ and check [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) for an
 that indicate a misconfiguration (such as certificate rejections etc)—see the Troubleshooting section.
 The cluster should quickly converge to an available state.
 
-This is the simplest and fastest way to enable TLS and is what we recommend if downtime is acceptable.
+This is the simplest and fastest way to enable TLS, and is highly recommend if downtime is acceptable.
 
 ## Upgrading an existing non-TLS Vespa application to TLS without downtime
 If you already have a Vespa application serving live traffic that you don't want to take down completely in
@@ -221,7 +222,7 @@ order to enable TLS, it's possible to perform a gradual, rolling upgrade. Doing 
 TLS connections to be used alongside each other for some time, moving more and more nodes onto TLS.
 Finally, once all nodes are speaking only TLS, the support for insecure connections must be removed entirely.
 
-To achieve this, Vespa supports a feature we call *insecure mixed mode*.
+To achieve this, Vespa supports a feature called *insecure mixed mode*.
 Enabling mixed mode lets all servers handle both TLS and insecure traffic at the same time.
 
 Mixed mode is controlled via the value set in environment variable `VESPA_TLS_INSECURE_MIXED_MODE`.
@@ -265,7 +266,8 @@ $ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-cert
 
 ## FAQ
 * Q: Should TLS be used even if I have a latency-sensitive real-time search application?
-  * A: Yes. The Vespa cloud team has run many such applications in production for a long time and the overhead imposed by TLS is negligible. We've spent a lot of time tuning our TLS integrations to keep overhead to a minimum.
+  * A: Yes. The Vespa cloud team has run many such applications in production for a long time and the overhead imposed by TLS is negligible.
+    Significant effort have been spent tuning Vespa's TLS integrations to keep overhead to a minimum.
 * Q: How much overhead does TLS impose in practice?
   * A: With modern CPUs, expect somewhere around 1-2% extra CPU usage for symmetric encryption (i.e. active connections). Connection handshakes have an expected extra latency of 2-4 ms of CPU time (network latency not included) due to more expensive cryptographic operations. Vespa performs handshake operations in separate threads to avoid stalling other network traffic. Vespa also uses long-lived connections internally to reduce the number of handshakes.
 
