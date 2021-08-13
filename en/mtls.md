@@ -42,8 +42,8 @@ and aggregating low level metrics or status pages from the Vespa backends.
 
 ## Prerequisites
 
-{% include important.html content="This document assumes you have some experience with generating and using certificates and private keys.
-Please see [TODO](TODO) before proceeding if you're just getting started.
+{% include important.html content="This document assumes you have some experience with generating and
+using certificates and private keys.
 " %}
 
 This feature is supported from Vespa 7.441.3.
