@@ -7,7 +7,7 @@ inputParent.appendChild(dropdown);
 input.setAttribute("autocomplete", "off");
 
 
-//test predictive shadow text
+//predictive shadow text
 const suggestText = document.createElement("div");
 suggestText.className = "suggestText";
 suggestText.id = "textSuggest"

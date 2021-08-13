@@ -25,7 +25,6 @@ const handleQuery = (query) => {
     
     document.getElementById("hits").innerHTML = "";
     result.innerHTML = `Searching for '${query}' ...`;
-
  fetch(
   `https://doc-search.vespa.oath.cloud/search/?term=${escape(query)}`
 )
