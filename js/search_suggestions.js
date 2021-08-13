@@ -43,7 +43,7 @@ const handleResults = (data) => {
     const items = data.root.children.map((child) => ({
       value: child.fields.term,
     }));
-    items.forEach((item, index) => {
+    items.forEach((item) => {
       const p = document.createElement("p");
       p.innerHTML = item.value;
       p.addEventListener("mousedown", handleSuggestClick);
