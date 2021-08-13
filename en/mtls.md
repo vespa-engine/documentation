@@ -247,6 +247,22 @@ Even a single service left with insecure mixed mode enabled could be used by a d
 other (believed secure) services.
 " %}
 
+## Verify configuration of TLS
+Successful configuration should be verified at runtime once TLS is enabled on all nodes.
+The [openssl s_client](https://www.openssl.org/docs/man1.1.1/man1/openssl-s_client.html) tool is suitable for this.
+Connect to a Vespa service, e.g a configserver on port 19071 or a container on port 8080, and verify that `openssl s_client`
+successfully completes the TLS handshake.
+
+```sh
+$ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-certs.pem -key /absolute/path/to/private-key.pem -cert /absolute/path/to/private-key.pem
+```
+
+Further, you should verify that servers require clients to authenticate by omitting `-key`/`-cert` from above command.
+The `s_client` tool should print an error during handshake and exit immediately.
+```sh
+$ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-certs.pem
+```
+
 ## FAQ
 * Q: Should TLS be used even if I have a latency-sensitive real-time search application?
   * A: Yes. The Vespa cloud team has run many such applications in production for a long time and the overhead imposed by TLS is negligible. We've spent a lot of time tuning our TLS integrations to keep overhead to a minimum.
@@ -254,8 +270,12 @@ other (believed secure) services.
   * A: With modern CPUs, expect somewhere around 1-2% extra CPU usage for symmetric encryption (i.e. active connections). Connection handshakes have an expected extra latency of 2-4 ms of CPU time (network latency not included) due to more expensive cryptographic operations. Vespa performs handshake operations in separate threads to avoid stalling other network traffic. Vespa also uses long-lived connections internally to reduce the number of handshakes.
 
 ## Troubleshooting
-TODO Example TLS errors in log to look out for
+### Disable TLS hostname validation
+Vespa enables the [HTTPS endpoint identification algorithm](https://datatracker.ietf.org/doc/html/rfc2818#section-3) by default.
+This extra verification can only be used if all certificates have their respective host's IP addresses and hostnames
+in the Subject / Subject Alternative Names extensions.
+[Disable hostname validation](reference/mtls.html#top-level-elements) if this is not the case.
 
 ## Appendix A: setting up with a self-signed Certificate Authority
-TODO consider if this should be its own subsection instead of an appendix
+TODO Follow up with setup used from blog post
 TODO can we use EC here?

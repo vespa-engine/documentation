@@ -44,7 +44,7 @@ Possible TLS mixed mode settings for `VESPA_TLS_INSECURE_MIXED_MODE`:
 ### Configuration file
 The TLS configuration file contains a single top-level JSON object.
 
-#### Top-level elements
+#### <a name="top-level-elements"/>Top-level elements
 <table class="table table-striped">
     <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
     <tr>
