@@ -93,7 +93,6 @@ const handleSuggestClick = (e) => {
 const handleUnfocus = (e) => hideDropdown();
 
 const handleSuggestionResults = (data) => {
-  console.log(data)
   firstArrow = true;
   dropdown.innerHTML = "";
   if (data.length > 0) {

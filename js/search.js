@@ -14,9 +14,7 @@ const debounce = (func, timeout = 200) => {
 
 
 const handleQuery = (query) => {
-
-  console.log(query)
-
+  
   if (query.length > 0) {
 
     const result = document.getElementById("result");

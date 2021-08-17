@@ -1,8 +1,6 @@
 const handleResults = (data) => {
   const result = document.getElementById("result");
 
-  console.log(data)
-
   result.innerHTML = "";
 
   const hits = data;
