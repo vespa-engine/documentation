@@ -6,25 +6,81 @@ dropdown.className = "dropdown hide";
 inputParent.appendChild(dropdown);
 input.setAttribute("autocomplete", "off");
 
+const getNextSibling = (node) => {
+  if (node.nextSibling) {
+    return node.nextSibling;
+  }
+  return null;
+}
 
-//predictive shadow text
-const suggestText = document.createElement("div");
-suggestText.className = "suggestText";
-suggestText.id = "textSuggest"
-inputParent.appendChild(suggestText);
-suggestText.innerHTML="";
-//
+const getPreviousSibling = (node) => {
+  if (node.previousSibling) {
+    return node.previousSibling
+  }
+  return null;
+}
 
-// https://www.freecodecamp.org/news/javascript-debounce-example/
+//arrow-key logic
+let dropdownShow = false;
+let firstArrow = false;
+const selectedID = "selectedDropdownElement";
+let writtenInput = "";
+
+const handleArrowKeyss = (event) => {
+  if (dropdownShow){ 
+    let newSelected;
+    let selected;
+    if (event.key === "ArrowDown" && event.target.value) {
+      event.preventDefault();
+      if (firstArrow) {
+        writtenInput = input.value;
+        newSelected = dropdown.firstChild;
+        firstArrow = false;
+      } else {
+        selected = document.getElementById(selectedID);
+        selected.id = "";
+        newSelected = getNextSibling(selected);
+      }
+      if (newSelected) {
+        newSelected.id = selectedID;
+        input.value = newSelected.innerHTML;
+      } else {
+        firstArrow = true;
+        input.value = writtenInput;
+      }
+    } else if (event.key === "ArrowUp" && event.target.value){
+      event.preventDefault();
+      if (firstArrow) {
+        writtenInput = input.value;
+        newSelected = dropdown.lastChild;
+        firstArrow = false;
+      } else {
+        selected = document.getElementById(selectedID);
+        selected.id = "";
+        newSelected = getPreviousSibling(selected);
+      }
+      if (newSelected) {
+        newSelected.id = selectedID;
+        input.value = newSelected.innerHTML;
+      } else {
+        firstArrow = true;
+        input.value = writtenInput;
+      }
+    }
+  }
+}
+
 
 const hideDropdown = () => {
   dropdown.classList.remove("show");
   dropdown.classList.add("hide");
+  dropdownShow = false;
 };
 
 const showDropdown = () => {
   dropdown.classList.add("show");
   dropdown.classList.remove("hide");
+  dropdownShow = true;
 };
 
 const handleSuggestClick = (e) => {
@@ -37,8 +93,8 @@ const handleSuggestClick = (e) => {
 const handleUnfocus = (e) => hideDropdown();
 
 const handleSuggestionResults = (data) => {
-  console.log(data);
-  suggestText.innerHTML = "";
+  console.log(data)
+  firstArrow = true;
   dropdown.innerHTML = "";
   if (data.length > 0) {
     const items = data.map((child) => ({
@@ -49,18 +105,13 @@ const handleSuggestionResults = (data) => {
       p.innerHTML = item.value;
       p.addEventListener("mousedown", handleSuggestClick);
       dropdown.appendChild(p);
-      showDropdown();
     });
-    suggestText.innerHTML = items[0].value;
-    document.getElementById("searchinput").placeholder = "";
-    if (document.getElementById("searchinput").value <= 0) {suggestText.innerHTML = ""; hideDropdown(); document.getElementById("searchinput").placeholder = "Search Documentation";}
+    showDropdown();
+    if (document.getElementById("searchinput").value <= 0) { hideDropdown();}
   } else {
     hideDropdown();
-    suggestText.innerHTML= "";
-    document.getElementById("searchinput").placeholder = "Search Documentation";
   }
 };
 
-
 export default handleSuggestionResults;
-export {handleUnfocus, hideDropdown};
+export {handleUnfocus, hideDropdown, handleArrowKeyss};
