@@ -1,5 +1,5 @@
 import handleResults from "./handle_results.js";
-import handleSuggestionResults, {handleUnfocus, hideDropdown, handleArrowKeyss} from "./handle_search_suggestions.js";
+import handleSuggestionResults, {handleUnfocus, hideDropdown, handleArrowKeys} from "./handle_search_suggestions.js";
 
 // https://www.freecodecamp.org/news/javascript-debounce-example/
 const debounce = (func, timeout = 200) => {
@@ -14,7 +14,7 @@ const debounce = (func, timeout = 200) => {
 
 
 const handleQuery = (query) => {
-  
+
   if (query.length > 0) {
 
     const result = document.getElementById("result");
@@ -64,4 +64,4 @@ document.getElementById("searchinput").addEventListener(
 );
 
 document.getElementById("searchinput").addEventListener("focusout", handleUnfocus);
-document.getElementById("searchinput").addEventListener("keydown", handleArrowKeyss)
+document.getElementById("searchinput").addEventListener("keydown", handleArrowKeys)

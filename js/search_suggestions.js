@@ -1,4 +1,4 @@
-import handleSuggestionResults, {handleUnfocus, hideDropdown, handleArrowKeyss} from "./handle_search_suggestions.js"; 
+import handleSuggestionResults, {handleUnfocus, hideDropdown, handleArrowKeys} from "./handle_search_suggestions.js"; 
 
 if (window.location.pathname != "/search.html"){
 const input = document.getElementById("searchinput");
@@ -33,5 +33,5 @@ const handleInput = (e) => {
 
 input.addEventListener("input", debounce(handleInput));
 input.addEventListener("focusout", handleUnfocus);
-input.addEventListener("keydown", handleArrowKeyss);
+input.addEventListener("keydown", handleArrowKeys);
 }

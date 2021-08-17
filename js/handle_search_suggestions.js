@@ -26,7 +26,7 @@ let firstArrow = false;
 const selectedID = "selectedDropdownElement";
 let writtenInput = "";
 
-const handleArrowKeyss = (event) => {
+const handleArrowKeys = (event) => {
   if (dropdownShow){ 
     let newSelected;
     let selected;
@@ -113,4 +113,4 @@ const handleSuggestionResults = (data) => {
 };
 
 export default handleSuggestionResults;
-export {handleUnfocus, hideDropdown, handleArrowKeyss};
+export {handleUnfocus, hideDropdown, handleArrowKeys};
