@@ -12,6 +12,7 @@ To keep your self-hosted Vespa installation safe, follow the guidelines outlined
 1. Isolate the Vespa hosts
 2. Secure the application container with access control filters and TLS
 3. Lockdown directory permissions
+4. Securing Vespa with mutually authenticated TLS (mTLS)
 
 ## Isolating the Vespa hosts
 
@@ -69,3 +70,7 @@ Note also that private keys used by the container to setup TLS must be protected
 to be readable by the container process only.
  
 Vespa does not have support for encryption of on-disk document stores or indexes.
+
+## Securing Vespa with mutually authenticated TLS (mTLS)
+Protect all internal endpoints and protocols in Vespa with mutually authenticated Transport Layer Security (mTLS).
+See the [dedicated documentation](mtls.html) on how to get started.
