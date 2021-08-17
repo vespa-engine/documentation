@@ -118,7 +118,7 @@ In that case simply having a valid certificate is not sufficient to be used as a
 You can constrain which certificates may access the internal Vespa service by using *authorization rules*.
 These are consulted as part of every TLS handshake and must pass before any connection can be established.
 
-Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](#top-level-elements) member.
+Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](reference/mtls.html#top-level-elements) member.
 See the [reference documentation](reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
 
 #### Example
