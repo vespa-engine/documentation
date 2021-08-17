@@ -4,17 +4,15 @@ title: "Securing Vespa with mutually authenticated TLS (mTLS)"
 ---
 
 ## Introduction
-{% include note.html content="See accompanying [reference](reference/mtls.html) for details on for instance configuration syntax." %}
-{% include note.html content="This document is only relevant if you're **self-hosting Vespa**.
+*Note: This document is only relevant if you're **self-hosting Vespa**.
 If you're using Vespa Cloud all services are automatically set up securely by default with full mTLS,
-with all key/certificate management handled for you.
-" %}
-{% include note.html content="Though the terms *TLS* and *mTLS* may be used interchangeably in this document, *TLS* implies *mTLS* for all cluster-internal traffic." %}
+with all key/certificate management handled for you.*
 
 [Transport Layer Security (TLS)](https://datatracker.ietf.org/doc/html/rfc5246) is a protocol that uses cryptography
 to enable secure, tamper-proof communication over the network.
 This document describes the TLS functionality in Vespa and how to configure it.
 When properly configured, TLS ensures only trusted Vespa services can talk to each other.
+See accompanying [reference](reference/mtls.html) for details on configuration syntax.
 
 By default, all communication between self-hosted Vespa nodes is *unauthenticated* and *unencrypted*.
 This means anyone with network access can read and write data and potentially execute commands on the system.
@@ -39,12 +37,11 @@ This document only covers **cluster-internal traffic**.
 Enabling TLS in Vespa means that all internal endpoints are mTLS protected,  even HTTP servers for status pages and metrics.
 Be especially aware of this if you have custom solutions in place for collecting
 and aggregating low level metrics or status pages from the Vespa backends.
+Though the terms *TLS* and *mTLS* may be used interchangeably in this document, *TLS* implies *mTLS* for all cluster-internal traffic.
 
 ## Prerequisites
 
-{% include important.html content="This document assumes you have some experience with generating and
-using certificates and private keys.
-" %}
+This section assumes you have some experience with generating and using certificates and private keys.
 
 This feature is supported from Vespa 7.441.3.
 
@@ -56,8 +53,6 @@ In order to enable TLS, some extra files must be present on every node in your V
   Note that Vespa does not currently support encrypted private key files.
 * A JSON configuration file telling Vespa which certificate/key files to use, and to provide further options for authorization.
   See [Writing a TLS configuration file](#tls-config-file) for how to write these.
-
-TODO Provide example OpenSSL commands for setting up private CA with self-signed certificates for local development?
 
 How certificate and key material is distributed to the nodes is outside the scope of this article.
 See [dedicated section](#automatic-reload) for Vespa's support of automatic and live reloading of TLS credentials.
@@ -123,7 +118,8 @@ In that case simply having a valid certificate is not sufficient to be used as a
 You can constrain which certificates may access the internal Vespa service by using *authorization rules*.
 These are consulted as part of every TLS handshake and must pass before any connection can be established.
 
-Authorization rules are specified as part of the JSON configuration file.
+Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](#top-level-elements) member.
+See the [reference documentation](reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
 
 #### Example
 Let's assume our Vespa cluster consists of many nodes, each with their own certificate signed by a shared Certificate Authority.
@@ -162,31 +158,6 @@ Our TLS config file implementing these rules may look like this:
   ]
 }
 ```
-
-The `authorized-peers` member is an array of credential rule-set objects. For a peer to be considered authorized its certificate MUST match at least one rule set completely.
-
-Each rule set must contain a `required-credentials` array of credential matchers. For a certificate to match a rule set it MUST match all its credential matchers.
-
-A credential is matched by checking a pattern given in `must-match` against a specified certificate `field`. The following fields are currently supported:
-* *CN* - the Common Name part of the certificate's Distinguished Name information. If multiple CN entries are present, the last one will be considered.
-* *SAN_DNS* - a Subject Alternate Name with type DNS. A certificate may contain many SAN entries. If so, all entries are checked and the credential is considered a match if at least one entry matches.
-* *SAN_URI* - a Subject Alternate Name with type URI. Currently only supports case-sensitive exact string matching.
-
-For *CN* and *SAN_DNS* fields, the `must-match` pattern is a "glob"-style pattern with the following semantics:
-* `*` matches 0-n non-dot characters within a single dot-separated hostname part. This is similar to the wildcards used by certificates for HTTPS hostname validation. Examples
-  * *\*.baz* matches *bar.baz* but not *foo.bar.baz* or *foo.baz.bar*.
-  * *\*.\*.baz* matches *foo.bar.baz* but not *bar.baz*.
-  * *\*-myservice* matches *foo-myservice* but not *bar.foo-myservice*.
-* `?` matches exactly 1 non-dot character within a single dot-separated hostname part. Examples:
-  * *?.bar* matches *x.bar* but not *bar*, *.bar* or *yx.bar*.
-  * *?.?.baz* matches *x.y.baz* but not *x.baz* or *xx.yy.baz*.
-
-For *SAN_URI* fields, must-match specifies a string whose content must exactly match that of the certificate.
-
-The description field is optional and is useful for e.g. documenting why a particular ruleset is present. It has no semantic meaning to the authorization engine.
-
-Not providing the `authorized-peers` field means only certificate validity is used for authorization.
-If the `authorized-peers` field is provided, it must contain at least one entry.
 
 ### <a name="automatic-reload"/>Automatic reloading of crypto material
 Vespa performs periodic reloading of the specified TLS configuration file.
@@ -278,6 +249,3 @@ This extra verification can only be used if all certificates have their respecti
 in the Subject / Subject Alternative Names extensions.
 [Disable hostname validation](reference/mtls.html#top-level-elements) if this is not the case.
 
-## Appendix A: setting up with a self-signed Certificate Authority
-TODO Follow up with setup used from blog post
-TODO can we use EC here?

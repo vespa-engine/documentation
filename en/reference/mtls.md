@@ -55,22 +55,24 @@ The TLS configuration file contains a single top-level JSON object.
     <tr>
         <td>accepted-ciphers</td>
         <td>No</td>
-        <td>JSON array of accepted TLS cipher suites.</td>
+        <td markdown="span">JSON array of accepted TLS cipher suites. See [here](#cipher-suites) for cipher suites enabled by default.</td>
     </tr>
     <tr>
         <td>accepted-protocols</td>
         <td>No</td>
-        <td>JSON array of accepted TLS protocol versions.</td>
+        <td markdown="span">JSON array of accepted TLS protocol versions. See [here](#protocol-versions) for TLS versions enabled by default.</td>
     </tr>
     <tr>
         <td>authorized-peers</td>
         <td>No</td>
-        <td markdown="span">JSON array of [authorized-peer](#authorized-peer) objects.</td>
+        <td markdown="span">
+          JSON array of [authorized-peer](#authorized-peer) objects. Authorization engine is disabled if not specified. 
+          See dedicated [section](#peer-authorization-rules) on how to create peer authorization rules.</td>
     </tr>
     <tr>
         <td>disable-hostname-validation</td>
         <td>No</td>
-        <td>Disables TLS/HTTPS hostname validation. Enabled by default.</td>
+        <td markdown="span">Disables TLS/HTTPS hostname validation. Enabled by default (default value `false`).</td>
     </tr>
 </table>
 
@@ -140,6 +142,32 @@ The TLS configuration file contains a single top-level JSON object.
     </tr>
 </table>
 
+#### Peer authorization rules
+The `authorized-peers` member is an array of credential rule-set objects. For a peer to be considered authorized its certificate MUST match at least one rule set completely.
+
+Each rule set must contain a `required-credentials` array of credential matchers. For a certificate to match a rule set it MUST match all its credential matchers.
+
+A credential is matched by checking a pattern given in `must-match` against a specified certificate `field`. The following fields are currently supported:
+* *CN* - the Common Name part of the certificate's Distinguished Name information. If multiple CN entries are present, the last one will be considered.
+* *SAN_DNS* - a Subject Alternate Name with type DNS. A certificate may contain many SAN entries. If so, all entries are checked and the credential is considered a match if at least one entry matches.
+* *SAN_URI* - a Subject Alternate Name with type URI. Currently only supports case-sensitive exact string matching.
+
+For *CN* and *SAN_DNS* fields, the `must-match` pattern is a "glob"-style pattern with the following semantics:
+* `*` matches 0-n non-dot characters within a single dot-separated hostname part. This is similar to the wildcards used by certificates for HTTPS hostname validation. Examples
+  * *\*.baz* matches *bar.baz* but not *foo.bar.baz* or *foo.baz.bar*.
+  * *\*.\*.baz* matches *foo.bar.baz* but not *bar.baz*.
+  * *\*-myservice* matches *foo-myservice* but not *bar.foo-myservice*.
+* `?` matches exactly 1 non-dot character within a single dot-separated hostname part. Examples:
+  * *?.bar* matches *x.bar* but not *bar*, *.bar* or *yx.bar*.
+  * *?.?.baz* matches *x.y.baz* but not *x.baz* or *xx.yy.baz*.
+
+For *SAN_URI* fields, must-match specifies a string whose content must exactly match that of the certificate.
+
+The description field is optional and is useful for e.g. documenting why a particular ruleset is present. It has no semantic meaning to the authorization engine.
+
+Not providing the `authorized-peers` field means only certificate validity is used for authorization.
+If the `authorized-peers` field is provided, it must contain at least one entry.
+
 #### Example
 ```json
 {
@@ -147,7 +175,7 @@ The TLS configuration file contains a single top-level JSON object.
     "ca-certificates": "/absolute/path/to/ca-certs.pem",
     "certificates": "/absolute/path/to/host-certs.pem",
     "private-key": "/absolute/path/to/private-key.pem",
-    "disable-hostname-validation": true,
+    "disable-hostname-validation": false,
     "accepted-ciphers": ["TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"],
     "accepted-protocols": ["TLSv1.2"]
   },
@@ -199,7 +227,7 @@ OpenSSL versions prior to 1.0.1 are not supported."
 ### Default TLS protocol settings
 Vespa will by default use the following TLS configuration (unless overridden by `accepted-ciphers` / `accepted-protocols`).
 
-#### Protocol version
+#### Protocol versions
 * `TLSv1.2`
 
 #### <a name="cipher-suites"/>Cipher suites
