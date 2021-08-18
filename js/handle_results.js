@@ -45,16 +45,16 @@ const handleResults = (data) => {
         const modifiedContent = (
           content
         )
-          .replaceAll("<sep />", " ... ")
-          .replaceAll("<hi>", "<mark>")
-          .replaceAll("</hi>", "</mark>");
+          .replace(/<sep \/>/g, " ... ")
+          .replace(/<hi>/g, "<mark>")
+          .replace(/<\/hi>/g, "</mark>");
 
         const modifiedTitle =
           title == "null"
             ? "No title"
             : title
-                .replaceAll("<hi>", "<mark>")
-                .replaceAll("</hi>", "</mark>");
+                .replace(/<hi>/g, "<mark>")
+                .replace(/<\/hi>/g, "</mark>");
 
         const listItem = document.createElement("li");
         listItem.className = "media";
