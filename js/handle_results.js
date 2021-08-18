@@ -1,6 +1,5 @@
 const handleResults = (data) => {
   const result = document.getElementById("result");
-  console.log(data);
 
   result.innerHTML = "";
 
@@ -30,7 +29,6 @@ const handleResults = (data) => {
 
     const highlightWeight = 10;
 
-    console.dir(hits);
 
     hits.forEach(
       ({
