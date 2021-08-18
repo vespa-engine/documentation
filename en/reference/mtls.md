@@ -22,7 +22,7 @@ on how to secure Vespa with mutually authenticated TLS."
     </tr>
 </table>
 
-### <a name="tls-mixed-mode"/>TLS mixed mode
+### TLS mixed mode
 Possible TLS mixed mode settings for `VESPA_TLS_INSECURE_MIXED_MODE`:
 
 <table class="table table-striped">
@@ -44,11 +44,11 @@ Possible TLS mixed mode settings for `VESPA_TLS_INSECURE_MIXED_MODE`:
 ### Configuration file
 The TLS configuration file contains a single top-level JSON object.
 
-#### <a name="top-level-elements"/>Top-level elements
+#### Top-level elements
 <table class="table table-striped">
     <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
     <tr>
-        <td markdown="span">[files](#files)</td>
+        <td markdown="span">[files](#the-files-element)</td>
         <td>Yes</td>
         <td>JSON object containing file system paths crypto material.</td>
     </tr>
@@ -66,7 +66,7 @@ The TLS configuration file contains a single top-level JSON object.
         <td>authorized-peers</td>
         <td>No</td>
         <td markdown="span">
-          JSON array of [authorized-peer](#authorized-peer) objects. Authorization engine is disabled if not specified. 
+          JSON array of [authorized-peer](#the-authorized-peer-element) objects. Authorization engine is disabled if not specified. 
           See dedicated [section](#peer-authorization-rules) on how to create peer authorization rules.</td>
     </tr>
     <tr>
@@ -76,7 +76,7 @@ The TLS configuration file contains a single top-level JSON object.
     </tr>
 </table>
 
-#### <a name="files"/>The *files* element
+#### The *files* element
 <table class="table table-striped">
     <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
     <tr>
@@ -102,13 +102,13 @@ The TLS configuration file contains a single top-level JSON object.
     </tr>
 </table>
 
-#### <a name="authorized-peer"/>The *authorized-peer* element
+#### The *authorized-peer* element
 <table class="table table-striped">
     <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
     <tr>
         <td>required-credentials</td>
         <td>Yes</td>
-        <td markdown="span">A JSON array specifying each [credential requirement](#required-credential) for this particular rule.</td>
+        <td markdown="span">A JSON array specifying each [credential requirement](#the-required-credential-element) for this particular rule.</td>
     </tr>
     <tr>
         <td>name</td>
@@ -127,7 +127,7 @@ The TLS configuration file contains a single top-level JSON object.
     </tr>
 </table>
 
-#### <a name="required-credential"/>The *required-credential* element
+#### The *required-credential* element
 <table class="table table-striped">
     <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
     <tr>
@@ -230,7 +230,7 @@ Vespa will by default use the following TLS configuration (unless overridden by 
 #### Protocol versions
 * `TLSv1.2`
 
-#### <a name="cipher-suites"/>Cipher suites
+#### Cipher suites
 * `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384`
 * `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`
 * `TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256` (JDK 12+)

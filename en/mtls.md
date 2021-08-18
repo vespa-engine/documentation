@@ -55,7 +55,7 @@ In order to enable TLS, some extra files must be present on every node in your V
   See [Writing a TLS configuration file](#writing-a-tls-configuration-file) for how to write these.
 
 How certificate and key material is distributed to the nodes is outside the scope of this article.
-See [dedicated section](#automatic-reload) for Vespa's support of automatic and live reloading of TLS credentials.
+See [dedicated section](#automatic-reloading-of-crypto-material) for Vespa's support of automatic and live reloading of TLS credentials.
 
 {% include warning.html content="You should never include public Certificate Authorities as part of the list of Certificate Authorities you trust.
 Only use CAs that you (or your organization) directly control or trust. This is to minimize the risk of malicious actors
@@ -68,7 +68,7 @@ Make sure only the user running the Vespa processes can read the private key fil
 Key and certificate files should only be writable by administrator users.
 " %}
 
-## <a name="configuring-tls"/>Configuring Vespa TLS
+## Configuring Vespa TLS
 On any node running Vespa software, TLS is controlled via a single environment variable.
 This variable contains an absolute path pointing to a JSON configuration file:
 ```sh
@@ -159,7 +159,7 @@ Our TLS config file implementing these rules may look like this:
 }
 ```
 
-### <a name="automatic-reload"/>Automatic reloading of crypto material
+### Automatic reloading of crypto material
 Vespa performs periodic reloading of the specified TLS configuration file.
 Currently this happens every 60 minutes. This reloading happens live and does not impact service availability.
 Both certificates, the private key and authorization rules are reloaded.
@@ -202,7 +202,7 @@ TLS rollout happens in 3 phases:
 
 **Phase 1:** clients do not use TLS, servers accept both TLS and plaintext clients
 1. Set `VESPA_TLS_INSECURE_MIXED_MODE=plaintext_client_mixed_server`.
-1. Set `VESPA_TLS_CONFIG` file as documented in [Configuring Vespa TLS](#configuring-tls).
+1. Set `VESPA_TLS_CONFIG` file as documented in [Configuring Vespa TLS](#configuring-vespa-tls).
 1. Rolling restart of all Vespa services to make mixed mode take effect.
 
 **Phase 2:** clients use TLS, servers accept both TLS and plaintext clients
