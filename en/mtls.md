@@ -52,7 +52,7 @@ In order to enable TLS, some extra files must be present on every node in your V
 * A file containing the private key corresponding to the certificate in the above chain, in PKCS#8 PEM format.
   Note that Vespa does not currently support encrypted private key files.
 * A JSON configuration file telling Vespa which certificate/key files to use, and to provide further options for authorization.
-  See [Writing a TLS configuration file](#tls-config-file) for how to write these.
+  See [Writing a TLS configuration file](#writing-a-tls-configuration-file) for how to write these.
 
 How certificate and key material is distributed to the nodes is outside the scope of this article.
 See [dedicated section](#automatic-reload) for Vespa's support of automatic and live reloading of TLS credentials.
@@ -86,7 +86,7 @@ Vespa command-line tools will automatically pick up the required configuration a
 {% include important.html content="If this variable is not set, Vespa starts up in insecure mode without any TLS!
 " %}
 
-### <a name="tls-config-file"/>Writing a TLS configuration file
+### Writing a TLS configuration file
 The simplest possible configuration file only needs to know the certificates to trust and the certificate/key pair that identifies the node itself.
 Example:
 ```json
