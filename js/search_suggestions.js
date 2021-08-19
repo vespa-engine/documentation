@@ -17,10 +17,10 @@ const debounce = (func, timeout = 200) => {
 const handleInput = (e) => {
   if (e.target.value.length > 0) {
     fetch(
-      `https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20term%20where%20term%20contains%20%28%5B%7B%22prefix%22%3Atrue%7D%5D%22${e.target.value.replaceAll(
+      `https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20sources%20term%20where%20default%20contains%20%28%5B%7B%22prefix%22%3Atrue%7D%5D%22${e.target.value.replaceAll(
         /[^a-zA-Z0-9 ]/g,
         ""
-      )}%22%29%20and%20%28corpus_count%20>%201%20or%20query_count%20>%201%29%3B&ranking=term_rank`
+      )}%22%29%3B&ranking=term_rank`
     )
       .then((res) => res.json())
       .then((res) => {const children = (res.root.children)? res.root.children : [];
