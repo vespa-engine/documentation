@@ -42,6 +42,9 @@ Though the terms *TLS* and *mTLS* may be used interchangeably in this document, 
 ## Prerequisites
 
 This section assumes you have some experience with generating and using certificates and private keys.
+For an introduction, see [Appendix A: setting up with a self-signed Certificate Authority](#setting-up-self-signed-ca)
+which gives step-by-step instructions on setting up certificates that can be used internally for a
+single Vespa application.
 
 This feature is supported from Vespa 7.441.3.
 
@@ -243,9 +246,245 @@ $ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-cert
   * A: With modern CPUs, expect somewhere around 1-2% extra CPU usage for symmetric encryption (i.e. active connections). Connection handshakes have an expected extra latency of 2-4 ms of CPU time (network latency not included) due to more expensive cryptographic operations. Vespa performs handshake operations in separate threads to avoid stalling other network traffic. Vespa also uses long-lived connections internally to reduce the number of handshakes.
 
 ## Troubleshooting
-### Disable TLS hostname validation
+
+### Certificate validation fails due to mismatching hostnames
+
 Vespa enables the [HTTPS endpoint identification algorithm](https://datatracker.ietf.org/doc/html/rfc2818#section-3) by default.
 This extra verification can only be used if all certificates have their respective host's IP addresses and hostnames
 in the Subject / Subject Alternative Names extensions.
 [Disable hostname validation](reference/mtls.html#top-level-elements) if this is not the case.
+
+### <a name="troubleshooting-application-deployment-sec-error-bad-key"/> Application deployment fails with `SEC_ERROR_BAD_KEY`
+
+This is usually caused by running `vespa-deploy` from an OS that has an old version of `curl` (such as on CentOS 7).
+Older versions of the NSS cryptographic library used by `curl` do not support elliptic curve (EC) keys.
+
+To resolve this, either run `vespa-deploy` from an environment with a sufficiently new version of `curl` or
+use RSA keys instead of EC keys.
+
+## <a name="setting-up-self-signed-ca"/>Appendix A: setting up with a self-signed Certificate Authority
+
+Our goal is to create cryptographic keys and certificates that can be used by Vespa for secure mTLS
+communication within a single Vespa installation.
+
+This requires the following steps, which we'll go through below:
+
+1. [Creating a root Certificate Authority](#creating-root-certificate-authority).
+   This is only done once, regardless of how many Vespa hosts you want to secure.
+1. [Creating a private key and Certificate Signing_request for each Vespa host](#creating-host-private-key-and-certificate).
+1. [Signing the CSR using the CA, creating a certificate for each Vespa host](#sign-host-certificate).
+
+We'll be using the [OpenSSL command-line tool](https://www.openssl.org/docs/man1.1.1/man1/) to
+generate all our crypto keys and certificates.
+
+{% include note.html content="
+If you are setting up Vespa in an organization that already has procedures for provisioning keys
+and certificates, you should first reach out to the team responsible for this to make sure
+you're following best practices.
+" %}
+
+### <a name="creating-root-certificate-authority"/> Creating a root Certificate Authority (CA)
+
+When a server (or client) presents a certificate as part of proving its identity to us, we
+must have a way to determine if this information is trustworthy. We do this by verifying
+if the certificate is _cryptographically signed_ by a [Certificate Authority (CA)](https://en.wikipedia.org/wiki/Certificate_authority)
+that we already know we can trust. It is possible that the certificate is in fact signed by a CA that we don't
+directly trust, but that in turn is signed by a CA that we _do_ trust. These are known as
+_intermediate_ Certificate Authorities and are part of what's known as the _certificate chain_.
+There may be more than one intermediate CA in a chain. In our simple setup we will not be using
+any intermediate CAs.
+
+At the top of the chain sits a _root_ Certificate Authority. Since we trust the root CA, we also
+implicitly trust any intermediate CA it has signed and in turn any leaf certificates such an
+intermediate CA has signed.
+
+A root Certificate Authority is special in that it has no CA above it to sign in. It is _self-signed_.
+
+To create our own root CA for our Vespa installation we'll first create its [_private key_](https://en.wikipedia.org/wiki/Public-key_cryptography).
+
+We have two choices of what kind of key to create; either based on [RSA](https://en.wikipedia.org/wiki/RSA_(cryptosystem))
+or [Elliptic Curve (EC)](https://en.wikipedia.org/wiki/Elliptic-curve_cryptography)
+cryptography. EC keys are faster to process than RSA-based keys and take up less space, but older
+OS versions or cryptographic libraries may not support these (see
+[Application deployment fails with `SEC_ERROR_BAD_KEY`](#troubleshooting-application-deployment-sec-error-bad-key)).
+In the latter case, RSA keys offer the highest level of backwards compatibility.
+
+(Recommended) either create an Elliptic Curve private key:
+```
+$ openssl ecparam -name prime256v1 -genkey -noout -out root-ca.key
+```
+
+**OR:** create an RSA private key:
+```
+$ openssl genrsa -out root-ca.key 2048
+```
+
+The root CA private key is stored in `root-ca.key`. This key is used to sign certificates and the
+file MUST therefore be kept secret! If it is compromised, an attacker can create any number of
+valid certificates that impersonate your Vespa hosts.
+
+We'll now create our CA X509 certificate, self-signed with the private key. Substitute the information
+given in `-subj` with whatever is appropriate for you; it's not really important for our
+simple usage.
+
+```
+$ openssl req -new -x509 -nodes \
+    -key root-ca.key \
+    -out root-ca.pem \
+    -subj '/C=US/L=California/O=ACME/OU=ACME test root CA' \
+    -sha256 \
+    -days 3650
+```
+
+Copy the resulting `root-ca.pem` file to your Vespa node(s) and point the `"ca-certificates"`
+field in the TLS config file to its absolute file path on the node.
+
+With both the CA key and certificate, we have what we need to start signing certificates for
+the hosts Vespa will be running on.
+
+### <a name="creating-host-private-key-and-certificate"/> Creating a private key and certificate for a Vespa host
+
+_Note: This section can be repeated for each Vespa host in your application.
+See [Alternatives to having a unique certificate per individual host](#alternatives-to-unique-certificate-per-host)
+for (possibly less secure) options that do not require doing this step per host._
+
+<a name="create-host-private-key-and-csr"/>
+Just like our CA our host needs its own private cryptographic key.
+
+If we're using Elliptic Curve keys:
+```
+$ openssl ecparam -name prime256v1 -genkey -noout -out host.key
+```
+
+**OR:** if we're using RSA keys:
+```
+$ openssl genrsa -out host.key 2048
+```
+
+As part of creating the certificate we'll first create a [Certificate Signing Request (CSR)](https://en.wikipedia.org/wiki/Certificate_signing_request).
+Again, you can substitute the information in `-subj` with something more appropriate for you.
+
+```
+$ openssl req -new \
+    -key host.key -out host.csr \
+    -subj '/C=US/L=California/OU=ACME/O=My Vespa App' \
+    -sha256
+```
+
+<a name="sign-host-certificate"/>
+By default Vespa runs with TLS hostname validation enabled, which requires the server's certificate
+to contain a hostname matching what the client is connecting to. This is fundamental to the security
+of protocols such as HTTP, but often sees less use with mTLS. Vespa supports it as an added layer of
+security. Using certificates containing hostnames has the added benefit that you can run tools such
+as `curl` against Vespa HTTPS status pages without having to explicitly disable certificate verification.
+
+Certificates can contain many entries known as ["Subject Alternate Names" (SANs)](https://en.wikipedia.org/wiki/Subject_Alternative_Name)
+that list what DNS names and IP addresses the certificate is issued for.
+We'll add a single such DNS SAN entry with the hostname of our node. We'll also use the opportunity
+to add certain X509 extensions to the certificate that specifies exactly what the certificate can
+be used for.
+
+Below, substitute `myhost.example.com` with the hostname of your Vespa node.
+```
+$ cat > cert-exts.cnf << EOF
+[host_cert_extensions]
+basicConstraints       = critical, CA:FALSE
+keyUsage               = critical, digitalSignature, keyAgreement, keyEncipherment
+extendedKeyUsage       = serverAuth, clientAuth
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid,issuer
+subjectAltName         = @host_sans
+[host_sans]
+DNS.1 = myhost.example.com
+EOF
+```
+
+We can now use our existing CA key and certificate to sign the host's CSR, additionally
+providing the above file of certificate extensions to OpenSSL.
+
+```
+$ openssl x509 -req \
+    -in host.csr \
+    -CA root-ca.pem \
+    -CAkey root-ca.key \
+    -CAcreateserial \
+    -out host.pem \
+    -extfile cert-exts.cnf \
+    -extensions host_cert_extensions \
+    -days 3650 \
+    -sha256
+```
+
+This creates an X509 certificate in PEM format for the host, valid for 3650 days from the
+time of signing.
+
+We can inspect the certificate using the `openssl x509` command. Here's some example output
+for a certificate using EC keys. Your output will look different since the serial
+number, dates and key information etc will differ.
+
+```
+$ openssl x509 -in host.pem -text -noout
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number: 13516182920561857512 (0xbb9320c1234a93e8)
+    Signature Algorithm: ecdsa-with-SHA256
+        Issuer: C=US, L=California, O=ACME, OU=ACME test root CA
+        Validity
+            Not Before: Aug 19 13:09:37 2021 GMT
+            Not After : Aug 17 13:09:37 2031 GMT
+        Subject: C=US, L=California, OU=ACME, O=My Vespa App
+        Subject Public Key Info:
+            Public Key Algorithm: id-ecPublicKey
+                Public-Key: (256 bit)
+                pub:
+                    04:ed:01:0e:1e:c5:05:17:99:41:74:68:a0:c5:32:
+                    52:4f:45:d5:04:f8:a0:9c:35:26:ae:66:0c:e5:89:
+                    34:5c:21:09:b8:a9:ed:81:22:06:bb:d1:1c:9e:13:
+                    80:0a:9a:9e:0c:a0:78:ac:7c:c4:6f:1c:ec:e6:df:
+                    c1:59:2d:71:8e
+                ASN1 OID: prime256v1
+                NIST CURVE: P-256
+        X509v3 extensions:
+            X509v3 Basic Constraints: critical
+                CA:FALSE
+            X509v3 Key Usage: critical
+                Digital Signature, Key Encipherment, Key Agreement
+            X509v3 Extended Key Usage:
+                TLS Web Server Authentication, TLS Web Client Authentication
+            X509v3 Subject Key Identifier:
+                08:EF:C7:B4:95:36:64:EC:2A:2F:9F:5A:C3:EA:F0:98:2C:E5:78:EC
+            X509v3 Authority Key Identifier:
+                DirName:/C=US/L=California/O=ACME/OU=ACME test root CA
+                serial:94:77:40:20:69:50:87:45
+
+            X509v3 Subject Alternative Name:
+                DNS:myhost.example.com
+    Signature Algorithm: ecdsa-with-SHA256
+         30:45:02:21:00:91:58:bb:7f:47:75:60:c3:49:09:b3:d2:54:
+         ad:d2:47:58:1c:17:c7:5a:5f:f0:f4:9c:67:e9:6a:44:21:8e:
+         08:02:20:23:9c:99:42:1b:91:29:26:f7:83:58:d1:09:65:38:
+         c1:18:e8:0d:55:3a:57:f6:e0:c6:5b:72:57:e4:d9:6a:d8
+```
+
+Copy `host.key` and `host.key` to your Vespa host and point the `"private-key"` and
+`"certificates"` TLS config fields to their respective absolute paths. The CSR and
+extension config files can be safely discarded.
+
+{% include warning.html content="Ensure that `host.key` is only readable by the Vespa user on your host(s)
+" %}
+### <a name="alternatives-to-unique-certificate-per-host"/> Alternatives to having a unique certificate per individual host
+
+It's possible to avoid having to create a separate certificate per host in favor of a single certificate
+shared between all hosts.
+
+* Hostname SANs do not have to be added (or match) if hostname validation is explicitly disabled in the
+  TLS config file. **Caveat:** this makes it impossible for clients to verify that they're talking to the host they expected.
+* Many SAN entries can be added to the extension file, one per host. **Caveat:** new certificates must be generated
+  if new hosts are added to the Vespa application that aren't already in the SAN list.
+* If all hosts share a common pattern (e.g. `foo.vespa.example.com` and `bar.vespa.example.com`) it's possible to use
+  a wildcard DNS SAN entry (`*.vespa.example.com`) instead of listing all hosts.
+
+However, for production deployments we recommend using a distinct certificate per host to help mitigate
+the impact of a host being compromised.
 
