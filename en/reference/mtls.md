@@ -53,21 +53,29 @@ The TLS configuration file contains a single top-level JSON object.
         <td>JSON object containing file system paths crypto material.</td>
     </tr>
     <tr>
+        <td>authorized-peers</td>
+        <td>No</td>
+        <td markdown="span">
+          JSON array of [authorized-peer](#the-authorized-peer-element) objects. Authorization engine is disabled if not specified.
+          See dedicated [section](#peer-authorization-rules) on how to create peer authorization rules.</td>
+    </tr>
+    <tr>
         <td>accepted-ciphers</td>
         <td>No</td>
-        <td markdown="span">JSON array of accepted TLS cipher suites. See [here](#cipher-suites) for cipher suites enabled by default.</td>
+        <td markdown="span">
+          JSON array of accepted TLS cipher suites. See [here](#cipher-suites) for cipher suites enabled by default.
+          You can only specify a _subset_ of the default ciper suites.
+          _This is an expert option_—use the default unless you have good reasons not to.
+        </td>
     </tr>
     <tr>
         <td>accepted-protocols</td>
         <td>No</td>
-        <td markdown="span">JSON array of accepted TLS protocol versions. See [here](#protocol-versions) for TLS versions enabled by default.</td>
-    </tr>
-    <tr>
-        <td>authorized-peers</td>
-        <td>No</td>
         <td markdown="span">
-          JSON array of [authorized-peer](#the-authorized-peer-element) objects. Authorization engine is disabled if not specified. 
-          See dedicated [section](#peer-authorization-rules) on how to create peer authorization rules.</td>
+          JSON array of accepted TLS protocol versions. See [here](#protocol-versions) for TLS versions enabled by default.
+          You can only specify a _subset_ of the default protocol versions.
+          _This is an expert option_—use the default unless you have good reasons not to.
+        </td>
     </tr>
     <tr>
         <td>disable-hostname-validation</td>
@@ -120,11 +128,6 @@ The TLS configuration file contains a single top-level JSON object.
         <td>No</td>
         <td>Description of the rule.</td>
     </tr>
-    <tr>
-        <td>roles</td>
-        <td>No</td>
-        <td>JSON array containing roles assumed if peer matches against the rule.</td>
-    </tr>
 </table>
 
 #### The *required-credential* element
@@ -154,12 +157,12 @@ A credential is matched by checking a pattern given in `must-match` against a sp
 
 For *CN* and *SAN_DNS* fields, the `must-match` pattern is a "glob"-style pattern with the following semantics:
 * `*` matches 0-n non-dot characters within a single dot-separated hostname part. This is similar to the wildcards used by certificates for HTTPS hostname validation. Examples
-  * *\*.baz* matches *bar.baz* but not *foo.bar.baz* or *foo.baz.bar*.
-  * *\*.\*.baz* matches *foo.bar.baz* but not *bar.baz*.
-  * *\*-myservice* matches *foo-myservice* but not *bar.foo-myservice*.
+  * `*.baz` matches `bar.baz` but not `foo.bar.baz` or `foo.baz.bar`.
+  * `*.*.baz` matches `foo.bar.baz` but not `bar.baz`.
+  * `*-myservice` matches `foo-myservice` but not `bar.foo-myservice`.
 * `?` matches exactly 1 non-dot character within a single dot-separated hostname part. Examples:
-  * *?.bar* matches *x.bar* but not *bar*, *.bar* or *yx.bar*.
-  * *?.?.baz* matches *x.y.baz* but not *x.baz* or *xx.yy.baz*.
+  * `?.bar` matches `x.bar` but not `bar`, `.bar` or `yx.bar`.
+  * `?.?.baz` matches `x.y.baz` but not `x.baz` or `xx.yy.baz`.
 
 For *SAN_URI* fields, must-match specifies a string whose content must exactly match that of the certificate.
 
@@ -169,15 +172,14 @@ Not providing the `authorized-peers` field means only certificate validity is us
 If the `authorized-peers` field is provided, it must contain at least one entry.
 
 #### Example
+
 ```json
 {
   "files": {
     "ca-certificates": "/absolute/path/to/ca-certs.pem",
     "certificates": "/absolute/path/to/host-certs.pem",
     "private-key": "/absolute/path/to/private-key.pem",
-    "disable-hostname-validation": false,
-    "accepted-ciphers": ["TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"],
-    "accepted-protocols": ["TLSv1.2"]
+    "disable-hostname-validation": false
   },
   "authorized-peers": [
     {
@@ -186,23 +188,20 @@ If the `authorized-peers` field is provided, it must contain at least one entry.
         { "field": "SAN_DNS", "must-match": "*.us-east-*.monitor.example.com" }
       ],
       "description": "Backend monitoring service access",
-      "name": "monitoring",
-      "roles": ["monitor"]
+      "name": "monitoring"
     }, 
     {
       "required-credentials": [
         { "field": "SAN_DNS", "must-match": "*.mycluster.vespa.example.com" }
       ],
       "description": "Cluster-internal node P2P access",
-      "name": "cluster",
-      "roles": ["monitor", "cluster"]
+      "name": "cluster"
     }
   ]
 }
 ```
 ## TLS features supported by Vespa
-Vespa is built with modern, high-performance cryptography libraries that fully support TLSv1.3,
-and this will be used by default for all cluster-internal communication. For security reasons,
+Vespa is built with modern, high-performance cryptography libraries. For security reasons,
 the Vespa TLS stack has some additional constraints that are always present:
 * `TLSv1.2` is the oldest TLS version that can be negotiated.
 * Only cipher suites supporting [forward secrecy](https://en.wikipedia.org/wiki/Forward_secrecy) can be negotiated
@@ -228,6 +227,8 @@ OpenSSL versions prior to 1.0.1 are not supported."
 Vespa will by default use the following TLS configuration (unless overridden by `accepted-ciphers` / `accepted-protocols`).
 
 #### Protocol versions
+* `TLSv1.3` - _note:_ due to certain limitations in the current Java runtime, TLSv1.3 is only supported by the C++ backends for now.
+  We will revisit this in the very near future to ensure Java defaults to TLSv1.3 as well.
 * `TLSv1.2`
 
 #### Cipher suites

@@ -75,7 +75,7 @@ Key and certificate files should only be writable by administrator users.
 On any node running Vespa software, TLS is controlled via a single environment variable.
 This variable contains an absolute path pointing to a JSON configuration file:
 ```sh
-VESPA_TLS_CONFIG_FILE=<absolute path to configuration file>
+VESPA_TLS_CONFIG_FILE=/absolute/path/to/my-tls-config.json
 ```
 
 This environment variable must be set to a valid file path before any Vespa services are started on the node.
@@ -122,9 +122,9 @@ You can constrain which certificates may access the internal Vespa service by us
 These are consulted as part of every TLS handshake and must pass before any connection can be established.
 
 Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](reference/mtls.html#top-level-elements) member.
-See the [reference documentation](reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
 
 #### Example
+
 Let's assume our Vespa cluster consists of many nodes, each with their own certificate signed by a shared Certificate Authority.
 Each certificate contains a Subject Alternate Name (SAN) DNS name entry of the form
 `<unique-node-id>.mycluster.vespa.example.com`, where *unique-node-id* is unique per cluster node.
@@ -161,6 +161,8 @@ Our TLS config file implementing these rules may look like this:
   ]
 }
 ```
+
+See the [reference documentation](reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
 
 ### Automatic reloading of crypto material
 Vespa performs periodic reloading of the specified TLS configuration file.
@@ -323,7 +325,7 @@ The root CA private key is stored in `root-ca.key`. This key is used to sign cer
 file MUST therefore be kept secret! If it is compromised, an attacker can create any number of
 valid certificates that impersonate your Vespa hosts.
 
-We'll now create our CA X509 certificate, self-signed with the private key. Substitute the information
+We'll now create our CA X.509 certificate, self-signed with the private key. Substitute the information
 given in `-subj` with whatever is appropriate for you; it's not really important for our
 simple usage.
 
@@ -381,7 +383,7 @@ as `curl` against Vespa HTTPS status pages without having to explicitly disable 
 Certificates can contain many entries known as ["Subject Alternate Names" (SANs)](https://en.wikipedia.org/wiki/Subject_Alternative_Name)
 that list what DNS names and IP addresses the certificate is issued for.
 We'll add a single such DNS SAN entry with the hostname of our node. We'll also use the opportunity
-to add certain X509 extensions to the certificate that specifies exactly what the certificate can
+to add certain X.509 extensions to the certificate that specifies exactly what the certificate can
 be used for.
 
 Below, substitute `myhost.example.com` with the hostname of your Vespa node.
@@ -415,7 +417,7 @@ $ openssl x509 -req \
     -sha256
 ```
 
-This creates an X509 certificate in PEM format for the host, valid for 3650 days from the
+This creates an X.509 certificate in PEM format for the host, valid for 3650 days from the
 time of signing.
 
 We can inspect the certificate using the `openssl x509` command. Here's some example output
