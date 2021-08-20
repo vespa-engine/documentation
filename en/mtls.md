@@ -28,11 +28,11 @@ Vespa offers two separate planes of TLS connectivity:
   Authentication and authorization for this plane is handled separately from Vespa-internal traffic; this is covered
   in [Configuring Http Servers and Filters](jdisc/http-server-and-filters.html#ssl).
   See also [Securing the application container](securing-your-vespa-installation.html#securing-the-application-container).
-* **Vespa-internal data and control planes.** This is all traffic between processes running on the nodes in your cluster.
+* **Vespa-internal communication.** This is all communication between processes running on the nodes in your cluster.
   This includes clients connecting directly to the backends instead of going through the application container APIs.
   Only mutually authenticated TLS (mTLS) may be configured for this traffic.
 
-This document only covers **Vespa-internal traffic**.
+This document only covers **Vespa-internal communication**.
 
 Enabling TLS in Vespa means that all internal endpoints are mTLS protected,  even HTTP servers for status pages and metrics.
 Be especially aware of this if you have custom solutions in place for collecting
