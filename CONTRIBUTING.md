@@ -9,7 +9,7 @@ This documents tells you what you need to know to contribute.
 All work on Vespa happens directly on Github,
 using the [Github flow model](https://guides.github.com/introduction/flow/).
 We release the master branch a few times a week and you should expect it to almost always work.
-In addition to the [public Travis build](https://travis-ci.org/vespa-engine/vespa) 
+In addition to the [public Screwdriver build](https://cd.screwdriver.cd/pipelines/6386) 
 we have a large acceptance and performance test suite which
 is also run continuously. We plan to add this to the open source code base later.
 
