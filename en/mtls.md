@@ -42,7 +42,7 @@ Though the terms *TLS* and *mTLS* may be used interchangeably in this document, 
 ## Prerequisites
 
 This section assumes you have some experience with generating and using certificates and private keys.
-For an introduction, see [Appendix A: setting up with a self-signed Certificate Authority](#setting-up-self-signed-ca)
+For an introduction, see [Appendix A: setting up with a self-signed Certificate Authority](#appendix-a-setting-up-with-a-self-signed-certificate-authority)
 which gives step-by-step instructions on setting up certificates that can be used internally for a
 single Vespa application.
 
@@ -264,7 +264,7 @@ Older versions of the NSS cryptographic library used by `curl` do not support el
 To resolve this, either run `vespa-deploy` from an environment with a sufficiently new version of `curl` or
 use RSA keys instead of EC keys.
 
-## <a name="setting-up-self-signed-ca"/>Appendix A: setting up with a self-signed Certificate Authority
+## Appendix A: setting up with a self-signed Certificate Authority
 
 Our goal is to create cryptographic keys and certificates that can be used by Vespa for secure mTLS
 communication within a single Vespa installation.
@@ -347,7 +347,7 @@ the hosts Vespa will be running on.
 ### <a name="creating-host-private-key-and-certificate"/> Creating a private key and certificate for a Vespa host
 
 _Note: This section can be repeated for each Vespa host in your application.
-See [Alternatives to having a unique certificate per individual host](#alternatives-to-unique-certificate-per-host)
+See [Alternatives to having a unique certificate per individual host](#alternatives-to-having-a-unique-certificate-per-individual-host)
 for (possibly less secure) options that do not require doing this step per host._
 
 <a name="create-host-private-key-and-csr"/>
@@ -475,7 +475,7 @@ extension config files can be safely discarded.
 
 {% include warning.html content="Ensure that `host.key` is only readable by the Vespa user on your host(s)
 " %}
-### <a name="alternatives-to-unique-certificate-per-host"/> Alternatives to having a unique certificate per individual host
+### Alternatives to having a unique certificate per individual host
 
 It's possible to avoid having to create a separate certificate per host in favor of a single certificate
 shared between all hosts.
