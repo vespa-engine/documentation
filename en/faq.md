@@ -132,12 +132,19 @@ Vespa does not have a stop-word concept inherently.
 See the [sample app](https://github.com/vespa-engine/sample-apps/pull/335/files)
 for how to use [filter terms](reference/query-language-reference.html#annotations).
 
-#### How to extract more than 400 hits?
+#### How to extract more than 400 hits / query and get ALL documents?
 Trying to request more than 400 hits in a query, getting this error:
 {'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}.
-To increase max result set size,
-configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
-e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
+
+* To increase max result set size,
+  configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
+  e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
+  Query timeout can be increased, but it will still be costly and likely impact other queries -
+  large limit more so than a large offset.
+  It can be made cheaper by using a smaller [document summary](document-summaries.html),
+  and avoiding fields on disk if possible.
+* Using _visit_ in the [document/v1/ API](document-v1-api-guide.html)
+  is usually a better option for dumping all the data.
 
 #### How to make a sub-query to get data to enrich the query, like get a user profile?
 See the [UserProfileSearcher](https://github.com/vespa-engine/sample-apps/blob/master/news/app-6-recommendation-with-searchers/src/main/java/ai/vespa/example/UserProfileSearcher.java)
