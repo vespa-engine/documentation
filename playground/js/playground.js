@@ -84,7 +84,11 @@ var operations = {
                     expression["arguments"].push(entry);
                 }
             });
-            d3.json("https://doc-search.vespa.oath.cloud/playground/eval?json=" + encodeURIComponent(JSON.stringify(expression)))
+            d3.json("https://doc-search.vespa.oath.cloud/playground/eval", {
+                    method: "POST",
+                    body: JSON.stringify({json: expression}),
+                    headers: { "Content-type": "application/json; charset=UTF-8" }
+                })
                 .then(function(response) {
                     if (!has_error(response, result)) {
                         if (param["n"].length > 0) {
