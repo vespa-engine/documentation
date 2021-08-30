@@ -185,17 +185,49 @@ WAND can efficiently find the top k documents using a linear ranking function (i
 </p>
 
 
+<h2 id="multi-lookup-set-filtering">Multi lookup - Set filtering</h2>
+<p>Several real world search use cases are built around limiting or filtering based on a set filter. If the contents of 
+a field in the document matches any of the values in the query set it should be retrieved. 
+
+For example searching data for a set of users:
+<pre>
+select * from sources * where user_id = 1 or user_id = 2 or user_id = 3 or user_id = 3 or user_id = 4 or user_id 5 .....;
+</pre>
+
+For OR filters filtering over the same field it's strongly recommended to 
+use the <a href="../reference/query-language-reference.html#weightedset">weighted set query operator</a>. It has considerably less
+overhead than plain OR for set filtering. 
+
+<pre>
+select * from sources * where weightedSet(user_id, {"1":1, "2":1, "3":1});
+</pre>
+
+Attribute fields used like the above without other stronger search criteria should be created with <samp>fast-search</samp>. If there is a large number of unique values 
+indexed it's 
+faster to use <samp>hash</samp> dictionary instead of <samp>btree</samp> which is the default data structure for dictionaries for attribute fields with <samp>fast-search</samp>:
+
+<pre>
+field user_id type long {
+  indexing: summary | attribute
+  attribute:fast-search
+  dictionary:hash
+  rank:filter
+}
+</pre>
+
+E.g if we have 10M unique user_ids in the dictionary and we search for 1000 users per query, btree based dictionary would be 1000 lookup times log(10M), 
+while hash based would be 1000 lookups times 1. (O(1)).  
+
+See <a href="../reference/schema-reference.html#dictionary">dictionary schema reference</a>.
 
 <h2 id="document-summaries-hits">Document summaries - hits</h2>
 <p>
 If queries request many hits from a few content nodes,
-a <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
+increasing <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
 </p><p>
 Using <a href="../document-summaries.html">Document summaries</a>,
-Vespa can support memory-only operations if fields in the summary are defined as <em>attribute</em>.
+Vespa can support memory-only summary fetch if fields referenced in document summary are <b>all</b> defined as <em>attribute</em>.
 </p>
-
-
 
 <h2 id="boolean-numeric-text-attribute">Boolean, numeric, text attribute</h2>
 <p>
@@ -204,6 +236,7 @@ When selecting attribute field type, considering performance, this is a rule of 
   <li>Use boolean if a field is a boolean (max two values)</li>
   <li>Use a string attribute if there is a set of values - only unique strings are stored</li>
   <li>Use a numeric attribute for range searches</li>
+  <li>Use a numeric attribute if the data is really is numeric, don't replace numeric with string numeric</li>
 </ol>
 Refer to <a href="../attributes.html">attributes</a> for details.
 </p>
