@@ -660,7 +660,7 @@ function execute_frame(i) {
     var op = setup["f"][i]["op"];
     var params = setup["f"][i]["p"];
     var result = results["f"][i];
-    operations[op]["execute"](params, result, function(){ execute_frame(i+1); });
+    operations[op]["execute"](params, result, function(){ update(); execute_frame(i+1); });
 }
 
 function find_selected_frame_index() {
