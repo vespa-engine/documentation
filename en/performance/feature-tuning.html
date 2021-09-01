@@ -77,25 +77,78 @@ which does not require any re-feeding, so testing the performance with and witho
 Adding or removing <em>fast-search</em> requires restart.
 </p>
 
-<h2 id="hybrid-taat-daat">Hybrid TAAT (term-at-a-time) and DAAT (document-at-a-time) query evaluation</h2>
+<h2 id="hybrid-taat-daat">Hybrid TAAT and DAAT query evaluation</h2>
 <p>
-Generally Vespa does <em>DAAT</em> (document-at-a-time) query evaluation and not <em>TAAT</em> (term-at-a time) so ranking and matching is not 
-fully two separate phases where one first find matches and later ranks them.
-Matching and first-phase score calculation is interleaved when using DAAT. 
+Vespa supports <strong>hybrid</strong> query evaluation over inverted indexes combining <em>TAAT</em> and <em>DAAT</em> evaluation to combine the best of both 
+query evaluation techniques. Hybrid is not enabled per default and is triggered by a run time query parameter. 
+
+<ul>
+<li><b>TAAT</b> <em>Term At A Time</em> scores documents one query term at a time.  The entire posting iterator can be read per query term
+and the score of a document is accumulated. It is cpu cache friendly as posting data is read sequentially without random seeking the posting list
+iterator.
+The downside is that <em>TAAT</em> limits
+the term based ranking function to be a linear sum of term scores. This downside is one reason why most search engines uses <em>DAAT</em>.</li>
+<li><b>DAAT</b> <em>Document At A Time</em> scores documents completely one at a time. This requires multiple seeks in the term posting lists which is 
+ cpu cache unfriendly but allows non-linear ranking functions. </li>
+</ul>
+
+Generally Vespa does <em>DAAT</em> (document-at-a-time) query evaluation and not <em>TAAT</em> (term-at-a time) for the reason listed above. 
+
+Ranking (score calculation) and matching (Does the document match the query logic) is not 
+fully two separate disjunct phases where one first find matches and in a later phase calculates the ranking score.
+Matching and <em>first-phase</em> score calculation is interleaved when using <em>DAAT</em>. 
+
+<p>The <em>first-phase</em> ranking score is assigned to the hit when it satisfies the query constraints and 
+at that point the term iterators are positioned at the document id and one can unpack additional data from the term posting lists, 
+for example for term proximity scoring used by <a href="../nativerank.html">nativeRank</a> 
+ranking feature which also requires unpacking of positions of the term within the document.</p>
+
+<p>
+The way hybrid evaluation is done is that <em>TAAT</em> is used for sub branches 
+of the overall query tree which is not used for term based ranking. 
+
+Using <em>TAAT</em> can speed up query matching significantly (up to 20-30%) in cases where the query tree is large and complex 
+and where only parts of the query tree is used for term based ranking. Examples of branches that would require <em>DAAT</em> is using text ranking features 
+like <a href="../reference/rank-features.html">bm25/nativeRank</a>. The list of ranking features which can handle <em>TAAT</em> is long but  
+using <a href="../tensor-user-guide.html">attribute or tensor</a> features only can have the entire tree evaluated using <em>TAAT</em>.
 </p>
 
-<p>The first-phase ranking score is assigned to the hit when it satisfies the query constraints and 
-at that point the term iterators are positioned at the document id and one can unpack additional data from the term posting lists, 
-for example for term proximity scoring used by <a href="../nativerank.html">nativeRank</a> ranking feature which also requires unpacking of positions of the term within the document.
+<p>
+For example, for a query where there is a user text query from an end user, one can use <em>userQuery()</em> YQL syntax 
+and combine it with application level constraints.  The application level filter constraints in the query could benefit from
+using <em>TAAT</em>. Given the following document schema:</p>
 
-Vespa can do a hybrid query evaluation combining TAAT and DAAT and using TAAT for sub-tree parts of the overall query tree which is not used for ranking, but used only for document filtering where 
-unpacking of posting lists is not needed. With <em>rank:filter</em> on a per field basis one can avoid unpacking on a per term/field basis while the TAAT evaluation works overall for the query sub tree. 
+<pre>
+search news {
+  document news {
+    field title type string {}
+    field body type string{}
+    field popularity type float {} 
+    field market type string {
+      rank:filter
+    } 
+    field language type string {
+      rank:filter 
+    } 
+  }
+  fieldset default {
+    fields: title,body
+  }
+  rank-profile text-and-popularity {
+    first-phase {
+      expression: attribute(popularity) + log10(bm25(title)) + log10(bm25(body))
+    }
+  }
+}
+</pre>
+<p>
+In this case the ranking profile only uses two ranking features, the popularity attribute and the <a href="../reference/bm25.html">bm25</a> score of the 
+userQuery() terms against the default fieldset containing the title and body. Notice how market or language is not used in the ranking expression.</p>
+<p>
+In this query example there is a language constraint and a market constraint where both language and market is 
+searched with a long list of valid values using OR, meaning that the document should match any of the market constraints and
+any of the language constraints.</p>
 
-Using TAAT can speed up query matching in some cases where the query tree is large and complex 
-and where only small parts of the query tree is used for ranking hits or ranking by a ranking expression only using <a href="../tensor-user-guide.html">attribute or tensor</a> features.
-
-For example for a query request where we take some user input from an end user by the userQuery() syntax 
-and combine it with business logic filters. In this example a language constraint and a market constraint:
 <pre>
 {
   'hits': 10,
@@ -107,21 +160,22 @@ and combine it with business logic filters. In this example a language constrain
 }
 </pre>
 
-With ranking profile <em>text-and-popularity</em> defined as 
+<p>
+The language and the market constraints in the query tree are not used in the 
+ranking score and that part of the query tree could be evaluated using <em>TAAT</em>. 
 
-<pre>
-rank-profile text-and-popularity {
-  first-phase {
-    expression: attribute(popularity) + log10(bm25(title))
-  }
-}
-</pre>
+See also <a href="#multi-lookup-set-filtering">multi lookup set filter</a> 
+for how to most efficiently search with large set filters where we want at least one of the constraints to match.
 
-In this case the ranking profile only uses two signals, the popularity value and the <a href="../reference/bm25.html">bm25</a> score of the 
-title as calculated from the input userQuery() terms. The language and the market constraints in the query tree are not used in the 
-ranking score and that part of the query tree could be evaluated using <em>TAAT</em>.  The sub-tree result is then passed as a bit vector into the <em>DAAT</em>
- query evaluation which could speed up the overall evaluation. Enabling hybrid <em>TAAT</em> is done by passing <em>ranking.matching.termwiselimit=0.01</em> as a request parameter 
-so one can evaluate if using the hybrid evaluation improves performance.
+The sub-tree result is then passed as a bit vector into the <em>DAAT</em>
+query evaluation which could speed up the overall evaluation. 
+</p>
+
+<p>Enabling hybrid <em>TAAT</em> is done by passing <b>ranking.matching.termwiselimit=0.01</b> as a request parameter.
+ 
+One can evaluate if using the hybrid evaluation improves search performance by adding the above parameter. 
+The limit is compared to the hit fraction estimate of the sub branch of the query tree, 
+if the hit fraction estimate is higher than the limit the termwise evaluation is used to evaluate that sub-branch of the query.
 </p>
 
 
@@ -150,6 +204,7 @@ field uuid type string {
     rank:     filter
 }
 </pre>
+<p>
 In addition, configure the <samp>uuid</samp> as a
 <a href="../reference/schema-reference.html#filter">rank: filter</a> field -
 the field will then be represented as efficient as possible during search and ranking.</p>
@@ -168,7 +223,6 @@ and <a href="../reference/services-content.html#visibility-delay">visibility-del
 </p>
 
 
-
 <h2 id="ranking-and-ml-model-inferences">Ranking and ML Model inferences</h2>
 <p>
 Vespa <a href="sizing-search.html">scales</a> with the number of hits the query retrieves per node/search thread,
@@ -181,11 +235,11 @@ bringing the relevant documents to the top of the result set.
 </p><p>
 For <a href="../text-matching-ranking.html">text ranking</a> applications,
 consider using the <a href="../using-wand-with-vespa.html">WAND</a> query operator -
-WAND can efficiently find the top k documents using a linear ranking function (inner dot product).
+WAND can efficiently (sub-linear) find the top k documents using a inner scoring function. 
 </p>
 
 
-<h2 id="multi-lookup-set-filtering">Multi lookup - Set filtering</h2>
+<h2 id="multi-lookup-set-filtering">Multi Lookup - Set filtering</h2>
 <p>Several real world search use cases are built around limiting or filtering based on a set filter. If the contents of 
 a field in the document matches any of the values in the query set it should be retrieved. 
 
@@ -194,7 +248,7 @@ For example searching data for a set of users:
 select * from sources * where user_id = 1 or user_id = 2 or user_id = 3 or user_id = 3 or user_id = 4 or user_id 5 .....;
 </pre>
 
-For OR filters filtering over the same field it's strongly recommended to 
+For OR filters over the same field it is strongly recommended to 
 use the <a href="../reference/query-language-reference.html#weightedset">weighted set query operator</a>. It has considerably less
 overhead than plain OR for set filtering. 
 
@@ -202,9 +256,11 @@ overhead than plain OR for set filtering.
 select * from sources * where weightedSet(user_id, {"1":1, "2":1, "3":1});
 </pre>
 
-Attribute fields used like the above without other stronger search criteria should be created with <samp>fast-search</samp>. If there is a large number of unique values 
-indexed it's 
-faster to use <samp>hash</samp> dictionary instead of <samp>btree</samp> which is the default data structure for dictionaries for attribute fields with <samp>fast-search</samp>:
+Attribute fields used like the above without other stronger search criteria should be created with <samp>fast-search</samp>. 
+
+If there is a large number of unique values in the field 
+it is faster to use <samp>hash</samp> dictionary instead of <samp>btree</samp> which is the 
+default data structure for dictionaries for attribute fields with <samp>fast-search</samp>:
 
 <pre>
 field user_id type long {
@@ -214,19 +270,21 @@ field user_id type long {
   rank:filter
 }
 </pre>
+<p>
+E.g if we have 10M unique user_ids in the dictionary and we search for 1000 users per query, <em>btree</em> dictionary would be 1000 lookup times log(10M), 
+while hash based would be 1000 lookups times 1. 
+The <em>weightedSet</em> query set filtering also work brilliantly in combination with <em>TAAT</em>, see <a href="#hybrid-taat-daat">hybrid TAAT/DAAT</a> section.  
 
-E.g if we have 10M unique user_ids in the dictionary and we search for 1000 users per query, btree based dictionary would be 1000 lookup times log(10M), 
-while hash based would be 1000 lookups times 1. (O(1)).  
-
-See <a href="../reference/schema-reference.html#dictionary">dictionary schema reference</a>.
+Also see
+<a href="../reference/schema-reference.html#dictionary">dictionary schema reference</a>.</p>
 
 <h2 id="document-summaries-hits">Document summaries - hits</h2>
 <p>
-If queries request many hits from a few content nodes,
-increasing <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
+If queries request many hits from a cluster with few content nodes,
+increasing the <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
 </p><p>
-Using <a href="../document-summaries.html">Document summaries</a>,
-Vespa can support memory-only summary fetch if fields referenced in document summary are <b>all</b> defined as <em>attribute</em>.
+Using <a href="../document-summaries.html">Explicit Document summaries</a>,
+Vespa can support memory-only summary/hit fetching if fields referenced in document summary are <b>all</b> defined as <em>attribute</em>.
 </p>
 
 <h2 id="boolean-numeric-text-attribute">Boolean, numeric, text attribute</h2>
