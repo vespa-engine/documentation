@@ -84,13 +84,12 @@ var operations = {
                     expression["arguments"].push(entry);
                 }
             });
-            d3.text("https://doc-search.vespa.oath.cloud/playground/eval", {
+            d3.json("https://doc-search.vespa.oath.cloud/playground/eval", {
                     method: "POST",
-                    body: "json=" + JSON.stringify(expression),
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                    body: JSON.stringify({json: expression}),
+                    headers: { "Content-type": "application/json; charset=UTF-8" }
                 })
                 .then(function(response) {
-                    response = JSON.parse(response);
                     if (!has_error(response, result)) {
                         if (param["n"].length > 0) {
                             variables.set(param["n"], {
