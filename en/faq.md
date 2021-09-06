@@ -74,7 +74,7 @@ Vespa is not optimized for huge documents.
 
 #### Can a document have lists (key value pairs)?
 E.g. a product is offered in a list of stores with a quantity per store.
-Use [multivalue fields](schemas.html#multivalue-fields) (array of struct) or [parent child](parent-child.html).
+Use [multivalue fields](schemas.html#field) (array of struct) or [parent child](parent-child.html).
 Which one to chose depends on use case, see discussion in the latter link.
 
 #### Does a whole document need to be updated and re-indexed?

@@ -5,8 +5,6 @@ title: "Schemas"
 
 <p>
   A schema defines a <a href="documents.html">document type</a> and what we want to compute over it.
-  Schemas are mapped to one or more content clusters in <a href="reference/services.html">services.xml</a>.
-  These content clusters can then store and compute over data stored in the schema.
   Schemas are stored in files named the same as the schema, with the ending ".sd" (for schema definition),
   in the <code>schemas/</code> directory of the application package.
   Refer to the <a href="reference/schema-reference.html">schema reference</a>.
@@ -32,6 +30,7 @@ schema music {
 
         field artistId type string {
             indexing: summary | attribute
+            match   : exact
         }
 
         field title type string {
@@ -70,20 +69,51 @@ schema music {
 
 
 
+<h2 id="document">document</h2>
+<p>
+  A <a href="documents.html">document</a> is the unit the rank-profile evaluates, and is returned in query results.
+  Documents have fields - reads and writes updates full documents or some fields of documents.
+  Refer to the <a href="reference/schema-reference.html#document">schema reference</a>.
+</p>
+<p>
+  Documents can have relations, field values can be imported from
+  <a href="parent-child.html">parent documents</a>.
+</p>
+<p>
+  Note that the document id is not a field of the document - add this explicitly if needed.
+</p>
+
+
+
 <h2 id="field">field</h2>
 <p>
-A field has a type, like string or double - see <a href="reference/schema-reference.html#field">
-field reference</a> for a full list.
-</p><p>
-Documents can have relations, and field values can be imported from
-<a href="parent-child.html">parent documents</a>.
+  A field has a type, see <a href="reference/schema-reference.html#field">field reference</a> for a full list.
+</p>
+<p>
+  A field contained in a document can be written to, read from and queried - this is the normal field use.
+  A field can also be generated (i.e. a <em>synthetic field</em>) -
+  in this case, the field definition is <em>outside</em> the document.
+  See <a href="reindexing.html">reindexing</a> for examples.
+</p>
+<p>
+  A field can be <em>single value</em>, like a string, or <em>multivalue</em>, like an array of strings -
+  see the  <a href="reference/schema-reference.html#field">field type list</a>.
+  Most multivalue fields can be used in <a href="reference/grouping-syntax.html#multivalue-attributes">grouping</a>.
+  Accessing attributes in maps and arrays of struct in ranking is not possible.
+  The rank feature <a href="reference/rank-features.html#attribute(name).count">attribute(name).count</a>
+  can be used in ranking to <em>rank</em> based on number of elements in a multivalue attribute.
+  To <em>filter</em> based on number of elements, create a
+  <a href="ranking-expressions-features.html#if-function-and-string-equality-tests">strict tiering rank function</a>
+  combined with a <a href="reference/schema-reference.html#rank-score-drop-limit">rank-score-drop-limit</a>.
+  Then use a <a href="ranking-expressions-features.html#using-query-variables">query variable</a> for number of elements.
+  Note that doing this filtering is more expensive to evaluate than just having a separate field for the count.
 </p>
 
 
 <h3 id="indexing">indexing</h3>
 <p>
-<code>indexing</code> configures how to process data of a field during indexing -
-the most important ones are:
+  <a href="reference/schema-reference.html#indexing">indexing</a>
+  configures how to process data of a field during indexing - the most important ones are:
 <table class="table">
   <thead></thead><tbody>
     <tr>
@@ -114,126 +144,152 @@ the most important ones are:
 Indexing instructions have pipeline semantics similar to unix shell
 commands, with data flowing from left to right.
 They can perform complex transformations on field values,
-or just send the field value unchanged to the next sections of the index structure - example:
+or just send the field value unchanged to the next sections of the index structure.
+Example, where the data is first added to the document summary, then added as an
+in-memory attribute and finally indexed.
+</p>
 <pre>
 indexing: summary | attribute | index
 </pre>
-The data is first added to the document summary, then added as an
-in-memory attribute and finally indexed.
-The indexing language offers more functionality than this,
-like filter field values, combine field values, select on different values.
-Learn more in the <a href="reference/advanced-indexing-language.html">
-indexing language</a> reference.
-</p>
 
 
-<h3 id="matching">Matching</h3>
+
+<h3 id="match">match</h3>
 <p>
-<a href="text-matching-ranking.html">Text matching</a> describes the different ways / modes
-to match queries to documents per field.
-Query tracing and match configuration inspection is useful to analyze matching.
-</p><p>
-Make sure the query did not time out when analyzing matches.
-The <a href="graceful-degradation.html#timeouts">soft timeout</a>
-will return the matches found at timeout, possibly eliminating matches.
-</p><p>
-Ensure that the configuration of chains and providers is correct with respect to indexing.
-Example: querying this provider will not lowercase / stem terms:
-<pre>
-&lt;provider id="myProvider" type="local" cluster="mydocs" inherits="vespa"
-    excludes="com.yahoo.prelude.searcher.BlendingSearcher
-              com.yahoo.prelude.querytransform.StemmingSearcher
-              com.yahoo.search.querytransform.VespaLowercasingSearcher"&gt;
-</pre>
-In case of using multiple document types, review
-<a href="reference/query-api-reference.html#model.restrict">restrict</a> /
-<a href="reference/query-api-reference.html#model.sources">sources</a> settings
-to make sure queries hit the right document types.
-
-
-<h3 id="multivalue-fields">Multivalue fields</h3>
-<p>
-A field can be <em>single value</em>, like a string, or <em>multivalue</em>, like an array of strings -
-see the  <a href="reference/schema-reference.html#field">field type list</a>.
-</p><p>
-Most multivalue fields can be used in <a href="reference/grouping-syntax.html#multivalue-attributes">grouping</a>.
-</p><p>
-When searching in array or map of struct,
-<a href="reference/query-language-reference.html#sameelement">sameElement()</a> is a useful query operator
-to restrict matches to same struct element.
-Note that the document summary will not contain which element(s) matched.
-</p><p>
-Accessing attributes in maps and arrays of struct in ranking is not possible.
-</p><p>
-The rank feature <a href="reference/rank-features.html#attribute(name).count">attribute(name).count</a>
-can be used in ranking to <em>rank</em> based on number of elements in a multivalue attribute.
-To <em>filter</em> based on number of elements, create a
-<a href="ranking-expressions-features.html#if-function-and-string-equality-tests">strict tiering rank function</a>
-combined with a <a href="reference/schema-reference.html#rank-score-drop-limit">rank-score-drop-limit</a>.
-Then use a <a href="ranking-expressions-features.html#using-query-variables">query variable</a> for number of elements.
-Note that doing this filtering is more expensive to evaluate than just having a separate field for the count.
+  The <a href="reference/schema-reference.html#match">match</a> mode configures
+  <em>how</em> query items are matched to fields (e.g. exact or prefix matching),
+  and is tightly coupled with <em>indexing</em>.
+  Find more details in <a href="text-matching-ranking.html">text matching</a>.
 </p>
-
+<p>
+  When searching in array or map of struct,
+  <a href="reference/query-language-reference.html#sameelement">sameElement()</a> is a useful query operator
+  to restrict matches to same struct element
+  (e.g. <em>first_name contains 'Joe', last_name contains 'Smith'</em> -
+  both must match in the <em>same</em> field value).
+  Note that the document summary will not contain which element(s) matched.
+</p>
 
 
 <h2 id="fieldset">fieldset</h2>
 <p>
-A <code>fieldset</code> groups fields together for searching - example:
-<pre>
-search/?query=title:sometitle default:someword
-</pre>
-This query returns documents having <em>sometitle</em> in the field <em>title</em>,
-and <em>someword</em> in one or more of the fields in the fieldset <em>default</em>.
-If no field/field set name is given for a search term, the fieldset named <em>default</em> is searched.
-Find details in the <a href="reference/schema-reference.html#fieldset">fieldset reference</a>.
+A <a href="reference/schema-reference.html#fieldset">fieldset</a> groups fields together for querying.
+If no field/field set name is given for a query term, the fieldset named <em>default</em> is queried. Example:
 </p>
-
+<pre>
+fieldset default {
+    fields: artist, title, album
+}
+</pre>
+<pre>
+$ENDPOINT/search/?
+  yql=select * from sources * where default contains "bob" and title contains "best";
+</pre>
 
 
 <h2 id="rank-profile">rank-profile</h2>
 <p>
-Vespa has built-in rank profiles, and/or such profiles can be configured,
-by hand or using machine learning.
-Read more in the <a href="ranking.html">ranking</a> documentation.
+  The <a href="ranking.html">rank profile</a> defines the computation over the documents, given a query.
+  This is hence the core of the application logic.
+  Vespa has built-in rank profiles for text ranking, the default is <a href="nativerank.html">nativerank</a> -
+  a rank profile is hence optional.
+  Learn more in <a href="getting-started-ranking.html">getting started with ranking</a>.
+</p>
+
+
+
+<h2 id="schema-modifications">Schema modifications</h2>
+<p>
+  Vespa is built for safe schema modifications,
+  like adding a field or changing indexing or match modes.
+  A new version of the schema is deployed in an <a href="cloudconfig/application-packages.html">application package</a>.
+  As some changes are potentially destructive (e.g. change a field index settings),
+  the deploy will by default not accept such changes.
+  Example output from deploy (change from <em>index</em> to <em>attribute</em>):
+</p>
+<pre>
+Invalid application package: Error loading default.default: indexing-change:
+Document type 'music': Field 'artist' changed:
+remove index aspect,
+  matching: 'text' -> 'word',
+  stemming: 'best' -> 'none', normalizing: 'ACCENT' -> 'LOWERCASE',
+  summary field 'artist' transform: 'none' -> 'attribute',
+  indexing script:
+    '{ input artist | tokenize normalize stem:\"BEST\" | summary artist | index artist; }' ->
+    '{ input artist | summary artist | attribute artist; }'
+To allow this add <allow until='yyyy-mm-dd'>indexing-change</allow> to validation-overrides.xml
+</pre>
+<p>
+  To accept such changes, add a <a href="reference/validation-overrides.html">validation-override</a>:
+</p>
+<pre>
+&lt;validation-overrides&gt;
+    &lt;allow until="2021-08-30"&gt;indexing-change&lt;/allow&gt;
+&lt;/validation-overrides&gt;
+</pre>
+<p>
+  By blocking destructive changes, it is safe and easy to automate on an evolving schema.
+  Many schema changes are non-destructive and does not require the validation override, like adding a field.
+  Read more in <a href="https://docs.vespa.ai/en/reference/schema-reference.html#modifying-schemas">
+  modifying-schemas</a>.
 </p>
 
 
 
 <h2 id="multiple-schemas">Multiple schemas</h2>
-
-<p>Many application define multiple kinds of data - each in their own schema.
-Multiple schemas can either be mapped to a single content cluster, or one
-can define a separate content cluster for each schema to be able to scale differently for each kind of data.
-A single container cluster can be used to query all the data types in both these configurations.</p>
-
-
-
-<h2 id="querying-multiple-document-types">Querying multiple document types</h2>
 <p>
-In an application with multiple types of data, each query may decide which types are
-to be searched by each query.
-The details on how this works are in <a href="federation.html">federation</a>.
-In summary, the following always apply:
-<ul>
-  <li>
-    Vespa will by default query all document types and all clusters in parallel,
-    and blend results based on score.
-  </li><li>
-    To limit the query to a subset of the types inside a content cluster,
-    set <a href="reference/query-api-reference.html#model.restrict">restrict</a>
-    to a comma-separated list of schema names:
+  An application can define multiple document types, each in their own schema.
+  Multiple schemas can either be mapped to a single content cluster, or one
+  can define separate content clusters for schemas to be able to scale differently for the document types.
+  A single container cluster can be used to query all the document types in both these configurations.
+</p>
+<p>
+  In an application with multiple document types, the query restricts which document types to be used.
+  Vespa will by default query all document types and all clusters in parallel,
+  and blend results based on score - find details in <a href="federation.html">federation</a>.
+</p>
+<p>
+  To limit the query to a subset of the document types,
+  set <a href="reference/query-api-reference.html#model.restrict">restrict</a>
+  to a comma-separated list of schema names:
+</p>
 <pre>
-/search/?query=lotr&amp;<span style="background-color: yellow;">restrict=music,book</span>
+$ENDPOINT/search/?
+  yql=select * from sources * where title contains "bob";&amp;
+  <span style="background-color: yellow;">restrict=music,books</span>
 </pre>
-  </li><li>
-    To limit the query to a subset of the content clusters,
-    set <a href="reference/query-api-reference.html#model.sources">sources</a>
-    to a comma-separated list of content cluster names.
+<!-- ToDo: Not sure if sources in YQL is the same as query param restrict, sources, or both ...
+           Clarify this in later commit -->
+
+
+
+<h2 id="content-cluster-mapping">Content cluster mapping</h2>
+<p>
+  A schema is mapped to a content cluster in <a href="reference/services.html">services.xml</a>.
+  The content cluster stores and computes over documents in the schema using the rank profile.
+  Applications can map many schemas to one content cluster.
+  Use multiple content clusters if documents of different schemas have different performance characteristics -
+  read more in the <a href="performance/sizing-search.html">serving scaling guide</a>.
+</p>
 <pre>
-/search/?query=lotr&amp;<span style="background-color: yellow;">sources=music_cluster,book_cluster</span>
+&lt;content id="items" version="1.0"&gt;
+    &lt;documents&gt;
+        &lt;document <span style="background-color: yellow;">type="music"</span> mode="index" /&gt;
+        &lt;document <span style="background-color: yellow;">type="books"</span> mode="index" /&gt;
+    &lt;/documents&gt;
+&lt;/content&gt;
 </pre>
-    Both these parameters can be combined to search both a subset of types and clusters.
-  </li>
-</ul>
-Queries are evaluated in parallel over all selected document types and all clusters.
+<p>
+  To limit a query to a subset of the content clusters,
+  set <a href="reference/query-api-reference.html#model.sources">sources</a>
+  to a comma-separated list of content cluster ids, e.g.:
+</p>
+<pre>
+$ENDPOINT/search/?
+  yql=select * from sources * where title contains "bob";&amp;
+  <span style="background-color: #ffff00;">sources=items,news</span>
+</pre>
+<p>
+  Both <em>restrict</em> and <em>sources</em> can be combined
+  to search both a subset of document types and content clusters.
 </p>
