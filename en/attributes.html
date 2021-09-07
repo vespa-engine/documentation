@@ -125,9 +125,18 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
 
 <h2 id="data-structures">Data structures</h2>
 <p>
-  The <em>Attribute Multivalue Mapping</em> stores arrays of values for array and weighed set types,
-  the <em>Attribute Enum Store</em> stores all unique strings for all string attributes:
+  The data type of an attribute field decides which data structures are used by the attribute
+  to store values for that field across all documents on a content node.
+  For some data types a combination of data structures are used:
 </p>
+<ul>
+  <li><em>Attribute Multivalue Mapping</em> stores arrays of values for array and weighed set types.</li>
+  <li><em>Attribute Enum Store</em> stores unique strings for all string attributes and unique values for
+  attributes with <a href="attributes.html#fast-search">fast-search</a>.</li>
+  <li><em>Attribute Tensor Store</em> stores tensor values for all tensor attributes.</li>
+</ul>
+<p>
+In the following illustration a row represents a document, while a named column represents an attribute.
 <img src="img/attributes.svg" width="445" height="auto"/>
 <p>
   Attributes can be:
@@ -142,54 +151,56 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
     <td style="white-space:nowrap;">Single-valued</td>
     <td>Fixed</td>
     <td>
-      Like the "A" attribute, example a 32 bit integer attribute.
-      The element size is the size of the type, like 8 bit for a byte.
-      A memory buffer holding all values in an array.
+      Like the "A" attribute, example <code>int</code>.
+      The element size is the size of the type, like 4 bytes for an integer.
+      A memory buffer (indexed by Local ID) is holding all values directly.
     </td>
   </tr><tr>
     <td>Multi-valued</td>
     <td>Fixed</td>
    <td>
-      Like the "B" attribute, example <code>array&lt;int&gt;</code> - a memory buffer holding values.
+      Like the "B" attribute, example <code>array&lt;int&gt;</code>.
+      A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the <em>Multivalue Mapping</em> the arrays are stored.
+      The <em>Multivalue Mapping</em> consists of multiple memory buffers, where arrays of the same size are co-located in the same buffer.
     </td>
   </tr><tr>
     <td>Multi-valued</td>
     <td>Variable</td>
   <td>
       Like the "B" attribute, example <code>array&lt;string&gt;</code>.
-      A memory buffer holding references (32 bit) to a memory structure with objects for each size class -
-      e.g. for an array&lt;string&gt; the string values are put in the <em>attribute enum store</em>
-      and referred to from the <em>attribute multivalue mapping</em>.
+      A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the <em>Multivalue Mapping</em> the arrays are stored.
+      The unique strings are stored in the <em>Enum Store</em>, and the arrays in the <em>Multivalue Mapping</em>
+      stores the references (32 bit) to the strings in the <em>Enum Store</em>.
+      The <em>Enum Store</em> consists of multiple memory buffers.
     </td>
   </tr><tr>
     <td>Single-valued</td>
     <td>Variable</td>
     <td>
-      Like the "C" attribute, example string.
-      One large memory buffer holding references (32 bit) to a memory structure
-      with objects per unique value.
+      Like the "C" attribute, example <code>string</code>.
+      A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the <em>Enum Store</em> the strings are stored.
     </td>
   </tr><tr>
     <td>Tensor</td>
     <td>Fixed / Variable</td>
     <td>
-      Like the "D" attribute - a tensor is a datatype with mapped and indexed dimensions,
-      stored in the <em>tensor store</em>.
-      The memory layout in the tensor store depends on the tensor type.
+      Like the "D" attribute, example <code>tensor&lt;float&gt;(x{},y[64])</code>.
+      A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the <em>Tensor Store</em> the tensor values are stored.
+      The memory layout in the <em>Tensor Store</em> depends on the tensor type.
     </td>
   </tr>
 </table>
 <p>
-  The "A", "B", "C" and "D" attribute memory buffers have attribute values in Local ID (LID) order -
+  The "A", "B", "C" and "D" attribute memory buffers have attribute values or references in Local ID (LID) order -
   see <a href="#document-meta-store">document meta store</a>.
 </p>
 <p>
   When updating an attribute, the full value is written.
-  This also applies to  <a href="schemas.html#field">multivalue</a> fields -
+  This also applies to <a href="schemas.html#field">multivalue</a> fields -
   example adding an item to an array:
 </p>
 <ol>
-  <li>A new memory buffer is allocated</li>
+  <li>Space for the new array is reserved in a memory buffer</li>
   <li>The current value is copied</li>
   <li>The new element is written</li>
 </ol>
@@ -199,8 +210,14 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
   are faster when using numeric keys (less memory and easier comparisons).
 </p>
 <p>
-  Whenever the <em>Attribute Multivalue Mapping</em> or <em>Attribute Enum Store</em> are full (they are bound),
-  feeding is blocked - <a href="reads-and-writes.html#feed-block">learn more</a>.
+  Data stored in the <em>Multivalue Mapping</em>, <em>Enum Store</em> and <em>Tensor Store</em>
+  is referenced using 32 bit references.
+  This address space can go full, and then feeding is blocked - <a href="reads-and-writes.html#feed-block">learn more</a>.
+  For array or weighted set attributes,
+  the max limit on the number of documents that can have the same number of values is approx 2 billion per node.
+  For string attributes or attributes with
+  <a href="attributes.html#fast-search">fast-search</a>,
+  the max limit on the number of unique values is approx 2 billion per node.
 </p>
 
 
