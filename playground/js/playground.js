@@ -86,7 +86,7 @@ var operations = {
             });
             d3.text("https://doc-search.vespa.oath.cloud/playground/eval", {
                     method: "POST",
-                    body: "json=" + JSON.stringify(expression),
+                    body: "json=" + encodeURIComponent(JSON.stringify(expression)),
                     headers: { "Content-Type": "application/x-www-form-urlencoded" }
                 })
                 .then(function(response) {
