@@ -36,11 +36,6 @@ var operations = {
             add_textarea_field(content, "Comment", "", 3, 100, param["t"], true);
             add_save_cancel_field(content);
         },
-        "execute" : function(param, result, next) {
-            var html = converter.makeHtml(param["t"]);
-            result.set("t", html);
-            next();
-        },
         "result_ui" : function(result, element, header, content, frame_index) {
             clear(header);
             header.append("div").attr("class", "block header-text").html("Comment");
@@ -74,42 +69,6 @@ var operations = {
             add_textarea_field(content, "Expression", "expression_expression", 3, 65, param["e"], false);
             add_save_cancel_field(content);
         },
-        "execute" : function(param, result, next) {
-            expression = {
-                "expression" : param["e"],
-                "arguments" : []
-            };
-            variables.forEach(function (entry, name, map) {
-                if (expression["expression"].includes(name)) {
-                    expression["arguments"].push(entry);
-                }
-            });
-            d3.text("https://doc-search.vespa.oath.cloud/playground/eval", {
-                    method: "POST",
-                    body: "json=" + encodeURIComponent(JSON.stringify(expression)),
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
-                })
-                .then(function(response) {
-                    response = JSON.parse(response);
-                    if (!has_error(response, result)) {
-                        if (param["n"].length > 0) {
-                            variables.set(param["n"], {
-                                "name" : param["n"],
-                                "type" : response["type"],
-                                "value": response["type"].includes("tensor") ? response["value"]["literal"] : response["value"]
-                            });
-                        }
-                        result.set("result", response)
-                        result.set("n", param["n"])
-                        result.set("type", response["type"])
-                        result.set("e", param["e"])
-                    }
-                    next();
-                });
-            result.set("result", "Executing...");
-            result.set("n", param["n"])
-            result.set("e", param["e"])
-        },
         "result_ui" : function(result, element, header, content, frame_index) {
             header.html("Expression");
             clear(content);
@@ -122,10 +81,15 @@ var operations = {
             if (result.has("n") && result.get("n").length > 0) {
                 headerLeft = "<b>" + result.get("n") + "</b>";
             }
+            if (result.has("executing") && result.get("executing") == true) {
+                headerLeft += " <i>(awaiting result)</i>";
+            }
 
             clear(header);
             header.append("div").attr("class", "block header-text").html(headerLeft);
-            add_result_ui_buttons(header.append("div").attr("class", "block right"), frame_index);
+            var button_area = header.append("div").attr("class", "block right");
+            add_expression_result_ui_buttons(button_area, frame_index);
+            add_result_ui_buttons(button_area, frame_index);
 
             if (result.has("error")) {
                 content.html("");
@@ -175,6 +139,17 @@ var operations = {
                     row.append("td").html("");
                     cell = row.append("td");
                     draw_table(cell, data);
+
+                    // steps
+                    const primitive = "Primitive representation:\n" + result.get("primitive");
+                    const steps = "Steps:\n" + JSON.stringify(JSON.parse(result.get("steps")), null, 2);
+                    row = table.append("tr").attr("id", "steps_" + frame_index);
+                    if ( ! result.has("show_details") || result.get("show_details") == false) {
+                        row.attr("hidden", true);
+                    }
+                    row.append("td").attr("class", "label").html("Details");
+                    row.append("td").append("textarea").attr("rows", steps.split("\n").length + 2)
+                            .attr("class", "debug-info-text").text(primitive +"\n\n" + steps);
 
                 } else {
                     content.html(data);
@@ -279,6 +254,11 @@ function add_result_ui_buttons(root, frame_index) {
         .on("click", function(event) { move_frame_down(frame_index); event.stopPropagation(); event.preventDefault(); });
     root.append("a").attr("href", "#").attr("class","header").html(icon_remove())
         .on("click", function(event) { remove_frame(frame_index); event.stopPropagation(); event.preventDefault(); });
+}
+
+function add_expression_result_ui_buttons(root, frame_index) {
+    root.append("a").attr("href", "#").attr("class","header header-space").html(icon_hierarchy())
+        .on("click", function(event) { show_details(frame_index); event.stopPropagation(); event.preventDefault(); });
 }
 
 function get_input_field_value(root, classname) {
@@ -417,6 +397,10 @@ function icon_code() {
     return '<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(2 3)"><line x1="10.5" x2="6.5" y1=".5" y2="14.5"/><polyline points="7.328 2.672 7.328 8.328 1.672 8.328" transform="rotate(135 4.5 5.5)"/><polyline points="15.328 6.672 15.328 12.328 9.672 12.328" transform="scale(1 -1) rotate(-45 -10.435 0)"/></g></svg>';
 }
 
+function icon_hierarchy() {
+    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(2 2)"><path d="m5.5.5h6v5h-6z"/><path d="m10.5 11.5h6v5h-6z"/><path d="m.5 11.5h6v5h-6z"/><path d="m3.498 11.5v-3h10v3"/><path d="m8.5 8.5v-3"/></g></svg>';
+}
+
 function setup_commands() {
     d3.select("#view-setup-cmd").on("click", function(event) { toggle_show_setup(); event.preventDefault(); });
     d3.select("#clear-cmd").on("click", function(event) { clear_all(); event.preventDefault(); });
@@ -453,23 +437,12 @@ function load_setup() {
     }
 }
 
-function on_setup_input_change() {
-    var compressed = d3.select("#setup-input").property("value").trim();
-    var decompressed = LZString.decompressFromEncodedURIComponent(compressed);
-    setup = JSON.parse(decompressed);
-    d3.select("#setup-content").text(JSON.stringify(setup, null, 2));
-    save_setup();
-    clear_results();
-    execute_frame(0);
-    document.activeElement.blur();
-}
-
 function apply_setup() {
     var setup_string = d3.select("#setup-content").property("value");
     setup = JSON.parse(setup_string);
     save_setup();
     clear_results();
-    execute_frame(0);
+    execute_all();
     toggle_show_setup();
 }
 
@@ -610,7 +583,7 @@ function move_frame_up(frame_index) {
 }
 
 function move_selected_up() {
-    frame_index = find_selected_frame_index();
+    var frame_index = find_selected_frame_index();
     if (frame_index == 0) {
         return;
     }
@@ -626,7 +599,7 @@ function move_frame_down(frame_index) {
 }
 
 function move_selected_down() {
-    frame_index = find_selected_frame_index();
+    var frame_index = find_selected_frame_index();
     if (frame_index == setup["f"].length - 1) {
         return;
     }
@@ -637,6 +610,7 @@ function move_selected_down() {
 }
 
 function execute_selected() {
+    var frame_index = find_selected_frame_index();
     var frame = d3.select(selected);
     var data = frame.data();
     var setup = data[0][0]; // because of zip in update
@@ -645,23 +619,83 @@ function execute_selected() {
 
     operations[op]["save"](param, frame);
     save_setup();
-
-    execute_frame(find_selected_frame_index());
     exit_edit_selected();
+
+    // If frame is a comment, update directly. Else execute all
+    if (op == "c") {
+        results["f"][frame_index].set("t", converter.makeHtml(param["t"]));
+        update();
+    } else {
+        execute_all();
+    }
 }
 
-function execute_frame(i) {
-    if (i < 0) {
-        return;
+function execute_all() {
+    var expressions = [];
+    for (var i=0; i < setup["f"].length; ++i) {
+        var op = setup["f"][i]["op"];
+        var param = setup["f"][i]["p"];
+        var result = results["f"][i];
+
+        if (op == "e") {
+            expressions.push({ "cell": i, "name": param["n"], "expr": param["e"], "verbose":true });  // later: add option
+            if ( ! result.has("result")) {
+                result.set("result", "Executing...");
+            }
+            result.set("executing", true)
+            result.set("n", param["n"])
+            result.set("e", param["e"])
+        } else if (op == "c") {
+            result.set("t", converter.makeHtml(param["t"]));
+        }
     }
-    if (i >= setup["f"].length) {
-        update();
-        return;
-    }
-    var op = setup["f"][i]["op"];
-    var params = setup["f"][i]["p"];
-    var result = results["f"][i];
-    operations[op]["execute"](params, result, function(){ update(); execute_frame(i+1); });
+    update();
+
+    d3.text("https://doc-search.vespa.oath.cloud/playground/eval", {
+            method: "POST",
+            body: "json=" + encodeURIComponent(JSON.stringify(expression)),
+            headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        })
+        .then(function(response) {
+            response = JSON.parse(response);
+
+            if ( ! Array.isArray(response) ) {
+                var error = "Unknown error";
+                if ("error" in response) {
+                    error = response["error"];
+                }
+                for (var i=0; i < setup["f"].length; ++i) {
+                    results["f"][i].set("executing", false)
+                    results["f"][i].set("error", response["error"]);
+                }
+                update();
+                return;
+            }
+
+            for(var i=0; i < response.length; ++i) {
+                var cell = response[i]["cell"];
+                var param = setup["f"][cell]["p"];
+                var result = results["f"][cell];
+
+                if ( ! has_error(response[i], result) ) {
+                    if (param["n"].length > 0) {
+                        variables.set(param["n"], {
+                            "name" : param["n"],
+                            "type" : response[i]["type"],
+                            "value": response[i]["type"].includes("tensor") ? response[i]["value"]["literal"] : response["value"]
+                        });
+                    }
+                    result.set("result", response[i]);
+                    result.set("n", param["n"]);
+                    result.set("type", response[i]["type"]);
+                    result.set("e", param["e"]);
+                    result.set("steps", response[i]["steps"]);
+                    result.set("primitive", response[i]["primitive"]);
+                    result.set("executing", false)
+                }
+            }
+            update();
+        });
 }
 
 function find_selected_frame_index() {
@@ -750,6 +784,13 @@ function edit_selected() {
     operations[op]["setup_ui"](param, frame, header, content, find_frame_index(frame));
 
     context = contexts.EDIT;
+}
+
+function show_details(frame_index) {
+    var result = results["f"][frame_index];
+    var element = document.getElementById("steps_" + frame_index);
+    element.hidden = ! element.hidden;
+    result.set("show_details", result.has("show_details") ? ! result.get("show_details") : true);
 }
 
 function exit_edit_selected() {
@@ -890,8 +931,7 @@ function main() {
     setup_commands();
     load_setup();
     clear_results();
-    execute_frame(0);
-    update();
+    execute_all();
     select_frame_by_index(0);
     setup_keybinds();
 }
