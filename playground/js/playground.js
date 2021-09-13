@@ -665,7 +665,7 @@ function execute_all() {
                     error = response["error"];
                 }
                 for (var i=0; i < setup["f"].length; ++i) {
-                    results["f"][i].set("executing", false)
+                    results["f"][i].set("executing", false);
                     results["f"][i].set("error", response["error"]);
                 }
                 update();
@@ -677,6 +677,10 @@ function execute_all() {
                 var param = setup["f"][cell]["p"];
                 var result = results["f"][cell];
 
+                result.set("n", param["n"]);
+                result.set("e", param["e"]);
+                result.set("executing", false);
+
                 if ( ! has_error(response[i], result) ) {
                     if (param["n"].length > 0) {
                         variables.set(param["n"], {
@@ -686,12 +690,9 @@ function execute_all() {
                         });
                     }
                     result.set("result", response[i]);
-                    result.set("n", param["n"]);
                     result.set("type", response[i]["type"]);
-                    result.set("e", param["e"]);
                     result.set("steps", response[i]["steps"]);
                     result.set("primitive", response[i]["primitive"]);
-                    result.set("executing", false)
                 }
             }
             update();
