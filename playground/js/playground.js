@@ -789,8 +789,10 @@ function edit_selected() {
 function show_details(frame_index) {
     var result = results["f"][frame_index];
     var element = document.getElementById("steps_" + frame_index);
-    element.hidden = ! element.hidden;
-    result.set("show_details", result.has("show_details") ? ! result.get("show_details") : true);
+    if (element != null) {
+        element.hidden = ! element.hidden;
+        result.set("show_details", result.has("show_details") ? ! result.get("show_details") : true);
+    }
 }
 
 function exit_edit_selected() {
