@@ -509,12 +509,15 @@ schema foo {
 
 <h2 id="paged-attributes">Paged attributes</h2>
 <p>
-Paged attributes are attributes which are resident on disk and paged into memory on-demand.
-Normal attribute fields are guaranteed to be in-memory.  
-Paged attributes is an alternative when there are memory resource constraints 
-and the attribute data is only accessed by a limited number of hits per query. 
+Paged attribute is only supported for dense <a href="tensor-user-guide.html">tensor</a> type fields.
 
-For example document tensor data which is only used during a <a href="phased-ranking.html">re-ranking phase</a>
+Normal attribute fields are guaranteed to be in-memory while the paged attribute setting 
+allows paging the data out of memory to disk.  
+
+Using the <em>paged</em> setting for dense tensor attributes is an alternative when there are memory resource constraints 
+and the tensor attribute data is only accessed by a limited number of hits per query during ranking. 
+
+For example a dense document tensor data which is only used during a <a href="phased-ranking.html">re-ranking phase</a>
  where the number of attribute accesses are limited by the re-ranking phase count.</p>
 
 For example using a second phase <em>rerank-count</em> 100 will 
@@ -527,7 +530,7 @@ on the node which is available).
 
 In this
 example we have a dense tensor 1024 <a href="reference/tensor.html#tensor-type-spec">int8</a> tensor which is
-only accessed during re-ranking. For this tensor we can enable the <em>paged</em> attribute option.
+only accessed during re-ranking (second-phase ranking expression). For this tensor we can enable the <em>paged</em> attribute option.
 
 <pre>
 schema foo {
@@ -547,20 +550,24 @@ schema foo {
 }
 </pre>
 
-
 For some use cases where serving latency SLA is not very strict 
-and query throughput is limited (e.g less than 200 qps per node) paged attributes might be a good tuning option
-as it would allow storing more tensor data per node.  
+and query throughput is low paged tensor attributes might be a good tuning option
+as it allows storing more tensor data per node.  
 
-The downsides of using <em>paged</em> attributes are many:
+The disadvantages of using <em>paged</em> tensor field attributes are many:
 </p>
 
-<strong>Paged attribute disadvantages</strong>
+<strong>Paged attribute tensor disadvantages</strong>
 <ul>
 
 <li>
-Unpredictable query latency as attribute access might touch disk. Limited queries per second throughput 
-per node.
+It is only implemented for dense tensor field types, not regular field types like string, int, double etc. Not mapped (sparse) tensors and not mixed
+tensors combining both dense and sparse dimensions.
+</li>
+
+<li>
+Unpredictable query latency as tensor attribute access might touch disk. Limited queries per second throughput  
+per node (Depends on locality of document re-ranking requests).
 </li>
 
 <li>
@@ -576,7 +583,7 @@ A good understanding of how the Linux virtual memory management system works is 
 </li>
 
 <li>
-Using paged attribute doubles the disk usage of attribute data. 
+Using paged tensor attribute doubles the disk usage of attribute data. 
 For example if the original attribute size is 92GB (100M documents of the above 1024 int8 per document schema), 
 using the attribute paged option will double the attribute disk usage to 200GB. No free lunch.
 </li>
