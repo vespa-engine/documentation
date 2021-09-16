@@ -6,7 +6,10 @@ title: "Create a text search application"
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vespa-engine/pyvespa/blob/master/docs/sphinx/source/create-text-app.ipynb)
 
-This self-contained tutorial will create a basic text search application from scratch based on the MS MARCO dataset, similar to Vespa's [text search tutorials](https://docs.vespa.ai/documentation/tutorials/text-search.html). Visit [pyvespa reference API](https://pyvespa.readthedocs.io/en/latest/reference-api.html) for more detailed information about the API presented here.
+This self-contained tutorial will create a basic text search application from scratch based on the MS MARCO dataset,
+similar to Vespa's [text search tutorials](../tutorials/text-search.html).
+Visit [pyvespa reference API](https://pyvespa.readthedocs.io/en/latest/reference-api.html)
+for more detailed information about the API presented here.
 
 ## Install pyvespa
 
