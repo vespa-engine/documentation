@@ -9,15 +9,12 @@ it configures Vespa, feeds three documents and runs a query.
 See <a href="getting-started.html">Getting Started</a> for troubleshooting, next steps and other guides.
 </p>
 
-<p>
-<strong>Prerequisites</strong>:
-</p>
+<p><strong>Prerequisites</strong>:</p>
 <ul>
-  <li><a href="https://docs.docker.com/docker-for-mac/install">Docker Desktop on Mac</a> or Docker on Linux</li>
-  <li><a href="https://git-scm.com/downloads">Git</a></li>
-  <li>Operating system: macOS or Linux</li>
+  <li><a href="https://docs.docker.com/engine/install/">Docker Desktop for Mac/Windows</a>, or Docker on Linux</li>
+  <li>Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)</li>
   <li>Architecture: x86_64</li>
-  <li><b>Minimum 6GB</b> memory dedicated to Docker (the default is 2GB on Macs)</li>
+  <li><b>Minimum 6GB</b> memory dedicated to Docker (the default is 2GB on macOS)</li>
 </ul>
 
 <p>
@@ -30,125 +27,101 @@ This guide is tested with Docker for Mac, Community Edition-18.06.1-ce-mac73 (26
 <h2 id="running-vespa-in-docker">Running Vespa in Docker</h2>
 <ol>
 <li>
-    <p><strong>Validate environment:</strong></p>
+<p><strong>Validating your environment:</strong></p>
 <pre>
 $ docker info | grep "Total Memory"
 </pre>
 <p>
-Make sure you see at minimum 6Gb.
+Make sure you see at minimum 6GB.
 </p>
 </li>
 
 <li>
-    <p><strong>Clone the Vespa sample apps from
-    <a href="https://github.com/vespa-engine/sample-apps">github</a>:</strong></p>
-<pre data-test="exec">
-$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/album-recommendation
+  <p><strong>Install the Vespa CLI:</strong></p>
+  <p>Using <a href="https://brew.sh/">Homebrew</a>:</p>
+<pre>
+$ brew install vespa-cli
 </pre>
+<p>You can
+also <a href="https://github.com/vespa-engine/vespa/releases">download Vespa
+CLI</a> for Windows, Linux and macOS.</p>
 </li>
 
 <li>
-    <p><strong>Start a Vespa Docker container:</strong></p>
+<p><strong>Start a Vespa Docker container:</strong></p>
 <pre data-test="exec">
 $ docker run --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa
 </pre>
 <p>
-    The port <samp>8080</samp> is published to make the search and feed interfaces
-    accessible outside of the docker container,
-    19071 is the config server endpoint.
-    Only one docker container named <samp>vespa</samp> can run at a time so change the name if needed.
-    See the
-    <a href="https://github.com/vespa-engine/docker-image/blob/master/Dockerfile">Dockerfile</a> and
-    the <a href="https://github.com/vespa-engine/docker-image/blob/master/include/start-container.sh">startup script</a>
-    for more insights.
+The port <samp>8080</samp> is published to make the search and feed interfaces
+accessible outside of the docker container,
+19071 is the config server endpoint.
+Only one docker container named <samp>vespa</samp> can run at a time so change the name if needed.
+See the
+<a href="https://github.com/vespa-engine/docker-image/blob/master/Dockerfile">Dockerfile</a> and
+the <a href="https://github.com/vespa-engine/docker-image/blob/master/include/start-container.sh">startup script</a>
+for more insights.
 </p>
 </li>
 
 <li>
-    <p><strong>Wait for the configuration server to start - wait for a 200 OK response:</strong></p>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:19071/ApplicationStatus
-</pre>
-</li>
-
-<li>
-    <p><strong>Deploy and activate a sample application:</strong></p>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd src/main/application && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
-</pre>
-    <p>
-    Read more on deploying applications in
-    <a href="cloudconfig/application-packages.html">Application packages</a>.
-    </p>
-</li>
-
-<li>
-    <p><strong>Ensure the application is active - wait for a 200 OK response:</strong></p>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-</li>
-
-<li>
-    <p><strong>Feed documents:</strong></p>
+<p><strong>Verify it is ready to use:</strong></p>
 <pre data-test="exec">
-$ curl -H Content-Type:application/json --data-binary @src/test/resources/A-Head-Full-of-Dreams.json \
-  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
-$ curl -H Content-Type:application/json --data-binary @src/test/resources/Love-Is-Here-To-Stay.json \
-  http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay
-$ curl -H Content-Type:application/json --data-binary @src/test/resources/Hardwired...To-Self-Destruct.json \
-  http://localhost:8080/document/v1/mynamespace/music/docid/hardwired-to-self-destruct
-</pre>
-    <p>This uses <a href="reference/document-v1-api-reference.html">/document/v1/</a> -
-    use <a href="vespa-feed-client.html">vespa-feed-client</a> to feed large amounts of data, fast.</p>
-</li>
-
-<li>
-    <p><strong>Make a query:</strong></p>
-<pre data-test="exec" data-test-assert-contains="Metallica">
-$ curl "http://localhost:8080/search/?ranking=rank_albums&amp;yql=select%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20%22music%22%3B&amp;ranking.features.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D"
-</pre>
-    <p>
-    You can also view query results in a browser with the query builder UI at
-    <a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>.
-    The query builder has guided queries and YQL autocompletion.
-    Read more in the <a href="query-api.html">Query API</a>.
-    </p>
-</li>
-
-<li>
-    <p><strong>Run a document GET request:</strong></p>
-<pre data-test="exec" data-test-assert-contains="Diana">
-$ curl -s http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay
+$ vespa status deploy
 </pre>
 </li>
 
 <li>
-<p><strong>Removing this setup:</strong></p>
-<pre data-test="after">
-$ docker rm -f vespa
+<p><strong>Initialize <code>myapp/</code> to a copy of a
+<a href="https://github.com/vespa-engine/sample-apps">sample</a>
+<a href="cloudconfig/application-packages.html">application package</a>:</strong></p>
+<pre data-test="exec">
+$ vespa clone album-recommendation myapp
+$ cd myapp
 </pre>
 </li>
 
 <li>
-    <p><strong>Restarting Docker containers:</strong></p>
-    <p>
-    If mapping file systems to the parent host and restarting the Docker container,
-    see <a href="docker-containers-in-production.html">Running Docker containers in production</a>
-    for graceful shutdown timeout settings:
-    </p>
-<pre>
-$ docker stop vespa -t 120
-$ docker start vespa
+<p><strong>Deploy it:</strong></p>
+<pre data-test="exec">
+$ vespa deploy --wait 300
 </pre>
-    </li>
+</li>
+
+<li>
+<p><strong>Verify it has started:</strong></p>
+<pre data-test="exec">
+$ vespa status
+</pre>
+</li>
+
+<li>
+<p><strong>Feed documents:</strong></p>
+<pre data-test="exec">
+$ vespa document src/test/resources/A-Head-Full-of-Dreams.json
+$ vespa document src/test/resources/Love-Is-Here-To-Stay.json
+$ vespa document src/test/resources/Hardwired...To-Self-Destruct.json
+</pre>
+<p>This uses the <a href="reference/document-v1-api-reference.html">/document/v1/ API</a> -
+use <a href="vespa-feed-client.html">vespa-feed-client</a> to feed large amounts of data, fast.</p>
+</li>
+
+<li>
+<p><strong>Issue queries:</strong></p>
+{% raw %}
+<pre data-test="exec" data-test-assert-contains="Head">
+$ vespa query "select * from music where album contains 'head';"
+$ vespa query "select * from sources * where sddocname contains 'music';" "ranking=rank_albums" "ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+</pre>
+{% endraw %}
+This uses the <a href="query-api.html">Query API</a>.
+You can also view query results in a browser at
+<a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>.
+</li>
+
 </ol>
-
 
 
 <h2 id="next-steps">Next steps</h2>
@@ -157,3 +130,9 @@ $ docker start vespa
   Hint: the <a href="tutorials/news-1-getting-started.html">News tutorial</a>
   set is a great way to explore more Vespa features, and a natural next step.
 </p>
+
+
+<pre hidden data-test="after">
+$ docker rm -f vespa
+</pre>
+
