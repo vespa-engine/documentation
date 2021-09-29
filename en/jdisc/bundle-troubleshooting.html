@@ -1,10 +1,9 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Bundle troubleshooting"
 ---
 
-<p>
-This document describes how to troubleshoot the most common errors  when working with bundles:
+<p>This document describes how to troubleshoot the most common errors when working with bundles:</p>
 <ul>
   <li><a href="#could-not-create-component">Could not create component</a></li>
   <li><a href="#class-not-found">Class not found</a></li>
@@ -12,34 +11,36 @@ This document describes how to troubleshoot the most common errors  when working
   <li><a href="#unresolved-constraint">Unresolved constraint</a></li>
   <li><a href="#multiple-implementations-of-the-same-class">Multiple implementations of the same class</a></li>
 </ul>
-For general information on OSGi bundles for Vespa, refer to the introduction on how
-to <a href="developing-osgi-bundles.html">develop OSGi bundles</a>.
-Richard S. Hall's presentation on
-<a href="https://cwiki.apache.org/confluence/download/attachments/7956/Learning_to_ignore_OSGi.pdf">
-using OSGi as a means to achieve modularity</a> is recommended - it explains a lot about how OSGi works, and why.
+<p>
+  For general information on OSGi bundles for Vespa, refer to the introduction on how
+  to <a href="developing-osgi-bundles.html">develop OSGi bundles</a>.
+  Richard S. Hall's presentation on
+  <a href="https://cwiki.apache.org/confluence/download/attachments/7956/Learning_to_ignore_OSGi.pdf">
+  using OSGi as a means to achieve modularity</a> is recommended - it explains a lot about how OSGi works, and why.
 </p>
+
 
 
 <h2 id="could-not-create-component">Could not create component</h2>
 <p>
-The Container fails to start if it cannot load bundles.
-Example, using wrong bundle name in the
-<a href="https://github.com/vespa-engine/sample-apps/tree/master/multiple-bundles">multiple-bundles</a>
-sample app:
+  The Container fails to start if it cannot load bundles.
+  Example, using wrong bundle name in the
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/multiple-bundles">multiple-bundles</a> sample app:
+</p>
 <pre>
  &lt;services version="1.0"&gt;
      &lt;container id="fibonacci" version="1.0"&gt;
 -        &lt;component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles-lib" /&gt;
 +        &lt;component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles<span style="background: yellow">-typo</span>" /&gt;
 </pre>
-Looking at what is actually deployed in <em>multiple-bundles</em>:
+<p>Looking at what is actually deployed in <em>multiple-bundles</em>:</p>
 <pre>
 $ ls -1 target/*.jar
   target/multiple-bundles-1.0.0-deploy.jar
   target/multiple-bundles-1.0.0-without-dependencies.jar
   target/multiple-bundles-lib-1.0.1-deploy.jar
 </pre>
-Error in log:
+<p>Error in log:</p>
 <pre>
 [2020-01-23 14:28:01.367] WARNING : qrserver         Container.com.yahoo.container.di.Container
 	Failed to set up new component graph. Retaining previous component generation.
@@ -71,16 +72,16 @@ Error in log:
 	at com.yahoo.container.jdisc.ConfiguredApplication.lambda$startReconfigurerThread$1(ConfiguredApplication.java:275)
 	at java.base/java.lang.Thread.run(Thread.java:834)
 </pre>
-Make sure that the jar files (i.e. bundles) are actually deployed with correct names per <em>services.xml</em>.
-</p>
+<p>Make sure that the jar files (i.e. bundles) are actually deployed with correct names per <em>services.xml</em>.</p>
+
 
 
 <h2 id="class-not-found">Class not found</h2>
 <p>
-All classes that are referred to in a user bundle must either be embedded in the bundle,
-or imported from another bundle by an <code>Import-Package</code> statement in the bundle
-manifest. When this rule has been breached, we get one of the most commonly seen
-exceptions when working with OSGi bundles:
+  All classes that are referred to in a user bundle must either be embedded in the bundle,
+  or imported from another bundle by an <code>Import-Package</code> statement in the bundle manifest.
+  When this rule has been breached, we get one of the most commonly seen exceptions when working with OSGi bundles:
+</p>
 <pre>
 ...
 exception=
@@ -88,34 +89,35 @@ exception=
     ...
     java.lang.ClassNotFoundException: com.acme.utils.Helper not found by my_bundle [29]
 </pre>
+<p>
+  For the <a href="../bundle-plugin.html">bundle-plugin</a> to automatically add an
+  Import-Package statement to the bundle's manifest,
+  that package must be exported from another bundle
+  that is declared as a 'provided' scope dependency in <em>pom.xml</em>.
+  If the dependency that contains the missing class is under your own control,
+  make sure it's packaged as an OSGi bundle,
+  and <a href="../bundle-plugin.html#exporting-importing-and-including-packages-from-bundles">export the package</a>
+  from that bundle.
+  If not, the simplest way to resolve the issue is to embed the dependency in your own bundle,
+  by setting its scope to 'compile' instead of 'provided'.
 </p><p>
-For the <a href="../bundle-plugin.html">bundle-plugin</a> to automatically add an
-Import-Package statement to your bundle's manifest, that package must be exported from
-another bundle that is declared as a 'provided' scope dependency in <em>pom.xml</em>.
-If the dependency that contains the missing class is under your own control, make sure
-it's packaged as an OSGi bundle, and <a
- href="../bundle-plugin.html#exporting-importing-and-including-packages-from-bundles">export
-the package</a> from that bundle.  If not, the simplest way to resolve the issue is to
-embed the dependency in your own bundle, by setting its scope to 'compile' instead of
-'provided'.
-</p><p>
-If the strategy above does not resolve the case, it's most likely because the class in
-question is loaded by reflection,
-e.g. <code>Class.forName("com.acme.utils.Helper")</code>. This is quite common when working
-with libraries for pluggable frameworks, for which we have a separate <a
- href="pluggable-frameworks.html"> troubleshooting doc</a>.
+  If the strategy above does not resolve the case,
+  it's most likely because the class in question is loaded by reflection,
+  e.g. <code>Class.forName("com.acme.utils.Helper")</code>.
+  This is quite common when working with libraries for pluggable frameworks,
+  for which we have a separate <a href="pluggable-frameworks.html">troubleshooting doc</a>.
 </p>
 
 
 
 <h2 id="slow-container-start">Slow Container start</h2>
-<p>
-  In the vespa log, a container startup looks like:
-</p>
+<p>In the vespa log, a container startup looks like:</p>
 <pre>
-[2021-01-07 10:13:35.325] INFO    : container        Container.com.yahoo.container.core.config.ApplicationBundleLoader  Installed bundles: {[0]org.apache.felix.framework:6.0.3, [1]container-disc:7.335.22 ...
+[2021-01-07 10:13:35.325] INFO    : container        Container.com.yahoo.container.core.config.ApplicationBundleLoader
+  Installed bundles: {[0]org.apache.felix.framework:6.0.3, [1]container-disc:7.335.22 ...
 ...
-[2021-01-07 10:26:57.291] INFO    : container        Container.com.yahoo.container.jdisc.ConfiguredApplication  Switching to the latest deployed set of configurations and components. Application config generation: 1
+[2021-01-07 10:26:57.291] INFO    : container        Container.com.yahoo.container.jdisc.ConfiguredApplication
+  Switching to the latest deployed set of configurations and components. Application config generation: 1
 </pre>
 <p>
   The container is ready at the last log line - note the long startup time.
@@ -133,59 +135,57 @@ $ vespa-stop-services &amp;&amp; vespa-start-services
 
 # Find DEBUG log messages for component creation, like:
 
-[2021-01-07 10:13:37.006] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentGraph        Trying the fallback injector to create component of class com.yahoo.container.jdisc.messagebus.SessionCache to inject
- into component 'chain.mychain in MbusServer' of type 'com.yahoo.container.jdisc.messagebus.MbusServerProvider'.
-
-[2021-01-07 10:14:14.082] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode Constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
-[2021-01-07 10:26:54.669] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode Finished constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+[2021-01-07 10:13:37.006] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentGraph
+  Trying the fallback injector to create component of class com.yahoo.container.jdisc.messagebus.SessionCache to inject
+  into component 'chain.mychain in MbusServer' of type 'com.yahoo.container.jdisc.messagebus.MbusServerProvider'.
+[2021-01-07 10:14:14.082] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode
+  Constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+[2021-01-07 10:26:54.669] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode
+  Finished constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
 </pre>
-<p>
-  In this particular example, query profile compilation takes a long time.
-</p>
+<p>In this particular example, query profile compilation takes a long time.</p>
 
 
 
 <h2 id="unresolved-constraint">Unresolved constraint</h2>
 <p>
-If the bundle has an Import-Package for a package that is not available at runtime,
-the OSGi framework will report an unresolved constraint error. The symptom as seen in the
-log is (line breaks have been added for legibility):
+  If the bundle has an Import-Package for a package that is not available at runtime,
+  the OSGi framework will report an unresolved constraint error.
+  The symptom as seen in the log is:
+</p>
 <pre>
 org.osgi.framework.BundleException: Unresolved constraint in bundle my_bundle [29]:
 Unable to resolve 29.0:
 missing requirement [29.0] osgi.wiring.package; (osgi.wiring.package=<span style="background: yellow">com.acme.utils</span>)
      at org.apache.felix.framework.Felix.resolveBundleRevision(Felix.java:3974)
 </pre>
-</p><p>
-This means that the missing class resides in a 'provided' dependency referred to from
-the bundle's <em>pom.xml</em>, either directly or transitively. In order to make the dependency
-available at runtime, there are two options:
-
+<p>
+  This means that the missing class resides in a 'provided' dependency referred to from
+  the bundle's <em>pom.xml</em>, either directly or transitively.
+  In order to make the dependency available at runtime, there are two options:
+</p>
 <ul>
-  <li>The easiest is to set the dependency as 'compile' scope (instead of 'provided') to
-  embed it in your own bundle. This works fine in most cases, unless two of your
-  dependencies need two different versions of the same library.
+  <li>The easiest is to set the dependency as 'compile' scope (instead of 'provided') to embed it in your own bundle.
+    This works fine in most cases, unless two of the dependencies need two different versions of the same library.
   </li>
-  <li>Add the missing jar file to the <code>components/</code> folder
-  of the application package, along with your own bundles. The maven-dependency-plugin has
-  a goal called 'copy-dependencies' to help with this.
+  <li>Add the missing jar file to the <code>components/</code> folder of the application package,
+    along with your own bundles.
+    The maven-dependency-plugin has a goal called 'copy-dependencies' to help with this.
   </li>
 </ul>
-</p><p>
-If the missing jar is a transitive dependency, maven can help visualize the dependency
-graph of your project:
+<p>If the missing jar is a transitive dependency, maven can help visualize the dependency graph of the project:</p>
 <pre>
 $ mvn dependency:tree
 </pre>
-</p>
 
 
 
 <h2 id="multiple-implementations-of-the-same-class">Multiple implementations of the same class</h2>
 <p>
-When two bundles interact via their public APIs, it is crucial that both bundles resolve
-each and every participating class to the same <code>Class</code> object. If not, we will
-get error messages like:
+  When two bundles interact via their public APIs, it is crucial that both bundles resolve
+  each and every participating class to the same <code>Class</code> object.
+  If not, we will get error messages like:
+</p>
 <pre>
 java.lang.LinkageError: loader constraint violation: when resolving field
 "DATETIME" the class loader (instance of
@@ -194,77 +194,67 @@ class, javax/xml/datatype/DatatypeConstants, and the class loader (instance of
 &lt;bootloader&gt;) for the field's resolved type, pe/DatatypeConstants, have different Class
 objects for that type
 </pre>
-or:
+<p>or:</p>
 <pre>
 java.lang.LinkageError: loader constraint violation: loader (instance of &lt;bootloader&gt;)
 previously initiated loading for a different type with name "<span style="background: yellow">javax/xml/namespace/QName</span>"
 </pre>
-or (less frequently):
+<p>or (less frequently):</p>
 <pre>
 java.lang.ClassCastException: com.acme.utils.Helper cannot be cast to  com.acme.utils.Helper
 </pre>
-</p><p>
-All these error messages indicate that multiple implementations of one or more classes are
-used at runtime. This could mean that either
+<p>
+  All these error messages indicate that multiple implementations of one or more classes are used at runtime -
+  possible root causes:
+</p>
 <ul>
   <li>Two interacting user bundles embed the same Java package.</li>
   <li>A user bundle embeds a Java package that is exported from one of the JDisc bundles.</li>
 </ul>
-Usually, the "duplicate" package is pulled in by the user bundle transitively from a
-library dependency.
-</p>
+<p>Usually, the "duplicate" package is pulled in by the user bundle transitively from a library dependency.</p>
 
 
 <h3 id="multiple-implementations-example">Multiple implementations example</h3>
 <p>
-Let's take a look at an example resolving the duplicate <span style="background:
-yellow">javax.xml.namespace.QName</span> class from the error message above.
+  Let's take a look at an example resolving the duplicate <span style="background:
+yellow">javax.xml.namespace.QName</span> class
+  from the error message above.
 </p><p>
-All 'javax.xml' packages in the JDK are exported by the JDisc core bundle. This means
-that they should be imported by user bundles, instead of embedded inside them.  Hence, we
-should ensure that there are no classes from packages prefixed by 'javax.xml' in our
-bundle. To find out which library that pulls in the package, we can use the following
-procedure:
+  All 'javax.xml' packages in the JDK are exported by the JDisc core bundle.
+  This means that they should be imported by user bundles, instead of embedded inside them.
+  Hence, ensure that there are no classes from packages prefixed by 'javax.xml' in the bundle.
+  Find out which library that pulls in the package:
+</p>
 <ol>
-  <li>Extract the full component jar, including any embedded jars. One
-  tool that does the job is <a href="https://github.com/pojosontheweb/rjar/">rjar</a>.
+  <li><p>Extract the full component jar, including any embedded jars.
+    One tool that does the job is <a href="https://github.com/pojosontheweb/rjar/">rjar</a>.</p>
   </li>
-  <p>
-  <li>Search the folder where the jar was extracted for 'javax.xml' classes. For example:
+  <li><p>Search the folder where the jar was extracted for 'javax.xml' classes:</p>
 <pre>
 $ find . | grep "javax/xml/.*\.class"
-</pre>
-This yields output like:
-<pre>
+
 ...
 ./my_bundle-deploy.jar/dependencies/<span style="background: yellow">stax-api-1.0.1.jar</span>/javax/xml/namespace/QName.class
 ...
 </pre>
   </li>
-  <p>
-  <li>Now we need to find out which libraries that pulled in the offending classes. From this
-  example, it was <code>stax-api-1.0.1</code>. Usually, these libraries are not
-  pulled in by our pom as direct dependencies, but rather transitively via another library that we
-  are using. In order to find the direct dependency, use maven's dependency plugin from your application
-  directory:
+  <li>Find out which libraries that pulled in the offending classes - here it was <code>stax-api-1.0.1</code>.
+    Usually, these libraries are not pulled in by the pom as direct dependencies,
+    but rather transitively via another library being used.
+    Use maven's dependency plugin from the application directory to find the direct dependency:
  <pre>
 $ mvn dependency:tree -Dverbose
-</pre>
-  This will yield output like:
-<pre>
+
 [INFO] +- com.acme.utils:jersey-utils:1.0.0:compile
 [INFO] |  +- com.sun.jersey:jersey-json:jar:1.13:compile
 [INFO] |  |  +- org.codehaus.jettison:jettison:jar:1.1:compile
 [INFO] |  |    \- <span style="background: yellow">stax:stax-api:jar:1.0.1:compile</span>
 </pre>
-  We can now see that <code>stax:stax-api:1.0.1</code> is pulled in transitively from our direct
-  dependency <code>com.acme.utils:jersey-utils</code>.
+    <p>Observe that <code>stax:stax-api:1.0.1</code> is pulled in transitively from the direct
+    dependency <code>com.acme.utils:jersey-utils</code>.</p>
   </li>
-  <p>
-  <li>
-    Finally, to exclude <code>stax:stax-api</code> we must add the appropriate
-  <code>exclusion</code> from our direct dependency <code>com.acme.utils:jersey-utils</code>, in
-  <em>pom.xml</em>:
+  <li><p>To exclude <code>stax:stax-api</code>, add the appropriate
+    <code>exclusion</code> from the direct dependency <code>com.acme.utils:jersey-utils</code> in <em>pom.xml</em>:</p>
  <pre>
 &lt;dependency&gt;
   &lt;groupId&gt;com.acme.utils&lt;/groupId&gt;
@@ -280,14 +270,14 @@ $ mvn dependency:tree -Dverbose
 </pre>
   </li>
 </ol>
-</p>
+
 
 
 <h3 id="multiple-implementations-example-slf4j-api">Multiple implementations example slf4j-api</h3>
 <p>
-This is similar to the previous example, but logging libraries are maybe the most common
-problem teams encounter. Here we will see the symptom, use dependency:tree and add an exclusion.
-The symptom:
+  This is similar to the previous example, but logging libraries are maybe the most common problem teams encounter.
+  Here we will see the symptom, use dependency:tree and add an exclusion. The symptom:
+</p>
 <pre>
 java.lang.RuntimeException: An exception occurred while
 constructing 'com.acme.utils.Helper in acme-utils'
@@ -303,8 +293,7 @@ org.slf4j.LoggerFactory.getILoggerFactory(LoggerFactory.java:299)
 at
 org.slf4j.LoggerFactory.getLogger(LoggerFactory.java:269)
 </pre>
-Running the <em>mvn dependency:tree</em> in the previous example gives:
-</p>
+<p>Running <em>mvn dependency:tree</em> in the previous example gives:</p>
 <pre>
 [INFO] +- com.yahoo.vespa:container-dev:jar:5.28.29:provided
 [INFO] |  +- com.yahoo.vespa:jdisc_core:jar:5.28.29:provided
@@ -314,8 +303,8 @@ Running the <em>mvn dependency:tree</em> in the previous example gives:
 [INFO] |  +- org.slf4j:slf4j-api:jar:1.6.6:compile
 </pre>
 <p>
-We see that slf4j-api is no longer provided from container-dev, which it should. To fix this, we add an exclusion
-on the offender:
+  See that slf4j-api is no longer provided from container-dev, which it should.
+  To fix this, add an exclusion on the offender:
 </p>
 <pre>
 &lt;dependency&gt;
@@ -329,16 +318,12 @@ on the offender:
       &lt;artifactId&gt;slf4j-api&lt;/artifactId&gt;
     &lt;/exclusion&gt;
 </pre>
-<p>
-But it still does not work! And we can see why:
-</p>
+<p>But it still does not work! And we can see why:</p>
 <pre>
 $ jar -tf mailsearch-docprocs-deploy.jar  | grep slf
 dependencies/slf4j-api-1.7.5.jar
 </pre>
-<p>
-Something still pulls in slf4j... Other candidates:
-</p>
+<p>Something still pulls in slf4j... Other candidates:</p>
 <pre>
 [INFO] \- com.yahoo.vespa:application:jar:5.28.29:test
 ...
@@ -351,16 +336,14 @@ Something still pulls in slf4j... Other candidates:
 [INFO]    |  +- (org.slf4j:slf4j-jdk14:jar:1.7.5:test - omitted for duplicate)
 </pre>
 <p>
-Added the right excludes for application and used mvn dependency:tree and verified that all references were
-gone, except the ones for container-dev. Still found:
+  Added the right excludes for application and used mvn dependency:tree and verified that all references were gone,
+  except the ones for container-dev. Still found:
 </p>
 <pre>
 $ jar -tf mailsearch-docprocs-deploy.jar  | grep slf
 dependencies/slf4j-api-1.7.5.jar
 </pre>
-<p>
-One can make it work by managing this dependency explicitly - add this at POM top-level:
-</p>
+<p>One can make it work by managing this dependency explicitly - add this at POM top-level:</p>
 <pre>
 &lt;dependencyManagement&gt;
   &lt;dependencies&gt;
