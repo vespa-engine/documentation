@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - getting started on Docker"
 ---
 
@@ -115,7 +115,7 @@ If a restart is required in some rare case, however, the output will notify you.
 In the upcoming parts of the tutorials, we'll frequently deploy the 
 application in this manner. 
 
-<p class="alert alert-success"> 
+<p><!-- ToDo: consider making a style for notes -->
 Note here that we prepare the application <em>directory</em>. Both
 application directories and a zip file containing the application are
 accepted. A zip file is created when compiling and packaging an

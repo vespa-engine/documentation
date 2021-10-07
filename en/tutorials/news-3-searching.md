@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - searching"
 ---
 
@@ -96,7 +96,8 @@ documents are added and the index grows.  Since attributes are kept in memory,
 they are excellent for fields that require fast access, e.g., fields used for
 sorting or grouping query results.  The downside is higher memory usage.  
 
-<p class="alert alert-success"> 
+<p> 
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
 By default, no index is generated for attributes, and search over these defaults
 to a linear scan - to build an index for an attribute field, include
 <code>attribute: fast-search</code> in the field definition.

@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News Recommendation Tutorial - parent child and tensor ranking"
 ---
 
@@ -173,13 +173,10 @@ id `id:category_ctr:category_ctr::global`, that is what this field must be
 set to. Usually, there are many parent documents that children can reference,
 but our application will only hold one.
 
-<p class="alert alert-success"> 
 You can think of the reference field as holding a foreign key
 to the parent document, and the import as performing a real-time 
 join between the child and parent document using this foreign key.
-The imported values are useable as if they were stored with the
-child.
-</p>
+The imported values are usable as if they were stored with the child.
 
 The `import` statement defines that we should import the `ctrs` field from
 the document referenced in the `category_ctr_ref` field. We name this as
@@ -232,7 +229,8 @@ the sparseness of the tensor, only the `finance` cell matches, and that value
 is multiplied by the `1.0` in this document. So in this case, this would
 effectively work as a lookup.
 
-<p class="alert alert-success"> 
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
 Much more complex operations are available, please refer to <a href="../tensor-user-guide.html#ranking-with-tensors">
 the tensor user guide</a> for more information.
 </p>
