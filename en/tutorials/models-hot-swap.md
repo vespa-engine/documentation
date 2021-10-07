@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Models hot swap tutorial"
 ---
 
@@ -111,7 +111,8 @@ schema news_model {
 }
 ```
 
-<p class="alert alert-success"> 
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
 The shared <code>news</code> schema neither holds the model vector nor has a model field. However, it still has a version field, obtained from a dedicated <code>news</code> configuration. This version is used only for garbage collection of removed documents, as described below.
 </p>
 
@@ -149,8 +150,14 @@ Now, we can distinguish between up-to-date and obsolete documents by comparing t
     </documents>
 ```
 
-<p class="alert alert-success"> 
-Note that the filter not only compares the internal and the latest versions but also checks whether the latest version is <code>null</code>. This is required as the filter is also applied during feeding. At that point, the reference to the configuration document isn't active yet, hence all imported fields contain <code>null</code> values. Without the <code>null</code> check, all our documents would be filtered out during feeding.
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
+The filter not only compares the internal and the latest versions
+but also checks whether the latest version is <code>null</code>.
+This is required as the filter is also applied during feeding.
+At that point, the reference to the configuration document isn't active yet,
+hence all imported fields contain <code>null</code> values.
+Without the <code>null</code> check, all our documents would be filtered out during feeding.
 </p>
 
 ## Dealing with feeding failures

@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - embeddings"
 ---
 
@@ -393,8 +393,9 @@ to create a better model for the user embedding. For the moment, however,
 we are satisfied with these, and we'll use them going forward. Feel 
 free to experiment and see if you can achieve better results!
 
-<p class="alert alert-success"> 
-Note that these numbers are for the demo dataset, which is much
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
+These numbers are for the demo dataset, which is much
 smaller than the full dataset. For reference, in 
 <a href="https://msnews.github.io/assets/doc/ACL2020_MIND.pdf">the MIND paper</a>
 the baseline here achieves <code>0.6776</code> on the full dataset.

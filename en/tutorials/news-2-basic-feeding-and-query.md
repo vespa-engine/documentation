@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - applications, feeding and querying"
 ---
 
@@ -81,12 +81,10 @@ abstract, and a URL to the article's content. The last two fields contain the
 identified entities in the title and abstract. This particular news item has no
 such entities.
 
-<p class="alert alert-success"> 
 Note that the body content of the news article is retrievable by the URL. The 
 dataset repository contains tools to download this. For the purposes of 
 this tutorial, we won't be using this data, but feel free to download 
 yourself.
-</p>
 
 Let's start building a Vespa application to make this data searchable. We'll
 create the directory `my-app` under the `news` sample app directory to
@@ -380,8 +378,9 @@ $ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from so
 http://localhost:8080/search/ | python -m json.tool
 </pre>
 
-<p class="alert alert-success"> 
-Note that you can use the built-in query builder found at 
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
+You can use the built-in query builder found at 
 <a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>
 which can help you build queries with, for instance, autocompletion of YQL.
 </p>

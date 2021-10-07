@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - searchers"
 ---
 
@@ -106,7 +106,8 @@ results come back, the processing passes back up the chain. The searchers can th
 process the results before passing them to the previous searcher, and ultimately back as 
 a response to the query.
 
-<p class="alert alert-success"> 
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
 Adding a <a href="../reference/query-api-reference.html#tracelevel">tracelevel</a> is 
 generally very helpful when debugging vespa queries.
 </p>
@@ -214,8 +215,9 @@ is restricted to the `user` document type. Since the `user_id` is
 unique, we only expect a single hit. We then extract the `embedding` tensor
 from the user document.
 
-<p class="alert alert-success"> 
-Note that we explicitly call a <em>fill</em> on the results before returning. A query is
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
+We explicitly call a <em>fill</em> on the results before returning. A query is
 usually passed to the search backend at least twice: one to retrieve the results, 
 another to retrieve the summary data of the final result set. This is to avoid 
 sending excess data between services. 
@@ -344,7 +346,8 @@ be passed along with the query by adding it to the default query profile in
 </query-profile>
 ```
 
-<p class="alert alert-success"> 
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
 The <em>src/python/evaluate.py</em> script can now be modified to also use this searcher.
 However, to properly calculate the metrics, the searcher needs to be modified to 
 accept a list of news article id's and only recall those. We'll leave this as 
@@ -391,7 +394,8 @@ This is often called federation. Vespa supports federation both
 from internal and external sources. Please see 
 [the guide on federation](../federation.html) for more information.
 
-<p class="alert alert-success"> 
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
 If the same document can be returned from multiple sources, it's
 important to perform some form of de-duplication before returning
 the final results!

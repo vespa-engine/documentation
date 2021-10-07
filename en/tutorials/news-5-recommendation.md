@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - recommendations"
 ---
 
@@ -197,8 +197,9 @@ This instructs Vespa to expect a float tensor with dimension `d0[51]` when the
 query parameter `ranking.features.query(user_embedding)` is passed. We'll see 
 how this works together with the `nearestNeighbor` search operator below.
 
-<p class="alert alert-success"> 
-Note that setting up this query profile type is required when sending a 
+<p>
+<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
+Setting up this query profile type is required when sending a 
 tensor as a query parameter. A common pitfall is to forget the 
 default query profile, but that is required to successfully set up
 the query profile type.
