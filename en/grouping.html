@@ -8,26 +8,48 @@ This document describes what grouping is and gives a few examples on how to use 
 Refer to the <a href="reference/query-api-reference.html#select">Query API reference</a>
 for how to set the <em>select</em> parameter,
 and the <a href="reference/grouping-syntax.html">Grouping reference</a> for details.
-</p><p>
-Vespa grouping has a flexible language in
-which to describe how the query hits should be grouped, aggregated and presented in results.
-The grouping parameter can be thought of as a high-level program.
-The core operations are <code>all</code> (process a list of elements as a whole),
-<code>each</code> (process each element in a list separately),
-<code>group</code> (group the elements of a list into sub-lists) and
-<code>output</code> (output result).
-</p><p>
-The operations can be nested.
-</p><p>
+</p>
+
+<p>
+The Vespa grouping language is a list processing language
+which describes how the query hits should be grouped, aggregated and presented in results.
+A grouping statement takes the list of all matches to a query as input and groups/aggregates
+it, possibly in multiple nested and parallel ways to produce the desired output. Of course,
+this is a logical specification, and does not indicate how it is executed, as instantiating the
+list of all matches to the query somewhere would be too expensive, and execution is distributed instead.
+</p>
+
+<h2 id="the-grouping-language-structure">The grouping language structure</h2>
+
+<p>The operations defining the structure of a grouping are:
+
+<ul>
+  <li><code>all(statement)</code>: Perform the nested statement once on the input list as a whole.
+  <li><code>each(statement)</code>: Perform the nested statement on each element of the input list.
+  <li><code>group(specification)</code>: Turn the input list into a list of list according to the grouping specification.
+  <li><code>output</code>: Output some value(s) at the current location in the structure.
+</ul>
+
+<p>The parallel and nested collection of these operations defines both the structure of the computation
+and of the result it produces. For example, <code>all(group(customer) each(output(count())))</code>
+will take all matches, group them by customer id, and for each group output the count of hits in the group.
+</p>
+
+<p>
 Vespa distributes and executes the grouping program on content nodes, and merges results on container nodes -
 in multiple phases, as needed.
 As realizing such programs over a distributed data set requires more network roundtrips than a regular search query,
-these queries are more expensive than regular queries.
-However, executing such programs are more efficient
-than achieving the same end result by issuing multiple independent queries to Vespa.
-</p><p>
-Grouping supports continuation objects that is used for <a href="#pagination">pagination</a>.
-</p><p>
+these queries may be more expensive than regular queries.
+</p>
+
+<p>
+Grouping supports continuation objects for <a href="#pagination">pagination</a>.
+</p>
+
+
+<h2 id="grouping-by-example">Grouping by example</h2>
+
+<p>
 For the entirety of this document, assume an index of engine part purchases:
 </p>
 <table class="table">
@@ -193,29 +215,42 @@ Example: <em>Return the total sum of purchases per customer</em> - steps:
   <li>
     Select all documents, query by document type <em>purchase</em>:
     <pre>/search/?yql=select * from sources * where sddocname contains "purchase"</pre>
-  </li><li>
-    Specify the grouping expression:
+  </li>
+  <li>
+    Take the list of all hits:
+    <pre>all(...)</pre>
+  </li>
+  <li>
+    Turn it into a list of lists of all hits having the same customer id:
     <pre>group(customer)</pre>
-  </li><li>
-    Specify output - return the sum of the purchase price for each customer.
-    <code>each</code> refers to each of the groups produced by <code>group(customer)</code>:
-    <pre>each(output(sum(price)))</pre>
-  </li><li>
-    Set <code>hits=0</code> to reduce latency and data in result set - the documents need not be returned - final query:
+  </li>
+  <li>
+    For each of those lists of same-customer hits:
+    each(...)
+  </li>
+  <li>
+    Output the sum (an aggregator) of the price over all items in that list of hits:
+    <pre>output(sum(price))</pre>
+  </li>
+  <li>
+</ol>
+
+<p>Final query, producing the sum of the price of all purchases for each customer:</p>
 <pre>
 /search/?hits=0&amp;yql=select * from sources * where sddocname contains "purchase" |
                     all( group(customer) each(output(sum(price))) );
 </pre>
-  </li>
-</ol>
-</p><p>
+
+<p>Here, we set hits to zero to get the grouping output only (it can also internally output the hits in groups).</p>
+
+<p>
 URL encoded equivalent:<br/>
 <pre>
 /search/?hits=0&amp; yql=select%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20%27purchase%27%20%7C%20
 all(group(customer)%20each(output(sum(price))))%3B
 </pre>
-Result:
-</p>
+
+<p>Result:</p>
 <table class="table">
 <thead>
 <tr>
