@@ -1,3 +1,5 @@
+# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+
 source "https://rubygems.org"
 
 # Hello! This is where you manage which Jekyll version is used to run.
