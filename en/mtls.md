@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Securing Vespa with mutually authenticated TLS (mTLS)"
 ---
 
@@ -279,11 +279,9 @@ This requires the following steps, which we'll go through below:
 We'll be using the [OpenSSL command-line tool](https://www.openssl.org/docs/man1.1.1/man1/) to
 generate all our crypto keys and certificates.
 
-{% include note.html content="
-If you are setting up Vespa in an organization that already has procedures for provisioning keys
-and certificates, you should first reach out to the team responsible for this to make sure
-you're following best practices.
-" %}
+{% include note.html content="If you are setting up Vespa in an organization
+that already has procedures for provisioning keys and certificates,
+you should first reach out to the team responsible for this to make sure you're following best practices." %}
 
 ### <a name="creating-root-certificate-authority"/> Creating a root Certificate Authority (CA)
 
