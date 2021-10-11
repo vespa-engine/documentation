@@ -8,7 +8,7 @@ const handleResults = (data) => {
     document.getElementById("hits").innerHTML = `${hits.length} hit(s)`;
 
     const unorderedList = document.createElement("ul");
-    unorderedList.className = "media-list";
+    unorderedList.className = "search-result-list";
     result.appendChild(unorderedList);
 
     const baseURL = {
@@ -57,7 +57,7 @@ const handleResults = (data) => {
                 .replace(/<\/hi>/g, "</mark>");
 
         const listItem = document.createElement("li");
-        listItem.className = "media";
+        listItem.className = "search-result-item";
 
         const header = document.createElement("h4");
         header.innerHTML = `<a href="${modifiedURL}">${modifiedTitle}</a>`;
@@ -67,7 +67,7 @@ const handleResults = (data) => {
         const paragraphBreak = document.createElement("br");
         paragraph.appendChild(paragraphBreak);
         const paragraphSmall = document.createElement("small");
-        paragraphSmall.className = "text-success";
+        paragraphSmall.className = "search-result-link";
         paragraphSmall.innerHTML = `${sourceName[namespace]}: ${path}`;
         paragraph.appendChild(paragraphSmall);
 
