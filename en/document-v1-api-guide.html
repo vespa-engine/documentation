@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "/document/v1 API guide"
 ---
 
@@ -142,6 +142,81 @@ $ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.
     <em>id:mynamespace:music:g=mymusicsite.com:mydocid-123</em>
   </li>
 </ul>
+
+
+
+<h2 id="conditional-writes">Conditional writes</h2>
+<p>
+  A <em>test-and-set</em> <a href="reference/document-select-language.html">condition</a>
+  can be added to Put, Remove and Update operations. Example:
+</p>
+<pre>
+{
+    "update": "id:mynamespace:music::a-head-full-of-dreams",
+    "condition": "music.artist==\"Elvis\"",
+    "fields": {
+        "artist": {
+            "assign": "Coldplay"
+        }
+    }
+}
+</pre>
+{% include important.html content="Use <em>documenttype.fieldname</em> (e.g. music.artist) in the condition,
+not only <em>fieldname</em>." %}
+<p>
+  If the condition is not met, a <em>412 Precondition Failed</em> is returned:
+</p>
+<pre>
+$ curl -X PUT -H "Content-Type:application/json" \
+  --data-binary @src/test/resources/A-Head-Full-of-Dreams-update.json \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+
+{
+    "pathId": "/document/v1/mynamespace/music/docid/a-head-full-of-dreams",
+    "id": "id:mynamespace:music::a-head-full-of-dreams",
+    "message": "[UNKNOWN(251013) @ tcp/vespa-container:19112/default]:
+      ReturnCode(TEST_AND_SET_CONDITION_FAILED,
+      Condition did not match document nodeIndex=0 bucket=20000000000000de)"
+}
+</pre>
+<p>
+  Also see the <a href="reference/document-json-format.html#test-and-set">condition reference</a>.
+</p>
+
+
+
+<h2 id="create-if-nonexistent">Create if nonexistent</h2>
+<p>
+  Updates to nonexistent documents are supported using
+  <a href="reference/document-json-format.html#create">create</a>.
+  An empty document is created on the content nodes, before the update is applied.
+  This simplifies client code in the case of multiple writers. Example:
+</p>
+<pre>
+$ cat src/test/resources/A-Head-Full-of-Dreams-update.json
+{
+    "fields": { "artist": { "assign": "Coldplay" } }
+}
+
+$ curl -X PUT -H "Content-Type:application/json" \
+  --data-binary @src/test/resources/A-Head-Full-of-Dreams-update.json \
+  'http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-things?&amp;create=true'
+</pre>
+<p>
+  <em>create</em> can be used in combination with a <a href="#conditional-writes">condition</a>.
+  If the document does not exist, the condition will be ignored
+  and a new document with the update applied is automatically created.
+  Otherwise, the condition must match for the update to take place.
+</p>
+<!-- ToDo: rewrite this / move to elastic-vespa details ... -->
+{% include warning.html content="If all existing replicas of a document are missing
+  when an update with <em>\"create\": true</em> is executed, a new document will always be created.
+  This happens even if a condition has been given.
+  If the existing replicas become available later,
+  their version of the document will be overwritten by the newest update since it has a higher timestamp." %}
+<p>
+  Related: <a href="reference/schema-reference.html#weightedset">auto-generate weightedset keys</a>.
+</p>
 
 
 

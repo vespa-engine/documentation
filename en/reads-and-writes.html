@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Reads and writes"
 ---
 
@@ -51,6 +51,9 @@ as one write will update all children documents.
     </p><p>
     Update supports <a href="#create-if-nonexistent">create if nonexistent</a>.
     </p><p>
+    Updates can have <a href="document-v1-api-guide.html#conditional-writes">conditions</a>
+    for test-and-set use cases.
+    </p><p>
     All data structures (<a href="attributes.html">attribute</a>,
     <a href="proton.html#index">index</a> and <a href="document-summaries.html">summary</a>) are updatable.
     Note that only <em>assign</em> and <em>remove</em> are idempotent -
@@ -66,9 +69,8 @@ as one write will update all children documents.
       </tr><tr>
         <td><strong>Numeric field types</strong></td>
         <td><ul>
-            <li><code><a href="reference/document-json-format.html#arithmetic">increment</a></code>
-              See <a href="#create-if-nonexistent-keys">create if nonexistent - keys</a>
-              for how to auto-create keys in weighted sets</li>
+            <li><code><a href="reference/document-json-format.html#arithmetic">increment</a></code>.
+              Also see <a href="reference/schema-reference.html#weightedset">auto-generate weightedset keys</a></li>
             <li><code><a href="reference/document-json-format.html#arithmetic">decrement</a></code></li>
             <li><code><a href="reference/document-json-format.html#arithmetic">multiply</a></code></li>
             <li><code><a href="reference/document-json-format.html#arithmetic">divide</a></code></li>
@@ -102,83 +104,6 @@ as one write will update all children documents.
 </tr>
 </tbody>
 </table>
-
-
-
-<h2 id="conditional-writes">Conditional writes</h2>
-<p>
-A <em>test and set</em> <em>condition</em> can be added to Put, Remove and Update operations.
-The <em>condition</em> is a <a href="reference/document-select-language.html">document selection</a>.
-Refer to the <a href="reference/document-json-format.html#test-and-set">test-and-set reference</a>.
-</p><p>
-Example: Increment the <em>sales</em> field only if it is already equal to 999:
-<pre>
-{
-    "update": "id:music:music::BestOf",
-        "condition": "music.sales==999",
-        "fields": {
-            "sales": {
-                "increment": 1
-            }
-    }
-}
-</pre>
-<strong>Note:</strong> Use <em>documenttype.fieldname</em> (e.g. music.sales) in the condition,
-not only <em>fieldname</em>.
-</p><p>
-<strong>Note:</strong> If the condition is not met, an error is returned.
-<strong>ToDo:</strong> There is a discussion whether to change to not return error,
-and instead return a <em>condition-not-met</em> in the response.
-</p>
-
-
-
-<h2 id="create-if-nonexistent">Create if nonexistent</h2>
-<p>
-Updates to nonexistent documents are supported using
-<a href="reference/document-json-format.html#create">create</a>.
-An empty document is created on the content nodes, before the update is applied.
-This simplifies client code in the case of multiple writers.
-Example using the <a href="document-api-guide.html">Java Document API</a>:
-<pre>
-public DocumentUpdate createUpdate(DocumentType musicType) {
-    DocumentUpdate update = new DocumentUpdate(musicType, "id:mynamespace:music::http://music.yahoo.com/bobdylan/BestOf");
-    update.setCreateIfNonExistent(true);
-    return update;
-}
-</pre>
-<em>create</em> can be used in combination with a
-<a href="#conditional-writes">condition</a>.
-If the document does not exist, the condition will be ignored
-and a new document with the update applied is automatically created.
-Otherwise, the condition must match for the update to take place.
-</p><p>
-<strong>Caution:</strong> if all existing replicas of a document are missing <!-- ToDo: rewrite this / move to elastic-vespa details ... -->
-when an update with <em>"create": true</em> is executed,
-a new document will always be created.
-This happens even if a condition has been given.
-If the existing replicas become available later,
-their version of the document will be overwritten by the newest update since it has a higher timestamp.
-</p>
-
-
-
-<h2 id="create-if-nonexistent-keys">Create if nonexistent - keys</h2>
-<p>
-If a key is missing in a weighted set field,
-it can be <a href="reference/schema-reference.html#weightedset">auto created</a>
-before incrementing its key value:
-<pre>
-field tag type weightedset<string> {
-    indexing: attribute | summary
-    weightedset {
-        create-if-nonexistent
-        remove-if-zero
-    }
-}
-</pre>
-The above also auto-deletes the key if decremented to 0.
-</p>
 
 
 
