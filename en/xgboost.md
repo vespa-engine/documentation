@@ -1,5 +1,5 @@
 ---
-# Copyright Verizon Media. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking with XGBoost Models"
 ---
 
@@ -16,7 +16,7 @@ and users can specify the feature names to be used in `fmap`.
 
 Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 1:
 
-```
+```json
 [
   { "nodeid": 0, "depth": 0, "split": "fieldMatch(title).completeness", "split_condition": 0.772132337, "yes": 1, "no": 2, "missing": 1, "children": [
     { "nodeid": 1, "leaf": 0.673938096 },
@@ -30,7 +30,7 @@ Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 
 ```
 Notice the 'split' attribute which represents the feature name. The above model was produced using the XGBoost python api:
 
-```
+```python
 #!/usr/local/bin/python3
 import xgboost as xgb
 
@@ -48,8 +48,8 @@ where features are named based on the index in the array  as in the example abov
 To convert the XGBoost features we need to map feature indexes to actual Vespa features
 (native features or custom defined features):
  
-```
-cat feature-map.txt |egrep "fieldMatch\(title\).completeness|fieldMatch\(title\).importance"
+```shell
+$ cat feature-map.txt |egrep "fieldMatch\(title\).completeness|fieldMatch\(title\).importance"
 36  fieldMatch(title).completeness q
 39  fieldMatch(title).importance q
 ```
@@ -73,7 +73,7 @@ model to your application package under a specific directory named `models`.
 For instance, if you would like to call the model above as `my_model`,
 you would add it to the application package resulting in a directory structure like this:
 
-```
+```text
 ├── models
 │   └── my_model.json
 ├── schemas
@@ -93,7 +93,7 @@ Vespa has a special [ranking feature](reference/rank-features.html) called `xgbo
 This ranking feature specifies the model to use in a ranking expression.
 Consider the following example:
 
-```
+```text
 schema xgboost {
     rank-profile prediction inherits default {
         first-phase {
@@ -124,7 +124,7 @@ but the base_score should be set 0 as the base_score used during the training ph
 
 An example model using the sklearn toy datasets is given below:
 
-```
+```python
 from sklearn import datasets
 import xgboost as xgb
 breast_cancer = datasets.load_breast_cancer()
@@ -137,7 +137,7 @@ c.predict_proba(breast_cancer.data)[:,1]
 To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa,
 we need to use the [sigmoid function](reference/ranking-expressions.html):
 
-```
+```text
 schema xgboost {
     rank-profile prediction-binary inherits default {
         first-phase {
