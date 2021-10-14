@@ -10,6 +10,7 @@ import time
 import yaml
 import urllib.request
 import tempfile
+import re
 
 from bs4 import BeautifulSoup
 
@@ -167,7 +168,12 @@ def parse_cmds(pre, attrs):
     cmds = []
     line_continuation = ""
     line_continuation_delimiter = "\\"
-    for line in pre.split("\n"):
+
+    # Remove highlight liquid macros, if present, e.g:
+    # {% highlight shell %}       {% endhighlight %}
+    sanitized_pre = re.sub(r"{%\s*.*highlight\s.*%}", "", pre)
+
+    for line in sanitized_pre.split("\n"):
         cmd = "{0} {1}".format(line_continuation, line.strip())
         if cmd.endswith(line_continuation_delimiter):
             line_continuation = cmd[:-len(line_continuation_delimiter)]
