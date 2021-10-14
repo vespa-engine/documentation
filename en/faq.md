@@ -31,7 +31,7 @@ You can store this data as a separate document type in Vespa and look it up befo
 or store this customer meta-data as part of the other meta-data for the customer
 (i.e. login information) and pass it along the query when you send it to the backend.
 Find an example on how to look up data in
-[album-recommendation-docproc](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/album-recommendation-docproc).
+[album-recommendation-docproc](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/document-processing).
 
 #### How to create a tensor on the fly in the ranking expression?
 Create a tensor in the ranking function from arrays or weighted sets using `tensorFrom...` functions -
