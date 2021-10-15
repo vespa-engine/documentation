@@ -248,6 +248,7 @@ def create_work_dir():
 
 
 def run_url(url):
+    print_cmd_header("Testing", url)
     html = urllib.request.urlopen(url).read()
     process_page(html, url)
 
