@@ -50,7 +50,7 @@ const handleResults = (data) => {
           .replace(/<\/hi>/g, "</mark>");
 
         const modifiedTitle =
-          title == "null"
+          typeof title == "undefined"
             ? "No title"
             : title
                 .replace(/<hi>/g, "<mark>")
