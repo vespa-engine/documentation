@@ -150,11 +150,11 @@ Also find examples in <a href="content/visiting.html">visiting</a>.
 To auto-expire documents, use a <a href="reference/services-content.html#documents.selection">
 selection</a> with <a href="reference/advanced-indexing-language.html#now">now</a>.
 Example, keep <em>music</em>-documents for a day, using a field called <em>timestamp</em>:
-<pre>
-&lt;documents garbage-collection="true"&gt;
-  &lt;document type="music" selection="music.timestamp &amp;gt; now() - 86400" &gt;
-&lt;/documents&gt;
-</pre>
+<pre>{% highlight xml %}
+<documents garbage-collection="true">
+  <document type="music" selection="music.timestamp &amp;gt; now() - 86400" />
+</documents>
+{% endhighlight %}</pre>
 The <em>timestamp</em>-field must have values in seconds since EPOCH:
 <pre>
 field timestamp type long {
@@ -165,11 +165,9 @@ field timestamp type long {
 }
 </pre>
 <p>
-  When <code>garbage-collection="true"</code>, Vespa iterates through the document space to purge expired documents.
-  It is not possible to observe where in the cycle the process it,
-  but one can configure a pause between cycles using
-  <a href="reference/services-content.html#documents.selection">garbage-collection-interval</a>.
-  One can hence not know excatly when a document will be removed from the index by using expiry.
+  When <code>garbage-collection="true"</code>, Vespa iterates over the document space to purge expired documents.
+  Vespa will invoke the configured GC selection for each stored document at most once every
+  <a href="reference/services-content.html#documents.selection">garbage-collection-interval</a> seconds.
 </p>
 Notes:
 <ul>
@@ -198,20 +196,29 @@ Notes:
     See <a href="reference/document-select-language.html#using-imported-fields-in-selections">
     using imported fields in selections</a> for more information and restrictions.
   </li>
+  </li><li>
+    Document garbage collection is a low priority background operation that runs continuously
+    unless preempted by higher priority operations.
+    If the cluster is too heavily loaded by client feed operations, there's a risk of starving
+    GC from running. To verify that garbage collection is not starved, check the
+    <code><a href="reference/metrics.html"> vds.idealstate.max_observed_time_since_last_gc_sec.average</a></code>
+    distributor metric.
+    If it significantly exceeds <code>garbage-collection-interval</code> it is an indication that GC is starved.
+  </li>
 </ul>
 To batch remove, set a selection that matches no documents, like <em>"not music"</em>
 </p><p>
 Use <a href="content/visiting.html">vespa-visit</a> to test the selection. Dump the IDs of all documents that would be <em>preserved</em>:
 </p>
-<pre>
+<pre>{% highlight sh %}
 $ vespa-visit -i -p progress-file -s 'music.timestamp &gt; now() - 86400' > ids.json
-</pre>
+{% endhighlight %}</pre>
 <p>
 Negate the expression by wrapping it in a <code>not</code> to dump the IDs of all the documents that would be <em>removed</em> during GC:
 </p>
-<pre>
+<pre>{% highlight sh %}
 $ vespa-visit -i -p progress-file -s 'not (music.timestamp &gt; now() - 86400)' > ids.json
-</pre>
+{% endhighlight %}</pre>
 
 
 
