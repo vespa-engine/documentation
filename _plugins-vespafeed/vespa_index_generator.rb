@@ -13,6 +13,7 @@ module Jekyll
             namespace = site.config["search"]["namespace"]
             operations = []
             site.pages.each do |page|
+                next if page.path.start_with?("css/")
                 if page.data["index"] == true && page.url.start_with?("/documentation") == false
                     text = extract_text(page)
                     operations.push({
