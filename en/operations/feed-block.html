@@ -1,0 +1,70 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Feed block"
+---
+
+<p>
+  A content cluster blocks external write operations when at least one content node has reached the
+  <a href="../reference/services-content.html#resource-limits">resource limit</a>
+  of disk or memory. This is done to avoid saturating content nodes.
+  The <em>Cluster controller</em> monitors the resource usage of the content nodes
+  and decides whether to block feeding.
+  When feed is blocked, write operations are rejected by <em>Distributors</em>.
+  All Put operations and most Update operations are rejected.
+  These operations are still allowed:
+</p>
+<ul>
+  <li>Remove operations</li>
+  <li>Update <code><a href="../reference/document-json-format.html#assign">assign</a></code> operations to numeric single-value fields</li>
+</ul>
+<p>
+  To remedy, add nodes to the content cluster, or use nodes with higher capacity.
+  The data will <a href="../elastic-vespa.html">auto-redistribute</a>, and feeding is unblocked when all content nodes are below the limits.
+  Configure <a href="../reference/services-content.html#resource-limits">resource-limits</a> to tune this.
+</p>
+<p>
+  These <a href="../reference/metrics.html">metrics</a> are used to monitor resource usage and whether feeding is blocked:
+</p>
+<table class="table">
+  <tr>
+    <th>cluster-controller.resource_usage.nodes_above_limit</th>
+    <td>The number of content nodes that are above one or more resource limits. When above 0, feeding is blocked.</td>
+  </tr>
+  <tr>
+    <th>content.proton.resource_usage.disk</th>
+    <td>A number between 0 and 1, indicating how much disk (of total available) is used on the content node.</td>
+  </tr>
+  <tr>
+    <th>content.proton.resource_usage.memory</th>
+    <td>A number between 0 and 1, indicating how much memory (of total available) is used on the content node.</td>
+  </tr>
+</table>
+<p>
+When feeding is blocked, error messages are returned in write operation replies - example:
+</p>
+<pre>
+ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
+                     memory on node 0 [my-vespa-node-0.example.com] (0.82 > 0.80))
+</pre>
+<p>
+  The address space used by data structures in attributes (<em>Multivalue Mapping</em>, <em>Enum Store</em>, and <em>Tensor Store</em>) can also go full and block feeding -
+  see <a href="../attributes.html#data-structures">attribute data structures</a> for details.
+  This will very rarely happen.
+  The following metric is used to monitor address space usage:
+</p>
+<table class="table">
+  <tr>
+    <th>content.proton.documentdb.attribute.resource_usage.address_space.max</th>
+    <td>A number between 0 and 1, indicating how much address space is used by the worst attribute data structure on the content node.</td>
+  </tr>
+</table>
+<p>
+  An error is returned when the address space limit (default value is 0.90) is exceeded:
+</p>
+<pre>
+ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
+                     attribute-address-space:test.ready.a1.enum-store on node 0 [my-vespa-node-0.example.com] (0.91 > 0.90))
+</pre>
+<p>
+To remedy, add nodes to the content cluster to distribute documents with attributes over more nodes.
+</p>
