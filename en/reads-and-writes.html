@@ -9,18 +9,42 @@ title: "Reads and writes"
   Writes (PUT, UPDATE, DELETE) and reads (GET) pass through a <em>container</em> cluster.
   Find a more detailed flow at the end of this article.
 </p>
-<img src="img/overview/vespa-overview.svg" style="padding:10px">
+<img src="img/overview/vespa-overview.svg" style="padding:10px" alt="Vespa Overview">
 <p>
-Vespa's indexing structures are built for high-rate, memory-only operations for field updates.
-Refer to the <a href="performance/sizing-feeding.html">feed sizing guide</a> for write performance.
-<!-- ToDo: once partial-update.html is done, link there -->
-</p><p>
-Vespa supports <a href="parent-child.html">parent/child</a> for de-normalized data.
-This can be used to simplify the code to update application data,
-as one write will update all children documents.
-</p><p>
+  Vespa's indexing structures are built for high-rate, memory-only operations for field updates.
+  Refer to the <a href="performance/sizing-feeding.html">feed sizing guide</a> for write performance,
+  in particular <a href="partial-updates.html">partial updates</a> for <em>in-memory-only</em> writes.
+</p>
+<p>
+  Vespa supports <a href="parent-child.html">parent/child</a> for de-normalized data.
+  This can be used to simplify the code to update application data,
+  as one write will update all children documents.
+</p>
+<p>
   Applications can add custom feed <a href="document-processing.html">document processors</a>
   and multiple container clusters - see <a href="indexing.html">indexing</a> for details.
+</p>
+<p>
+  Vespa is <em>eventually consistent</em> -
+  find details on dynamic behavior in <a href="elastic-vespa.html#consistency">elastic Vespa</a>.
+  Also see the <a href="content/consistency.html">Vespa consistency model</a>.
+  It is recommended to use the same client instance for updating a given document -
+  both for data consistency but also
+  <a href="performance/sizing-feeding.html#concurrent-mutations">performance</a> (see <em>concurrent mutations</em>).
+  Read more on write operation <a href="content/content-nodes.html#ordering">ordering</a>.
+  For performance, group field updates to the same document into
+  <a href="performance/sizing-feeding.html#client-roundtrips">one update operation</a>.
+</p>
+<p>
+  Applications can <a href="documents.html#document-expiry">auto-expire documents</a>.
+  This feature also blocks PUTs to documents that are already expired -
+  see <a href="indexing.html#document-selection">indexing</a> and
+  <a href="reference/services-content.html#documents">document selection</a>.
+  This is a common problem when feeding test data with timestamps,
+  and the writes a silently dropped.
+</p>
+<p>
+  Also see <a href="operations/admin-procedures.html#troubleshooting">troubleshooting</a>.
 </p>
 <table class="table">
 <tbody>
@@ -40,11 +64,13 @@ as one write will update all children documents.
     Remove a document by ID.
     If the document to be removed is not found, it is not considered a failure.
     Read more about <a href="operations/admin-procedures.html#data-retention-vs-size">data-retention</a>.
+    Also see <a href="operations/batch-delete.html">batch deletes</a>.
   </p></td>
 </tr><tr>
   <th>Update</th>
   <td><p>
-    Also referred to as <em>partial update</em>, as it updates some/all fields of a document by ID.
+    Also referred to as <a href="partial-updates.html">partial updates</a>,
+    as it updates some/all fields of a document by ID.
     If the document to update is not found, it is not considered a failure.
     </p><p>
     Update supports <a href="document-v1-api-guide.html#create-if-nonexistent">create if nonexistent</a>.
@@ -109,6 +135,7 @@ as one write will update all children documents.
 <p>
 Documents are created using <a href="reference/document-json-format.html">JSON</a> or in
 <a href="https://github.com/vespa-engine/vespa/blob/master/document/src/main/java/com/yahoo/document/Document.java">Java</a>:
+</p>
 <table class="table">
   <tr>
     <td><a href="reference/document-v1-api-reference.html">/document/v1/</a></td>
@@ -143,81 +170,6 @@ Documents are created using <a href="reference/document-json-format.html">JSON</
       <a href="reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> gets multiple.</td>
   </tr>
 </table>
-</p>
-
-
-
-<h2 id="consistency">Consistency</h2>
-<p>
-Read the reference at <a href="content/consistency.html">Vespa consistency model</a>.
-Vespa is <em>eventually consistent</em> -
-find details on dynamic behavior in <a href="elastic-vespa.html#consistency">elastic Vespa</a>.
-</p><p>
-It is recommended to use the same client instance for updating a given document -
-both for data consistency but also
-<a href="performance/sizing-feeding.html#concurrent-mutations">performance</a> (see <em>concurrent mutations</em>).
-Read more on write operation <a href="content/content-nodes.html#ordering">ordering</a>.
-For performance, group field updates to the same document into
-<a href="performance/sizing-feeding.html#client-roundtrips">one update operation</a>.
-</p>
-
-
-
-<h2 id="dropped-writes-document-expiry">Dropped writes - document expiry</h2>
-<p>
-Applications can <a href="documents.html#document-expiry">auto-expire documents</a>.
-This feature also blocks PUTs to documents that are already expired -
-see <a href="indexing.html#document-selection">indexing</a> and
-<a href="reference/services-content.html#documents">document selection</a>.
-This is a common problem when feeding test data with timestamps,
-and the writes a silently dropped.
-</p>
-
-
-
-<h2 id="batch-delete">Batch delete</h2>
-<p>
-Options for batch deleting documents:
-</p>
-<ol>
-  <li>
-    Find documents using a query, delete, repeat. Pseudocode:
-<pre>
-while True; do
-   query and read document ids, if empty exit
-   delete document ids using <a href="reference/document-v1-api-reference.html#delete">/document/v1</a>
-   wait a sec # optional, add wait to reduce load while deleting
-</pre>
-  </li>
-  <li>
-    Like 1, but use the <a href="vespa-feed-client.html">Vespa feed client</a>.
-    Instead of deleting one-by-one, stream remove operations to the API (write a Java program for this),
-    or append to a file and use the binary:
-<pre>
-$ vespa-feed-client --file deletes.json --endpoint my-endpoint
-</pre>
-  </li>
-  <li>
-    Use a <a href="documents.html#document-expiry">document selection</a> to expire documents.
-    This deletes all documents <em>not</em> matching the expression.
-    It is possible to use parent documents and imported fields for expiry of a document set.
-    The content node will iterate over the corpus and delete documents (that are later compacted out):
-<pre>
-&lt;documents garbage-collection="true"&gt;
-    &lt;document type="mytype" selection="mytype.version &amp;gt; 4" &gt;
-&lt;/documents&gt;
-</pre>
-  </li>
-  <li>
-    Use <a href="reference/document-v1-api-reference.html#delete">/document/v1</a> to delete documents
-    identified by a <a href="reference/document-select-language.html">document selection</a> -
-    example dropping all documents from the <em>my_doctype</em> schema:
-<pre>
-$ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
-  "$ENDPOINT/document/v1/my_namespace/my_doctype/docid?selection=true&amp;cluster=my_cluster"
-</pre>
-  </li>
-</ol>
 
 
 
@@ -237,8 +189,8 @@ $ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.
   before being sent to the <em>content node</em>.
   The <em>distributor</em> maps the document to bucket, and sends it to <em>proton</em> nodes:
 </p>
-<img src="content/img/elastic-feed-container.svg" height="410" width="340"/>
-<img src="content/img/elastic-feed-vespafeeder.svg" height="410" width="340"/>
+<img src="content/img/elastic-feed-container.svg" height="410" width="340" alt="Feed with feed client"/>
+<img src="content/img/elastic-feed-vespafeeder.svg" height="410" width="340" alt="Feed with vespafeeder"/>
 <p></p>
 <table class="table">
   <thead></thead><tbody>
@@ -295,48 +247,6 @@ $ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.
   </td>
 </tr>
 </tbody>
-</table>
-
-
-
-<h2 id="troubleshooting">Troubleshooting</h2>
-<table class="table">
-  <tr>
-    <th>Routing</th>
-    <td>
-      <p>
-        Vespa lets application set up custom document processing / indexing,
-        with different feed endpoints.
-        Refer to <a href="indexing.html">indexing</a> for how to configure this in <em></em>services.xml</em>.
-      </p>
-      <p>
-        <a href="https://github.com/vespa-engine/vespa/issues/13193">#13193</a>
-        has a summary of problems and solutions.
-      </p>
-    </td>
-  </tr>
-  <tr>
-    <th>Tracing</th>
-    <td>
-      Use <a href="reference/document-v1-api-reference.html#request-parameters">tracelevel</a>
-      to dump the routes and hops for a write operation - example:
-<pre>
-$ curl -H Content-Type:application/json --data-binary @docs.json \
-  $ENDPOINT/document/v1/mynamespace/doc/docid/1?tracelevel=4 | jq .
-
-{
-    "pathId": "/document/v1/mynamespace/doc/docid/1",
-    "id": "id:mynamespace:doc::1",
-    "trace": [
-        { "message": "[1623413878.905] Sending message (version 7.418.23) from client to ..." },
-        { "message": "[1623413878.906] Message (type 100004) received at 'default/container.0' ..." },
-        { "message": "[1623413878.907] Sending message (version 7.418.23) from 'default/container.0' ..." },
-        { "message": "[1623413878.907] Message (type 100004) received at 'default/container.0' ..." },
-        { "message": "[1623413878.909] Selecting route" },
-        { "message": "[1623413878.909] No cluster state cached. Sending to random distributor." }
-</pre>
-    </td>
-  </tr>
 </table>
 
 

@@ -186,7 +186,7 @@ public class ConfigCacheRefresher extends AbstractComponent {
 
 #### How to debug document processing chain configuration?
 This configuration is a combination of content and container cluster configuration,
-see [indexing](indexing.html) and [feed troubleshooting](reads-and-writes.html#troubleshooting).
+see [indexing](indexing.html) and [feed troubleshooting](operations/admin-procedures.html#troubleshooting).
 
 #### I feed documents with no error, but they are not in the index
 This is often a problem if using [document expiry](documents.html#document-expiry),
