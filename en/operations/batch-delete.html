@@ -1,0 +1,47 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Batch delete"
+---
+
+<p>
+  Options for batch deleting documents:
+</p>
+<ol>
+  <li>
+    Find documents using a query, delete, repeat. Pseudocode:
+<pre>
+while True; do
+   query and read document ids, if empty exit
+   delete document ids using <a href="../reference/document-v1-api-reference.html#delete">/document/v1</a>
+   wait a sec # optional, add wait to reduce load while deleting
+</pre>
+  </li>
+  <li>
+    Like 1, but use the <a href="../vespa-feed-client.html">Vespa feed client</a>.
+    Instead of deleting one-by-one, stream remove operations to the API (write a Java program for this),
+    or append to a file and use the binary:
+<pre>{% highlight sh %}
+$ vespa-feed-client --file deletes.json --endpoint my-endpoint
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    Use a <a href="../documents.html#document-expiry">document selection</a> to expire documents.
+    This deletes all documents <em>not</em> matching the expression.
+    It is possible to use parent documents and imported fields for expiry of a document set.
+    The content node will iterate over the corpus and delete documents (that are later compacted out):
+<pre>{% highlight xml %}
+<documents garbage-collection="true">
+    <document type="mytype" selection="mytype.version &gt; 4" />
+</documents>
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    Use <a href="../reference/document-v1-api-reference.html#delete">/document/v1</a> to delete documents
+    identified by a <a href="../reference/document-select-language.html">document selection</a> -
+    example dropping all documents from the <em>my_doctype</em> schema:
+<pre>{% highlight sh %}
+$ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  "$ENDPOINT/document/v1/my_namespace/my_doctype/docid?selection=true&amp;cluster=my_cluster"
+{% endhighlight %}</pre>
+  </li>
+</ol>
