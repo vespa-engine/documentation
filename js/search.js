@@ -55,7 +55,7 @@ const handleLocationQuery = () => {
   }
 };
 
-window.addEventListener("load", handleLocationQuery);
+document.addEventListener("DOMContentLoaded", handleLocationQuery);
 document.getElementById("searchinput").addEventListener(
   "input",
   (event) => {
