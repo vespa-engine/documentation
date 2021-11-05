@@ -16,7 +16,7 @@ title: "Content nodes, states and metrics"
   for an overview of the Document API flow.
   Content cluster processes are <em>distributor</em>, <em>proton</em> and <em>cluster controller</em>:
 </p>
-<img src="img/elastic-feed.svg" height="340" width="310"/>
+<img src="img/elastic-feed.svg" height="340" width="310" alt="Content cluster overview"/>
 
 
 
@@ -102,6 +102,7 @@ There are three kinds of state:
   <p>
   <em>user state</em> must be one of
   <em>up</em>, <em>down</em>, <em>maintenance</em> or <em>retired</em>:
+  </p>
   <ul>
   <li>Retire a node from a cluster -
       use <em>retired</em> to move buckets to other nodes</li>
@@ -109,6 +110,7 @@ There are three kinds of state:
       use <em>maintenance</em> to avoid merging buckets to other nodes</li>
   <li>Fail a bad node. The cluster controller or an operator can set a node <em>down</em></li>
   </ul>
+  <p>
   Use tools for <a href="../operations/admin-procedures.html#cluster-state">user state management</a>.
   </p>
   </td>
@@ -150,6 +152,7 @@ This is done by <em>polling</em> nodes for state,
 which is then <em>broadcast</em> to all the content nodes in the cluster.
 Note that clients do not interface with the cluster controller -
 they get the cluster state from the distributors - <a href="#distributor">details</a>.
+</p>
 <table class="table">
 <tr id="node-state-polling">
   <th>Node state polling</th>
@@ -197,6 +200,9 @@ they get the cluster state from the distributors - <a href="#distributor">detail
   </td>
 </tr>
 </table>
+<p>
+  See <a href="../operations/admin-procedures.html#cluster-controller-configuration">
+  cluster controller configuration</a>.
 </p>
 
 
@@ -218,30 +224,6 @@ As a majority vote is required,
 the number of cluster controllers should be an odd number of 3 or greater.
 A fresh master will not broadcast states before a transition time is passed, <!-- ToDo config ref -->
 allowing an old master to have some time to realize it is no longer the master.
-</p>
-
-
-<h3>Constantly restarting node</h3>
-<p>
-  A broken node may end up with processes constantly restarting.
-  It may die during initialization due to accessing corrupt files,
-  or it may die when it starts receiving requests of a given type triggering a node local bug.
-  This is bad for distributor nodes,
-  as these restarts create constant ownership transfer between distributors,
-  causing windows where buckets are unavailable.
-</p><p>
-  The cluster controller has functionality for detecting such nodes.
-  If a node restarts in a way that is not detected as a controlled shutdown, more than
-  <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
-    max_premature_crashes</a>,
-  the cluster controller will set the wanted state of this node to be down.
-</p><p>
-  Detecting a controlled restart is currently a bit tricky.
-  A controlled restart is typically initiated by sending a TERM signal to the process.
-  Not having any other sign,
-  the content layer has to assume that all TERM signals are the cause of controlled shutdowns.
-  Thus, if the process keep being killed by kernel due to using too much memory,
-  this will look like controlled shutdowns to the content layer.
 </p>
 
 
@@ -323,6 +305,7 @@ Distributors track which content nodes have which buckets in their bucket bataba
 Distributors then use the <a href="idealstate.html">ideal state algorithm</a>
 to generate bucket <em>maintenance operations</em>.
 A stable system has all buckets located per the ideal state:
+</p>
 <ul>
   <li>If buckets have too few replicas, new are generated on other content nodes.</li>
   <li>If the replicas differ, a bucket merge is issued to get replicas consistent.</li>
@@ -333,6 +316,7 @@ A stable system has all buckets located per the ideal state:
       Read more on <a href="buckets.html">inconsistent buckets</a>.</li> <!-- ToDo: change this to a proper anchor within buckets.html - this needs a dedicated section, relevant to point to from visiting -->
   <li>If buckets are too small/large, they will be joined or split.</li>
 </ul>
+<p>
 The maintenance operations have different priorities.
 If no maintenance operations are needed, the cluster is said to be in the <em>ideal state</em>.
 The distributors synchronize maintenance load with user load,
