@@ -1,12 +1,9 @@
 const handleResults = (data) => {
   const result = document.getElementById("result");
-
   result.innerHTML = "";
 
   const hits = data;
   if (hits && hits.length > 0) {
-    document.getElementById("hits").innerHTML = `${hits.length} hit(s)`;
-
     const unorderedList = document.createElement("ul");
     unorderedList.className = "search-result-list";
     result.appendChild(unorderedList);
