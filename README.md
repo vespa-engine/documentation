@@ -5,6 +5,9 @@
 # Creating Vespa documentation
 
 All Vespa features must have user documentation - this document explains how to write documentation.
+See [introduction to documentation](en/introduction-to-documentation.html)
+for styles and examples.
+
 
 ## Practical information
 
@@ -15,24 +18,24 @@ with
 To edit documentation, check out and work off the master branch in this repository.
 
 Documentation is written in HTML or Markdown.
-We use a single Jekyll template [_layouts/default.html](_layouts/default.html) to add header, footer and layout.
+Use a single Jekyll template [_layouts/default.html](_layouts/default.html) to add header, footer and layout.
 
 Install [bundler](https://bundler.io/), then
 
-    bundle install
-    bundle exec jekyll serve --incremental --drafts --trace
+    $ bundle install
+    $ bundle exec jekyll serve --incremental --drafts --trace
 
 to set up a local server at localhost:4000 to see the pages as they will look when served.
 The output will highlight rendering/other problems when starting serving.
 
 Alternatively, use the docker image `jekyll/jekyll` to run the local server
 
-    docker run -ti --rm --name doc --publish 4000:4000 -e JEKYLL_UID=$UID -v $(pwd):/srv/jekyll jekyll/jekyll jekyll serve
+    $ docker run -ti --rm --name doc \
+      --publish 4000:4000 -e JEKYLL_UID=$UID -v $(pwd):/srv/jekyll \
+      jekyll/jekyll jekyll serve
 
-The layout is written in Bootstrap, documents refers directly to the Bootstrap CSS.
-Refer to [Bootstrap documentation](http://getbootstrap.com/css/) to
-add style effects to articles. Note that the entire documentation page content
-is contained in a Bootstrap layout column with column width 12.
+The layout is written in [denali.design](https://denali.design/),
+see [_layouts/default.html](_layouts/default.html) for usage.
 Please do not add custom style sheets, as it is harder to maintain.
 
 ## Writing good documentation
@@ -125,5 +128,5 @@ File locations below refer to this repo's root.
 
 Local development:
 
-    bundle exec jekyll build
-    ./feed_to_vespa.py   # put data-plane-private/public-key.pem in this dir in advance
+    $ bundle exec jekyll build
+    $ ./feed_to_vespa.py   # put data-plane-private/public-key.pem in this dir in advance
