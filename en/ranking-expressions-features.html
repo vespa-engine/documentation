@@ -175,7 +175,7 @@ rank-profile test {
 
 }
 </pre>
-The results of this functions will be available in the Hits of the result as follows:
+The results of these functions will be available in the Hits of the result as follows:
 <pre>
 import com.yahoo.search.result.FeatureData;
     ...
@@ -186,7 +186,26 @@ import com.yahoo.search.result.FeatureData;
 You can easily do further computation on the returned tensors,
 such as e.g <code>Tensor larger = tensor_join_value.map((value) -> 3 * value)</code>.
 </p>
-
+<p>
+If also leveraging <a href="searcher-development.html#multiphase-searching">multiphase searching</a>
+it's possible to get some rank features returned in the first phase using the
+<a href="reference/schema-reference.html#match-features">match-features</a> keyword
+which pre-populates the <code>matchfeatures</code> field.
+The effects which can be observed in the results are the same, so this may seem like the same
+functionality, but the performance trade-off is different:
+The expressions in <em>match-features</em> must be computed for all hits returned
+in the first phase, before selecting which hits to <em>fill</em>.  But that also means it's
+possible to use the <code>matchfeatures</code> field to select which hits to keep and which to
+remove before calling <code>fill()</code> at all.
+The expressions in <em>summary-features</em> are not available before the <em>fill</em> phase,
+but only need to be calculated for those hits that are actually filled.  The difference is
+most pronounced when the corpus is divided onto many content nodes:
+Consider a case where you have 7 content nodes and fetch 100 matches from each,
+these are merged (by relevance score) into a list of 700 hits, and the 100 with best relevance
+are selected and <em>filled</em>.  If you use <em>match-features</em> they need to be calculated
+for all 700 hits.  But with <em>summary-features</em> only the final 100 hits need to
+be considered for calculating those.
+</p>
 
 
 <h2 id="if-function-and-string-equality-tests">The <code>if</code> function and string equality tests</h2>
