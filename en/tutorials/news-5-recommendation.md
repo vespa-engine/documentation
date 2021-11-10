@@ -449,7 +449,7 @@ returned. Vespa still searches through the graph starting from the query
 point, however the search does not stop when we have 10 hits. In effect, 
 the graph search widens until 10 results fulfilling the filters are found.
 
-As a note, very strict filters that filter away a large part of the 
+As a note, strict filters that filter away a large part of the 
 corpus would entail that many candidates in the graph are skipped 
 while searching for the results that fulfill the filters. This can take 
 an exponential amount of time. For this case, Vespa falls back to 

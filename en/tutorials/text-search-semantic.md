@@ -58,7 +58,7 @@ The match operator `OR` means that we are matching documents that contain any of
 }
 ```
 
-The baselines are two obvious choices that also represent two extremes that are interesting to analyze. The `AND` operator is too restrictive, matching very few documents. The consequence is that it ends up missing the relevant documents in the first 100 positions for approximately half of the queries. The `OR` operator on the other hand, matches the majority of the documents in the corpus and recalls the relevant document for most of the queries.
+The baselines are two obvious choices that also represent two extremes that are interesting to analyze. The `AND` operator is too restrictive, matching few documents. The consequence is that it ends up missing the relevant documents in the first 100 positions for approximately half of the queries. The `OR` operator on the other hand, matches the majority of the documents in the corpus and recalls the relevant document for most of the queries.
 
 ## Pre-trained vector embeddings
 
@@ -204,7 +204,7 @@ The query above uses the `nearestNeighbor` operator to match documents based on 
 
 The table below shows results obtained by matching the closest 1.000 document vectors to the query vector in terms of the Euclidean distance. Even though Vespa supports approximate nearest neighbor search, we set the method to be brute force to remove the approximation error from the analysis in this tutorial. This means that the documents matched were indeed the closest ones to the query. The `ANN(title, bert)` in the table below means that we matched documents by comparing the document title embedding to the query embedding where the embeddings were created by the sentence BERT model. 
 
-All the results involving embeddings in this tutorial are generated via the sentence BERT model. The results obtained with the Universal Sentence Encoder model were very similar and therefore omitted. On the other hand, the results obtained with the Word2Vec model were way worse than expected and were left out of this tutorial since they might require more pre-processing than the sentence models to give sensible results.
+All the results involving embeddings in this tutorial are generated via the sentence BERT model. The results obtained with the Universal Sentence Encoder model were similar and therefore omitted. On the other hand, the results obtained with the Word2Vec model were way worse than expected and were left out of this tutorial since they might require more pre-processing than the sentence models to give sensible results.
 
 <div style="text-align:center"><img src="images/pure_ann.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
@@ -276,7 +276,7 @@ This confirms the results we obtained when only using `nearestNeighbor` operator
 
 <div style="text-align:center"><img src="images/bm25_hist.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
-In other words, there are very few documents that would not be matched by term-matching approaches. This explains why the results obtained with the `weakAND` operator were outstanding. MS MARCO dataset turns out to be a favorable environment for this kind of algorithm. That also means that after accounting for term-matching there are almost no relevant documents left to be matched by semantic signals. This is true even if the semantic embeddings are informative. 
+In other words, there are few documents that would not be matched by term-matching approaches. This explains why the results obtained with the `weakAND` operator were outstanding. MS MARCO dataset turns out to be a favorable environment for this kind of algorithm. That also means that after accounting for term-matching there are almost no relevant documents left to be matched by semantic signals. This is true even if the semantic embeddings are informative. 
 
 The best we can hope for in a biased dataset is for the bm25 scores and the embedding dot-product scores to be positively correlated, showing that both carry information about document relevance. This seems indeed to be the case in the scatter plot below that shows a much stronger correlation between bm25 scores and embedding scores for the relevant documents (red) than between the scores of the general population (black).
 
@@ -294,7 +294,7 @@ Looking at steps 3 and 4 (and maybe 5), it is not surprising to find bias in the
 
 ## Fine-tuning sentence embeddings: advantages and disadvantages
 
-At this point a reasonable observation would be that we are talking about pre-trained embeddings and that we could get better results if we fine-tuned the embeddings to the specific application at hand. This might very well be the case but there are at least two important considerations to be taken into account, cost and overfitting. The resource/cost consideration is important but more obvious to be recognized. You either have the money to pursue it or not. If you do, you still should check to see if the improvement you get is worth the cost. 
+At this point a reasonable observation would be that we are talking about pre-trained embeddings and that we could get better results if we fine-tuned the embeddings to the specific application at hand. This might well be the case but there are at least two important considerations to be taken into account, cost and overfitting. The resource/cost consideration is important but more obvious to be recognized. You either have the money to pursue it or not. If you do, you still should check to see if the improvement you get is worth the cost. 
 
 The main issue in this case relates to overfitting. It is not easy to avoid overfitting when using big and complex models such as Universal Sentence Encoder and sentence BERT. Even if we use the entire MS MARCO dataset, which is considered a big and important recent development to help advance the research around NLP tasks, we only have around 3 million documents and 300 thousand labeled queries to work with. This is not necessarily big relative to such massive models. 
 

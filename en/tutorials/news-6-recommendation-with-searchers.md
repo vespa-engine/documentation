@@ -109,13 +109,12 @@ a response to the query.
 <p>
 <strong>Note: </strong><!-- ToDo: consider making a style for notes -->
 Adding a <a href="../reference/query-api-reference.html#tracelevel">tracelevel</a> is 
-generally very helpful when debugging vespa queries.
+generally helpful when debugging vespa queries.
 </p>
 
 So, [searchers](../searcher-development.html) are Java components that perform
 some kind of processing along the query chain; either modifying the query before 
 the actual search, modifying the results after the search, or some combination of both.
-Searchers are very flexible.
 
 Developers can provide their own searchers and inject them into the query chain.
 We'll capitalize on this and create a searcher that performs essentially 

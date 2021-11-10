@@ -210,7 +210,7 @@ don't do this unless you are sure.
 
 ## Conclusion
 
-Our very simple application should now be up and running. In the [next part
+Our simple application should now be up and running. In the [next part
 of the tutorial](news-2-basic-feeding-and-query.html), we'll start building
 from this foundation.
 

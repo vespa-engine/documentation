@@ -266,7 +266,7 @@ first-phase {
     expression: random
 }
 ```
-in our `collect_rank_features` _rank-profile_ leading to a biased dataset where the negative examples were actually quite relevant to the query. The trained model did well on the validation set but failed miserably on the test set when deployed to Vespa. This showed us that our dataset probably had a very different distribution than what was observed on a running Vespa instance and led us to investigate and catch the bug.
+in our `collect_rank_features` _rank-profile_ leading to a biased dataset where the negative examples were actually quite relevant to the query. The trained model did well on the validation set but failed miserably on the test set when deployed to Vespa. This showed us that our dataset probably had a different distribution than what was observed on a running Vespa instance and led us to investigate and catch the bug.
 
 ## Beyond pointwise loss functions
 
