@@ -6,107 +6,127 @@ title: "Accelerated OR search using the WAND algorithm with Vespa"
 <p>
   This document describes how to use the Weak And algorithm for accelerated OR like search. 
 <p>
-
-<p>The WAND algorithm is described in detail in 
-<a href="https://www.researchgate.net/profile/David-Carmel-3/publication/221613425_Efficient_query_evaluation_using_a_two-level_retrieval_process/links/02bfe50e6854500153000000/Efficient-query-evaluation-using-a-two-level-retrieval-process.pdf">
-Efficient Query Evaluation using a Two-Level Retrieval Process (PDF)</a> by <em>Andrei Z. Broder et al</em></p>
-
-<blockquote>
-We have determined that our algorithm significantly reduces the total number of full evaluations by more
-than 90%, almost without any loss in precision or recall.
-At the heart of our approach there is an efficient implementation of a new Boolean construct called WAND or
-Weak AND that might be of independent interest.
-</blockquote>
 <p>
-
-Vespa has two different implementations of the WAND dynamic pruning algorithm. Both implementations
-attempts to retrieve the best top-k scoring documents without exhaustive scoring all documents which matches any of the terms in the query. 
-
-Consider a query example <b><em>is cdg airport in main paris</em>?</b> from the <a href="https://github.com/microsoft/MSMARCO-Passage-Ranking">MS Marco Passage Ranking</a> query set. 
-
-If we run this query over the 8.8M passage documents using OR 
-we retrieve and rank <em>7,926,256</em> documents out of <em>8,841,823</em> documents. That is in other words <a href="ranking.html">ranking</a> 89% of the total corpus size. 
-It's close to brute force evaluating all documents (100%). 
-
-If we instead change to the boolean retrieval logic to AND we only retrieve 2 documents and fail to retrieve the relevant document(s). </p>
-
-<p>The WAND algorithm tries to address this problem by starting
-the search for candidate documents using OR 
-limiting the number of documents that are ranked, saving both latency and resource usage (cost) while still returning the same or almost the same top-k results as the brute force OR. For the example
-using WAND with <em>K</em> or <em>targetHits</em> to 1000 we fully rank only 196,900 documents. That is a huge improvement over the exhaustive OR search which retrieves and ranks <em>7,926,256</em> documents 
-and at the same time retrieving the same results as the exhaustive OR search.
+  The WAND algorithm is described in detail in
+  <a href="https://www.researchgate.net/profile/David-Carmel-3/publication/221613425_Efficient_query_evaluation_using_a_two-level_retrieval_process/links/02bfe50e6854500153000000/Efficient-query-evaluation-using-a-two-level-retrieval-process.pdf">
+  Efficient Query Evaluation using a Two-Level Retrieval Process (PDF)</a> by <em>Andrei Z. Broder et al</em>
 </p>
-
+  {% include note.html content="We have determined that the Weak And algorithm algorithm
+  significantly reduces the total number of full evaluations by more than 90%,
+  almost without any loss in precision or recall.
+  At the heart of the approach there is an efficient implementation of a new Boolean construct
+  called WAND or Weak AND that might be of independent interest."%}
 <p>
-So what is the catch? Why not use WAND algorithm all the time? The catch is that the inner wand scoring function can only 
-be a linear sum of the ranking contribution from each of the query terms and one cannot override the score calculation (with a ranking expression, see <a href="ranking.html">ranking documentation</a>).
-
-The inner scoring function of both WAND implementations in Vespa cannot be overridden like the ranking expression controlled by the <code>first-phase</code> ranking expression in a ranking profile. 
-Users can only control the weight of the 
-terms or generally features in the query and in the document document. The weights can be adjusted and both WAND implementations in Vespa attempt to 
-calculate the top-k documents with highest maximum inner dot product. WAND could be looked at as performing the maximum inner product search in a sparse vector space without brute force calculating it all over all candidates exhaustively. 
+  Vespa has two different implementations of the WAND dynamic pruning algorithm.
+  Both implementations attempt to retrieve the best top-k scoring documents
+  without exhaustive scoring all documents which matches any of the terms in the query.
 </p>
-
 <p>
-Vespa has two query operators which implements the WAND algorithm; <code>weakAnd</code> and <code>wand</code>. These two query
-operators have different characteristics. 
-
+  Consider a query example <strong><em>is cdg airport in main paris</em>?</strong> from the
+  <a href="https://github.com/microsoft/MSMARCO-Passage-Ranking">MS Marco Passage Ranking</a> query set.
+  If we run this query over the 8.8M passage documents using OR
+  we retrieve and rank <em>7,926,256</em> documents out of <em>8,841,823</em> documents.
+  That is in other words <a href="ranking.html">ranking</a> 89% of the total corpus size.
+  It's close to brute force evaluating all documents (100%).
+</p>
+<p>
+  If we instead change to the boolean retrieval logic to AND,
+  we only retrieve 2 documents and fail to retrieve the relevant document(s).
+</p>
+<p>
+  The WAND algorithm tries to address this problem by starting the search for candidate documents using OR,
+  limiting the number of documents that are ranked, saving both latency and resource usage (cost)
+  while still returning the same or almost the same top-k results as the brute force OR.
+  For the example, using WAND with <em>K</em> or <em>targetHits</em> to 1000, only 196,900 documents are fully ranked.
+  That is a huge improvement over the exhaustive OR search which retrieves and ranks <em>7,926,256</em> documents
+  and at the same time retrieving the same results as the exhaustive OR search.
+</p>
+<p>
+  So what is the catch? Why not use WAND algorithm all the time?
+  The catch is that the inner wand scoring function can only be a linear sum of the ranking contribution
+  from each of the query terms,
+  and one cannot override the score calculation (with a <a href="ranking.html">ranking expression</a>).
+  The inner scoring function of both WAND implementations in Vespa cannot be overridden
+  like the ranking expression controlled by the <code>first-phase</code> ranking expression in a ranking profile.
+  Users can only control the weight of the terms or generally features in the query and in the document.
+  The weights can be adjusted and both WAND implementations in Vespa
+  attempt to calculate the top-k documents with the highest maximum inner dot product.
+  WAND could be looked at as performing the maximum inner product search in a sparse vector space,
+  without brute force calculating it all over all candidates exhaustively.
+</p>
+<p>
+  Vespa has two query operators which implements the WAND algorithm; <code>weakAnd</code> and <code>wand</code>.
+  These two query operators have different characteristics:
+</p>
 <ul>
 <li>
-<code>WeakAnd</code> is designed for single valued indexed string fields (or fieldset combining multiple indexed string fields). The <em>weakAnd</em>
-integrates with linguistic processing (tokenization and stemming). It uses the per term inverted document frequency and query term 
-weight in the inner scoring but does not use document term frequency in the scoring. </li>
-
+  <code>weakAnd</code> is designed for single valued indexed string fields
+  (or fieldset combining multiple indexed string fields).
+  <code>weakAnd</code> integrates with linguistic processing (tokenization and stemming).
+  It uses the per-term inverted document frequency and query term weight in the inner scoring
+  but does not use document term frequency in the scoring.
+</li>
 <li>
-The <code>wand</code> query operator which does not integrate with linguistic processing like tokenization, stemming and normalization and the user (you) must specify the query features and their weight and the document features and their weight. 
-The features does not need to be string and it is recommended to map from string to numeric types. For example the pre-trained language model <a href="https://en.wikipedia.org/wiki/BERT_(language_model)">BERT</a> uses a fixed vocabulary 
-of about 30K tokens and text snippets are tokenized into a set of token ids. We can
-then represent the document as a bag of BERT token ids (e.g using weightedset&lt;int&gt; data type) where each token id has a weight which is computed during document processing. For example using <a href="https://github.com/AdeDZY/DeepCT">DeepCT or HDCT</a> weighting. 
-Similar approaches exist for other high dimensional sparse vector spaces which do not relate to text matching but where one wants to efficiently perform a maximum inner dot product search.
+  The <code>wand</code> query operator which does not integrate with linguistic processing
+  like tokenization, stemming and normalization
+  and the user (you) must specify the query features and their weight and the document features and their weight.
+  The features do not need to be string, and it is recommended to map from string to numeric types.
+  For example the pre-trained language model <a href="https://en.wikipedia.org/wiki/BERT_(language_model)">BERT</a>
+  uses a fixed vocabulary of about 30K tokens and text snippets are tokenized into a set of token ids.
+  We can then represent the document as a bag of BERT token ids (e.g. using weightedset&lt;int&gt; data type)
+  where each token id has a weight which is computed during document processing,
+  e.g. using <a href="https://github.com/AdeDZY/DeepCT">DeepCT or HDCT</a> weighting.
+  Similar approaches exist for other high dimensional sparse vector spaces
+  which do not relate to text matching but where one wants to efficiently perform a maximum inner dot product search.
 </li>
 </ul>
-
 <p>
-If you are in doubt whether you can use WAND algorithm to accelerate retrieval, you can evaluate using a query set and perform the query exhaustive using brute force OR and compare the top-k results returned when using the approximative
-WAND. If top-k is as measured by Recall@K is high you could save compute resources (and lower latency) by  using WAND.</p>
-
-
-In the following sections we discuss these two WAND implementations in detail:
+  If you are in doubt whether you can use WAND algorithm to accelerate retrieval,
+  you can evaluate using a query set and perform the query exhaustive using brute force OR
+  and compare the top-k results returned when using the approximative WAND.
+  If top-k as measured by Recall@K is high, you could save compute resources (and get lower latency) by using WAND.
+</p>
+<p>
+In the following sections we discuss these two WAND implementations in detail.
 </p>
 
 
 
 <h2 id="weakand">weakAnd</h2>
 <p>
-The <a href="reference/query-language-reference.html#weakand">weakAnd query operator</a>
-accepts terms searching over multiple fields and also logical conjuctions using OR/AND. It's designed to retrieve over indexed string fields and fieldsets (single-valued or multi-valued) and integrates
-fully with linguistic processing like tokenization and stemming. 
+  The <a href="reference/query-language-reference.html#weakand">weakAnd query operator</a>
+  accepts terms searching over multiple fields and also logical conjuctions using OR/AND.
+  It's designed to retrieve over indexed string fields and fieldsets (single-valued or multi-valued)
+  and integrates fully with linguistic processing like tokenization and stemming.
 </p>
-
 <p>
-When using <em>weakAnd</em> via YQL or a Java Searcher plugin,
-specify the target for minimum number of hits the operator should produce per content node involved in the query.
-
-The effect of tuning <code>targetHits</code> may not be intuitive.
-To ensure that you get the best hits possible with a <em>weakAnd</em>,
-set the target number somewhat higher than the number of hits returned to the user;
-setting it 10 times higher should be more than enough.
-
-The reason for increasing the target number is that <em>weakAnd</em>
-uses a ranking function internally (inner product) and the hits which are evaluated by the weakAnd scorer is
-also evaluated by the <code>first-phase</code> ranking expression.
-
-Anything similar to classic vector vector ranking should correlate well with <em>weakAnd</em> inner product scoring. For example
-<code>nativeFieldMatch</code> or <code>bm25</code> ranking features. 
-
-Note that because <em>weakAnd</em> relies on feedback
-identifying which hits are used for first phase ranking to increase its threshold for what's considered a good hit,
-the special <code>unranked</code> rank profile (which turns off ranking completely)
-may cause <em>weakAnd</em> queries to become slower than using a real ranking profile.
+  When using weakAnd via <a href="query-language.html">YQL</a>
+  or a <a href="searcher-development.html">Searcher plugin</a>,
+  specify the target for minimum number of hits the operator should produce per content node involved in the query.
 </p>
-
-<p>Our query example expressed in 
-<a href="query-language.html">YQL - Vespa Query Language</a> :
+<p>
+  The effect of tuning <code>targetHits</code> may not be intuitive.
+  To ensure that you get the best hits possible with a weakAnd,
+  set the target number somewhat higher than the number of hits returned to the user;
+  setting it 10 times higher should be more than enough.
+</p>
+<p>
+  The reason for increasing the target number is that weakAnd uses a ranking function internally (inner product)
+  and the hits which are evaluated by the weakAnd scorer is also evaluated by the <code>first-phase</code> ranking expression.
+</p>
+<p>
+  Anything similar to classic vector ranking should correlate well with weakAnd inner product scoring,
+  e.g. <code>nativeFieldMatch</code> or <code>bm25</code> ranking features.
+</p>
+<p>
+  Note that because weakAnd relies on feedback identifying which hits are used for first phase ranking
+  to increase its threshold for what's considered a good hit,
+  the special <a href="reference/schema-reference.html#rank-profile">unranked rank profile</a>
+  (which turns off ranking completely) may cause weakAnd queries to become slower than using a real ranking profile.
+</p>
+<p>
+  The query example expressed in YQL:
+</p>
 <pre>
 select * from passages where (
     default contains "is" OR default contains "cdg" OR 
@@ -114,9 +134,9 @@ select * from passages where (
     default contains "paris" 
   );
 </pre>
-
-Alternatively using a combination of YQL and user query language
-
+<p>
+  Alternatively using a combination of YQL and user query language
+</p>
 <pre>
 {
   "yql": "select * from passages where userQuery();",
@@ -124,9 +144,12 @@ Alternatively using a combination of YQL and user query language
   "type": "any"
 }
 </pre>
-Where type any means OR. 
-
-Using the <em>weakAnd</em> query operator the query could look like:
+<p>
+  Where type <em>any</em> means OR.
+</p>
+<p>
+  Using the weakAnd query operator, the query is:
+</p>
 <pre>
 select * from passages where (
   [{"targetHits": 200}] 
@@ -136,53 +159,58 @@ select * from passages where (
     )
 );
 </pre>
-We specify that the target number of hits (top k) should be 200 (Default 100)
-and this number is used per content node if the content is distributed over more than one node.
+<p>
+  We specify that the target number of hits (top k) should be 200 (Default 100)
+  and this number is used per content node if the content is distributed over more than one node.
 </p>
 
-<p><b>Weak and inner scoring</b>
-The WeakAnd query operator uses the following ranking features when calculating the inner score dot product.
+<h3 id="weakand-inner-scoring">weakAnd inner scoring</h3>
+<p>
+  The weakAnd query operator uses the following ranking features when calculating the inner score dot product:
+</p>
 <ul>
   <li><a href="reference/rank-features.html#term(n).significance">term(n).significance</a></li>
   <li><a href="reference/rank-features.html#term(n).weight">term(n).weight</a></li>
 </ul>
-
-Note that the number of times the term occurs in the document is not used in the inner scoring.
-
-Both term significance and weight features could be overridden in the query using
-<a href="reference/query-language-reference.html#annotations">annotations</a>:
-
-If the term significance is not overridden with the query, the significance is calculated from the indexed corpus 
-using a formula loosely based on <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf">Inverse Document Frequency</a>.
-
-Documents that could not potentially compete with any of the hits already in heap (size targetHits) of top hits are skipped,
-while the weakAnd implementation still exposes the hits which were evaluated to the first phase ranking function,
-and not only the top k hits. When Vespa is configured to use multiple threads per search each thread maintains a top-k scoring heap but communicates
-score thresholds. 
-
-</p>
-
 <p>
-Often times, for the performance reasons listed above, it is preferable to use weakAnd instead of OR. 
-To enable this behavior, the query property <code><a href="reference/query-api-reference.html#weakAnd.replace">weakAnd.replace</a></code>
-can be set to true. 
+  Note that the number of times the term occurs in the document is not used in the inner scoring.
+</p><p>
+  Both term significance and weight features could be overridden in the query using
+<a href="reference/query-language-reference.html#annotations">annotations</a>.
+  If the term significance is not overridden with the query,
+  the significance is calculated from the indexed corpus using a formula loosely based on
+  <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf">Inverse Document Frequency</a>.
 </p>
+<p>
+  Documents that could not potentially compete with any of the hits already in heap (size targetHits) of top hits are skipped,
+  while the weakAnd implementation still exposes the hits which were evaluated to the first phase ranking function,
+  and not only the top k hits.
+  When configured to use multiple threads per search,
+  each thread maintains a top-k scoring heap but communicates score thresholds.
+</p>
+<p>
+  Often times, for the performance reasons listed above, it is preferable to use weakAnd instead of OR.
+  To enable this behavior, set the query property
+  <code><a href="reference/query-api-reference.html#weakAnd.replace">weakAnd.replace</a></code> to true.
+</p>
+
 
 
 <h2 id="wand">wand</h2>
 <p>
-The <a href="reference/query-language-reference.html#wand">wand query operator</a>
-works over a single <a href="reference/schema-reference.html#type:weightedset">weightedset field</a>
-which can be both string or numeric (int/long) and the weight is always int. 
-
-Weighted sets of string must be configured with 
-<code>match:word</code> or <code>match:exact</code>. See <a href="reference/schema-reference.html#match">match documentation</a>. 
-There is no linguistic processing of strings for 
-  string features when using the <em>wand</em> query operator.</p>
+  The <a href="reference/query-language-reference.html#wand">wand query operator</a>
+  works over a single <a href="reference/schema-reference.html#type:weightedset">weightedset field</a>
+  which can be both string or numeric (int/long) - the weight is always int.
+</p>
+  Weighted sets of string must be configured with
+  <code>match:word</code> or <code>match:exact</code> -
+  see <a href="reference/schema-reference.html#match">match documentation</a>.
+  There is no linguistic processing of strings for string features when using the wand query operator.
+</p>
 <p>
-Below is an example passage document type where 
-we pre-process the text using a BERT tokenizer and map text to bert token ids and assign a weight to each unique token id.   
-
+  Below is an example passage document type where we pre-process the text using a BERT tokenizer
+  and map text to bert token ids and assign a weight to each unique token id.
+</p>
 <pre>
   document passage {
     field text type string { 
@@ -194,9 +222,9 @@ we pre-process the text using a BERT tokenizer and map text to bert token ids an
     }
   }
 </pre> 
-
-We can process text and tokenize the text with a BERT tokenizer and set the weight per token id
-
+<p>
+We can process text and tokenize the text with a BERT tokenizer and set the weight per token id:
+</p>
 <pre>
 { 
 	"put":"id:msmarco:passage::8433854", 
@@ -210,24 +238,25 @@ We can process text and tokenize the text with a BERT tokenizer and set the weig
 	}
 }
 </pre>
-
-The <code>wand</code> query operator allows full control over both query side weights and document side weights
-and it is guaranteed that it will find the top k best hits ranked by the inner dot product  
-between the sparse query vector and the sparse document vector.
-
-</p><p>
-The Vespa <a href="reference/query-language-reference.html#rank">rank query operator</a>
-can be used to create a query tree where a bag of features is used in the <em>wand</em> for efficient retrieval 
-with normal lexical query terms to produce matching ranking features like bm25 for the configurable first phase/second-phase ranking.
-
-The example below uses the <em>rank</em> operator to also produce normal text matching features for those top-k documents which are 
-retrieved by the inner product search performed by the wand operator.
-
-The userQuery() does not impact recall,
-but creates "normal" ranking features for first-phase or second-phase ranking.
-
-Similar at query time we can use the same type of text to feature mapping (in this case all query terms have weight 1):
-
+<p>
+  The wand query operator allows full control over both query side weights and document side weights,
+  and it is guaranteed that it will find the top k best hits ranked by the inner dot product
+  between the sparse query vector and the sparse document vector.
+</p>
+<p>
+  The Vespa <a href="reference/query-language-reference.html#rank">rank query operator</a>
+  can be used to create a query tree,
+  where a bag of features is used in the wand for efficient retrieval with normal lexical query terms
+  to produce matching ranking features like bm25 for the configurable first phase/second-phase ranking.
+</p>
+<p>
+  The example below uses the <code>rank</code> operator to also produce normal text matching features
+  for those top-k documents which are retrieved by the inner product search performed by the wand operator.
+  The userQuery() does not impact recall,
+  but creates "normal" ranking features for first-phase or second-phase ranking.
+  Similar at query time we can use the same type of text to feature mapping
+  (in this case all query terms have weight 1):
+</p>
 <pre>
 {
   "yql":"select * from passages where rank(
@@ -239,9 +268,9 @@ Similar at query time we can use the same type of text to feature mapping (in th
   "ranking.profile": "deep_bm25"
 }
 </pre>
-
-With our ranking profile <em>deep_bm25</em> defined as  
-
+<p>
+With the ranking profile <em>deep_bm25</em> defined as:
+</p>
 <pre>
 rank-profile deep {
   first-phase {
@@ -253,11 +282,13 @@ rank-profile deep {
    }
 }
 </pre>
-
-The <em>rawScore</em> ranking feature is the inner dot product calculated by the 
-  <em>wand</em> query operator and for those 25 documents (per node) with the highest inner product score 
-  there is also a bm25(text) score which we combine with the inner product score. Note
-that the bm25 is <b>only</b> calculated for the top-k hits returned by the <em>wand</em> . 
-
-In our example the inner product score is 41, and the bm25 of the text is 35.003. 
- 
+<p>
+  The <a href="reference/rank-features.html#rawScore(field)">rawScore</a> ranking feature
+  is the inner dot product calculated by the wand query operator.
+  For the 25 documents (per node) with the highest inner product score
+  there is also a bm25(text) score which we combine with the inner product score.
+  Note that the bm25 is <strong>only</strong> calculated for the top-k hits returned by the wand.
+</p>
+<p>
+In this example, the inner product score is 41, and the bm25 of the text is 35.003.
+</p>
