@@ -106,11 +106,9 @@ results come back, the processing passes back up the chain. The searchers can th
 process the results before passing them to the previous searcher, and ultimately back as 
 a response to the query.
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-Adding a <a href="../reference/query-api-reference.html#tracelevel">tracelevel</a> is 
-generally helpful when debugging vespa queries.
-</p>
+{% include note.html content="Adding a [tracelevel](../reference/query-api-reference.html#tracelevel)
+is  generally helpful when debugging vespa queries." %}
+
 
 So, [searchers](../searcher-development.html) are Java components that perform
 some kind of processing along the query chain; either modifying the query before 
@@ -214,18 +212,14 @@ is restricted to the `user` document type. Since the `user_id` is
 unique, we only expect a single hit. We then extract the `embedding` tensor
 from the user document.
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-We explicitly call a <em>fill</em> on the results before returning. A query is
-usually passed to the search backend at least twice: one to retrieve the results, 
-another to retrieve the summary data of the final result set. This is to avoid 
-sending excess data between services. 
-
-For instance, if searching for the top 10 results with two search backends, each 
-backend will retrieve the top 10 results from the local content on that node. A 
-searcher will determine the "globally" top 10 and only issue a <em>fill</em> to retrieve 
-the summary features for those top 10.
-</p>
+{% include note.html content="We explicitly call a *fill* on the results before returning.
+A query is  usually passed to the search backend at least twice: one to retrieve the results,
+another to retrieve the summary data of the final result set.
+This is to avoid sending excess data between services.
+For instance, if searching for the top 10 results with two search backends,
+each backend will retrieve the top 10 results from the local content on that node.
+A searcher will determine the \"globally\" top 10
+and only issue a *fill* to retrieve the summary features for those top 10." %}
 
 Now that we've retrieved the user embedding, we programmatically set up a
 nearest-neighbor search, and add the user embedding to the query as the
@@ -345,13 +339,11 @@ be passed along with the query by adding it to the default query profile in
 </query-profile>
 ```
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-The <em>src/python/evaluate.py</em> script can now be modified to also use this searcher.
-However, to properly calculate the metrics, the searcher needs to be modified to 
-accept a list of news article id's and only recall those. We'll leave this as 
-an exercise to the reader.
-</p>
+{% include note.html content="The `src/python/evaluate.py` script can now be modified to also use this searcher.
+However, to properly calculate the metrics, the searcher needs to be modified to
+accept a list of news article id's and only recall those.
+We'll leave this as an exercise to the reader." %}
+
 
 ## Document processors
 
@@ -393,12 +385,8 @@ This is often called federation. Vespa supports federation both
 from internal and external sources. Please see 
 [the guide on federation](../federation.html) for more information.
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-If the same document can be returned from multiple sources, it's
-important to perform some form of de-duplication before returning
-the final results!
-</p>
+{% include important.html content="If the same document can be returned from multiple sources,
+it's important to perform some form of de-duplication before returning the final results!" %}
 
 A common way of performing blending from multiple sources is to implement a specialized
 blending searcher. This searcher can, for instance, use an approach such 

@@ -229,11 +229,8 @@ the sparseness of the tensor, only the `finance` cell matches, and that value
 is multiplied by the `1.0` in this document. So in this case, this would
 effectively work as a lookup.
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-Much more complex operations are available, please refer to <a href="../tensor-user-guide.html#ranking-with-tensors">
-the tensor user guide</a> for more information.
-</p>
+{% include note.html content="Much more complex operations are available,
+please refer to [the tensor user guide](../tensor-user-guide.html#ranking-with-tensors) for more information." %}
 
 Let's add a new ranking profile to perform this calculation:
 
