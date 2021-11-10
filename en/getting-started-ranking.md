@@ -19,11 +19,10 @@ Let's start with something simple: _Irrespective of the query, score all documen
 That is, for any query, return the documents with most in-links first in the result set:
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="attribute(inlinks).count">
-curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks'
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&ranking=inlinks'
 </pre>
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&ranking=inlinks](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks)
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where true;&ranking=inlinks](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&ranking=inlinks)
 
-`where sddocname contains "doc"` which is a Vespa shorthand for _all documents of "doc" schema_.
 The score, named `relevance` in query results, is the size of the `inlinks` attribute array in the document,
 as configured in the `expression`:
 ```
@@ -61,9 +60,9 @@ Also new is:
 * use of constants and functions to write better code
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="summaryfeatures">
-curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks'
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&ranking=inlinks'
 </pre>
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&ranking=inlinks_age](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=inlinks_age)
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where true;&ranking=inlinks_age](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&ranking=inlinks_age)
 ```
 rank-profile inlinks_age {
     first-phase {
@@ -121,9 +120,9 @@ From most perspectives, this is a poor similarity function, better functions are
 The documents have a `term_count` field - so let's add a `ranking.features.query` for term count as well:
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="query(q_term_count)">
-curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000'
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000'
 </pre>
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000)
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where true;&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000)
 
 <br/>
 <p><!-- depends on mathjax -->
@@ -202,9 +201,9 @@ rank-profile inlink_similarity {
 ```
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="tensor&lt;float&gt;(links{})">
-curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D'
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D'
 </pre>
-[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where sddocname contains "doc";&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)={% raw %}{{inlinks:/en/query-profiles.html}:1,{inlinks:/en/page-templates.html}:1,{inlinks:/en/overview.html}:1}{% endraw %}](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20sddocname%20contains%20%22doc%22%3B&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D)
+[https://doc-search.vespa.oath.cloud/search/?yql=select * from doc where true;&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)={% raw %}{{inlinks:/en/query-profiles.html}:1,{inlinks:/en/page-templates.html}:1,{inlinks:/en/overview.html}:1}{% endraw %}](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true%3B&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D)
 
 Inspect relevance and summary-features:
 
