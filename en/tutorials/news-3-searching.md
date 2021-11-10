@@ -187,7 +187,7 @@ across all the documents — some common use cases include:
 
 Displaying such groups and their sizes (in terms of matching documents per
 group) on a search result page, with a link to each such group, is a common way
-to let users refine searches.  For now we will only do a very simple grouping
+to let users refine searches.  For now we will only do a simple grouping
 query to get a list of unique values for `category` ordered by the number of
 documents they occur in and top 3 is shown:
 

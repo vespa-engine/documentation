@@ -228,7 +228,7 @@ Vespa will by default use the following TLS configuration (unless overridden by 
 
 #### Protocol versions
 * `TLSv1.3` - _note:_ due to certain limitations in the current Java runtime, TLSv1.3 is only supported by the C++ backends for now.
-  We will revisit this in the very near future to ensure Java defaults to TLSv1.3 as well.
+  We will revisit this in the near future to ensure Java defaults to TLSv1.3 as well.
 * `TLSv1.2`
 
 #### Cipher suites

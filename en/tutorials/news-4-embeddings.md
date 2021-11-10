@@ -116,7 +116,7 @@ a user, we simply find the user's vector and find the articles with the
 highest dot products. In the following, we will use this approach to generate
 such embeddings for users and news articles.
 
-Please note, however, this approach would not work very well in practice for
+Please note, however, this approach would not work well in practice for
 news recommendation. The reason is that a large part of news recommendation
 is to recommend **new** news articles, which might not have received any
 implicit feedback yet. This is called the "cold start" problem. For such
