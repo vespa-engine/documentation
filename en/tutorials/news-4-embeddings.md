@@ -393,13 +393,9 @@ to create a better model for the user embedding. For the moment, however,
 we are satisfied with these, and we'll use them going forward. Feel 
 free to experiment and see if you can achieve better results!
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-These numbers are for the demo dataset, which is much
-smaller than the full dataset. For reference, in 
-<a href="https://msnews.github.io/assets/doc/ACL2020_MIND.pdf">the MIND paper</a>
-the baseline here achieves <code>0.6776</code> on the full dataset.
-</p>
+{% include note.html content="These numbers are for the demo dataset, which is much smaller than the full dataset.
+For reference, in [the MIND paper](https://msnews.github.io/assets/doc/ACL2020_MIND.pdf)
+the baseline here achieves `0.6776` on the full dataset." %}
 
 The training script writes these embeddings to the files
 `mind/user_embeddings.tsv` and `mind/news_embeddings.tsv`.

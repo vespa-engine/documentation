@@ -197,13 +197,9 @@ This instructs Vespa to expect a float tensor with dimension `d0[51]` when the
 query parameter `ranking.features.query(user_embedding)` is passed. We'll see 
 how this works together with the `nearestNeighbor` search operator below.
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-Setting up this query profile type is required when sending a 
-tensor as a query parameter. A common pitfall is to forget the 
-default query profile, but that is required to successfully set up
-the query profile type.
-</p>
+{% include important.html content="Setting up this query profile type is required when sending a tensor as a query parameter.
+A common pitfall is to forget the default query profile,
+but that is required to successfully set up the query profile type." %}
 
 ## Testing the application
 

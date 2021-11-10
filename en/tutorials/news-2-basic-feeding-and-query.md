@@ -378,12 +378,9 @@ $ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from so
 http://localhost:8080/search/ | python -m json.tool
 </pre>
 
-<p>
-<strong>Note: </strong><!-- ToDo: consider making a style for notes -->
-You can use the built-in query builder found at 
-<a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>
-which can help you build queries with, for instance, autocompletion of YQL.
-</p>
+{% include note.html content="You can use the built-in query builder found at 
+<a href='http://localhost:8080/querybuilder/' data-proofer-ignore>localhost:8080/querybuilder/</a>
+which can help you build queries with, for instance, autocompletion of YQL." %}
 
 Looking at the output, please note:
 

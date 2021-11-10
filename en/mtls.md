@@ -68,8 +68,7 @@ that would allow them to directly access your system.
 
 {% include warning.html content="Private keys must be kept secret and protected against unauthorized access.
 Make sure only the user running the Vespa processes can read the private key file.
-Key and certificate files should only be writable by administrator users.
-" %}
+Key and certificate files should only be writable by administrator users." %}
 
 ## Configuring Vespa TLS
 On any node running Vespa software, TLS is controlled via a single environment variable.
