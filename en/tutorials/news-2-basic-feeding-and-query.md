@@ -412,15 +412,10 @@ This is a query for the two terms "music" and "festival", combined with an
 `AND` operation; it finds documents that match both terms — but not just one of
 them.
 
-    {"yql" : "select * from sources * where sddocname contains \"news\";"}
+    {"yql" : "select * from news * where true;"}
 
-This is a single-term query in the special field `sddocname` for the value
-`"news"`.  This is a common and useful Vespa trick to get the number of indexed
-documents for a certain document type: `sddocname` is a special and reserved
-field which is always set to the name of the document type for a given
-document. The documents are all of type `news`, and will 
-automatically have the field `sddocname` set to that value.
-
+This is a common and useful Vespa trick to get the number of indexed
+documents for a certain document type. 
 This means that the query above really means "return all documents of type
 news", and as such, all documents in the index are returned.
 

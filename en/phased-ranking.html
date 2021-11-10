@@ -4,15 +4,8 @@ title: "Phased Ranking "
 ---
 
 <p>
-Rank scores in general become more accurate by using complex expressions
-which use many features, complex features or large tensors.
-Even though Vespa is optimized for such calculations,
-complex expressions become expensive when calculated for each selected document.
-For this reason Vespa can be configured to run multiple phases of ranking expressions -
-a smaller and less accurate one on all matches as they are found (first-phase ranking)
-and a more expensive and accurate one only on the best documents (second-phase ranking).
-This provides a better CPU budget distribution
-by dedicating more resources to the best candidates as calculated per ranking phase.
+Ranking, in general, becomes more accurate by using complex expressions which use many features.
+
 </p><p>
 Read the <a href="query-api.html">query API</a> guide
 to get an overview of how queries are executed in Vespa, before continuing this guide.
@@ -20,51 +13,33 @@ to get an overview of how queries are executed in Vespa, before continuing this 
 Vespa supports multiple rank phases:
 <ul>
   <li>Re-ranking of the top hits from the content nodes
-      using a custom <a href="searcher-development.html">searcher component</a></li>
+      using a custom <a href="searcher-development.html">stateless searchers</a></li>
   <li>Re-ranking at each content node using two phase ranking configured by rank profiles
       with ranking expressions working on scalars, tensors or matching features</li>
   <li>Retrieval and Ranking with query operators like <a href="using-wand-with-vespa.html">WAND/Weak And</a>
-      which speeds up retrieval of top matches of a disjunction query (OR) or <a href="nearest-neighbor-search.html">Nearest Neighbor Search</a>.</li>
+      which speeds up retrieval of top matches of a disjunction query (OR) or <a href="nearest-neighbor-search.html">Nearest Neighbor Search</a></li>
 </ul>
 </p>
 <p>
 <img src="img/phased-ranking.png"/>
 
 
-<h2 id="container-top-matches-re-ranking">Container top matches re-ranking</h2>
+<h2 id="stateless-re-ranking">Stateless re-ranking</h2>
 <p>
-It's possible to write <a href="searcher-development.html">custom searcher plugin</a>
-which can re-rank hits using any custom scoring function.
+It's possible to write <a href="searcher-development.html">stateless searchers</a>
+which can re-rank hits using any custom scoring function or model.
+
 The searcher can also blend and re-order hits from multiple sources
 when using <a href="federation.html">federation</a> of content sources.
-<pre>
-public class ReRankerSearcher extends Searcher {
-    
-    @Override
-    public Result search(Query query, Execution execution) {
-        // Pass on to the next searcher to execute the query
-        Result result = execution.search(query);
-        // Fill the result including summary-features 
-        execution.fill(result); 
-        for(Hit h: result.hits()) {
-            h.getRelevance().setScore(myReranker(h));
-        }
-        return result;
-    }
 
-    double myReranker(Hit h) {
-        double newScore = 0.1d;
-        //Do the magic
-        return newScore;
-    }
-}
-</pre>
+See <a href="https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/src/main/java/ai/vespa/searcher/ReRankingSearcher.java">ReRankingSearcher</a>
+for inspiration. The linked searcher re-ranks the top global results from all content nodes using a Transformer (BERT) model.
+
 The searcher might request rank features calculated by the content nodes to be returned
 along with the hit fields using <a href="reference/inspecting-structured-data.html">summary-features</a>.
 The features returned can be configured in the <em>rank-profile</em>
 as <a href="reference/schema-reference.html#summary-features">summary-features</a>.
-As the example above is executed in a single thread iterating over the top hits,
-the number of hits and complexity of the re-ranking need to be adjusted per the given latency budget.
+
 The number of <em>hits</em> is limited by the query api <a href="reference/query-api-reference.html#hits">hits</a> parameter
 and <a href="reference/query-api-reference.html#queryProfile">maxHits</a> setting. The hits available for container level re-ranking is
 the global top ranking hits after content nodes have retrieved and ranked the hits and global top ranking hits have been found by merging the responses
@@ -141,16 +116,5 @@ The application rank function should hence in most cases be a second phase funct
 The task then becomes to find a first phase function,
 which correlates sufficiently well with the second phase function -
 this to ensure that relevance is not hurt too much
-by not evaluating the second phase function on all the hits.
-</p><p>
-The impact of using a cheaper function in the first phase can be assessed
-by deploying the second phase function as the first phase function in a test rank profile,
-and comparing the results to the production rank profile.
-During such evaluation, the timeout should be adjusted for the increased resource usage
-with using the second order function over all matching candidates.
-</p>
-<p>
-With a dataset with query and document judgements one can evaluate the <em>first-phase</em> ranking function by it's effectiveness to retrieve relevant documents 
-at a given position (e.g <a href="https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Recall">Recall@100</a>.</p> 
-
+by not evaluating the real ranking function on all the hits.
 </p>

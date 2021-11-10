@@ -12,73 +12,30 @@ Some use cases in this guide are better solved using <a href="tensor-user-guide.
 
 <h2 id="dotproduct-and-wand">dotProduct and wand</h2>
 <p>
-It might make sense to start out using <em>dotProduct</em>
-and later switch to <em>wand</em> if the performance gain outweighs
-the reduction in flexibility and correctness.
-Also note that benchmarking should be involved in such a switch,
-to quantify the possible gain in performance (which might be negative).
-</p><p>
 <em>wand</em> (aka Parallel Wand) is a search operator that can be used for efficient top-k retrieval.
 It implements the <em>Weak AND/Weighted AND</em> algorithm as described by Broder et al in
 <a href="https://dl.acm.org/citation.cfm?id=956944">Efficient query evaluation using a two-level retrieval process</a>.
 See <a href="using-wand-with-vespa.html">using Wand with Vespa</a> for details.
 </p>
 <p>
-<em>wand</em>, <em>dotProduct</em> and <em>weightedSet</em>
-model similar operations in the search core.
-They have recall behavior similar to <em>or</em>,
-but only return a limited number of documents.
-</p><p>
+<p>
 <em>dotProduct</em> is the brute force equivalent to <em>wand</em>.
 They are both used to search for documents
 where weighted tokens in a field matches a subset of weighted tokens in the query.
 The <a href="#raw-scores-and-query-item-labeling">raw scores</a> produced by
 <em>dotProduct</em> are equivalent to those produced by <em>wand</em>.
-In some simple cases <em>dotProduct</em> is preferable to <em>wand</em>.
 </p><p>
 The difference is that <em>wand</em> will perform local optimizations
-in order to retrieve the top-k results that would be returned by <em>dotProduct</em>.
-This optimization will only yield correct results if the overall ranking is equal to the
-score produced by the <em>dotProduct</em> itself.
-</p><p>
-Cases where <em>dotProduct</em> might be better / more correct than <em>wand</em>:
+in order to retrieve the top-k targetHits results that would be returned by inner maximum <em>dotproduct</em>. 
+
+Which one of these are most cost efficient is complex as it depends on the size of the vocabulary (features) and:
 <ul>
-  <li>Might be more efficient with few tokens or few total results</li>
-  <li>Works better with arbitrary rank expressions and compound queries</li>
-  <li>Works better with grouping</li>
-  <li>Scales better when partitioning the problem space</li>
+<li>Number of query terms and their weight distribution</li>
+<li>Number of document terms and their weight distribution</li>
 </ul>
-</p><p>
-Use cases for a Wand operator arise when you have many query
-terms that you would like to see matched with OR semantics,
-but you are only interested in a small number of top hits for the query.
-With the normal OR operator the cost rises quickly with the number of terms,
-so five terms inside OR may already be "many":
-a simple rule of thumb is that the evaluation cost is proportional to the number of hits the OR yields.
-A Wand operator, in contrast, has a target for the number of hits you want it to produce,
-and may throw away hits that are not good enough once it has produced enough hits.
-</p><p>
-If you are only interested in the best 100 hits (or less) from an OR,
-a Wand operator should be a good match.
-The basic idea is that after seeing enough hits,
-the Wand algorithm will require that a document match more terms (or more relevant terms) in the query.
-The operator may go all the way to requiring match on all terms if that gives many hits.
-Note that since the behavior is adaptive you will always get at least the target number of hits,
-usually many more. Example use cases:
-<ul>
-  <li>Make recommendations based on user history</li>
-  <li>Find similar documents</li>
-  <li>Find extra content for a web page that is relevant to the text on the page</li>
-</ul>
-Note that in the cases above you would extract a large number of words from user history,
-from a document, or from some text you are going to display,
-and then make a query with all those words as weak criteria,
-looking for documents that contain as many of those words as possible,
-optionally with extra weight on those words that are considered more important.
-</p>
-
-
-
+<p> It is easy to compare the two approaches. One can run benchmarks using either and compare latency and total number of hits, if on average,
+total number of hits approaches the total number of documents matching the other filters in the query, it is cheaper 
+to use tensor dot product. 
 
 <h2 id="dotproduct-example">dotProduct example</h2>
 <p>
