@@ -4,20 +4,24 @@ title: "Vespa Serving Scaling Guide"
 ---
 
 <p>
-<em>Will it scale?</em> is a question we hear a lot? The answer is usually yes as Vespa can scale in any dimension:
+<em>Vespa can scale in multiple scaling dimensions:</em>
 <ul>
-  <li>Scale document volume and write (update/put) volume</li>
+  <li>Scale document volume and write volume</li>
   <li>Scale query throughput</li>
-  <li>Scale serving latency to meet service level agreement (SLA)</li>
+  <li>Scale serving latency to meet service level agreements (SLA)</li>
 </ul>
-The question you try to answer during a sizing exercise is
-"what the total cost would be to serve a use case using Vespa".
+</p>
+
+<p>The question one tries to answer during a sizing exercise is:
+<em>What the total cost would be to serve a use case using Vespa?</em>.</p>
+<p>
 This document helps sizing an application correctly with as low cost as possible.
+
 Vespa is used to implement many use cases, and this document is relevant for all of them:
 <ul>
   <li>Serving a <a href="../text-matching-ranking.html">text ranking</a> use case
     or a <a href="../tutorials/news-1-getting-started.html">recommendation</a> use case</li>
-  <li>Serving a Machine Learned Model, e.g a <a href="../tensorflow.html">Tensorflow</a>,
+  <li>Serving a machine learned model, e.g., a <a href="../tensorflow.html">Tensorflow</a>,
     <a href="../onnx.html">ONNX</a>, <a href="../xgboost.html">XGBoost</a>, or
     <a href="../lightgbm.html">LightGBM</a> model</li>
 </ul>
@@ -253,7 +257,7 @@ so it's easy to start out with a sample prototype and scale it to production sca
 <p>
 Vespa is a parallel computing platform
 where the work of matching and ranking is parallelized across a set of nodes and processors.
-The speedup we can get by altering the number of nodes in a Vespa content group follows
+The speedup one can get by altering the number of nodes in a Vespa content group follows
 <a href="https://en.wikipedia.org/wiki/Amdahl%27s_law">Amdahl's law</a>,
 which is a formula used to find the maximum improvement possible by improving a particular part of a system.
 In parallel computing, <em>Amdahl's law</em> is mainly used to predict the theoretical
@@ -261,8 +265,7 @@ maximum speedup for program processing using multiple processors.
 In Vespa, as in any parallel computing system,
 there is work which can be parallelized and work which cannot.
 The relationship between these two work types determine how to best scale the system,
-using a flat or grouped distribution.
-We introduce the following concepts:
+using a flat or grouped distribution. 
 <table class="table">
   <tr id="static-query-work">
     <td><strong>static query work</strong></td>
@@ -299,17 +302,17 @@ reduces the dynamic query work per node (<em>DQW</em>)
 but does not reduce the static query work (<em>SQW</em>).
 The overall system cost also increases as you need to rent another node.</p>
 Since <em>DQW</em> depends and scales almost linearly with the number of documents  on the content nodes,
-we can try to distribute the work over more nodes.
-<em>Amdahl's law</em> specifies that the maximum speedup we achieve by parallelizing the
+one can try to distribute the work over more nodes.
+<em>Amdahl's law</em> specifies that the maximum speedup one achieve by parallelizing the
 dynamic work (<em>DQW</em>) is given by the formula:
 </p><p><!-- depends on mathjax -->
   $$\text{max_speedup}_{\text{group}} = \frac{1}{1 - \frac{DQW}{SQW+DQW}}$$
 </p><p>
-For example, if we through <a href="#metrics-for-capacity-plan">metrics</a> see that the <em>DQW</em> = 0.50,
-the maximum speedup we can get by increasing parallelism by using more nodes and decreasing <em>DQW</em> is 2.
+For example, if one by inspecting <a href="#metrics-for-capacity-plan">metrics</a> see that the <em>DQW</em> = 0.50,
+the maximum speedup one can get by increasing parallelism by using more nodes and decreasing <em>DQW</em> is 2.
 With fixed occupancy (number of users, clients or load),
 <a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's Law'</a>
-tells us that we cans achieve 2 times throughput if we are able to speed up the latency by 2 times:
+tells us that one could achieve two times the throughput if one is able to speed up the latency by a factor of two:
 </p><p><!-- depends on mathjax -->
   $$\frac{1}{1 - \frac{0.5}{0.5+0.5}} = 2$$
 </p><p>
@@ -325,7 +328,7 @@ but the <em>DQW</em> portion of the <em>TQW</em> is different.
 The throughput (QPS) is a function of the latency (<a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's Law</a>)
 and the number of cpu cores * nodes.
 Using 1 node with 24 v-cpu cores and 10 ms service time (<em>TQW</em>),
-we expect to reach close to 2400 QPS at 100% utilization
+one can expect reaching close to 2400 QPS at 100% utilization
 (unless there are other bottlenecks like network or stateless container processing).
 </p>
 <figure>
@@ -335,17 +338,17 @@ we expect to reach close to 2400 QPS at 100% utilization
 <p>
 In the first figure the overall latency is 10 ms,
 but the dynamic query work (latency) is only 50%
-and given <em>Amdahl's law</em> it follows that the maximum speedup we can get is 2.
-This is true regardless of how many processors or nodes we distribute the dynamic query work over.
-No matter how many nodes we add, we don't get above 4800 queries/s.
-The only thing we achieve by adding more nodes
-is increasing the cost without any performance benefits.
+and given <em>Amdahl's law</em> it follows that the maximum speedup one can get is two.
+This is true regardless of how many processors or nodes the dynamic query work is parallelized over.
+No matter how many nodes one adds, one don't get above 4800 queries/s.
+The only thing one achieve by adding more nodes
+is increasing the cost without <em>any</em> performance benefits.
 </p><p>
-In the second figure we illustrate a system where the dynamic work portion is much higher (0.9),
+In the second figure there is a system where the dynamic work portion is much higher (0.9),
 and the theoretical maximum speedup becomes bound by 10x as given by <em>Amdahl's law</em>.
 Note that both figures are with a single flat distributed content cluster with a fixed document volume.
 </p><p>
-Given the theoretical explanation above we can provide two rules of thumb for scaling throughput and latency:</p>
+Given the theory, one can derive two rules of thumb for scaling throughput and latency:</p>
 <table class="table">
   <thead></thead><tbody>
     <tr>
@@ -366,68 +369,94 @@ Given the theoretical explanation above we can provide two rules of thumb for sc
 
 <h2 id="scaling-latency">Scaling latency in a content group</h2>
 <p>
-Whether we have a single group (flat distribution) or multiple groups,
+Irrespective of using single group (flat distribution) or multiple groups,
 the serving latency depends on the factors already described; <em>DQW</em> and <em>SQW</em>.
 For use cases where <em>DQW</em> dominates the total query work <em>TQW</em>,
-we can effectively scale latency down by parallelizing the <em>DQW</em> over more nodes per group.
+one can effectively scale latency down by parallelizing the <em>DQW</em> over more nodes per group.
 </p><p>
 It is important to decide on a latency service level agreement (SLA)
 before sizing the Vespa deployment for the application and query features.
-A latency SLA is often specified as a latency percentile at a certain throughput level - example:
+A latency SLA is often specified as a latency percentile at a certain throughput level - example:</p>
 <ul>
   <li>SLA Example 1: 95.0 percentile &lt; 100 ms @ 2000 QPS</li>
   <li>SLA Example 2: 95.0 percentile &lt; 40 ms @ 8000 QPS</li>
 </ul>
-As we have seen in the previous section,
-different use cases might have different performance characteristics,
+<p>
+Different use cases might have different performance characteristics,
 depending on how the dynamic work query portion is compared to the static query work portion.
-This graph illustrates the relationship between overall latency versus number of documents indexed per node:
+This graph illustrates the relationship between overall latency versus number of documents indexed per node for two
+different use cases.
 </p>
 <figure>
   <img src="../img/Latency_documents.svg" />
 </figure>
 <ul>
   <li>For the yellow use case,
-    the measured latency is as we can see almost independent of the total document volume.
+    the measured latency is almost independent of the total document volume. This is called sub-linear latency scaling
+    which calls for scaling up using better flavor specification instead of scaling out.
+
     The observed latency at 10M documents per node is almost the same as with 1M documents per node.
-    This illustrates a use case with low dynamic query work portion.
     Such a use case would be most cost effective by storing as many documents as possible
     (within the memory/disk/feeding constrains set by the concurrency settings and node flavor)
-    and scale throughput by using a grouped distribution.</li>
+    and scale throughput by using a grouped distribution.
+    Efficient query operators which are sub-linear has scaling properties
+    like the yellow case. Example of such query operators include 
+    the <a href="../using-wand-with-vespa.html">wand operators</a>, and <a href="../approximate-nn-hnsw.html">
+    approximate nearest neighbor search operator</a>
+</li>
   <li>For the blue use case,
       the measured latency shows a clear correlation with the document volume.
-      This tells us that the dynamic query work portion is high,
-      and that adding nodes to the group will help reduce the DQW per node.
-      The sweet spot is found where we meet the targeted latency SLA at a given document volume.
+      This is a case where the dynamic query work portion is high,
+      and adding nodes to the flat group will reduce the serving latency.
+      The sweet spot is found where targeted latency SLA is achieved. 
       This sweet spot depends on which model or ranking features are in use,
-      e.g how expensive the model is per hit.
-      E.g. a <a href="../xgboost.html">xgboost model</a> with 3000 trees
-      might breach the targeted SLA already at 200K documents,
-      while a 300 tree model might be below our SLA at 2M documents.
+      e.g how expensive the model is per retrieved or ranked document.
+
+      For example, a <a href="../xgboost.html">GBDT xgboost model</a> with 3000 trees
+      might breach the targeted latency SLA already at 200K documents,
+      while a 300 tree model might be below the SLA at 2M documents.
+      Using exact <a href="../nearest-neighbor-search.html>nearest neighbor search</a> 
+      has scaling properties like the blue case.
       See also <a href="feature-tuning.html">feature tuning</a>.
   </li>
 </ul>
+
+<h3 id="num-threads-per-search">Reduce latency with multi-threaded per search execution</h2>
 <p>
 It is possible to reduce latency of queries
-where the <a href="#dynamic-query-work">dynamic query work</a> portion is high,
-query throughput is relatively low, and using a multi-cpu core node.
+where the <a href="#dynamic-query-work">dynamic query work</a> portion is high.
 Using multiple threads per search for a use case where the static query work is high,
-will be as wasteful as adding nodes to a flat distribution,
-as demonstrated in the previous sections.
+will be as wasteful as adding nodes to a flat distribution.
 </p>
 <figure>
   <img src="../img/Threads-per-search.svg" />
 </figure>
 <p>
-Using more threads per search will reduce <em>DQW</em> and latency as long as there are cpu cores available.
-Typically there is a small synchronization overhead when concurrency becomes higher,
-as the searcher threads needs to communicate through a shared heap containing the best hits found.
-A search request with 4 threads will occupy all 4 threads until the last thread has completed,
+Using more threads per search will reduce latency as long as the dynamic portion of the query cost is high 
+compared to the static query cost. The reduction in latency comes with the cost of higher cpu utilization. 
+
+A search request with four threads will occupy all four threads until the last thread has completed,
 and the intra-node per thread document space partitioning must be balanced to give optimal results.
-By default this number is 1,
-as that gives the best resource usage measured as cpu/query.
+
+For ranking profiles with second phase ranking, see <a href="../phased-ranking.html">phased ranking</a>,
+the hits from first-phase ranking are rebalanced so that each matching thread scores about 
+the same amount of hits using the second phase ranking expression.
+</p>
+
+<p>From the above examples with the blue and yellow use case it follows that
+
+<ul>
+<li>Linear exact nearest neighbor search latency can be reduced by using more threads per search</li>
+<li>Sub-linear approximate nearest neighbor search latency does not benefit from using more threads per search</li>
+</ul>
+
+<p>
+By default, the number of threads per search is one,
+as that gives the best resource usage measured as CPU resources used per query.
 The optimal threads per search depends on the query use case,
-and should be evaluated by benchmarking.
+and should be evaluated by benchmarking. 
+</p>
+
 </p><p>
 The threads per search settings globally is tuned by
 <a href="../reference/services-content.html#requestthreads-persearch">persearch</a>.
@@ -453,6 +482,13 @@ and watch system level metrics and Vespa metrics.
 If latency is within the stated latency SLA and  the system meets the targeted sustained feed rate,
 overall cost is reduced by fitting more documents into each node
 (e.g. by increasing memory, cpu and disk constraints set by the node flavor).
+
+With larger fan-out by using more nodes to partition the data over comes also higher tail latency
+as search waits for all results from all nodes. Therefor, the overall execution time depends on
+the slowest node at the time of the query. In such cases with large fan-out, using
+<a href="../reference/services-content.html#coverage">adaptive timeout</a> is recommended
+to keep tail latency in check.
+
 </p><p>
 Vespa will block feed operations
 if <a href="../reference/services-content.html#resource-limits">resource limits</a> have been reached.
@@ -502,7 +538,7 @@ scale throughput using grouped distribution.
 Regardless, if throughput is scaled by grouped distribution for use cases
 with high static query work portion
 or a flat distribution for high dynamic query work portion,
-we should identify how much throughput the total system supports.
+one should identify how much throughput the total system supports.
 </p><p>
 Finding where the latency starts climbing exponentially versus throughput
 is important in order to make sure that the deployed system is scaled well below this throughput threshold.
@@ -510,27 +546,25 @@ Also, that it has capacity to absorb load increases over time,
 as well as having sufficient capacity to sustain node outages during peak traffic.
 </p><p>
 At some throughput level, some resource(s) in the system will be fully saturated,
-and requests will be queued up causing latency to spike up exponentially,
-as requests are spending more time in the queue.
-The more queries/s we try to push by increasing the load,
-the longer a request needs to be in the queue waiting to be served.
+and requests will be queued up causing latency to spike up,
+as requests are spending more time waiting for the saturated resource.
+
 This behaviour is illustrated in the figure below:
 <figure>
   <img src="../img/QPS-scaling.svg" />
 </figure>
 A small increase in serving latency is observed as throughput increases,
 until saturated at approximately 2200 QPS.
-Pushing more QPS than this only increases queueing time,
-and overall latency increases.
+Pushing more queries than this only increases queueing time,
+and latency increases sharply.
 </p>
-
 
 
 <h2 id="scaling-for-failures-and-headroom">Scaling for failures and headroom</h2>
 <p>
 It is important to also measure behaviour under non-ideal circumstances,
-to avoid getting too good results.
-E.g. simulating node failures or node replacements,
+to avoid getting too good results. 
+E.g., by simulating node failures or node replacements,
 verifying feeding concurrency versus search and serving.
 See <a href="sizing-examples.html#serving-availability-tuning">Serving availability tuning</a>.
 </p><p>
@@ -540,6 +574,7 @@ the more fragile it becomes when changing query patterns or ranking models.
 The target system utilization should be kept sufficiently low for the response times to be reasonable and within latency SLA,
 even with some extra traffic occurring at peak hours.
 See also <a href="../graceful-degradation.html">graceful degradation</a>.
+Also see <a href="sizing-feeding.html#feed-vs-search">sizing write versus read</a>. 
 </p>
 
 
@@ -559,7 +594,7 @@ content.proton.documentdb.matching.rank_profile.query_latency
 </pre>
 <p>
 By sampling these metrics,
-we can calculate the theoretical speedup we can achieve by increasing number of nodes using flat distribution,
+one can calculate the theoretical speedup we can achieve by increasing number of nodes using flat distribution,
 by using <em>Amdahl's law</em>:
 </p><p><!-- depends on mathjax -->
   $$\text{max_speedup}_{\text{}} = \frac{1}{1 - \frac{query\_setup\_time}{query\_setup\_time+match\_time}}$$
