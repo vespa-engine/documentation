@@ -86,9 +86,12 @@ title: "/document/v1 API reference"
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid?selection=&lt;selection&gt;
 </pre>
  
-Note that visit via selection is evaluated over all the stored documents in the cluster. It's therefore not recommended to try to partition the data 
-by having multiple requests with different selections as each selection visit is a linear scan over all documents. 
-Use the <a href="#concurrency">concurrency</a> parameter to increase parallelism of the visit via selection operation.
+Note that visit via selection is evaluated over all the stored documents in the cluster. To split visiting of the
+document corpus across more than one HTTP request—thus allowing the concurrent use of more HTTP containers—use the
+<a href="#slices">slices</a> and <a href="#sliceId">sliceId</a> parameters.
+It's also recommended to enable streamed HTTP responses, with the <a href="#stream">stream</a> parameter, as this
+reduces memory consumption and reduces HTTP overhead.
+Finally, use the <a href="#concurrency">concurrency</a> parameter to increase backend parallelism for each visit HTTP request.
  
             </li>
           </ul>
@@ -329,6 +332,24 @@ Or for grouped documents:
   <td>String</td>
   <td>Select only a subset of documents when <a href="../content/visiting.html">visiting</a> —
     details in <a href="document-select-language.html">document selector language</a>.</td>
+</tr><tr id="sliceId">
+  <th>sliceId</th>
+  <td>Integer</td>
+  <td>The slice number of the visit represented by thiss HTTP request. This number must be non-negative
+    and less than the number of <a href="#slices">slices</a> specified for the visit.</td>
+</tr><tr id="slices">
+  <th>slices</th>
+  <td>Integer</td>
+  <td>
+    Split the document corpus into this number of independent slices. This lets multiple, concurrent series of
+    HTTP requests advance the same logcal visit, by specifying a different <a href="#sliceId">sliceId</a> for each.
+  </td>
+</tr><tr id="stream">
+  <th>stream</th>
+  <td>Boolean</td>
+  <td>Whether to stream the HTTP response, allowing data to flow as soon as documents arrive from the backend.
+    This obsoletes the <a href="#wantedDocumentCount">wantedDocumentCount</a> parameter.
+    The HTTP status code will always be 200 if the visit is successfully initiated. Default value is false.</td>
 </tr><tr id="timechunk">
   <th>timeChunk</th>
   <td>String</td>
@@ -492,6 +513,8 @@ plus a <code><a href="#continuation">continuation</a></code>:
     "documentCount": 123
 }
 </pre>
+A continuation indicates the client should perfor further requests to get more data, while lack of a
+continuation indicates an error ocurred, and that visiting should cease, or that there are no more documents.
 </p><p>
 A <code>message</code> can be returned for failed operations:
 <pre>

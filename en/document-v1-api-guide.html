@@ -46,15 +46,30 @@ $ curl http://hostname:8080/document/v1/namespace/music/docid?continuation=AAAAE
 <pre>
 $ curl http://hostname:8080/document/v1/namespace/music/docid?selection=music.genre=='blues'
 </pre>
-            <p>
-              Note that visit with selection is a linear scan over all the music documents in the example above.
-              The selection expression is evaluated for all documents.
-              Trying to speed up selection visits using multiple http requests with different selection strings
-              does hence not improve throughput.
-              Use <a href="reference/document-v1-api-reference.html#concurrency">concurrency</a>
-              to increase the parallelism and throughput.
-            </p>
-            <p>
+<p>
+Note that visit with selection is a linear scan over all the music documents in the example above. The selection expression is evaluated for
+all documents. There are a few ways to improve visiting throughput, over the single-threaded example above, however:
+<ul>
+  <li>
+    Split the corpus into any number of smaller <a href="reference/document-v1-api-reference.html#slices">slices</a>,
+    each to be visited by a separate, independent series of HTTP requests. This is by far the most effective setting to change,
+    as it allows visiting through all HTTP containers simultaneously, and from any number of clients—either of which is
+    typically the bottle neck for visits through <em>/document/v1</em>. A good value for this setting is at least a handful per container.
+  </li>
+  <li>
+    Increase backend <a href="reference/document-v1-api-reference.html#concurrency">concurrency</a> so each visit HTTP response is
+    promptly filled with documents. When using this together with slicing (above), take care to also stream the HTTP responses (below),
+    to avoid buffering too much data in the container layer. When a high number of slices is specified, this setting may have no effect.
+  </li>
+  <li>
+    <a href="reference/document-v1-api-reference.html#stream">Stream</a> the HTTP responses. This lets you receive data earlier,
+    and more of it per request, reducing HTTP overhead. It also minimizes memory usage due to buffering in the container, allowing higher
+    concurrency per container. It is recommended to always use this, but the default is not to, due to backwards compatibility.
+  </li>
+</ul>
+</p>
+
+
             Visit all documents for a group:
             </p>
 <pre>
@@ -241,37 +256,56 @@ To iterate over documents, use <a href="content/visiting.html">visiting</a> — 
 }
 </pre>
 Note the <em>continuation</em> token — use this in the next request for more data.
-Sample script dumping all data using <a href="https://stedolan.github.io/jq/">jq</a> for JSON parsing:
+Below is a sample script dumping all data using <a href="https://stedolan.github.io/jq/">jq</a> for JSON parsing.
+It splits the corpus in 8 slices by default; using a number of slices at least four times the number of container
+nodes is recommended for high throughput. Timeout can be set lower for benchmarking. (Each request has a maximum
+timeout of 60s to ensure progress is saved at regular intervals)
 </p>
 <pre>
-#!/bin/bash
+#!/bin bash
+set -eo pipefail
 
-set -x
+if [ $# -gt 2 ]
+then
+  echo "Usage: $0 [number of slices, default 8] [timeout in seconds, default 31536000 (1 year)]"
+  exit 1
+fi
 
-ENDPOINT="https://endpoint.vespa.oath.cloud"
-NAMESPACE=open
-DOCTYPE=doc
-CLUSTER=documentation
-CERT=data-plane-public-cert.pem
-KEY=data-plane-private-key.pem
+app="factory.vespa.aws-us-east-1a.vespa.oath.cloud"
+cluster="db"
+selection="true"
+slices="${1:-8}"
+timeout="${2:-31516000}"
+curlTimeout="$((timeout &amp;gt; 60 ? 60 : timeout))"
+url="https://$app/document/v1/?cluster=$cluster&amp;selection=$selection&amp;stream=true&amp;timeout=$curlTimeout&amp;concurrency=8&amp;slices=$slices"
+curl="curl -sS $auth"
+start=$(date '+%s')
+doom=$((start + timeout - 1))
 
-continuation=""
-idx=0
+function visit {
+  sliceId="$1"
+  documents=0
+  continuation=""
+  while
+    printf -v filename "data-%03g-%012g.json.gz" $sliceId $documents
+    json="$(eval "$curl '$url&amp;sliceId=$sliceId$continuation'" | tee &amp;gt;( gzip &amp;gt; $filename ) | jq '{ documentCount, continuation, message }')"
+    message="$(jq -re .message &amp;lt;&amp;lt;&amp;lt; $json)" &amp;&amp; echo "Failed visit for sliceId $sliceId: $message" &amp;gt;&amp;2 &amp;&amp; exit 1
+    documentCount="$(jq -re .documentCount &amp;lt;&amp;lt;&amp;lt; $json)" &amp;&amp; ((documents += $documentCount))
+    [ "$(date '+%s')" -le "$doom" ] &amp;&amp; token="$(jq -re .continuation &amp;lt;&amp;lt;&amp;lt; $json)"
+  do
+    echo "$documentCount documents retrieved from slice $sliceId; continuing at $token"
+    continuation="&amp;continuation=$token"
+  done
+  time=$(($(date '+%s') - start))
+  echo "$documents documents total retrieved in $time seconds ($((documents / time)) docs/s) from slice $sliceId" &amp;gt;&amp;2
+}
 
-while
-  ((idx+=1))
-  echo "$continuation"
-  printf -v out "%05g" $idx
-  filename=${NAMESPACE}-${DOCTYPE}-${out}.data.gz
-  echo "Fetching data..."
-  token=$(curl -s --cert ${CERT} --key ${KEY} \
-          "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=20&amp;concurrency=4&amp;cluster=${CLUSTER}&amp;${continuation}" \
-          | tee &gt;(gzip &gt; ${filename}) | jq -re .continuation)
+for ((sliceId = 0; sliceId &amp;lt; slices; sliceId++))
 do
-  continuation="continuation=${token}"
+  visit $sliceId &amp;
 done
+wait
 </pre>
-
 
 
 <h2 id="using-fieldsets">Using fieldsets</h2>
