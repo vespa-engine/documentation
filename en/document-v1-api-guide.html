@@ -215,8 +215,10 @@ $ curl -X PUT -H "Content-Type:application/json" \
 
 <h2 id="visiting-throughput">Visiting throughput</h2>
 <p>
-Note that visit with selection is a linear scan over all the music documents in the example above. The selection expression is evaluated for
-all documents. There are a few ways to improve visiting throughput, over the single-threaded example above, however:
+Note that visit with selection is a linear scan over all the music documents in the <a href="#request-examples">request examples</a>
+in the table above. Each complete visit thus requires the selection expression to be evaluated for all documents. Running concurrent
+visits with selections that match disjoint subsets of the document corpus is therefore a poor way of increasing throughput, as work
+is duplicated across each such visit. Fortunately, the API offers other options for increasing throughput: 
 <ul>
   <li>
     Split the corpus into any number of smaller <a href="reference/document-v1-api-reference.html#slices">slices</a>,
@@ -263,7 +265,7 @@ It splits the corpus in 8 slices by default; using a number of slices at least f
 nodes is recommended for high throughput. Timeout can be set lower for benchmarking. (Each request has a maximum
 timeout of 60s to ensure progress is saved at regular intervals)
 </p>
-<pre>
+<pre>{% highlight sh %}
 #!/bin bash
 set -eo pipefail
 
@@ -273,14 +275,15 @@ then
   exit 1
 fi
 
-endpoint="https://factory.vespa.aws-us-east-1a.vespa.oath.cloud"
+endpoint="https://my.vespa.endpoint"
 cluster="db"
 selection="true"
 slices="${1:-8}"
 timeout="${2:-31516000}"
 curlTimeout="$((timeout &gt; 60 ? 60 : timeout))"
 url="$endpoint/document/v1/?cluster=$cluster&amp;selection=$selection&amp;stream=true&amp;timeout=$curlTimeout&amp;concurrency=8&amp;slices=$slices"
-start=$(date '+%s')
+auth="--key my-key --cert my-cert -H 'Authorization: my-auth'" 
+curl="curl -sS $auth"
 doom=$((start + timeout))
 
 ## auth can be something like auth='--key data-plane-private-key.pem --cert data-plane-public-cert.pem'
@@ -309,7 +312,7 @@ do
   visit $sliceId &amp;
 done
 wait
-</pre>
+{% endhighlight %}</pre>
 
 
 <h2 id="using-fieldsets">Using fieldsets</h2>
