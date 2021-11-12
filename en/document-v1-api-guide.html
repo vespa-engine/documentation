@@ -280,8 +280,8 @@ cluster="db"
 selection="true"
 slices="${1:-8}"
 timeout="${2:-31516000}"
-curlTimeout="$((timeout &gt; 60 ? 60 : timeout))"
-url="$endpoint/document/v1/?cluster=$cluster&amp;selection=$selection&amp;stream=true&amp;timeout=$curlTimeout&amp;concurrency=8&amp;slices=$slices"
+curlTimeout="$((timeout > 60 ? 60 : timeout))"
+url="$endpoint/document/v1/?cluster=$cluster&selection=$selection&stream=true&timeout=$curlTimeout&concurrency=8&slices=$slices"
 auth="--key my-key --cert my-cert -H 'Authorization: my-auth'" 
 curl="curl -sS $auth"
 doom=$((start + timeout))
@@ -295,21 +295,21 @@ function visit {
   continuation=""
   while
     printf -v filename "data-%03g-%012g.json.gz" $sliceId $documents
-    json="$(eval "$curl '$url&amp;sliceId=$sliceId$continuation'" | tee &gt;( gzip &gt; $filename ) | jq '{ documentCount, continuation, message }')"
-    message="$(jq -re .message &lt;&lt;&lt; $json)" &amp;&amp; echo "Failed visit for sliceId $sliceId: $message" &gt;&amp;2 &amp;&amp; exit 1
-    documentCount="$(jq -re .documentCount &lt;&lt;&lt; $json)" &amp;&amp; ((documents += $documentCount))
-    [ "$(date '+%s')" -lt "$doom" ] &amp;&amp; token="$(jq -re .continuation &lt;&lt;&lt; $json)"
+    json="$(eval "$curl '$url&sliceId=$sliceId$continuation'" | tee >( gzip > $filename ) | jq '{ documentCount, continuation, message }')"
+    message="$(jq -re .message <<< $json)" && echo "Failed visit for sliceId $sliceId: $message" >&2 && exit 1
+    documentCount="$(jq -re .documentCount <<< $json)" && ((documents += $documentCount))
+    [ "$(date '+%s')" -lt "$doom" ] && token="$(jq -re .continuation <<< $json)"
   do
     echo "$documentCount documents retrieved from slice $sliceId; continuing at $token"
-    continuation="&amp;continuation=$token"
+    continuation="&continuation=$token"
   done
   time=$(($(date '+%s') - start))
-  echo "$documents documents total retrieved in $time seconds ($((documents / time)) docs/s) from slice $sliceId" &gt;&amp;2
+  echo "$documents documents total retrieved in $time seconds ($((documents / time)) docs/s) from slice $sliceId" >&2
 }
 
-for ((sliceId = 0; sliceId &lt; slices; sliceId++))
+for ((sliceId = 0; sliceId < slices; sliceId++))
 do
-  visit $sliceId &amp;
+  visit $sliceId &
 done
 wait
 {% endhighlight %}</pre>
