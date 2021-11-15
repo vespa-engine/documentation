@@ -57,7 +57,7 @@ http://localhost:8080/search/?input=two+people+bicylcing
     transform the text to the representation before sending it to the backend
     for the ANN search.
 
-* [Container components](container-components.html)
+* [Container components](jdisc/container-components.html)
 
     In Vespa, you can set up custom document or search processors to perform
     extra processing during document feeding or a query. This application uses
