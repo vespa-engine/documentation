@@ -18,7 +18,7 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
   }
 
   [id^=toc-] {
-    min-width: 450px;
+    min-width: 400px;
   }
 </style>
 
