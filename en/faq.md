@@ -6,8 +6,62 @@ style: faq
 
 Refer to [Vespa Support](https://vespa.ai/support) for more support options.
 
-* TOC
-{:toc}
+<style>
+  ul.toc-list {
+    list-style-type: none;
+    padding-inline-start: 0px;
+  }
+
+  ul.toc-list > li {
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+</style>
+
+<!-- ToDo: script FAQ TOC once final design is settled -->
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-0" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-1" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-2" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-3" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-4" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-5" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-6" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-7" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
 
 ---
 
@@ -353,3 +407,37 @@ ensures that data can be queried from all groups.
 
 #### How to set up for disaster recovery / backup?
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
+
+
+<script type="application/javascript">
+  function createTOC() {
+    let i = 0;
+    for (const h3Item of document.querySelectorAll("H3")) {
+      writeCategory("toc-"+i++, h3Item);
+	}
+  }
+
+  function writeCategory(tocId, h3) {
+    let header = document.createElement("H3");
+    header.innerText = h3.innerText;
+    let category = document.getElementById(tocId);
+    category.appendChild(header);
+    let questions = document.createElement("UL");
+    questions.classList.add("toc-list");
+    let elem = h3;
+    while (elem = elem.nextSibling) {
+      if (elem.nodeName === "H3") break;
+      if (elem.nodeName === "H4") {
+        let question = document.createElement("LI");
+        let a = document.createElement("A");
+        a.href = "#" + elem.id;
+        a.innerText = elem.innerText;
+        question.appendChild(a);
+        questions.appendChild(question);
+      }
+    }
+    category.appendChild(questions);
+  }
+
+  document.addEventListener("DOMContentLoaded", createTOC);
+</script>
