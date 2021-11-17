@@ -6,8 +6,62 @@ style: faq
 
 Refer to [Vespa Support](https://vespa.ai/support) for more support options.
 
-* TOC
-{:toc}
+<style>
+  ul.toc-list {
+    list-style-type: none;
+    padding-inline-start: 0px;
+  }
+
+  ul.toc-list > li {
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+</style>
+
+<!-- ToDo: script FAQ TOC once final design is settled -->
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-0" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-1" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-2" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-3" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-4" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-5" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-6" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-7" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
 
 ---
 
@@ -23,7 +77,7 @@ A rank profile is where the application's logic is implemented,
 supporting simple types like `double` and complex types like `tensor`.
 Supply ranking data in queries in query features (e.g. different weights per customer),
 or look up in a [Searcher](searcher-development.html).
-Typically a document (e.g. product) "feature vector"/"weights" will be compared to a user-specific vector (tensor).
+Typically, a document (e.g. product) "feature vector"/"weights" will be compared to a user-specific vector (tensor).
 
 #### Where would customer specific weightings be stored?
 Vespa doesn't have specific support for storing customer data as such.
@@ -39,9 +93,7 @@ see [document features](reference/rank-features.html#document-features).
 
 #### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
-see [retrieval and ranking](getting-started-ranking.html#retrieval-and-ranking).
-
-For example:
+see [retrieval and ranking](getting-started-ranking.html#retrieval-and-ranking). Example:
 <pre>
 rank-profile drop-low-score {
    function my_score() {
@@ -78,7 +130,7 @@ Use [multivalue fields](schemas.html#field) (array of struct) or [parent child](
 Which one to chose depends on use case, see discussion in the latter link.
 
 #### Does a whole document need to be updated and re-indexed?
-E.g, price and quantity available per store may change often vs the actual product attributes.
+E.g. price and quantity available per store may often change vs the actual product attributes.
 Vespa supports [partial updates](reads-and-writes.html) of documents.
 Also, the parent/child feature is implemented to support use-cases where child elements are updated frequently,
 while a more limited set of parent elements are updated less frequently.
@@ -102,8 +154,8 @@ No limit, except memory.
 Implement a [document processor](document-processing.html) for this.
 
 #### How to auto-expire documents / set up garbage collection?
-Set a selection criterium on the `document` element in `services.xml`.
-The criterium selects documents <span style="text-decoration: underline">to keep</span>.
+Set a selection criterion on the `document` element in `services.xml`.
+The criterion selects documents <span style="text-decoration: underline">to keep</span>.
 I.e. to purge documents "older than two weeks", the expression should be "newer than two weeks".
 Read more about [document expiry](documents.html#document-expiry).
 
@@ -134,7 +186,7 @@ for how to use [filter terms](reference/query-language-reference.html#annotation
 
 #### How to extract more than 400 hits / query and get ALL documents?
 Trying to request more than 400 hits in a query, getting this error:
-{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}.
+`{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}`.
 
 * To increase max result set size,
   configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
@@ -154,7 +206,7 @@ this creates a new Query, sets a new root and parameters - then `fill`s the Hits
 #### How to create a cache that refreshes itself regularly
 <!-- ToDo: Maybe a bit long for the FAQ and such a component could be added to a sample app instead later -->
 See the sub-query question above, in addition add something like:
-````
+```java
 public class ConfigCacheRefresher extends AbstractComponent {
 ...
     private final ScheduledExecutorService configFetchService = Executors.newSingleThreadScheduledExecutor();
@@ -176,8 +228,8 @@ public class ConfigCacheRefresher extends AbstractComponent {
             configFetchService.shutdown();
             configFetchService.awaitTermination(1, TimeUnit.MINUTES);
 ...
-    }
-````
+}
+```
 
 
 
@@ -206,8 +258,8 @@ Vespa supports these things well:
   and [annotations](annotations.html) on document processors working on semantic annotations of text
 
 #### Does Vespa support customization of the inverted index?
-<em>E.g. instead of using terms or n-grams as the unit, we might use terms with specific word senses
-(e.g. bark (dog bark) vs. bark (tree bark), or BCG (company) vs. BCG (vaccine name).</em>
+E.g. instead of using terms or n-grams as the unit, we might use terms with specific word senses -
+e.g. bark (dog bark) vs. bark (tree bark), or BCG (company) vs. BCG (vaccine name).
 Creating a new index <em>format</em> means changing the core.
 However, for the examples above, one just need control over the tokens which are indexed (and queried).
 That is easily done in some Java code.
@@ -219,7 +271,7 @@ Since all that is Searchers and Docprocs which you can replace and/or add custom
 you can also take full control over these things without modifying the platform itself.
 
 #### Does vespa provide any support for named entity extraction?
-It provides the building blocks but not an out of the box solution.
+It provides the building blocks but not an out-of-the-box solution.
 We can write a [Searcher](searcher-development.html) to detect query-side entities and rewrite the query, 
 and a [DocProc](document-processing.html) if we want to handle them in some special way on the indexing side.
 
@@ -231,7 +283,7 @@ You can write a document processor for text extraction, Vespa does not provide i
 {:.faq-section}
 ### Programming Vespa
 
-#### is Python plugins supported / is there a scripting language?
+#### Is Python plugins supported / is there a scripting language?
 Plugins have to run in the JVM - [jython](https://www.jython.org/) might be an alternative,
 however Vespa Team has no experience with it.
 Vespa does not have a language like
@@ -278,7 +330,7 @@ and not memory constrained other than what the operating system does.
 
 #### Get request for a document when document is not in sync in all the replica nodes? 
 If the replicas are in sync the request is only sent to the primary content node.
-Otherwise it's sent to several nodes, depending on replica metadata.
+Otherwise, it's sent to several nodes, depending on replica metadata.
 Example: if a bucket has 3 replicas A, B, C and A & B both have metadata state X and C has metadata state Y,
 a request will be sent to A and C
 (but not B since it has the same state as A and would therefore not return a potentially different document).
@@ -301,7 +353,7 @@ You will need to load balance incoming requests between the nodes running the
 [stateless Java container cluster(s)](overview.html).
 This can typically be done using a simple network load balancer available in most cloud services.
 This is included when using [Vespa Cloud](https://cloud.vespa.ai/),
-with an already load balanced HTTPS endpoint - both locally within the region and globally across regions.
+with an HTTPS endpoint that is already load balanced - both locally within the region and globally across regions.
 
 #### Supporting index partitions
 [Search sizing](performance/sizing-search.html) is the intro to this.
@@ -328,16 +380,16 @@ For these reasons, it is not recommended, and not supported.
 No. Use [visiting](content/visiting.html) to dump all or a subset of documents.
 See [dumping-data](https://cloud.vespa.ai/en/dumping-data) for a sample script.
 
-#### What is the response when data is written only on some of the nodes and not on all of the replica nodes (Based on the redundancy count of the content cluster)? 
+#### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)? 
 Failure response will be given in case the document is not written on some of the replica nodes. 
 
-#### When the doc is not written to some of the nodes, will the document become available due to replica reconciliation?
+#### When the doc is not written to some nodes, will the document become available due to replica reconciliation?
 Yes, it will be available, eventually.
 Also try [Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode).
 
 #### Does vespa provide soft delete functionality?
-Yes just add a "deleted" attribute, add [fast-search](attributes.html#fast-search) on it
-and create a searcher which adds an "andnot deleted" item to queries.
+Yes just add a `deleted` attribute, add [fast-search](attributes.html#fast-search) on it
+and create a searcher which adds an `andnot deleted` item to queries.
 
 #### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down? 
 You can set a [transition-time](reference/services-content.html#transition-time) in services.xml
@@ -345,11 +397,45 @@ to configure the cluster controller how long a node is to be kept in maintenance
 before being automatically marked down.
 
 #### What is the recommended redundant/searchable-copies config when using grouping distribution?
-Grouping is used to reduce search latency.
-When using grouped distribution content is distributed to a configured set of groups,
+Grouped distribution is used to reduce search latency.
+Content is distributed to a configured set of groups,
 such that the entire document collection is contained in each group.
 Setting the redundancy and searchable-copies equal to the number of groups
-ensures that data can be queried from all of the group.
+ensures that data can be queried from all groups.
 
 #### How to set up for disaster recovery / backup?
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
+
+
+<script type="application/javascript">
+  function createTOC() {
+    let i = 0;
+    for (const h3Item of document.querySelectorAll("H3")) {
+      writeCategory("toc-"+i++, h3Item);
+    }
+  }
+
+  function writeCategory(tocId, h3) {
+    let header = document.createElement("H3");
+    header.innerText = h3.innerText;
+    let category = document.getElementById(tocId);
+    category.appendChild(header);
+    let questions = document.createElement("UL");
+    questions.classList.add("toc-list");
+    let elem = h3;
+    while (elem = elem.nextSibling) {
+      if (elem.nodeName === "H3") break;
+      if (elem.nodeName === "H4") {
+        let question = document.createElement("LI");
+        let a = document.createElement("A");
+        a.href = "#" + elem.id;
+        a.innerText = elem.innerText;
+        question.appendChild(a);
+        questions.appendChild(question);
+      }
+    }
+    category.appendChild(questions);
+  }
+
+  document.addEventListener("DOMContentLoaded", createTOC);
+</script>
