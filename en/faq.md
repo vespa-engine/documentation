@@ -412,7 +412,7 @@ Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a disc
     let i = 0;
     for (const h3Item of document.querySelectorAll("H3")) {
       writeCategory("toc-"+i++, h3Item);
-	}
+    }
   }
 
   function writeCategory(tocId, h3) {
