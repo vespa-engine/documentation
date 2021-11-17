@@ -16,6 +16,10 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
     margin-bottom: 5px;
     font-weight: bold;
   }
+
+  [id^=toc-] {
+    min-width: 450px;
+  }
 </style>
 
 <!-- ToDo: script FAQ TOC once final design is settled -->
