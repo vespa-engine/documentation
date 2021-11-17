@@ -93,9 +93,7 @@ see [document features](reference/rank-features.html#document-features).
 
 #### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
-see [retrieval and ranking](getting-started-ranking.html#retrieval-and-ranking).
-
-For example:
+see [retrieval and ranking](getting-started-ranking.html#retrieval-and-ranking). Example:
 <pre>
 rank-profile drop-low-score {
    function my_score() {
@@ -132,7 +130,7 @@ Use [multivalue fields](schemas.html#field) (array of struct) or [parent child](
 Which one to chose depends on use case, see discussion in the latter link.
 
 #### Does a whole document need to be updated and re-indexed?
-E.g, price and quantity available per store may often change vs the actual product attributes.
+E.g. price and quantity available per store may often change vs the actual product attributes.
 Vespa supports [partial updates](reads-and-writes.html) of documents.
 Also, the parent/child feature is implemented to support use-cases where child elements are updated frequently,
 while a more limited set of parent elements are updated less frequently.
@@ -188,7 +186,7 @@ for how to use [filter terms](reference/query-language-reference.html#annotation
 
 #### How to extract more than 400 hits / query and get ALL documents?
 Trying to request more than 400 hits in a query, getting this error:
-{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}.
+`{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}`.
 
 * To increase max result set size,
   configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
@@ -208,7 +206,7 @@ this creates a new Query, sets a new root and parameters - then `fill`s the Hits
 #### How to create a cache that refreshes itself regularly
 <!-- ToDo: Maybe a bit long for the FAQ and such a component could be added to a sample app instead later -->
 See the sub-query question above, in addition add something like:
-````
+```java
 public class ConfigCacheRefresher extends AbstractComponent {
 ...
     private final ScheduledExecutorService configFetchService = Executors.newSingleThreadScheduledExecutor();
@@ -230,8 +228,8 @@ public class ConfigCacheRefresher extends AbstractComponent {
             configFetchService.shutdown();
             configFetchService.awaitTermination(1, TimeUnit.MINUTES);
 ...
-    }
-````
+}
+```
 
 
 
@@ -260,8 +258,8 @@ Vespa supports these things well:
   and [annotations](annotations.html) on document processors working on semantic annotations of text
 
 #### Does Vespa support customization of the inverted index?
-<em>E.g. instead of using terms or n-grams as the unit, we might use terms with specific word senses -
-e.g. bark (dog bark) vs. bark (tree bark), or BCG (company) vs. BCG (vaccine name).</em>
+E.g. instead of using terms or n-grams as the unit, we might use terms with specific word senses -
+e.g. bark (dog bark) vs. bark (tree bark), or BCG (company) vs. BCG (vaccine name).
 Creating a new index <em>format</em> means changing the core.
 However, for the examples above, one just need control over the tokens which are indexed (and queried).
 That is easily done in some Java code.
@@ -285,7 +283,7 @@ You can write a document processor for text extraction, Vespa does not provide i
 {:.faq-section}
 ### Programming Vespa
 
-#### is Python plugins supported / is there a scripting language?
+#### Is Python plugins supported / is there a scripting language?
 Plugins have to run in the JVM - [jython](https://www.jython.org/) might be an alternative,
 however Vespa Team has no experience with it.
 Vespa does not have a language like
@@ -390,8 +388,8 @@ Yes, it will be available, eventually.
 Also try [Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode).
 
 #### Does vespa provide soft delete functionality?
-Yes just add a "deleted" attribute, add [fast-search](attributes.html#fast-search) on it
-and create a searcher which adds an "andnot deleted" item to queries.
+Yes just add a `deleted` attribute, add [fast-search](attributes.html#fast-search) on it
+and create a searcher which adds an `andnot deleted` item to queries.
 
 #### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down? 
 You can set a [transition-time](reference/services-content.html#transition-time) in services.xml
