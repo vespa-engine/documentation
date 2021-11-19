@@ -304,26 +304,4 @@ But despite all those remarks, the most important point here is that if we want 
 
 [^1]: Bajaj, Payal and Campos, Daniel and Craswell, Nick and Deng, Li and Gao, Jianfeng and Liu, Xiaodong and Majumder, Rangan and McNamara, Andrew and Mitra, Bhaskar and Nguyen, Tri and others, 2018. MS MARCO: A human generated machine reading comprehension dataset.
 
-<script>
-function processFilePREs() {
-    var tags = document.getElementsByTagName("pre");
-
-    // copy elements, because the list above is mutated by the insert html below
-    var elems = [];
-    for (i = 0; i < tags.length; i++) {
-        elems.push(tags[i]);
-    }
-
-    for (i = 0; i < elems.length; i++) {
-        var elem = elems[i];
-        if (elem.getAttribute("data-test") === "file") {
-            var html = elem.innerHTML;
-            elem.innerHTML = html.replace(/<!--\?/g, "<?").replace(/\?-->/g, "?>").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            elem.insertAdjacentHTML("beforebegin", "<pre class=\"filepath\">file: " + elem.getAttribute("data-path") + "</pre>");
-        }
-    }
-};
-
-processFilePREs();
-
-</script>
+<script src="/js/process_pre.js" />

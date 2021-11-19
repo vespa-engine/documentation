@@ -214,24 +214,4 @@ Our simple application should now be up and running. In the [next part
 of the tutorial](news-2-basic-feeding-and-query.html), we'll start building
 from this foundation.
 
-<script>
-function processFilePREs() {
-    let tags = document.getElementsByTagName("pre");
-    let elems = [];
-    for (let i = 0; i < tags.length; i++) {
-        elems.push(tags[i]);
-    }
-
-    for (let i = 0; i < elems.length; i++) {
-        let elem = elems[i];
-        if (elem.getAttribute("data-test") === "file") {
-            let html = elem.innerHTML;
-            elem.innerHTML = html.replace(/<!--\?/g, "<?").replace(/\?-->/g, "?>").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            elem.insertAdjacentHTML("beforebegin", "<pre class=\"filepath\">file: " + elem.getAttribute("data-path") + "</pre>");
-        }
-    }
-};
-
-processFilePREs();
-
-</script>
+<script src="/js/process_pre.js" />
