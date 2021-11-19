@@ -186,11 +186,11 @@ first-phase {
 ```
 in the `collect_rank_features` _rank-profile_ defined earlier in this tutorial. Using `random` as our first-phase ranking function ensures that the top documents returned by Vespa are randomly selected from the set of documents that were matched by the query.
 
-### Anotated data
+
+### Annotated data
 
 Once we have both the relevant and the random documents associated with a given query, we parse the Vespa result and store it in a file with the following format:
 
-<html>
 <table border="1" class="dataframe">
   <col width="120" align="center">
   <col width="120">
@@ -240,7 +240,6 @@ Once we have both the relevant and the random documents associated with a given 
         </tr>
     </tbody>
 </table>
-</html>
 
 where the values in the `relevant` column are equal to 1 if document `docid` is relevant to the query `qid` and zero otherwise.
 
