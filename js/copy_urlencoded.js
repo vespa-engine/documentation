@@ -1,8 +1,8 @@
 
 function replace(encodedText) {
-    var body_element = document.getElementsByTagName('body')[0];
-    var selection = window.getSelection();
-    var newdiv = document.createElement('div');
+    let body_element = document.getElementsByTagName('body')[0];
+    let selection = window.getSelection();
+    let newdiv = document.createElement('div');
     body_element.appendChild(newdiv);
     newdiv.innerHTML = encodedText;
     newdiv.style.position='absolute';
@@ -14,11 +14,11 @@ function replace(encodedText) {
 }
 
 function init() {
-    var elements = document.getElementsByClassName("urlunencode");
-    var len = elements.length
-    for (var i = 0 ; i < len; i++)
+    let elements = document.getElementsByClassName("urlunencode");
+    let len = elements.length
+    for (let i = 0 ; i < len; i++)
     {
-        var original = elements[i].innerHTML;
+        let original = elements[i].innerHTML;
         elements[i].innerHTML = decodeURIComponent(original);
         elements[i].getAttributeNode("oncopy").nodeValue = "replace(\""+original+"\");";
     }
