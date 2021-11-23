@@ -64,7 +64,7 @@ len(query_result.hits)
 
 
 
-We can then retrieve specific information from the hit list thorugh the `query_result.hits` or access the entire Vespa response through `query_result.json`.
+We can then retrieve specific information from the hit list through the `query_result.hits` or access the entire Vespa response through `query_result.json`.
 
 
 ```python
