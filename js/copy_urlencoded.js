@@ -20,7 +20,9 @@ function init() {
     {
         let original = elements[i].innerHTML;
         elements[i].innerHTML = decodeURIComponent(original);
-        elements[i].getAttributeNode("oncopy").nodeValue = "replace(\""+original+"\");";
+        elements[i].addEventListener("copy", function (event) {
+            replace(original);
+        })
     }
 
 }
