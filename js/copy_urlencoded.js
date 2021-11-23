@@ -20,7 +20,7 @@ function init() {
     {
         let original = elements[i].innerHTML;
         elements[i].innerHTML = decodeURIComponent(original);
-        elements[i].addEventListener("copy", function (event) {
+        elements[i].addEventListener("copy", function () {
             replace(original);
         })
     }
