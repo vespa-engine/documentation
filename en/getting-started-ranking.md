@@ -249,7 +249,7 @@ As all values are 1, all products are 1 and the sum is 2:
 Change values in the query tensor to see difference in rank score, setting different weights for links.
 
 Summary: The problem of comparing two lists of links is transformed into a numerical problem
-of multiplying two occurrence vectors,  summing co-occurences and ranking by this sum:
+of multiplying two occurrence vectors, summing co-occurrences and ranking by this sum:
 ```
 sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
 ```
