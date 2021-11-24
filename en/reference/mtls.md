@@ -64,7 +64,7 @@ The TLS configuration file contains a single top-level JSON object.
         <td>No</td>
         <td markdown="span">
           JSON array of accepted TLS cipher suites. See [here](#cipher-suites) for cipher suites enabled by default.
-          You can only specify a _subset_ of the default ciper suites.
+          You can only specify a _subset_ of the default cipher suites.
           _This is an expert option_—use the default unless you have good reasons not to.
         </td>
     </tr>
