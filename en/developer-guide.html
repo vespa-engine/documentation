@@ -4,134 +4,141 @@ title: "Developer Guide"
 ---
 
 <p>
-For Big Data Serving, writing custom code in plugins is often required -
-in Vespa, such plugins (called <em>Components</em>) are run in the Stateless Java Container Cluster:
+  Application packages can contain Java components to be run in container clusters.
 </p>
 <img src="img/overview/vespa-overview.svg" style="padding:0.5em" alt="Vespa Overview">
+<p>The most common component types are</p>
 <ul>
   <li>
-  Query Processors implemented as <a href="searcher-development.html">Searchers</a>
-  enables query enrichment, rewrites and external data lookup as part of query processing.
-  </li><li>
-  <a href="document-processing.html">Document processors</a> is similar and
-  operates on incoming documents in an asynchronous environment for high throughput.
-  </li><li>
-  Handlers and renderers are Other Components that lets application owners build rich APIs,
-  see the <a href="jdisc/index.html">Vespa Container</a>.
+    <a href="searcher-development.html">Searchers</a>, which can modify or build the query,
+    modify the result, implement workflows issuing multiple queries etc.
+  </li>
+  <li>
+    <a href="document-processing.html">Document processors</a> that can modify incoming write operations.
+  </li>
+  <li>
+    <a href="jdisc/developing-request-handlers.html">Handlers</a> that can implement custom web service API's.
+  </li>
+  <li>
+    <a href="result-rendering.html">Renderers</a> that are used to define custom result formats.
   </li>
 </ul>
+
 <p>
-Find sample applications for all component types in <a href="getting-started.html">Getting Started</a>,
-also see <a href="operations/admin-procedures.html#troubleshooting">Troubleshooting</a>.
+  Components are constructed by dependency injection and are reloaded safely on deployment without restarts.
+  See the <a href="jdisc/index.html">container documentation</a> for more details.
+</p>
+
+See the sample applications in <a href="getting-started.html">getting started</a>,
+to find examples of applications containing Java components.
+Also see <a href="operations/admin-procedures.html#troubleshooting">troubleshooting</a>.
 </p>
 
 
 
-<h2 id="developing-plugins">Developing Plugins</h2>
+<h2 id="developing-components">Developing Components</h2>
 <p>
-  The development cycle is normally create a plugin (based on the sample applications),
-  deploy it to Vespa, write tests, iterate.
+  The development cycle consists of creating the component,
+  deploying the application package to Vespa, writing tests, and iterating.
   These steps refer to files in
   <a href="https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/album-recommendation-java">
-  album-recommendation-java</a>:
+    album-recommendation-java</a>:
 </p>
 
 <table class="table">
-<tr id="build">
-  <th>Build</th>
-  <td>
-    <p>All the Vespa sample applications use the <a href="bundle-plugin.html">bundle plugin</a>
-    to build the Components.</p>
-  <td>
-</tr>
-<tr id="configure">
-  <th>Configure</th>
-  <td>
-    <p>
-    A key Vespa feature is code and configuration consistency,
-    deployed using an <a href="cloudconfig/application-packages.html">application package</a>.
-    This ensures that code and configuration is in sync, and loaded atomically when deployed.
-    This is done by generating config classes from config definition files.
-    In Vespa and application code,
-    configuration is hence accessed through generated config classes -
-    read more in the <a href="cloudconfig/config-introduction.html">
-    Cloud Configuration System</a>.
+  <tr id="build">
+    <th>Build</th>
+    <td>
+      <p>All the Vespa sample applications use the <a href="bundle-plugin.html">bundle plugin</a>
+        to build the components.</p>
+    <td>
+  </tr>
+  <tr id="configure">
+    <th>Configure</th>
+    <td>
+      <p>
+        A key Vespa feature is code and configuration consistency,
+        deployed using an <a href="cloudconfig/application-packages.html">application package</a>.
+        This ensures that code and configuration is in sync, and loaded atomically when deployed.
+        This is done by generating config classes from config definition files.
+        In Vespa and application code,
+        configuration is hence accessed through generated config classes -
+        read more in the <a href="cloudconfig/config-introduction.html">
+        Cloud Configuration System</a>.
+      </p><p>
+      The Maven target <em>generate-sources</em> (invoked by <em>mvn install</em>) uses
+      <code><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/main/resources/configdefinitions/metal-names.def">
+        metal-names.def</a></code>
+      to generate <code>target/generated-sources/vespa-configgen-plugin/com/mydomain/example/MetalNamesConfig.java</code>.
     </p><p>
-    The Maven target <em>generate-sources</em> (invoked by <em>mvn install</em>) uses
-    <code><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/main/resources/configdefinitions/metal-names.def">
-    metal-names.def</a></code>
-    to generate <code>target/generated-sources/vespa-configgen-plugin/com/mydomain/example/MetalNamesConfig.java</code>.
-    </p><p>
-    After generating config classes, they will resolve in tools like
-    <a href="https://www.jetbrains.com/idea/download/">IntelliJ IDEA</a>.
+      After generating config classes, they will resolve in tools like
+      <a href="https://www.jetbrains.com/idea/download/">IntelliJ IDEA</a>.
     </p>
-  <td>
-</tr>
-<tr id="tests">
-  <th>Tests</th>
-  <td>
-    <p>
-    Examples unit tests are found in
-    <a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/MetalSearcherTest.java">
-    MetalSearcherTest.java</a>.
-    <code>testAddedOrTerm1</code> and <code>testAddedOrTerm2</code> illustrates two ways of doing the same test:
-    </p>
-    <ul>
-      <li>The first setting up the minimal search chain for <a href="query-language.html">YQL</a> programmatically</li>
-      <li>The second uses <code>
-    <a href="https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html">
-    com.yahoo.application.Application</a></code>, which sets up the application package and simplifies testing</li>
-    </ul>
-    <p>
-    Read more in <a href="testing.html">testing</a>.
-    </p>
-  </td>
-</tr>
-<tr id="automate">
-  <th>Automate</th>
-  <td>
-    <p>Add testing to automate deployments:</p>
-    <ul>
-      <li><em>System Tests</em> for functional tests -
-        a system test is an integration test that tests the application API endpoints</li>
-      <li><em>Staging Tests</em> to validate the instance before and after the code/config change,
+    <td>
+  </tr>
+  <tr id="tests">
+    <th>Tests</th>
+    <td>
+      <p>
+        Examples unit tests are found in
+        <a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/MetalSearcherTest.java">
+          MetalSearcherTest.java</a>.
+        <code>testAddedOrTerm1</code> and <code>testAddedOrTerm2</code> illustrates two ways of doing the same test:
+      </p>
+      <ul>
+        <li>The first setting up the minimal search chain for <a href="query-language.html">YQL</a> programmatically</li>
+        <li>The second uses <code>
+          <a href="https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html">
+            com.yahoo.application.Application</a></code>, which sets up the application package and simplifies testing</li>
+      </ul>
+      <p>
+        Read more in <a href="testing.html">testing</a>.
+      </p>
+    </td>
+  </tr>
+  <tr id="automate">
+    <th>Automate</th>
+    <td>
+      <p>Add testing to automate deployments:</p>
+      <ul>
+        <li><em>System Tests</em> for functional tests -
+          a system test is an integration test that tests the application API endpoints</li>
+        <li><em>Staging Tests</em> to validate the instance before and after the code/config change,
           i.e. two test runs with potentially different tests</li>
-      <li><em>Production Tests</em> to validate a production instance before upgrading the next instance</li>
-    </ul>
-    <p>
-    System and Staging tests require a (downscaled) full instance,
-    whereas Production tests evaluates user-defined production metrics.
-    <a href="https://cloud.vespa.ai/">Vespa Cloud</a> has automated this - find examples in
-    </p>
-    <ul>
-      <li><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/FeedAndSearchSystemTest.java">
+        <li><em>Production Tests</em> to validate a production instance before upgrading the next instance</li>
+      </ul>
+      <p>
+        System and Staging tests require a (downscaled) full instance,
+        whereas Production tests evaluates user-defined production metrics.
+        <a href="https://cloud.vespa.ai/">Vespa Cloud</a> has automated this - find examples in
+      </p>
+      <ul>
+        <li><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/FeedAndSearchSystemTest.java">
           FeedAndSearchSystemTest</a></li>
-      <li><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/StagingSetupTest.java">
+        <li><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/StagingSetupTest.java">
           StagingSetupTest</a> /
           <a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/StagingVerificationTest.java">
-          StagingVerificationTest</a></li>
-      <li><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/MetalProductionTest.java">
+            StagingVerificationTest</a></li>
+        <li><a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/MetalProductionTest.java">
           MetalProductionTest</a></li>
-    </ul>
-    <p>
-    Read more in <a href="https://cloud.vespa.ai/en/automated-deployments">automated deployments</a>.
-    </p>
-  </td>
-</tr>
-<tr id="debug">
-  <th>Debug</th>
-  <td>
-    To connect a debugger, use Java Debug Wire Protocol (JDWP) -
-    <a href="performance/profiling-search-container.html#remote-debug-with-intellij-idea">instructions</a>.
-  </td>
-</tr>
+      </ul>
+      <p>
+        Read more in <a href="https://cloud.vespa.ai/en/automated-deployments">automated deployments</a>.
+      </p>
+    </td>
+  </tr>
+  <tr id="debug">
+    <th>Debug</th>
+    <td>
+      To connect a debugger, use Java Debug Wire Protocol (JDWP) -
+      <a href="performance/profiling-search-container.html#remote-debug-with-intellij-idea">instructions</a>.
+    </td>
+  </tr>
 </table>
 
 
+<h2 id="intellij-plugin">IntelliJ plugin</h2>
 
-<h2 id="schema-files">Schema files</h2>
-<p>
-  Working with schema files is simplified using the
-  <a href="https://github.com/vespa-engine/vespa/blob/master/integration/intellij/README.md">SD Reader</a>
-  Intellij plugin.
-</p>
+<p>If you use IntelliJ, you can install the Vespa IntelliJ plugin to simplify working with schema files.</p>
+
+<p><iframe frameborder="none" width="384px" height="319px" src="https://plugins.jetbrains.com/embeddable/card/18074"></iframe></p>
