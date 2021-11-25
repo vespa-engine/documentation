@@ -130,7 +130,7 @@ var operations = {
                     if (data["type"] !== null && data["type"].includes("tensor")) {
                         value = data["value"]["literal"];
                     }
-                    cell.append("input").attr("value", value).attr("style", "width: 800px");
+                    cell.append("input").attr("value", value).attr("style", "width: 800px").attr("readonly","readonly");
                     row.append("td").append("a").attr("href", "#").attr("class", "header").html(icon_clipboard_copy())
                         .on("click", function(event) { copy_to_clipboard(value); event.stopPropagation(); event.preventDefault(); });
 
@@ -862,9 +862,8 @@ function setup_keybinds() {
     key_binds[contexts.VIEW]["shift + down"] =
     key_binds[contexts.VIEW]["shift + j"]  = function() { move_selected_down(); };
 
-    key_binds[contexts.VIEW]["backspace"] =
-    key_binds[contexts.VIEW]["x"]   = function() { remove_selected(); };
-    key_binds[contexts.VIEW]["d,d"]   = function() { remove_selected(); };
+    key_binds[contexts.VIEW]["x"] =
+    key_binds[contexts.VIEW]["d,d"] = function() { remove_selected(); };
 
     key_binds[contexts.VIEW]["e"]  =
     key_binds[contexts.VIEW]["enter"]   = function() { edit_selected(); };
