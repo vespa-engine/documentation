@@ -24,7 +24,7 @@ app_package = QuestionAnswering()
 
 ## Docker requirement
 
-This guide illustrate how to deploy a Vespa application to a Docker container in your local machine. It is required to have Docker installed in the machine you are running this tutorial from. For that reason we cannot run this tutorial in Google Colab as Docker is not available on their standard runtime machines.
+This guide illustrates how to deploy a Vespa application to a Docker container in your local machine. It is required to have Docker installed in the machine you are running this tutorial from. For that reason we cannot run this tutorial in Google Colab as Docker is not available on their standard runtime machines.
 
 ## Deploy to a Docker container
 
