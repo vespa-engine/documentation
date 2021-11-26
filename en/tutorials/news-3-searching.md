@@ -30,8 +30,6 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 </pre>
 
 
-## Introduction
-
 This is the third part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
@@ -79,6 +77,7 @@ can be divided into multiple phases as well.
 We'll start by looking at attribute-based sorting and grouping before 
 moving on to ranking.
 
+
 ## What is an attribute?
 
 We saw multiple examples of attributes in the `news.sd` schema, for instance:
@@ -125,6 +124,7 @@ This search will be faster than the previous example, as the term "weather" is
 for a field where there is an index. The search core will evaluate this 
 term first.
 
+
 ### Range searches
 
 The examples above searched over `date` just as any other field, and requested
@@ -142,6 +142,7 @@ all documents from before 10 November 2019, while
 
 finds all news articles from 8 November 2019 to 10 November 2019, inclusive.
 
+
 ### Sorting
 
 The first feature we will look at is how an attribute can be used to change the
@@ -155,19 +156,30 @@ is defined. We'll get back to this later.
 Now try to send the following query to Vespa, and look at the order of the
 hits:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date;"}' \
-http://localhost:8080/search/ | python -m json.tool
+$ curl -s -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date;"}' \
+  http://localhost:8080/search/ | python -m json.tool
 </pre>
+</div>
 
 By default, sorting is done in ascending order. This can also be specified by
 appending `asc` after the sort attribute name. Use `desc` to sort the  in
 descending order:
 
-    $ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date desc;"}' \
-    http://localhost:8080/search/ | python -m json.tool
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ curl -s -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date <span class="pre-hilite">desc</span>;"}' \
+  http://localhost:8080/search/ | python -m json.tool
+</pre>
+</div>
 
 So, sorting is simply defined by the `order by` statement in YQL.
+
 
 ### Query time data grouping
 
@@ -190,10 +202,14 @@ to let users refine searches.  For now we will only do a simple grouping
 query to get a list of unique values for `category` ordered by the number of
 documents they occur in and top 3 is shown:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 | all(group(category) max(3) order(-count())each(output(count())));"}' \
-http://localhost:8080/search/ | python -m json.tool
+$ curl -s -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 | all(group(category) max(3) order(-count())each(output(count())));"}' \
+  http://localhost:8080/search/ | python -m json.tool
 </pre>
+</div>
 
 Note that expression after the pipe (`|`): this is the grouping expression that
 determines how grouping will be performed. You can read more about the grouping 
@@ -281,10 +297,12 @@ documents have been matched.
 Please refer to the [grouping guide](../grouping.html) for more information 
 and examples on grouping.
 
+
 ### Attribute limitations
 
 Before we move on to ranking, it's important to know that use attributes 
 has some limitations.
+
 
 #### Memory usage
 
@@ -294,6 +312,7 @@ that it is not practical to define all the document type fields as
 attributes, as it will heavily restrict the number of documents per search
 node.  Some Vespa applications have more than 1 billion documents per node —
 having megabytes of text in memory per document is not cost-effective.
+
 
 #### Matching
 
@@ -320,6 +339,7 @@ matching* or *prefix matching*. Exact matching is the default, and, as the name
 implies, it requires you to search for the exact contents of the field in order
 to get a match.
 
+
 #### When to use attributes
 
 There are both advantages and drawbacks of using attributes — it enables
@@ -332,6 +352,7 @@ use attributes for:
 - fields that are not long string fields.
 
 Finally, all numeric fields should always be attributes.
+
 
 ## Relevance and Ranking
 
@@ -355,6 +376,7 @@ ranking and relevance calculations that one can choose from at query time.  A
 number of built-in functions and expressions are available to create highly
 specialized rank expressions.
 
+
 ### News article popularity signal
 
 During the conversion of the news dataset, the conversion script counted both the
@@ -366,14 +388,19 @@ ranking.
 We can do this by including a `popularity` rank profile below at the bottom of
 `schemas/news.sd`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
     rank-profile popularity inherits default {
         function popularity() {
-            expression: if (attribute(impressions) > 0, attribute(clicks) / attribute(impressions), 0)
+            expression: if (attribute(impressions) &gt; 0, attribute(clicks) / attribute(impressions), 0)
         }
         first-phase {
             expression: nativeRank(title, abstract) + 10 * popularity
         }
     }
+</pre>
+</div>
 
 - `rank-profile popularity inherits default`
 
@@ -412,13 +439,18 @@ reference](../reference/schema-reference.html#rank-profile).
 
 After you deploy the configuration, you can run a query such as:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\";", "ranking" : "popularity"}' \
-http://localhost:8080/search/ | python -m json.tool
+$ curl -s -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where default contains \"music\";", "ranking" : "popularity"}' \
+  http://localhost:8080/search/ | python -m json.tool
 </pre>
+</div>
 
 and find documents with high `popularity` values at the top. Note that
 we must specify the ranking profile to use with the `ranking` parameter.
+
 
 ## Conclusion
 
@@ -431,4 +463,5 @@ start with the basics for transforming this into a recommendation system.
 $ docker rm -f vespa
 </pre>
 
-<script src="/js/process_pre.js" />
+<script src="/js/process_pre.js"></script>
+<script src="/js/pre_copy.js"></script>

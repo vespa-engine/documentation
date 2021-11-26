@@ -35,7 +35,6 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
 </pre>
 
-## Introduction
 
 This is the sixth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
@@ -158,7 +157,9 @@ So, what we do before we pass the query along (in `execution.search(query)`) and
 before we return the results is completely up to us. So, we implement our 
 `UserProfileSearcher` like this:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 public class UserProfileSearcher extends Searcher {
 
     public Result search(Query query, Execution execution) {
@@ -203,7 +204,8 @@ public class UserProfileSearcher extends Searcher {
     }
 
 }
-```
+</pre>
+</div>
 
 First, we retrieve the `user_id` from the query. If this is given in the
 query, we first call the `retrieveUserEmbedding` method, which creates a new
@@ -231,22 +233,24 @@ the results.
 Again, note that all this is pretty much the same as what we did in
 `src/python/user_search.py` - just in Java.
 
+
 ## Adding a search chain
 
 To add this searcher to Vespa, we need to modify `services.xml`:
 
-```
-...
-  <container id='default' version='1.0'>
-    <search>
-      <chain id='user' inherits='vespa'>
-        <searcher bundle='news-recommendation-searcher' id='ai.vespa.example.UserProfileSearcher' />
-      </chain>
-    </search>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+  &lt;container id="default" version="1.0"&gt;
+    &lt;search&gt;
+      &lt;chain id="user" inherits="vespa"&gt;
+        &lt;searcher bundle="news-recommendation-searcher" id="ai.vespa.example.UserProfileSearcher" /&gt;
+      &lt;/chain&gt;
+    &lt;/search&gt;
     ...
-  </container>
-...
-```
+  &lt;/container&gt;
+</pre>
+</div>
 
 Here, we instruct Vespa to add a new search chain called `user` (which
 inherits the default `vespa` search chain), and includes our
@@ -288,9 +292,12 @@ The Vespa application now lies under `src/main/application`, and all
 custom Java components are under `src/main/java` as is standard in 
 a Java project. We can now compile and package this application:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ mvn package
-```
+</pre>
+</div>
 
 The `pom.xml` is set up to create an artifact called `news-recommendation`, 
 which is what we referred to in `services.xml`. When the command 
@@ -310,9 +317,12 @@ for much more on searchers and the Java API.
 Now we can search for a user's recommended news articles directly from 
 the `user_id`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"documents": 28603'>
 $ curl -s 'http://localhost:8080/search/?user_id=U33527&searchchain=user' | python -m json.tool
 </pre>
+</div>
 
 This should now return the top 10 recommended news articles for this user. Indeed,
 if we now add a with a `&tracelevel=5`, we see our searcher being invoked:
@@ -333,11 +343,14 @@ Note that the `searchchain` query parameter can be set as default so this does n
 be passed along with the query by adding it to the default query profile in 
 `src/main/application/search/query-profiles/default.xml`:
 
-```
-<query-profile id="default" type="root" >
-    <field name="searchChain">user</field>
-</query-profile>
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+&lt;query-profile id="default" type="root"&gt;
+    &lt;field name="searchChain"&gt;user&lt;/field&gt;
+&lt;/query-profile&gt;
+</pre>
+</div>
 
 {% include note.html content="The `src/python/evaluate.py` script can now be modified to also use this searcher.
 However, to properly calculate the metrics, the searcher needs to be modified to
@@ -357,15 +370,19 @@ Vespa also supports custom document processors. Please refer to
 [the guide for document processing](../document-processing.html) for 
 more information.
 
+
 ## Improving recommendation diversity 
 
 If we take a closer look at the query above, and search for the top 100 hits:
 
-```
-$ curl -s "http://localhost:8080/search/?user_id=U33527&hits=100" | \
-      python -m json.tool | grep "category\": \"sports" | \
-      wc -l
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ curl -s "http://localhost:8080/search/?user_id=U33527&amp;hits=100" | \
+  python -m json.tool | grep "category\": \"sports" | \
+  wc -l
+</pre>
+</div>
 
 We see that all the hits are of category `sports` for this user. Actually,
 they are all from the `football_nfl` sub-category. Indeed, from inspection of
@@ -407,4 +424,5 @@ we'll address what to do when new users without any history visit our recommenda
 $ docker rm -f vespa
 </pre>
 
-<script src="/js/process_pre.js" />
+<script src="/js/process_pre.js"></script>
+<script src="/js/pre_copy.js"></script>
