@@ -3,7 +3,6 @@
 title: "News search and recommendation tutorial - applications, feeding and querying"
 ---
 
-## Introduction
 
 This is the second part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
@@ -27,6 +26,7 @@ before moving on to the next part of the tutorial: searching for content.
 
 For reference, the final state of this tutorial can be found in the
 `app-2-feed-and-query` sub-directory of the `news` sample application.
+
 
 ## The Microsoft News Dataset
 
@@ -60,9 +60,12 @@ $ git clone https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps/news
 </pre>
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
 $ ./bin/download-mind.sh demo
 </pre>
+</div>
 
 The argument defines which dataset to download. Here, we download the `demo`
 dataset, but `small` and `large` are valid options. Both the training and
@@ -90,9 +93,13 @@ Let's start building a Vespa application to make this data searchable. We'll
 create the directory `my-app` under the `news` sample app directory to
 contain your Vespa application:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ mkdir my-app
 </pre>
+</div>
+
 
 ## Application Packages
 
@@ -177,6 +184,7 @@ Write the following to `my-app/hosts.xml`:
 
 This sets up the alias `node1` to represent the localhost. You 
 saw this alias in the services specification above.
+
 
 ### Schema
 
@@ -272,6 +280,7 @@ index compatible with [bm25
 ranking](https://docs.vespa.ai/en/reference/rank-features.html#bm25) for text
 search.
 
+
 ## Deploy the Application Package
 
 With the three necessary files above, we are ready to deploy the application package.
@@ -283,11 +292,17 @@ my-app/
 ├── schemas
 │   └── news.sd
 └── services.xml
+</pre>
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ (cd my-app && zip -r - .) | \
   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
+</div>
+
 Continue after the application is successfully deployed.
 
 <pre style="display:none" data-test="exec">
@@ -304,6 +319,7 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/my-app && 
 $ curl -s --head http://localhost:8080/ApplicationStatus
 </pre>
 
+
 ## Feeding data
 
 The data fed to Vespa must match the schema for the document type. The
@@ -311,9 +327,12 @@ downloaded MIND data must be converted to a valid Vespa [document
 format](../reference/document-json-format.html) before it can be fed to
 Vespa. Again, we have a script to help us with this:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
 $ python3 src/python/convert_to_vespa_format.py mind
 </pre>
+</div>
 
 The argument is where to find the downloaded data above, which was in the
 `mind` directory. This script creates a new file in that directory called
@@ -321,10 +340,13 @@ The argument is where to find the downloaded data above, which was in the
 file can now be fed to Vespa. Use the method described in the previous part,
 using the `vespa-http-client`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ java -jar vespa-http-client-jar-with-dependencies.jar \
   --verbose --file mind/vespa.json --endpoint http://localhost:8080
 </pre>
+</div>
 
 <pre style="display:none" data-test="exec" >
 $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
@@ -337,9 +359,13 @@ $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' |
 You can verify that specific documents are fed by fetching documents by
 document id using the [Document API](../api.html):
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="id:news:news::N10864">
 $ curl -s 'http://localhost:8080/document/v1/news/news/docid/N10864' | python -m json.tool
 </pre>
+</div>
+
 
 ## The first query
 
@@ -367,16 +393,24 @@ part of the `fieldset default`, any document containing the word "music" in one
 or more of these fields matches that query. Let's try that with either a 
 GET query:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' | python -m json.tool
+$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' |\
+  python -m json.tool
 </pre>
+</div>
 
 or a POST JSON query:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" --data '{"yql" : "select * from sources * where default contains \"music\";"}' \
-http://localhost:8080/search/ | python -m json.tool
+$ curl -s -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where default contains \"music\";"}' \
+  http://localhost:8080/search/ | python -m json.tool
 </pre>
+</div>
 
 {% include note.html content="You can use the built-in query builder found at 
 <a href='http://localhost:8080/querybuilder/' data-proofer-ignore>localhost:8080/querybuilder/</a>
@@ -429,4 +463,5 @@ sorting, grouping, and ranking results.
 $ docker rm -f vespa
 </pre>
 
-<script src="/js/process_pre.js" />
+<script src="/js/process_pre.js"></script>
+<script src="/js/pre_copy.js"></script>

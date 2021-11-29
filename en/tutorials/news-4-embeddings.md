@@ -3,7 +3,6 @@
 title: "News search and recommendation tutorial - embeddings"
 ---
 
-## Introduction
 
 This is the fourth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
@@ -39,16 +38,21 @@ euclidean distance search before moving along to the next tutorial.
 Let's start with taking a look again at what data the MIND dataset provides
 for us.
 
-#### Requirements
+
+### Requirements
 
 We start using some machine learning tools in this tutorial. Specifically,
 we need Numpy, Scikit-learn, PyTorch, and the HuggingFace Transformers 
 library. Make sure you have all the necessary dependencies by running the 
 following in the sample application directory:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ python3 -m pip install -r requirements.txt
-```
+</pre>
+</div>
+
 
 ## The MIND dataset
 
@@ -77,6 +81,7 @@ We interpret a click as a positive signal for interest and a skip as
 possibly a negative signal for interest. This is called implicit feedback, as
 the users haven't explicitly expressed their interests. However, using clicks
 and skips, we can still start to infer the users' interests.
+
 
 ## Collaborative filtering in recommendation systems
 
@@ -123,6 +128,7 @@ implicit feedback yet. This is called the "cold start" problem. For such
 problems, we need to use additional content (often called "side information")
 of news articles to provide recommendations. We'll tackle this "cold start" a
 bit later.
+
 
 ## Generating embeddings 
 
@@ -183,10 +189,12 @@ samples 4 negative examples (skips) for each positive example (click).
 The full code can be seen in the sample application, in `src/python/train.py`.
 
 Let's go ahead and generate the embeddings. Run the following:
-
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ ./src/python/train_mf.py mind 10
 </pre>
+</div>
 
 This runs the training code for 10 epochs, and deposits the resulting
 user and news vectors in the `mind` directory, where the rest of the 
@@ -218,6 +226,7 @@ and their embedding vectors are effectively random.
 
 We'll address this next.
 
+
 ## Addressing the cold start problem
 
 The approach above based itself on news articles that users interacted with
@@ -240,6 +249,7 @@ that they have a finite set of values they can take. To handle these,
 we'll generate an embedding for each possible value, similar to how we 
 generated embeddings for the user id's and news id's above. These id's 
 are also categorical, after all.
+
 
 ### Creating BERT embeddings
 
@@ -268,12 +278,16 @@ To generate these embeddings for all news content, run the following.
 This might take a while, around an hour for all news articles in 
 the `train` and `dev` demo dataset.
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ python3 src/python/create_bert_embeddings.py mind
-```
+</pre>
+</div>
 
 This creates a `news_embeddings.tsv` file under the `mind/train` and
 `mind/dev` subdirectories.
+
 
 ## Training the model
 
@@ -346,9 +360,14 @@ The forward pass function is pretty much the same as before. You can
 see the entire training script in `src/python/train_cold_start.py` in 
 the sample app. Running this results in:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ python3 src/python/train_cold_start.py mind 10
+</pre>
+</div>
 
+```
 Total loss after epoch 1: 920.5855102539062 (0.703811526298523 avg)
 {'auc': 0.5391, 'mrr': 0.2367, 'ndcg@5': 0.2464, 'ndcg@10': 0.3059}
 {'auc': 0.5131, 'mrr': 0.2239, 'ndcg@5': 0.2296, 'ndcg@10': 0.2933}
@@ -422,12 +441,14 @@ information on nearest neighbor search and distance metrics in Vespa.
 We've included a script to map the embeddings to euclidean space and create
 a feed suitable for Vespa:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ python3 src/python/convert_embeddings_to_vespa_format.py mind
 </pre>
+</div>
 
 We are now ready to feed these vectors to Vespa.
-
 
 
 ## Conclusion
@@ -436,4 +457,5 @@ Now that we've generated user and document embeddings, we can start using
 these to recommend news items to users. We'll start feeding these in 
 the [next part of the tutorial](news-5-recommendation.html).
 
-<script src="/js/process_pre.js" />
+<script src="/js/process_pre.js"></script>
+<script src="/js/pre_copy.js"></script>

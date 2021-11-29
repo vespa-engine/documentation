@@ -33,7 +33,6 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
 </pre>
 
-## Introduction
 
 This is the fifth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
@@ -56,16 +55,19 @@ and start using them for searching.
 For reference, the final state of this tutorial can be found in the
 `app-5-recommendation` sub-directory of the `news` sample application.
 
+
 ## Indexing embeddings
 
 First, we need to modify the `news.sd` search definition to include a field
 to hold the embedding. Add the following field and rank profile:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 schema news {
   document news {
     ...
-    field embedding type tensor<float>(d0[51]) {
+    field embedding type tensor&lt;float&gt;(d0[51]) {
         indexing: attribute 
         attribute {
             distance-metric: euclidean
@@ -79,7 +81,8 @@ schema news {
     }
   }
 }
-```
+</pre>
+</div>
 
 The `embedding` field is a tensor field. Tensors in Vespa are flexible
 multi-dimensional data structures, and, as first-class citizens, can be used
@@ -128,19 +131,23 @@ on feeding formats.
 We need to add another document type to represent a user. Add 
 the following schema in `schemas/user.sd`:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 schema user {
     document user {
         field user_id type string {
             indexing: summary | attribute
             attribute: fast-search
         }
-        field embedding type tensor<float>(d0[51]) {
+        field embedding type tensor&lt;float&gt;(d0[51]) {
             indexing: summary | attribute
         }
     }
 }
-```
+</pre>
+</div>
+
 
 This schema is set up so that we can search for a `user_id` and 
 retrieve the user's embedding vector. 
@@ -148,23 +155,28 @@ retrieve the user's embedding vector.
 We also need to let Vespa know we want to use this document type, so we
 modify `services.xml` and add it under `documents` in the `content` section:
 
-```
-<services version="1.0">
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+&lt;services version="1.0"&gt;
   ...
-  <content id='mind' version='1.0'>
-    <documents>
-      <document type='news' mode="index"/>
-      <document type='user' mode="index"/>
-    </documents>
+  &lt;content id="mind" version="1.0"&gt;
+    &lt;documents&gt;
+      &lt;document type="news" mode="index"/&gt;
+      &lt;document type="user" mode="index"/&gt;
+    &lt;/documents&gt;
     ...
-  </content>
+  &lt;/content&gt;
   ...
-</services>
-```
+&lt;/services&gt;
+</pre>
+</div>
+
 
 After redeploying with the updates schemas and `services.xml`, you can now
 feed the `mind/vespa_user_embeddings.json` and
 `mind/vespa_news_embeddings.json` using the Vespa HTTP client. 
+
 
 ## Query profiles and query profile types
 
@@ -180,20 +192,26 @@ query profile to set up the types of query parameters we expect to pass.
 
 So, write the following to `search/query-profiles/default.xml`:
 
-```
-<query-profile id="default" type="root" />
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+&lt;query-profile id="default" type="root" /&gt;
+</pre>
+</div>
 
 To set up the query profile types, we write them to the file
 `search/query-profiles/types/root.xml`:
 
-```
-<query-profile-type id="root" inherits="native">
-    <field name="ranking.features.query(user_embedding)" type="tensor&lt;float&gt;(d0[51])" />
-</query-profile-type>
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+&lt;query-profile-type id="root" inherits="native"&gt;
+    &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[51])" /&gt;
+&lt;/query-profile-type&gt;
+</pre>
+</div>
 
-This instructs Vespa to expect a float tensor with dimension `d0[51]` when the
+This configures Vespa to expect a float tensor with dimension `d0[51]` when the
 query parameter `ranking.features.query(user_embedding)` is passed. We'll see 
 how this works together with the `nearestNeighbor` search operator below.
 
@@ -201,17 +219,21 @@ how this works together with the `nearestNeighbor` search operator below.
 A common pitfall is to forget the default query profile,
 but that is required to successfully set up the query profile type." %}
 
+
 ## Testing the application
 
 After redeploying with the updates to the query profiles, we can now start
 searching Vespa using embeddings. First, let's find the user `U33527`. We
 issue a query with the following YQL:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"id": "id:user:user::U33527"'>
 $ curl -s -H "Content-Type: application/json" --data \
     '{"yql" : "select * from sources user where user_id contains \"U33527\";", "hits": 1}' \
     http://localhost:8080/search/ | python -m json.tool
 </pre>
+</div>
 
 This returns the document containing the user's embedding:
 
@@ -240,11 +262,14 @@ This returns the document containing the user's embedding:
 ```
 
 Now we can use this vector to query the news articles. You can either write this
-query by hand, but we've added a convenience script which queries Vespa for you:
+query by hand, but we've added a convenience script which queries Vespa:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"documents": 28603'>
 $ ./src/python/user_search.py U33527 10
 </pre>
+</div>
 
 This script first retrieves the user embedding using an HTTP `GET` query to
 Vespa. It then parses the tensor containing the embedding vector. Finally, it
@@ -282,9 +307,12 @@ the rank order, Vespa provides the `closeness` feature which is calculated as
 Let's test that this works as intended. The sample app provides the 
 following script:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ ./src/python/evaluate.py mind 1000
 </pre>
+</div>
 
 This reads both the training and validation set impressions, queries Vespa
 for 1000 randomly drawn impressions, and calculates the same metrics we saw
@@ -299,6 +327,7 @@ This is in line with the results from the training. So, the conversion
 from inner product space to euclidean space works as intended. The
 resulting rank scores are different, but the transformation evidently 
 retains the same ordering.
+
 
 ## ANNs
 
@@ -344,21 +373,30 @@ Let's switch to using approximate nearest-neighbors. For this, we must
 instruct Vespa to create an index on the field we would like to use.
 This is simply a modification to the `embedding` field in `news.sd`:
 
-```
-    field embedding type tensor<float>(d0[51]) {
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+    field embedding type tensor&lt;float&gt;(d0[51]) {
         indexing: attribute | index
         attribute {
             distance-metric: euclidean
         }
     }
-```
+</pre>
+</div>
 
 If you make this change and deploy it, you will get prompted by Vespa that a
 restart is required so that the index can be built. After doing this and
 waiting a bit for Vespa to start, we can query Vespa again:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ ./src/python/user_search.py U33527 10
+</pre>
+</div>
+
+```
 {
   "root": {
     "id": "toplevel",
@@ -405,6 +443,7 @@ in Vespa.
 A unique feature of Vespa is that the implementation allows for filtering
 during graph traversal, which we'll look at next.
 
+
 ## Filtering
 
 A common case when using approximate nearest-neighbors is to combine 
@@ -425,20 +464,23 @@ In our case, let's assume we want to retrieve 10 `sports` articles for a
 user. It turns out we need to retrieve at least 278 news articles from the 
 search to get to 10 `sports` articles for this user:
 
-```
-$ ./src/python/user_search.py U63195 10 | grep "category\": \"sports\"" | wc -l
-0
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ ./src/python/user_search.py U63195  10 | grep "category\": \"sports\"" | wc -l
 $ ./src/python/user_search.py U63195 278 | grep "category\": \"sports\"" | wc -l
-10
-```
+</pre>
+</div>
 
 On the other hand, if we add a filter specifically:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ ./src/python/user_search.py U63195 10 "AND category contains 'sports'" | \
     grep "category\": \"sports" | wc -l
-10
-```
+</pre>
+</div>
 
 Here, we only specify 10 hits and exactly 10 hits of `sports` category are 
 returned. Vespa still searches through the graph starting from the query 
@@ -465,4 +507,5 @@ need one pass.
 $ docker rm -f vespa
 </pre>
 
-<script src="/js/process_pre.js" />
+<script src="/js/process_pre.js"></script>
+<script src="/js/pre_copy.js"></script>

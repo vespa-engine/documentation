@@ -3,7 +3,6 @@
 title: "News search and recommendation tutorial - getting started on Docker"
 ---
 
-## Introduction
 
 Our goal with this series is to set up a Vespa application for personalized
 news recommendations. We will do this in stages, starting with a simple news
@@ -56,10 +55,13 @@ each tutorial can be found in the various `app-...` sub-directories.
 
 Let's start by cloning the sample application:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps/news
 </pre>
+</div>
 
 The `app-1-getting-started` directory contains a minimal Vespa application.
 There are three files there:
@@ -75,12 +77,15 @@ We will get back to these files in the next part of the tutorial.
 This application doesn't contain much at the moment, but let's start up the
 application anyway by starting a Docker container to run it:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ docker pull vespaengine/vespa
 $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa
 </pre>
+</div>
 
 First, we pull the latest Vespa image from the Docker repository, then we
 start it with the name `vespa`. This starts the Docker container and the
@@ -90,17 +95,23 @@ Starting the container can take a short while. Before continuing, make sure
 that the configuration service is running. This is signified by a `200 OK`
 response when querying the configuration service, running on port 19071:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-wait-for="200 OK">
 $ curl -s --head http://localhost:19071/ApplicationStatus
 </pre>
+</div>
 
 With the config server up and running, deploy the application:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ (cd app-1-getting-started && zip -r - .) | \
   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
+</div>
 
 The command uploads the application and verifies the content.
 If anything is wrong with the application, this step will fail with a failure description,
@@ -127,9 +138,12 @@ The first time you deploy your application, it might take a while to
 start the services. Like the configuration server, you can query the 
 status:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-wait-for="200 OK">
 $ curl -s --head http://localhost:8080/ApplicationStatus
 </pre>
+</div>
 
 This returns a `200 OK` when it is ready for receiving traffic. Note here 
 that we don't run the command inside the Docker container. The port `8080`
@@ -142,15 +156,21 @@ we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
 document. We'll use the `vespa-http-client` Java feeder for this:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ curl -L -o vespa-http-client-jar-with-dependencies.jar \
   https://search.maven.org/classic/remotecontent?filepath=com/yahoo/vespa/vespa-http-client/7.391.28/vespa-http-client-7.391.28-jar-with-dependencies.jar
 </pre>
+</div>
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
 $ java -jar vespa-http-client-jar-with-dependencies.jar \
   --verbose --file doc.json --endpoint http://localhost:8080
 </pre>
+</div>
 
 This runs the `vespa-http-client` Java client with the file `doc.json` file.
 This contains a single document which we'll query for below.
@@ -161,9 +181,12 @@ This contains a single document which we'll query for below.
 If everything is ok so far, our application should be up and running. We 
 can query the endpoint:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Hello world!'>
 $ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddocname+contains+%22news%22;"
 </pre>
+</div>
 
 This uses the `search` API to search for all documents of type `news`.
 This should return `1` result, which is the document we fed above.
@@ -174,35 +197,47 @@ Well done!
 
 To stop Vespa, we can run the following commands:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ docker exec vespa bash -c '/opt/vespa/bin/vespa-stop-services'
 $ docker exec vespa bash -c '/opt/vespa/bin/vespa-stop-configserver'
 </pre>
+</div>
 
 Likewise, to start the Vespa services:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-configserver'
 $ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-services'
 </pre>
+</div>
 
 If a restart is required due to changes in the application package,
 these two steps are what you need to do.
 
 To wipe the index and restart:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ docker exec vespa bash -c ' \
   /opt/vespa/bin/vespa-stop-services && \
   /opt/vespa/bin/vespa-remove-index -force && \
   /opt/vespa/bin/vespa-start-services'
 </pre>
+</div>
 
 You can stop and kill the Vespa Docker application like this:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
 $ docker rm -f vespa
 </pre>
+</div>
 
 This will delete the Vespa application, including all data, so 
 don't do this unless you are sure.
@@ -214,4 +249,5 @@ Our simple application should now be up and running. In the [next part
 of the tutorial](news-2-basic-feeding-and-query.html), we'll start building
 from this foundation.
 
-<script src="/js/process_pre.js" />
+<script src="/js/process_pre.js"></script>
+<script src="/js/pre_copy.js"></script>

@@ -35,7 +35,6 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
 $ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
 </pre>
 
-## Introduction
 
 This is the seventh part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
@@ -95,16 +94,19 @@ So, let's set this up for our application. First we need to add a new document
 type to hold the CTR values. We introduce the `category_ctr` document type, 
 which we add in `schemas/category_ctr.sd`:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 schema category_ctr {
     document category_ctr {
-        field ctrs type tensor<float>(category{}) {
+        field ctrs type tensor&lt;float&gt;(category{}) {
             indexing: attribute
             attribute: fast-search
         }
     }
 }
-```
+</pre>
+</div>
 
 This document holds a single field: a [tensor](../tensor-user-guide.html) of type
 `tensor<float>(category{})`. This is a tensor with a single sparse dimension, which
@@ -130,21 +132,25 @@ can be helpful when you have large tensors.
 
 To use this document, we need to add it to `services.xml`:
 
-```
-  <content id='mind' version='1.0'>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+  &lt;content id="mind" version="1.0"&gt;
     ...
-    <documents>
-      <document type='news' mode="index"/>
-      <document type='user' mode="index"/>
-      <document type='category_ctr' mode="index" global="true"/>
-    </documents>
+    &lt;documents&gt;
+      &lt;document type="news" mode="index"/&gt;
+      &lt;document type="user" mode="index"/&gt;
+      &lt;document type="category_ctr" mode="index" global="true"/&gt;
+    &lt;/documents&gt;
     ...
-  </content>
-```
+  &lt;/content&gt;
+</pre>
+</div>
 
 Notice that we've set `global="true"`, which instructs Vespa to keep a copy 
 of these documents on all content nodes. This is required for using it in a 
 parent-child relationship.
+
 
 ## Importing parent values in child documents
 
@@ -153,18 +159,21 @@ To use the `category_ctr` tensor when ranking `news` documents, we need to
 the parent document, and which fields to import. We modify our
 `schemas/news.sd`:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 schema news {
     document news {
         ...
-        field category_ctr_ref type reference<category_ctr> {
+        field category_ctr_ref type reference&lt;category_ctr&gt; {
             indexing: attribute
         }
         ...
     }
     import field category_ctr_ref.ctrs as global_category_ctrs {}
 }
-```
+</pre>
+</div>
 
 The field `category_ctr_ref` is a field of type `reference` of a
 `category_ctr` document type. When feeding this field, Vespa expects the
@@ -183,6 +192,7 @@ the document referenced in the `category_ctr_ref` field. We name this as
 `global_category_ctrs`, and we can reference this as
 `attribute(global_category_ctrs)` during ranking.
 
+
 ## Tensor expressions in ranking
 
 Up until this point, we've only used tensors as storage. We used tensors to
@@ -198,27 +208,36 @@ Our `news` document has a field currently that holds the `category` as a string.
 Unfortunately, tensor expressions only work on tensors, so we need to add a 
 new field to hold the category tensor:
 
-``` 
-    field category_tensor type tensor<float>(category{}) {
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+    field category_tensor type tensor&lt;float&gt;(category{}) {
         indexing: attribute
     }
-```
+</pre>
+</div>
 
 Using a tensor in this way also enables a document to have multiple categories, 
 but our dataset only has a single category per article. For instance, we 
 can represent the `finance` category of a `news` article like this:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
     {category: finance}: 1.0 }
-```
+</pre>
+</div>
 
 Since this is a sparse tensor, we don't need to mention the other categories.
 Now, we can use this tensor to calculate the global CTR score for an article's
 category:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
     attribute(category_tensor) * attribute(global_category_ctrs)
-```
+</pre>
+</div>
 
 Given the global category CTR example above, this would result in the value
 `0.1`. How did we arrive at this? Recall that the value for the cell
@@ -234,7 +253,9 @@ please refer to [the tensor user guide](../tensor-user-guide.html#ranking-with-t
 
 Let's add a new ranking profile to perform this calculation:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 rank-profile recommendation_with_global_category_ctr inherits recommendation {
     function category_ctr() {
         expression: sum(attribute(category_tensor) * attribute(global_category_ctrs))
@@ -252,7 +273,8 @@ rank-profile recommendation_with_global_category_ctr inherits recommendation {
         nearest_neighbor
     }
 }
-```
+</pre>
+</div>
 
 Here, we've added a first phase ranking expression that multiplies the nearest-neighbor 
 score with the category CTR score, implemented with the functions `nearest_neighbor` 
@@ -271,15 +293,19 @@ with the `indexing: summary` statement with each field. The `summary-features` c
 the result of functions as well. This is a helpful debugging tool, and we'll see how this looks
 after feeding some data.
 
+
 ## Feeding parent and child updates
 
 After deploying the application, we are ready to feed a global CTR document.
 For convenience, we've added a script that reads the MIND content and
 impression data to calculate CTR scores for each category:
 
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 $ ./src/python/create_category_ctrs.py mind
-```
+</pre>
+</div>
 
 This produces two files in the `mind` directory:
 
@@ -301,14 +327,18 @@ $ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar
     --file /app/mind/news_category_ctr_update.json  --host localhost --port 8080'
 </pre>
 
+
 ## Testing the application
 
 After feeding the above files, we can now test the application with a query:
 
-```
-curl -s "http://localhost:8080/search/?user_id=U33527&ranking.profile=recommendation_with_global_category_ctr" | \
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ curl -s "http://localhost:8080/search/?user_id=U33527&amp;ranking.profile=recommendation_with_global_category_ctr" | \
     python -m json.tool
-```
+</pre>
+</div>
 
 Note that we specify the ranking profile to use. The first result of this query is something like
 the following:
@@ -364,4 +394,5 @@ of the tutorial, we will start using a machine-learned model in ranking.
 $ docker rm -f vespa
 </pre>
 
-<script src="/js/process_pre.js" />
+<script src="/js/process_pre.js"></script>
+<script src="/js/pre_copy.js"></script>
