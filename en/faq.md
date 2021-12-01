@@ -9,7 +9,7 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
 <style>
   ul.toc-list {
     list-style-type: none;
-    padding-inline-start: 0px;
+    padding-inline-start: 0;
   }
 
   ul.toc-list > li {
@@ -235,6 +235,13 @@ public class ConfigCacheRefresher extends AbstractComponent {
 }
 ```
 
+#### Is it possible to query Vespa using a list of document ids?
+The best article on the subject is
+[multi-lookup set filtering](https://docs.vespa.ai/en/performance/feature-tuning.html#multi-lookup-set-filtering).
+Refer to the [weightedset-example](multivalue-query-operators.html#weightedset-example) -
+also see [weightedset](reference/query-language-reference.html#weightedset)
+for writing a YQL query to select multiple IDs.
+The ID must be a field in the document type.
 
 
 {:.faq-section}
@@ -315,7 +322,7 @@ it is more flexible to write application logic in a JVM-supported language, usin
 ### Performance
 
 #### What is the latency of documents being ingested vs indexed and available for search?
-Vespa has a near real-time indexing core with typically sub-second latencies from ingest to indexed.
+Vespa has a near real-time indexing core with typically sub-second latencies from document ingestion to being indexed.
 This depends on the use-case, available resources and how the system is tuned.
 Some more examples and thoughts can be found in the [scaling guide](performance/sizing-search.html).
 
@@ -328,7 +335,7 @@ that do high throughput updates to large parts of the (sometimes entire) documen
 In cases where feed throughput is more important than indexing latency, you can tune this to meet your requirements.
 Some of this is detailed in the [feed sizing guide](performance/sizing-feeding.html).
 
-#### Can the index support up to 512GB index size in memory?
+#### Can the index support up to 512 GB index size in memory?
 Yes. The [content node](proton.html) is implemented in C++
 and not memory constrained other than what the operating system does.
 
@@ -385,7 +392,7 @@ No. Use [visiting](content/visiting.html) to dump all or a subset of documents.
 See [dumping-data](https://cloud.vespa.ai/en/dumping-data) for a sample script.
 
 #### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)? 
-Failure response will be given in case the document is not written on some of the replica nodes. 
+Failure response will be given in case the document is not written on some replica nodes.
 
 #### When the doc is not written to some nodes, will the document become available due to replica reconciliation?
 Yes, it will be available, eventually.
