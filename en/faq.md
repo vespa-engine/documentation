@@ -236,6 +236,8 @@ public class ConfigCacheRefresher extends AbstractComponent {
 ```
 
 #### Is it possible to query Vespa using a list of document ids?
+The best article on the subject is
+[multi-lookup set filtering](https://docs.vespa.ai/en/performance/feature-tuning.html#multi-lookup-set-filtering).
 Refer to the [weightedset-example](multivalue-query-operators.html#weightedset-example) -
 also see [weightedset](reference/query-language-reference.html#weightedset)
 for writing a YQL query to select multiple IDs.
