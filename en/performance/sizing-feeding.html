@@ -4,80 +4,83 @@ title: "Vespa Feed Sizing Guide"
 ---
 
 <p>
-Vespa is optimized to sustain a high feed load while serving -
-also during planned and unplanned changes to the instance.
-Vespa supports feed rates at memory speed,
-this guide goes through how to configure, test and size the application
-for optimal feed performance.
+  Vespa is optimized to sustain a high feed load while serving -
+  also during planned and unplanned changes to the instance.
+  Vespa supports feed rates at memory speed,
+  this guide goes through how to configure, test and size the application
+  for optimal feed performance.
+</p>
+<p>
+  Read <a href="../reads-and-writes.html">reads and writes</a> first.
+  This has an overview of Vespa, where the key takeaway is the <em>stateless container cluster</em>
+  and the <em>stateful content cluster</em>.
+  The processing of documents PUT to Vespa is run in the <em>container</em> cluster,
+  and includes both Vespa-internal processing like <a href="../linguistics.html#tokenization">tokenization</a>
+  and application custom code in <a href="../document-processing.html">document processing</a>.
+  The stateless cluster is primarily CPU bound,
+  read <a href="../indexing.html#multiple-container-clusters">indexing</a>
+  for how to separate search and write to different container clusters.
+  Other than that, make sure the container cluster has enough memory to avoid excessive GC -
+  the <a href="container-tuning.html">heap</a> must be big enough.
+  Allocate enough CPU for the indexing load.
+</p>
+<p>
+  All operations are written and synched to the <a href="../proton.html#transaction-log">transaction log</a>.
+  This is sequential (not random) IO but might impact overall feed performance if running on NAS attached storage
+  where the synch operation has a much higher cost than on local attached storage (e.g. SSD).
+  See <a href="../reference/services-content.html#sync-transactionlog">sync-transactionlog</a>.
 </p><p>
-Read <a href="../reads-and-writes.html">writing to Vespa</a> first.
-This has an overview of Vespa, where the key takeaway is the <em>stateless container cluster</em>
-and the <em>stateful content cluster</em>.
-The processing of documents PUT to Vespa is run in the <em>container</em> cluster,
-and includes both Vespa-internal processing like <a href="../linguistics.html#tokenization">tokenization</a>
-and application custom code in <a href="../document-processing.html">document processing</a>.
-The stateless cluster is primarily CPU bound,
-read <a href="../indexing.html#multiple-container-clusters">indexing</a>
-for how to separate search and write to different container clusters.
-Other than that, make sure the container cluster has enough memory to avoid excessive GC -
-the <a href="container-tuning.html">heap</a> must be big enough.
-Allocate enough CPU for the indexing load.
-</p><p>
-
-All operations are written and synched to the <a href="../proton.html#transaction-log">transaction log</a>.
-This is sequential (not random) IO but might impact overall feed performance if running on NAS attached storage
-where the synch operation has a much higher cost than on local attached storage (e.g. SSD).
-See <a href="../reference/services-content.html#sync-transactionlog">sync-transactionlog</a>.
- 
-</p><p>
-The remainder of this document concerns how to configure the application
-to optimize feed performance on the content node.
+  The remainder of this document concerns how to configure the application
+  to optimize feed performance on the content node.
 </p>
 
 
 
 <h2 id="content-node">Content node</h2>
 <p>
-The content node runs the <a href="../proton.html">proton</a> process - overview:
+  The content node runs the <a href="../proton.html">proton</a> process - overview:
 </p>
 <img src="/assets/img/proton-feed.svg" alt="Proton feed overview" width="930px" height="auto"/>
 <p>
-As there are multiple components and data structures involved,
-this guide starts with the simplest examples and then adds optimizations and complexity.
-Flushing of index structures is covered at the end of this guide.
+  As there are multiple components and data structures involved,
+  this guide starts with the simplest examples and then adds optimizations and complexity.
+  Flushing of index structures is covered at the end of this guide.
 </p>
 
 
 
 <h2 id="streaming-search">Streaming search</h2>
 <p>
-The simplest for of indexing is <strong>no indexing</strong>.
-In Vespa, this is called <em>streaming search</em> indexing mode.
-Streaming search is optimized for write performance - the tradeoff is slow search.
-Streaming search is hence great for applications like personal search, where data size <em>searched</em> is small -
-read more in the <a href="../streaming-search.html">streaming search</a> guide.
-</p><p>
-Documents are written to the <a href="../document-summaries.html#document-store">document store</a> in all indexing modes -
-this is where the copy of the PUT document is persisted.
-See <em>Summary Manager + Document store</em> in illustration above.
-In short, this is <em>append</em> operations to large files, and (simplified) each PUT is one write.
-</p><p>
-PUT-ing documents to the document store can hence be thought of as appending to files using sequential IO,
-expecting a high write rate, using little memory and CPU.
-Writing a new version of a document (PUT a document that already exists) is the same as non-existent -
-the index on the document is updated to point to the latest version in both cases.
-</p><p>
-A partial UPDATE to a document incurs a read from the document store to get the current fields.
-Then the new field values are applied and the new version or the document is written.
-Hence, like a PUT with an extra read.
+  The simplest form of indexing is <strong>no indexing</strong>.
+  In Vespa, this is called <em>streaming search</em> indexing mode.
+  Streaming search is optimized for write performance - the tradeoff is slow search.
+  Streaming search is hence great for applications like personal search, where data size <em>searched</em> is small -
+  read more in the <a href="../streaming-search.html">streaming search</a> guide.
+</p>
+<p>
+  Documents are written to the <a href="../document-summaries.html#document-store">document store</a> in all indexing modes -
+  this is where the copy of the PUT document is persisted.
+  See <em>Summary Manager + Document store</em> in illustration above.
+  In short, this is <em>append</em> operations to large files, and (simplified) each PUT is one write.
+</p>
+<p>
+  PUT-ing documents to the document store can hence be thought of as appending to files using sequential IO,
+  expecting a high write rate, using little memory and CPU.
+  Writing a new version of a document (PUT a document that already exists) is the same as non-existent -
+  the index on the document is updated to point to the latest version in both cases.
+</p>
+<p>
+  A partial UPDATE to a document incurs a read from the document store to get the current fields.
+  Then the new field values are applied and the new version or the document is written.
+  Hence, like a PUT with an extra read.
 </p>
 
 
 
-<h2 id="indices">Index</h2>
+<h2 id="index">Index</h2>
 <p>
-The majority of Vespa use cases operate on the full data set,
-using <a href="../reference/services-content.html#document">indexed mode</a>:
+  The majority of Vespa use cases operate on the full data set,
+  using <a href="../reference/services-content.html#document">indexed mode</a>:
 </p>
 <pre>
 schema music {
@@ -87,27 +90,30 @@ schema music {
         }
 </pre>
 <p>
-Observe that documents are written to summary (i.e. document store) as in streaming mode,
-but there is also an <em>index</em>.
-See <em>Index Manager + Index</em> in illustration above.
-</p><p>
-Refer to <a href="../partial-updates.html">partial updates</a> for the index write.
-In short, it updates the memory index, which is flushed regularly.
-The PUT to the index is hence a memory only operation, but uses CPU to update the index.
-</p><p>
-A partial UPDATE is as in streaming search, plus the memory index update.
+  Observe that documents are written to summary (i.e. document store) as in streaming mode,
+  but there is also an <em>index</em>.
+  See <em>Index Manager + Index</em> in illustration above.
+</p>
+<p>
+  Refer to <a href="../partial-updates.html">partial updates</a> for the index write.
+  In short, it updates the memory index, which is flushed regularly.
+  The PUT to the index is hence a memory only operation, but uses CPU to update the index.
+</p>
+<p>
+  A partial UPDATE is as in streaming search, plus the memory index update.
 </p>
 
 
 
 <h2 id="attribute">Attribute</h2>
 <p>
-Some applications have a limited set of documents,
-with a high change rate to fields in the documents
-(e.g. stock prices - number of stocks is almost fixed, prices changes constantly).
-Such applications are easily write bound.
-</p><p>
-To real-time update fields in high volume, use <a href="../attributes.html">attribute</a> fields:
+  Some applications have a limited set of documents,
+  with a high change-rate to fields in the documents
+  (e.g. stock prices - number of stocks is almost fixed, prices changes constantly).
+  Such applications are easily write bound.
+</p>
+<p>
+  To real-time update fields in high volume, use <a href="../attributes.html">attribute</a> fields:
 </p>
 <pre>
 schema ticker {
@@ -117,10 +123,9 @@ schema ticker {
         }
 </pre>
 <p>
-Attribute fields are not stored in the document store, there is hence no IO (except sequential flushing).
-This enables application to write at memory speed to vespa - a 10k update rate per node is possible.
+  Attribute fields are not stored in the document store, there is hence no IO (except sequential flushing).
+  This enables application to write at memory speed to vespa - a 10k update rate per node is possible.
 </p>
-
 
 
 <h3 id="redundancy-settings">Redundancy settings</h3>
@@ -135,19 +140,19 @@ meaning the content node has loaded the attribute into memory:
     <a href="../reference/services-content.html#searchable-copies">searchable copies</a> equal to
     <a href="../reference/services-content.html#redundancy">redundancy</a> -
     i.e. all nodes that has a replica of the document has loaded it as searchable
-  </li><li>
+  </li>
+  <li>
     Another way is by setting
     <a href="../reference/schema-reference.html#attribute">fast-access</a> on each attribute to update
   </li>
 </ul>
 
 
-
 <h3 id="debugging-performance">Debugging performance</h3>
 <p>
-When debugging update performance, it is useful to know if an update hits the
-<a href="../document-summaries.html#document-store">document store</a> or not.
-Enable <em>spam</em> log level and look for <em>SummaryAdapter::put</em> - then do an update:
+  When debugging update performance, it is useful to know if an update hits the
+  <a href="../document-summaries.html#document-store">document store</a> or not.
+  Enable <em>spam</em> log level and look for <em>SummaryAdapter::put</em> - then do an update:
 </p>
 <pre>
 $ <a href="../reference/vespa-cmdline-tools.html#vespa-logctl">vespa-logctl</a> searchnode:proton.server.summaryadapter spam=on
@@ -157,7 +162,7 @@ $ <a href="../reference/vespa-cmdline-tools.html#vespa-logfmt">vespa-logfmt</a> 
 [2019-10-10 12:16:47.339] SPAM    : searchnode       proton.proton.server.summaryadapter	summaryadapter.cpp:45 SummaryAdapter::put(serialnum = '12', lid = 1, stream size = '199')
 </pre>
 <p>
-Existence of such log messages indicates that the update was accessing the document store.
+  Existence of such log messages indicates that the update was accessing the document store.
 </p>
 <!-- ToDo: when we have log for get and remove as well, add to documentation
 https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/proton/server/summaryadapter.cpp#L75
@@ -167,48 +172,55 @@ https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcor
 
 <h2 id="multivalue-attribute">Multivalue attribute</h2>
 <p>
-<a href="../reference/schema-reference.html#field">Multivalued attributes</a> are
-<em>weightedset</em>, <em>array of struct/map</em>, <em>map of struct/map</em> and <em>tensor</em>.
-The attributes have different characteristics, which affects write performance.
-Generally, updates to multivalue fields are more expensive as the field size grows.
+  <a href="../reference/schema-reference.html#field">Multivalued attributes</a> are
+  <em>weightedset</em>, <em>array of struct/map</em>, <em>map of struct/map</em> and <em>tensor</em>.
+  The attributes have different characteristics, which affects write performance.
+  Generally, updates to multivalue fields are more expensive as the field size grows:
 </p>
 <table class="table">
-<tr>
-  <th>weightedset</th>
-  <td>
-    Memory-only operation when updating: read full set, update, write back.
-    Make the update as inexpensive as possible using numeric types instead of strings, where possible
-    Example: a weighted set of string with many (1000+) elements.
-    Adding an element to the set means an enum store lookup/add and add/sort of the attribute multivalue map -
-    details in <a href="../attributes.html">attributes</a>.
-    Use a numeric type instead to speed this up - this has no string comparisons.
-  </td>
-</tr><tr>
-  <th style="white-space: nowrap">array/map of struct/map</th>
-  <td>
-    Update to array of struct/map and map of struct/map requires a read from the
-    <a href="../document-summaries.html#document-store">document store</a> and will hence reduce update rate -
-    see <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
-  </td>
-</tr><tr>
-  <th>tensor</th>
-  <td>
-    Updating tensor cell values is a memory-only operation: copy tensor, update, write back.
-    For large tensors, this implicates reading and writing a large chunk of memory for single cell updates.
-  </td>
-</tr>
+  <thead>
+  <tr>
+    <th>Attribute</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>weightedset</th>
+    <td>
+      Memory-only operation when updating: read full set, update, write back.
+      Make the update as inexpensive as possible using numeric types instead of strings, where possible
+      Example: a weighted set of string with many (1000+) elements.
+      Adding an element to the set means an enum store lookup/add and add/sort of the attribute multivalue map -
+      details in <a href="../attributes.html">attributes</a>.
+      Use a numeric type instead to speed this up - this has no string comparisons.
+    </td>
+  </tr><tr>
+    <th style="white-space: nowrap">array/map of struct/map</th>
+    <td>
+      Update to array of struct/map and map of struct/map requires a read from the
+      <a href="../document-summaries.html#document-store">document store</a> and will hence reduce update rate -
+      see <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
+    </td>
+  </tr><tr>
+    <th>tensor</th>
+    <td>
+      Updating tensor cell values is a memory-only operation: copy tensor, update, write back.
+      For large tensors, this implicates reading and writing a large chunk of memory for single cell updates.
+    </td>
+  </tr>
+  </tbody>
 </table>
-
 
 
 
 <h2 id="parent-child">Parent/child</h2>
 <p>
-<a href="../parent-child.html">Parent documents</a> are global, i.e. has a replica on all nodes.
-Writing to fields in parent documents often simplify logic,
-compared to the de-normalized case where <span style="text-decoration: underline">all</span>
-(child) documents are updated.
-Write performance depends on the average number of child documents vs number of nodes in the cluster - examples:
+  <a href="../parent-child.html">Parent documents</a> are global, i.e. has a replica on all nodes.
+  Writing to fields in parent documents often simplify logic,
+  compared to the de-normalized case where <span style="text-decoration: underline">all</span>
+  (child) documents are updated.
+  Write performance depends on the average number of child documents vs number of nodes in the cluster - examples:
 </p>
 <ul>
   <li>10-node cluster, avg number of children=100, redundancy=2:
@@ -217,14 +229,14 @@ Write performance depends on the average number of child documents vs number of 
     A parent write means 50 writes, compared to 20 writes, or 2.5x worse</li>
 </ul>
 <p>
-Hence, the more children, the better performance effect for parent writes.
+  Hence, the more children, the better performance effect for parent writes.
 </p>
 
 
 
 <h2 id="conditional-updates">Conditional updates</h2>
 <p>
-A conditional update looks like:
+  A conditional update looks like:
 </p>
 <pre>
 {
@@ -234,20 +246,21 @@ A conditional update looks like:
 }
 </pre>
 <p>
-If the <a href="../document-summaries.html#document-store">document store</a>
-is accessed when evaluating the condition, performance drops.
-Conditions should be evaluated using attribute values for high performance -
-in the example above, <em>myField</em> should be an attribute.
-</p><p>
-Note: If the condition uses struct or map, values are read from the document store:
+  If the <a href="../document-summaries.html#document-store">document store</a>
+  is accessed when evaluating the condition, performance drops.
+  Conditions should be evaluated using attribute values for high performance -
+  in the example above, <em>myField</em> should be an attribute.
+</p>
+<p>
+  Note: If the condition uses struct or map, values are read from the document store:
 </p>
 <pre>
     "condition" : "myDoc.myMap{1} == 3"
 </pre>
 <p>
-This is true even though all struct fields are defined as attribute.
-Improvements to this is tracked in
-<a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
+  This is true even though all struct fields are defined as attribute.
+  Improvements to this is tracked in
+  <a href="https://github.com/vespa-engine/vespa/issues/10892">#10892</a>.
 </p>
 <!-- ToDo: can probably use the "SummaryAdapter::get" log message above, once made -->
 
@@ -255,7 +268,7 @@ Improvements to this is tracked in
 
 <h2 id="client-roundtrips">Client roundtrips</h2>
 <p>
-Consider the difference when sending two fields assignments to the same document:
+  Consider the difference when sending two fields assignments to the same document:
 </p>
 <pre>
 {
@@ -266,7 +279,7 @@ Consider the difference when sending two fields assignments to the same document
     }
 }
 </pre>
-
+<p>vs.</p>
 <pre>
 {
     "update" : "id:namespace:doctype::1",
@@ -282,38 +295,39 @@ Consider the difference when sending two fields assignments to the same document
 }
 </pre>
 <p>
-In the first case, <em>one</em> update operation is sent from the <a href="../vespa-feed-client.html">vespa-feed-client</a> -
-in the latter, the client will send the second update operation <em>after</em> receiving and ack for the first.
-When updating multiple fields, put the updates in as few operations as possible.
-See <a href="../content/content-nodes.html#ordering">Ordering details</a>.
+  In the first case, <em>one</em> update operation is sent from the
+  <a href="../vespa-feed-client.html">vespa-feed-client</a> -
+  in the latter, the client will send the second update operation <em>after</em> receiving and ack for the first.
+  When updating multiple fields, put the updates in as few operations as possible.
+  See <a href="../content/content-nodes.html#ordering">ordering details</a>.
 </p>
 
 
 
-<h2 id="feed-vs-search">Feed vs search</h2>
+<h2 id="feed-vs-search">Feed vs. search</h2>
 <p>
-A content node normally has a fixed set of resources (CPU, memory, disk).
-Configure the CPU allocation for feeding vs. searching in
-<a href="../reference/services-content.html#feeding">concurrency</a> -
-value from 0 to 1.0 - a higher value means more CPU resources for feeding.
+  A content node normally has a fixed set of resources (CPU, memory, disk).
+  Configure the CPU allocation for feeding vs. searching in
+  <a href="../reference/services-content.html#feeding">concurrency</a> -
+  value from 0 to 1.0 - a higher value means more CPU resources for feeding.
 </p>
 
 
 
 <h2 id="feed-testing">Feed testing</h2>
 <p>
-When testing for feeding capacity:
+  When testing for feeding capacity:
 </p>
 <ol>
   <li>Use the <a href="../vespa-feed-client.html">vespa-feed-client</a>.</li>
-  <li>Test using one content node to find its capacity</li>
+  <li>Test using one content node to find its capacity.</li>
   <li>Test feeding performance by adding feeder instances.
     Make sure network and CPU (content and container node) usage increases, until saturation.</li>
-  <li>See troubleshooting at end to make sure there are no errors</li>
+  <li>See troubleshooting at end to make sure there are no errors.</li>
 </ol>
 <p>
-Other scenarios: Feed testing for capacity for sustained load in a system in steady state,
-during state changes, during query load.
+  Other scenarios: Feed testing for capacity for sustained load in a system in steady state,
+  during state changes, during query load.
 </p>
 
 
@@ -404,6 +418,7 @@ vds.distributor.updates.sum.failures.wrongdistributor
   <td>
     <p>
     <em>update_puts/gets</em> indicate "two-phase" updates: <!-- ToDo: explain two-phase updates / link -->
+    </p>
 <pre>
 vds.distributor.update_puts.sum.latency
 vds.distributor.update_puts.sum.ok
