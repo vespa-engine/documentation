@@ -9,14 +9,12 @@ title: "Vespa Serving Scaling Guide"
   <li>Scale query throughput</li>
   <li>Scale serving latency to meet service level agreements (SLA)</li>
 </ul>
-
-
 <p>The question one tries to answer during a sizing exercise is:
 <em>What the total cost would be to serve a use case using Vespa?</em>.</p>
 <p>
 This document helps sizing an application correctly with as low cost as possible.
-
 Vespa is used to implement many use cases, and this document is relevant for all of them:
+</p>
 <ul>
   <li>Serving a <a href="../text-matching-ranking.html">text ranking</a> use case
     or a <a href="../tutorials/news-1-getting-started.html">recommendation</a> use case</li>
@@ -38,7 +36,7 @@ It also covers the following topics:
 <ul>
   <li><a href="#data-distribution">Data distribution</a> in Vespa and how it impacts serving</li>
   <li><a href="#content-cluster-scalability-model">Scaling Serving Latency and Throughput</a> in Vespa</li>
-  <li><a href="#scaling-document-volume">Scaling Data Volume</a> in Vespa</li>
+  <li><a href="#scaling-document-volume-per-node">Scaling Data Volume</a> in Vespa</li>
 </ul>
 
 
@@ -59,10 +57,10 @@ Read <a href="../elastic-vespa.html">elastic Vespa</a> to learn
 how data is distributed across nodes, and how adding or removing nodes works.
 See also <a href="../content/consistency.html">Vespa's consistency model</a> documentation.
 </p>
-<figure>
-<figcaption><strong>Flat content distribution</strong></figcaption>
+
+
+<h3 id="flat-content-distribution">Flat content distribution</h3>
 <img src="../img/flat-content-cluster.svg" alt="Flat content distribution"/>
-</figure>
 <p>
 With a flat distribution, the content is distributed to content nodes using the
 <a href="../content/idealstate.html">ideal state distribution algorithm</a>.
@@ -70,7 +68,7 @@ A query is dispatched in parallel from a container instance to
 <strong>all</strong> content nodes in the content cluster.
 Each content node searches the <em>active</em> part of the <em>ready</em> sub-database.
 The above figure illustrates a deployment using 4 nodes with <em>redundancy</em> 2 and <em>searchable-copies</em> 2 -
-see the <a href="#high-availability">availability</a> section.
+see the <a href="#high-data-availability">availability</a> section.
 </p><p>
 When using flat data distribution, the only way to scale query throughput is to reduce the search latency.
 Given a fixed occupancy (users, load clients),
@@ -78,10 +76,10 @@ this relationship between query throughput and latency is described by
 <a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's law</a> -
 more on this in <a href="#content-cluster-scalability-model">content cluster scalability model</a> section.
 </p>
-<figure>
-<figcaption><strong>Grouped content distribution</strong></figcaption>
+
+
+<h3 id="grouped-content-distribution">Grouped content distribution</h3>
 <img src="../img/grouped-content-cluster.svg" alt="Grouped content distribution"/>
-</figure>
 <p>
 With a grouped distribution, content is distributed to a configured set of <em>groups</em>,
 such that the entire document collection is contained in each group.
@@ -97,7 +95,7 @@ The default policy is <em>adaptive</em>, which load balances over the set of gro
 </p>
 
 
-<h3 id="high-availability">High Data Availability</h3>
+<h3 id="high-data-availability">High Data Availability</h3>
 <p>
 Ideally, the data is available and searchable at all times, even during node failures.
 High availability costs resources due to data replication.
@@ -129,13 +127,14 @@ Configure availability vs cost:
     </tr>
   </tbody>
 </table>
-<figure>
-<figcaption><strong>Content node database</strong></figcaption>
+
+
+<h3 id="content-node-database">Content node database</h3>
 <img src="../img/proton_database.svg" height="420" width="840" alt="Content node database"/>
-</figure>
 <p>
 The above figure illustrates the three
 <a href="../proton.html#sub-databases">sub-databases</a> inside a Vespa content node.
+</p>
 <ul>
   <li>The documents in the <strong>Ready</strong> DB are indexed,
     but only the documents in <b>Active</b> state are searchable.
@@ -184,12 +183,13 @@ By doing the query in two protocol
 phases one avoids transferring summary data for hits which will not make it into the global best hits.
 </p><p>
 Components Involved in Query Execution:
+</p>
 <ul>
-<li><b>Container</b>
+<li><strong>Container</strong>
   <ul>
   <li>Parses the <a href="../query-api.html">API</a> request
       and the <a href="../query-language.html">query</a> and run time context features.</li>
-  <li>Modify the query according to the schema specification (stemming, etc.) for a text search application
+  <li>Modifies the query according to the schema specification (stemming, etc.) for a text search application
       or creating run time query or user context tensors for an ML serving application.</li>
   <li>Invokes chains of custom <a href="../jdisc/container-components.html">container components/plugins</a>
       which can work on the request and query input and also the results.</li>
@@ -224,7 +224,9 @@ Components Involved in Query Execution:
   </ul>
 </li>
 </ul>
+<p>
 The detailed execution inside Proton during the matching and ranking first protocol phase is:
+</p>
 <ol>
   <li>Build up the query tree from the serialized network representation.</li>
   <li>Lookup the query terms in the index and B-tree dictionaries
@@ -267,7 +269,8 @@ maximum speedup for program processing using multiple processors.
 In Vespa, as in any parallel computing system,
 there is work which can be parallelized and work which cannot.
 The relationship between these two work types determine how to best scale the system,
-using a flat or grouped distribution. 
+using a flat or grouped distribution.
+</p>
 <table class="table">
   <tr id="static-query-work">
     <td><strong>static query work</strong></td>
@@ -312,7 +315,7 @@ dynamic work (<em>DQW</em>) is given by the formula:
 </p><p><!-- depends on mathjax -->
   $$\text{max_speedup}_{\text{group}} = \frac{1}{1 - \frac{DQW}{SQW+DQW}}$$
 </p><p>
-For example, if one by inspecting <a href="#metrics-for-capacity-plan">metrics</a> see that the <em>DQW</em> = 0.50,
+For example, if one by inspecting <a href="#metrics-for-vespa-sizing">metrics</a> see that the <em>DQW</em> = 0.50,
 the maximum speedup one can get by increasing parallelism by using more nodes and decreasing <em>DQW</em> is 2.
 With fixed occupancy (number of users, clients or load),
 <a href="https://en.wikipedia.org/wiki/Little%27s_law">Little's Law'</a>
@@ -371,7 +374,7 @@ Given the theory, one can derive two rules of thumb for scaling throughput and l
 
 
 
-<h2 id="scaling-latency">Scaling latency in a content group</h2>
+<h2 id="scaling-latency-in-a-content-group">Scaling latency in a content group</h2>
 <p>
 Irrespective of using single group (flat distribution) or multiple groups,
 the serving latency depends on the factors already described; <em>DQW</em> and <em>SQW</em>.
@@ -395,10 +398,13 @@ different use cases.
   <img src="../img/Latency_documents.svg" alt="Latency vs document count per node"/>
 </figure>
 <ul>
-  <li>For the yellow use case,
+  <li>
+    <p>
+    For the yellow use case,
     the measured latency is almost independent of the total document volume. This is called sub-linear latency scaling
     which calls for scaling up using better flavor specification instead of scaling out.
-
+    </p>
+    <p>
     The observed latency at 10M documents per node is almost the same as with 1M documents per node.
     Such a use case would be most cost-effective by storing as many documents as possible
     (within the memory/disk/feeding constrains set by the concurrency settings and node flavor)
@@ -407,25 +413,31 @@ different use cases.
     like the yellow case. Example of such query operators include 
     the <a href="../using-wand-with-vespa.html">wand operators</a>, and <a href="../approximate-nn-hnsw.html">
     approximate nearest neighbor search operator</a>
-</li>
-  <li>For the blue use case,
+    </p>
+  </li>
+  <li>
+    <p>
+      For the blue use case,
       the measured latency shows a clear correlation with the document volume.
       This is a case where the dynamic query work portion is high,
       and adding nodes to the flat group will reduce the serving latency.
       The sweet spot is found where targeted latency SLA is achieved. 
       This sweet spot depends on which model or ranking features are in use,
       e.g. how expensive the model is per retrieved or ranked document.
-
+    </p>
+    <p>
       For example, a <a href="../xgboost.html">GBDT xgboost model</a> with 3000 trees
       might breach the targeted latency SLA already at 200K documents,
       while a 300 tree model might be below the SLA at 2M documents.
       Using exact <a href="../nearest-neighbor-search.html">nearest neighbor search</a> 
       has scaling properties like the blue case.
       See also <a href="feature-tuning.html">feature tuning</a>.
+    </p>
   </li>
 </ul>
 
-<h3 id="num-threads-per-search">Reduce latency with multi-threaded per search execution</h3>
+
+<h3 id="reduce-latency-with-multi-threaded-per-search-execution">Reduce latency with multi-threaded per search execution</h3>
 <p>
 It is possible to reduce latency of queries
 where the <a href="#dynamic-query-work">dynamic query work</a> portion is high.
@@ -437,23 +449,24 @@ will be as wasteful as adding nodes to a flat distribution.
 </figure>
 <p>
 Using more threads per search will reduce latency as long as the dynamic portion of the query cost is high 
-compared to the static query cost. The reduction in latency comes with the cost of higher cpu utilization. 
-
+compared to the static query cost. The reduction in latency comes with the cost of higher cpu utilization.
+</p>
+<p>
 A search request with four threads will occupy all four threads until the last thread has completed,
 and the intra-node per thread document space partitioning must be balanced to give optimal results.
-
+</p>
+<p>
 For ranking profiles with second phase ranking, see <a href="../phased-ranking.html">phased ranking</a>,
 the hits from first-phase ranking are rebalanced so that each matching thread scores about 
 the same amount of hits using the second phase ranking expression.
 </p>
-
-<p>From the above examples with the blue and yellow use case it follows that
-
+<p>
+  From the above examples with the blue and yellow use case it follows that
+</p>
 <ul>
-<li>Linear exact nearest neighbor search latency can be reduced by using more threads per search</li>
-<li>Sub-linear approximate nearest neighbor search latency does not benefit from using more threads per search</li>
+  <li>Linear exact nearest neighbor search latency can be reduced by using more threads per search</li>
+  <li>Sub-linear approximate nearest neighbor search latency does not benefit from using more threads per search</li>
 </ul>
-
 <p>
 By default, the number of threads per search is one,
 as that gives the best resource usage measured as CPU resources used per query.
@@ -471,7 +484,7 @@ multi-core cpu architectures for low query volume applications.
 
 
 
-<h2 id="scaling-document-volume">Scaling document volume per node</h2>
+<h2 id="scaling-document-volume-per-node">Scaling document volume per node</h2>
 <p>
 One want to fit as many documents as possible into a node given the node constrains
 (e.g. available cpu, memory, disk) while maintaining:
@@ -584,7 +597,7 @@ Also see <a href="sizing-feeding.html#feed-vs-search">sizing write versus read</
 
 
 
-<h2 id="metrics-for-capacity-plan">Metrics for Vespa Sizing</h2>
+<h2 id="metrics-for-vespa-sizing">Metrics for Vespa Sizing</h2>
 <p>
 The relevant <a href="../reference/metrics.html">Vespa Metrics</a> for measuring the cost factors,
 in addition to system level metrics like cpu util, are:
@@ -604,7 +617,7 @@ by using <em>Amdahl's law</em>:
 </p><p><!-- depends on mathjax -->
   $$\text{max_speedup}_{\text{}} = \frac{1}{1 - \frac{query\_setup\_time}{query\_setup\_time+match\_time}}$$
 </p><p>
-In addition, the following metrics are used to find number of matches per query per node:
+In addition, the following metrics are used to find number of matches per query, per node:
 <pre>
 content.proton.documentdb.matching.rank_profile.docs_matched
 content.proton.documentdb.matching.rank_profile.queries
