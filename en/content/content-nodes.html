@@ -3,21 +3,40 @@
 title: "Content nodes, states and metrics"
 ---
 
-<p>
-  Refer to <a href="../operations/admin-procedures.html">administrative procedures</a>
-  for configuration and state monitoring / management.
-</p>
-<p>
-  Try the <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode">
-  Multinode testing and observability</a> sample app to get familiar with interfaces and behavior.
-</p>
-<p>
-  Refer to <a href="../reads-and-writes.html#components">components</a>
-  for an overview of the Document API flow.
-  Content cluster processes are <em>distributor</em>, <em>proton</em> and <em>cluster controller</em>:
-</p>
 <img src="/assets/img/elastic-feed.svg" alt="Content cluster overview" width="540" height="auto"/>
-
+<p>
+  Content cluster processes are <em>distributor</em>, <em>proton</em> and <em>cluster controller</em>.
+</p>
+<p>
+  The distributor calculates the correct content node using
+  the distribution algorithm and the <a href="#cluster-state">cluster state</a>.
+  With no known cluster state, the client library will send requests to a random node,
+  which replies with the updated cluster state if the node was incorrect.
+  Cluster states are versioned, such that clients hitting outdated distributors do not override
+  updated states with old states.
+</p>
+<p>
+  The <a href="#distributor">distributor</a> keeps track of
+  which content nodes that stores replicas of each bucket (maximum one replica each),
+  based on <a href="../reference/services-content.html#redundancy">redundancy</a>
+  and information from the <em>cluster controller</em>.
+  A bucket maps to one distributor only.
+  A distributor keeps a bucket database with bucket metadata.
+  The metadata holds which content nodes store replicas of the buckets,
+  the checksum of the bucket content and the number of documents and meta entries within the bucket.
+  Each document is algorithmically mapped to a bucket and forwarded to the correct content nodes.
+  The distributors detect whether there are enough bucket replicas on the
+  content nodes and add/remove as needed.
+  Write operations wait for replies from every replica
+  and fail if less than redundancy are persisted within timeout.
+</p>
+<p>
+  The <a href="#cluster-controller">cluster controller</a>
+  manages the state of the distributor and content nodes.
+  This <em>cluster state</em> is used by the document processing chains
+  to know which distributor to send documents to,
+  as well as by the distributor to know which content nodes should have which bucket.
+</p>
 
 
 <h2 id="node-state">Node state</h2>
@@ -493,3 +512,17 @@ e.g. to remap requests to other buckets after bucket splitting and joining.
   If all copies of a bucket are in an initializing state at the same time,
   read requests may be sent to a bucket copy that does not have the most updated state to process it.
 </p>
+
+
+
+<h2 id="further-reading">Further reading</h2>
+<ul>
+  <li>
+    Refer to <a href="../operations/admin-procedures.html">administrative procedures</a>
+    for configuration and state monitoring / management.
+  </li>
+  <li>
+    Try the <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode">
+    Multinode testing and observability</a> sample app to get familiar with interfaces and behavior.
+  </li>
+</ul>
