@@ -103,7 +103,7 @@ $ mkdir my-app
 
 ## Application Packages
 
-<img src="/assets/img/vespa-overview.svg" width="795px" height="auto" alt="Vespa Overview" />
+<img src="/assets/img/vespa-overview.svg" width="825px" height="auto" alt="Vespa Overview" />
 
 A Vespa [application package](../cloudconfig/application-packages.html) is the
 set of configuration files and Java plugins that together define the behavior

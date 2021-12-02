@@ -63,13 +63,12 @@ For reference, the final state of this tutorial can be found in the
 
 First, let's revisit Vespa's overall architecture:
 
-<img src="/assets/img/vespa-overview.svg" width="795px" height="auto" alt="Vespa Overview" />
+<img src="/assets/img/vespa-overview.svg" width="825px" height="auto" alt="Vespa Overview" />
 
 Recall that the application package contains everything necessary to run the
 application. When this is deployed, the config cluster takes care of
 distributing the services to the various nodes. In particular, the two main
-types of nodes are the stateless `container` nodes and the stateful `content`
-nodes.
+types of nodes are the stateless `container` nodes and the stateful `content` nodes.
 
 All requests pass through the `container` cluster before passing along to
 `content` cluster where the actual retrieval and ranking occurs. The queries
