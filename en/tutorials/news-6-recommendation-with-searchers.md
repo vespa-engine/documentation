@@ -63,7 +63,7 @@ For reference, the final state of this tutorial can be found in the
 
 First, let's revisit Vespa's overall architecture:
 
-![Vespa's overall architecture](../img/overview/vespa-overview.svg)
+<img src="/assets/img/vespa-overview.svg" width="795px" height="auto" alt="Vespa Overview" />
 
 Recall that the application package contains everything necessary to run the
 application. When this is deployed, the config cluster takes care of
