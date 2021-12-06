@@ -28,11 +28,17 @@ Install [bundler](https://bundler.io/), then
 to set up a local server at localhost:4000 to see the pages as they will look when served.
 The output will highlight rendering/other problems when starting serving.
 
-Alternatively, use the docker image `jekyll/jekyll` to run the local server
+Alternatively, use the docker image `jekyll/jekyll` to run the local server on
+Mac
 
     $ docker run -ti --rm --name doc \
       --publish 4000:4000 -e JEKYLL_UID=$UID -v $(pwd):/srv/jekyll \
       jekyll/jekyll jekyll serve
+
+or RHEL 8
+
+    $ podman run -it --rm --name doc -p 4000:4000 -e JEKYLL_ROOTLESS=true \
+      -v "$PWD":/srv/jekyll:Z docker.io/jekyll/jekyll jekyll serve
 
 The layout is written in [denali.design](https://denali.design/),
 see [_layouts/default.html](_layouts/default.html) for usage.
