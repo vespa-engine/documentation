@@ -303,7 +303,7 @@ use an inexpensive ranking expression to sort out the least promising candidates
 before spending most resources on the highest ranking candidates.
 In short, use increasingly more power per document as the candidate set shrinks:
 
-<img src="img/retrieval-ranking.svg" width="584" height="auto" alt="retrieval and ranking]"/>
+<img src="/assets/img/retrieval-ranking.svg" width="584" height="auto" alt="Retrieval and ranking]"/>
 
 Let's try the same query again, with a two-phase rank-profile that also does an explicit rank score cutoff:
 
