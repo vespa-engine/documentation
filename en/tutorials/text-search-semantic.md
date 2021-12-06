@@ -206,7 +206,7 @@ The table below shows results obtained by matching the closest 1.000 document ve
 
 All the results involving embeddings in this tutorial are generated via the sentence BERT model. The results obtained with the Universal Sentence Encoder model were similar and therefore omitted. On the other hand, the results obtained with the Word2Vec model were way worse than expected and were left out of this tutorial since they might require more pre-processing than the sentence models to give sensible results.
 
-<div style="text-align:center"><img src="images/pure_ann.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/pure_ann.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 In addition to matching documents based on the distance between document and query vectors, we also ranked the matched documents using the semantic vectors by having the 1st phase ranking function be the dot-product between query and title plus the dot-product between the query and body. All embedding vectors are normalized to have length (L2-norm) equal to 1.
 
@@ -242,7 +242,7 @@ fieldset default {
 
 It was surprising to see the effectiveness of the WAND operator in this case: 
 
-<div style="text-align:center"><img src="images/wand_effectiveness.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/wand_effectiveness.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 It matched much less documents than the `OR` operator (12.5% versus 85% respectively) while keeping a similar recall metric (92% versus 96% respectively). 
 
@@ -256,11 +256,11 @@ The second surprise was to see how little the pre-trained sentence embeddings co
 
 It could be argued that the articles retrieved by `ANN` does not necessarily contain the query terms in the title nor the body of the document, leading to zero `BM25` scores. To address that we can add the (unscaled) dot-product in the 1st phase ranking. The results below show that we had a marginal reduction in Recall and a marginal increase in MRR.
 
-<div style="text-align:center"><img src="images/weakAND_ANN_BM25_dotP.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/weakAND_ANN_BM25_dotP.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 Another issue that must be addressed is that we should scale the BM25 scores and the embedding dot-products so that we take into consideration that they might have completely different scales. In order to do that we need to collect a training dataset that that takes into account the appropriate match phase and fit a model (linear in our case) according to a listwise loss function, as described in our [text search tutorial with ML](text-search-ml.html) and summarized in [this blog post](https://medium.com/vespa/learning-to-rank-with-vespa-9928bbda98bf). 
 
-<div style="text-align:center"><img src="images/weakAND_ANN_BM25_dotP_scaled.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/weakAND_ANN_BM25_dotP_scaled.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 The table above shows that we obtained a slight improvement in MRR and that the model increased the relative weight associated with the BM25 scores, even though the magnitude of the BM25 scores are much bigger than the magnitude of the dot-product scores, as we will see in the next section. This again points towards the importance of term-match signals relative to the semantic search signals.
 
@@ -270,17 +270,17 @@ The results obtained so far led us to investigate why the `weakAND` operator was
 
 The results discussed so far did not show any significant improvement by adding (pre-trained) semantic vectors in addition to the term-matching signals. The important question is why not? One possibility is to say that the pre-trained semantic vectors are not informative enough in this context. However, the graph below indicates otherwise. The blue histogram shows the empirical distribution of embedding dot-product scores for the general population of (query, document) pairs. The red histogram shows the empirical distribution of embedding dot-product scores for the population of (query, relevant_document) pairs. So the dot-product scores are significantly higher for documents relevant to the query than they are for random documents. 
 
-<div style="text-align:center"><img src="images/dotP_hist.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/dotP_hist.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 This confirms the results we obtained when only using `nearestNeighbor` operator to match the documents and the dot-product scores to rank them and shows that pre-trained embedding indeed carries relevant information about query document relevance. If that is the case, there is also the possibility that the dataset being used, MS MARCO dataset in our case, is biased towards term-matching signals. The next graph supports this hypothesis by showing that the empirical distribution of the relevant documents (red) is significantly higher in bm25 score than the distribution of random documents.
 
-<div style="text-align:center"><img src="images/bm25_hist.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/bm25_hist.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 In other words, there are few documents that would not be matched by term-matching approaches. This explains why the results obtained with the `weakAND` operator were outstanding. MS MARCO dataset turns out to be a favorable environment for this kind of algorithm. That also means that after accounting for term-matching there are almost no relevant documents left to be matched by semantic signals. This is true even if the semantic embeddings are informative. 
 
 The best we can hope for in a biased dataset is for the bm25 scores and the embedding dot-product scores to be positively correlated, showing that both carry information about document relevance. This seems indeed to be the case in the scatter plot below that shows a much stronger correlation between bm25 scores and embedding scores for the relevant documents (red) than between the scores of the general population (black).
 
-<div style="text-align:center"><img src="images/bm25_dotP_scatter.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/bm25_dotP_scatter.png" style="width: 60%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 To be clear, there is no claim being made that the results and conclusions described here are valid across different NLP datasets and tasks. However, this problem might be more common than we would like to admit given the nature of how the datasets are created. For example, according to the MS MARCO dataset paper [^1], they built the dataset by:
 
