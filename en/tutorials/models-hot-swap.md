@@ -91,7 +91,7 @@ we ensure that no more than two versions of a document are stored at any given t
 Using the internal version,
 we can filter out old versions that were not overwritten and hence still exist with a set bit that again became current.
 
-Versioning can be stored in a database or some configuration file,
+Versioning can be stored in a database or a configuration file,
 but the simplest place is probably the Vespa app itself, using a dedicated type:
 ```
 search config {
@@ -252,7 +252,7 @@ Now, we can distinguish between up-to-date and obsolete documents
 by comparing the `version` and `latest_version` fields:
 if they are equal the document is part of the latest feed, otherwise it isn't.
 Note that a difference may be briefly acceptable during a hot swap,
-where on-going queries should access documents from the set that became old.
+where ongoing queries should access documents from the set that became old.
 We can therefore allow some slack in our filter definition,
 defined in `services.xml` under the `<content>` tag:
 ```
@@ -297,15 +297,16 @@ as several unsuccessful attempts might take place before one goes well,
 and during that time queries should keep using the latest successful version.
 
 The solution is to separate read and write versions:
-at the beginning of every feed, the write version is incremented,
+at the beginning of every feed, the _write_ version is incremented,
 and the result is stored back in the configuration and used in all the model documents.
-Once feeding completes successfully, the configuration is updated again, setting the read version to the write version.
+Once feeding completes successfully, the configuration is updated again,
+setting the read version to the _write_ version.
 This way, any leftovers from unsuccessful feedings will have smaller versions, hence will be ignored by queries.
 Importantly, the active set should only be modified after a successful feed,
 otherwise we'll break the hot swap by overwriting the currently active set.
 
 The new configuration schema can look as follows,
-using the new `next_version` field to store the write version
+using the new `next_version` field to store the _write_ version
 and the previously defined `version` field (imported for GC) for the read version:
 
 ```
@@ -373,4 +374,5 @@ The mechanisms described above introduce new types, fields, and relations to the
 ![Hot swap schema](images/hot-swap-schema.png)
 
 While these changes increase the complexity of the application,
-they enable features that are a must in any application that is highly available, updated often, lean, and efficient.
+they enable features that are a must in any application that is highly available,
+frequently updated, lean, and efficient.
