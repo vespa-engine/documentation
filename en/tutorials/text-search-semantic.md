@@ -252,7 +252,7 @@ If you are detail oriented, you might be wondering why the `weakAND` operator ma
 
 The second surprise was to see how little the pre-trained sentence embeddings contributed in addition to what was delivered by WAND. The table below shows that we are indeed matching documents that wouldn't be matched by the `weakAND` operator alone (16% matched documents by adding `ANN` vs. 12% by `weakAND` alone.). However, we see almost no improvement for Recall and MRR.
 
-<div style="text-align:center"><img src="images/weakAND_ANN_BM25.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/weakAND_ANN_BM25.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 It could be argued that the articles retrieved by `ANN` does not necessarily contain the query terms in the title nor the body of the document, leading to zero `BM25` scores. To address that we can add the (unscaled) dot-product in the 1st phase ranking. The results below show that we had a marginal reduction in Recall and a marginal increase in MRR.
 
