@@ -439,7 +439,7 @@ or plot those values to get a richer comparison between the two ranking function
 For the small dataset in the sample data, the MRR is approximately equal.
 For the full MSMARCO dataset on the other hand, we see a different picture:
 
-<div style="text-align:center"><img src="images/mrr_boxplot.png" style="width: 50%; margin-right: 1%; margin-bottom: 1.0em; margin-top: 1.0em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/mrr_boxplot.png" style="width: 50%; margin-right: 1%; margin-bottom: 1.0em; margin-top: 1.0em;"></div>
 
 Looking at the figure we can see that the faster BM25 feature
 has delivered superior results for this specific application.

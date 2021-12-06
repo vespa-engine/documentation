@@ -105,7 +105,7 @@ other. We'll call this the interaction matrix. Then we factorize this matrix
 into two smaller matrices, where the product of these two smaller
 approximates the original.
 
-![Matrix factorization](images/mf.png)
+![Matrix factorization](/assets/img/tutorials/mf.png)
 
 In the image above, you can see a user matrix with as many rows as there are
 users and a news matrix with as many columns as there are news articles.
@@ -295,7 +295,7 @@ Now that we have content-based embeddings for each news article,
 we can train the model to use them. The following figure illustrates
 the model we are training:
 
-<img src="images/embeddings.png" width="768px" />
+<img src="/assets/img/tutorials/embeddings.png" width="768px" />
 
 So, we'll pass the 512-dimensional embeddings from the BERT model 
 through a typical neural network layer to reduce dimensions to 50.
