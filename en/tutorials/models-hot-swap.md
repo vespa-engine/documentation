@@ -27,12 +27,12 @@ Hence, for simplicity, we assume that embeddings are available along with some r
 
 Moving from a demo app to a real-world one introduces additional requirements:
 
-1. **Hot swap** - models should be updated on a regular basis, as new users and news articles enter the system,
+1. **Hot swap**: Models should be updated on a regular basis, as new users and news articles enter the system,
    and more events (users viewing and clicking news) are collected.
    Model updates must be atomic from the users' perspective,
    namely a ranking procedure must not consider embeddings from different models at the same time.
    Further, there must be no downtime for model updates.
-2. **Multiple models** - our initial model recommends news articles to users based on other users' interactions
+2. **Multiple models**: Our initial model recommends news articles to users based on other users' interactions
    with those articles (as well as categories and content). This is the basic model.
    Now, let us consider two other (somewhat contrived) models:
    _recent_, which only considers events from the last day,
@@ -40,7 +40,7 @@ Moving from a demo app to a real-world one introduces additional requirements:
    While all 3 models contain the same users and articles, and all rely on the same model generation procedure,
    each model is composed of a completely different set of embeddings.
    Further, we should be able to use all models simultaneously for different queries and feeds.
-3. **Shared model-agnostic data** - news articles carry data and metadata that can be used for filtering -
+3. **Shared model-agnostic data**: News articles carry data and metadata that can be used for filtering -
    title, author, category, language, and so on.
    Models, on the other hand, are created based on events reporting access to the document from specific users.
    We thus distinguish between document data, which depends only on the article and is model agnostic,
@@ -50,7 +50,7 @@ Moving from a demo app to a real-world one introduces additional requirements:
    Further, while the models rely on user events coming from some tracking system,
    the model-agnostic fields may come from some database.
    Decoupling operations relying on each data source can eliminate coordination issues.
-4. **Cleanup** - news articles might be deleted and users might opt out of the system.
+4. **Cleanup**: News articles might be deleted and users might opt out of the system.
    Our system should not rely on or recommend stale data, hence obsolete entities should be removed.
    Assuming news articles and users aren't deleted from Vespa in real time,
    we need a way to remove the obsolete users and articles from the application.
@@ -73,13 +73,13 @@ it is up to the application to implement the model swap as an atomic transaction
 The weapon of choice is versioning, which consists of two parts,
 a set bit externally defined as part of the document ID, and a version stored internally within the document:
 
-1. **External versioning** - a set number is appended to each document ID.
+1. **External versioning**: A set number is appended to each document ID.
    This separates documents belonging to the current model from the documents belonging to the next (or previous) model,
    allowing them to coexist without overwriting each other.
    Sets alternate between 0 and 1.
    This way, when a new model is being fed, it does not overwrite documents pertaining to the current model
    but does overwrite documents pertaining to the previous one, which is already obsolete.
-2. **Internal versioning** - a version number is stored inside each document belonging to the model.
+2. **Internal versioning**: A version number is stored inside each document belonging to the model.
    This model number is increased in every feeding, allowing queries to only target the current model,
    filtering our documents belonging to the next or previous one.
 
@@ -113,7 +113,9 @@ It then adds a filter clause to the following query, limiting it to the current 
 On the feeding side, the configuration is also read first.
 Documents are then generated such that they have the next internal version and the alternative set.
 Once all documents are fed successfully, the configuration document is updated with the new internal version and set.
-From that point onward, any new search will target the newly fed model.
+From that point onward, any new search will target the newly fed model:
+
+<img src="/assets/img/tutorials/hot-swap-flow.svg" width="968" height="auto" alt="Hot swap flow" />
 
 ![Hot swap flow](images/hot-swap-flow.png)
 
@@ -335,13 +337,13 @@ Now, consider one of the regions becomes temporarily unavailable and the daily f
 while another region is successfully fed as usual.
 The discrepancy between the regions can lead to two issues:
 
-1. **Version mismatch** - since each region had a different number of successful feedings,
+1. **Version mismatch**: Since each region had a different number of successful feedings,
    each will have a different current version.
    Given the global endpoint can go either way,
    a user that gets the version from a configuration in one region
    might be directed to a different region when performing the recommendation query.
    This will lead to using an obsolete model at best, and a non-existing one at worst.
-2. **Model mismatch** - even if the versions somehow converge,
+2. **Model mismatch**: Even if the versions somehow converge,
    the models themselves might differ when one region isn't fed (possibly due to a feeding issue).
    Recall that recommendations are based on two steps:
    first, the user's vector is obtained, and then a dot product with each news article is performed.
