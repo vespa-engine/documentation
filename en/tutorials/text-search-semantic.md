@@ -33,7 +33,7 @@ However, assuming that we can deploy a multi-phased ranking system with cheaper 
 
 Before we proceed to more elaborate experiments we need to establish some obvious baselines. Here are the results obtained by using query terms to match documents and [BM25](../reference/bm25.html) as 1st phase ranking:
 
-<div style="text-align:center"><img src="images/semantic_baselines.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center"><img src="/assets/img/tutorials/semantic_baselines.png" style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"></div>
 
 The match operator `AND` means that we are only matching documents that contain all the query terms either in the title or in the body of the document. A sample query looks like this:
 
