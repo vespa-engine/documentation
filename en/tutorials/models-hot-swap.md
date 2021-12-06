@@ -117,7 +117,7 @@ From that point onward, any new search will target the newly fed model:
 
 <img src="/assets/img/tutorials/hot-swap-flow.svg" width="968" height="auto" alt="Hot swap flow" />
 
-![Hot swap flow](images/hot-swap-flow.png)
+
 
 ## Supporting multiple models
 
