@@ -115,7 +115,7 @@ Documents are then generated such that they have the next internal version and t
 Once all documents are fed successfully, the configuration document is updated with the new internal version and set.
 From that point onward, any new search will target the newly fed model:
 
-<img src="/assets/img/tutorials/hot-swap-flow.svg" width="968" height="auto" alt="Hot swap flow" />
+<img src="/assets/img/tutorials/hot-swap-flow.svg" width="968px" height="auto" alt="Hot swap flow" />
 
 
 
@@ -373,7 +373,7 @@ Luckily, we can achieve the desired "stickiness" by extending the configuration 
 
 The mechanisms described above introduce new types, fields, and relations to the application:
 
-![Hot swap schema](images/hot-swap-schema.png)
+<img src="/assets/img/tutorials/hot-swap-schema.svg" width="994px" height="auto" alt="Hot swap schema" />
 
 While these changes increase the complexity of the application,
 they enable features that are a must in any application that is highly available,
