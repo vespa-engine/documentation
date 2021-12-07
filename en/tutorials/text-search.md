@@ -34,6 +34,7 @@ This repository contains a fully-fledged Vespa application including a front-end
 This tutorial however will start with the basics and develop the application over multiple parts.
 
 
+
 ## Dataset
 
 We use a dataset called [MS MARCO](https://microsoft.github.io/msmarco/) throughout this tutorial.
@@ -95,6 +96,7 @@ Each of those relevant documents are guaranteed to be on the sampled pool of doc
 so that we have a fair chance of retrieving it when sending sample queries to our Vespa application.
 
 
+
 ## Create a Vespa Application Package
 
 A Vespa application package is the set of configuration files and Java plugins
@@ -114,6 +116,7 @@ so we create a directory for this application:
 $ mkdir application
 </pre>
 </div>
+
 
 
 ### Schema
@@ -213,6 +216,7 @@ will be computed for every document matching your query.
 Rank profiles are selected by using the `ranking` query parameter.
 
 
+
 ### Services Specification
 
 The [services.xml](../reference/services.html) defines the services that make up
@@ -256,6 +260,7 @@ content cluster capacity can be increased by adding node elements — see
 setup.)
 - `<nodes>` defines the hosts for the content cluster.
 
+
 ### Deployment Specification
 
 [hosts.xml](../reference/hosts.html) contains a list of all the hosts/nodes
@@ -270,6 +275,7 @@ uses a single node. Write the following to `application/hosts.xml`:
   </host>
 </hosts>
 </pre>
+
 
 
 ## Deploy the application package
@@ -326,6 +332,7 @@ $ curl -s --head http://localhost:8080/ApplicationStatus
 </div>
 
 
+
 ## Feed the data
 
 The data fed to Vespa must match the document type in the schema.
@@ -343,6 +350,7 @@ $ java -jar vespa-http-client-jar-with-dependencies.jar \
   --verbose --file msmarco/vespa.json --endpoint http://localhost:8080
 </pre>
 </div>
+
 
 
 ## Run a test query
@@ -397,6 +405,7 @@ which in this case is delivered by the `nativeRank` algorithm
 that we defined as the default _ranking-profile_ in our schema definition file.
 
 
+
 ## Compare and evaluate different ranking functions
 
 Vespa allow us to easily experiment with different _ranking-profile_'s.
@@ -439,7 +448,11 @@ or plot those values to get a richer comparison between the two ranking function
 For the small dataset in the sample data, the MRR is approximately equal.
 For the full MSMARCO dataset on the other hand, we see a different picture:
 
-<div style="text-align:center"><img src="/assets/img/tutorials/mrr_boxplot.png" style="width: 50%; margin-right: 1%; margin-bottom: 1.0em; margin-top: 1.0em;"></div>
+<div style="text-align:center">
+<img src="/assets/img/tutorials/mrr_boxplot.png"
+     style="width: 50%; margin-right: 1%; margin-bottom: 1.0em; margin-top: 1.0em;"
+     alt="Plot with Ranking scores for BM25 and nativerank" />
+</div>
 
 Looking at the figure we can see that the faster BM25 feature
 has delivered superior results for this specific application.
@@ -452,6 +465,7 @@ To stop and remove the Docker container for this application:
 $ docker rm -f vespa-msmarco
 </pre>
 </div>
+
 
 
 ## Next steps
