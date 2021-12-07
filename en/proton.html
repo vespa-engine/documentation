@@ -53,11 +53,10 @@ then handed to the appropriate sub-database, based on the request type.
 <h3 id="sub-databases">Sub-databases</h3>
 <p>
 There are three types of sub-databases, each with its own
-<a href="attributes.html#document-meta-store">document meta store</a> and
-<a href="document-summaries.html#document-store">document store</a>.
-The document meta store holds a map from the document id to a local
-id. This local id is used to address the document in the document
-store. The document meta store also maintains information on the
+<a href="attributes.html#document-meta-store">document meta store</a> and <a href="#document-store">document store</a>.
+The document meta store holds a map from the document id to a local id.
+This local id is used to address the document in the document store.
+The document meta store also maintains information on the
 state of the buckets that are present in the sub-database.
 </p><p>
 The sub-databases are maintained by the <em>index maintainer</em>.
@@ -189,6 +188,157 @@ drwxr-xr-x 74 org users    4096 Oct 29 06:11 ..
 </p>
 
 
+<h2 id="document-store">Document store</h2>
+<p>
+  Documents are stored in the <em>document store</em>.
+  Put, update and remove operations are persisted in the <a href="#transaction-log">transaction log</a>
+  before updating the document in the document store.
+  The operation is ack'ed to the client and the result of the operation is immediately seen in search results.
+</p>
+<p>
+  Files in the document store are written sequentially, and occur in pairs - example:
+<pre>
+-rw-r--r-- 1 owner users 4133380096 Aug 10 13:36 1467957947689211000.dat
+-rw-r--r-- 1 owner users   71192112 Aug 10 13:36 1467957947689211000.idx
+</pre>
+<p>
+  The <a href="reference/services-content.html#summary-store-logstore-maxfilesize">maximum size</a>:
+  (in bytes) per .dat file on disk can be set using the following:
+</p>
+<pre>
+&lt;content id="mycluster" version="1.0"&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;tuning&gt;
+        &lt;searchnode&gt;
+          &lt;summary&gt;
+            &lt;store&gt;
+              &lt;logstore&gt;
+                <span class="pre-hilite">&lt;maxfilesize&gt;8000000000&lt;/maxfilesize&gt;</span>
+</pre>
+Notes:
+<ul>
+  <li>The files are written in sequence. <em>proton</em> starts with one pair
+    and grows it until <em>maxfilesize</em>. Once full, a new pair is started.</li>
+  <li>This means, the pair is immutable, except the last pair, which is written to.</li>
+  <li>This also implies that documents for a given group or user (i.e. bucket)
+    will be distributed to multiple such pairs, depending on insertion order.</li>
+  <li>This also means that a <a href="streaming-search.html">streaming search</a> potentially hits multiple
+    files per bucket searched, impacting search latency if disk access time is high.</li>
+  <li>Documents exist in multiple versions in multiple files.
+    Older versions are compacted away when a pair is scheduled for being the new active pair -
+    obsolete versions are removed, leaving only the active document version left in a new file pair
+    - which is the new active pair.</li>
+  <li>Read more on implications of setting <em>maxfilesize</em> in
+    <a href="proton.html#document-store-compaction">proton maintenance jobs</a>.</li>
+  <li>Files are written in <a href="reference/services-content.html#summary-store-logstore-chunk">chunks</a>,
+    using compression settings.
+</ul>
+
+
+<h3 id="visiting-the-document-store">Visiting the document store</h3>
+<p>
+  A streaming search is a <a href="content/visiting.html">visit</a>, by buckets, in sequence or (semi)parallel.
+  Access to the document store is by local ID - LID.
+  In proton, a bucket is just a property on the <a href="documents.html">document's ID</a>.
+  As documents are added to the file pairs in insertion order,
+  a scan of all documents in a bucket is hence a set of random file accesses,
+  unless some kind of bucket localization is done.
+  The set of document IDs for a given bucket is easily generated from memory structures
+  and assumed to take little resources.
+</p>
+
+
+<h3 id="defragmentation">Defragmentation</h3>
+<p>
+  <a href="#document-store-compaction">Document store compaction</a>,
+  defragments and sort document store files.
+  It removes stale versions of documents (i.e. old version of updated documents).
+  It is triggered when the disk bloat of the document store is larger than the total disk usage of the document store
+  times <a href="reference/services-content.html#flushstrategy-native-total-diskbloatfactor">
+  diskbloatfactor</a>.
+  Refer to <a href="reference/services-content.html#summary">summary tuning</a> for details.
+  As streaming accesses are organized per bucket, latencies are cut by co-locating documents by bucket.
+</p>
+<p>
+  Defragmentation status is hence best observed by tracking <em>max_bucket_spread</em> over time,
+  a sawtooth pattern is normal for corpora that change over time.
+  The <em>document_store_compact</em> metric tracks when proton is running compaction jobs.
+  Compaction settings can be set too tight, in that case, the metric is always, or close to, 1.
+</p>
+<p>
+  When benchmarking, it is hence important to set the correct compaction settings,
+  and also make sure that proton has compacted files since (can take hours),
+  and is not actively compacting (<em>document_store_compact</em> should be 0 most of the time).
+  <!-- The effect of compaction on query latency is <strong>ToDo</strong>. -->
+</p>
+{% include note.html content="There is no bucket-compaction across files - documents will not move between files."%}
+
+
+<h3 id="optimized-reads-using-chunks">Optimized reads using chunks</h3>
+<p>
+  As documents are clustered within the .dat file,
+  proton optimizes reads by reading larger chunks when accessing documents.
+  When visiting (as in streaming search), documents are read in <em>bucket</em> order.
+  This is the same order as the defragmentation jobs uses.
+</p>
+<p>
+  The first document read in a visit operation for a bucket will read a chunk from the .dat file into memory.
+  Subsequent document accesses are served be a memory lookup only.
+  The chunk size is configured by
+  <a href="reference/services-content.html#summary-store-logstore-chunk-maxsize">maxsize</a>:
+</p>
+<pre>
+&lt;engine&gt;
+  &lt;proton&gt;
+    &lt;tuning&gt;
+      &lt;searchnode&gt;
+        &lt;summary&gt;
+          &lt;store&gt;
+            &lt;logstore&gt;
+              &lt;chunk&gt;
+                <span class="pre-hilite">&lt;maxsize&gt;16384&lt;/maxsize&gt;</span>
+              &lt;/chunk&gt;
+            &lt;/logstore&gt;
+</pre>
+<p>
+  There can be 2^22=4M chunks. This sets a minimum chunk size based on <em>maxfilesize</em> -
+  e.g. an 8G file can have minimum 2k chunk size.
+  Finally, bucket size is configured by setting
+  <a href="reference/services-content.html#bucket-splitting">bucket-splitting</a>:
+</p>
+<pre>
+&lt;content id="imagepersonal" version="1.0"&gt;
+  &lt;tuning&gt;
+    <span class="pre-hilite">&lt;bucket-splitting max-documents="1024"/&gt;</span>
+</pre>
+<p>The following are hence the relevant sizing units:</p>
+<ul>
+  <li>.dat file size - <em>maxfilesize</em>.
+    Larger files give less files and hence better locality,
+    but compaction requires more memory and more time to complete.</li>
+  <li>chunk size - <em>maxsize</em>.
+    Smaller chunks give less wasted IO bytes but more IO operations.
+  <li>bucket size - <em>bucket-splitting</em>.
+    Larger buckets give less buckets and hence better locality to nodes and files.
+    Larger buckets means higher streaming search latency per bucket.</li>
+</ul>
+
+
+
+<h3 id="memory-usage">Memory usage</h3>
+<p>
+  The document store has a mapping in memory from local ID (LID) to position in a document store file (.dat).
+  Part of this mapping is persisted in the .idx-file paired to the .dat file.
+  The memory used by the document store is linear with number of documents and updates to these.
+</p><p>
+  The metric <em>content.proton.documentdb.ready.document_store.memory_usage.allocated_bytes</em>
+  gives the size in memory -
+  use the <a href="reference/metrics.html#process-metrics-api">metric API</a> to find it.
+  A rule of thumb is 12 bytes per document.
+</p>
+
+
 
 <h2 id="proton-maintenance-jobs">Proton maintenance jobs</h2>
 <p>
@@ -205,9 +355,13 @@ Refer to the implementation of
   performance metrics</a>, see <em>getSearchNodeMetrics()</em>.
 Metrics are available at the <a href="reference/metrics.html">Metrics API</a>.
 </p>
-
 <table class="table">
-  <thead></thead>
+  <thead>
+  <tr>
+    <th>Job</th>
+    <th>Description</th>
+  </tr>
+  </thead>
   <tbody>
 
   <tr id="attribute-flush">
@@ -322,7 +476,7 @@ Metrics are available at the <a href="reference/metrics.html">Metrics API</a>.
 
   <tr id="document-store-flush">
     <th rowspan="5">document store flush</th>
-    <td colspan="2">Flushes the <a href="document-summaries.html#document-store-memory-usage">document store</a>.</td>
+    <td colspan="2">Flushes the <a href="#memory-usage">document store</a>.</td>
   </tr>
   <tr>
     <th>CPU</th>
@@ -344,10 +498,8 @@ Metrics are available at the <a href="reference/metrics.html">Metrics API</a>.
   <tr id="document-store-compaction">
     <th rowspan="7">document store compaction</th>
     <td colspan="2">
-      Defragment and sort <a href="document-summaries.html#document-store">
-      document store</a> files as documents are updated and deleted,
-      in order to reduce disk space and speed up
-      <a href="streaming-search.html">streaming search</a>.
+      Defragment and sort <a href="#document-store"> document store</a> files as documents are updated and deleted,
+      in order to reduce disk space and speed up <a href="streaming-search.html">streaming search</a>.
       The file is sorted in bucket order on output. Triggered by
       <a href="reference/services-content.html#flushstrategy-native-total-diskbloatfactor">
         diskbloatfactor</a>.
