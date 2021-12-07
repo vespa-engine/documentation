@@ -4,42 +4,36 @@ title: "Distribution Algorithm"
 ---
 
 <p>
-The distribution algorithm decides what nodes should be responsible for a
-given bucket. This is used directly in the clients to calculate distributor
-to talk to. Content nodes need time to move buckets when the distribution is
-changing, so routing to content nodes is done using tracked current state.
-The distribution algorithm decides which content nodes is wanted to store the
-bucket copies though, and due to this, the algorithm is also referred to as
-the ideal state algorithm.
+  The distribution algorithm decides what nodes should be responsible for a given bucket.
+  This is used directly in the clients to calculate distributor to talk to.
+  Content nodes need time to move buckets when the distribution is changing,
+  so routing to content nodes is done using tracked current state.
+  The distribution algorithm decides which content nodes is wanted to store the bucket copies though,
+  and due to this, the algorithm is also referred to as the ideal state algorithm.
 </p><p>
-The input to the distribution algorithm is a bucket identifier, together with
-knowledge about what nodes are available, and what their capacities are.
+  The input to the distribution algorithm is a bucket identifier,
+  together with knowledge about what nodes are available, and what their capacities are.
 </p><p>
-The output of the distribution algorithm is a sorted list of the available
-nodes. The first node in the order is the node most preferred to handle a
-given bucket. Currently, the highest order distributor node will be the
-owning distributor and the redundancy factor decides how many of the highest
-order content nodes are preferred to store copies for a bucket.
+  The output of the distribution algorithm is a sorted list of the available nodes.
+  The first node in the order is the node most preferred to handle a given bucket.
+  Currently, the highest order distributor node will be the owning distributor,
+  and the redundancy factor decides how many of the highest order content nodes
+  are preferred to store copies for a bucket.
 </p><p>
-To enable minimal transfer of buckets when the list of available nodes
-changes, the removal or addition of nodes should not alter the sort order of
-the remaining nodes.
+  To enable minimal transfer of buckets when the list of available nodes changes,
+  the removal or addition of nodes should not alter the sort order of the remaining nodes.
 </p><p>
-Desired qualities for the ideal state algorithm:
+  Desired qualities for the ideal state algorithm:
 </p>
 <table class="table">
 <thead></thead><tbody>
 <tr>
   <th>Minimal reassignment on cluster state change</th><td>
     <ul>
-      <li>If a node goes down, only buckets that resided on that node should be
-          reassigned.</li>
-      <li>If a node comes up, only buckets that are moved to the new node should
-          relocate.</li>
-      <li>Increasing the capacity of a single node should only move buckets to
-          that node.</li>
-      <li>Reducing the capacity of a single node should only move buckets away
-          from that node.</li>
+      <li>If a node goes down, only buckets that resided on that node should be reassigned.</li>
+      <li>If a node comes up, only buckets that are moved to the new node should relocate.</li>
+      <li>Increasing the capacity of a single node should only move buckets to that node.</li>
+      <li>Reducing the capacity of a single node should only move buckets away from that node.</li>
     </ul>
   </td>
 </tr><tr>
@@ -58,57 +52,55 @@ Desired qualities for the ideal state algorithm:
 
 
 
-
 <h2 id="computational-cost">Computational cost</h2>
 <p>
-When considering how efficient the algorithm have to be, it is important to
-consider how often we need to calculate the ideal locations.
-Calculations are needed for the following tasks.
+  When considering how efficient the algorithm have to be,
+  it is important to consider how often we need to calculate the ideal locations.
+  Calculations are needed for the following tasks:
 </p>
 <ul>
   <li>
-    A client needs to map buckets to the distributors. If there are few buckets
-    existing, all the results can be cached in clients, but for larger clusters,
-    a lot of buckets may need to exist to create an even distribution, and
-    caching becomes more memory intensive. Preferably the computational cost
-    is cheap enough, such that no caching is needed. Currently, no caching is
-    done by clients, but there is typically less than a million buckets, so
-    caching all results would still have been viable.
+    A client needs to map buckets to the distributors.
+    If there are few buckets existing, all the results can be cached in clients,
+    but for larger clusters, a lot of buckets may need to exist to create an even distribution,
+    and caching becomes more memory intensive.
+    Preferably the computational cost is cheap enough, such that no caching is needed.
+    Currently, no caching is done by clients, but there is typically less than a million buckets,
+    so caching all results would still have been viable.
   </li><li>
-    Distributors need to calculate ideal state for a single bucket to verify
-    that incoming operations are mapped to the correct distributor (client have
-    cluster state matching the distributor). This could be eliminated for
-    buckets pre-existing in the bucket database, which would be true in most all cases.
+    Distributors need to calculate ideal state for a single bucket
+    to verify that incoming operations are mapped to the correct distributor
+    (clients have cluster state matching the distributor).
+    This could be eliminated for buckets pre-existing in the bucket database,
+    which would be true in most all cases.
     Currently, calculation is done for all requests.
   </li><li>
     Distributors need to calculate correct content nodes to create bucket
-    copies on when operations to currently non-existing buckets come in. This
-    is typically only something happening at the start of the cluster
-    lifetime though. Normally buckets are created through splitting or joining
-    existing buckets.
+    copies on when operations to currently non-existing buckets come in.
+    This is typically only something happening at the start of the cluster lifetime though.
+    Normally buckets are created through splitting or joining existing buckets.
   </li><li>
-    Distributors need to calculate ideal state to check if any maintenance
-    operations needs to be done for a bucket.
+    Distributors need to calculate ideal state to check if any maintenance operations need to be done for a bucket.
   </li><li>
-    Content nodes need to calculate ideal state for a single bucket to verify
-    that the correct distributor sent the request. This could be cached or
-    served through bucket database but currently there is no need.
+    Content nodes need to calculate ideal state for a single bucket
+    to verify that the correct distributor sent the request.
+    This could be cached or served through bucket database but currently there is no need.
   </li>
 </ul>
 <p>
-As long as the algorithm is cheap, we can avoid needing to cache the result.
-The cache will then not limit scalability, and we have less dependencies and
-complexity within the content layer. The current algorithm has shown itself
-cheap enough, such that little caching has been needed.
+  As long as the algorithm is cheap, we can avoid needing to cache the result.
+  The cache will then not limit scalability,
+  and we have less dependencies and complexity within the content layer.
+  The current algorithm has shown itself cheap enough, such that little caching has been needed.
 </p>
 
 
 
 <h2 id="a-simple-example-modulo">A simple example: Modulo</h2>
 <p>
-A simple approach would be to use a modulo operation to find the most
-preferred node, and then just order the nodes in configured order from there,
-skipping nodes that are currently not available.
+  A simple approach would be to use a modulo operation to find the most preferred node,
+  and then just order the nodes in configured order from there,
+  skipping nodes that are currently not available:
 </p><p><!-- depends on mathjax -->
 $$\text{most preferred node} =  \text{bucket % nodecount}$$
 </p><p>
@@ -120,78 +112,78 @@ Properties:
   <li>Total redistribution on state change.</li>
 </ul>
 <p>
-By just skipping currently unavailable nodes, nodes can go down and up with
-minimal movement. However, if the number of configured nodes change,
-practically all buckets will be redistributed. As the content layer is
-intended to be scalable, this breaks with one of the intentions and this
-algorithm has thus not been considered.
+  By just skipping currently unavailable nodes, nodes can go down and up with minimal movement.
+  However, if the number of configured nodes change,
+  practically all buckets will be redistributed.
+  As the content layer is intended to be scalable,
+  this breaks with one of the intentions and this algorithm has thus not been considered.
 </p>
 
 
 
 <h2 id="weighted-random-election">Weighted random election</h2>
 <p>
-This is the algorithm that is currently used for distribution in the content layer,
-as it fits our usecase well.
+  This is the algorithm that is currently used for distribution in the content layer,
+  as it fits our usecase well.
 </p><p>
-To avoid a total redistribution on state change, the mapping can not be
-heavily dependent on the number of nodes in the cluster.
-By using random numbers, we can distribute the buckets randomly between the nodes,
-in such a fashion that altering the cluster state has a small impact.
-As we need the result to be reproducible,
-we obviously need to use a pseudo-random number generator and not real random numbers.
+  To avoid a total redistribution on state change,
+  the mapping can not be heavily dependent on the number of nodes in the cluster.
+  By using random numbers, we can distribute the buckets randomly between the nodes,
+  in such a fashion that altering the cluster state has a small impact.
+  As we need the result to be reproducible,
+  we obviously need to use a pseudo-random number generator and not real random numbers.
 </p><p>
-The idea is as follows. To find the location of a given bucket,
-seed a random number generator with the bucket identifier,
-when draw one number for each node.
-The drawn numbers will then decide upon the preferred node order for that specific bucket.
+  The idea is as follows. To find the location of a given bucket,
+  seed a random number generator with the bucket identifier,
+  when draw one number for each node.
+  The drawn numbers will then decide upon the preferred node order for that specific bucket.
 </p><p>
-For this to be reproducible, all nodes need to draw the same numbers each time.
-Each node is assigned a distribution key in the configuration.
-This key decides what random number the node will be assigned.
-For instance, a node with distribution key 13, will be assigned the 14th random number generated.
-(As the first will go to the node with key 0).
-The existence of this node then also requires us to always generate at least 14 random numbers
-to do the calculation.
+  For this to be reproducible, all nodes need to draw the same numbers each time.
+  Each node is assigned a distribution key in the configuration.
+  This key decides what random number the node will be assigned.
+  For instance, a node with distribution key 13, will be assigned the 14th random number generated.
+  (As the first will go to the node with key 0).
+  The existence of this node then also requires us to always generate at least 14 random numbers
+  to do the calculation.
 </p><p>
-Thus, one may end up calculating random numbers for nodes that are currently not available,
-either because they are temporarily down,
-or because the configuration have left holes in the distribution key space.
-It is recommended to not leave too large holes in the distribution key space to not waste too much.
+  Thus, one may end up calculating random numbers for nodes that are currently not available,
+  either because they are temporarily down,
+  or because the configuration have left holes in the distribution key space.
+  It is recommended to not leave too large holes in the distribution key space to not waste too much.
 </p><p>
-Using this approach, if you add another node to the cluster, it will roll for each bucket.
-It should thus steal ownership of some of the buckets.
-As all the numbers are random, it will steal buckets from all the other nodes, thus,
-given that the bucket count is large compared to the number of nodes,
-it will steal on average 1/n of the buckets from each pre-existing node,
-where n is the number of nodes in the current cluster.
-Likewise, if a node is removed from the cluster,
-the remaining nodes will divide the extra load between them.
+  Using this approach, if you add another node to the cluster, it will roll for each bucket.
+  It should thus steal ownership of some of the buckets.
+  As all the numbers are random, it will steal buckets from all the other nodes, thus,
+  given that the bucket count is large compared to the number of nodes,
+  it will steal on average 1/n of the buckets from each pre-existing node,
+  where n is the number of nodes in the current cluster.
+  Likewise, if a node is removed from the cluster,
+  the remaining nodes will divide the extra load between them.
 </p>
 
 
 <h3 id="weighting-nodes">Weighting nodes</h3>
 <p>
-By enforcing all the numbers drawn to be floating point numbers between 0 and 1,
-we can introduce node weights using the following formula:
+  By enforcing all the numbers drawn to be floating point numbers between 0 and 1,
+  we can introduce node weights using the following formula:
 </p><p><!-- depends on mathjax -->
   $${r}^{\frac{1}{c}}$$
 </p><p>
-Where r is the floating point number between 0 and 1 that was drawn for a given node,
-and c is the node capacity, which is the weight of the node.
-Proof not included here, but this will end up giving each node on average an
-amount of data that is relative to its capacity.
-That is, among any nodes there are two nodes X and Y,
-where the number of buckets given to X should be equal to the number of buckets
-given to Y multiplied by capacity(X)/capacity(Y). (Given perfect random distribution)
+  Where r is the floating point number between 0 and 1 that was drawn for a given node,
+  and c is the node capacity, which is the weight of the node.
+  Proof not included here, but this will end up giving each node on average an
+  amount of data that is relative to its capacity.
+  That is, among any nodes there are two nodes X and Y,
+  where the number of buckets given to X should be equal to the number of buckets
+  given to Y multiplied by capacity(X)/capacity(Y). (Given perfect random distribution)
 </p><p>
-Altering the weight in a running system will also create a minimal redistribution of data.
-If we reduce the capacity, all the nodes number will be reduced,
-and some of its buckets will be taken over by the other nodes,
-and vice versa if the capacity is increased. Properties:
+  Altering the weight in a running system will also create a minimal redistribution of data.
+  If we reduce the capacity, all the nodes number will be reduced,
+  and some of its buckets will be taken over by the other nodes,
+  and vice versa if the capacity is increased. Properties:
 </p>
 <ul>
-  <li>Minimum data movement on state changes</li>
+  <li>Minimum data movement on state changes.</li>
   <li>Some skew, depending on how good the random number generator is, the
       amount of nodes we have to divide buckets between, and the number of
       buckets we have to divide between them.</li>
@@ -203,8 +195,8 @@ and vice versa if the capacity is increased. Properties:
 
 <h3 id="distribution-skew">Distribution skew</h3>
 <p>
-The algorithm does generate a bit of skew in the distribution, as it is
-essentially random. The following attributes decrease the skew:
+  The algorithm does generate a bit of skew in the distribution,
+  as it is essentially random. The following attributes decrease the skew:
 </p>
 <ul>
   <li>Having more buckets to distribute.</li>
@@ -212,74 +204,76 @@ essentially random. The following attributes decrease the skew:
   <li>Having a more uniform pseudo-random function.</li>
 </ul>
 <p>
-The more buckets exist, the more metadata needs to be tracked in the distributors though,
-and operations that wants to scan all the buckets will take longer.
-Additionally, the backend may want buckets above a given size to improve performance,
-storage efficiency or similar.
-Consequently, we typically want to enforce enough buckets for a decent distribution, but not more.
+  The more buckets exist, the more metadata needs to be tracked in the distributors though,
+  and operations that wants to scan all the buckets will take longer.
+  Additionally, the backend may want buckets above a given size to improve performance,
+  storage efficiency or similar.
+  Consequently, we typically want to enforce enough buckets for a decent distribution, but not more.
 </p><p>
-Then the number of nodes increase, more buckets need to exist to keep the distribution even.
-If the number of nodes is doubled,
-the number of buckets must typically more than double to keep the distribution equally even.
-Thus, this scales worse than linear. It does not scale much worse though,
-and this has not proved to be a practical problem for the cluster sizes we have used up until now.
-(A cluster size of a thousand nodes does not seem to be any issue here)
+  Then the number of nodes increase, more buckets need to exist to keep the distribution even.
+  If the number of nodes is doubled,
+  the number of buckets must typically more than double to keep the distribution equally even.
+  Thus, this scales worse than linear. It does not scale much worse though,
+  and this has not proved to be a practical problem for the cluster sizes we have used up until now.
+  (A cluster size of a thousand nodes does not seem to be any issue here)
 </p><p>
-Having a good and uniform pseudo-random function makes the distribution more even.
-However, this may require more computationally heavy generators.
-Currently, we are using a simple and fast algorithm,
-and it has proved more than sufficient for our needs.
+  Having a good and uniform pseudo-random function makes the distribution more even.
+  However, this may require more computationally heavy generators.
+  Currently, we are using a simple and fast algorithm,
+  and it has proved more than sufficient for our needs.
 </p><p>
-The distribution to distributors are done to create an even distribution between the nodes.
-The distributors are free to split the buckets further if the backend wants buckets to contain less data.
-They can not use less buckets than are needed for distribution though.
-By using a minimum amount of buckets for distribution,
-the distributors have more freedom to control sizes of buckets.
+  The distribution to distributors are done to create an even distribution between the nodes.
+  The distributors are free to split the buckets further if the backend wants buckets to contain less data.
+  They can not use less buckets than are needed for distribution though.
+  By using a minimum amount of buckets for distribution,
+  the distributors have more freedom to control sizes of buckets.
 </p>
 
 
 <h3 id="distribution_waste">Distribution waste</h3>
 <p>
-To measure how many buckets are needed to create a decent distribution a
-metric is needed. We have defined a waste metric for this purpose as follows:
+  To measure how many buckets are needed to create a decent distribution a metric is needed.
+  We have defined a waste metric for this purpose as follows:
 </p><p>
-Distribute the buckets to all the units. Assume the size of all units are identical.
-Assume the unit with the most units assigned to it is at 100% capacity.
-The wasted space is the percentage of unused capacity compared to the used capacity.
+  Distribute the buckets to all the units.
+  Assume the size of all units are identical.
+  Assume the unit with the most units assigned to it is at 100% capacity.
+  The wasted space is the percentage of unused capacity compared to the used capacity.
 </p><p>
-This definition seems useful as a cluster is considered at full capacity once
-one of its partitions is at full capacity.
-Having one node with more buckets than the rest is thus damaging,
-while having one node with fewer buckets than the rest is just fine.
+  This definition seems useful as a cluster is considered at full capacity once
+  one of its partitions is at full capacity.
+  Having one node with more buckets than the rest is thus damaging,
+  while having one node with fewer buckets than the rest is just fine.
 </p><p>
-Example: There are 4 nodes distributing 18 units. The node with the most units have 6.
-Distribution waste is <code>100% * (4 * 6 - 18) / (4 * 6) = 25%</code>.
+  Example: There are 4 nodes distributing 18 units. The node with the most units have 6.
+  Distribution waste is <code>100% * (4 * 6 - 18) / (4 * 6) = 25%</code>.
 </p><p>
-Below we have calculated waste based on number of nodes and the amount of
-buckets to distribute between them. Bits refer to distribution bits used.
-A distribution bit count of 16 indicates that there will be 2^16 buckets.
+  Below we have calculated waste based on number of nodes and the amount of
+  buckets to distribute between them.
+  Bits refer to distribution bits used.
+  A distribution bit count of 16 indicates that there will be 2^16 buckets.
 </p><p>
-The calculations assume all buckets have the same size. This is normally close
-to true as documents are randomly assigned to buckets. There will be lots of
-buckets per node too, so a little variance typically evens out fairly well.
+  The calculations assume all buckets have the same size. This is normally close
+  to true as documents are randomly assigned to buckets.
+  There will be lots of buckets per node too, so a little variance typically evens out fairly well.
 </p><p>
-The tables below assume only one partition exist on each node.
-If you have 4 partitions on 16 nodes, you should rather use the values for
-<code>4 * 16 = 64</code> nodes.
+  The tables below assume only one partition exist on each node.
+  If you have 4 partitions on 16 nodes, you should rather use the values for
+  <code>4 * 16 = 64</code> nodes.
 </p><p>
-A higher redundancy factor indicates more buckets to distribute between the
-same amount of nodes, resulting in a more even distribution.
-Doubling the redundancy has the same effect as adding one to the distribution bit count.
-To get values for redundancy 4, the redundancy 2 values can be used,
-and then the waste will be equal to the value with one less distribution bit used.
+  A higher redundancy factor indicates more buckets to distribute between the same amount of nodes,
+  resulting in a more even distribution.
+  Doubling the redundancy has the same effect as adding one to the distribution bit count.
+  To get values for redundancy 4, the redundancy 2 values can be used,
+  and then the waste will be equal to the value with one less distribution bit used.
 </p>
 
 
 <h3 id="calculated-waste-from-various-cluster-sizes">Calculated waste from various cluster sizes</h3>
 <p>
-A value of 1 indicates 100% waste. A value of 0.1 indicates 10% waste.
-A waste below 1 % is shown green, below 10% as yellow and below 30% as orange.
-Red indicates more than 30% waste.
+  A value of 1 indicates 100% waste. A value of 0.1 indicates 10% waste.
+  A waste below 1 % is shown green, below 10% as yellow and below 30% as orange.
+  Red indicates more than 30% waste.
 </p>
 
 <style>
@@ -289,8 +283,7 @@ Red indicates more than 30% waste.
     .td-red    { background-color: #ff8f80; }
 </style>
 
-<strong>Distribution with redundancy 1:</strong>
-
+<h4>Distribution with redundancy 1:</h4>
 <table>
 <tr>
   <th><nobr>Bits \ Nodes</nobr></th>
@@ -690,8 +683,7 @@ Red indicates more than 30% waste.
 </tr>
 </table>
 
-<strong>Distribution with redundancy 2:</strong>
-
+<h4>Distribution with redundancy 2:</h4>
 <table>
 <tr>
   <th><nobr>Bits \ Nodes</nobr></th>
@@ -1055,8 +1047,7 @@ Red indicates more than 30% waste.
 </tr>
 </table>
 
-<strong>Distribution with redundancy 2:</strong>
-
+<h4>Distribution with redundancy 2:</h4>
 <table>
 <tr>
   <th><nobr>Bits \ Nodes</nobr></th>
@@ -1438,25 +1429,25 @@ Red indicates more than 30% waste.
 </tr>
 </table>
 
+
 <h3 id="default-number-of-distribution-bits-used">Default number of distribution bits used</h3>
 <p>
-Note that changing the amount of distribution bits used will change what buckets exist,
-which will change the distribution considerably.
-We thus do not want to alter the distribution bit count too often.
+  Note that changing the amount of distribution bits used will change what buckets exist,
+  which will change the distribution considerably.
+  We thus do not want to alter the distribution bit count too often.
 </p><p>
-Ideally, the users would be allowed to configure minimal and maximal acceptable waste,
-and the current amount of distribution bits could then just be calculated on the fly.
-But as computing the waste values above are computational heavy,
-especially with many nodes and many distribution bits,
-currently only a couple of profiles are available for you to configure.
+  Ideally, the users would be allowed to configure minimal and maximal acceptable waste,
+  and the current amount of distribution bits could then just be calculated on the fly.
+  But as computing the waste values above are computational heavy,
+  especially with many nodes and many distribution bits,
+  currently only a couple of profiles are available for you to configure.
 </p>
-
 
 <h4 id="strict-mode-default-for-memfile-persistence-provider">Strict mode (Default for memfile persistence provider)</h4>
 <p>
-The strict mode attempts to keep the waste below 1.0 %.
-When it needs to increase the bit count it increases the bit count significantly
-to allow considerable more growth before having to adjust the count again.
+  The strict mode attempts to keep the waste below 1.0 %.
+  When it needs to increase the bit count it increases the bit count significantly
+  to allow considerable more growth before having to adjust the count again.
 </p>
 <table class="table">
 <tr>
@@ -1501,26 +1492,26 @@ to allow considerable more growth before having to adjust the count again.
 </tr>
 </table>
 <p style="font-size:12px">
-*) Max calculated waste, given redundancy 2 and the max node count in the
-given range, as shown in the table above. (Note that this assumes equal
-sized buckets, and that every possible bucket exist. In a real system there
-will be random variation).
-</p><p style="font-size:12px">
-**) Given a node count and distribution bits, there is a minimum number of
-buckets enforced to exist. However, splitting due to bucket size may increase this
-count beyond this number. This value shows the maximum value of the minimum. (That is
-the number of buckets per node enforced for the lowest node count in the range)
-Ideally one wants to have few buckets enforced by distribution and rather let bucket
-size split buckets, as that leaves more freedom to users.
+  *) Max calculated waste, given redundancy 2 and the max node count in the given range,
+  as shown in the table above.
+  (Note that this assumes equal sized buckets, and that every possible bucket exist.
+  In a real system there will be random variation).
 </p>
-
+<p style="font-size:12px">
+  **) Given a node count and distribution bits, there is a minimum number of buckets enforced to exist.
+  However, splitting due to bucket size may increase this count beyond this number.
+  This value shows the maximum value of the minimum.
+  (That is the number of buckets per node enforced for the lowest node count in the range)
+  Ideally one wants to have few buckets enforced by distribution
+  and rather let bucket size split buckets, as that leaves more freedom to users.
+</p>
 
 <h4 id="loose-mode-default-for-search-provider">Loose mode (Default for search provider)</h4>
 <p>
-The loose mode allows for more waste, allowing the amount of nodes to
-change considerably without altering the distribution bit counts.
-A transition between 4 and 5 nodes are kept,
-to enable creating tests that crosses the line without using too many nodes.
+  The loose mode allows for more waste, allowing the amount of nodes to
+  change considerably without altering the distribution bit counts.
+  A transition between 4 and 5 nodes are kept,
+  to enable creating tests that crosses the line without using too many nodes.
 </p>
 <table class="table">
 <tr>
