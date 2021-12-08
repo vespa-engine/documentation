@@ -5,7 +5,7 @@ title: "News search and recommendation tutorial - embeddings"
 
 
 This is the fourth part of the tutorial series for setting up a Vespa
-application for personalized news recommendations. The parts are:  
+application for personalized news recommendations. The parts are:
 
 1. [Getting started](news-1-getting-started.html)
 2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query
@@ -26,7 +26,7 @@ The primary function of a recommendation system is to provide items of interest
 to any given user. The more we know about the user, the better
 recommendations we can provide. We can view recommendation as search where
 the query is the user profile. So, in this tutorial we will build upon
-the previous news search tutorial by creating user profiles and use 
+the previous news search tutorial by creating user profiles and use
 them to search for relevant news articles.
 
 We start by generating embeddings using a collaborative filtering method.
@@ -42,8 +42,8 @@ for us.
 ### Requirements
 
 We start using some machine learning tools in this tutorial. Specifically,
-we need Numpy, Scikit-learn, PyTorch, and the HuggingFace Transformers 
-library. Make sure you have all the necessary dependencies by running the 
+we need Numpy, Scikit-learn, PyTorch, and the HuggingFace Transformers
+library. Make sure you have all the necessary dependencies by running the
 following in the sample application directory:
 
 <div class="pre-parent">
@@ -56,8 +56,8 @@ $ python3 -m pip install -r requirements.txt
 
 ## The MIND dataset
 
-The MIND dataset, for our purposes in this series of tutorials, consists 
-of two main files: `news.tsv` and `behaviors.tsv`. We used the former 
+The MIND dataset, for our purposes in this series of tutorials, consists
+of two main files: `news.tsv` and `behaviors.tsv`. We used the former
 in the previous tutorial, as that contains all news article content.
 
 The `behaviors.tsv` file contains a set of impressions. An impression is an
@@ -130,7 +130,7 @@ of news articles to provide recommendations. We'll tackle this "cold start" a
 bit later.
 
 
-## Generating embeddings 
+## Generating embeddings
 
 A standard method for factorizing the interaction matrix is to use
 Alternating Least Squares. The idea is to randomly fill the user and news
@@ -139,11 +139,11 @@ other. By alternating between which matrix is fixed, this can be solved with
 a traditional least-squares problem. We can iterate the process until
 convergence.
 
-This tutorial aims to generate embeddings so that the dot product 
-between a user and news vector signifies the probability of a click. Using 
+This tutorial aims to generate embeddings so that the dot product
+between a user and news vector signifies the probability of a click. Using
 this signal we can rank news articles by click probability. To train the
-embedding vectors, we will use a stochastic gradient descent approach 
-to modify the embeddings so that their dot product followed by the logistic 
+embedding vectors, we will use a stochastic gradient descent approach
+to modify the embeddings so that their dot product followed by the logistic
 function predicts a user click. We use a binary cross-entropy as loss function.
 
 We'll use PyTorch for this. The main PyTorch model class is as follows:
@@ -168,7 +168,7 @@ We use the PyTorch's `Embedding` class to hold the user and news embeddings.
 The forward function is the forward pass of the gradient descent. First, the
 users and items selected for a mini-batch update are extracted from their
 embedding tables. Then we take the dot-product with a logistic function and
-return the value. This prediction for user and news pairs is then evaluated 
+return the value. This prediction for user and news pairs is then evaluated
 against the click or skip labels:
 
 ```
@@ -184,7 +184,7 @@ This is done across several of epochs. The `batch` here contains a batch of
 `user_id`s, `news_id`s, and `label`s used for training a mini-batch. For
 instance, from the example impression above, a training example would be
 `U11552, N23967, 1`. The code responsible for generating the training data
-samples 4 negative examples (skips) for each positive example (click). 
+samples 4 negative examples (skips) for each positive example (click).
 
 The full code can be seen in the sample application, in `src/python/train.py`.
 
@@ -197,7 +197,7 @@ $ ./src/python/train_mf.py mind 10
 </div>
 
 This runs the training code for 10 epochs, and deposits the resulting
-user and news vectors in the `mind` directory, where the rest of the 
+user and news vectors in the `mind` directory, where the rest of the
 data is. This outputs something like the following (if run for 100 epochs):
 
 ```
@@ -213,7 +213,7 @@ Valid: {'auc': 0.5101, 'mrr': 0.2181, 'ndcg@5': 0.224, 'ndcg@10': 0.2874}
 
 We can see the loss reduces over the number of epochs. The two final lines
 here are ranking metrics run on the training set and validation set. Here,
-the `AUC` metric - Area Under the (ROC) Curve - is at `0.974` for the 
+the `AUC` metric - Area Under the (ROC) Curve - is at `0.974` for the
 training set and `0.51` for the validation set. In this case,
 this metric measures the probability of ranking relevant news higher than
 non-relevant news. A score of around `0.5` means that it is totally random.
@@ -222,7 +222,7 @@ Thus, we haven't learned anything of use for the validation set.
 This is not overfitting but rather an instance of the problem mentioned
 earlier. The validation set contains news articles shown to users a time period
 after the data in the training set. Thus, most news articles are new,
-and their embedding vectors are effectively random. 
+and their embedding vectors are effectively random.
 
 We'll address this next.
 
@@ -238,16 +238,16 @@ interacted, rather than the actual news article id.
 
 This is, naturally enough, called content-based recommendation.
 
-The general approach we'll take here is to still rely on a dot product 
-between a user embedding and news embedding, however the news embedding 
+The general approach we'll take here is to still rely on a dot product
+between a user embedding and news embedding, however the news embedding
 will be constructed from various content features.
 
-The MIND dataset has a few such features we can use. Each news article 
-has a `category`, a `subcategory` and zero or more `entities` 
-extracted from the text. These features are categorical, meaning 
-that they have a finite set of values they can take. To handle these, 
-we'll generate an embedding for each possible value, similar to how we 
-generated embeddings for the user id's and news id's above. These id's 
+The MIND dataset has a few such features we can use. Each news article
+has a `category`, a `subcategory` and zero or more `entities`
+extracted from the text. These features are categorical, meaning
+that they have a finite set of values they can take. To handle these,
+we'll generate an embedding for each possible value, similar to how we
+generated embeddings for the user id's and news id's above. These id's
 are also categorical, after all.
 
 
@@ -270,12 +270,12 @@ embedding = outputs[0][0][0]
 ```
 
 Here, we use a medium-sized BERT model with 8 layers and a hidden dimension
-size of 512. This means that the embedding will be a vector of 
+size of 512. This means that the embedding will be a vector of
 size 512. We use the vector from the first `CLS` token to represent
 the combined title and abstract.
 
 To generate these embeddings for all news content, run the following.
-This might take a while, around an hour for all news articles in 
+This might take a while, around an hour for all news articles in
 the `train` and `dev` demo dataset.
 
 <div class="pre-parent">
@@ -297,12 +297,12 @@ the model we are training:
 
 <img src="/assets/img/tutorials/embeddings.png" width="768px" alt="Model training example" />
 
-So, we'll pass the 512-dimensional embeddings from the BERT model 
+So, we'll pass the 512-dimensional embeddings from the BERT model
 through a typical neural network layer to reduce dimensions to 50.
-We then concatenate this representation with the 50 dimensional 
+We then concatenate this representation with the 50 dimensional
 embeddings for `category`, `subcategory` and `entity`. We only use
-one entity for now. This representation is then sent through another 
-neural network layer to form the final representation for a news 
+one entity for now. This representation is then sent through another
+neural network layer to form the final representation for a news
 article. Finally, the dot product is taken with the user embedding.
 
 In PyTorch code, this looks like:
@@ -356,8 +356,8 @@ class ContentBasedModel(torch.nn.Module):
 
 ```
 
-The forward pass function is pretty much the same as before. You can 
-see the entire training script in `src/python/train_cold_start.py` in 
+The forward pass function is pretty much the same as before. You can
+see the entire training script in `src/python/train_cold_start.py` in
 the sample app. Running this results in:
 
 <div class="pre-parent">
@@ -401,15 +401,15 @@ Total loss after epoch 10: 517.16748046875 (0.3953879773616791 avg)
 ```
 
 This is much better. The `AUC` score at epoch 9 is a respectable `0.6266`.
-Note that as we train further, the `AUC` for the dev set starts 
+Note that as we train further, the `AUC` for the dev set starts
 dropping. This is a sign of overfitting, so we should stop training.
 
 For reference, the baseline model for the MIND competition, [Neural News
 Recommendation with Multi-Head
-Self-Attention](https://www.aclweb.org/anthology/D19-1671.pdf), results in
+Self-Attention](https://aclanthology.org/D19-1671/), results in
 `0.6362`. This model additionally uses the user history in each impression
 to create a better model for the user embedding. For the moment, however,
-we are satisfied with these, and we'll use them going forward. Feel 
+we are satisfied with these, and we'll use them going forward. Feel
 free to experiment and see if you can achieve better results!
 
 {% include note.html content="These numbers are for the demo dataset, which is much smaller than the full dataset.
@@ -422,21 +422,21 @@ The training script writes these embeddings to the files
 
 ## Mapping from inner-product search to euclidean search
 
-There is one more step we need to do before feeding these vectors 
+There is one more step we need to do before feeding these vectors
 to Vespa. The vectors have been trained to maximize the inner product.
-Finding the best news articles given a user vector is called Maximum 
-Inner Product Search - or MIPS. Unfortunately, this form isn't 
-really suitable for efficient retrieval. We'll get back to this 
+Finding the best news articles given a user vector is called Maximum
+Inner Product Search - or MIPS. Unfortunately, this form isn't
+really suitable for efficient retrieval. We'll get back to this
 later when discussing approximate nearest neighbors.
 
 To facilitate efficient retrieval, we need to map the MIPS problem to a
 Euclidean nearest neighbor search problem. We use the technique discussed in
 [Speeding Up the Xbox Recommender System Using a Euclidean Transformation for Inner-Product
-Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf). 
+Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf).
 
 See [Nearest Neighbor
-Search](https://docs.vespa.ai/en/nearest-neighbor-search.html) for more 
-information on nearest neighbor search and distance metrics in Vespa. 
+Search](https://docs.vespa.ai/en/nearest-neighbor-search.html) for more
+information on nearest neighbor search and distance metrics in Vespa.
 
 We've included a script to map the embeddings to euclidean space and create
 a feed suitable for Vespa:
@@ -453,8 +453,8 @@ We are now ready to feed these vectors to Vespa.
 
 ## Conclusion
 
-Now that we've generated user and document embeddings, we can start using 
-these to recommend news items to users. We'll start feeding these in 
+Now that we've generated user and document embeddings, we can start using
+these to recommend news items to users. We'll start feeding these in
 the [next part of the tutorial](news-5-recommendation.html).
 
 <script src="/js/process_pre.js"></script>
