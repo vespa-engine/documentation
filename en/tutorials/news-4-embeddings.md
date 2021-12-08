@@ -406,7 +406,7 @@ dropping. This is a sign of overfitting, so we should stop training.
 
 For reference, the baseline model for the MIND competition, [Neural News
 Recommendation with Multi-Head
-Self-Attention](https://www.aclweb.org/anthology/D19-1671.pdf), results in
+Self-Attention](https://aclanthology.org/D19-1671.pdf), results in
 `0.6362`. This model additionally uses the user history in each impression
 to create a better model for the user embedding. For the moment, however,
 we are satisfied with these, and we'll use them going forward. Feel 
