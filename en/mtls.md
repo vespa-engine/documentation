@@ -39,6 +39,8 @@ Be especially aware of this if you have custom solutions in place for collecting
 and aggregating low level metrics or status pages from the Vespa backends.
 Though the terms *TLS* and *mTLS* may be used interchangeably in this document, *TLS* implies *mTLS* for all Vespa-internal traffic.
 
+
+
 ## Prerequisites
 
 This section assumes you have some experience with generating and using certificates and private keys.
@@ -70,6 +72,8 @@ that would allow them to directly access your system.
 Make sure only the user running the Vespa processes can read the private key file.
 Key and certificate files should only be writable by administrator users." %}
 
+
+
 ## Configuring Vespa TLS
 On any node running Vespa software, TLS is controlled via a single environment variable.
 This variable contains an absolute path pointing to a JSON configuration file:
@@ -87,6 +91,7 @@ Vespa command-line tools will automatically pick up the required configuration a
 
 {% include important.html content="If this variable is not set, Vespa starts up in insecure mode without any TLS!
 " %}
+
 
 ### Writing a TLS configuration file
 The simplest possible configuration file only needs to know the certificates to trust and the certificate/key pair that identifies the node itself.
@@ -109,6 +114,7 @@ override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
 ```
 
 All file paths must be absolute. If a Vespa process cannot load one or more files, it will fail to start up.
+
 
 ### Configuring TLS peer authorization rules
 For many simpler deployments, a dedicated self-signed Certificate Authority will be used for the Vespa cluster alone.
@@ -163,9 +169,10 @@ Our TLS config file implementing these rules may look like this:
 
 See the [reference documentation](reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
 
+
 ### Automatic reloading of crypto material
 Vespa performs periodic reloading of the specified TLS configuration file.
-Currently this happens every 60 minutes. This reloading happens live and does not impact service availability.
+Currently, this happens every 60 minutes. This reloading happens live and does not impact service availability.
 Both certificates, the private key and authorization rules are reloaded.
 Vespa currently does not watch the configuration file for changes, so altering the config file
 or any of its dependencies does not trigger a reload by itself.
@@ -180,16 +187,20 @@ consider splitting file refreshing into multiple phases:
 1. Atomically rename the new TLS config file to the name specified by `VESPA_TLS_CONFIG_FILE`.
 1. Garbage-collect the old files at a later point (for example at the next refresh time).
 
+
+
 ## Setting up TLS for a new Vespa application or upgrading with downtime
 With no Vespa services running on any nodes, ensure the `VESPA_TLS_CONFIG_FILE` environment variable is set to
 a valid configuration file path on every node, and [is visible to any Vespa start scripts](setting-vespa-variables.html).
 Start Vespa services as you normally would. Check cluster health with
 [vespa-get-cluster-state](reference/vespa-cmdline-tools.html#vespa-get-cluster-state)
 and check [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
-that indicate a misconfiguration (such as certificate rejections etc)—see the Troubleshooting section.
+that indicate a misconfiguration (such as certificate rejections etc.)—see the Troubleshooting section.
 The cluster should quickly converge to an available state.
 
 This is the simplest and fastest way to enable TLS, and is highly recommend if downtime is acceptable.
+
+
 
 ## Upgrading an existing non-TLS Vespa application to TLS without downtime
 If you already have a Vespa application serving live traffic that you don't want to take down completely in
@@ -223,6 +234,8 @@ Even a single service left with insecure mixed mode enabled could be used by a d
 other (believed secure) services.
 " %}
 
+
+
 ## Verify configuration of TLS
 Successful configuration should be verified at runtime once TLS is enabled on all nodes.
 The [openssl s_client](https://www.openssl.org/docs/man1.1.1/man1/openssl-s_client.html) tool is suitable for this.
@@ -239,12 +252,16 @@ The `s_client` tool should print an error during handshake and exit immediately.
 $ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-certs.pem
 ```
 
+
+
 ## FAQ
 * Q: Should TLS be used even if I have a latency-sensitive real-time search application?
   * A: Yes. The Vespa cloud team has run many such applications in production for a long time and the overhead imposed by TLS is negligible.
     Significant effort have been spent tuning Vespa's TLS integrations to keep overhead to a minimum.
 * Q: How much overhead does TLS impose in practice?
   * A: With modern CPUs, expect somewhere around 1-2% extra CPU usage for symmetric encryption (i.e. active connections). Connection handshakes have an expected extra latency of 2-4 ms of CPU time (network latency not included) due to more expensive cryptographic operations. Vespa performs handshake operations in separate threads to avoid stalling other network traffic. Vespa also uses long-lived connections internally to reduce the number of handshakes.
+
+
 
 ## Troubleshooting
 
@@ -255,13 +272,16 @@ This extra verification can only be used if all certificates have their respecti
 in the Subject / Subject Alternative Names extensions.
 [Disable hostname validation](reference/mtls.html#top-level-elements) if this is not the case.
 
-### <a name="troubleshooting-application-deployment-sec-error-bad-key"/> Application deployment fails with `SEC_ERROR_BAD_KEY`
+
+### Application deployment fails with `SEC_ERROR_BAD_KEY`
 
 This is usually caused by running `vespa-deploy` from an OS that has an old version of `curl` (such as on CentOS 7).
 Older versions of the NSS cryptographic library used by `curl` do not support elliptic curve (EC) keys.
 
 To resolve this, either run `vespa-deploy` from an environment with a sufficiently new version of `curl` or
 use RSA keys instead of EC keys.
+
+
 
 ## Appendix A: setting up with a self-signed Certificate Authority
 
@@ -270,9 +290,9 @@ communication within a single Vespa installation.
 
 This requires the following steps, which we'll go through below:
 
-1. [Creating a root Certificate Authority](#creating-root-certificate-authority).
+1. [Creating a root Certificate Authority](#creating-a-root-certificate-authority-ca).
    This is only done once, regardless of how many Vespa hosts you want to secure.
-1. [Creating a private key and Certificate Signing_request for each Vespa host](#creating-host-private-key-and-certificate).
+1. [Creating a private key and Certificate Signing_request for each Vespa host](#creating-a-private-key-and-certificate-for-a-vespa-host).
 1. [Signing the CSR using the CA, creating a certificate for each Vespa host](#sign-host-certificate).
 
 We'll be using the [OpenSSL command-line tool](https://www.openssl.org/docs/man1.1.1/man1/) to
@@ -282,7 +302,8 @@ generate all our crypto keys and certificates.
 that already has procedures for provisioning keys and certificates,
 you should first reach out to the team responsible for this to make sure you're following best practices." %}
 
-### <a name="creating-root-certificate-authority"/> Creating a root Certificate Authority (CA)
+
+### Creating a root Certificate Authority (CA)
 
 When a server (or client) presents a certificate as part of proving its identity to us, we
 must have a way to determine if this information is trustworthy. We do this by verifying
@@ -305,7 +326,7 @@ We have two choices of what kind of key to create; either based on [RSA](https:/
 or [Elliptic Curve (EC)](https://en.wikipedia.org/wiki/Elliptic-curve_cryptography)
 cryptography. EC keys are faster to process than RSA-based keys and take up less space, but older
 OS versions or cryptographic libraries may not support these (see
-[Application deployment fails with `SEC_ERROR_BAD_KEY`](#troubleshooting-application-deployment-sec-error-bad-key)).
+[Application deployment fails with `SEC_ERROR_BAD_KEY`](#application-deployment-fails-with-sec_error_bad_key)).
 In the latter case, RSA keys offer the highest level of backwards compatibility.
 
 (Recommended) either create an Elliptic Curve private key:
@@ -341,13 +362,13 @@ field in the TLS config file to its absolute file path on the node.
 With both the CA key and certificate, we have what we need to start signing certificates for
 the hosts Vespa will be running on.
 
-### <a name="creating-host-private-key-and-certificate"/> Creating a private key and certificate for a Vespa host
+
+### Creating a private key and certificate for a Vespa host
 
 _Note: This section can be repeated for each Vespa host in your application.
 See [Alternatives to having a unique certificate per individual host](#alternatives-to-having-a-unique-certificate-per-individual-host)
 for (possibly less secure) options that do not require doing this step per host._
 
-<a name="create-host-private-key-and-csr"/>
 Just like our CA our host needs its own private cryptographic key.
 
 If we're using Elliptic Curve keys:
@@ -370,8 +391,9 @@ $ openssl req -new \
     -sha256
 ```
 
-<a name="sign-host-certificate"/>
-By default Vespa runs with TLS hostname validation enabled, which requires the server's certificate
+#### Sign host certificate
+
+By default, Vespa runs with TLS hostname validation enabled, which requires the server's certificate
 to contain a hostname matching what the client is connecting to. This is fundamental to the security
 of protocols such as HTTP, but often sees less use with mTLS. Vespa supports it as an added layer of
 security. Using certificates containing hostnames has the added benefit that you can run tools such
@@ -419,7 +441,7 @@ time of signing.
 
 We can inspect the certificate using the `openssl x509` command. Here's some example output
 for a certificate using EC keys. Your output will look different since the serial
-number, dates and key information etc will differ.
+number, dates and key information etc. will differ.
 
 ```
 $ openssl x509 -in host.pem -text -noout
@@ -470,8 +492,9 @@ Copy `host.key` and `host.key` to your Vespa host and point the `"private-key"` 
 `"certificates"` TLS config fields to their respective absolute paths. The CSR and
 extension config files can be safely discarded.
 
-{% include warning.html content="Ensure that `host.key` is only readable by the Vespa user on your host(s)
-" %}
+{% include warning.html content="Ensure that `host.key` is only readable by the Vespa user on your host(s)" %}
+
+
 ### Alternatives to having a unique certificate per individual host
 
 It's possible to avoid having to create a separate certificate per host in favor of a single certificate
@@ -486,4 +509,3 @@ shared between all hosts.
 
 However, for production deployments we recommend using a distinct certificate per host to help mitigate
 the impact of a host being compromised.
-
