@@ -295,7 +295,7 @@ Now that we have content-based embeddings for each news article,
 we can train the model to use them. The following figure illustrates
 the model we are training:
 
-<img src="/assets/img/tutorials/embeddings.png" width="768px" />
+<img src="/assets/img/tutorials/embeddings.png" width="768px" alt="Model training example" />
 
 So, we'll pass the 512-dimensional embeddings from the BERT model 
 through a typical neural network layer to reduce dimensions to 50.

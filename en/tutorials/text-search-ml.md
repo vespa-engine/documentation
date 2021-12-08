@@ -411,7 +411,11 @@ Although there is not a huge difference between those models on average,
 we can clearly see in the figure below that a model based on a listwise loss function
 allocate more documents in the first two positions of the ranked list when compared to the pointwise model:
 
-<div style="text-align:center"><img src="/assets/img/tutorials/text_search_baseline_pointwise_listwise_rr.png" style="width: 50%; margin-right: 1%; margin-bottom: 0.5em;"></div>
+<div style="text-align:center">
+<img src="/assets/img/tutorials/text_search_baseline_pointwise_listwise_rr.png"
+     style="width: 50%; margin-right: 1%; margin-bottom: 0.5em;" 
+     alt="Plot of pointwise and listwise BM25" />
+</div>
 
 Overall, on average, there is not much difference between those models (with respect to MRR),
 which was expected given the simplicity of the models described here.
