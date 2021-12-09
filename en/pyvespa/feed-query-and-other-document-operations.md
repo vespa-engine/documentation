@@ -12,7 +12,9 @@ pip install pyvespa
 
 ## Define your application package
 
-This tutorial assumes that a [Vespa application package](https://pyvespa.readthedocs.io/en/latest/create-text-app.html) was defined and stored in the variable `app_package`. To illustrate this tutorial, we will use a basic question answering app from our gallery.
+This tutorial assumes that a [Vespa application package](https://pyvespa.readthedocs.io/en/latest/create-text-app.html)
+was defined and stored in the variable `app_package`.
+To illustrate this tutorial, we will use a basic question answering app from our gallery.
 
 
 ```python
@@ -23,7 +25,11 @@ app_package = QuestionAnswering()
 
 ## Deploy the application
 
-It is required to deploy the application to follow the commands below. Deploy the `app_package` using either [Docker](deploy-vespa-docker) or [Vespa Cloud](https://cloud.vespa.ai/en/getting-started-python). The resulting Vespa connection should be stored in the `app` variable. For example, to deploy using Docker:
+It is required to deploy the application to follow the commands below.
+Deploy the `app_package` using either [Docker](deploy-vespa-docker)
+or [Vespa Cloud](https://cloud.vespa.ai/en/getting-started-python).
+The resulting Vespa connection should be stored in the `app` variable.
+For example, to deploy using Docker:
 
 
 ```python
@@ -71,7 +77,8 @@ list(sentence_data[0].keys())
 
 ## Feed data
 
-Prepare the data as a list of dicts having the `id` key holding a unique id of the data point and the `fields` key holding a dict with the data fields required by the application.
+Prepare the data as a list of dicts having the `id` key holding a unique id of the data point
+and the `fields` key holding a dict with the data fields required by the application.
 
 
 ```python
@@ -93,7 +100,7 @@ response = app.feed_batch(schema="sentence", batch=batch_feed)
 
 ## Query the application
 
-We can query the application using the [Vespa Query Language](https://docs.vespa.ai/en/query-language.html).
+We can query the application using the [Vespa Query Language](../query-language.html).
 
 
 ```python
@@ -133,7 +140,7 @@ batch = [{"id": 0}, {"id": 1}, {"id": 2}]
 response = app.get_batch(schema="sentence", batch=batch)
 ```
 
-It is possible to inspect each of the Vespa responses through the `json` attribute. E.g. `response[0].json`.
+It is possible to inspect each of the Vespa responses through the `json` attribute, e.g. `response[0].json`.
 
 
 ```python
@@ -151,7 +158,8 @@ response
 
 ### Update data
 
-To update a data point, it is required to inform the `id` of the data to be updated and the `fields` to be updated. Optionally, we can choose to `create` the data point if it does not exist.
+To update a data point, it is required to inform the `id` of the data to be updated and the `fields` to be updated.
+Optionally, we can choose to `create` the data point if it does not exist.
 
 
 ```python

@@ -5,11 +5,15 @@ title: "Connect to a running Vespa instance"
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vespa-engine/pyvespa/blob/master/docs/sphinx/source/connect-to-vespa-instance.ipynb)
 
-This self-contained tutorial will show you how to connect to a pre-existing Vespa instance. We will use the [https://cord19.vespa.ai/](https://cord19.vespa.ai/) app as an example. You can run this tutorial yourself in Google Colab by clicking on the badge located at the top of the tutorial.
+This self-contained tutorial will show you how to connect to a pre-existing Vespa instance.
+We will use the [https://cord19.vespa.ai/](https://cord19.vespa.ai/) app as an example.
+You can run this tutorial yourself in Google Colab by clicking on the badge located at the top of the tutorial.
 
 ## Connect to a running Vespa application
 
-We can connect to a running Vespa application by creating an instance of [Vespa](https://pyvespa.readthedocs.io/en/latest/reference-api.html#vespa.application.Vespa) with the appropriate url. The resulting `app` will then be used to communicate with the application.
+We can connect to a running Vespa application by creating an instance of
+[Vespa](https://pyvespa.readthedocs.io/en/latest/reference-api.html#vespa.application.Vespa) with the appropriate url.
+The resulting `app` will then be used to communicate with the application.
 
 
 ```python
@@ -20,7 +24,8 @@ app = Vespa(url = "https://api.cord19.vespa.ai")
 
 ## Query the application
 
-We have full flexibility to specify the request body based on the [Vespa query language](https://docs.vespa.ai/en/reference/query-api-reference.html).
+We have full flexibility to specify the request body based on the
+[Vespa query language](../reference/query-api-reference.html).
 
 
 ```python
