@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Deploy to Docker"
+redirect_from:
+- /documentation/pyvespa/deploy-vespa-docker.html
 ---
 > Deploy Vespa applications to Docker containers.
 

@@ -2,6 +2,8 @@
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: FAQ - frequently asked questions
 style: faq
+redirect_from:
+- /documentation/faq.html
 ---
 
 Refer to [Vespa Support](https://vespa.ai/support) for more support options.

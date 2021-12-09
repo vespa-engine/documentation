@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking with XGBoost Models"
+redirect_from:
+- /documentation/xgboost.html
 ---
 
 If you have models that are trained in XGBoost, Vespa can import the models

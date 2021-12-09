@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Getting started with ranking"
+redirect_from:
+- /documentation/getting-started-ranking.html
 ---
 
 Learn how [ranking](ranking.html) works in Vespa by using the open [query API](query-api.html) of

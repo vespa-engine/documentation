@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Semantic Text Search: Quick start "
+redirect_from:
+- /documentation/tutorials/text-search-semantic.html
 ---
 
 The main goal of this tutorial is to add out-of-the-box semantic search capabilities to text applications with as little application specific tuning as possible. In order to do that, we will first describe the data used, the metrics of interest and important baselines that will be used to judge our results. 

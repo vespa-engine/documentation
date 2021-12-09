@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking with LightGBM Models"
+redirect_from:
+- /documentation/lightgbm.html
 ---
 
 [LightGBM](https://github.com/microsoft/LightGBM) is a gradient boosting

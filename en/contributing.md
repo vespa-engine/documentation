@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Contributing to Vespa"
+redirect_from:
+- /documentation/contributing.html
 ---
 
 Contributions to [Vespa](http://github.com/vespa-engine/vespa)
