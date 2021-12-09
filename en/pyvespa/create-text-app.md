@@ -20,7 +20,8 @@ for more detailed information about the API presented here.
 
 ## Document
 
-Create a `Document` instance containing the `Field`s to store in the app. To simplify the application, include only the `id`, the `title` and the `body` of the MS MARCO documents.
+Create a `Document` instance containing the `Field`s to store in the app.
+To simplify the application, include only the `id`, the `title` and the `body` of the MS MARCO documents.
 
 
 ```python
@@ -37,7 +38,11 @@ document = Document(
 
 ## Schema
 
-The complete `Schema` will be named `msmarco` and contain the `Document` instance defined above. The default `FieldSet` indicates that queries will look for matches by searching both in the titles and bodies of the documents. The default `RankProfile` indicates that all the matched documents will be ranked by the `nativeRank` expression involving the title and the body of the matched documents.
+The complete `Schema` will be named `msmarco` and contain the `Document` instance defined above.
+The default `FieldSet` indicates that queries will look for matches
+by searching both in the titles and bodies of the documents.
+The default `RankProfile` indicates that all the matched documents will be ranked by the `nativeRank` expression
+involving the title and the body of the matched documents.
 
 
 ```python
@@ -62,4 +67,5 @@ from vespa.package import ApplicationPackage
 app_package = ApplicationPackage(name = "msmarco", schema=[msmarco_schema])
 ```
 
-At this point, `app_package` contains all the relevant information required to create an MS MARCO text search app and is ready for deployment.
+At this point, `app_package` contains all the relevant information required
+to create an MS MARCO text search app and is ready for deployment.
