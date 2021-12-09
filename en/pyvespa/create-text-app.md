@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Create a text search application"
+redirect_from:
+- /documentation/pyvespa/create-text-app.html
 ---
 > Get started with the Python API to create and modify Vespa applications
 

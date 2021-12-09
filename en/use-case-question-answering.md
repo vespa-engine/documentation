@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Use Case - open-domain question-answering"
+redirect_from:
+- /documentation/use-case-question-answering.html
 ---
 
 The [open-domain question-answering use

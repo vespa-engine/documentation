@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Text Search Tutorial"
+redirect_from:
+- /documentation/tutorials/text-search.html
 ---
 
 In this tutorial, we will guide you through the setup of a text search application built on top of Vespa.

@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Models hot swap tutorial"
+redirect_from:
+- /documentation/tutorials/models-hot-swap.html
 ---
 
 This tutorial builds on the [news recommendation tutorial](news-1-getting-started.html).

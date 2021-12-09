@@ -1,6 +1,8 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - searchers"
+redirect_from:
+- /documentation/tutorials/news-6-recommendation-with-searchers.html
 ---
 
 <!-- Temporary - for doc testing - display is "none" -->
