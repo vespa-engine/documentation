@@ -155,7 +155,7 @@ Each rule set must contain a `required-credentials` array of credential matchers
 A credential is matched by checking a pattern given in `must-match` against a specified certificate `field`. The following fields are currently supported:
 * *CN* - the Common Name part of the certificate's Distinguished Name information. If multiple CN entries are present, the last one will be considered.
 * *SAN_DNS* - a Subject Alternate Name with type DNS. A certificate may contain many SAN entries. If so, all entries are checked and the credential is considered a match if at least one entry matches.
-* *SAN_URI* - a Subject Alternate Name with type URI. Currently only supports case-sensitive exact string matching.
+* *SAN_URI* - a Subject Alternate Name with type URI. It is similar to *SAN_DNS* but with slightly different pattern matching semantics.
 
 For *CN* and *SAN_DNS* fields, the `must-match` pattern is a "glob"-style pattern with the following semantics:
 * `*` matches 0-n non-dot characters within a single dot-separated hostname part. This is similar to the wildcards used by certificates for HTTPS hostname validation. Examples
@@ -166,7 +166,11 @@ For *CN* and *SAN_DNS* fields, the `must-match` pattern is a "glob"-style patter
   * `?.bar` matches `x.bar` but not `bar`, `.bar` or `yx.bar`.
   * `?.?.baz` matches `x.y.baz` but not `x.baz` or `xx.yy.baz`.
 
-For *SAN_URI* fields, must-match specifies a string whose content must exactly match that of the certificate.
+For *SAN_URI* fields, `must-match` is also a "glob"-style pattern, with some deviation compared to *CN*/*SAN_DNS*:
+* The `*` wildcard matches 0-n non-slash characters. A `/` is used as separator between the host and path components, as well as separator between path segments. Examples:
+  * `vespa://myapp/content/*` matches `vespa://myapp/content/node1` but not `vespa://myapp/container/node1` or `vespa://myapp/content/node1/myservice`.
+  * `vespa://*/*/*` matches `vespa://myapp/content/node1` but not `vespa://myapp/content` or `vespa://myapp/content/node1/myservice`.
+* `?` in a pattern has no special behaviour - it only matches the `?` literal. URIs use `?` as separator between the path and query components.
 
 The description field is optional and is useful for e.g. documenting why a particular ruleset is present. It has no semantic meaning to the authorization engine.
 
