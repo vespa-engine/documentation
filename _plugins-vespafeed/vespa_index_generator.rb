@@ -14,7 +14,7 @@ module Jekyll
             operations = []
             site.pages.each do |page|
                 next if page.path.start_with?("css/")
-                if page.data["index"] == true && page.url.start_with?("/documentation") == false
+                if page.data["index"] == true && page.url.start_with?("/redirects.json") == false
                     text = extract_text(page)
                     operations.push({
                         :put => "id:"+namespace+":doc::"+namespace+page.url,
