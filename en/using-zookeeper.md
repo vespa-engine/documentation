@@ -43,13 +43,13 @@ ZooKeeper features are exposed through
 [Inject](jdisc/injecting-components.html) `VespaCurator` to use it. [Handler](jdisc/developing-request-handlers.html) example:
 
 ```java
-public class MyRequestHandler extends LoggingRequestHandler {
+public class MyRequestHandler extends ThreadedHttpRequestHandler {
 
     private final VespaCurator curator;
 
     @Inject
-    public CuratorHandler(Executor executor, AccessLog accessLog, VespaCurator curator) {
-        super(executor, accessLog);
+    public CuratorHandler(Executor executor, VespaCurator curator) {
+        super(executor);
         this.curator = curator;
     }
 
