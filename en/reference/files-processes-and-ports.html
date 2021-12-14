@@ -1,8 +1,10 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Files, Processes and Ports"
+title: "Files, Processes, Ports, Environment"
 redirect_from:
 - /documentation/reference/files-processes-and-ports.html
+- /documentation/setting-vespa-variables.html
+- /en/setting-vespa-variables.html
 ---
 
 <p>
@@ -74,8 +76,7 @@ So even though the allocation is deterministic,
 i.e. the same system will get the same ports on subsequent startups,
 a particular service instance may get different ports
 when the overall system setup is changed through <a href="services.html">services.xml</a>.
-Use <a href="vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a>
-to see port allocations.
+Use <a href="vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a> to see port allocations.
 </p>
 <ul>
   <li>
@@ -184,10 +185,9 @@ to see port allocations.
 
 <h2 id="vespa-system-limits">System limits</h2>
 <p>
-The startup scripts in the next section will ensure that some of the system limits are
-set to a value greater than or equal to the table below.
+  The startup scripts in the next section ensures that some of the system limits are
+  set to a value greater than or equal to the table below.
 </p>
-
 <table class="table">
 <thead><tr>
   <th>Name</th><th>Limit</th><th>Command executed</th></thead><tbody>
@@ -209,23 +209,25 @@ set to a value greater than or equal to the table below.
 </tbody>
 </table>
 <p>
-If the startup scripts are not able to set the maximum number of open files Vespa will not start.
+  If the startup scripts are not able to set the maximum number of open files Vespa will not start.
 </p>
 
 
 
 <h2 id="vespa-start-stop">Vespa start / stop</h2>
 <p>
-Start and stop <em>all</em> services on a node:
+  Start and stop <em>all</em> services on a node:
+</p>
 <pre>
 $ $VESPA_HOME/bin/vespa-start-services
 $ $VESPA_HOME/bin/vespa-stop-services
 </pre>
-Likewise, for the config server:
+<p>Likewise, for the config server:</p>
 <pre>
 $ $VESPA_HOME/bin/vespa-start-configserver
 $ $VESPA_HOME/bin/vespa-stop-configserver
 </pre>
+<p>
 Learn more about which processes are run at
 <a href="../config-sentinel.html">Vespa startup</a>.
 </p>
@@ -236,6 +238,7 @@ Learn more about which processes are run at
 To run an automated node check before Vespa is started, provide a check script,
 returning 0 if <em>service vespa-services start</em> is allowed to run.
 This is useful when autostarting:
+</p>
 <pre>
 $ export VESPA_VALIDATIONSCRIPT=/tmp/foo.bar.sh
 $ cat /tmp/foo.bar.sh
@@ -249,16 +252,73 @@ validation script '/tmp/foo.bar.sh' failed
 $VESPA_HOME/bin/vespa-start-services failed: exit code 1 from command:
 $VESPA_HOME/libexec/vespa/start-vespa-base.sh
 </pre>
-</p>
 
 
 
 <h2 id="core-dumps">Core dumps</h2>
 <p>
-Example settings:
+  Example settings:
+</p>
 <pre>
 $ mkdir -p /tmp/cores && chmod a+rwx /tmp/cores
 $ echo "/tmp/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 </pre>
-This will write files like <em>/tmp/cores/core.vespa-proton-bi.1721.localhost.1580387387</em>.
+<p>
+  This will write files like <em>/tmp/cores/core.vespa-proton-bi.1721.localhost.1580387387</em>.
 </p>
+
+
+
+<h2 id="environment-variables">Environment variables</h2>
+<p>
+  Vespa configuration is set in
+  <a href="../cloudconfig/application-packages.html">application packages</a>.
+  Some configuration is used to bootstrap nodes - this is set in environment variables.
+  Environment variables are only read at startup.
+</p>
+<p>
+<code>$VESPA_HOME/conf/vespa/default-env.txt</code> is read in Vespa start scripts -
+use this to modify variables.
+Each line  has the format <code>action variablename value</code> where the items are:
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Item</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+<tr><th>action</th>
+  <td>One of <code>fallback</code>, <code>override</code>, or <code>unset</code>.
+    <code>fallback</code> sets the variable if it is unset (or empty).
+    <code>override</code> set the value regardless.
+    <code>unset</code> unsets the variable.</td></tr>
+<tr><th>variablename</th>
+  <td>The name of the variable, e.g. <code>VESPA_CONFIGSERVERS</code></td></tr>
+<tr><th>value</th>
+  <td>The rest of the line is the variable's value.</td></tr>
+</tbody>
+</table>
+
+<table class="table">
+  <thead>
+    <tr><th>Environment variable</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+<tr><th>VESPA_CONFIGSERVERS</th>
+  <td>
+    A comma-separated list of hosts to run configservers (default <code>localhost</code>).
+    Should always be set to the same value on all hosts in a multi-host setup.</td></tr>
+<tr><th>VESPA_WEB_SERVICE_PORT</th>
+  <td>
+    The port number where REST apis will run, default <code>8080</code>.
+    This isn't strictly needed, as the port number can be set
+    for each HTTP server in <code>services.xml</code>,
+    but with a big application it can be easier to set the default port number just once.
+    Also note that this needs to be set when starting the <em>configserver</em>,
+    since the REST api implementation gets its port number from there.
+  </td></tr>
+<tr><th>VESPA_TLS_CONFIG_FILE</th>
+  <td>
+    Absolute path to <a href="../mtls.html">TLS configuration file</a>.
+  </td></tr>
+</tbody>
+</table>
