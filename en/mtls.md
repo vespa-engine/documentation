@@ -5,10 +5,9 @@ redirect_from:
 - /documentation/mtls.html
 ---
 
-## Introduction
-*Note: This document is only relevant if you're **self-hosting Vespa**.
-If you're using Vespa Cloud all services are automatically set up securely by default with full mTLS,
-with all key/certificate management handled for you.*
+{% include note.html content="This document is only relevant if **self-hosting Vespa**.
+If using Vespa Cloud, all services are automatically set up securely by default with full mTLS,
+with all key/certificate management handled." %}
 
 [Transport Layer Security (TLS)](https://datatracker.ietf.org/doc/html/rfc5246) is a protocol that uses cryptography
 to enable secure, tamper-proof communication over the network.
@@ -257,10 +256,10 @@ $ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-cert
 
 
 ## FAQ
-* Q: Should TLS be used even if I have a latency-sensitive real-time search application?
+* **Q: Should TLS be used even if I have a latency-sensitive real-time search application?**
   * A: Yes. The Vespa cloud team has run many such applications in production for a long time and the overhead imposed by TLS is negligible.
     Significant effort have been spent tuning Vespa's TLS integrations to keep overhead to a minimum.
-* Q: How much overhead does TLS impose in practice?
+* **Q: How much overhead does TLS impose in practice?**
   * A: With modern CPUs, expect somewhere around 1-2% extra CPU usage for symmetric encryption (i.e. active connections). Connection handshakes have an expected extra latency of 2-4 ms of CPU time (network latency not included) due to more expensive cryptographic operations. Vespa performs handshake operations in separate threads to avoid stalling other network traffic. Vespa also uses long-lived connections internally to reduce the number of handshakes.
 
 
