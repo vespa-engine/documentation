@@ -48,8 +48,8 @@ public class MyRequestHandler extends ThreadedHttpRequestHandler {
     private final VespaCurator curator;
 
     @Inject
-    public CuratorHandler(Executor executor, AccessLog accessLog, VespaCurator curator) {
-        super(executor, accessLog);
+    public CuratorHandler(Executor executor, VespaCurator curator) {
+        super(executor);
         this.curator = curator;
     }
 
