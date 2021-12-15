@@ -331,7 +331,7 @@ rank-profile inlinks_twophase inherits inlinks_age {
 
 Note how using rank-profile `inherits` is a smart way to define functions once,
 then use in multiple rank-profiles.
-Read more in the [schema inheritance guide](schema-inheritance.html).
+Read more about [schema inheritance](schemas.html#schema-inheritance).
 Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earlier:
 
 ```
