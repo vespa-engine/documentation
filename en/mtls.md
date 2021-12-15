@@ -85,7 +85,8 @@ VESPA_TLS_CONFIG_FILE=/absolute/path/to/my-tls-config.json
 This environment variable must be set to a valid file path before any Vespa services are started on the node.
 All nodes in your Vespa application must have a TLS config file pointing to the certificates that are trusted by the other nodes.
 
-See [Vespa environment variables](setting-vespa-variables.html) for information on configuring environment variables for Vespa.
+See [Vespa environment variables](reference/files-processes-and-ports.html#environment-variables)
+for information on configuring environment variables for Vespa.
 
 Setting `VESPA_TLS_CONFIG_FILE` automatically enables TLS for all Vespa processes on the node.
 Vespa command-line tools will automatically pick up the required configuration and work transparently.
@@ -107,8 +108,8 @@ Example:
 }
 ```
 
-Set the environment variable, for example by appending to the
-[conf/vespa/default-env.txt](https://docs.vespa.ai/en/setting-vespa-variables.html) file in your Vespa installation:
+Set the environment variable, for example by appending to
+[conf/vespa/default-env.txt](reference/files-processes-and-ports.html#environment-variables):
 
 ```sh
 override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
@@ -192,7 +193,8 @@ consider splitting file refreshing into multiple phases:
 
 ## Setting up TLS for a new Vespa application or upgrading with downtime
 With no Vespa services running on any nodes, ensure the `VESPA_TLS_CONFIG_FILE` environment variable is set to
-a valid configuration file path on every node, and [is visible to any Vespa start scripts](setting-vespa-variables.html).
+a valid configuration file path on every node,
+and [is visible to any Vespa start scripts](reference/files-processes-and-ports.html#environment-variables).
 Start Vespa services as you normally would. Check cluster health with
 [vespa-get-cluster-state](reference/vespa-cmdline-tools.html#vespa-get-cluster-state)
 and check [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
