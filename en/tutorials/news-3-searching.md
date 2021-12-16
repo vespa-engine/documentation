@@ -6,6 +6,8 @@ redirect_from:
 ---
 
 <!-- Temporary - for doc testing - display is "none" -->
+<!-- ToDo: Replace with vespa-feed-client -->
+<!-- ToDo: Test the actual queries made in the doc -->
 <pre style="display:none" data-test="exec" >
 $ git clone https://github.com/vespa-engine/sample-apps.git
 $ cd sample-apps/news
@@ -155,8 +157,7 @@ we haven't even touched upon ranking yet. The answer is that
 Vespa uses its [nativeRank](../nativerank.html) score unless anything else 
 is defined. We'll get back to this later.
 
-Now try to send the following query to Vespa, and look at the order of the
-hits:
+Now try to send the following query to Vespa, and look at the order of the hits:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
