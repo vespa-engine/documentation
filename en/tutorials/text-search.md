@@ -226,26 +226,26 @@ the Vespa application — which services to run and how many nodes per service.
 Write the following to `application/services.xml`:
 
 <pre data-test="file" data-path="sample-apps/text-search/application/services.xml">
-<?xml version="1.0" encoding="UTF-8"?>
-<services version="1.0">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;services version="1.0"&gt;
 
-  <container id="text_search" version="1.0">
-    <search></search>
-    <document-processing></document-processing>
-    <document-api></document-api>
-  </container>
+  &lt;container id="text_search" version="1.0"&gt;
+    &lt;search&gt;&lt;/search&gt;
+    &lt;document-processing&gt;&lt;/document-processing&gt;
+    &lt;document-api&gt;&lt;/document-api&gt;
+  &lt;/container&gt;
 
-  <content id="msmarco" version="1.0">
-    <redundancy>1</redundancy>
-    <documents>
-      <document type='msmarco' mode="index"></document>
-      <document-processing cluster="text_search"></document-processing>
-    </documents>
-    <nodes>
-      <node distribution-key='0' hostalias='node1'></node>
-    </nodes>
-  </content>
-</services>
+  &lt;content id="msmarco" version="1.0"&gt;
+    &lt;redundancy&gt;1&lt;/redundancy&gt;
+    &lt;documents&gt;
+      &lt;document type="msmarco" mode="index"&gt;&lt;/document&gt;
+      &lt;document-processing cluster="text_search"&gt;&lt;/document-processing&gt;
+    &lt;/documents&gt;
+    &lt;nodes&gt;
+      &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
+    &lt;/nodes&gt;
+  &lt;/content&gt;
+&lt;/services&gt;
 </pre>
 
 Some notes about the elements above:
@@ -270,12 +270,12 @@ that is part of the application, with an alias for each of them. This tutorial
 uses a single node. Write the following to `application/hosts.xml`:
 
 <pre data-test="file" data-path="sample-apps/text-search/application/hosts.xml">
-<?xml version="1.0" encoding="utf-8"?>
-<hosts>
-  <host name="localhost">
-    <alias>node1</alias>
-  </host>
-</hosts>
+&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;hosts&gt;
+  &lt;host name="localhost"&gt;
+    &lt;alias&gt;node1&lt;/alias&gt;
+  &lt;/host&gt;
+&lt;/hosts&gt;
 </pre>
 
 

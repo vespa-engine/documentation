@@ -125,28 +125,28 @@ make up the Vespa application — which services to run and how many nodes per
 service. Write the following to `my-app/services.xml`:
 
 <pre data-test="file" data-path="sample-apps/news/my-app/services.xml">
-<?xml version='1.0' encoding='UTF-8'?>
-<services version="1.0">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;services version="1.0"&gt;
 
-  <container id='default' version='1.0'>
-    <search></search>
-    <document-api></document-api>
-    <nodes>
-      <node hostalias='node1'></node>
-    </nodes>
-  </container>
+    &lt;container id="default" version="1.0"&gt;
+        &lt;search&gt;&lt;/search&gt;
+        &lt;document-api&gt;&lt;/document-api&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1"&gt;&lt;/node&gt;
+        &lt;/nodes&gt;
+    &lt;/container&gt;
 
-  <content id='mind' version='1.0'>
-    <redundancy>1</redundancy>
-    <documents>
-      <document type='news' mode="index"/>
-    </documents>
-    <nodes>
-      <node hostalias="node1" distribution-key="0" />
-    </nodes>
-  </content>
+    &lt;content id="mind" version="1.0"&gt;
+        &lt;redundancy&gt;1&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="news" mode="index"/&gt;
+        &lt;/documents&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1" distribution-key="0" /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
 
-</services>
+&lt;/services&gt;
 </pre>
 
 Quite a lot is set up here:
@@ -176,12 +176,12 @@ hosts/nodes that are part of the application, with an alias for each of them.
 Write the following to `my-app/hosts.xml`:
 
 <pre data-test="file" data-path="sample-apps/news/my-app/hosts.xml">
-<?xml version="1.0" encoding="utf-8" ?>
-<hosts>
-  <host name="localhost">
-    <alias>node1</alias>
-  </host>
-</hosts>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;hosts&gt;
+  &lt;host name="localhost"&gt;
+    &lt;alias&gt;node1&lt;/alias&gt;
+  &lt;/host&gt;
+&lt;/hosts&gt;
 </pre>
 
 This sets up the alias `node1` to represent the localhost. You 
