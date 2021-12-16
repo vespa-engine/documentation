@@ -33,6 +33,8 @@ In this part we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.
 In the next part of the tutorial, we'll start developing our application.
 
+
+
 ## Prerequisites
 
 - [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
@@ -42,11 +44,13 @@ In the next part of the tutorial, we'll start developing our application.
 - python 3
 - Operating system: macOS or Linux
 - Architecture: x86_64
-- Minimum **10GB** memory dedicated to Docker (the default is 2GB on Macs)
+- Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
 
-In upcoming parts of this series, we will have some additional python
-dependencies as we use PyTorch to train vector representations for news and
-users and train machine learning models for use in ranking.
+In upcoming parts of this series, we will have some additional python dependencies -
+we use PyTorch to train vector representations for news and users
+and train machine learning models for use in ranking.
+
+
 
 ## A minimal Vespa application
 
@@ -74,6 +78,8 @@ There are three files there:
 
 We will get back to these files in the next part of the tutorial.
 
+
+
 ## Starting Vespa
 
 This application doesn't contain much at the moment, but let's start up the
@@ -89,7 +95,7 @@ $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
 </pre>
 </div>
 
-First, we pull the latest Vespa image from the Docker repository, then we
+First, we pull the latest Vespa-image from the Docker repository, then we
 start it with the name `vespa`. This starts the Docker container and the
 initial Vespa services to be able to deploy an application.
 
@@ -128,13 +134,11 @@ If a restart is required in some rare case, however, the output will notify you.
 In the upcoming parts of the tutorials, we'll frequently deploy the 
 application in this manner. 
 
-<p><!-- ToDo: consider making a style for notes -->
-Note here that we prepare the application <em>directory</em>. Both
-application directories and a zip file containing the application are
-accepted. A zip file is created when compiling and packaging an
-application containing custom Java code. We'll get back to that in part 6 
-of the tutorial.
-</p>
+{% include note.html content="We prepare the application <em>directory</em>.
+Both application directories and a zip file containing the application are accepted.
+A zip file is created when compiling and packaging an application containing custom Java code.
+We'll get back to that in part 6 of the tutorial."%}
+
 
 The first time you deploy your application, it might take a while to
 start the services. Like the configuration server, you can query the 
@@ -151,6 +155,8 @@ This returns a `200 OK` when it is ready for receiving traffic. Note here
 that we don't run the command inside the Docker container. The port `8080`
 was exposed when starting the Docker container, so we can query it directly.
 
+
+
 ## Feeding to Vespa
 
 We must index data before we can search for it. This is called 'feeding', and
@@ -158,9 +164,10 @@ we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
 document. We'll use the `vespa-http-client` Java feeder for this:
 
+<!-- ToDo: Replace with vespa-feed-client -->
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ curl -L -o vespa-http-client-jar-with-dependencies.jar \
   https://search.maven.org/classic/remotecontent?filepath=com/yahoo/vespa/vespa-http-client/7.391.28/vespa-http-client-7.391.28-jar-with-dependencies.jar
 </pre>
@@ -178,10 +185,11 @@ This runs the `vespa-http-client` Java client with the file `doc.json` file.
 This contains a single document which we'll query for below.
 
 
+
 ## Testing Vespa
 
-If everything is ok so far, our application should be up and running. We 
-can query the endpoint:
+If everything is ok so far, our application should be up and running.
+We can query the endpoint:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -193,6 +201,7 @@ $ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddoc
 This uses the `search` API to search for all documents of type `news`.
 This should return `1` result, which is the document we fed above.
 Well done!
+
 
 
 ## Stopping and starting Vespa
@@ -241,8 +250,8 @@ $ docker rm -f vespa
 </pre>
 </div>
 
-This will delete the Vespa application, including all data, so 
-don't do this unless you are sure.
+This will delete the Vespa application, including all data, so don't do this unless you are sure.
+
 
 
 ## Conclusion
