@@ -50,7 +50,7 @@ following in the sample application directory:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ python3 -m pip install -r requirements.txt
 </pre>
 </div>
@@ -113,9 +113,9 @@ In the image above, you can see a user matrix with as many rows as there are
 users and a news matrix with as many columns as there are news articles.
 Each user row, or news column, has the same length, signified by the `k`
 dimension. The intuition is that the dot product of the `k` length vector for
-a user and news pair approximates the user's interest for the news
+a user and news pair approximates the user's interest in the news
 article. Since the information is compressed into the `k` length vector, this works
-across users as well. Thus the "collaborative" filtering.
+across users as well. Thus, the "collaborative" filtering.
 
 These `k` length vectors can be extracted from the matrices and associated
 with the user or news article. So, when we want to recommend news articles to
@@ -232,7 +232,7 @@ We'll address this next.
 ## Addressing the cold start problem
 
 The approach above based itself on news articles that users interacted with
-in the training set period. Only the user id's and news article id's were
+in the training set period. Only the user ids and news article ids were
 used. To overcome the problem that new articles haven't been seen in the
 training set, we need to use the article's content features. So, the
 predictions will be based on the similarity of content a user has previously
@@ -249,7 +249,7 @@ has a `category`, a `subcategory` and zero or more `entities`
 extracted from the text. These features are categorical, meaning
 that they have a finite set of values they can take. To handle these,
 we'll generate an embedding for each possible value, similar to how we
-generated embeddings for the user id's and news id's above. These id's
+generated embeddings for the user id's and news id's above. These ids
 are also categorical, after all.
 
 
@@ -282,7 +282,7 @@ the `train` and `dev` demo dataset.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ python3 src/python/create_bert_embeddings.py mind
 </pre>
 </div>
@@ -311,7 +311,14 @@ In PyTorch code, this looks like:
 
 ```
 class ContentBasedModel(torch.nn.Module):
-    def __init__(self, num_users, num_news, num_categories, num_subcategories, num_entities, embedding_size, bert_embeddings):
+    def __init__(self,
+                 num_users,
+                 num_news,
+                 num_categories,
+                 num_subcategories,
+                 num_entities,
+                 embedding_size,
+                 bert_embeddings):
         super(ContentBasedModel, self).__init__()
 
         # Embedding tables for category variables
@@ -344,7 +351,8 @@ class ContentBasedModel(torch.nn.Module):
         news_embeddings = self.news_embeddings(items)
         sub_cat_embeddings = self.sub_cat_embeddings(subcategories)
         entity_embeddings_1 = self.entity_embeddings(entities[:,0])
-        news_embedding = torch.cat((news_embeddings, bert_embeddings, cat_embeddings, sub_cat_embeddings, entity_embeddings_1), 1)
+        news_embedding = torch.cat((news_embeddings, bert_embeddings, cat_embeddings,
+                                    sub_cat_embeddings, entity_embeddings_1), 1)
         news_embedding = self.news_content_transform(news_embedding)
         news_embedding = torch.sigmoid(news_embedding)
 
@@ -364,7 +372,7 @@ the sample app. Running this results in:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ python3 src/python/train_cold_start.py mind 10
 </pre>
 </div>
