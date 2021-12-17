@@ -90,7 +90,7 @@ application anyway by starting a Docker container to run it:
 <pre data-test="exec">
 $ docker pull vespaengine/vespa
 $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-  --publish 8080:8080 --publish 19071:19071 \
+  --publish 8080:8080 --publish 19071:19071 --publish 19092:19092 \
   vespaengine/vespa
 </pre>
 </div>
