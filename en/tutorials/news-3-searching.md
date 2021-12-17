@@ -5,34 +5,6 @@ redirect_from:
 - /documentation/tutorials/news-3-searching.html
 ---
 
-<!-- Temporary - for doc testing - display is "none" -->
-<!-- ToDo: Replace with vespa-feed-client -->
-<!-- ToDo: Test the actual queries made in the doc -->
-<pre style="display:none" data-test="exec" >
-$ git clone https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/news
-$ ./bin/download-mind.sh demo
-$ python3 src/python/convert_to_vespa_format.py mind
-$ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-    --volume `pwd`:/app --publish 8080:8080 vespaengine/vespa
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
-</pre>
-<pre style="display:none" data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-3-searching && /opt/vespa/bin/vespa-deploy activate'
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-<pre style="display:none" data-test="exec" >
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --verbose --file /app/mind/vespa.json --host localhost --port 8080'
-</pre>
-<pre style="display:none" data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
-</pre>
-
 
 This is the third part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
@@ -201,7 +173,7 @@ across all the documents — some common use cases include:
 
 Displaying such groups and their sizes (in terms of matching documents per
 group) on a search result page, with a link to each such group, is a common way
-to let users refine searches.  For now we will only do a simple grouping
+to let users refine searches.  For now, we will only do a simple grouping
 query to get a list of unique values for `category` ordered by the number of
 documents they occur in and top 3 is shown:
 
@@ -391,9 +363,49 @@ ranking.
 We can do this by including a `popularity` rank profile below at the bottom of
 `schemas/news.sd`:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+schema news {
+    document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field category type string {
+            indexing: summary | attribute
+        }
+        field subcategory type string {
+            indexing: summary | attribute
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field abstract type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field date type int {
+            indexing: summary | attribute
+        }
+        field clicks type int {
+            indexing: summary | attribute
+        }
+        field impressions type int {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, abstract, body
+    }
+
     rank-profile popularity inherits default {
         function popularity() {
             expression: if (attribute(impressions) &gt; 0, attribute(clicks) / attribute(impressions), 0)
@@ -402,8 +414,8 @@ We can do this by including a `popularity` rank profile below at the bottom of
             expression: nativeRank(title, abstract) + 10 * popularity
         }
     }
+}
 </pre>
-</div>
 
 - `rank-profile popularity inherits default`
 
@@ -440,7 +452,23 @@ We can do this by including a `popularity` rank profile below at the bottom of
 More information can be found in the [schema
 reference](../reference/schema-reference.html#rank-profile).
 
-After you deploy the configuration, you can run a query such as:
+Deploy the _popularity_ rank profile:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ (cd my-app && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+</div>
+
+<!-- Give the container some time to load new config -->
+<pre data-test="exec" style="display:none">
+$ sleep 3
+</pre>
+
+Run a query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -461,10 +489,6 @@ After completing this part of the tutorial, you should now have a basic
 understanding of how you can load data into Vespa and effectively search for
 content. In the [next part of the tutorial](news-4-embeddings.html), we'll
 start with the basics for transforming this into a recommendation system.
-
-<pre style="display:none" data-test="after">
-$ docker rm -f vespa
-</pre>
 
 <script src="/js/process_pre.js"></script>
 <script src="/js/pre_copy.js"></script>
