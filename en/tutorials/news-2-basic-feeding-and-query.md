@@ -57,11 +57,6 @@ the recommendation system later in this series.
 Let's start by downloading the data. The `news` sample app directory will 
 be our starting point. We've included a script to download the data for us:
 
-<pre style="display:none" data-test="exec" >
-$ git clone https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/news
-</pre>
-
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
@@ -298,28 +293,21 @@ my-app/
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ (cd my-app && zip -r - .) | \
   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 </div>
 
-Continue after the application is successfully deployed.
+Continue after the application is successfully deployed:
 
-<pre style="display:none" data-test="exec">
-$ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-    --volume `pwd`:/app --publish 8080:8080 vespaengine/vespa
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
-</pre>
-<pre style="display:none" data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/my-app && /opt/vespa/bin/vespa-deploy activate'
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-wait-for="200 OK">
 $ curl -s --head http://localhost:8080/ApplicationStatus
 </pre>
+</div>
 
 
 ## Feeding data
@@ -344,19 +332,21 @@ using the `vespa-http-client`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ java -jar vespa-http-client-jar-with-dependencies.jar \
   --verbose --file mind/vespa.json --endpoint http://localhost:8080
 </pre>
 </div>
 
-<pre style="display:none" data-test="exec" >
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --verbose --file /app/mind/vespa.json --host localhost --port 8080'
+Wait for all 28 604 documents to be fed:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28604'>
+$ curl -s 'http://localhost:19092/metrics/v1/values' | \
+  tr "," "\n" | grep content.proton.documentdb.documents.active
 </pre>
-<pre style="display:none" data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
-</pre>
+</div>
 
 You can verify that specific documents are fed by fetching documents by
 document id using the [Document API](../api.html):
@@ -460,10 +450,6 @@ news", and as such, all documents in the index are returned.
 We now have a Vespa application running with searchable data. In 
 the [next part of the tutorial](news-3-searching.html), we'll explore searching with 
 sorting, grouping, and ranking results.
-
-<pre style="display:none" data-test="after">
-$ docker rm -f vespa
-</pre>
 
 <script src="/js/process_pre.js"></script>
 <script src="/js/pre_copy.js"></script>
