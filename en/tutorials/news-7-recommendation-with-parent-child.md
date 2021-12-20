@@ -61,7 +61,9 @@ parent-child relationships between documents in Vespa. We will also use
 sparse tensors directly in ranking.
 
 For reference, the final state of this tutorial can be found in the
-`app-7-parent-child` sub-directory of the `news` sample application.
+[app-7-parent-child](https://github.com/vespa-engine/sample-apps/tree/master/news/app-7-parent-child)
+directory of the `news` sample application.
+
 
 ## Parent-child relationships in Vespa
 
@@ -298,16 +300,29 @@ after feeding some data.
 
 ## Feeding parent and child updates
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ cd ../app-7-parent-child
+$ mvn package
+</pre>
+</div>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ curl --header Content-Type:application/zip --data-binary @target/application.zip \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+</div>
+
 After deploying the application, we are ready to feed a global CTR document.
 For convenience, we've added a script that reads the MIND content and
 impression data to calculate CTR scores for each category:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ ./src/python/create_category_ctrs.py mind
 </pre>
-</div>
 
 This produces two files in the `mind` directory:
 
@@ -385,16 +400,13 @@ experience.
 To remedy this, we will try to learn a suitable weighting between features. We'll 
 address this in the next part of this series.
 
+
 ## Conclusion
 
 This tutorial introduced parent-child relationships and demonstrated it
 through a global CTR feature we used in ranking. As this feature was based on
 tensors, we also introduced ranking with tensor expressions. In the next part
 of the tutorial, we will start using a machine-learned model in ranking.
-
-<pre style="display:none" data-test="after">
-$ docker rm -f vespa
-</pre>
 
 <script src="/js/process_pre.js"></script>
 <script src="/js/pre_copy.js"></script>

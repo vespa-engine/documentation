@@ -5,13 +5,6 @@ redirect_from:
 - /documentation/tutorials/news-5-recommendation.html
 ---
 
-<!-- Temporary - for doc testing - display is "none" -->
-
-<pre style="display:none" data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
-</pre>
-
-
 This is the fifth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
@@ -26,9 +19,9 @@ application for personalized news recommendations. The parts are:
 9. Advanced news recommendation - ML models
 
 In this part, we'll start transforming our application from news search to
-recommendation using the embeddings we created in the previous part. So,
-we'll start by modifying our application so we can feed the embeddings
-and start using them for searching.
+recommendation using the embeddings we created in the previous part.
+So, we'll start by modifying our application,
+so we can feed the embeddings and start using them for searching.
 
 For reference, the final state of this tutorial can be found in the
 `app-5-recommendation` sub-directory of the `news` sample application.
@@ -152,7 +145,7 @@ on feeding formats.
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="sample-apps/news/my-app/schemas/user.sd">
 schema user {
     document user {
         field user_id type string {
@@ -234,8 +227,8 @@ the query. For Vespa to bind the correct types, it needs to know
 the expected type of this query parameter. That is called a query profile type.
 
 [Query profiles](../query-profiles.html) are named sets of search request parameters
-that can be set as default so you don't have to pass them along with the query. We 
-don't use this in this sample application. Still we need to set up a default 
+that can be set as default, so you don't have to pass them along with the query.
+We don't use this in this sample application. Still we need to set up a default 
 query profile to set up the types of query parameters we expect to pass. 
 
 So, write the following to `search/query-profiles/default.xml`:
@@ -420,21 +413,7 @@ Here, `coverage` shows that Vespa did scan through all 28603 documents. The
 interesting piece here is the `totalCount`. This number is the number of 
 times a document has been put in the top 10 results during this linear scan.
 
-Let's switch to using approximate nearest-neighbors. For this, we must 
-instruct Vespa to create an index on the field we would like to use.
-This is simply a modification to the `embedding` field in `news.sd`:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-    field embedding type tensor&lt;float&gt;(d0[51]) {
-        indexing: attribute | index
-        attribute {
-            distance-metric: euclidean
-        }
-    }
-</pre>
-</div>
+Let's switch to using approximate nearest-neighbors by adding `index` to the embedding field in `news.sd`:
 
 <pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
 schema news {
@@ -503,12 +482,36 @@ schema news {
 </pre>
 
 If you make this change and deploy it, you will get prompted by Vespa that a
-restart is required so that the index can be built. After doing this and
-waiting a bit for Vespa to start, we can query Vespa again:
+restart is required so that the index can be built:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ (cd my-app && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+</div>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ docker exec vespa /usr/bin/sh -c \
+  '/opt/vespa/bin/vespa-stop-services &amp;&amp; /opt/vespa/bin/vespa-start-services'
+</pre>
+</div>
+
+<!-- Give the container some time to reindex -->
+<pre data-test="exec" style="display:none">
+$ sleep 300
+</pre>
+
+
+After doing this and waiting a bit for Vespa to start, we can query Vespa again:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
 $ ./src/python/user_search.py U33527 10
 </pre>
 </div>
@@ -583,7 +586,7 @@ search to get to 10 `sports` articles for this user:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec" >
 $ ./src/python/user_search.py U63195  10 | grep "category\": \"sports\"" | wc -l
 $ ./src/python/user_search.py U63195 278 | grep "category\": \"sports\"" | wc -l
 </pre>
@@ -593,7 +596,7 @@ On the other hand, if we add a filter specifically:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec" >
 $ ./src/python/user_search.py U63195 10 "AND category contains 'sports'" | \
     grep "category\": \"sports" | wc -l
 </pre>
@@ -618,11 +621,7 @@ for a user, retrieve the embedding vector and use that for querying
 the news articles. Right now, this means two calls to Vespa. In 
 the [next part of the tutorial](news-6-recommendation-with-searchers.html), we will introduce `searchers` which 
 allows for custom logic during query processing, so we only 
-need one pass. 
-
-<pre style="display:none" data-test="after">
-$ docker rm -f vespa
-</pre>
+need one pass.
 
 <script src="/js/process_pre.js"></script>
 <script src="/js/pre_copy.js"></script>

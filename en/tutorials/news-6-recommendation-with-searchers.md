@@ -5,39 +5,6 @@ redirect_from:
 - /documentation/tutorials/news-6-recommendation-with-searchers.html
 ---
 
-<!-- Temporary - for doc testing - display is "none" -->
-<pre style="display:none" data-test="exec" >
-$ git clone https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/news
-$ ./bin/download-mind.sh demo
-$ python3 src/python/convert_to_vespa_format.py mind
-$ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-    --volume `pwd`:/app --publish 8080:8080 vespaengine/vespa
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
-</pre>
-<pre style="display:none" data-test="exec">
-$ cd app-6-recommendation-with-searchers
-$ mvn package
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-6-recommendation-with-searchers/target/application.zip && /opt/vespa/bin/vespa-deploy activate'
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-<pre style="display:none" data-test="exec" >
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa.json --host localhost --port 8080'
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa_user_embeddings.json --host localhost --port 8080'
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa_news_embeddings.json --host localhost --port 8080'
-</pre>
-<pre style="display:none" data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
-</pre>
-
-
 This is the sixth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
@@ -59,7 +26,9 @@ processors that can modify queries before passing them along to search. These
 will allow us to pull the logic from the Python scripts into Vespa.
 
 For reference, the final state of this tutorial can be found in the
-`app-6-recommendation-with-searchers` sub-directory of the `news` sample application.
+[app-6-recommendation-with-searchers](https://github.com/vespa-engine/sample-apps/tree/master/news/app-6-recommendation-with-searchers) 
+directory of the `news` sample application.
+
 
 ## Searchers and document processors
 
@@ -108,7 +77,6 @@ a response to the query.
 
 {% include note.html content="Adding a [tracelevel](../reference/query-api-reference.html#tracelevel)
 is  generally helpful when debugging vespa queries." %}
-
 
 So, [searchers](../searcher-development.html) are Java components that perform
 some kind of processing along the query chain; either modifying the query before 
@@ -256,10 +224,9 @@ To add this searcher to Vespa, we need to modify `services.xml`:
 Here, we instruct Vespa to add a new search chain called `user` (which
 inherits the default `vespa` search chain), and includes our
 `UserProfileSearcher`. Note that Vespa expects this searcher to be in a
-bundle called `news-recommendation`, so we need to compile and package this
-code. In Vespa we use [Apache Maven](https://maven.apache.org/) for this,
-which requires a project object model, or `pom.xml`, to specify how to build
-this artifact. 
+bundle called `news-recommendation`, so we need to compile and package this code.
+In Vespa, we use [Apache Maven](https://maven.apache.org/) for this,
+which requires a project object model, or `pom.xml`, to specify how to build this artifact. 
 
 We won't go through that here; please refer to the
 `app-6-recommendation-with-searchers` sub-directory in the `news` sample
@@ -295,38 +262,51 @@ a Java project. We can now compile and package this application:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
+$ cd app-6-recommendation-with-searchers
 $ mvn package
 </pre>
 </div>
 
-The `pom.xml` is set up to create an artifact called `news-recommendation`, 
+`pom.xml` is set up to create an artifact called `news-recommendation`, 
 which is what we referred to in `services.xml`. When the command 
-finishes, we can see this artifact in the `target` sub-directory. Also in 
-this directory we find the `application.zip` file. This contains the 
-entire Vespa application with Java components.
+finishes, we can see this artifact in  `target/application.zip`,
+This contains the full Vespa application, with Java components.
 
 Until now, we've deployed the entire application directory. From now on 
 we deploy this `application.zip` file.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ curl --header Content-Type:application/zip --data-binary @target/application.zip \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+</div>
+
+<!-- Wait for bundle load -->
+<pre data-test="exec" style="display:none">
+$ sleep 3
+</pre>
 
 After this file has been deployed, we are ready to test this. Please 
 refer to [the searcher development guide](../searcher-development.html)
 for much more on searchers and the Java API.
 
+
 ## Testing
 
-Now we can search for a user's recommended news articles directly from 
-the `user_id`:
+Now we can search for a user's recommended news articles directly from the `user_id`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"documents": 28603'>
+<pre data-test="exec" data-test-assert-contains='"documents": 28604'>
 $ curl -s 'http://localhost:8080/search/?user_id=U33527&searchchain=user' | python -m json.tool
 </pre>
 </div>
 
 This should now return the top 10 recommended news articles for this user. Indeed,
-if we now add a with a `&tracelevel=5`, we see our searcher being invoked:
+if we now add a with a `&tracelevel=5`, we see the searcher being invoked:
 
 ```
 ...
@@ -378,7 +358,7 @@ If we take a closer look at the query above, and search for the top 100 hits:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ curl -s "http://localhost:8080/search/?user_id=U33527&amp;hits=100" | \
   python -m json.tool | grep "category\": \"sports" | \
   wc -l
@@ -414,16 +394,13 @@ there are usually some goals or restrictions that needs to be controlled.
 In this case the business rules can be hand-written in the blending searcher.
 Searchers are flexible enough to perform any type of processing.
 
+
 ## Conclusion
 
 We now have a Vespa application up and running that takes a single `user_id`
 and returns recommendations for that user.
 In the [next part of the tutorial](news-7-recommendation-with-parent-child.html),
 we'll address what to do when new users without any history visit our recommendation system.
-
-<pre style="display:none" data-test="after">
-$ docker rm -f vespa
-</pre>
 
 <script src="/js/process_pre.js"></script>
 <script src="/js/pre_copy.js"></script>
