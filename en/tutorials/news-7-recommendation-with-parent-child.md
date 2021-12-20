@@ -5,37 +5,6 @@ redirect_from:
 - /documentation/tutorials/news-7-recommendation-with-parent-child.html
 ---
 
-<!-- Temporary - for doc testing - display is "none" -->
-<pre style="display:none" data-test="exec" >
-$ git clone https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/news
-$ ./bin/download-mind.sh demo
-$ python3 src/python/convert_to_vespa_format.py mind
-$ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-    --volume `pwd`:/app --publish 8080:8080 vespaengine/vespa
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
-</pre>
-<pre style="display:none" data-test="exec">
-$ cd app-7-parent-child
-$ mvn package
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-7-parent-child/target/application.zip && /opt/vespa/bin/vespa-deploy activate'
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-<pre style="display:none" data-test="exec" >
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa.json --host localhost --port 8080'
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa_user_embeddings.json --host localhost --port 8080'
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa_news_embeddings.json --host localhost --port 8080'
-</pre>
-<pre style="display:none" data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
-</pre>
 
 
 This is the seventh part of the tutorial series for setting up a Vespa
@@ -335,13 +304,13 @@ These files can now be fed to Vespa, but note that the
 `mind/global_category_ctr.json` need to be fed first because the global
 document needs to exist before the child documents can reference it.
 
-<pre style="display:none" data-test="exec" >
+<pre data-test="exec">
 $ cd ..
 $ ./src/python/create_category_ctrs.py mind
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/global_category_ctr.json --host localhost --port 8080'
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/news_category_ctr_update.json  --host localhost --port 8080'
+$ java -jar vespa-http-client-jar-with-dependencies.jar \
+--verbose --file mind/global_category_ctr.json --endpoint http://localhost:8080
+$ java -jar vespa-http-client-jar-with-dependencies.jar \
+--verbose --file mind/news_category_ctr_update.json --endpoint http://localhost:8080
 </pre>
 
 
@@ -351,7 +320,7 @@ After feeding the above files, we can now test the application with a query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ curl -s "http://localhost:8080/search/?user_id=U33527&amp;ranking.profile=recommendation_with_global_category_ctr" | \
     python -m json.tool
 </pre>
