@@ -5,37 +5,6 @@ redirect_from:
 - /documentation/tutorials/news-5-recommendation.html
 ---
 
-<!-- Temporary - for doc testing - display is "none" -->
-<pre style="display:none" data-test="exec" >
-$ git clone https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/news
-$ ./bin/download-mind.sh demo
-$ python3 src/python/convert_to_vespa_format.py mind
-$ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
-    --volume `pwd`:/app --publish 8080:8080 vespaengine/vespa
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ docker exec vespa bash -c 'curl -s --head http://localhost:19071/ApplicationStatus'
-</pre>
-<pre style="display:none" data-test="exec">
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-deploy prepare /app/app-5-recommendation && /opt/vespa/bin/vespa-deploy activate'
-</pre>
-<pre style="display:none" data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-<pre style="display:none" data-test="exec" >
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa.json --host localhost --port 8080'
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa_user_embeddings.json --host localhost --port 8080'
-$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
-    --file /app/mind/vespa_news_embeddings.json --host localhost --port 8080'
-</pre>
-<pre style="display:none" data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ docker exec vespa bash -c 'curl -s http://localhost:19092/metrics/v1/values' | tr "," "\n" | grep content.proton.documentdb.documents.active
-</pre>
-
-
 This is the fifth part of the tutorial series for setting up a Vespa
 application for personalized news recommendations. The parts are:  
 
@@ -50,9 +19,9 @@ application for personalized news recommendations. The parts are:
 9. Advanced news recommendation - ML models
 
 In this part, we'll start transforming our application from news search to
-recommendation using the embeddings we created in the previous part. So,
-we'll start by modifying our application so we can feed the embeddings
-and start using them for searching.
+recommendation using the embeddings we created in the previous part.
+So, we'll start by modifying our application,
+so we can feed the embeddings and start using them for searching.
 
 For reference, the final state of this tutorial can be found in the
 `app-5-recommendation` sub-directory of the `news` sample application.
@@ -61,30 +30,73 @@ For reference, the final state of this tutorial can be found in the
 ## Indexing embeddings
 
 First, we need to modify the `news.sd` search definition to include a field
-to hold the embedding. Add the following field and rank profile:
+to hold the embedding and a recommendation rank profile:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
 schema news {
-  document news {
-    ...
-    field embedding type tensor&lt;float&gt;(d0[51]) {
-        indexing: attribute 
-        attribute {
-            distance-metric: euclidean
+    document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field category type string {
+            indexing: summary | attribute
+        }
+        field subcategory type string {
+            indexing: summary | attribute
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field abstract type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field date type int {
+            indexing: summary | attribute
+        }
+        field clicks type int {
+            indexing: summary | attribute
+        }
+        field impressions type int {
+            indexing: summary | attribute
+        }
+        field embedding type tensor&lt;float&gt;(d0[51]) {
+            indexing: attribute 
+            attribute {
+                distance-metric: euclidean
+            }
         }
     }
-  }
-  ...
-  rank-profile recommendation inherits default {
-    first-phase {
-      expression: closeness(field, embedding)
+
+    fieldset default {
+        fields: title, abstract, body
     }
-  }
+
+    rank-profile popularity inherits default {
+        function popularity() {
+            expression: if (attribute(impressions) &gt; 0, attribute(clicks) / attribute(impressions), 0)
+        }
+        first-phase {
+            expression: nativeRank(title, abstract) + 10 * popularity
+        }
+    }
+
+    rank-profile recommendation inherits default {
+        first-phase {
+          expression: closeness(field, embedding)
+        }
+    }
 }
 </pre>
-</div>
 
 The `embedding` field is a tensor field. Tensors in Vespa are flexible
 multi-dimensional data structures, and, as first-class citizens, can be used
@@ -130,12 +142,10 @@ again. Please refer to [Vespa reads and
 writes](https://docs.vespa.ai/en/reads-and-writes.html) for more information
 on feeding formats.
 
-We need to add another document type to represent a user. Add 
-the following schema in `schemas/user.sd`:
+We need to add another document type to represent a user.
+Add this schema in `schemas/user.sd`:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="file" data-path="sample-apps/news/my-app/schemas/user.sd">
 schema user {
     document user {
         field user_id type string {
@@ -148,36 +158,65 @@ schema user {
     }
 }
 </pre>
-</div>
-
 
 This schema is set up so that we can search for a `user_id` and 
 retrieve the user's embedding vector. 
 
-We also need to let Vespa know we want to use this document type, so we
-modify `services.xml` and add it under `documents` in the `content` section:
+We also need to let Vespa know we want to use this document type,
+so we modify `services.xml` and add it under `documents` in the `content` section:
+
+<pre data-test="file" data-path="sample-apps/news/my-app/services.xml">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;services version="1.0"&gt;
+
+    &lt;container id="default" version="1.0"&gt;
+        &lt;search&gt;&lt;/search&gt;
+        &lt;document-api&gt;&lt;/document-api&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1"&gt;&lt;/node&gt;
+        &lt;/nodes&gt;
+    &lt;/container&gt;
+
+    &lt;content id="mind" version="1.0"&gt;
+        &lt;redundancy&gt;1&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="news" mode="index"/&gt;
+            &lt;document type="user" mode="index"/&gt;
+        &lt;/documents&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1" distribution-key="0" /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
+
+&lt;/services&gt;
+</pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-&lt;services version="1.0"&gt;
-  ...
-  &lt;content id="mind" version="1.0"&gt;
-    &lt;documents&gt;
-      &lt;document type="news" mode="index"/&gt;
-      &lt;document type="user" mode="index"/&gt;
-    &lt;/documents&gt;
-    ...
-  &lt;/content&gt;
-  ...
-&lt;/services&gt;
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ (cd my-app && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 </div>
 
+<!-- Give the container some time to load new config -->
+<pre data-test="exec" style="display:none">
+$ sleep 3
+</pre>
 
-After redeploying with the updates schemas and `services.xml`, you can now
-feed the `mind/vespa_user_embeddings.json` and
-`mind/vespa_news_embeddings.json` using the Vespa HTTP client. 
+After redeploying with the updates schemas and `services.xml`,
+feed `mind/vespa_user_embeddings.json` and `mind/vespa_news_embeddings.json`: 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" >
+$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
+    --file /app/mind/vespa_user_embeddings.json --host localhost --port 8080'
+$ docker exec vespa bash -c 'java -jar /opt/vespa/lib/jars/vespa-http-client-jar-with-dependencies.jar \
+    --file /app/mind/vespa_news_embeddings.json --host localhost --port 8080'
+</pre>
+</div>
 
 
 ## Query profiles and query profile types
@@ -188,45 +227,48 @@ the query. For Vespa to bind the correct types, it needs to know
 the expected type of this query parameter. That is called a query profile type.
 
 [Query profiles](../query-profiles.html) are named sets of search request parameters
-that can be set as default so you don't have to pass them along with the query. We 
-don't use this in this sample application. Still we need to set up a default 
+that can be set as default, so you don't have to pass them along with the query.
+We don't use this in this sample application. Still we need to set up a default 
 query profile to set up the types of query parameters we expect to pass. 
 
 So, write the following to `search/query-profiles/default.xml`:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="file" data-path="sample-apps/news/my-app/search/query-profiles/default.xml">
 &lt;query-profile id="default" type="root" /&gt;
 </pre>
-</div>
 
-To set up the query profile types, we write them to the file
+To set up the query profile types, write them to the file
 `search/query-profiles/types/root.xml`:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="file" data-path="sample-apps/news/my-app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id="root" inherits="native"&gt;
     &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[51])" /&gt;
 &lt;/query-profile-type&gt;
 </pre>
-</div>
 
 This configures Vespa to expect a float tensor with dimension `d0[51]` when the
-query parameter `ranking.features.query(user_embedding)` is passed. We'll see 
-how this works together with the `nearestNeighbor` search operator below.
+query parameter `ranking.features.query(user_embedding)` is passed.
+We'll see how this works together with the `nearestNeighbor` search operator below.
 
 {% include important.html content="Setting up this query profile type is required when sending a tensor as a query parameter.
 A common pitfall is to forget the default query profile,
 but that is required to successfully set up the query profile type." %}
 
+Deploy the updates to query profiles:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ (cd my-app && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+</div>
+
 
 ## Testing the application
 
-After redeploying with the updates to the query profiles, we can now start
-searching Vespa using embeddings. First, let's find the user `U33527`. We
-issue a query with the following YQL:
+We can now query Vespa using embeddings.
+First, let's find the user `U33527`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -371,29 +413,105 @@ Here, `coverage` shows that Vespa did scan through all 28603 documents. The
 interesting piece here is the `totalCount`. This number is the number of 
 times a document has been put in the top 10 results during this linear scan.
 
-Let's switch to using approximate nearest-neighbors. For this, we must 
-instruct Vespa to create an index on the field we would like to use.
-This is simply a modification to the `embedding` field in `news.sd`:
+Let's switch to using approximate nearest-neighbors by adding `index` to the embedding field in `news.sd`:
+
+<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+schema news {
+    document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field category type string {
+            indexing: summary | attribute
+        }
+        field subcategory type string {
+            indexing: summary | attribute
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field abstract type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field date type int {
+            indexing: summary | attribute
+        }
+        field clicks type int {
+            indexing: summary | attribute
+        }
+        field impressions type int {
+            indexing: summary | attribute
+        }
+        field embedding type tensor&lt;float&gt;(d0[51]) {
+            indexing: attribute | index
+            attribute {
+                distance-metric: euclidean
+            }
+        }
+    }
+
+    fieldset default {
+        fields: title, abstract, body
+    }
+
+    rank-profile popularity inherits default {
+        function popularity() {
+            expression: if (attribute(impressions) &gt; 0, attribute(clicks) / attribute(impressions), 0)
+        }
+        first-phase {
+            expression: nativeRank(title, abstract) + 10 * popularity
+        }
+    }
+
+    rank-profile recommendation inherits default {
+        first-phase {
+          expression: closeness(field, embedding)
+        }
+    }
+}
+</pre>
+
+If you make this change and deploy it, you will get prompted by Vespa that a
+restart is required so that the index can be built:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-    field embedding type tensor&lt;float&gt;(d0[51]) {
-        indexing: attribute | index
-        attribute {
-            distance-metric: euclidean
-        }
-    }
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ (cd my-app && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 </div>
 
-If you make this change and deploy it, you will get prompted by Vespa that a
-restart is required so that the index can be built. After doing this and
-waiting a bit for Vespa to start, we can query Vespa again:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ docker exec vespa /usr/bin/sh -c \
+  '/opt/vespa/bin/vespa-stop-services &amp;&amp; /opt/vespa/bin/vespa-start-services'
+</pre>
+</div>
+
+<!-- Give the container some time to reindex -->
+<pre data-test="exec" style="display:none">
+$ sleep 300
+</pre>
+
+
+After doing this and waiting a bit for Vespa to start, we can query Vespa again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ ./src/python/user_search.py U33527 10
 </pre>
 </div>
@@ -468,7 +586,7 @@ search to get to 10 `sports` articles for this user:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec" >
 $ ./src/python/user_search.py U63195  10 | grep "category\": \"sports\"" | wc -l
 $ ./src/python/user_search.py U63195 278 | grep "category\": \"sports\"" | wc -l
 </pre>
@@ -478,7 +596,7 @@ On the other hand, if we add a filter specifically:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec" >
 $ ./src/python/user_search.py U63195 10 "AND category contains 'sports'" | \
     grep "category\": \"sports" | wc -l
 </pre>
@@ -503,11 +621,7 @@ for a user, retrieve the embedding vector and use that for querying
 the news articles. Right now, this means two calls to Vespa. In 
 the [next part of the tutorial](news-6-recommendation-with-searchers.html), we will introduce `searchers` which 
 allows for custom logic during query processing, so we only 
-need one pass. 
-
-<pre style="display:none" data-test="after">
-$ docker rm -f vespa
-</pre>
+need one pass.
 
 <script src="/js/process_pre.js"></script>
 <script src="/js/pre_copy.js"></script>
