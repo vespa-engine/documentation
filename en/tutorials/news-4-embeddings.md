@@ -199,18 +199,14 @@ $ ./src/python/train_mf.py mind 10
 </div>
 
 This runs the training code for 10 epochs, and deposits the resulting
-user and news vectors in the `mind` directory, where the rest of the
-data is. This outputs something like the following (if run for 100 epochs):
+user and news vectors in the `mind` directory, where the rest of the data is:
 
 ```
 Total loss after epoch 1: 573.5299682617188 (3.49713397026062 avg)
 Total loss after epoch 2: 551.6585083007812 (3.363771438598633 avg)
-Total loss after epoch 3: 523.4100952148438 (3.1915249824523926 avg)
 ...
-Total loss after epoch 99: 27.76451301574707 (0.16929581761360168 avg)
-Total loss after epoch 100: 27.45075035095215 (0.1673826277256012 avg)
-Train: {'auc': 0.9737, 'mrr': 0.7158, 'ndcg@5': 0.8193, 'ndcg@10': 0.842}
-Valid: {'auc': 0.5101, 'mrr': 0.2181, 'ndcg@5': 0.224, 'ndcg@10': 0.2874}
+{'auc': 0.5776, 'mrr': 0.248, 'ndcg@5': 0.2573, 'ndcg@10': 0.317}
+{'auc': 0.4988, 'mrr': 0.2154, 'ndcg@5': 0.2182, 'ndcg@10': 0.2824}
 ```
 
 We can see the loss reduces over the number of epochs. The two final lines
@@ -411,16 +407,15 @@ Total loss after epoch 10: 517.16748046875 (0.3953879773616791 avg)
 ```
 
 This is much better. The `AUC` score at epoch 9 is a respectable `0.6266`.
-Note that as we train further, the `AUC` for the dev set starts
-dropping. This is a sign of overfitting, so we should stop training.
+Note that as we train further, the `AUC` for the dev set starts dropping.
+This is a sign of overfitting, so we should stop training.
 
-For reference, the baseline model for the MIND competition, [Neural News
-Recommendation with Multi-Head
-Self-Attention](https://aclanthology.org/D19-1671/), results in
-`0.6362`. This model additionally uses the user history in each impression
-to create a better model for the user embedding. For the moment, however,
-we are satisfied with these, and we'll use them going forward. Feel
-free to experiment and see if you can achieve better results!
+For reference, the baseline model for the MIND competition,
+[Neural News Recommendation with Multi-Head Self-Attention](https://aclanthology.org/D19-1671/),
+results in `0.6362`.
+This model additionally uses the user history in each impression to create a better model for the user embedding.
+For the moment, however, we are satisfied with these, and we'll use them going forward.
+Feel free to experiment and see if you can achieve better results!
 
 {% include note.html content="These numbers are for the demo dataset, which is much smaller than the full dataset.
 For reference, in [the MIND paper](https://msnews.github.io/assets/doc/ACL2020_MIND.pdf)

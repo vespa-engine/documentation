@@ -200,11 +200,22 @@ $ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddoc
 
 This uses the `search` API to search for all documents of type `news`.
 This should return `1` result, which is the document we fed above.
+
+Remove the document:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='id:news:news::1'>
+$ curl -X DELETE "http://localhost:8080/document/v1/news/news/docid/1"
+</pre>
+</div>
+
 Well done!
 
 
 
 ## Stopping and starting Vespa
+
+Keep Vespa running to continue with next steps in this tutorial set (skip the below).
 
 To stop Vespa, we can run the following commands:
 

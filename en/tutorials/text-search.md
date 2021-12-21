@@ -255,11 +255,10 @@ Some notes about the elements above:
 - `<document-api>` sets up the [document endpoint](../reference/document-v1-api-reference.html) for feeding.
 - `<content>` defines how documents are stored and searched
 - `<redundancy>` denotes how many copies to keep of each document.
-- `<documents>` assigns the document types in the _schema_ — the
-content cluster capacity can be increased by adding node elements — see
-[elastic Vespa](../elastic-vespa.html). (See also the
-[reference](../reference/services-content.html) for more on content cluster
-setup.)
+- `<documents>` assigns the document types in the _schema_ —
+  the content cluster capacity can be increased by adding node elements —
+  see [elastic Vespa](../elastic-vespa.html).
+  (See also the [reference](../reference/services-content.html) for more on content cluster setup.)
 - `<nodes>` defines the hosts for the content cluster.
 
 
