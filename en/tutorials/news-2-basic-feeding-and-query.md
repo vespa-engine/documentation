@@ -338,11 +338,11 @@ $ java -jar vespa-http-client-jar-with-dependencies.jar \
 </pre>
 </div>
 
-Wait for all 28 604 documents to be fed:
+Wait for all 28 603 documents to be fed:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28604'>
+<pre data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
 $ curl -s 'http://localhost:19092/metrics/v1/values' | \
   tr "," "\n" | grep content.proton.documentdb.documents.active
 </pre>

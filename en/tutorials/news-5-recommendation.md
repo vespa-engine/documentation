@@ -134,13 +134,13 @@ something like this:
 }
 ```
 
-This is a "partial update". So, assuming you already have a system up and
-running from the previous search tutorial, you don't need to feed the entire
-corpus. With a partial update, you only need to update the necessary fields.
-So, after training another set of embeddings you can partially feed them
-again. Please refer to [Vespa reads and
-writes](https://docs.vespa.ai/en/reads-and-writes.html) for more information
-on feeding formats.
+This is a [partial update](../partial-updates.html).
+So, assuming you already have a system up and running from the previous search tutorial,
+you don't need to feed the entire corpus.
+With a partial update, you only need to update the necessary fields.
+So, after training another set of embeddings you can partially feed them again.
+Please refer to [Vespa reads and writes](https://docs.vespa.ai/en/reads-and-writes.html)
+for more information on feeding formats.
 
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:
