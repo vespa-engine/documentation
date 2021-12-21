@@ -181,8 +181,7 @@ documents they occur in and top 3 is shown:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 |
-  all(group(category) max(3) order(-count())each(output(count())));"}' \
+  --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 | all(group(category) max(3) order(-count())each(output(count())));"}' \
   http://localhost:8080/search/ | python -m json.tool
 </pre>
 </div>
