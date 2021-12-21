@@ -97,27 +97,60 @@ In addition, we can specify the desired features within the `rank-features` elem
 In the example below we explicitly configured Vespa to only return
 `bm25(title)`, `bm25(body)`, `nativeRank(title)` and `nativeRank(body)`.
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-rank-profile collect_rank_features inherits default {
-
-    first-phase {
-        expression: random
+<pre data-test="file" data-path="sample-apps/text-search/application/schemas/msmarco.sd">
+schema msmarco {
+    document msmarco {
+        field id type string {
+            indexing: attribute | summary
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: summary
+        }
+        field body type string {
+            indexing: index | summary
+            index: enable-bm25
+            summary: dynamic
+        }
     }
 
-    ignore-default-rank-features
-
-    rank-features {
-        bm25(title)
-        bm25(body)
-        nativeRank(title)
-        nativeRank(body)
+    document-summary minimal {
+        summary id type string {  }
     }
 
+    fieldset default {
+        fields: title, body
+    }
+
+    rank-profile default {
+        first-phase {
+            expression: nativeRank(title, body)
+        }
+    }
+
+    rank-profile bm25 inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body)
+        }
+    }
+
+    rank-profile collect_rank_features inherits default {
+        first-phase {
+            expression: random
+        }
+        ignore-default-rank-features
+        rank-features {
+            bm25(title)
+            bm25(body)
+            nativeRank(title)
+            nativeRank(body)
+        }
+    }
 }
 </pre>
-</div>
 
 The `random` global feature is explained in the [Rank Feature Reference](../reference/rank-features.html) documentation
 and will be useful in the next section when we describe our data collection process.
@@ -126,9 +159,10 @@ After adding the _rank-profile_ `collect_rank_features` to our _msmarco.sd_ file
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ docker exec vespa-msmarco bash -c '/opt/vespa/bin/vespa-deploy prepare /app/src/main/application &amp;&amp; \
-    /opt/vespa/bin/vespa-deploy activate'
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
+$ (cd application && zip -r - .) | \
+  curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 </div>
 
@@ -333,7 +367,7 @@ rank-profile bm25 inherits default {
 }
 ```
 Therefore, our sanity-check model will be a linear model containing only the two features above,
-i.e. `a + b * bm25(title) + c * bm25(body)`, where `a`, `b`and `c` should be learned using our collected dataset.
+i.e. `a + b * bm25(title) + c * bm25(body)`, where `a`, `b`and `c` should be learned by using our collected dataset.
 
 We split our dataset into training and validation sets,
 train the linear model and evaluate it on the validation dataset.
