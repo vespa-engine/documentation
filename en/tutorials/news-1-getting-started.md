@@ -114,7 +114,7 @@ With the config server up and running, deploy the application:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
 $ (cd app-1-getting-started && zip -r - .) | \
   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate

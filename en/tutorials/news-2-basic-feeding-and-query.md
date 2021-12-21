@@ -293,7 +293,7 @@ my-app/
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-assert-contains="prepared and activated.">
 $ (cd my-app && zip -r - .) | \
   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
