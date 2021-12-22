@@ -6,7 +6,8 @@ redirect_from:
 ---
 <p>
 Ideally one want to search all data indexed in a Vespa cluster within the specified timeout,
-but that might not be possible due to several different reasons:
+but that might not be possible due to different reasons:
+</p>
 <ul>
 	<li>The system might be overloaded due to capacity constraints,
         and queries do not complete within the timeout,
@@ -14,15 +15,17 @@ but that might not be possible due to several different reasons:
 	<li>A complex query might take longer time to execute than the specified timeout,
         or the timeout is too low given the complexity of the query and available capacity</li>
 </ul>
+<p>
 This document describes how Vespa could gracefully degrade the result set
 if the query cannot be completed within the timeout specified. Definitions:
+</p>
 <ul>
     <li> <strong>Coverage</strong>: The percentage of documents indexed which were searched by the query.
         Ideally coverage is 100%</li>
     <li> <strong>Timeout</strong>: The total time a query is allowed to run for.
         Vespa is a distributed system where multiple components are involved in the query execution</li>
     <li> <strong>Soft Timeout</strong>: Soft timeout is a Vespa configuration switch which allows coverage to be less than 100%,
-        but bigger than 0% if the query is going to time out. E.g return current hit set when time budget is used</li>
+        but bigger than 0% if the query is going to time out. E.g. return current hit set when time budget is used</li>
 </ul>
 
 
@@ -31,6 +34,7 @@ if the query cannot be completed within the timeout specified. Definitions:
 <p>
 Vespa's default query timeout is 500 ms and soft timeout is enabled per default -
 reference documentation:
+</p>
 <ul>
 <li><a href="reference/query-api-reference.html#timeout">timeout</a></li>
 <li><a href="reference/query-api-reference.html#ranking.softtimeout">ranking.softtimeout</a></li>
@@ -48,9 +52,10 @@ With <em>softtimeout</em> disabled, the Vespa container will return a 504 timeou
 When enabled, it will return the documents matched and ranked up until the timeout was reached,
 with a 200 OK response along with the reason the result set was degraded.
 </p><p>
-The container might respond with a timeout error with http response code 504
-even with <em>softtimeout</em> enabled if the timeout is set so low that that the query does not make it to the content nodes,
-or the container does not have any time left after input and query processing to dispatch the query to the content nodes.
+  The container might respond with a timeout error with HTTP response code 504 even with <em>softtimeout</em> enabled
+  if the timeout is set so low that the query does not make it to the content nodes,
+  or the container does not have any time left after input and query processing
+  to dispatch the query to the content nodes.
 </p>
 
 
@@ -61,6 +66,7 @@ The default JSON renderer template will always render a <em>coverage</em> elemen
 which has a <em>degraded</em> element if the query execution was degraded in some way
 and the <em>coverage</em> field will be less than 100.
 Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enable=true</em>:
+</p>
 <pre>
 /search/?searchChain=vespa&yql=select * from sources * where foo contains bar;&presentation.format=json&timeout=200ms&ranking.softtimeout.enable=true
 
@@ -86,12 +92,14 @@ Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enabl
     }
 }
 </pre>
+<p>
 The result was delivered in 200 ms but the query was degraded as coverage is less than 100
 (not all available documents searched and ranked within the specified timeout of 200ms).
 In this case 167006201 out of x documents where searched, and 16469732 documents where matched and ranked,
 using the first-phase ranking expression in the default ranking profile.
 </p><p>
 The <em>degraded</em> field contains the following fields which explains why the result had coverage less than 100:
+</p>
 <ul>
   <li><em>adaptive-timeout</em> is true if <a href="reference/services-content.html#coverage">Adaptive coverage</a>
       has been enabled and one or more nodes fail to produce a result at all within the timeout.
@@ -99,10 +107,12 @@ The <em>degraded</em> field contains the following fields which explains why the
   <li><em>match-phase</em> is true if the ranking profile has defined
       <a href="reference/schema-reference.html#match-phase">match phase ranking degradation</a>.
       Match-phase can be used to control which documents are ranked within the timeout</li>
-  <li><em>non-ideal-state</em> is true in cases where the system is not in <a href="content/idealstate.html">ideal state</a></li>
+  <li><em>non-ideal-state</em> is true in cases where the system is not in
+    <a href="content/idealstate.html">ideal state</a></li>
   <li><em>timeout</em> is true if softtimeout was enabled and not all documents could be matched and ranked
       with the first phase ranking function within the timeout</li>
-</ul> 
+</ul>
+<p>
 Note that the degraded reasons are not mutually exclusive.
 In the example, the softtimeout was triggered and only 99% of of the documents where searched before the time budget was used.
 One could imagine scenarios where 10 out of 11 nodes involved in the query execution were healthy
@@ -112,6 +122,7 @@ and that would cause both <em>timeout</em> and <em>adaptive-timeout</em> to be t
 </p><p>
 When working on Results in a <a href="searcher-development.html">Searcher</a>,
 get the coverage information programmatically:
+</p>
 <pre>
     @Override
     public Result search(Query query, Execution execution) {
@@ -123,7 +134,6 @@ get the coverage information programmatically:
         return result;
     }
 </pre>
-</p>
 
 
 
@@ -149,10 +159,10 @@ But since the distribution of documents isn't perfectly smooth,
 you risk sometimes getting less than the configured <code>max-hits</code> hits back.
 </p><p>
 Note that limiting hits in the match-phase also affects aggregation,
-grouping, and total-hit-count since it actually limits so the query gets less hits.
+grouping, and total-hit-count since it actually limits so the query gets fewer hits.
 Also note that it doesn't really make sense to use this
 feature together with a WAND operator that also limit your hits,
-since they both operate in the same manner
+since they both operate in the same manner,
 and you would get interference between them that could cause unpredictable results.
 The graph shows possible hits versus actual hits in a corpus with 100 000 documents,
 where <code>max-hits</code> is configured to 10 000.
@@ -180,7 +190,7 @@ match-phase might make these queries significantly slower,
 hence it might actually be faster to run the query without the filter.
 </p><p>
 Example: Lets say you have a corpus with a document attribute named <em>created_time</em>.
-For all queries you want the newest content surfaced so you enable match-phase on <em>created_time</em>.
+For all queries you want the newest content surfaced, so you enable match-phase on <em>created_time</em>.
 So far, so good - you get a great latency and always get your top-k hits.
 The problem might come if you introduce a filter.
 If you have a filter saying you only want documents from the last day,
@@ -190,7 +200,7 @@ This means it will start evaluating documents in the order they were indexed on 
 and for most use-cases that means the oldest documents first.
 Without a filter, every document is a potential match,
 and match-phase will quickly figure out how it can optimize.
-With the filter, on the other hand, the algorithm need to evaluate almost all of the corpus
+With the filter, on the other hand, the algorithm need to evaluate almost the full corpus
 before it reaches potential matches (1 day old corpus),
 and because of the way the algorithm is implemented,
 end up with doing a lot of unnecessary work and can have orders of magnitude higher latencies
@@ -201,7 +211,7 @@ when doing queries with match-phase enabled.
 This is because match-phase works on an estimated "virtual" corpus,
 which might have much fewer hits than is actually in the full corpus.
 </p><p>
-If used correctly match-phase can be a life saver, but as you understand,
+If used correctly match-phase can be a life-saver, but as you understand,
 it is not a straight forward fix-it-all silver bullet.
 Please test and measure your use of match-phase,
 and contact the Vespa team if your results are not what you expect.

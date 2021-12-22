@@ -30,10 +30,10 @@ Vespa does not currently use.
 
 Availability (A) in CAP implies that _all requests_ receive a non-error response regardless of how
 the network may be partitioned. Vespa is dependent on a centralized (but fault tolerant) node health
-checker and coordinator. A network partition may take place between the coordinator and a subset
-of nodes. Operations to nodes in this subset aren't guaranteed to succeed until the partition heals.
-As a consequence, Vespa is not _guaranteed_ to be strongly available so we treat this as a "limited
-subset" of AP.
+checker and coordinator. A network partition may take place between the coordinator and a subset of nodes.
+Operations to nodes in this subset aren't guaranteed to succeed until the partition heals.
+As a consequence, Vespa is not _guaranteed_ to be strongly available,
+so we treat this as a "limited subset" of AP.
 
 In _practice_, the best-effort semantics of Vespa have proven to be both robust and
 highly available in common datacenter networks.
@@ -114,8 +114,8 @@ documentation.
 
 Tombstone entries have a configurable time-to-live before they are compacted away.
 Nodes that have been partitioned away from the network for a longer period of time
-than this TTL should ideally have their indexes removed before being allowed back into
-the cluster. Otherwise there is a risk of resurrecting previously removed documents.
+than this TTL should ideally have their indexes removed before being allowed back into the cluster.
+If not, there is a risk of resurrecting previously removed documents.
 Vespa does not currently detect or handle this scenario automatically.
 
 See the documentation on [data-retention-vs-size](../operations/admin-procedures.html#data-retention-vs-size).
