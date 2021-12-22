@@ -218,6 +218,24 @@ $ java -jar vespa-http-client-jar-with-dependencies.jar \
 </pre>
 </div>
 
+Wait for 5 000 user and 28 603 news documents to be indexed:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-wait-for='"content.proton.documentdb.documents.active.last":5000'>
+$ curl -s 'http://localhost:19092/metrics/v1/values' | \
+  tr "," "\n" | grep content.proton.documentdb.documents.active
+</pre>
+</div>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
+$ curl -s 'http://localhost:19092/metrics/v1/values' | \
+  tr "," "\n" | grep content.proton.documentdb.documents.active
+</pre>
+</div>
+
 
 ## Query profiles and query profile types
 
@@ -263,6 +281,11 @@ $ (cd my-app && zip -r - .) | \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
 </div>
+
+<!-- Give the container some time to load new config -->
+<pre data-test="exec" style="display:none">
+$ sleep 3
+</pre>
 
 
 ## Testing the application
