@@ -11,9 +11,9 @@ are welcome.
 This documents tells you what you need to know to contribute.
 
 ## Open development
-All work on Vespa happens directly on Github,
+All work on Vespa happens directly on GitHub,
 using the [Github flow model](https://guides.github.com/introduction/flow/).
-We release the master branch a few times a week and you should expect it to almost always work.
+We release the master branch a few times a week, and you should expect it to almost always work.
 In addition to the [public Screwdriver build](https://cd.screwdriver.cd/pipelines/6386)
 we have a large acceptance and performance test suite which
 is also run continuously.
@@ -40,9 +40,11 @@ between major versions: Existing types and method signatures must be preserved
 
 ## Issues
 We track issues in [GitHub issues](https://github.com/vespa-engine/vespa/issues).
-It is fine to submit issues also for feature requests and ideas, whether or not you intend to work on them.
+It is fine to submit issues also for feature requests and ideas, whether you intend to work on them or not.
 
-There is also a [ToDo list](https://github.com/vespa-engine/vespa/blob/master/TODO.md) for larger things which nobody are working on yet.
+There is also a [ToDo list](https://github.com/vespa-engine/vespa/blob/master/TODO.md) for larger things
+which no one are working on yet.
 
 ## Community
-If you have questions, want to share your experience or help others, please join our community on [Stack Overflow](http://stackoverflow.com/questions/tagged/vespa).
+If you have questions, want to share your experience or help others,
+please join our community on [Stack Overflow](http://stackoverflow.com/questions/tagged/vespa).
