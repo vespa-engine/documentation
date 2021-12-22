@@ -202,7 +202,7 @@ $ (cd my-app && zip -r - .) | \
 
 <!-- Give the container some time to load new config -->
 <pre data-test="exec" style="display:none">
-$ sleep 3
+$ sleep 60
 </pre>
 
 After redeploying with the updates schemas and `services.xml`,
