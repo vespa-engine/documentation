@@ -338,7 +338,7 @@ $ java -jar vespa-http-client-jar-with-dependencies.jar \
 </pre>
 </div>
 
-Wait for all 28 603 documents to be fed:
+Wait for all 28 603 documents to be indexed:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
