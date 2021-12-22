@@ -5,7 +5,7 @@ redirect_from:
 - /documentation/onnx.html
 ---
 
-Vespa has support for advanced ranking models through it's tensor API. If you
+Vespa has support for advanced ranking models through its tensor API. If you
 have your model in the [ONNX format](https://onnx.ai/), Vespa can import the
 models and use them directly.
 
@@ -103,7 +103,7 @@ onnx(my_onnx_model).output_name{d0:0,d1:0}
 ```
 
 The input tensors must have dimension names starting with `"d0"` for the first
-dimension, and increasing for each dimension (i.e. `"d1"`, `"d2"`, etc). The
+dimension, and increasing for each dimension (i.e. `"d1"`, `"d2"`, etc.). The
 result of the evaluation will likewise be a tensor with names `"d0"`, `"d1"`,
 etc.
 
@@ -111,9 +111,9 @@ The types of document tensors are specified in the schema as shown above.
 If you specify the types of query tensors in the
 [query profile types](query-profiles.html#query-profile-types),
 you can pass tensors in HTTP requests by using the HTTP parameter
-"ranking.features.query(myTensor)" (assuming the ranking expression contains
-"query(myTensor)". To do this specify a
-[query profile](query-profiles.html) of a type containing
+"ranking.features.query(myTensor)"
+(assuming the ranking expression contains "query(myTensor)").
+To do this, specify a [query profile](query-profiles.html) of a type containing
 
     <field name="ranking.features.query(myTensor)" type="tensor(d0[1],d1[784])" />
 
