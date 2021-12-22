@@ -6,7 +6,7 @@ redirect_from:
 ---
 
 <p>
-This article is a follow up to the <a href="ranking.html">ranking introduction</a>.
+This article is a followup to the <a href="ranking.html">ranking introduction</a>.
 Some use cases in this guide are better solved using <a href="tensor-user-guide.html">tensors</a>.
 </p>
 
@@ -20,7 +20,6 @@ It implements the <em>Weak AND/Weighted AND</em> algorithm as described by Brode
 See <a href="using-wand-with-vespa.html">using Wand with Vespa</a> for details.
 </p>
 <p>
-<p>
 <em>dotProduct</em> is the brute force equivalent to <em>wand</em>.
 They are both used to search for documents
 where weighted tokens in a field matches a subset of weighted tokens in the query.
@@ -28,16 +27,19 @@ The <a href="#raw-scores-and-query-item-labeling">raw scores</a> produced by
 <em>dotProduct</em> are equivalent to those produced by <em>wand</em>.
 </p><p>
 The difference is that <em>wand</em> will perform local optimizations
-in order to retrieve the top-k targetHits results that would be returned by inner maximum <em>dotproduct</em>. 
-
-Which one of these are most cost efficient is complex as it depends on the size of the vocabulary (features) and:
+in order to retrieve the top-k targetHits results that would be returned by inner maximum <em>dotproduct</em>.
+Which one of these are most cost-efficient is complex as it depends on the size of the vocabulary (features) and:
+</p>
 <ul>
 <li>Number of query terms and their weight distribution</li>
 <li>Number of document terms and their weight distribution</li>
 </ul>
 <p> It is easy to compare the two approaches. One can run benchmarks using either and compare latency and total number of hits, if on average,
-total number of hits approaches the total number of documents matching the other filters in the query, it is cheaper 
-to use tensor dot product. 
+total number of hits approaches the total number of documents matching the other filters in the query, it is cheaper
+to use tensor dot product.
+</p>
+
+
 
 <h2 id="dotproduct-example">dotProduct example</h2>
 <p>
@@ -48,17 +50,20 @@ which is used in ranking expressions.
 </p><p>
 Use a weighted set field (use <a href="attributes.html">attribute</a> with <em>fast-search</em> for higher performance)
 in the document to store the tokens:
+</p>
 <pre>
 field features type weightedset&lt;string&gt; {
     indexing: summary | attribute
     attribute: fast-search
 }
 </pre>
+<p>
 The query needs to be prepared by a custom searcher or sent
 using <a href="reference/query-language-reference.html#dotproduct">YQL</a>.
 The code below shows the relevant part.
 If using multiple dot products in the same query it is a good idea to label them.
 This enables us to use individual dot product scores when ranking results later.
+</p>
 <pre>
 Item makeDotProduct(String label, String field, Map&lt;String, Integer&gt; token_map) {
     DotProductItem item = new DotProductItem(field);
@@ -69,10 +74,12 @@ Item makeDotProduct(String label, String field, Map&lt;String, Integer&gt; token
     return item;
 }
 </pre>
+<p>
 <em>dotProduct</em> produces
 <a href="#raw-scores-and-query-item-labeling">raw scores</a>
 that can be used in a ranking expression.
 The simplest approach is to use the sum of all raw scores for the field containing the tokens:
+</p>
 <pre>
 rank-profile default {
     first-phase {
@@ -80,7 +87,7 @@ rank-profile default {
     }
 }
 </pre>
-For better control, label each dot product in the query and use their scores individually:
+<p>For better control, label each dot product in the query and use their scores individually:</p>
 <pre>
 rank-profile default {
     first-phase {
@@ -88,7 +95,6 @@ rank-profile default {
     }
 }
 </pre>
-</p>
 
 
 
@@ -97,6 +103,7 @@ rank-profile default {
 Refer to the <a href="reference/query-language-reference.html#weightedset">weightedSet</a> reference.
 The use cases for <em>weightedSet</em> are for limiting the search result
 to documents with specific properties that can have a large number of distinct values, like:
+</p>
 <ul>
   <li>We know who the user is, and want to restrict to documents
       written by one of the user's friends</li>
@@ -105,6 +112,7 @@ to documents with specific properties that can have a large number of distinct v
   <li>We have recorded the documents that have been clicked by users
       in the last 10 minutes, and want to search only in these</li>
 </ul>
+<p>
 Note that in most actual use cases,
 the field we are searching in is some sort of user ID, topic ID, group ID, or document ID
 and can often be modeled as a number -
@@ -116,13 +124,14 @@ then using <code>match: word</code> for that field is recommended.
 </p><p>
 The decision to use a <code>WeightedSetItem</code> must be taken by application-specific logic.
 This must be in the form of a Container plugin where the query object can be manipulated as follows:
+</p>
 <ul>
   <li>Decide if <code>WeightedSetItem</code> should be used</li>
   <li>Create a new <code>WeightedSetItem</code> for the field you want to use as filter</li>
   <li>Find the tokens and optionally weights to insert into the set</li>
   <li>Combine new <code>WeightedSetItem</code> with the original query by using an <code>AndItem</code></li>
 </ul>
-A simple code example adding a hardcoded filter containing 10 tokens:
+<p>A simple code example adding a hardcoded filter containing 10 tokens:</p>
 <pre>
 private Result hardCoded(Query query, Execution execution) {
     WeightedSetItem filter = new WeightedSetItem("author");
@@ -146,6 +155,7 @@ private Result hardCoded(Query query, Execution execution) {
     return execution.search(query);
 }
 </pre>
+<p>
 The biggest challenge here is finding the tokens to insert;
 normally the incoming search request URL should not contain all the tokens directly.
 For example, the search request could contain the user id,

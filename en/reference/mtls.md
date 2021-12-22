@@ -224,7 +224,7 @@ the Vespa TLS stack has some additional constraints that are always present:
 
 {% include note.html content="The above assumes you are using a Vespa version built with our `vespa_openssl` 
 package (which is the case for all Open-Source RPMs and Docker images). 
-If you are doing a custom build, it is highly recommended to build against OpenSSL 1.1.1 or newer. 
+If you are doing a custom build, it is highly recommended building against OpenSSL 1.1.1 or newer. 
 Older versions may have performance regressions or reduced crypto functionality.
 OpenSSL versions prior to 1.0.1 are not supported."
 %}

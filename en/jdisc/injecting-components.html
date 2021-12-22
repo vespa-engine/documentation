@@ -18,12 +18,13 @@ The container relies on auto-injection instead of Guice modules.
 All components declared in the container cluster are available for injection,
 and the dependent component only needs to declare the dependency as a constructor parameter.
 In general, dependency injection involves at least three elements:
+</p>
 <ul>
   <li>a dependent consumer,</li>
   <li>a declaration of a component's dependencies,</li>
   <li>an injector that creates instances of classes that implement a given dependency on request.</li>
 </ul>
-Notes:
+<p>Notes:</p>
 <ul>
   <li>
     The dependent object describes what software component it depends on to do its work.
@@ -39,6 +40,7 @@ Notes:
     Circular dependencies is not supported.
   </li>
 </ul>
+<p>
 Refer to the <a href="https://github.com/vespa-engine/sample-apps/tree/master/multiple-bundles">
 multiple-bundles sample app</a> for a practical example.
 </p>
@@ -49,7 +51,8 @@ multiple-bundles sample app</a> for a practical example.
 <p>
 A component that depends on another is considered to be a <em>consumer</em>.
 A component's dependencies is whatever its <code>@Inject</code>-annotated
-constructor declares as arguments. E.g. the component
+constructor declares as arguments. E.g. the component:
+</p>
 <pre>
 package com.yahoo.example;
 import com.google.inject.Inject;
@@ -64,27 +67,30 @@ public class MyComponent {
     }
 }  
 </pre>
+<p>
 has a dependency on the class <code>com.yahoo.example.MyDependency</code>.
 To deploy <code>MyComponent</code>, register <code>MyDependency</code> in <code>services.xml</code>:
+</p>
 <pre>
 &lt;container version="1.0"&gt;
     &lt;component id="com.yahoo.example.MyComponent" /&gt;
     &lt;component id="com.yahoo.example.MyDependency" /&gt;
 &lt;/container&gt;
 </pre>
+<p>
 Upon deployment, the Container will first instantiate <code>MyDependency</code>,
 and then pass that instance to the constructor of <code>MyComponent</code>.
 Multiple consumers can take the same dependency.
 One can also <a href="../configuring-components.html">inject configuration</a> to components.
-</p><p>
-<strong>Note:</strong> A component will be reconstructed only when one of its dependencies,
+</p>
+{% include note.html content="A component will be reconstructed only when one of its dependencies,
 configuration, or its class changes -
 all which only occurs when you re-deploy your application package.
 Reconstruction is transitive; if component A depends on component B,
 and component B depends on component C,
-then a reconfiguration of component B causes a reconfiguration of A but not of C.
-Reconfiguration of C causes a reconstruction of both A and B.
-</p>
+then a reconfiguration of component B causes a reconfiguration of A, but not of C.
+Reconfiguration of C causes a reconstruction of both A and B."%}
+
 
 <h3 id="extending-components">Extending components</h3>
 <p>
@@ -99,19 +105,19 @@ Reconfiguration of C causes a reconstruction of both A and B.
 <p>
 The example above assumes the bundle name can be deducted from the class name.
 This is not always the case, and you will get class loading problems like:
+</p>
 <pre>
 Caused by: java.lang.IllegalArgumentException: Could not create a component with id
 'com.yahoo.example.My'.
 Tried to load class directly, since no bundle was found for spec:
 com.yahoo.example.Dependency
 </pre>
-To remedy, specify the jar file (i.e. bundle) with the component:
+<p>To remedy, specify the jar file (i.e. bundle) with the component:</p>
 <pre>
 &lt;container version="1.0"&gt;
     &lt;component id="com.yahoo.example.MyDependency" bundle="the name in &lt;artifactId&gt; in your pom.xml" /&gt;
 &lt;/container&gt;
 </pre>
-</p>
 
 
 
@@ -122,6 +128,7 @@ and each strategy is implemented as a separate component.
 Since the number and type of strategies is unknown when implementing the consumer,
 it is impossible to make a constructor that lists all of them.
 This is where the <code>ComponentRegistry</code> comes into play. E.g. the following component:
+</p>
 <pre>
 package com.yahoo.example;
 
@@ -135,6 +142,7 @@ public class MyComponent {
     }
 }
 </pre>
+<p>
 declares a dependency on the set of all components registered in <code>services.xml</code>
 that are instances of the class <code>Strategy</code> (including subclasses).
 The <code>ComponentRegistry</code> class provides accessors for components based
@@ -146,26 +154,31 @@ on their <a href="../reference/services-container.html#component">component id</
 <h2 id="special-components">Special Components</h2>
 <p>
 There are cases where a component cannot be directly injected to its consumers - example:
+</p>
 <ul>
   <li>The component must be instantiated via a factory method instead of its constructor</li>
   <li>Each consumer must have a unique instance of the dependency class</li>
   <li>The component uses native resources that must be cleaned up
     when the component goes out of scope</li>
 </ul>
-For these situations, JDisc supports injection, and optional deconstruction,
-via its <code>Provider</code> interface:
+<p>
+  For these situations, JDisc supports injection, and optional deconstruction,
+  via its <code>Provider</code> interface:
+</p>
 <pre>
 public interface Provider&lt;T&gt; {
     T get();
     void deconstruct();
 }
 </pre>
+<p>
 <code>get()</code> is called by JDisc each time it needs to instantiate the specific component type.
 <code>deconstruct()</code> is only called after reconfiguring the system with a new application,
 where the current provider instance is either removed or replaced due to modified dependencies.
 </p><p>
 Following the earlier example, declare a provider for the <code>MyDependency</code> class,
 that returns a new instance for each consumer:
+</p>
 <pre>
 package com.yahoo.example;
 import com.yahoo.container.di.componentgraph.Provider;
@@ -181,8 +194,10 @@ public class MyDependencyProvider implements Provider&lt;MyDependency&gt; {
     public void deconstruct() { }
 }
 </pre>
-Using this provider, <code>services.xml</code> has two instances of <code>MyComponent</code>,
-each getting a unique instance of <code>MyDependency</code>:
+<p>
+  Using this provider, <code>services.xml</code> has two instances of <code>MyComponent</code>,
+  each getting a unique instance of <code>MyDependency</code>:
+</p>
 <pre>
 &lt;container version="1.0"&gt;
     &lt;component id="com.yahoo.example.MyDependencyProvider" /&gt;
@@ -190,6 +205,7 @@ each getting a unique instance of <code>MyDependency</code>:
     &lt;component id="my-component-2" class="com.yahoo.example.MyComponent" /&gt;
 &lt;/container&gt;
 </pre>
+<p>
 Upon deployment, the Container will first instantiate <code>MyDependencyProvider</code>,
 and then invoke <code>MyDependencyProvider.get()</code> for each instantiation of <code>MyComponent</code>.
 </p><p>
