@@ -16,6 +16,8 @@ To keep your self-hosted Vespa installation safe, follow the guidelines outlined
 3. Lockdown directory permissions
 4. Securing Vespa with mutually authenticated TLS (mTLS)
 
+
+
 ## Isolating the Vespa hosts
 
 **When running your own Vespa instances, hosts running Vespa MUST NOT be directly exposed 
@@ -46,13 +48,15 @@ should be sent by your frontends or backends.
  
 Inter-node communication inside a Vespa installation is not encrypted.
 
+
+
 ## Securing the application container
-By default, the container allows unauthenticated writes to, and reads from, the Vespa
-installation. For a production deployment, this must be locked down.
+
+By default, the container allows unauthenticated writes to, and reads from, the Vespa installation.
+For a production deployment, this must be locked down.
  
-Connections to the HTTP containers may be
-[protected with TLS](jdisc/http-server-and-filters.html#ssl). Mutual TLS is supported 
-and should be configured.
+Connections to the HTTP containers may be [protected with TLS](jdisc/http-server-and-filters.html#ssl).
+Mutual TLS is supported and should be configured.
  
 Access to the container API endpoints can be controlled using
 [request filters](jdisc/http-server-and-filters.html#set-up-filter-chains).
@@ -62,17 +66,22 @@ for your specific use case.
 If you do not set up TLS with restrictive filter logic, you should restrict the
 container port in the same way as you would the rest of the Vespa hosts.
 
+
+
 ## Locking down directory permissions
+
 All Vespa processes run under the Linux user given by `$VESPA_USER` and store their
 data under `$VESPA_HOME`. You should ensure the files and directories under
-`$VESPA_HOME` are not accessible by other users if you store sensitive data in
-your application.
+`$VESPA_HOME` are not accessible by other users if you store sensitive data in your application.
 
-Note also that private keys used by the container to setup TLS must be protected 
+Note also that private keys used by the container to set up TLS must be protected 
 to be readable by the container process only.
  
 Vespa does not have support for encryption of on-disk document stores or indexes.
 
+
+
 ## Securing Vespa with mutually authenticated TLS (mTLS)
+
 Protect all internal endpoints and protocols in Vespa with mutually authenticated Transport Layer Security (mTLS).
 See the [dedicated documentation](mtls.html) on how to get started.
