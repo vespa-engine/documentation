@@ -348,7 +348,7 @@ Read more in the [reference](reference/schema-reference.html#rank-score-drop-lim
 For a dynamic limit, pass a ranking feature like `query(threshold)`
 and use an `if` statement to check if the score is above the threshold or not -
 if below, assign -1 (something lower than the `rank-score-drop-limit`) and have it dropped.
-Read more in [ranking expressions](ranking-expressions-features.html#if-function-and-string-equality-tests).
+Read more in [ranking expressions](ranking-expressions-features.html#the-if-function-and-string-equality-tests).
 
 Two-phased ranking is a performance optimization - this guide is about functionality,
 so the rest of the examples will only be using one ranking phase.
