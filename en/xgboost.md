@@ -11,9 +11,9 @@ and use them directly. See [Learning to Rank](learning-to-rank.html) for example
 
 ## Exporting models from XGBoost
 
-Vespa supports importing XGBoost's JSON model dump (E.g. Python API
-([xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model)).
-When dumping  the trained model, XGBoost allows users to set the `dump_format` to `json`,
+Vespa supports importing XGBoost's JSON model dump, e.g. Python API
+([xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model).
+When dumping the trained model, XGBoost allows users to set the `dump_format` to `json`,
 and users can specify the feature names to be used in `fmap`. 
 
 Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 1:
@@ -62,10 +62,10 @@ The feature mapping format is not well described in the XGBoost documentation,
 but the [sample demo for binary classification](https://github.com/dmlc/xgboost/tree/master/demo/CLI/binary_classification) writes:
 
 Format of ```feature-map.txt: <featureid> <featurename> <q or i or int>\n ```:
-  - Feature id must be from 0 to number of features, in sorted order.
-  - i means this feature is binary indicator feature
-  - q means this feature is a quantitative value, such as age, time, can be missing
-  - int means this feature is integer value (when int is hinted, the decision boundary will be integer)
+  - "Feature id" must be from 0 to number of features, in sorted order.
+  - "i" means this feature is binary indicator feature
+  - "q" means this feature is a quantitative value, such as age, time, can be missing
+  - "int" means this feature is integer value (when int is hinted, the decision boundary will be integer)
 
 
 ## Importing XGBoost models
@@ -152,7 +152,7 @@ schema xgboost {
 
 ## Known issues 
 * When dumping XGBoost models to a JSON representation some of the model information is lost
-  (e.g the base_score or the optimal number of trees if trained with early stopping).
-  XGBoost also has different predict functions (e.g predict/predict_proba).
+  (e.g. the base_score or the optimal number of trees if trained with early stopping).
+  XGBoost also has different predict functions (e.g. predict/predict_proba).
   The following [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost)
   demonstrates how to represent different type of XGBoost models in Vespa. 

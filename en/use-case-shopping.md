@@ -43,7 +43,7 @@ not cause unexpected results.
 
     Vespa models data as documents, which are configured in schemas
     that defines how documents should be stored, indexed, ranked, and searched.
-    In Vespa you can have multiple documents types, which can be defined in
+    In Vespa, you can have multiple documents types, which can be defined in
     `services.xml` how these should be distributed around the content clusters.
     This application uses two document types that both are stored in the same
     content cluster: item and review. Search is done on items, but reviews
@@ -51,7 +51,7 @@ not cause unexpected results.
 
 * [Custom document processor](document-processing.html)
 
-    In Vespa you can set up custom document processors to perform any type of
+    In Vespa, you can set up custom document processors to perform any type of
     extra processing during document feeding. One example is to enrich the
     document with extra information, and another is to precalculate values of
     fields to avoid unnecessary computation during ranking. This application
@@ -60,7 +60,7 @@ not cause unexpected results.
 
 * [Custom handlers](jdisc/developing-request-handlers.html)
 
-    With Vespa you can set up general request handlers to handle any type of
+    With Vespa, you can set up general request handlers to handle any type of
     request. This example site is implemented with a single such request
     handler, `SiteHandler` which is set up in `services.xml` to be bound to
     `/site`. Note that this handler is for example purposes and is designed to
@@ -79,17 +79,17 @@ not cause unexpected results.
 
 * [Partial update](reference/document-json-format.html#update)
 
-    With Vespa you can make changes to an existing document without submitting
+    With Vespa, you can make changes to an existing document without submitting
     the full document. Examples are setting the value of a single field, adding
     elements to an array, or incrementing the value of a field without knowing
     the field value beforehand. This application contains an example of a
     partial update, in the voting of whether a review is helpful or not.  The
     `SiteHandler` receives the request and the `ReviewVote` class sends a
-    partial update to increment the up- or downvotes field.
+    partial update to increment the `up`- or `downvotes` field.
 
 * [Search using YQL](query-language.html)
 
-    In Vespa you search for documents using YQL. In this application, the
+    In Vespa, you search for documents using YQL. In this application, the
     classes responsible for retrieving data from Vespa (in the `data` package
     beneath the `SiteHandler`) set up the YQL queries which are used to query
     Vespa over HTTP.
