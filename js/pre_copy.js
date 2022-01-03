@@ -5,13 +5,13 @@ function copyPreContent(button) {
     while (elem = elem.nextSibling) {
         if ( elem.nodeType !== Node.TEXT_NODE) {
             if (elem.nodeName === "PRE") {
-                copyToClipboard(removePrompt(elem.innerText));
+                copyToClipboard(removePrompt(elem.innerText).trim());
             }
         }
     }
 }
 
-function removePrompt (text) {
+function removePrompt(text) {
     return text.replace(/^\$\s*/gm, "");
 }
 
