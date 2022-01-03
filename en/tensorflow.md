@@ -5,16 +5,18 @@ redirect_from:
 - /documentation/tensorflow.html
 ---
 
-Vespa has support for advanced ranking models through it's tensor API. If
-you have models that are trained in TensorFlow, Vespa can import the models
-and use them directly.
+Vespa has support for advanced ranking models through its tensor API.
+If you have models that are trained in TensorFlow,
+Vespa can import the models and use them directly.
+
+
 
 ## Exporting models from TensorFlow
 
 Vespa supports TensorFlow's [SavedModel](https://www.tensorflow.org/programmers_guide/saved_model#save_and_restore_models)
 for importing models. `SavedModel` is a hermetic serialization format
 that stores the model and primarily contains a `meta graph` which holds
-the dataflow graph, variables, assets and signatures. Signatures defines
+the dataflow graph, variables, assets and signatures. Signatures define
 the set of inputs and outputs to the graph and are instrumental to instruct
 Vespa on how to import and evaluate the models.
 
@@ -149,16 +151,15 @@ field as shown here, a value sent along with the query, a constant value or a
 parent value. However, the tensor type from the function must match the tensor
 type expected in the model. The input tensors must have dimension names
 starting with `"d0"` for the first dimension, and increasing for each dimension
-(i.e. `"d1"`, `"d2"`, etc). The result of the evaluation will likewise be
+(i.e. `"d1"`, `"d2"`, etc.). The result of the evaluation will likewise be
 a tensor with names `"d0"`, `"d1"`, etc.
 
 The types of document tensors are specified in the schema as shown above.
 If you specify the types of query tensors in the
 [query profile types](query-profiles.html#query-profile-types),
 you can pass tensors in HTTP requests by using the HTTP parameter
-"ranking.features.query(myTensor)" (assuming the ranking expression contains
-"query(myTensor)". To do this specify a
-[query profile](query-profiles.html) of a type containing
+"ranking.features.query(myTensor)" (assuming the ranking expression contains "query(myTensor)").
+To do this, specify a [query profile](query-profiles.html) of a type containing
 
     <field name="ranking.features.query(myTensor)" type="tensor<float>(d0[1],d1[784])" />
 
@@ -181,8 +182,8 @@ in Vespa to improve evaluation time. This is shown in the example above.
 
 ## Updating variables without redeploying the application
 
-Some times it is desirable to update the TensorFlow variables of a model frequently,
-e.g when a neural net with a fixed layout is retrained frequently to update weights
+Sometimes it is desirable to update the TensorFlow variables of a model frequently,
+e.g. when a neural net with a fixed layout is retrained frequently to update weights
 and biases in a reinforcement learning setup.
 
 It is possible to do this without redeploying the application by storing those
@@ -206,7 +207,7 @@ the following INFO log message:
 Importing TensorFlow variable [TensorFlow name] as [Vespa name] of type [Vespa type]
 ```
 
-Find this log message for the variables you want to make updateable and take note
+Find this log message for the variables you want to make update-able and take note
 of the Vespa name and type.
 
 ### 2. Create a global document containing the tensor variables as fields
@@ -216,7 +217,7 @@ Add <code>&lt;document type="myvariables" mode="index" global="true"/&gt;</code>
 the &lt;documents&gt; list in your services.xml.
 
 1. Add attribute fields for your tensors in the document definition
-(one per TensorFlow variable to make updateable), using the type spec found
+(one per TensorFlow variable to make update-able), using the type spec found
 in step 1 and any name:
 ```
 schema myvariables {
@@ -284,7 +285,8 @@ java -cp model-integration-jar-with-dependencies.jar ai.vespa.rankingexpression.
 or, if you do this from Java, call ai.vespa.rankingexpression.importer.tensorflow.VariableConverter.importVariable
 with the same arguments.
 
-1. Update the global document. Use e.g <a href="reference/document-v1-api-reference.html">/document/v1/</a> to PUT a new value for your variable:
+1. Update the global document.
+   Use e.g. <a href="reference/document-v1-api-reference.html">/document/v1/</a> to PUT a new value for your variable:
 ```
 curl -X PUT -H "Content-Type:application/json" --data-binary @update.json http://hostname:8080/document/v1/mynamespace/myvariables/docid/1
 ```
