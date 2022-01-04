@@ -6,30 +6,30 @@ redirect_from:
 ---
 
 <p>
-To avoid overloading a Vespa content cluster or to limit query load from e.g. 
-certain clients, the bundled 
-<a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/searchers/RateLimitingSearcher.java">Vespa Rate Limiting Searcher</a>
-can be configured to reject incoming requests to a search chain with
-<a href="https://en.wikipedia.org/wiki/List_of_HTTP_status_codes#429">HTTP return code 429</a>
-if number of requests per second exceed a certain quota. The counter will reset
-once the quota is refilled the next second.
+  To avoid overloading a Vespa content cluster or to limit query load from e.g.
+  certain clients, the bundled
+  <a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/searchers/RateLimitingSearcher.java">
+    Vespa Rate Limiting Searcher</a> can be configured to reject incoming requests to a search chain with
+  <a href="https://en.wikipedia.org/wiki/List_of_HTTP_status_codes#429">HTTP return code 429</a>
+  if number of requests per second exceed a certain quota.
+  The counter will reset once the quota is refilled the next second.
 </p>
 
 
 
 <h2 id="getting-started">Getting Started</h2>
 <p>
-While the rate limiting searcher is bundled with Vespa, it needs to be
-explicitly configured in <a href="../reference/services.html">services.xml</a>
-before it is loaded. This example shows how the searcher is configured for the
-default search chain:
+  While the rate limiting searcher is bundled with Vespa, it needs to be
+  explicitly configured in <a href="../reference/services.html">services.xml</a> before it is loaded.
+  This example shows how the searcher is configured for the default search chain:
+</p>
 <pre>
 &lt;container id="search" version="1.0"&gt;
-  &lt;search&gt;
-    &lt;chain id="default" inherits="vespa"&gt;
-      &lt;searcher id="com.yahoo.search.searchers.RateLimitingSearcher"/&gt;
-    &lt;/chain&gt;
-  &lt;/search&gt;
+    &lt;search&gt;
+        &lt;chain id="default" inherits="vespa"&gt;
+            &lt;searcher id="com.yahoo.search.searchers.RateLimitingSearcher"/&gt;
+        &lt;/chain&gt;
+    &lt;/search&gt;
 &lt;/container&gt;
 </pre>
 <p>
@@ -43,76 +43,104 @@ default search chain:
 
 <h2 id="active-with-query-parameters">Activate With Query Parameters</h2>
 <p>
-The searcher takes these query parameter arguments:
-<ul>
-  <li>rate.id - (String) the id of the client from rate limiting perspective</li>
-  <li>rate.cost - (Double) the cost Double of this query. This is read after
-    executing the query and hence can be set by downstream searchers
-    inspecting the result to allow differencing the cost of various queries.
-    Default is 1.</li>
-  <li>rate.quota - (Double) the cost per second a particular id is allowed to 
-  	consume in this system.</li>
-  <li>rate.idDimension - (String) the name of the rate-id dimension used when
-    logging metrics. If this is not specified, the metric will be logged
-    without dimensions.</li>
-  <li>rate.dryRun - (Boolean) emit metrics on rejected requests but don't
-    actually reject them.</li>
-</ul>
+  The searcher takes these query parameter arguments:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Argument</th>
+    <th>Type</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>rate.id</td>
+    <td>String</td>
+    <td>The id of the client from rate limiting perspective.</td>
+  </tr>
+  <tr>
+    <td>rate.cost</td>
+    <td>Double</td>
+    <td>The cost Double of this query. This is read after
+      executing the query and hence can be set by downstream searchers
+      inspecting the result to allow differencing the cost of various queries.
+      Default is 1.</td>
+  </tr>
+  <tr>
+    <td>rate.quota</td>
+    <td>Double</td>
+    <td>The cost per second a particular id is allowed to
+      consume in this system.</td>
+  </tr>
+  <tr>
+    <td>rate.idDimension</td>
+    <td>String</td>
+    <td>The name of the rate-id dimension used when
+      logging metrics. If this is not specified, the metric will be logged
+      without dimensions.</td>
+  </tr>
+  <tr>
+    <td>rate.dryRun</td>
+    <td>Boolean</td>
+    <td>Emit metrics on rejected requests but don't
+      actually reject them.</td>
+  </tr>
+  </tbody>
+</table>
 <p>
-In a typical scenario, the application logic constructing the HTTP search
-request will set <code>&amp;rate.id</code> and <code>&amp;rate.quota</code>
-in the request depending on where the traffic originated. Example URL:
+  In a typical scenario, the application logic constructing the HTTP search
+  request will set <code>&amp;rate.id</code> and <code>&amp;rate.quota</code>
+  in the request depending on where the traffic originated - example:
 </p>
 <pre>http://localhost:8080/search?query=foo&amp;rate.id=clientA&amp;rate.quota=300</pre>
 
 
 
-
 <h2 id="activate-with-query-profiles">Activate With Query Profiles</h2>
 <p>
-If you don't want to add the rate limiting parameters to every request or don't
-control the application logic constructing the search requests, you can enable
-the rate limiting using <a href="../query-profiles.html">query profiles</a>.
-An example default query profile enabling rate limiting in the application package:
+  If you don't want to add the rate limiting parameters to every request
+  or don't control the application logic constructing the search requests,
+  you can enable the rate limiting using <a href="../query-profiles.html">query profiles</a>.
+  An example default query profile enabling rate limiting in the application package:
 </p>
 <pre>
 &lt;query-profile id="default"&gt;
-  &lt;field name="rate.quota"&gt;100&lt;/field&gt;
-  &lt;field name="rate.id"&gt;default&lt;/field&gt;
+    &lt;field name="rate.quota"&gt;100&lt;/field&gt;
+    &lt;field name="rate.id"&gt;default&lt;/field&gt;
 &lt;/query-profile&gt;
 </pre>
 
 
 <h3 id="per-client-quotas">Per Client Quotas</h3>
 <p>
-In a shared service scenario, you may want to assign different quota based
-on a query parameter passed with the request, e.g. <code>&amp;clientId</code>.
-The example below will assign different quotas based on the clientId parameter
-passed with the request:
+  In a shared service scenario, you may want to assign different quota based
+  on a query parameter passed with the request, e.g. <code>&amp;clientId</code>.
+  The example below will assign different quotas based on the clientId parameter passed with the request:
 </p>
 <pre>
 &lt;query-profile id="default"&gt;
-  &lt;!-- the request parameter used to select query profile --&gt;
-  &lt;dimensions&gt;clientId&lt;/dimensions&gt;
+    &lt;!-- the request parameter used to select query profile --&gt;
+    &lt;dimensions&gt;clientId&lt;/dimensions&gt;
 
-  &lt;!-- default rate limiting; add specific query profile for clientId with other settings --&gt;
-  &lt;field name="rate.quota"&gt;100&lt;/field&gt;
-  &lt;field name="rate.id"&gt;default&lt;/field&gt;
-  &lt;field name="rate.idDimension"&gt;default&lt;/field&gt;
+    &lt;!-- default rate limiting; add specific query profile for clientId with other settings --&gt;
+    &lt;field name="rate.quota"&gt;100&lt;/field&gt;
+    &lt;field name="rate.id"&gt;default&lt;/field&gt;
+    &lt;field name="rate.idDimension"&gt;default&lt;/field&gt;
 
-  &lt;!-- rate limiting for requests with &amp;clientId=clientA --&gt;
-  &lt;query-profile for="clientA"&gt;
-    &lt;field name="rate.quota"&gt;200&lt;/field&gt;
-    &lt;field name="rate.id"&gt;clientA&lt;/field&gt;
-    &lt;field name="rate.idDimension"&gt;clientA&lt;/field&gt;
-  &lt;/query-profile&gt;
+    &lt;!-- rate limiting for requests with &amp;clientId=clientA --&gt;
+    &lt;query-profile for="clientA"&gt;
+        &lt;field name="rate.quota"&gt;200&lt;/field&gt;
+        &lt;field name="rate.id"&gt;clientA&lt;/field&gt;
+        &lt;field name="rate.idDimension"&gt;clientA&lt;/field&gt;
+    &lt;/query-profile&gt;
 
-  &lt;!-- rate limiting for requests with &amp;clientId=clientB --&gt;
-  &lt;query-profile for="clientB"&gt;
-    &lt;field name="rate.quota"&gt;400&lt;/field&gt;
-    &lt;field name="rate.id"&gt;clientB&lt;/field&gt;
-    &lt;field name="rate.idDimension"&gt;clientB&lt;/field&gt;
-  &lt;/query-profile&gt;
+    &lt;!-- rate limiting for requests with &amp;clientId=clientB --&gt;
+    &lt;query-profile for="clientB"&gt;
+        &lt;field name="rate.quota"&gt;400&lt;/field&gt;
+        &lt;field name="rate.id"&gt;clientB&lt;/field&gt;
+        &lt;field name="rate.idDimension"&gt;clientB&lt;/field&gt;
+    &lt;/query-profile&gt;
 &lt;/query-profile&gt;
 </pre>
 
@@ -120,8 +148,6 @@ passed with the request:
 
 <h2 id="metrics">Metrics</h2>
 <p>
-The searcher will emit the 
-<a href="../reference/metrics.html">count metric</a>
-<code>requestsOverQuota</code> with the dimension
-<code>[rate.idDimension=rate.id]</code>.
+  The searcher will emit the <a href="../reference/metrics.html">count metric</a>
+  <code>requestsOverQuota</code> with the dimension <code>[rate.idDimension=rate.id]</code>.
 </p>
