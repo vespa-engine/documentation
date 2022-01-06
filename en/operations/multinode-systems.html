@@ -1,0 +1,96 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Multinode systems"
+redirect_from:
+- /documentation/multinode-systems.html
+- /en/multinode-systems.html
+---
+
+<p>
+  A Vespa <em>system</em> consists of one or more stateless and stateful clusters configured by an application package.
+  A Vespa system is configured and managed through an admin cluster as shown below.
+</p>
+<img src="/assets/img/vespa-overview.svg" width="825px" height="auto" alt="Vespa Overview" />
+<p>
+  All nodes of a Vespa system have the same software installed.
+  Which processes are started on each node and how they are configured
+  is determined by the admin cluster from the specification given in
+  <a href="../reference/services.html">services.xml</a> in the application package.
+</p>
+
+
+
+<h2 id="creating-a-multinode-system-from-a-sample-application">
+  Creating a multinode system from a sample application</h2>
+<p>
+  To create a fully functional production ready multinode system from a single-node sample application,
+  follow these steps (also see <a href="#next-steps">next steps</a>):
+</p>
+<ol>
+  <li>Add an <a href="../reference/services-admin.html">admin cluster</a> in services.xml:
+<pre>
+&lt;services version="1.0"&gt;
+    &lt;admin version="2.0"&gt;
+        &lt;adminserver hostalias="admin0"/&gt;
+        &lt;configservers&gt;
+            &lt;configserver hostalias="admin0"/&gt;
+        &lt;/configservers&gt;
+    &lt;/admin&gt;
+</pre>
+    This cluster can have multiple nodes as config servers,
+    but it is not strictly necessary as the other nodes will continue to run when the admin cluster is unreachable.
+  </li>
+  <li>Install the Vespa image or Docker image on all the nodes and start Vespa on the nodes.</li>
+  <li>Run
+<pre>
+$ echo "override VESPA_CONFIGSERVERS [adminserver-hostname]" >> $VESPA_HOME/conf/vespa/default-env.txt
+</pre>
+	  where [adminserver-hostname] is replaced by the full hostname of the admin server
+	  (or a comma-separated list if multiple).
+  <li>Add these nodes to the container and content clusters
+    by adding more <code>node</code> tags in <code>src/main/application/services.xml</code>
+    (to avoid traffic disruption on restarts or node failure at least two nodes are needed in each cluster).
+    One can add the same nodes to multiple clusters.
+  </li>
+  <li>Add the same nodes to <code>src/main/application/hosts.xml</code>.</li>
+</ol>
+<p>
+  With this, the application is fully production ready!
+</p>
+
+
+
+<h2 id="log-collection">Log collection</h2>
+<p>
+  Logs are automatically collected from all nodes in real time to the admin node listed as <code>adminserver</code>.
+  To view log messages from the system,
+  run <a href="../reference/vespa-cmdline-tools.html#vespa-logfmt">vespa-logfmt</a> on this node.
+</p>
+
+
+
+<h2 id="making-changes-to-live-systems">Making changes to live systems</h2>
+<p>
+  To change the system, deploy the changed application to the admin cluster.
+  The admin cluster will automatically change the participating nodes as necessary.
+  It is safe to do this while serving live query and write traffic.
+  In some cases the admin cluster will report that some processes must be restarted to make the change effective.
+  To avoid query or write traffic disruption,
+  such restarts must be done on one node at the time,
+  waiting until the node is fully up before restarting the next one.
+</p>
+
+
+
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li>
+  The <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode">multinode</a>
+  sample application is a useful starting point for setting up a system
+  and run some basic tests to get familiar with Vespa APIs and interfaces.
+</li>
+<li>
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode-HA">multinode-HA</a>
+  is a high-availability multi-node template - use this as a basis for the final configuration.
+</li>
+</ul>

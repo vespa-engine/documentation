@@ -181,29 +181,29 @@ If the `authorized-peers` field is provided, it must contain at least one entry.
 
 ```json
 {
-  "files": {
-    "ca-certificates": "/absolute/path/to/ca-certs.pem",
-    "certificates": "/absolute/path/to/host-certs.pem",
-    "private-key": "/absolute/path/to/private-key.pem",
-    "disable-hostname-validation": false
-  },
-  "authorized-peers": [
-    {
-      "required-credentials": [
-        { "field": "CN", "must-match": "vespa-monitoring.example.com" },
-        { "field": "SAN_DNS", "must-match": "*.us-east-*.monitor.example.com" }
-      ],
-      "description": "Backend monitoring service access",
-      "name": "monitoring"
-    }, 
-    {
-      "required-credentials": [
-        { "field": "SAN_DNS", "must-match": "*.mycluster.vespa.example.com" }
-      ],
-      "description": "Cluster-internal node P2P access",
-      "name": "cluster"
-    }
-  ]
+    "files": {
+        "ca-certificates": "/absolute/path/to/ca-certs.pem",
+        "certificates": "/absolute/path/to/host-certs.pem",
+        "private-key": "/absolute/path/to/private-key.pem",
+        "disable-hostname-validation": false
+    },
+    "authorized-peers": [
+        {
+            "required-credentials": [
+                { "field": "CN", "must-match": "vespa-monitoring.example.com" },
+                { "field": "SAN_DNS", "must-match": "*.us-east-*.monitor.example.com" }
+            ],
+            "description": "Backend monitoring service access",
+            "name": "monitoring"
+        }, 
+        {
+            "required-credentials": [
+                { "field": "SAN_DNS", "must-match": "*.mycluster.vespa.example.com" }
+            ],
+            "description": "Cluster-internal node P2P access",
+            "name": "cluster"
+        }
+    ]
 }
 ```
 ## TLS features supported by Vespa
