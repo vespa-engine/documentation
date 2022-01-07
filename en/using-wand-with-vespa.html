@@ -1,6 +1,6 @@
 ---
 #Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Accelerated OR search using the WAND algorithm with Vespa"
+title: "Accelerated OR search using the WAND algorithm"
 redirect_from:
 - /documentation/using-wand-with-vespa.html
 ---
@@ -11,13 +11,14 @@ redirect_from:
 <p>
   The WAND algorithm is described in detail in
   <a href="https://www.researchgate.net/profile/David-Carmel-3/publication/221613425_Efficient_query_evaluation_using_a_two-level_retrieval_process/links/02bfe50e6854500153000000/Efficient-query-evaluation-using-a-two-level-retrieval-process.pdf">
-  Efficient Query Evaluation using a Two-Level Retrieval Process (PDF)</a> by <em>Andrei Z. Broder et al</em>
+  Efficient Query Evaluation using a Two-Level Retrieval Process (PDF)</a> by Andrei Z. Broder et al:
 </p>
-  {% include note.html content="We have determined that the Weak And algorithm algorithm
-  significantly reduces the total number of full evaluations by more than 90%,
+<blockquote cite="https://www.researchgate.net/profile/David-Carmel-3/publication/221613425_Efficient_query_evaluation_using_a_two-level_retrieval_process/links/02bfe50e6854500153000000/Efficient-query-evaluation-using-a-two-level-retrieval-process.pdf">
+  We have determined that our algorithm significantly reduces the total number of full evaluations by more than 90%,
   almost without any loss in precision or recall.
-  At the heart of the approach there is an efficient implementation of a new Boolean construct
-  called WAND or Weak AND that might be of independent interest."%}
+  At the heart of our approach there is an efficient implementation of a new Boolean construct called WAND or Weak AND
+  that might be of independent interest
+</blockquote>
 <p>
   Vespa has two different implementations of the WAND dynamic pruning algorithm.
   Both implementations attempt to retrieve the best top-k scoring documents
@@ -134,16 +135,16 @@ select * from passages where (
     default contains "is" OR default contains "cdg" OR 
     default contains "airport" OR default contains "in" OR default contains "main" OR 
     default contains "paris" 
-  );
+);
 </pre>
 <p>
   Alternatively using a combination of YQL and user query language
 </p>
 <pre>
 {
-  "yql": "select * from passages where userQuery();",
-  "query" : "is cdg airport in main paris?",
-  "type": "any"
+    "yql": "select * from passages where userQuery();",
+    "query": "is cdg airport in main paris?",
+    "type": "any"
 }
 </pre>
 <p>
@@ -154,10 +155,10 @@ select * from passages where (
 </p>
 <pre>
 select * from passages where (
-  [{"targetHits": 200}] 
-    weakAnd(
-      default contains "is", default contains "cdg", default contains "airport", 
-      default contains "in", default contains "main", default contains "paris" 
+    [{"targetHits": 200}]
+        weakAnd(
+            default contains "is", default contains "cdg", default contains "airport",
+            default contains "in", default contains "main", default contains "paris"
     )
 );
 </pre>
@@ -165,6 +166,7 @@ select * from passages where (
   We specify that the target number of hits (top k) should be 200 (Default 100)
   and this number is used per content node if the content is distributed over more than one node.
 </p>
+
 
 <h3 id="weakand-inner-scoring">weakAnd inner scoring</h3>
 <p>
@@ -214,30 +216,41 @@ select * from passages where (
   and map text to bert token ids and assign a weight to each unique token id.
 </p>
 <pre>
-  document passage {
+document passage {
     field text type string { 
-      indexing: summary | index
+        indexing: summary | index
     }
     field deep_ct_tokens type weightedset&lt;int&gt; {
-      indexing: summary |attribute
-      attribute:fast-search 
+        indexing: summary |attribute
+        attribute:fast-search
     }
-  }
+}
 </pre> 
 <p>
 We can process text and tokenize the text with a BERT tokenizer and set the weight per token id:
 </p>
 <pre>
-{ 
-	"put":"id:msmarco:passage::8433854", 
-	"fields": {
-    "text": "Charles de Gaulle airport (CDG) is the main international airport for Paris",
-		"deep_ct_tokens": {
-		"2248": 12, "1996": 5, "3729": 9, "2003": 8, "2798": 1, 
-    "2139": 1, "1006": 3, "1007": 1, "2290": 5, "28724": 6, 
-    "3000": 3, "2005": 5, "2364": 1, "3199": 15
-		}
-	}
+{
+    "put": "id:msmarco:passage::8433854",
+    "fields": {
+        "text": "Charles de Gaulle airport (CDG) is the main international airport for Paris",
+        "deep_ct_tokens": {
+            "2248": 12,
+            "1996": 5,
+            "3729": 9,
+            "2003": 8,
+            "2798": 1,
+            "2139": 1,
+            "1006": 3,
+            "1007": 1,
+            "2290": 5,
+            "28724": 6,
+            "3000": 3,
+            "2005": 5,
+            "2364": 1,
+            "3199": 15
+        }
+    }
 }
 </pre>
 <p>
@@ -261,13 +274,13 @@ We can process text and tokenize the text with a BERT tokenizer and set the weig
 </p>
 <pre>
 {
-  "yql":"select * from passages where rank(
-    ([ {"targetHits": 25} ]
-      wand(deep_ct_tokens, {"2003": 1, "3729": 1, "2290": 1, "3199": 1, "1999": 1, "2364": 1, "3000": 1})),
-      userQuery());",
-  "query": "is cdg airport in main paris?",
-  "type":"any"
-  "ranking.profile": "deep_bm25"
+    "yql":"select * from passages where rank(
+        ([{"targetHits": 25}]
+            wand(deep_ct_tokens, {"2003": 1, "3729": 1, "2290": 1, "3199": 1, "1999": 1, "2364": 1, "3000": 1})),
+            userQuery());",
+    "query": "is cdg airport in main paris?",
+    "type": "any"
+    "ranking.profile": "deep_bm25"
 }
 </pre>
 <p>
@@ -275,13 +288,13 @@ With the ranking profile <em>deep_bm25</em> defined as:
 </p>
 <pre>
 rank-profile deep {
-  first-phase {
-    expression: rawScore(deep_ct_tokens) + bm25(text)
-  }
-  summary-features {
-    bm25(text)
-    rawScore(deep_ct_tokens)
-   }
+    first-phase {
+        expression: rawScore(deep_ct_tokens) + bm25(text)
+    }
+    summary-features {
+        bm25(text)
+        rawScore(deep_ct_tokens)
+    }
 }
 </pre>
 <p>
