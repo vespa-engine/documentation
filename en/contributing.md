@@ -31,8 +31,7 @@ OSGi bundles or dependency injection, we also require that the pull request is c
 part of the checks.
 
 ## Versioning
-Vespa uses semantic versioning - see
-[vespa versions](vespa-versions.html).
+Vespa uses semantic versioning - see [vespa versions](https://vespa.ai/releases#versions).
 Notice in particular that any Java API in a package having a @PublicAPI
 annotation in the package-info file cannot be changed in an incompatible way
 between major versions: Existing types and method signatures must be preserved
