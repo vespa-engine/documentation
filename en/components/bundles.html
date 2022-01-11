@@ -1,0 +1,846 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Bundles"
+redirect_from:
+- /documentation/jdisc/developing-osgi-bundles.html
+- /en/jdisc/developing-osgi-bundles.html
+- /documentation/jdisc/bundle-troubleshooting.html
+- /en/jdisc/bundle-troubleshooting.html
+- /documentation/bundle-plugin.html
+- /en/bundle-plugin.html
+---
+
+<p>
+  The Container uses <a href="https://osgi.org">OSGi</a> to provide a modular platform
+  for developing applications that can be composed of many reusable components.
+  The user can deploy, upgrade and remove these components at runtime.
+</p>
+
+
+
+<h2 id="osgi">OSGi</h2>
+<p>
+  OSGi is a framework for modular development of Java applications, where a
+  set of resources called <em>bundles</em> can be installed. OSGi allows the developer to
+  control which resources (Java packages) in a bundle that should be available to
+  other bundles. Hence, you can explicitly declare a bundle's public API,
+  and also ensure that internal implementation details remain hidden.
+</p>
+<p>
+  Unless you're already familiar with OSGi, we recommend reading Richard S. Hall's presentation
+  <a href="https://cwiki.apache.org/confluence/download/attachments/7956/Learning_to_ignore_OSGi.pdf">Learning
+    to ignore OSGi</a>, which explains the most important aspects that you must relate to as a bundle
+  developer. There are other good OSGi tutorials available:
+</p>
+<ul>
+  <li><a href="https://thiloshon.wordpress.com/2020/03/04/osgi-for-dummies/">OSGi for Dummies</a> </li>
+  <li><a href="https://www.vogella.com/tutorials/OSGi/article.html">OSGi Modularity and Services - Tutorial</a>
+    (You can ignore the part about OSGi services.)</li>
+</ul>
+
+<p>
+  JDisc uses OSGi's <em>module</em> and <em>lifecycle</em> layers, and does not provide any functionality
+  from the <em>service</em> layer.
+</p>
+
+
+
+<h2 id="osgi-bundles">OSGi bundles</h2>
+<p>
+  An OSGi bundle is a regular JAR file with a MANIFEST.MF file that describes its content,
+  what the bundle requires (imports) from other bundles, and what it provides (exports) to other
+  bundles. Below is an example of a typical bundle manifest with the most important headers:
+</p>
+<pre>
+Bundle-SymbolicName: com.yahoo.helloworld
+Bundle-Description: A Hello World bundle
+Bundle-Version: 1.0.0
+Export-Package: com.yahoo.helloworld;version="1.0.0"
+Import-Package: org.osgi.framework;version="1.3.0"
+</pre>
+<p>
+  The meaning of the headers in this bundle manifest is as follows:
+</p>
+<ul>
+  <li><code>Bundle-SymbolicName</code> - The unique identifier of the bundle.</li>
+  <li><code>Bundle-Description</code> - A human-readable description of the bundle's
+    functionality.</li>
+  <li><code>Bundle-Version</code> - Designates a version number to the
+    bundle.</li>
+  <li><code>Export-Package</code> - Expresses which Java packages contained
+    in a bundle will be made available to the outside world.</li>
+  <li><code>Import-Package</code> - Indicates which Java packages will be
+    required from the outside world to fulfill the dependencies needed in a
+    bundle.</li>
+</ul>
+<p>
+  Note that OSGi has a strict definition of version numbers that need to
+  be followed for bundles to work correctly.  See the
+  <a href="https://www.osgi.org/javadoc/r4v42/org/osgi/framework/Version.html#Version(java.lang.String)">OSGi
+    javadoc</a> for details. As a general advice, never use more than three numbers
+  in the version (major, minor, micro).
+</p>
+
+
+
+<h2>Building an OSGi bundle</h2>
+<p>
+  As long as the project was created by following steps in the
+  <a href="../developer-guide.html">Developer Guide</a>,
+  the code is already being packaged into an OSGi bundle by the
+  <a href="#maven-bundle-plugin">Maven bundle plugin</a>.
+  However, if migrating an existing Maven project, change the packaging statement to:
+</p>
+<pre>
+&lt;packaging&gt;container-plugin&lt;/packaging&gt;
+</pre>
+<p>
+  and add the plugin to the build instructions:
+</p>
+<pre>
+&lt;plugin&gt;
+    &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+    &lt;artifactId&gt;bundle-plugin&lt;/artifactId&gt;
+    &lt;!-- Find latest version at <a href="https://search.maven.org/search?q=g:com.yahoo.vespa%20a:bundle-plugin">search.maven.org/search?q=g:com.yahoo.vespa%20a:bundle-plugin</a> --&gt;
+    &lt;version&gt;7.25.26&lt;/version&gt;
+    &lt;extensions&gt;true&lt;/extensions&gt;
+&lt;/plugin&gt;
+</pre>
+<p>
+  Because OSGi introduces a different runtime environment from what Maven provides when running unit tests,
+  one will not observe any loading and linking errors until trying to deploy the application onto a running Container.
+  Errors triggered at this stage will be the likes of
+  <code>ClassNotFoundException</code> and <code>NoClassDefFoundError</code>.
+  To debug these types of errors, inspect the stack traces in the
+  <a href="../reference/logs.html">error log</a>, and refer to
+  <a href="#troubleshooting">troubleshooting</a>.
+</p><p>
+  <a href="../reference/vespa-cmdline-tools.html#vespa-logfmt">vespa-logfmt</a>
+  with its <em>--nldequote</em> option is useful when reading logs.
+</p>
+<p>
+  The test suite needs to cover deployment of the application bundle to
+  ensure that its dynamic loading and linking issues are covered.
+</p>
+
+
+
+<h2>Depending on non-OSGi ready libraries</h2>
+<p>
+  Unfortunately, many popular Java libraries have yet to be bundled with the
+  appropriate manifest that makes them OSGi-compatible.
+  The simplest solution to this is to set the scope of the problematic
+  dependency to <strong>compile</strong> in your pom.xml file. This will cause the bundle
+  plugin to package the whole library into your bundle's JAR file. Until the
+  offending library becomes available as an OSGi bundle, it means that your
+  bundle will be bigger (in number of bytes), and that classes of that
+  library can not be shared across application bundles.
+</p>
+<p>
+  The practical implication of this feature is that the bundle plugin
+  copies the compile-scoped dependency, and its transitive dependencies,
+  into the final JAR file, and adds
+  a <code>Bundle-ClassPath</code> instruction to its manifest that
+  references those dependencies.
+</p>
+<p>
+  Although this approach works for most non-OSGi libraries, it only works for
+  libraries where the jar file is <em>self contained</em>. If, on the other hand, the
+  library depends on other installed files, it must be treated as if it was a
+  <a href="#depending-on-JNI-libraries">JNI library</a>.
+</p>
+
+
+
+<h2 id="depending-on-JNI-libraries">Depending on JNI Libraries</h2>
+<p>
+  This section details alternatives for using native code in the container.
+</p>
+
+
+<h3>OSGi bundles containing native code</h3>
+<p>
+  OSGi jars may contain .so files, which can be loaded in the standard way from Java
+  code in the bundle. Note that since only one instance of an .so can be loaded at any time,
+  it is not possible to hot swap a jar containing .so files - when such jars are changed
+  the <a href="../jdisc/container-components.html#JNI-requires-restart">new configuration will not
+  take effect until the container is restarted</a>.
+  Therefore, it is often a good idea to package a .so file and its Java API
+  into a separate bundle from the rest of your code to avoid having to restart the container on all code changes.
+</p>
+
+
+<h3>Add JNI code to the global classpath</h3>
+<p>
+  When the JNI dependency cannot be packaged in a bundle,
+  and you run on an environment where you can install files locally
+  on the container nodes,
+  you can add the dependency to the container's classpath and explicitly
+  export the packages to make them visible to OSGi bundles.
+</p>
+<p>
+  Add the following configuration in the top level <em>services</em>
+  element in <a href="../reference/services-container.html">services.xml</a>:
+</p>
+<pre>
+&lt;services version="1.0"&gt;		
+    &lt;config name="search.config.qr-start"&gt;		
+        &lt;container&gt;		
+            &lt;classpath_extra&gt;/lib/jars/foo.jar:/path/bar.jar&lt;/classpath_extra&gt;		
+            &lt;export_packages&gt;com.foo,com.bar&lt;/export_packages&gt;		
+        &lt;/container&gt;		
+    &lt;/config&gt;		
+    ...		
+&lt;/services&gt;		
+</pre>		
+<p>
+  Adding the config at the top level ensures that it's applied to all jdisc clusters.
+</p>
+<p>
+  The packages are now available and visible,
+  but they must still be imported by the application bundle that uses the library.
+  Here is how to configure the bundle plugin to enforce an import of the packages to the bundle:
+</p>
+<pre>
+&lt;plugin&gt;		
+  &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;		
+  &lt;artifactId&gt;bundle-plugin&lt;/artifactId&gt;		
+  &lt;extensions&gt;true&lt;/extensions&gt;		
+  <span class="pre-hilite">&lt;configuration&gt;</span>
+      <span class="pre-hilite">&lt;importPackage&gt;com.foo,com.bar&lt;/importPackage&gt;</span>
+  <span class="pre-hilite">&lt;/configuration&gt;</span>
+&lt;/plugin&gt;		
+</pre>
+<p>
+  When adding a library to the classpath it becomes globally visible, and
+  exempt from the package visibility management of OSGi.
+  If another bundle contains the same library, there will be class loading issues.
+</p>
+
+
+
+
+<h2 id="maven-bundle-plugin">Maven bundle plugin</h2>
+<p>
+  The <em>bundle-plugin</em> is used to build and package components for the
+  <a href="../jdisc/container-components.html">Vespa Container</a> with Maven.
+  Refer to the <a href="https://github.com/vespa-engine/sample-apps/tree/master/multiple-bundles">
+  multiple-bundles sample app</a> for a practical example.
+</p><p>
+  The minimal Maven <em>pom.xml</em> configuration is:
+</p>
+<pre>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+    &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+    &lt;groupId&gt;com.yahoo.example&lt;/groupId&gt;
+    &lt;artifactId&gt;basic-application&lt;/artifactId&gt;
+    &lt;packaging&gt;container-plugin&lt;/packaging&gt; <span class="pre-hilite">&lt;!-- Use Vespa packaging --&gt;</span>
+    &lt;version&gt;1.0.1&lt;/version&gt;
+
+    &lt;properties&gt;
+        &lt;!-- Find latest version at <a href="https://search.maven.org/search?q=g:com.yahoo.vespa">search.maven.org/search?q=g:com.yahoo.vespa</a> --&gt;
+        &lt;vespa.version&gt;7.164.8&lt;/vespa.version&gt;
+    &lt;/properties&gt;
+
+    &lt;build&gt;
+        &lt;plugins&gt;
+            &lt;plugin&gt; <span class="pre-hilite">&lt;!-- Build the bundles --&gt;</span>
+                &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+                &lt;artifactId&gt;bundle-plugin&lt;/artifactId&gt;
+                &lt;version&gt;${vespa.version}&lt;/version&gt;
+                &lt;extensions&gt;true&lt;/extensions&gt;
+            &lt;/plugin&gt;
+            &lt;plugin&gt; <span class="pre-hilite">&lt;!-- Zip the application package --&gt;</span>
+                &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+                &lt;artifactId&gt;vespa-application-maven-plugin&lt;/artifactId&gt;
+                &lt;version&gt;${vespa.version}&lt;/version&gt;
+                &lt;executions&gt;
+                    &lt;execution&gt;
+                        &lt;goals&gt;
+                            &lt;goal&gt;packageApplication&lt;/goal&gt;
+                        &lt;/goals&gt;
+                    &lt;/execution&gt;
+                &lt;/executions&gt;
+            &lt;/plugin&gt;
+        &lt;/plugins&gt;
+    &lt;/build&gt;
+
+    &lt;dependencies&gt;
+        &lt;dependency&gt; <span class="pre-hilite">&lt;!-- Vespa dependencies --&gt;</span>
+            &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+            &lt;artifactId&gt;container&lt;/artifactId&gt;
+            &lt;version&gt;${vespa.version}&lt;/version&gt;
+            &lt;scope&gt;provided&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+&lt;/project&gt;
+</pre>
+<p>
+  To create a deployable <a href="../cloudconfig/application-packages.html">application package</a>, run:
+</p>
+<pre>
+$ mvn install package
+</pre>
+<p>
+  The bundle plugin automates generation of configuration classes by invoking the maven step
+  <em>generate-resources</em> - read more in <a href="../configuring-components.html">
+  configuring-components.html</a>
+</p>
+
+
+<h3 id="including-third-party-libraries">Including third-party libraries</h3>
+<p>
+  Include external dependencies into the bundle by specifying them as dependencies:
+</p>
+<pre>
+&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.httpcomponents.client5&lt;/groupId&gt;
+    &lt;artifactId&gt;httpclient5&lt;/artifactId&gt;
+    &lt;version&gt;5.0.3&lt;/version&gt;
+    &lt;scope&gt;compile&lt;/scope&gt;
+&lt;/dependency&gt;
+</pre>
+<p>
+  All packages in the library will then be available for use.
+  If the external dependency is an OSGi bundle, one can deploy it
+  instead of including it into the bundle by setting the scope to
+  provided:
+</p>
+<pre>
+&lt;dependency&gt;
+    &lt;groupId&gt;org.apache.httpcomponents.client5&lt;/groupId&gt;
+    &lt;artifactId&gt;httpclient5-osgi&lt;/artifactId&gt;
+    &lt;version&gt;5.0-beta2&lt;/version&gt;
+    <span class="pre-hilite">&lt;scope&gt;provided&lt;/scope&gt;</span>
+&lt;/dependency&gt;
+</pre>
+<p>
+  Then deploy the external dependency along with the bundle.
+  Only packages exported by the author of the library will then be
+  available for use (see the section below).
+</p>
+
+
+<h3 id="exporting-importing-and-including-packages-from-bundles">
+  Exporting, Importing and Including Packages from Bundles</h3>
+<p>
+  OSGi features information hiding &mdash; by default all the classes
+  used inside a bundle are invisible from the outside.  Also, the bundle
+  will by default only see (all) the packages in the Java and Container
+  + Vespa APIs. If any other package is needed by the bundle, then it
+  must happen in one of three ways:
+</p>
+<ul>
+  <li>Some additional packages are exported by the container and may
+    be <em>imported</em> explicitly by a bundle</li>
+  <li>In addition, any deployed bundle may export packages on its own,
+    which may then be imported by another bundle</li>
+  <li>Finally, the bundle may include its own JAR libraries</li>
+</ul>
+<p>
+  One can export packages from a bundle by annotating the package.
+  E.g. to export <em>com.mydomain.mypackage</em>, create <em>package-info.java</em>
+  in the package directory with:
+</p>
+<pre>
+@ExportPackage(version = @Version(major=1, minor=0, micro=0))
+package com.mydomain.mypackage;
+
+import com.yahoo.osgi.annotation.ExportPackage;
+import com.yahoo.osgi.annotation.Version;
+</pre>
+<p>
+  The Maven plugin will place such information in the manifest of the
+  plugin JAR built to be picked up by the Container.
+</p><p>
+  Note that this may also be used with bundles that do not contain any
+  searchers but libraries used by other searchers - a bundle may
+  just exist to export some libraries and never have any searchers
+  instantiated.
+</p><p>
+  Bundles may <em>import</em> packages (exported by some other bundle or
+  by the container). The maven plugin will automatically import any
+  package used from bundles it compiles against(i.e. maven dependencies
+  with scope provided).
+</p><p>
+  As mentioned above, each exported package has a version associated
+  with it. Similarly, an import of a package has a version range
+  associated with it. The version range determines which exported
+  packages can be used. The range used by the maven plugin is the
+  current version(i.e. the version of the package available at compile
+  time) up to the next major version (not including).
+</p><p>
+  To learn more about OSGi manifests and bundle packaging (e.g. how to
+  include Java libraries and native code), please refer to the OSGi spec
+  at <a href="https://osgi.org">the OSGi home page</a>.
+</p><p>
+  More details in <a href="#troubleshooting">troubleshooting</a>.
+</p>
+
+
+<h3 id="configuring-the-bundle-plugin">Configuring the Bundle-Plugin</h3>
+<p>
+  The bundle plugin can be configured to tailor the resulting bundle to specific needs.
+</p>
+<pre>
+&lt;build&gt;
+    &lt;plugins&gt;
+        &lt;plugin&gt;
+            &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
+            &lt;artifactId&gt;bundle-plugin&lt;/artifactId&gt;
+            &lt;version&gt;${vespa.version}&lt;/version&gt;
+            &lt;extensions&gt;true&lt;/extensions&gt;
+            &lt;configuration&gt;
+                &lt;attachBundleArtifact&gt;true/false&lt;/attachBundleArtifact&gt;
+                &lt;bundleClassifierName&gt;&hellip;&lt;/bundleClassifierName&gt;
+                &lt;discApplicationClass&gt;&hellip;&lt;/discApplicationClass&gt;
+                &lt;discPreInstallBundle&gt;&hellip;&lt;/discPreInstallBundle&gt;
+                &lt;bundleVersion&gt;&hellip;&lt;/bundleVersion&gt;
+                &lt;bundleSymbolicName&gt;&hellip;&lt;/bundleSymbolicName&gt;
+                &lt;bundleActivator&gt;&hellip;&lt;/bundleActivator&gt;
+                &lt;configGenVersion&gt;&hellip;&lt;/configGenVersion&gt;
+                &lt;configModels&gt;&hellip;&lt;/configModels&gt;
+            &lt;/configuration&gt;
+        &lt;/plugin&gt;
+</pre>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Element</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr><th>attachBundleArtifact</th>
+    <td>Whether to attach the bundle jar artifact to the build.
+      Use this if you want to install and deploy the bundle jar along with the default jar.
+      Default is <em>false</em></td></tr>
+  <tr><th>bundleClassifierName</th>
+    <td>If <em>attachBundleArtifact</em> is true,
+      this will be used as classifier for the bundle jar artifact.
+      Default is <em>bundle</em></td></tr>
+  <tr><th>discApplicationClass</th>
+    <td>The fully qualified class
+      name of the Application to be started by JDisc</td></tr>
+  <tr><th>discPreInstallBundle</th>
+    <td>The name of the bundles
+      that jDISC must pre-install</td></tr>
+  <tr><th>bundleVersion</th>
+    <td>The version of this bundle.
+      Defaults to the Maven project version</td></tr>
+  <tr><th>bundleSymbolicName</th>
+    <td>The symbolic name of this bundle.
+      Defaults to the Maven artifact ID</td></tr>
+  <tr><th>bundleActivator</th>
+    <td>The fully qualified class name of the bundle activator</td></tr>
+  <tr><th>configGenVersion</th>
+    <td> The version of <em>com.yahoo.vespa.configlib.config-class-plugin</em>
+      that will be used to generate config classes</td></tr>
+  <tr><th>configModels</th><td>List of config models</td></tr>
+  </tbody>
+</table>
+
+
+<h3 id="bundle-plugin-troubleshooting">Bundle Plugin Troubleshooting</h3>
+<!-- ToDo: Consider moving this to the troubleshooting section -->
+<p>
+  A package <em>p</em> is imported if all of this holds:
+</p>
+<ol>
+  <li>Using a class in <em>p</em> directly (i.e. not with reflection) in the
+    bundle</li>
+  <li>There's no classes in the bundle that is in <em>p</em></li>
+  <li>There's a bundle that exports <em>p</em>, and compiling against this bundle</li>
+</ol>
+<p>To debug, run</p>
+<pre>
+$ mvn -X package
+</pre>
+<p>
+  and look at Defined packages (=packages in the bundle), Exported packages of
+  dependencies, Referenced packages(= packages used).
+  A package is imported if it is in Exported packages and Referenced packages but not in Defined packages.
+</p>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>This section describes how to troubleshoot the most common errors when working with bundles:</p>
+<ul>
+  <li><a href="#bundle-reload">Bundle reload</a></li>
+  <li><a href="#could-not-create-component">Could not create component</a></li>
+  <li><a href="#class-not-found">Class not found</a></li>
+  <li><a href="#slow-container-start">Slow Container start</a></li>
+  <li><a href="#unresolved-constraint">Unresolved constraint</a></li>
+  <li><a href="#multiple-implementations-of-the-same-class">Multiple implementations of the same class</a></li>
+</ul>
+
+
+<h3 id="bundle-reload">Bundle reload</h3>
+<p>Bundles that are uninstalled between re-configs are logged like this:</p>
+<pre>
+INFO    : qrserver         Container.com.yahoo.container.core.config.ApplicationBundleLoader
+  Bundles to schedule for uninstall: [com.yahoo.vespatest.ExtraHitSearcher [67]]
+</pre>
+<p>And in case there are none, it shows the empty set:</p>
+<pre>
+INFO    : qrserver         Container.com.yahoo.container.core.config.ApplicationBundleLoader
+  Bundles to schedule for uninstall: []
+</pre>
+
+
+<h3 id="could-not-create-component">Could not create component</h3>
+<p>
+  The Container fails to start if it cannot load bundles.
+  Example, using wrong bundle name in the
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/multiple-bundles">multiple-bundles</a> sample app:
+</p>
+<pre>
+ &lt;services version="1.0"&gt;
+     &lt;container id="fibonacci" version="1.0"&gt;
+-        &lt;component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles-lib" /&gt;
++        &lt;component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles<span class="pre-hilite">-typo</span>" /&gt;
+</pre>
+<p>Looking at what is actually deployed in <em>multiple-bundles</em>:</p>
+<pre>
+$ ls -1 target/*.jar
+  target/multiple-bundles-1.0.0-deploy.jar
+  target/multiple-bundles-1.0.0-without-dependencies.jar
+  target/multiple-bundles-lib-1.0.1-deploy.jar
+</pre>
+<p>Error in log:</p>
+<pre>
+[2020-01-23 14:28:01.367] WARNING : qrserver         Container.com.yahoo.container.di.Container
+	Failed to set up new component graph. Retaining previous component generation.
+	exception=
+  java.lang.IllegalArgumentException: <span class="pre-hilite">Could not create a component with id 'com.mydomain.lib.FibonacciProducer'.</span>
+        <span class="pre-hilite">Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo.</span>
+        If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	at com.yahoo.osgi.OsgiImpl.resolveFromClassPath(OsgiImpl.java:74)
+	at com.yahoo.osgi.OsgiImpl.resolveClass(OsgiImpl.java:65)
+	at com.yahoo.container.di.Container.addNodes(Container.java:228)
+	at com.yahoo.container.di.Container.createComponentsGraph(Container.java:217)
+	at com.yahoo.container.di.Container.getConfigAndCreateGraph(Container.java:160)
+	at com.yahoo.container.di.Container.getNewComponentGraph(Container.java:84)
+	at com.yahoo.container.core.config.HandlersConfigurerDi.getNewComponentGraph(HandlersConfigurerDi.java:145)
+	at com.yahoo.container.jdisc.ConfiguredApplication.lambda$startReconfigurerThread$1(ConfiguredApplication.java:275)
+	at java.base/java.lang.Thread.run(Thread.java:834)
+
+[2020-01-23 14:28:01.367] ERROR   : qrserver         Container.com.yahoo.container.jdisc.ConfiguredApplication
+	Reconfiguration failed, your application package must be fixed, unless this is a JNI reload issue: Could not create a component with id 'com.mydomain.lib.FibonacciProducer'. Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo. If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	exception=
+	java.lang.IllegalArgumentException: Could not create a component with id 'com.mydomain.lib.FibonacciProducer'. Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo. If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	at com.yahoo.osgi.OsgiImpl.resolveFromClassPath(OsgiImpl.java:74)
+	at com.yahoo.osgi.OsgiImpl.resolveClass(OsgiImpl.java:65)
+	at com.yahoo.container.di.Container.addNodes(Container.java:228)
+	at com.yahoo.container.di.Container.createComponentsGraph(Container.java:217)
+	at com.yahoo.container.di.Container.getConfigAndCreateGraph(Container.java:160)
+	at com.yahoo.container.di.Container.getNewComponentGraph(Container.java:84)
+	at com.yahoo.container.core.config.HandlersConfigurerDi.getNewComponentGraph(HandlersConfigurerDi.java:145)
+	at com.yahoo.container.jdisc.ConfiguredApplication.lambda$startReconfigurerThread$1(ConfiguredApplication.java:275)
+	at java.base/java.lang.Thread.run(Thread.java:834)
+</pre>
+<p>Make sure that the jar files (i.e. bundles) are actually deployed with correct names per <em>services.xml</em>.</p>
+
+
+<h3 id="could-not-load-class">Could not load class</h3>
+<p>
+  If a component is added to services.xml, and its class cannot be found in the declared bundle,
+  the container will fail to start. For example:
+</p>
+<pre>
+&lt;component id="com.example.MissingClass" bundle="my-bundle" /&gt;
+</pre>
+<p>
+  The log will contain an error like this:
+</p>
+<pre>
+java.lang.IllegalArgumentException: Could not load class 'com.example.MissingClass' from bundle my-bundle
+</pre>
+<p>
+  If you see this error, please make sure that the class actually exists in the given bundle. Also, verify that
+  the <code>id</code> (or <code>class</code>) tag refers to the component class, and not e.g. a java package
+  or the bundle name.
+</p>
+
+
+<h3 id="class-not-found">Class not found</h3>
+<p>
+  All classes that are referred to in a user bundle must either be embedded in the bundle,
+  or imported from another bundle by an <code>Import-Package</code> statement in the bundle manifest.
+  When this rule has been breached, we get one of the most commonly seen exceptions when working with OSGi bundles:
+</p>
+<pre>
+...
+exception=
+    java.lang.NoClassDefFoundError: com/acme/utils/Helper
+    ...
+    java.lang.ClassNotFoundException: com.acme.utils.Helper not found by my_bundle [29]
+</pre>
+<p>
+  For the <a href="#maven-bundle-plugin">bundle-plugin</a> to automatically add an
+  Import-Package statement to the bundle's manifest,
+  that package must be exported from another bundle
+  that is declared as a 'provided' scope dependency in <em>pom.xml</em>.
+  If the dependency that contains the missing class is under your own control,
+  make sure it's packaged as an OSGi bundle,
+  and <a href="#exporting-importing-and-including-packages-from-bundles">export the package</a>
+  from that bundle.
+  If not, the simplest way to resolve the issue is to embed the dependency in your own bundle,
+  by setting its scope to 'compile' instead of 'provided'.
+</p><p>
+  If the strategy above does not resolve the case,
+  it's most likely because the class in question is loaded by reflection,
+  e.g. <code>Class.forName("com.acme.utils.Helper")</code>.
+  This is quite common when working with libraries for pluggable frameworks,
+  for which there is a separate <a href="../jdisc/pluggable-frameworks.html">troubleshooting doc</a>.
+  <!-- ToDo: Maybe that troubleshooting should be moved here, too? -->
+</p>
+
+
+<h3 id="slow-container-start">Slow Container start</h3>
+<p>In the vespa log, a container startup looks like:</p>
+<pre>
+[2021-01-07 10:13:35.325] INFO    : container        Container.com.yahoo.container.core.config.ApplicationBundleLoader
+  Installed bundles: {[0]org.apache.felix.framework:6.0.3, [1]container-disc:7.335.22 ...
+...
+[2021-01-07 10:26:57.291] INFO    : container        Container.com.yahoo.container.jdisc.ConfiguredApplication
+  Switching to the latest deployed set of configurations and components. Application config generation: 1
+</pre>
+<p>
+  The container is ready at the last log line - note the long startup time.
+  To get more details on what the container is doing at startup, inspect the ComponentGraph debug log.
+  Find the container service name (here: "container"), set debug logging and restart the container:
+</p>
+<pre>
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-sentinel-cmd">vespa-sentinel-cmd</a> list
+vespa-sentinel-cmd 'sentinel.ls' OK.
+container state=RUNNING mode=AUTO pid=246585 exitstatus=0 id="default/container.0"
+
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-logctl">vespa-logctl</a> container:com.yahoo.container.di.componentgraph.core debug=on
+
+$ vespa-stop-services &amp;&amp; vespa-start-services
+
+# Find DEBUG log messages for component creation, like:
+
+[2021-01-07 10:13:37.006] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentGraph
+  Trying the fallback injector to create component of class com.yahoo.container.jdisc.messagebus.SessionCache to inject
+  into component 'chain.mychain in MbusServer' of type 'com.yahoo.container.jdisc.messagebus.MbusServerProvider'.
+[2021-01-07 10:14:14.082] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode
+  Constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+[2021-01-07 10:26:54.669] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode
+  Finished constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+</pre>
+<p>In this particular example, query profile compilation takes a long time.</p>
+
+
+<h3 id="unresolved-constraint">Unresolved constraint</h3>
+<p>
+  If the bundle has an Import-Package for a package that is not available at runtime,
+  the OSGi framework will report an unresolved constraint error.
+  The symptom as seen in the log is:
+</p>
+<pre>
+org.osgi.framework.BundleException: Unresolved constraint in bundle my_bundle [29]:
+Unable to resolve 29.0:
+missing requirement [29.0] osgi.wiring.package; (osgi.wiring.package=<span class="pre-hilite">com.acme.utils</span>)
+     at org.apache.felix.framework.Felix.resolveBundleRevision(Felix.java:3974)
+</pre>
+<p>
+  This means that the missing class resides in a 'provided' dependency referred to from
+  the bundle's <em>pom.xml</em>, either directly or transitively.
+  In order to make the dependency available at runtime, there are two options:
+</p>
+<ul>
+  <li>The easiest is to set the dependency as 'compile' scope (instead of 'provided') to embed it in your own bundle.
+    This works fine in most cases, unless two of the dependencies need two different versions of the same library.
+  </li>
+  <li>Add the missing jar file to the <code>components/</code> folder of the application package,
+    along with your own bundles.
+    The maven-dependency-plugin has a goal called 'copy-dependencies' to help with this.
+  </li>
+</ul>
+<p>If the missing jar is a transitive dependency, maven can help visualize the dependency graph of the project:</p>
+<pre>
+$ mvn dependency:tree
+</pre>
+
+
+<h3 id="multiple-implementations-of-the-same-class">Multiple implementations of the same class</h3>
+<p>
+  When two bundles interact via their public APIs, it is crucial that both bundles resolve
+  each and every participating class to the same <code>Class</code> object.
+  If not, we will get error messages like:
+</p>
+<pre>
+java.lang.LinkageError: loader constraint violation: when resolving field
+"DATETIME" the class loader (instance of
+org/apache/felix/framework/BundleWiringImpl$BundleClassLoaderJava5) of the referring
+class, javax/xml/datatype/DatatypeConstants, and the class loader (instance of
+&lt;bootloader&gt;) for the field's resolved type, pe/DatatypeConstants, have different Class
+objects for that type
+</pre>
+<p>or:</p>
+<pre>
+java.lang.LinkageError: loader constraint violation: loader (instance of &lt;bootloader&gt;)
+previously initiated loading for a different type with name "<span class="pre-hilite">javax/xml/namespace/QName</span>"
+</pre>
+<p>or (less frequently):</p>
+<pre>
+java.lang.ClassCastException: com.acme.utils.Helper cannot be cast to  com.acme.utils.Helper
+</pre>
+<p>
+  All these error messages indicate that multiple implementations of one or more classes are used at runtime -
+  possible root causes:
+</p>
+<ul>
+  <li>Two interacting user bundles embed the same Java package.</li>
+  <li>A user bundle embeds a Java package that is exported from one of the JDisc bundles.</li>
+</ul>
+<p>Usually, the "duplicate" package is pulled in by the user bundle transitively from a library dependency.</p>
+
+
+<h4 id="multiple-implementations-example">Multiple implementations example</h4>
+<p>
+  Let's take a look at an example resolving the duplicate <em>javax.xml.namespace.QName</em> class
+  from the error message above.
+</p><p>
+  All 'javax.xml' packages in the JDK are exported by the JDisc core bundle.
+  This means that they should be imported by user bundles, instead of embedded inside them.
+  Hence, ensure that there are no classes from packages prefixed by 'javax.xml' in the bundle.
+  Find out which library that pulls in the package:
+</p>
+<ol>
+  <li><p>Extract the full component jar, including any embedded jars.
+    One tool that does the job is <a href="https://github.com/pojosontheweb/rjar/">rjar</a>.</p>
+  </li>
+  <li><p>Search the folder where the jar was extracted for 'javax.xml' classes:</p>
+    <pre>
+$ find . | grep "javax/xml/.*\.class"
+
+...
+./my_bundle-deploy.jar/dependencies/<span class="pre-hilite">stax-api-1.0.1.jar</span>/javax/xml/namespace/QName.class
+...
+</pre>
+  </li>
+  <li>Find out which libraries that pulled in the offending classes - here it was <code>stax-api-1.0.1</code>.
+    Usually, these libraries are not pulled in by the pom as direct dependencies,
+    but rather transitively via another library being used.
+    Use maven's dependency plugin from the application directory to find the direct dependency:
+    <pre>
+$ mvn dependency:tree -Dverbose
+
+[INFO] +- com.acme.utils:jersey-utils:1.0.0:compile
+[INFO] |  +- com.sun.jersey:jersey-json:jar:1.13:compile
+[INFO] |  |  +- org.codehaus.jettison:jettison:jar:1.1:compile
+[INFO] |  |    \- <span class="pre-hilite">stax:stax-api:jar:1.0.1:compile</span>
+</pre>
+    <p>Observe that <code>stax:stax-api:1.0.1</code> is pulled in transitively from the direct
+      dependency <code>com.acme.utils:jersey-utils</code>.</p>
+  </li>
+  <li><p>To exclude <code>stax:stax-api</code>, add the appropriate
+    <code>exclusion</code> from the direct dependency <code>com.acme.utils:jersey-utils</code> in <em>pom.xml</em>:</p>
+<pre>
+&lt;dependency&gt;
+    &lt;groupId&gt;com.acme.utils&lt;/groupId&gt;
+    &lt;artifactId&gt;jersey-utils&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+    <span class="pre-hilite">&lt;exclusions&gt;</span>
+        <span class="pre-hilite">&lt;exclusion&gt;</span>
+            <span class="pre-hilite">&lt;groupId&gt;stax&lt;/groupId&gt;</span>
+            <span class="pre-hilite">&lt;artifactId&gt;stax-api&lt;/artifactId&gt;</span>
+        <span class="pre-hilite">&lt;/exclusion&gt;</span>
+    <span class="pre-hilite">&lt;/exclusions&gt;</span>
+&lt;/dependency&gt;
+</pre>
+  </li>
+</ol>
+
+
+<h4 id="multiple-implementations-example-slf4j-api">Multiple implementations example slf4j-api</h4>
+<p>
+  This is similar to the previous example, but logging libraries are maybe the most common problem teams encounter.
+  Here we will see the symptom, use dependency:tree and add an exclusion. The symptom:
+</p>
+<pre>
+java.lang.RuntimeException: An exception occurred while
+constructing 'com.acme.utils.Helper in acme-utils'
+Caused by: java.lang.LinkageError: loader constraint violation: when resolving method
+"<span class="pre-hilite">org.slf4j</span>.impl.StaticLoggerBinder.getLoggerFactory()Lorg/slf4j/ILoggerFactory;"
+the class loader (instance of org/apache/felix/framework/BundleWiringImpl$BundleClassLoaderJava5) of the
+current class, org/slf4j/LoggerFactory, and the class loader (instance of
+sun/misc/Launcher$AppClassLoader) for the method's defining class,
+org/slf4j/impl/StaticLoggerBinder, have different Class objects for the type
+org/slf4j/ILoggerFactory used in the signature
+at
+org.slf4j.LoggerFactory.getILoggerFactory(LoggerFactory.java:299)
+at
+org.slf4j.LoggerFactory.getLogger(LoggerFactory.java:269)
+</pre>
+<p>Running <em>mvn dependency:tree</em> in the previous example gives:</p>
+<pre>
+[INFO] +- com.yahoo.vespa:container-dev:jar:5.28.29:provided
+[INFO] |  +- com.yahoo.vespa:jdisc_core:jar:5.28.29:provided
+[INFO] |  |  +- (org.slf4j:slf4j-api:jar:1.7.5:compile - scope updated from provided; omitted for duplicate)
+...
+[INFO] +- com.acme.utils:smartlib:jar:1.0.0:compile
+[INFO] |  +- org.slf4j:slf4j-api:jar:1.6.6:compile
+</pre>
+<p>
+  See that slf4j-api is no longer provided from container-dev, which it should.
+  To fix this, add an exclusion on the offender:
+</p>
+<pre>
+&lt;dependency&gt;
+    &lt;groupId&gt;com.acme.utils&lt;/groupId&gt;
+    &lt;artifactId&gt;smartlib&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+    &lt;scope&gt;compile&lt;/scope&gt;
+    &lt;exclusions&gt;
+        &lt;exclusion&gt;
+            &lt;groupId&gt;org.slf4j&lt;/groupId&gt;
+            &lt;artifactId&gt;slf4j-api&lt;/artifactId&gt;
+        &lt;/exclusion&gt;
+</pre>
+<p>But it still does not work! And we can see why:</p>
+<pre>
+$ jar -tf mailsearch-docprocs-deploy.jar  | grep slf
+
+  dependencies/slf4j-api-1.7.5.jar
+</pre>
+<p>Something still pulls in slf4j... Other candidates:</p>
+<pre>
+[INFO] \- com.yahoo.vespa:application:jar:5.28.29:test
+...
+[INFO]    +- com.yahoo.vespa:zkfacade:jar:5.28.29:test
+[INFO]    |  +- org.apache.curator:curator-recipes:jar:2.4.1:test
+[INFO]    |  |  +- org.apache.curator:curator-framework:jar:2.4.1:test
+[INFO]    |  |  |  +- org.apache.curator:curator-client:jar:2.4.1:test
+[INFO]    |  |  |  |  +- (org.slf4j:slf4j-api:jar:1.6.4:test - omitted for conflict with 1.7.5)
+...
+[INFO]    |  +- (org.slf4j:slf4j-jdk14:jar:1.7.5:test - omitted for duplicate)
+</pre>
+<p>
+  Added the right excludes for application and used mvn dependency:tree and verified that all references were gone,
+  except the ones for container-dev. Still found:
+</p>
+<pre>
+$ jar -tf mailsearch-docprocs-deploy.jar  | grep slf
+dependencies/slf4j-api-1.7.5.jar
+</pre>
+<p>One can make it work by managing this dependency explicitly - add this at POM top-level:</p>
+<pre>
+&lt;dependencyManagement&gt;
+    &lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;org.slf4j&lt;/groupId&gt;
+            &lt;artifactId&gt;slf4j-api&lt;/artifactId&gt;
+            &lt;version&gt;1.7.5&lt;/version&gt;
+            &lt;scope&gt;provided&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+&lt;/dependencyManagement&gt;
+</pre>
