@@ -4,11 +4,12 @@ title: "Vespa Serving Tuning"
 redirect_from:
 - /documentation/performance/feature-tuning.html
 ---
+
 <p>
-This document describes tuning certain features of an application for high performance, 
-the main focus is on content cluster search features, 
-see <a href="container-tuning.html">Container tuning</a> for tuning of container clusters.
-The <a href="sizing-search.html">search sizing guide</a> is about scaling an application deployment.
+  This document describes tuning certain features of an application for high performance,
+  the main focus is on content cluster search features,
+  see <a href="container-tuning.html">Container tuning</a> for tuning of container clusters.
+  The <a href="sizing-search.html">search sizing guide</a> is about scaling an application deployment.
 </p>
 
 
@@ -36,12 +37,12 @@ field timestamp type long {
 
 
 
-<h2 id="when-to-use-fast-search">When to use fast-search for attribute fields</h2>
+<h2 id="when-to-use-fast-search-for-attribute-fields">When to use fast-search for attribute fields</h2>
 <p>
-By default Vespa does not build any posting list index structures over <em>attribute</em> fields.
-Adding <em>fast-search</em> to the attribute definition as shown below
-will add an in-memory B-tree posting list structure
-which enables faster search for some cases (but not all, see next paragraph):
+  By default, Vespa does not build any posting list index structures over <em>attribute</em> fields.
+  Adding <em>fast-search</em> to the attribute definition as shown below
+  will add an in-memory B-tree posting list structure
+  which enables faster search for some cases (but not all, see next paragraph):
 </p>
 <pre>
 field timestamp type long {
@@ -51,34 +52,40 @@ field timestamp type long {
 }
 </pre>
 <p>
-When Vespa executes a query with multiple query items it builds a query execution plan which it tries to
-optimize so that query tree items that are restrictive, meaning they match few documents, are evaluated early so 
-that the temporary result set becomes as low as possible. 
-To do so the query execution plan looks at hit count estimates for each part of the query tree using the index 
-and B-tree dictionaries which track the number of documents a given term occurs in.
-However, for attribute fields without fast-search there is no hit count estimate so the estimate becomes 
-equal to the total number of documents (matches all) and is thus moved to the end of the query evaluation. 
-A query with only one query term searching an attribute field without <em>fast-search</em> would be
-a linear scan over all documents and thus expensive:
+  When Vespa runs a query with multiple query items, it builds a query execution plan.
+  It tries to optimize the plan so the temporary result set is as small as possible.
+  To do this, query tree items that are restrictive (matching few documents) are evaluated early .
+  The query execution plan looks at hit count estimates for each part of the query tree
+  using the index and B-tree dictionaries which track the number of documents a given term occurs in.
+</p>
+<p>
+  However, for attribute fields without <a href="https://docs.vespa.ai/en/attributes.html#fast-search">fast-search</a>
+  there is no hit count estimate,
+  so the estimate becomes equal to the total number of documents (matches all)
+  and is thus moved to the end of the query evaluation.
+  A query with only one query term searching an attribute field without <code>fast-search</code>
+  would be a linear scan over all documents and thus expensive:
 </p>
 <pre>
 select * from sources * where range(timestamp, 0, 100);
 </pre>
-But if this query term is <em>and</em>-ed with another term which matches fewer documents, that term will determine
-the cost instead, and fast-search won't be necessary, for example:
+<p>
+  But if this query term is <em>and</em>-ed with another term which matches fewer documents,
+  that term will determine the cost instead, and fast-search won't be necessary, e.g.:
+</p>
 <pre>
 select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000";
 </pre>
-The general rules of thumb for when to use fast-search for an attribute field is:
+<p>The general rules of thumb for when to use fast-search for an attribute field is:</p>
 <ul>
   <li>Use <em>fast-search</em> if the attribute field is searched without any other query terms</li>
   <li>Use <em>fast-search</em> if the attribute field could limit the total number of hits efficiently</li>
 </ul>
 <p>
-Changing fast-search aspect of the attribute is a
-<a href="../reference/schema-reference.html#modifying-schemas">live change</a>
-which does not require any re-feeding, so testing the performance with and without is low effort. 
-Adding or removing <em>fast-search</em> requires restart.
+  Changing fast-search aspect of the attribute is a
+  <a href="../reference/schema-reference.html#modifying-schemas">live change</a>
+  which does not require any re-feeding, so testing the performance with and without is low effort.
+  Adding or removing <em>fast-search</em> requires restart.
 </p>
 
 
@@ -117,8 +124,8 @@ Adding or removing <em>fast-search</em> requires restart.
   which also requires unpacking of positions of the term within the document.
 </p>
 <p>
-The way hybrid evaluation is done is that <em>TAAT</em> is used for sub-branches
-of the overall query tree which is not used for term based ranking. 
+  The way hybrid evaluation is done is that <em>TAAT</em> is used for sub-branches
+  of the overall query tree which is not used for term based ranking.
 </p>
 <p>
   Using <em>TAAT</em> can speed up query matching significantly (up to 20-30%)
@@ -201,22 +208,27 @@ search news {
 
 
 <h2 id="indexing-uuids">Indexing uuids</h2>
-<p>When configuring <a href="../reference/schema-reference.html#type:string">string</a>
-type fields with <code>index</code>,
-the default <a href="../reference/schema-reference.html#match">match</a> mode is <code>text</code>.
-This means Vespa will <a href="../linguistics.html#tokenization">tokenize</a> the content and index the tokens.</p>
-
-<p>The string representation of an <a href="https://en.wikipedia.org/wiki/Universally_unique_identifier">
-Universally unique identifier</a> (UUID) is 32 hexadecimal (base 16) digits,
-in five groups, separated by hyphens, in the form 8-4-4-4-12,
-for a total of 36 characters (32 alphanumeric characters and four hyphens).</p>
-
-<p>Example: Indexing <code>123e4567-e89b-12d3-a456-426655440000</code> with the above document definition,
-Vespa will tokenize this into 5 tokens: <code>[123e4567,e89b,12d3,a456,426655440000]</code>,
-each of which could be matched independently, leading to possible incorrect matches.</p>
-
-<p>To avoid this, change the mode to <a href="../reference/schema-reference.html#word">match: word</a> to
-treat the entire uuid as <i>one</i> token/word:</p>
+<p>
+  When configuring <a href="../reference/schema-reference.html#type:string">string</a>
+  type fields with <code>index</code>,
+  the default <a href="../reference/schema-reference.html#match">match</a> mode is <code>text</code>.
+  This means Vespa will <a href="../linguistics.html#tokenization">tokenize</a> the content and index the tokens.
+</p>
+<p>
+  The string representation of an <a href="https://en.wikipedia.org/wiki/Universally_unique_identifier">
+  Universally unique identifier</a> (UUID) is 32 hexadecimal (base 16) digits,
+  in five groups, separated by hyphens, in the form 8-4-4-4-12,
+  for a total of 36 characters (32 alphanumeric characters and four hyphens).
+</p>
+<p>
+  Example: Indexing <code>123e4567-e89b-12d3-a456-426655440000</code> with the above document definition,
+  Vespa will tokenize this into 5 tokens: <code>[123e4567,e89b,12d3,a456,426655440000]</code>,
+  each of which could be matched independently, leading to possible incorrect matches.
+</p>
+<p>
+  To avoid this, change the mode to <a href="../reference/schema-reference.html#word">match: word</a> to
+  treat the entire uuid as <i>one</i> token/word:
+</p>
 <pre>
 field uuid type string {
     indexing: summary | index
@@ -225,38 +237,39 @@ field uuid type string {
 }
 </pre>
 <p>
-In addition, configure the <code>uuid</code> as a
-<a href="../reference/schema-reference.html#rank">rank: filter</a> field -
-the field will then be represented as efficient as possible during search and ranking.
-The <code>rank:filter</code> behavior can also be triggered at query time on a per-query item basis
-by the <code>com.yahoo.prelude.query.Item.setRanked()</code>
-in a <a href="../searcher-development.html">custom searcher</a>.</p>
+  In addition, configure the <code>uuid</code> as a
+  <a href="../reference/schema-reference.html#rank">rank: filter</a> field -
+  the field will then be represented as efficient as possible during search and ranking.
+  The <code>rank:filter</code> behavior can also be triggered at query time on a per-query item basis
+  by the <code>com.yahoo.prelude.query.Item.setRanked()</code>
+  in a <a href="../searcher-development.html">custom searcher</a>.
+</p>
 
 
 
 <h2 id="parent-child-and-search-performance">Parent child and search performance</h2>
 <p>
-When searching imported attribute fields from parent document types
-there is an additional cost penalty which can be reduced significantly
-if the imported field is defined with <code>rank:filter</code>
-and <a href="../reference/services-content.html#visibility-delay">visibility-delay</a> is configured to &gt; 0.
+  When searching imported attribute fields from parent document types
+  there is an additional cost penalty which can be reduced significantly
+  if the imported field is defined with <code>rank:filter</code>
+  and <a href="../reference/services-content.html#visibility-delay">visibility-delay</a> is configured to &gt; 0.
 </p>
 
 
 
 <h2 id="ranking-and-ml-model-inferences">Ranking and ML Model inferences</h2>
 <p>
-Vespa <a href="sizing-search.html">scales</a> with the number of hits the query retrieves per node/search thread,
-and which needs to be evaluated by the first-phase ranking function.
-Read more on <a href="../phased-ranking.html">phased ranking</a>.
-Using phased ranking enables spending more resources during a second phase ranking step than in the first-phase.
-The first-phase should be focused on getting decent recall (retrieve relevant documents in the top k),
-while second phase is used to tune precision at k,
-bringing the relevant documents to the top of the result set.
+  Vespa <a href="sizing-search.html">scales</a> with the number of hits the query retrieves per node/search thread,
+  and which needs to be evaluated by the first-phase ranking function.
+  Read more on <a href="../phased-ranking.html">phased ranking</a>.
+  Using phased ranking enables spending more resources during a second phase ranking step than in the first-phase.
+  The first-phase should be focused on getting decent recall (retrieve relevant documents in the top k),
+  while second phase is used to tune precision at k,
+  bringing the relevant documents to the top of the result set.
 </p><p>
-For <a href="../text-matching-ranking.html">text ranking</a> applications,
-consider using the <a href="../using-wand-with-vespa.html">WAND</a> query operator -
-WAND can efficiently (sub-linear) find the top k documents using an inner scoring function.
+  For <a href="../text-matching-ranking.html">text ranking</a> applications,
+  consider using the <a href="../using-wand-with-vespa.html">WAND</a> query operator -
+  WAND can efficiently (sub-linear) find the top k documents using an inner scoring function.
 </p>
 
 
@@ -294,24 +307,26 @@ field user_id type long {
 }
 </pre>
 <p>
-E.g if we have 10M unique user_ids in the dictionary, and we search for 1000 users per query,
-<em>btree</em> dictionary would be 1000 lookup times log(10M),
-while hash based would be 1000 lookups times 1. 
-The <code>weightedSet</code> query set filtering also work brilliantly in combination with <em>TAAT</em>,
+  E.g if we have 10M unique user_ids in the dictionary, and we search for 1000 users per query,
+  <em>btree</em> dictionary would be 1000 lookup times log(10M),
+  while hash based would be 1000 lookups times 1.
+  The <code>weightedSet</code> query set filtering also work brilliantly in combination with <em>TAAT</em>,
   see <a href="#hybrid-taat-daat">hybrid TAAT/DAAT</a> section.
 </p>
 <p>
-Also see the <a href="../reference/schema-reference.html#dictionary">dictionary schema reference</a>.</p>
+  Also see the <a href="../reference/schema-reference.html#dictionary">dictionary schema reference</a>.
+</p>
 
 
 
 <h2 id="document-summaries-hits">Document summaries - hits</h2>
 <p>
-If queries request many hits from a cluster with few content nodes,
-increasing the <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
+  If queries request many hits from a cluster with few content nodes,
+  increasing the <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
 </p><p>
-Using <a href="../document-summaries.html">explicit document summaries</a>,
-Vespa can support memory-only summary/hit fetching if fields referenced in document summary are <b>all</b> defined as <em>attribute</em>.
+  Using <a href="../document-summaries.html">explicit document summaries</a>,
+  Vespa can support memory-only summary/hit fetching if fields referenced in document summary are
+  <strong>all</strong> defined as <em>attribute</em>.
 </p>
 
 
