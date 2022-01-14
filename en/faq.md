@@ -362,7 +362,7 @@ the hosts wait for ZooKeeper in a catch 22 -
 see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/operations#troubleshooting).
 
 #### Starting Vespa using Docker on M1 fails
-Using an M1 MacBook Pro / arch64 makes the Docker run fail:
+Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
 ```
 WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
 and no specific platform was requested
