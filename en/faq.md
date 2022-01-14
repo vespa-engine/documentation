@@ -355,6 +355,20 @@ a request will be sent to A and C
 {:.faq-section}
 ### Administration
 
+#### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
+The Config Server cluster with 3 nodes fails to start.
+The ZooKeeper cluster the Config Servers use waits for hosts on the network,
+the hosts wait for ZooKeeper in a catch 22 -
+see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/operations#troubleshooting).
+
+#### Starting Vespa using Docker on M1 fails
+Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
+```
+WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
+and no specific platform was requested
+```
+Refer to [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/operations#troubleshooting).
+
 #### How fast can nodes be added and removed from a running cluster?
 [Elasticity](elastic-vespa.html) is a core Vespa strength -
 easily add and remove nodes with minimal (if any) serving impact.
