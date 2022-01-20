@@ -7,7 +7,7 @@ redirect_from:
 ---
 
 <p>
-The Cloud Config System can be set up with one or more configuration servers (config servers).
+The Config System can be set up with one or more configuration servers (config servers).
 A config server uses <a href="https://zookeeper.apache.org/">ZooKeeper</a>
 as a distributed data storage for the configuration system.
 In addition, each node runs a config proxy to cache configuration data -
@@ -67,9 +67,8 @@ VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.mydo
   like <em>myhost1.mydomain.com,myhost2.mydomain.com,myhost3.mydomain.com</em>.
 </p><p>
 When there are multiple config servers, the <a href="config-proxy.html">config proxy</a>
-will pick a config server based on a hash of their hostname and how many config servers there are
-(to achieve load balancing between config servers).
-The config proxy is fault-tolerant and will switch to another config server if it is unavailable
+will pick a config server randomly (to achieve load balancing between config servers).
+The config proxy is fault-tolerant and will switch to another config server if the one it is using becomes unavailable
 or there is an error in the configuration it receives.
 With only one config server configured, it will continue using that in case of errors.
 </p><p>
@@ -77,8 +76,8 @@ For the system to tolerate <em>n</em> failures,
 <a href="#zookeeper">ZooKeeper</a> by design requires using <em>(2*n)+1</em> nodes.
 Consequently, only an odd numbers of nodes is useful, so you need minimum 3 nodes to have a fault tolerant config system.
 </p><p>
-Even when using just one config server the config system the application will still work if it goes down (you
-will of course be unable to deploy application changes).
+Even when using just one config server the the application will still work if the server goes down
+(but deploy application changes will not work, of course).
 Since the  <em>config proxy</em> runs on every node and caches configs,
 it will continue to serve config to the services on that node.
 However, restarting a node when config servers are unavailable
@@ -96,13 +95,14 @@ Add config server nodes for increased fault tolerance. Procedure:
   </li><li>
     Add config server hosts to <em>VESPA_CONFIGSERVERS</em> on <em>all</em> the nodes
   </li><li>
-    Restart the config server on the old config server  hosts and start it on the new ones
+    Restart the config server on one of the original config server hosts and start it on the new ones,
+    one by one.
   </li><li>
     Update <em>services.xml</em> and <em>hosts.xml</em> with the new set of config servers,
     then <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>
   </li>
   <li>
-    Restart nodes one by one to start using the new config servers.
+    Restart other nodes one by one to start using the new config servers.
   </li>
 </ol>
 <p>
@@ -113,7 +113,7 @@ Note: ZooKeeper will automatically redistribute the application data.
 <p>
 When increasing from 1 to 3 nodes or 3 to 7, the blank nodes constitutes a majority in the cluster.
 After restarting the config servers, they will not contain the old application data,
-because the blank nodes might win the election - depending on restart timing.
+because the blank nodes might win the ZooKeeper master election - depending on restart timing.
 To avoid any issues with this, scale up by minor sets of the nodes - example:
 </p>
 <ol>
@@ -157,7 +157,7 @@ embedded with an RPC frontend that the other nodes use.
 ZooKeeper stores data internally in <em>nodes</em> that can have <em>sub-nodes</em>,
 similar to a file system.
 </p><p>
-When start/restarting the config server, the configuration file for ZooKeeper,
+When starting or restarting the config server, the configuration file for ZooKeeper,
 <em>$VESPA_HOME/conf/zookeeper/zookeeper.cfg</em>, is generated based on the contents of
 <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>.
 Hence, config server(s) must all be restarted if that changes on a config server node.
@@ -240,8 +240,8 @@ The syntax for the value is the same as for VESPA_CONFIG_SOURCES.
 
 <h3 id="system-requirements">System requirements</h3>
 <p>
-The default heap size for the JVM it runs under is 1.5 Gb
-(which can be changed with a <a href="../performance/container-tuning.html">setting</a>).
+The minimum heap size for the JVM it runs under is 128 Mb and max heap size is 2Gb
+(which can be changed with a <a href="../performance/container-tuning.html#config-server-and-config-proxy">setting</a>).
 It writes a transaction log that is regularly purged of old items, so little disk space is required.
 Note that running on a server that has a lot of disk I/O
 will adversely affect performance and is not recommended.
@@ -277,6 +277,9 @@ When deploying, use the <em>-p</em> option, if port is changed from the default.
       <td>
         Verify that a config server is up and running using the <a href="../reference/metrics.html">Health and Metric APIs</a>, like
         <a href="http://myserver0.mydomain.com:12345/state/v1/" data-proofer-ignore>http://myserver0.mydomain.com:12345/state/v1/health</a>.
+        You should see a status code <b>up</b> if the server is up and has finished bootstrapping. Alternatively you can
+        <a href="http://myserver0.mydomain.com:12345/status.html" data-proofer-ignore>http://myserver0.mydomain.com:12345/status.html</a>
+        which will return response code 200 if server is up and has finished bootstrapping.
         Metrics are found at
         <a href="http://myserver0.mydomain.com:12345/state/v1/metrics" data-proofer-ignore>http://myserver0.mydomain.com:12345/state/v1/metrics</a>.
         Use <a href="../reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a>
@@ -287,9 +290,9 @@ When deploying, use the <em>-p</em> option, if port is changed from the default.
       <td>
         If running with more than one config server and one of these goes down or has hardware failure,
         the cluster will still work and serve config as usual
-        (clients will switch to use one of the good nodes).
-        It is not necessary to remove a bad node from the configuration.
-        Deploying applications will use a long time,
+        (clients will switch to use one of the good servers).
+        It is not necessary to remove a bad server from the configuration.
+        Deploying applications will take a long time,
         since vespa-deploy will not be able to complete a deployment on all servers when one of them is down.
         If this is troublesome, lower the <a href="#zookeeper-barrier-timeout">barrier timeout</a> -
         (default value is 120 seconds).
