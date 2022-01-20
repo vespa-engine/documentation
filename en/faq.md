@@ -355,6 +355,12 @@ a request will be sent to A and C
 {:.faq-section}
 ### Administration
 
+#### Deployment fails / nothing is listening on 19071
+Make sure all [Config servers](operations/configuration-server.html#troubleshooting) are started,
+and are able to establish ZooKeeper quorum (if more than one) -
+see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode) sample application.
+Validate that the container has [enough memory](operations/docker-containers.html).
+
 #### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
 The Config Server cluster with 3 nodes fails to start.
 The ZooKeeper cluster the Config Servers use waits for hosts on the network,

@@ -1,0 +1,213 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Docker containers"
+redirect_from:
+- /documentation/docker-containers-in-production.html
+- /en/docker-containers-in-production.html
+---
+
+<p>
+  This document describes tuning and adaptions for running Vespa Docker containers,
+  for developer use on laptop, and in production.
+</p>
+
+
+
+<h2 id="mounting-persistent-volumes">Mounting persistent volumes</h2>
+<p>
+  The <a href="../vespa-quick-start.html">quick start</a>
+  and <a href="../vespa-quick-start-multinode-aws-ecs.html">AWS ECS multi node</a> guides
+  show how to run Vespa in Docker containers.
+  In these examples, all the data is stored inside the container - the data is lost if the container is deleted.
+  When running Vespa inside Docker containers in production,
+  volume mappings to the parent host should be added to persist data and logs.
+</p>
+<ul>
+  <li>/opt/vespa/var</li>
+  <li>/opt/vespa/logs</li>
+</ul>
+<pre>
+$ mkdir -p /tmp/vespa/var;  export VESPA_VAR_STORAGE=/tmp/vespa/var
+$ mkdir -p /tmp/vespa/logs; export VESPA_LOG_STORAGE=/tmp/vespa/logs
+$ docker run --detach --name vespa --hostname vespa-container --volume $VESPA_VAR_STORAGE:/opt/vespa/var \
+  --volume $VESPA_LOG_STORAGE:/opt/vespa/logs --publish 8080:8080 vespaengine/vespa
+</pre>
+
+
+
+<h2 id="system-limits">System limits</h2>
+<p>
+  When Vespa starts inside Docker containers, the startup scripts will set
+  <a href="../reference/files-processes-and-ports.html#vespa-system-limits">system limits</a>.
+  Make sure that the environment starting the Docker engine is set up in such a way
+  that these limits can be set inside the containers.
+</p>
+<p>
+  For a CentOS/RHEL base host, Docker is usually started by
+  <a href="https://www.freedesktop.org/software/systemd/man/systemd.exec.html">systemd</a>.
+  In this case, <code>LimitNOFILE</code>, <code>LimitNPROC</code> and <code>LimitCORE</code>
+  should be set to meet the minimum requirements in
+  <a href="../reference/files-processes-and-ports.html#vespa-system-limits">system limits</a>.
+</p>
+<p>
+  In general when using Docker or Podman to run Vespa the <code>--ulimit</code> option should be used
+  to set limits according to <a href="../reference/files-processes-and-ports.html#vespa-system-limits">system limits</a>.
+  The <code>--pids-limit</code> should be set to unlimited (<code>-1</code> for Docker and <code>0</code> for Podman).
+</p>
+
+
+
+<h2 id="controlling-which-services-to-start">Controlling which services to start</h2>
+<p>
+  The Docker image <a href="../build-install-vespa.html">vespaengine/vespa</a>
+  takes a parameter that controls which services are started inside the container.
+</p>
+<p>Starting a <em>configserver</em> container:</p>
+<pre>
+$ docker run &lt;other arguments&gt; \
+  --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; \
+  vespaengine/vespa <span class="pre-hilite">configserver</span>
+</pre>
+<p>Starting a <em>services</em> container (configserver will not be started):</p>
+<pre>
+$ docker run &lt;other arguments&gt; \
+  --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; \
+  vespaengine/vespa <span class="pre-hilite">services</span>
+</pre>
+<p>Starting a container with <em>both configserver and services</em>:</p>
+<pre>
+$ docker run &lt;other arguments&gt; \
+  --env VESPA_CONFIGSERVERS=&lt;comma separated list of config servers&gt; \
+  vespaengine/vespa
+</pre>
+<p>
+  This is required in the case where the configserver container should run other services
+  like an adminserver or logserver (see <a href="../reference/services.html">services.html</a>)
+</p>
+<p>
+  If the <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>
+  environment variable is not specified it will be set to the container hostname.
+</p>
+<p>
+  Use the <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode-HA">multinode-HA</a>
+  sample application as a blueprint for how to set up config servers and services.
+</p>
+
+
+
+<h2 id="graceful-stop">Graceful stop</h2>
+<p>
+  Stopping a running <em>vespaengine/vespa</em> container triggers a graceful shutdown,
+  which saves time when starting the container again
+  (i.e. data structures are flushed).
+  If the container is shutdown forcefully,
+  the content nodes might need to restore the state from the transaction log which might be time-consuming.
+  There is no chance of data loss or data corruption as the data is always written and sync'ed to persistent storage.
+</p>
+<p>
+  The default timeout for the Docker daemon to wait for the shutdown
+  might be too low for larger number of documents per node.
+  Below stop will wait at least 120 seconds before terminating the running container forcefully,
+  if the stop is successfully performed before the timeout has passed the command takes less than the timeout.
+</p>
+<pre>
+$ docker stop name -t 120
+</pre>
+<p>
+  It is also possible to configure the default Docker daemon timeout,
+  see <a href="https://docs.docker.com/engine/reference/commandline/dockerd/">--shutdown-timeout</a>.
+</p>
+
+
+
+<h2 id="memory">Memory</h2>
+<p>
+  The <a href="https://github.com/vespa-engine/sample-apps">sample applications</a>
+  and <a href="../getting-started.html">getting started guides</a>
+  indicates the minimum memory requirements for the Docker containers.
+</p>
+{% include note.html content="Too little memory is a very common problem when testing Vespa in Docker containers.
+Use the below to troubleshoot before making a support request, and also see the <a href='../faq.html'>FAQ</a>."%}
+<p>
+  As a rule of thumb, a single-node Vespa application requires minimum 4G for the Docker container.
+  Using <code>docker stats</code> can be useful to track memory usage:
+</p>
+<pre>
+$ docker stats
+
+CONTAINER ID   NAME      CPU %     MEM USAGE / LIMIT    MEM %     NET I/O           BLOCK I/O        PIDS
+589bf5801b22   node0     213.25%   697.3MiB / 3.84GiB   17.73%    14.2kB / 11.5kB   617MB / 976MB    253
+e108dde84679   node1     213.52%   492.7MiB / 3.84GiB   12.53%    15.7kB / 12.7kB   74.3MB / 924MB   252
+be43aacd0bbb   node2     191.22%   497.8MiB / 3.84GiB   12.66%    19.6kB / 21.6kB   64MB / 949MB     261
+</pre>
+<p>
+  It is not necessarily easy to verify that Vespa has started all services successfully.
+  Symptoms of errors due to insufficient memory vary, depending on where it fails.
+  Example: Inspect restart logs in a container named <em>vespa</em>,
+  running the <a href="../vespa-quick-start.html">quickstart</a> with only 2G:
+</p>
+<pre>
+$ docker exec -it vespa sh -c "/opt/vespa/bin/vespa-logfmt -S config-sentinel -c sentinel.sentinel.service"
+
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 2.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 6.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 14.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 30.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 25.173 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 62.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 126.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 119.515 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 254.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 510.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 501.026 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 1022.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 1800.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 1793.142 seconds
+</pre>
+<p>
+  Observe that the <em>container</em> service restarts in a loop, with increasing pause.
+</p>
+<p>
+  A common problem is <a href="configuration-server.html">Config Servers</a>
+  not starting or running properly due to lack of memory.
+  This manifests itself as nothing listening on 19071, or deployment failures.
+</p>
+<p>
+  Some guides / sample applications have specific configuration to minimize resource usage.
+  Example from <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode-HA">multinode-HA</a>:
+</p>
+<pre>
+$ docker run --detach --name node0 --hostname node0.vespa_net \
+    -e VESPA_CONFIGSERVERS=node0.vespa_net,node1.vespa_net,node2.vespa_net \
+    -e <span class="pre-hilite">VESPA_CONFIGSERVER_JVMARGS="-Xms32M -Xmx128M"</span>  \
+    -e <span class="pre-hilite">VESPA_CONFIGPROXY_JVMARGS="-Xms32M -Xmx32M"</span> \
+    --network vespa_net \
+    --publish 19071:19071 --publish 19100:19100 --publish 19050:19050 --publish 20092:19092 \
+    vespaengine/vespa
+</pre>
+<p>
+  Here <code><a href="../reference/files-processes-and-ports.html#environment-variables">
+  VESPA_CONFIGSERVER_JVMARGS</a></code>
+  and <code><a href="../reference/files-processes-and-ports.html#environment-variables">
+  VESPA_CONFIGPROXY_JVMARGS</a></code>
+  are tweaked to the minimum for a functional test only.
+</p>
+{% include important.html content="For production use,
+do not set <code>VESPA_CONFIGSERVER_JVMARGS</code> and <code>VESPA_CONFIGPROXY_JVMARGS</code>
+unless you know what you are doing -
+the Vespa defaults are set for regular production use, and rarely needs changing."%}
+<p>
+  Container memory setting are done in <em>services.xml</em>, example from
+  <a href="https://github.com/vespa-engine/sample-apps/blob/master/operations/multinode-HA/src/main/application/services.xml">
+    multinode-HA</a>:
+</p>
+<pre>
+&lt;container id="query" version="1.0"&gt;
+    &lt;nodes&gt;
+        <span class="pre-hilite">&lt;jvm options="-Xms32M -Xmx128M"/&gt;</span>
+        &lt;node hostalias="node6" /&gt;
+        &lt;node hostalias="node7" /&gt;
+</pre>
+<p>
+  Make sure that the settings match the Docker container Vespa is running in.
+</p>
