@@ -6,43 +6,66 @@ redirect_from:
 ---
 
 <p>
-This guide describes how to install and run Vespa on a single machine using Kubernetes, K8s.
-See <a href="getting-started.html">Getting Started</a> for troubleshooting, next steps and other guides.
-Also see <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/basic-search-on-gke">
-Vespa example on GKE</a>.
-</p><p>
-<strong>Prerequisites</strong>:
+  This guide describes how to install and run Vespa on a single machine using Kubernetes, K8s.
+  See <a href="getting-started.html">Getting Started</a> for troubleshooting, next steps and other guides.
+  Also see <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/basic-search-on-gke">
+  Vespa example on GKE</a>.
+</p>
+<p>
+  <strong>Prerequisites</strong>:
 </p>
 <ul>
-  <li><a href="https://kubernetes.io/docs/getting-started-guides/minikube/">Minikube</a> installed with xhyve driver.</li>
-  <li><a href="https://git-scm.com/downloads">Git</a> installed.</li>
+  <li><a href="https://docs.docker.com/get-docker/">Docker</a></li>
+  <li><a href="https://kubernetes.io/docs/tasks/tools/">Minikube</a></li>
+  <li><a href="https://git-scm.com/downloads">Git</a></li>
   <li>Operating system: macOS</li>
   <li>Architecture: x86_64</li>
-  <li>At least 4 GB of memory dedicated to your container instance.</li>
 </ul>
 
 
 <ol>
-<li>
-<strong>Start Kubernetes cluster with minicube:</strong>
-<pre>
-$ minikube start --vm-driver xhyve --memory 4096
-</pre>
-</li>
 
-<li>
-<strong>Clone the Vespa sample apps from
-<a href="https://github.com/vespa-engine/sample-apps">github</a>:</strong>
+  <li>
+    <strong>Validate environment, should be minimum 5G:</strong>
+    <p>
+      Refer to <a href="operations/docker-containers.html#memory">Docker memory</a>
+      for details and troubleshooting:
+    </p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ docker info | grep "Total Memory"
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <strong>Start Kubernetes cluster with minicube:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ minikube start --vm-driver docker --memory 4096
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <strong>Clone the <a href="https://github.com/vespa-engine/sample-apps">Vespa sample apps</a>:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ git clone https://github.com/vespa-engine/sample-apps.git
 $ export VESPA_SAMPLE_APPS=`pwd`/sample-apps
 </pre>
-</li>
+    </div>
+  </li>
 
-<li>
-<strong>Create Kubernetes configuration files:</strong><br/>
-service.yml:
+  <li>
+    <strong>Create Kubernetes configuration files:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
+$ cat << EOF > service.yml
 apiVersion: v1
 kind: Service
 metadata:
@@ -62,9 +85,13 @@ spec:
     port: 19071
     targetPort: 19071
     protocol: TCP
+EOF
 </pre>
-statefulset.yml:
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
+$ cat << EOF > statefulset.yml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -96,95 +123,150 @@ spec:
             path: /ApplicationStatus
             port: 19071
             scheme: HTTP
-        volumeMounts:
-        - name: vespa-sample-apps
-          mountPath: /vespa-sample-apps
-      volumes:
-      - name: vespa-sample-apps
-        hostPath:
-          path: PATH_TO_CLONED/sample-apps
+EOF
 </pre>
-Replace the <strong>PATH_TO_CLONED</strong> with the current path.
-</li>
+    </div>
+  </li>
 
-<li>
-<strong>Start the service:</strong>
+  <li>
+    <strong>Start the service:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ kubectl apply -f service.yml -f statefulset.yml
 </pre>
-</li>
+    </div>
+  </li>
 
-<li>
-<strong>Wait for the service to enter a running state:</strong>
+  <li>
+    <strong>Wait for the service to enter a running state:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ kubectl get pods --watch
 </pre>
-</li>
+    </div>
+  </li>
 
-<li>
-<strong>Deploy and activate a sample application:</strong>
+  <li>
+    <strong>Start port forwarding from localhost to pod:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ kubectl exec vespa-0 -- bash -c '/opt/vespa/bin/vespa-deploy prepare /vespa-sample-apps/album-recommendation/src/main/application/ &amp;&amp; \
-  /opt/vespa/bin/vespa-deploy activate'
+$ kubectl port-forward vespa-0 19071 8080 &amp;
 </pre>
-</li>
+    </div>
+  </li>
 
-<li>
-<strong>Start port forwarding from localhost to pod:</strong>
+  <li>
+    <strong>Wait for configserver start:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ kubectl port-forward vespa-0 8080 &amp;
+$ curl -s --head http://localhost:19071/ApplicationStatus
 </pre>
-</li>
+    </div>
+  </li>
 
-<li>
-<strong>Ensure the application is active - wait for a 200 OK response:</strong>
+  <li>
+    <strong>Zip the application package:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ (cd ${VESPA_SAMPLE_APPS}/album-recommendation/src/main/application &amp;&amp; \
+  zip -r ../../../../../application.zip .)
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <strong>Deploy and activate the application package:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ curl --header Content-Type:application/zip --data-binary @application.zip \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <strong>Ensure the application is active - wait for a 200 OK response:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ curl -s --head http://localhost:8080/ApplicationStatus
 </pre>
-</li>
+    </div>
+  </li>
 
-<li>
-<strong>Feed documents:</strong>
+  <li>
+    <strong>Feed documents:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ curl -s -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/src/test/resources/A-Head-Full-of-Dreams.json \
-    http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
-$ curl -s -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/src/test/resources/Love-Is-Here-To-Stay.json \
-    http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay
-$ curl -s -H "Content-Type:application/json" --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/src/test/resources/Hardwired...To-Self-Destruct.json \
-    http://localhost:8080/document/v1/mynamespace/music/docid/hardwired-to-self-destruct
+$ curl -s -H "Content-Type:application/json" \
+  --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/src/test/resources/A-Head-Full-of-Dreams.json \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+$ curl -s -H "Content-Type:application/json" \
+  --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/src/test/resources/Love-Is-Here-To-Stay.json \
+  http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay
+$ curl -s -H "Content-Type:application/json" \
+  --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/src/test/resources/Hardwired...To-Self-Destruct.json \
+  http://localhost:8080/document/v1/mynamespace/music/docid/hardwired-to-self-destruct
 </pre>
-</li>
+    </div>
+  </li>
 
-<li>
+  <li>
     <p><strong>Make a query:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Metallica">
 $ curl "http://localhost:8080/search/?ranking=rank_albums&amp;yql=select%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20%22music%22%3B&amp;ranking.features.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D"
 </pre>
+    </div>
     <p>
-    You can also view query results in a browser with the query builder UI at
-    <a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>.
-    The query builder has guided queries and YQL autocompletion.
-    Read more in the <a href="query-api.html">Query API</a>.
+      You can also view query results in a browser with the query builder UI at
+      <a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>.
+      The query builder has guided queries and YQL autocompletion.
+      Read more in the <a href="query-api.html">Query API</a>.
     </p>
-</li>
+  </li>
 
-<li>
-    <strong>Run a document get request :</strong>
+  <li>
+    <strong>Run a document get request:</strong>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ curl -s http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay
 </pre>
+    </div>
+  </li>
 
-</li>
-
-<li>
-<p><strong>Clean up:</strong></p>
-<p>Stop the running container:</p>
+  <li>
+    <p><strong>Clean up:</strong></p>
+    <p>Stop the running container:</p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ kubectl delete service,statefulsets vespa
 </pre>
-<p>Stop minikube:</p>
+    </div>
+    <p>Stop port forwarding:</p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ killall kubectl
+</pre>
+    </div>
+    <p>Stop minikube:</p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ minikube stop
 </pre>
-</li>
+    </div>
+  </li>
+
 </ol>
