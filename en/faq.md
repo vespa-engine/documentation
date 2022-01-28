@@ -15,7 +15,7 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
   }
 
   ul.toc-list > li {
-    margin-bottom: 5px;
+    margin-bottom: 15px;
     font-weight: bold;
   }
 
