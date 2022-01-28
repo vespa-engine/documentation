@@ -15,7 +15,7 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
   }
 
   ul.toc-list > li {
-    margin-bottom: 5px;
+    margin-bottom: 15px;
     font-weight: bold;
   }
 
@@ -354,6 +354,14 @@ a request will be sent to A and C
 
 {:.faq-section}
 ### Administration
+
+#### Can one do a partial deploy to the config server / update the schema without deploying all the node configs?
+Yes, deployment is using this web service API,
+which allows you to create an edit session from the currently deployed package,
+make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](cloudconfig/deploy-rest-api-v2.html).
+However, this is only useful in cases where you want to avoid transferring data to the config server unnecessarily.
+When you resend everything, the config server will notice that you did not actually change e.g. the node configs
+and avoid unnecessary noop changes.
 
 #### Deployment fails / nothing is listening on 19071
 Make sure all [Config servers](operations/configuration-server.html#troubleshooting) are started,
