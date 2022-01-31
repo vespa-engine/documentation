@@ -11,18 +11,18 @@ redirect_from:
 </p>
 <img src="/assets/img/metrics-api.svg" width="983px" height="auto" alt="Metrics interfaces" />
 <ul>
-  <li><code><a href="#state-v1-metrics">/state/v1/metrics</a></code> is the process metrics api,
-    and exposes all metrics from an individual service -
-    here each node runs a container and a content node.</li>
+  <li><code><a href="#metrics-v2-values">/metrics/v2/values</a></code> is an aggregation of
+    <code><a href="#metrics-v1-values">/metrics/v1/values</a></code> for all nodes,
+    hosted on the same endpoint as the container's query API -
+    intended for integration with graphing and alerting services.</li>
   <li><code><a href="#metrics-v1-values">/metrics/v1/values</a></code> is the node metrics api,
     and aggregates metrics for processes running on the node.
     Each Vespa node has a <em>metrics-proxy</em> process running for this API.</li>
   <li><code><a href="#prometheus-v1-values">/prometheus/v1/values</a></code> is the same as
     <code><a href="#metrics-v1-values">/metrics/v1/values</a></code>, in prometheus format.</li>
-  <li><code><a href="#metrics-v2-values">/metrics/v2/values</a></code> is an aggregation of
-    <code><a href="#metrics-v1-values">/metrics/v1/values</a></code> for all nodes,
-    hosted on the same endpoint as the container's query API -
-    intended for integration with graphing and alerting services.</li>
+  <li><code><a href="#state-v1-metrics">/state/v1/metrics</a></code> is the process metrics api,
+    and exposes all metrics from an individual service -
+    here each node runs a container and a content node.</li>
 </ul>
 
 {% include note.html content="
@@ -31,6 +31,142 @@ and <a href='https://github.com/vespa-engine/sample-apps/tree/master/operations/
 sample applications for a practical example of using the APIs.
 These apps also include examples for how to find ports used by using
 <a href='vespa-cmdline-tools.html#vespa-model-inspect'>vespa-model-inspect</a>."%}
+
+
+
+<h2 id="metrics-v2-values">/metrics/v2/values</h2>
+<p>
+  The API is found on all nodes running a Container node at <em>http://host:port/metrics/v2/values</em>
+</p>
+<p>
+  Port is the same as the container's query/feed endpoint, default 8080.
+</p>
+<p>
+  The Vespa container exposes a selected set of metrics for every service on all nodes for the application.
+  The metrics API can, for example, be used to
+  <a href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch">
+    pull Vespa metrics to Cloudwatch</a> using an AWS lambda function.
+</p>
+<p>
+  The <a href="#metrics-v2-values">metrics API</a> exposes a
+  <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">selected
+    set of metrics</a> for the whole application, or for a single node,
+  to allow integration with graphing and alerting services.
+</p>
+<p>
+  The response is a <code>nodes</code> list (see example output below),
+  where each element represents a node in the application and contains:
+</p>
+<ul>
+  <li>The node's <code>hostname</code>.</li>
+  <li>The node's <code>role</code> in the Vespa application.</li>
+  <li>A <code>node</code> element containing the node's system metrics, e.g. cpu usage.</li>
+  <li>A <code>services</code> list containing metrics for the node's services.
+    The format of this list is described <a href="#metrics-v1-values">below</a>.</li>
+</ul>
+<pre>
+$ curl http://localhost:8080/metrics/v2/values
+</pre>
+<pre>{% highlight json %}
+{
+    "nodes": [
+        {
+            "hostname": "vespa-container",
+            "role": "hosts/vespa-container",
+            "services": [
+                {
+                    "name": "vespa.container",
+                    "timestamp": 1634127924,
+                    "status": {
+                        "code": "up",
+                        "description": "Data collected successfully"
+                    },
+                    "metrics": [
+                        {
+                            "values": {
+                                "memory_virt": 3685253120,
+                                "memory_rss": 1441259520,
+                                "cpu": 29.1900152827305
+                            },
+                            "dimensions": {
+                                "serviceId": "container"
+                            }
+                        },
+                        {
+                            "values": {
+                                "jdisc.gc.ms.average": 0
+                            },
+                            "dimensions": {
+                                "gcName": "G1OldGeneration",
+                                "serviceId": "container"
+                            }
+                        },
+{% endhighlight %}</pre>
+
+
+
+
+<h2 id="metrics-v1-values">/metrics/v1/values</h2>
+<p>
+  Vespa provides a <em>node metrics API</em> on each <em>node</em> at
+  <em>http://host:19092/metrics/v1/values</em>
+</p>
+<p>
+  This API can be used for monitoring, using products like
+  <a href="../operations/monitoring.html#pulling-into-prometheus">Prometheus</a> and
+  <a href="../operations/monitoring.html#pulling-into-datadog">DataDog</a>.
+  The response contains a selected set of metrics from each service running on the node.
+  The output is a list of <code>service</code> elements, with name, status and metrics for that service - example:
+</p>
+<pre>{% highlight json %}
+{
+    "services": [
+        {
+            "name": "vespa.logd",
+            "timestamp": 1561469256,
+            "status": {
+                "code": "up",
+                "description": "Data collected successfully"
+            },
+            "metrics": [
+                {
+                    "values": {
+                        "memory_virt": 111796224,
+                        "memory_rss": 14086144,
+                        "cpu": 1.0631117111036
+                    },
+                    "dimensions": {
+                        "metrictype": "system",
+                        "instance": "logd",
+                        "vespaVersion": "7.0.0"
+                    }
+                }
+            ]
+        },
+        ....
+    ]
+}
+{% endhighlight %}</pre>
+<p>
+  The status for each service is either <code>up</code>,
+  <code>down</code> or (in rare cases) <code>unknown</code>.
+  The <code>unknown</code> status is for example used if the service seems to be alive,
+  but does not report any metrics.
+</p>
+
+
+
+<h2 id="prometheus-v1-values">/prometheus/v1/values</h2>
+<p>
+  Vespa provides a <em>node metrics API</em> on each <em>node</em> at <em>http://host:19092/prometheus/v1/values</em>
+</p>
+<p>
+  The prometheus API on each node exposes metrics in a text based
+  <a href="https://prometheus.io/docs/instrumenting/exposition_formats/">format</a> that can be
+  scraped by <a href="https://prometheus.io/docs/introduction/overview/">Prometheus</a>.
+  The metrics is the same as in <code><a href="#metrics-v1-values">/metrics/v1/values</a></code>.
+  See <a href="../operations/monitoring.html">monitoring</a> for a Prometheus / Grafana example.
+</p>
 
 
 
@@ -54,50 +190,50 @@ These apps also include examples for how to find ports used by using
 <p>
   Example:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
-  "status" : {
-    "code" : "up",
-    "message" : "Everything ok here"
-  },
-  "metrics" : {
-    "snapshot" : {
-      "from" : 1334134640.089,
-      "to" : 1334134700.088,
+    "status" : {
+        "code" : "up",
+        "message" : "Everything ok here"
     },
-    "values" : [
-      {
-        "name" : "queries",
-        "description" : "Number of queries executed during snapshot interval",
-        "values" : {
-          "count" : 28,
-          "rate" : 0.4667
+    "metrics" : {
+        "snapshot" : {
+            "from" : 1334134640.089,
+            "to" : 1334134700.088,
         },
-        "dimensions" : {
-          "searcherid" : "x"
-        }
-      },
-      {
-        "name" : "query_hits",
-        "description" : "Number of documents matched per query during snapshot interval",
-        "values" : {
-          "count" : 28,
-          "rate" : 0.4667,
-          "average" : 128.3,
-          "min" : 0,
-          "max" : 10000,
-          "sum" : 3584,
-          "median" : 124.0,
-          "std_deviation": 5.43
-        },
-        "dimensions" : {
-          "searcherid" : "x"
-        }
-      }
-    ]
-  }
+        "values" : [
+            {
+                "name" : "queries",
+                "description" : "Number of queries executed during snapshot interval",
+                "values" : {
+                    "count" : 28,
+                    "rate" : 0.4667
+                },
+                "dimensions" : {
+                    "searcherid" : "x"
+                }
+            },
+            {
+                "name" : "query_hits",
+                "description" : "Number of documents matched per query during snapshot interval",
+                "values" : {
+                    "count" : 28,
+                    "rate" : 0.4667,
+                    "average" : 128.3,
+                    "min" : 0,
+                    "max" : 10000,
+                    "sum" : 3584,
+                    "median" : 124.0,
+                    "std_deviation": 5.43
+                },
+                "dimensions" : {
+                    "searcherid" : "x"
+                }
+            }
+        ]
+    }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   A flat list of metrics is returned.
   Each metric value reported by a component should be a separate metric.
@@ -140,194 +276,27 @@ These apps also include examples for how to find ports used by using
 </table>
 
 
-
-<h2 id="metrics-v1-values">/metrics/v1/values</h2>
-<p>
-  Vespa provides a <em>node metrics API</em> on each <em>node</em> at
-  <em>http://host:19092/metrics/v1/values</em>
-</p>
-<p>
-  This API can be used for monitoring, using products like
-  <a href="../operations/monitoring.html#pulling-into-prometheus">Prometheus</a> and
-  <a href="../operations/monitoring.html#pulling-into-datadog">DataDog</a>.
-  The response contains a selected set of metrics from each service running on the node.
-  The output is a list of <code>service</code> elements, with name, status and metrics for that service - example:
-</p>
-<pre>
-{
-  "services": [
-    {
-      "name": "vespa.logd",
-      "timestamp": 1561469256,
-      "status": {
-        "code": "up",
-        "description": "Data collected successfully"
-      },
-      "metrics": [
-        {
-          "values": {
-            "memory_virt": 111796224,
-            "memory_rss": 14086144,
-            "cpu": 1.0631117111036
-          },
-          "dimensions": {
-            "metrictype": "system",
-            "instance": "logd",
-            "vespaVersion": "7.0.0"
-          }
-        }
-      ]
-    },
-    ....
-  ]
-}
-</pre>
-<p>
-  The status for each service is either <code>up</code>,
-  <code>down</code> or (in rare cases) <code>unknown</code>.
-  The <code>unknown</code> status is for example used if the service seems to be alive,
-  but does not report any metrics.
-</p>
-
-
-
-<h2 id="prometheus-v1-values">/prometheus/v1/values</h2>
-<p>
-  Vespa provides a <em>node metrics API</em> on each <em>node</em> at <em>http://host:19092/prometheus/v1/values</em>
-</p>
-<p>
-  The prometheus API on each node exposes metrics in a text based
-  <a href="https://prometheus.io/docs/instrumenting/exposition_formats/">format</a> that can be
-  scraped by <a href="https://prometheus.io/docs/introduction/overview/">Prometheus</a>.
-  The metrics is the same as in <code><a href="#metrics-v1-values">/metrics/v1/values</a></code>.
-  See <a href="../operations/monitoring.html">monitoring</a> for a Prometheus / Grafana example.
-</p>
-
-
-
-<h2 id="metrics-v2-values">/metrics/v2/values</h2>
-<p>
-  The Vespa container exposes a selected set of metrics for every service on all nodes for the application.
-  The metrics API can, for example, be used to
-  <a href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch">
-    pull Vespa metrics to Cloudwatch</a> using an AWS lambda function.
-</p>
-<p>
-  The <a href="#metrics-v2-values">metrics API</a> exposes a
-  <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">selected
-    set of metrics</a> for the whole application, or for a single node,
-  to allow integration with graphing and alerting services.
-</p>
-<p>
-  For self-hosted Vespa, the URL is:
-  <em>http://&lt;container-host&gt;:&lt;port&gt;/metrics/v2/values</em>, where
-  the <em>port</em> is the same as for searching, e.g. 8080.
-</p>
-<p>
-  The response is a <code>nodes</code> list, where each element represents a node in the application and contains:
-</p>
-<ul>
-  <li>The node's <code>hostname</code>.</li>
-  <li>The node's <code>role</code> in the Vespa application.</li>
-  <li>A <code>node</code> element containing the node's system metrics, e.g. cpu
-  usage.</li>
-  <li>A <code>services</code> list containing metrics for the node's services. The format
-  of this list is described <a href="#metrics-v1-values">below</a>.</li>
-</ul>
-<p>
-  For example:
-</p>
-<pre>
-$ curl http://localhost:8080/metrics/v2/values
-
-{
-  "nodes": [
-    {
-      "hostname": "vespa-container",
-      "role": "hosts/vespa-container",
-      "services": [
-        {
-          "name": "vespa.container",
-          "timestamp": 1634127924,
-          "status": {
-            "code": "up",
-            "description": "Data collected successfully"
-          },
-          "metrics": [
-            {
-              "values": {
-                "memory_virt": 3685253120,
-                "memory_rss": 1441259520,
-                "cpu": 29.1900152827305
-              },
-              "dimensions": {
-                "serviceId": "container"
-              }
-            },
-            {
-              "values": {
-                "jdisc.gc.ms.average": 0
-              },
-              "dimensions": {
-                "gcName": "G1OldGeneration",
-                "serviceId": "container"
-              }
-            },
-</pre>
-
-
-
-
-<h2 id="state-v1-health">/state/v1/health</h2>
-<p>
-  Each service exposes its health status via the <a href="#state-v1-health">process health api</a>.
-</p>
-<img src="/assets/img/health-api.svg" width="480px" height="auto" alt="Health API" />
-<p>
-  The Health API is most commonly used for heartbeating.
-  Health status for each process is found at <em>http://host:port/state/v1/health</em>
-</p>
-<p>
-  Example:
-</p>
-<pre>
-{
-  "status" : {
-    "code" : "up",
-    "message" : "Everything ok here"
-  }
-}
-</pre>
-<p>
-  The status code can either be <code>up</code> or <code>down</code>.
-  Status <code>up</code> means that the service is fully up, ready for serving traffic.
-  If the page cannot be downloaded, a state of down is typically assumed.
-  The message part is optional - it is normally empty if the service is up,
-  while it is set to a textual reason for why it is unavailable, if that is the case.
-</p>
-
-
-
-<h2 id="metrics-from-custom-components">Metrics from custom components</h2>
+<h3 id="metrics-from-custom-components">Metrics from custom components</h3>
 <ol>
-  <li>Add a <em>MetricReceiver</em>
-  (<a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/MetricReceiver.html">
-  com.yahoo.metrics.simple.MetricReceiver</a>)
-  instance to the constructor of the component in question - it is injected by the container</li>
-
-  <li>Declare the <em>gauges</em> and <em>counters</em> using the <em>declare</em>
-  methods on the metric receiver. Optionally set arbitrary metric
-  dimensions to default values at declaration time -
-  refer to the javadoc for details</li>
-
-  <li>Each time there is some data to measure, invoke the <em>sample</em> method on gauges
-  or the <em>add</em> method on counters.
-  When sampling data, any dimensions can optionally be set</li>
+  <li>
+    Add a <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/MetricReceiver.html">
+    com.yahoo.metrics.simple.MetricReceiver</a>
+    instance to the constructor of the component - it is injected by the container.
+  </li>
+  <li>
+    Declare the <em>gauges</em> and <em>counters</em> using the <em>declare</em> methods on the metric receiver.
+    Optionally set arbitrary metric dimensions to default values at declaration time - refer to the javadoc for details.
+  </li>
+  <li>
+    Each time there is some data to measure,
+    invoke the <em>sample</em> method on gauges or the <em>add</em> method on counters.
+    When sampling data, any dimensions can optionally be set.
+  </li>
 </ol>
 <p>
-  The gauges and counters declared are inherently thread safe. Example:
+  The gauges and counters declared are inherently thread-safe. Example:
 </p>
-<pre>
+<pre>{% highlight java %}
 package com.yahoo.example;
 
 import java.util.Optional;
@@ -353,17 +322,16 @@ public class HitCountSearcher extends Searcher {
     public Result search(Query query, Execution execution) {
         Result result = execution.search(query);
         hitCountMetric
-                .sample(result.getTotalHitCount(),
-                        hitCountMetric.builder()
-                                .set(LANGUAGE_DIMENSION_NAME, query.getModel().getParsingLanguage().languageCode())
-                                .build());
+            .sample(result.getTotalHitCount(),
+                    hitCountMetric.builder()
+                        .set(LANGUAGE_DIMENSION_NAME, query.getModel().getParsingLanguage().languageCode())
+                        .build());
         return result;
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
-  Then look at the <em>Metrics API</em>
-  where the new event <em>example_hitcounts</em> is available in the list of metrics.
+  Then look at the metrics where the new event <em>example_hitcounts</em> is available in the list of metrics.
   The histograms for the last five minutes of logged data are available as CSV per
   dimension at <em>http://host:port/state/v1/metrics/histograms</em>.
   In the example, that would include the estimated total hit counts for queries, grouped by language.
@@ -372,11 +340,8 @@ public class HitCountSearcher extends Searcher {
 </p>
 
 
-
-<h2 id="http-server-metrics">Http Server metrics</h2>
+<h3 id="http-server-metrics">Http Server metrics</h3>
 <p>
-  The metrics from the built-in HTTP server are available in JSON using the <em>metrics API</em>.
-</p><p>
   The Container HTTP server is based on Jetty.
   Some of the metrics are gathered from the Jetty <code>StatisticsHandler</code>
   or <code>ConnectorStatistics</code>, with names familiar to those used to working with Jetty.
@@ -389,118 +354,144 @@ public class HitCountSearcher extends Searcher {
 </p>
 
 
-<h3 id="server-wide-metrics">Server-wide Metrics</h3>
+<h4 id="server-wide-metrics">Server-wide Metrics</h4>
 <p>
   These metrics are output for the server as a whole, across all connectors,
   as opposed to the per-connector metrics listed in the next section.
 </p>
 <table class="table">
   <thead>
-    <tr>
-      <th>Metric name</th><th>Description</th>
-    </tr>
+  <tr>
+    <th>Metric name</th><th>Description</th>
+  </tr>
   </thead><tbody>
-    <tr>
-      <td>serverStartedMillis</td>
-      <td>Time since server started</td>
-    </tr><tr>
-      <td>mem.heap.total</td>
-      <td>Total heap size</td>
-    </tr><tr>
-      <td>mem.heap.free</td>
-      <td>Free heap size</td>
-    </tr><tr>
-      <td>mem.heap.used</td>
-      <td>Used heap size</td>
-    </tr><tr>
-      <td>serverThreadPoolSize</td>
-      <td>Size of the thread pool for request processing</td>
-    </tr><tr>
-      <td>serverActiveThreads</td>
-      <td>Number of threads that are active processing requests</td>
-    </tr><tr>
-      <td>serverRejectedRequests</td>
-      <td>Number of requests rejected by the thread pool</td>
-    </tr><tr>
-      <td>jdisc.http.requests.status</td>
-      <td>Number of requests to the built-in status handler</td>
-    </tr><tr>
-      <td>http.status.1xx</td>
-      <td>Number of responses with a 1xx status</td>
-    </tr><tr>
-      <td>http.status.2xx</td>
-      <td>Number of responses with a 2xx status</td>
-    </tr><tr>
-      <td>http.status.3xx</td>
-      <td>Number of responses with a 3xx status</td>
-    </tr><tr>
-      <td>http.status.4xx</td>
-      <td>Number of responses with a 4xx status</td>
-    </tr><tr>
-      <td>http.status.5xx</td>
-      <td>Number of responses with a 5xx status</td>
-    </tr>
-  </tbody>
+<tr>
+  <td>serverStartedMillis</td>
+  <td>Time since server started</td>
+</tr><tr>
+  <td>mem.heap.total</td>
+  <td>Total heap size</td>
+</tr><tr>
+  <td>mem.heap.free</td>
+  <td>Free heap size</td>
+</tr><tr>
+  <td>mem.heap.used</td>
+  <td>Used heap size</td>
+</tr><tr>
+  <td>serverThreadPoolSize</td>
+  <td>Size of the thread pool for request processing</td>
+</tr><tr>
+  <td>serverActiveThreads</td>
+  <td>Number of threads that are active processing requests</td>
+</tr><tr>
+  <td>serverRejectedRequests</td>
+  <td>Number of requests rejected by the thread pool</td>
+</tr><tr>
+  <td>jdisc.http.requests.status</td>
+  <td>Number of requests to the built-in status handler</td>
+</tr><tr>
+  <td>http.status.1xx</td>
+  <td>Number of responses with a 1xx status</td>
+</tr><tr>
+  <td>http.status.2xx</td>
+  <td>Number of responses with a 2xx status</td>
+</tr><tr>
+  <td>http.status.3xx</td>
+  <td>Number of responses with a 3xx status</td>
+</tr><tr>
+  <td>http.status.4xx</td>
+  <td>Number of responses with a 4xx status</td>
+</tr><tr>
+  <td>http.status.5xx</td>
+  <td>Number of responses with a 5xx status</td>
+</tr>
+</tbody>
 </table>
 
 
-<h3 id="per-connector-metrics">Per-connector Metrics</h3>
+<h4 id="per-connector-metrics">Per-connector Metrics</h4>
 <p>
   These metrics are output for each connector in the Jetty server.
 </p>
 <table class="table">
   <thead>
-    <tr>
-      <th>Metric name</th><th>Description</th>
-    </tr>
+  <tr>
+    <th>Metric name</th><th>Description</th>
+  </tr>
   </thead><tbody>
-    <tr>
-      <td>serverNumConnections</td>
-      <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
-      </a></td>
-    </tr><tr>
-      <td>serverNumOpenConnections</td>
-      <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
-      </a></td>
-    </tr><tr>
-      <td>serverConnectionsOpenMax</td>
-      <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
-      </a></td>
-    </tr><tr>
-      <td>serverConnectionDurationMean, -Max, -StdDev</td>
-      <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
-      </a></td>
-    </tr><tr>
-      <td>serverNumRequests, jdisc.http.requests</td>
-      <td>Number of requests received by the connector</td>
-    </tr><tr>
-      <td>serverNumSuccessfulResponses</td>
-      <td>Number of successful responses sent by the connector</td>
-    </tr><tr>
-      <td>serverNumFailedResponses</td>
-      <td>Number of error responses sent by the connector</td>
-    </tr><tr>
-      <td>serverNumSuccessfulResponseWrites</td>
-      <td>Number of HTTP response chunks that have been successfully written to the network.</td>
-    </tr><tr>
-      <td>serverNumFailedResponseWrites</td>
-      <td>Number of HTTP response chunks that have not been successfully written to the network,
-        due to some kind of I/O error.</td>
-    </tr><tr>
-      <td>serverBytesReceived</td>
-      <td>Number of bytes the connector has received</td>
-    </tr><tr>
-      <td>serverBytesSent</td>
-      <td>Number of bytes the connector has sent</td>
-    </tr><tr>
-      <td>serverTimeToFirstByte</td>
-      <td>Time to first byte of response body is sent</td>
-    </tr><tr>
-      <td>serverTotalSuccessfulResponseLatency</td>
-      <td>Time to complete successful responses</td>
-    </tr><tr>
-      <td>serverTotalFailedResponseLatency</td>
-      <td>Time to complete failed responses</td>
-    </tr>
-  </tbody>
+<tr>
+  <td>serverNumConnections</td>
+  <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+  </a></td>
+</tr><tr>
+  <td>serverNumOpenConnections</td>
+  <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+  </a></td>
+</tr><tr>
+  <td>serverConnectionsOpenMax</td>
+  <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+  </a></td>
+</tr><tr>
+  <td>serverConnectionDurationMean, -Max, -StdDev</td>
+  <td>See Jetty <a href="https://archive.eclipse.org/jetty/9.3.9.v20160517/apidocs/org/eclipse/jetty/server/ConnectorStatistics.html">ConnectorStatistics
+  </a></td>
+</tr><tr>
+  <td>serverNumRequests, jdisc.http.requests</td>
+  <td>Number of requests received by the connector</td>
+</tr><tr>
+  <td>serverNumSuccessfulResponses</td>
+  <td>Number of successful responses sent by the connector</td>
+</tr><tr>
+  <td>serverNumFailedResponses</td>
+  <td>Number of error responses sent by the connector</td>
+</tr><tr>
+  <td>serverNumSuccessfulResponseWrites</td>
+  <td>Number of HTTP response chunks that have been successfully written to the network.</td>
+</tr><tr>
+  <td>serverNumFailedResponseWrites</td>
+  <td>Number of HTTP response chunks that have not been successfully written to the network,
+    due to some kind of I/O error.</td>
+</tr><tr>
+  <td>serverBytesReceived</td>
+  <td>Number of bytes the connector has received</td>
+</tr><tr>
+  <td>serverBytesSent</td>
+  <td>Number of bytes the connector has sent</td>
+</tr><tr>
+  <td>serverTimeToFirstByte</td>
+  <td>Time to first byte of response body is sent</td>
+</tr><tr>
+  <td>serverTotalSuccessfulResponseLatency</td>
+  <td>Time to complete successful responses</td>
+</tr><tr>
+  <td>serverTotalFailedResponseLatency</td>
+  <td>Time to complete failed responses</td>
+</tr>
+</tbody>
 </table>
+
+
+
+<h2 id="state-v1-health">/state/v1/health</h2>
+<p>
+<em>Per-process</em> health status is found at <em>http://host:port/state/v1/health</em>
+</p>
+<img src="/assets/img/health-api.svg" width="480px" height="auto" alt="Health API" />
+<p>
+  The Health API is most commonly used for heartbeating. Example:
+</p>
+<pre>{% highlight json %}
+{
+    "status" : {
+        "code" : "up",
+        "message" : "Everything ok here"
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  The status code can either be <code>up</code> or <code>down</code>.
+  Status <code>up</code> means that the service is fully up, ready for serving traffic.
+  If the page cannot be downloaded, a state of down is typically assumed.
+  The message part is optional - it is normally empty if the service is up,
+  while it is set to a textual reason for why it is unavailable, if that is the case.
+</p>
