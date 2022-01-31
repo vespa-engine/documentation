@@ -11,18 +11,18 @@ redirect_from:
 </p>
 <img src="/assets/img/metrics-api.svg" width="983px" height="auto" alt="Metrics interfaces" />
 <ul>
-  <li><code><a href="#state-v1-metrics">/state/v1/metrics</a></code> is the process metrics api,
-    and exposes all metrics from an individual service -
-    here each node runs a container and a content node.</li>
+  <li><code><a href="#metrics-v2-values">/metrics/v2/values</a></code> is an aggregation of
+    <code><a href="#metrics-v1-values">/metrics/v1/values</a></code> for all nodes,
+    hosted on the same endpoint as the container's query API -
+    intended for integration with graphing and alerting services.</li>
   <li><code><a href="#metrics-v1-values">/metrics/v1/values</a></code> is the node metrics api,
     and aggregates metrics for processes running on the node.
     Each Vespa node has a <em>metrics-proxy</em> process running for this API.</li>
   <li><code><a href="#prometheus-v1-values">/prometheus/v1/values</a></code> is the same as
     <code><a href="#metrics-v1-values">/metrics/v1/values</a></code>, in prometheus format.</li>
-  <li><code><a href="#metrics-v2-values">/metrics/v2/values</a></code> is an aggregation of
-    <code><a href="#metrics-v1-values">/metrics/v1/values</a></code> for all nodes,
-    hosted on the same endpoint as the container's query API -
-    intended for integration with graphing and alerting services.</li>
+  <li><code><a href="#state-v1-metrics">/state/v1/metrics</a></code> is the process metrics api,
+    and exposes all metrics from an individual service -
+    here each node runs a container and a content node.</li>
 </ul>
 
 {% include note.html content="
@@ -31,6 +31,142 @@ and <a href='https://github.com/vespa-engine/sample-apps/tree/master/operations/
 sample applications for a practical example of using the APIs.
 These apps also include examples for how to find ports used by using
 <a href='vespa-cmdline-tools.html#vespa-model-inspect'>vespa-model-inspect</a>."%}
+
+
+
+<h2 id="metrics-v2-values">/metrics/v2/values</h2>
+<p>
+  The API is found on all nodes running a Container node at <em>http://host:port/metrics/v2/values</em>
+</p>
+<p>
+  Port is the same as the container's query/feed endpoint, default 8080.
+</p>
+<p>
+  The Vespa container exposes a selected set of metrics for every service on all nodes for the application.
+  The metrics API can, for example, be used to
+  <a href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch">
+    pull Vespa metrics to Cloudwatch</a> using an AWS lambda function.
+</p>
+<p>
+  The <a href="#metrics-v2-values">metrics API</a> exposes a
+  <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">selected
+    set of metrics</a> for the whole application, or for a single node,
+  to allow integration with graphing and alerting services.
+</p>
+<p>
+  The response is a <code>nodes</code> list (see example output below),
+  where each element represents a node in the application and contains:
+</p>
+<ul>
+  <li>The node's <code>hostname</code>.</li>
+  <li>The node's <code>role</code> in the Vespa application.</li>
+  <li>A <code>node</code> element containing the node's system metrics, e.g. cpu usage.</li>
+  <li>A <code>services</code> list containing metrics for the node's services.
+    The format of this list is described <a href="#metrics-v1-values">below</a>.</li>
+</ul>
+<pre>
+$ curl http://localhost:8080/metrics/v2/values
+</pre>
+<pre>{% highlight json %}
+{
+    "nodes": [
+        {
+            "hostname": "vespa-container",
+            "role": "hosts/vespa-container",
+            "services": [
+                {
+                    "name": "vespa.container",
+                    "timestamp": 1634127924,
+                    "status": {
+                        "code": "up",
+                        "description": "Data collected successfully"
+                    },
+                    "metrics": [
+                        {
+                            "values": {
+                                "memory_virt": 3685253120,
+                                "memory_rss": 1441259520,
+                                "cpu": 29.1900152827305
+                            },
+                            "dimensions": {
+                                "serviceId": "container"
+                            }
+                        },
+                        {
+                            "values": {
+                                "jdisc.gc.ms.average": 0
+                            },
+                            "dimensions": {
+                                "gcName": "G1OldGeneration",
+                                "serviceId": "container"
+                            }
+                        },
+{% endhighlight %}</pre>
+
+
+
+
+<h2 id="metrics-v1-values">/metrics/v1/values</h2>
+<p>
+  Vespa provides a <em>node metrics API</em> on each <em>node</em> at
+  <em>http://host:19092/metrics/v1/values</em>
+</p>
+<p>
+  This API can be used for monitoring, using products like
+  <a href="../operations/monitoring.html#pulling-into-prometheus">Prometheus</a> and
+  <a href="../operations/monitoring.html#pulling-into-datadog">DataDog</a>.
+  The response contains a selected set of metrics from each service running on the node.
+  The output is a list of <code>service</code> elements, with name, status and metrics for that service - example:
+</p>
+<pre>{% highlight json %}
+{
+    "services": [
+        {
+            "name": "vespa.logd",
+            "timestamp": 1561469256,
+            "status": {
+                "code": "up",
+                "description": "Data collected successfully"
+            },
+            "metrics": [
+                {
+                    "values": {
+                        "memory_virt": 111796224,
+                        "memory_rss": 14086144,
+                        "cpu": 1.0631117111036
+                    },
+                    "dimensions": {
+                        "metrictype": "system",
+                        "instance": "logd",
+                        "vespaVersion": "7.0.0"
+                    }
+                }
+            ]
+        },
+        ....
+    ]
+}
+{% endhighlight %}</pre>
+<p>
+  The status for each service is either <code>up</code>,
+  <code>down</code> or (in rare cases) <code>unknown</code>.
+  The <code>unknown</code> status is for example used if the service seems to be alive,
+  but does not report any metrics.
+</p>
+
+
+
+<h2 id="prometheus-v1-values">/prometheus/v1/values</h2>
+<p>
+  Vespa provides a <em>node metrics API</em> on each <em>node</em> at <em>http://host:19092/prometheus/v1/values</em>
+</p>
+<p>
+  The prometheus API on each node exposes metrics in a text based
+  <a href="https://prometheus.io/docs/instrumenting/exposition_formats/">format</a> that can be
+  scraped by <a href="https://prometheus.io/docs/introduction/overview/">Prometheus</a>.
+  The metrics is the same as in <code><a href="#metrics-v1-values">/metrics/v1/values</a></code>.
+  See <a href="../operations/monitoring.html">monitoring</a> for a Prometheus / Grafana example.
+</p>
 
 
 
@@ -333,143 +469,6 @@ public class HitCountSearcher extends Searcher {
 </tr>
 </tbody>
 </table>
-
-
-
-<h2 id="metrics-v1-values">/metrics/v1/values</h2>
-<p>
-  Vespa provides a <em>node metrics API</em> on each <em>node</em> at
-  <em>http://host:19092/metrics/v1/values</em>
-</p>
-<p>
-  This API can be used for monitoring, using products like
-  <a href="../operations/monitoring.html#pulling-into-prometheus">Prometheus</a> and
-  <a href="../operations/monitoring.html#pulling-into-datadog">DataDog</a>.
-  The response contains a selected set of metrics from each service running on the node.
-  The output is a list of <code>service</code> elements, with name, status and metrics for that service - example:
-</p>
-<pre>{% highlight json %}
-{
-    "services": [
-        {
-            "name": "vespa.logd",
-            "timestamp": 1561469256,
-            "status": {
-                "code": "up",
-                "description": "Data collected successfully"
-            },
-            "metrics": [
-                {
-                    "values": {
-                        "memory_virt": 111796224,
-                        "memory_rss": 14086144,
-                        "cpu": 1.0631117111036
-                    },
-                    "dimensions": {
-                        "metrictype": "system",
-                        "instance": "logd",
-                        "vespaVersion": "7.0.0"
-                    }
-                }
-            ]
-        },
-        ....
-    ]
-}
-{% endhighlight %}</pre>
-<p>
-  The status for each service is either <code>up</code>,
-  <code>down</code> or (in rare cases) <code>unknown</code>.
-  The <code>unknown</code> status is for example used if the service seems to be alive,
-  but does not report any metrics.
-</p>
-
-
-
-<h2 id="prometheus-v1-values">/prometheus/v1/values</h2>
-<p>
-  Vespa provides a <em>node metrics API</em> on each <em>node</em> at <em>http://host:19092/prometheus/v1/values</em>
-</p>
-<p>
-  The prometheus API on each node exposes metrics in a text based
-  <a href="https://prometheus.io/docs/instrumenting/exposition_formats/">format</a> that can be
-  scraped by <a href="https://prometheus.io/docs/introduction/overview/">Prometheus</a>.
-  The metrics is the same as in <code><a href="#metrics-v1-values">/metrics/v1/values</a></code>.
-  See <a href="../operations/monitoring.html">monitoring</a> for a Prometheus / Grafana example.
-</p>
-
-
-
-<h2 id="metrics-v2-values">/metrics/v2/values</h2>
-<p>
-  The Vespa container exposes a selected set of metrics for every service on all nodes for the application.
-  The metrics API can, for example, be used to
-  <a href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch">
-    pull Vespa metrics to Cloudwatch</a> using an AWS lambda function.
-</p>
-<p>
-  The <a href="#metrics-v2-values">metrics API</a> exposes a
-  <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">selected
-    set of metrics</a> for the whole application, or for a single node,
-  to allow integration with graphing and alerting services.
-</p>
-<p>
-  For self-hosted Vespa, the URL is:
-  <em>http://&lt;container-host&gt;:&lt;port&gt;/metrics/v2/values</em>, where
-  the <em>port</em> is the same as for searching, e.g. 8080.
-</p>
-<p>
-  The response is a <code>nodes</code> list, where each element represents a node in the application and contains:
-</p>
-<ul>
-  <li>The node's <code>hostname</code>.</li>
-  <li>The node's <code>role</code> in the Vespa application.</li>
-  <li>A <code>node</code> element containing the node's system metrics, e.g. cpu
-  usage.</li>
-  <li>A <code>services</code> list containing metrics for the node's services. The format
-  of this list is described <a href="#metrics-v1-values">below</a>.</li>
-</ul>
-<p>
-  For example:
-</p>
-<pre>
-$ curl http://localhost:8080/metrics/v2/values
-</pre>
-<pre>{% highlight json %}
-{
-    "nodes": [
-        {
-            "hostname": "vespa-container",
-            "role": "hosts/vespa-container",
-            "services": [
-                {
-                    "name": "vespa.container",
-                    "timestamp": 1634127924,
-                    "status": {
-                        "code": "up",
-                        "description": "Data collected successfully"
-                    },
-                    "metrics": [
-                        {
-                            "values": {
-                                "memory_virt": 3685253120,
-                                "memory_rss": 1441259520,
-                                "cpu": 29.1900152827305
-                            },
-                            "dimensions": {
-                                "serviceId": "container"
-                            }
-                        },
-                        {
-                            "values": {
-                                "jdisc.gc.ms.average": 0
-                            },
-                            "dimensions": {
-                                "gcName": "G1OldGeneration",
-                                "serviceId": "container"
-                            }
-                        },
-{% endhighlight %}</pre>
 
 
 
