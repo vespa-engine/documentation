@@ -85,10 +85,10 @@ Steps / requirements:
 <pre>
 &lt;metrics&gt;
     &lt;consumer id="my-cloudwatch"&gt;
-      &lt;metric-set id="default" /&gt;
-      &lt;cloudwatch region="us-east-1" namespace="my-vespa-metrics"&gt;
-          &lt;shared-credentials file="/path/to/credentials-file" /&gt;
-      &lt;/cloudwatch&gt;
+        &lt;metric-set id="default" /&gt;
+        &lt;cloudwatch region="us-east-1" namespace="my-vespa-metrics"&gt;
+            &lt;shared-credentials file="/path/to/credentials-file" /&gt;
+        &lt;/cloudwatch&gt;
     &lt;/consumer&gt;
 &lt;/metrics&gt;
 </pre>
@@ -113,7 +113,7 @@ Steps / requirements:
   <li>
     <p><strong>Run the Quick Start:</strong></p>
     <p>
-      Complete steps <a href="../vespa-quick-start.html">1-6</a> (or 1-10), but skip the removal step.
+      Complete steps <a href="../vespa-quick-start.html">1-7</a> (or 1-10), but skip the removal step.
       Clone repository:
     </p>
     <div class="pre-parent">
@@ -126,10 +126,13 @@ $ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git && \
   </li>
   <li>
     <p><strong>Create a network and add the <em>vespa</em> container to it:</strong></p>
-<pre data-test="exec">
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+      <pre data-test="exec">
 $ docker network create --driver bridge monitoring && \
   docker network connect monitoring vespa
 </pre>
+    </div>
     <p>
       This creates the <em>monitoring</em> network and attaches the vespa container to it.
       Find details in
@@ -137,39 +140,21 @@ $ docker network create --driver bridge monitoring && \
     </p>
   </li>
   <li>
-    <p><strong>Launch Prometheus and Grafana:</strong></p>
+    <p><strong>Launch Prometheus:</strong></p>
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker-compose up -d prometheus
+$ docker run --detach --name sample-apps-prometheus --hostname prometheus \
+  --network monitoring \
+  --publish 9090:9090 \
+  --volume `pwd`/prometheus/prometheus-selfhosted.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus
 </pre>
     </div>
-    <div class="pre-parent">
-      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ docker-compose up -d grafana
-</pre>
-    </div>
     <p>
-      This launches <a href="https://prometheus.io/">Prometheus</a> and
-      <a href="https://grafana.com/oss/grafana/">Grafana</a>
-      with configurations defined in <em>docker-compose.yml</em>.
-      Prometheus is a time-series database, which holds a series of values associated with a timestamp.
-      Grafana is a visualisation tool that can be used to easily make representations of important metrics surrounding Vespa.
-      The configuration for both of these include some default values and connects the two of them together.
-    </p>
-  </li>
-  <li>
-    <p><strong>Check that Grafana and Prometheus are running:</strong></p>
-    <p>
-      Open <a href="http://localhost:3000/" data-skip-link-check="true" data-proofer-ignore>
-      http://localhost:3000/</a> and find the Grafana login screen - log in with admin/admin (skip changing password).
-      From the list on the left, click Manage under Dashboards (the symbol with 4 blocks),
-      then click the <em>Vespa Detailed Monitoring Dashboard</em>.
-      The dashboard displays detailed Vespa metrics. (empty for now).
-    </p>
-    <p>
-      Now open Prometheus at <a href="http://localhost:9090/" data-skip-link-check="true" data-proofer-ignore>
+      <a href="https://prometheus.io/">Prometheus</a> is a time-series database,
+      which holds a series of values associated with a timestamp.
+      Open Prometheus at <a href="http://localhost:9090/" data-skip-link-check="true" data-proofer-ignore>
       http://localhost:9090/</a>.
       One can easily find what data Prometheus has, the input box auto-completes,
       e.g. enter <em>feed_operations_rate</em> and click <em>Execute</em>.
@@ -177,21 +162,54 @@ $ docker-compose up -d grafana
     </p>
   </li>
   <li>
-    <p><strong>Start the Random Data Feeder:</strong></p>
+    <p><strong>Launch Grafana:</strong></p>
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ docker-compose up -d random-data-feeder
+      <pre data-test="exec">
+$ docker run --detach --name sample-apps-grafana \
+  --network monitoring \
+  --publish 3000:3000 \
+  --volume `pwd`/grafana/provisioning:/etc/grafana/provisioning \
+  grafana/grafana
 </pre>
     </div>
     <p>
-      This builds and starts a
+      This launches <a href="https://grafana.com/oss/grafana/">Grafana</a>.
+      Grafana is a visualisation tool that can be used to easily make representations of important metrics surrounding Vespa.
+      Open <a href="http://localhost:3000/" data-skip-link-check="true" data-proofer-ignore>
+      http://localhost:3000/</a> and find the Grafana login screen - log in with admin/admin (skip changing password).
+      From the list on the left, click <em>Browse</em> under <em>Dashboards</em> (the symbol with 4 blocks),
+      then click the <em>Vespa Detailed Monitoring Dashboard</em>.
+      The dashboard displays detailed Vespa metrics - empty for now.
+    </p>
+  </li>
+  <li>
+    <p><strong>Build the Random Data Feeder:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ docker build album-recommendation-random-data --tag random-data-feeder
+</pre>
+    </div>
+    <p>
+      This builds the
       <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/album-recommendation-monitoring/album-recommendation-random-data">
         Random Data Feeder</a> -
       it generates random sets of data and puts them into the Vespa instance.
       Also, it repeatedly runs queries, for Grafana visualisation.
       Compiling the Random Data Feeder takes a few minutes.
     </p>
+  </li>
+  <li>
+    <p><strong>Run the Random Data Feeder:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+      <pre data-test="exec">
+$ docker run --detach --name sample-apps-random-data-feeder \
+  --network monitoring \
+  random-data-feeder
+</pre>
+    </div>
   </li>
   <li>
     <p><strong>Check the updated Grafana metrics:</strong></p>
@@ -208,8 +226,19 @@ $ docker-compose up -d random-data-feeder
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
-$ docker rm -f vespa; docker-compose down
+$ docker rm -f vespa \
+  sample-apps-random-data-feeder \
+  sample-apps-grafana \
+  sample-apps-prometheus
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="after">
+$ docker network rm monitoring
 </pre>
     </div>
   </li>
 </ol>
+
+<script src="/js/pre_copy.js"></script>
