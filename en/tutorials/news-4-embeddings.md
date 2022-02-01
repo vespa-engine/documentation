@@ -463,4 +463,3 @@ these to recommend news items to users. We'll start feeding these in
 the [next part of the tutorial](news-5-recommendation.html).
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>

@@ -471,4 +471,3 @@ Vespa integrates with several popular machine learning libraries which can be us
  - [Ranking with ONNX Models](../onnx.html) 
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>

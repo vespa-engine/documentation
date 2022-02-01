@@ -403,4 +403,3 @@ In the [next part of the tutorial](news-7-recommendation-with-parent-child.html)
 we'll address what to do when new users without any history visit our recommendation system.
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>

@@ -476,4 +476,3 @@ Check out the [Improving Text Search through ML](text-search-ml.html).
 [^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>

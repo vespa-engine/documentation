@@ -378,4 +378,3 @@ tensors, we also introduced ranking with tensor expressions. In the next part
 of the tutorial, we will start using a machine-learned model in ranking.
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>

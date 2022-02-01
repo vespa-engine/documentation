@@ -272,4 +272,3 @@ of the tutorial](news-2-basic-feeding-and-query.html), we'll start building
 from this foundation.
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>

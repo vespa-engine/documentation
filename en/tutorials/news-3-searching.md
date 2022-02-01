@@ -491,4 +491,3 @@ content. In the [next part of the tutorial](news-4-embeddings.html), we'll
 start with the basics for transforming this into a recommendation system.
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>

@@ -647,4 +647,3 @@ allows for custom logic during query processing, so we only
 need one pass.
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>
