@@ -452,4 +452,3 @@ the [next part of the tutorial](news-3-searching.html), we'll explore searching 
 sorting, grouping, and ranking results.
 
 <script src="/js/process_pre.js"></script>
-<script src="/js/pre_copy.js"></script>
