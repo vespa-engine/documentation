@@ -84,6 +84,57 @@ Set the flag to true by adding the following below the root <code>services</code
 Note that this flag affects rendering both in documents fetched/visited, and
 in search results; but both the new and old formats are accepted as feed input.
 
+<h2 id="feature-data">Summary-features wrapped in "rankingExpression"</h2>
+<p>
+In Vespa 7, if your ranking profile wanted a function
+<code>foobar</code> returned in summary-features (or match-features),
+it would be rendered as <code>rankingExpression(foobar)</code> in
+the output.
+</p>
+<p>
+For programmatic use, the <code>FeatureData</code> class has
+extra checking to allow lookup with
+<code>getDouble("foobar")</code> or
+<code>getTensor("foobar")</code>, but now it's present and rendered
+with just the original name as specified.
+</p>
+<p>
+If your applications needs the JSON rendering to look exactly
+as in Vespa 7, you can specify that in the rank profile.
+For example, with this in your schema:
+    <pre class="code">
+	rank-profile whatever {
+		function lengthScore() { expression: matchCount(title)/fieldLength(title) }
+		summary-features {
+			matchCount(title)
+			lengthScore
+			...
+    </pre>
+could, in Vespa 7, yield JSON output containing:
+    <pre class="code">
+	summaryfeatures: {
+		matchCount(title): 1,
+		rankingExpression(lengthScore): 0.25,
+		...
+    </pre>
+in Vespa 8, you would instead get the expected:
+    <pre class="code">
+	summaryfeatures: {
+		matchCount(title): 1,
+		lengthScore: 0.25,
+		...
+    </pre>
+But to get the old behavior you can specify:
+    <pre class="code">
+	rank-profile whatever {
+		function lengthScore() { expression: matchCount(title)/fieldLength(title) }
+		summary-features {
+			matchCount(title)
+			rankingExpression(lengthScore)
+			...
+    </pre>
+which gives you the same output as before, if you really need that.
+
 <h2 id="xml-rendering">Discontinuation of XML rendering</h2>
 <p>
 After Vespa 8 is released we will remove all code supporting XML rendering
