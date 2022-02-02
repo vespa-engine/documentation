@@ -60,6 +60,9 @@ in the query (usually via a <a href="query-profiles.html">query profile</a>).
 Fields with the type <code>position</code> would in Vespa 7 be rendered
 using the internal fields "x" and "y". These are integers representing microdegrees,
 aka geographical degrees times 1 million, of longitude (for x) and latitude (for y).
+Also, any field <em>foo</em> of type <code>position</code> would trigger addition of
+two extra synthetic summary fields <em>foo.position</em> and <em>foo.distance</em>
+(see below for details).
 </p>
 <p>
 In Vespa 8, positions will be rendered with two JSON fields "lat" and "lng",
@@ -81,8 +84,33 @@ Set the flag to true by adding the following below the root <code>services</code
         &lt;/legacy&gt;
       </pre>
 </p>
+<p>
 Note that this flag affects rendering both in documents fetched/visited, and
 in search results; but both the new and old formats are accepted as feed input.
+</p>
+<p>
+A closely related change is the removal of two synthetic summary fields
+which would be returned in search results.  For example with this in schema:
+<pre class="code">
+        field mainloc type position {
+            indexing: attribute | summary
+        }
+</pre>
+Vespa 7 would include the <em>mainloc</em> summary field, but also
+<em>mainloc.position</em> and <em>mainloc.distance</em>; the latter
+only when the query actually had a position to take the distance from.
+</p>
+<p>
+The first of these (<em>mainloc.position</em> in this case) was
+mainly useful for producing XML output in older Vespa versions, and
+now contains just the same information as the <em>mainloc</em>
+summary field.  The second (<em>mainloc.distance</em> in this case)
+would return a distance in internal units, and can be replaced by
+a summary feature - here <code>distance(mainloc)</code> would
+give the same number, while <code>distance(mainloc).km</code> would
+be the recommended replacement with suitable code changes.
+<p>
+
 
 <h2 id="feature-data">Summary-features wrapped in "rankingExpression"</h2>
 <p>
