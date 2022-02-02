@@ -14,6 +14,7 @@ const handleResults = (data) => {
       blog: "https://blog.vespa.ai",
       vespaai: "https://vespa.ai",
       vespaapps: "https://github.com/vespa-engine/sample-apps/tree/master",
+      pyvespa: "https://pyvespa.readthedocs.io/en/latest",
     };
 
     const sourceName = {
@@ -22,6 +23,7 @@ const handleResults = (data) => {
       blog: "Blog",
       vespaai: "Vespa.ai",
       vespaapps: "Vespa Sample Apps",
+      pyvespa: "pyvespa",
     };
 
     const highlightWeight = 10;
