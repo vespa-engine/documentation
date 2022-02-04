@@ -49,7 +49,7 @@ const handleLocationQuery = () => {
     result.innerHTML = `Searching for '${query}' ...`;
     fetch(
         encodeURI("https://doc-search.vespa.oath.cloud/search/?yql=" +
-            "select * from doc where [{\"grammar\": \"weakAnd\"}]userInput(@input)" +
+            "select * from doc where [{grammar: \"weakAnd\"}]userInput(@input)" +
             "&hits=25&ranking=documentation&locale=en-US&input=" + query)
     )
           .then((res) => res.json())
