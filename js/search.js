@@ -48,7 +48,9 @@ const handleLocationQuery = () => {
     document.getElementById("searchinput").value = query;
     result.innerHTML = `Searching for '${query}' ...`;
     fetch(
-      `https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22grammar%22%3A%20%22weakAnd%22%7D%5DuserInput(@input)%3B&hits=25&ranking=documentation&locale=en-US&input=${escape(query)}`
+        encodeURI("https://doc-search.vespa.oath.cloud/search/?yql=" +
+            "select * from doc where [{\"grammar\": \"weakAnd\"}]userInput(@input)" +
+            "&hits=25&ranking=documentation&locale=en-US&input=" + query)
     )
           .then((res) => res.json())
           .then((res) => handleResults(res.root.children))
