@@ -22,8 +22,8 @@ const handleQuery = (query) => {
     document.getElementById("hits").innerHTML = "";
     result.innerHTML = `Searching for '${query}' ...`;
   fetch(
-  `https://doc-search.vespa.oath.cloud/search/?term=${escape(query)}`
-)
+      encodeURI("https://doc-search.vespa.oath.cloud/search/?term=" + query)
+  )
       .then((res) => res.json())
       .then((res) => { const children = (res.root.children)? res.root.children : [];
         handleSuggestionResults(children.filter(child => child.fields.sddocname == "term"));
