@@ -1,0 +1,301 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: Test Reference
+---
+
+<p>
+  This is the reference for basic HTTP tests.
+  These tests verify the behaviour of a Vespa application by using its HTTP interfaces.
+  The tests are located in the application package, simplifying management and support.
+</p>
+<p>
+  Refer to the <a href="../testing.html#system-testing-with-vespa-cli">testing guide</a> for how to run system tests
+  using the <a href="../vespa-cli.html">Vespa CLI</a>.
+</p>
+<p>
+  This reference also defines staging- and production tests,
+  that can be implemented in CI/CD platforms for safe deployments.
+</p>
+
+
+
+<h2 id="test-format">Test format</h2>
+<p>
+  Each test is described by a JSON file, and may include other files using relative paths.
+  The placement of a test file, in the <code>src/test/application/tests/</code> directory,
+  determines what test suite it belongs to, and hence in which production deployment phase it is run.
+  Look further down for a description of the various test suites.
+  The sub-directories are <code>system-test</code>, <code>staging-setup</code>,
+  <code>staging-test</code>, and <code>production-test</code>:
+</p>
+<pre>
+$ ls -1 src/test/application/tests/*/*
+  
+  src/tests/application/tests/production-test/metrics-test.json
+  src/tests/application/tests/staging-setup/set-up-old-documents.json
+  src/tests/application/tests/staging-test/verify-search-still-works.json
+  src/tests/application/tests/system-test/feed-and-search-test.json
+  src/tests/application/tests/system-test/ranking-test.json
+</pre>
+
+
+
+<h3 id="test-file-structure">Test file structure</h3>
+<p>
+  Each <code>.json</code> file directly under any of the directories listed above describes one test.
+  Each test consists of a series of steps, and each step specifies an HTTP request to run,
+  and some assertions about the response to obtain.
+  Some additional properties may also be specified on both the test and step levels.
+  A full example, with comments:
+</p>
+<pre>
+{
+    "name": "my test",
+    "defaults": {
+        "cluster": "default",
+        "parameters": {
+            "timeout": "1.618s"
+        }
+    },
+    "steps": [
+        {
+            "name": "clear existing documents",
+            "request": {
+                "method": "DELETE",
+                "uri": "/document/v1/",
+                "parameters": {
+                    "cluster": "music",
+                    "selection": "true"
+                }
+            }
+        },
+        {
+            "name": "feed foo",
+            "request": {
+                "method": "POST",
+                // should contain payload as expected by /document/v1/
+                "body": "foo/body.json",
+                // specify only the path and query for Vespa requests
+                "uri": "/document/v1/test/music/docid/foo?timeout=8s",
+                // JSON object file; merged with query from "uri"
+                "parameters": "foo/parameters.json"
+            }
+            // no response spec: just assert code 200
+        },
+        {
+            "name": "query for foo",
+            "request": {
+                // no "uri": defaults to "/search/"
+                "parameters": {
+                    "query": "artist: foo"
+                }
+            },
+            "response": {
+                "body": {
+                    "root": {
+                        "children": [
+                            // assert "children" has a single element ...
+                            {
+                                // ... which has the field "fields" ...
+                                "fields": {
+                                    // ... where the field "artist" is "Foo Fighters" ...
+                                    "artist": "Foo Fighters"
+                                },
+                                // ... and the field "relevance" close to 0.381862383599
+                                "relevance": 0.381862383599
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}
+</pre>
+
+
+<h3 id="test-json-specification">Test JSON specification</h3>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:100px;font-weight:bold">Name</th>
+    <th style="width:100px">Parent</th>
+    <th style="width:100px">Type</th>
+    <th style="width:150px">Default</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td style="font-weight:bold">name</td>
+    <td>root<br>step</td>
+    <td>string</td>
+    <td>file name, step <em>n</em></td>
+    <td>Name used for display purposes in the test report. The file name is used by default
+        for the test, while the 1-indexed "step n" is used for steps.</td>
+  </tr><tr>
+    <td style="font-weight:bold">defaults</td>
+    <td>root</td>
+    <td>object</td>
+    <td></td>
+    <td>Default settings for all steps in this test. May be overridden in each step.</td>
+  </tr><tr>
+    <td style="font-weight:bold">steps</td>
+    <td>root</td>
+    <td>array</td>
+    <td></td>
+    <td>The non-empty list of steps that constitute this test.</td>
+  </tr><tr>
+    <td style="font-weight:bold">request</td>
+    <td>step</td>
+    <td>object</td>
+    <td></td>
+    <td>A specification of a request to send, to Vespa, or to an external service.</td>
+  </tr><tr>
+    <td style="font-weight:bold">cluster</td>
+    <td>defaults request</td>
+    <td>string</td>
+    <td></td>
+    <td>The name of the Vespa cluster to send a request to, as specified in <a href="services.html">services.xml</a>.
+        If this is not specified, and the application has a single container cluster, this is used.</td>
+  </tr><tr>
+    <td style="font-weight:bold">method</td>
+    <td>request</td>
+    <td>string</td>
+    <td>"GET"</td>
+    <td>The HTTP method to use for a request.</td>
+  </tr><tr>
+    <td style="font-weight:bold">uri</td>
+    <td>request</td>
+    <td>string</td>
+    <td>"/search/"</td>
+    <td>When this is path + (encoded) query, the host is determined by the specified cluster;
+        otherwise, it must be an absolute URI (with scheme), and its host is used.
+        Query parameters specified here override those specified in the defaults.</td>
+  </tr><tr>
+    <td style="font-weight:bold">parameters</td>
+    <td>defaults request</td>
+    <td>string object</td>
+    <td></td>
+    <td>HTTP request query parameters. The values should not be encoded. These are merged
+        with parameters from the specified URI, and override those specified in the defaults.
+        If the value is a string, it must be a relative file reference to a parameters object.</td>
+  </tr><tr>
+    <td style="font-weight:bold">body</td>
+    <td>request response</td>
+    <td>string object</td>
+    <td></td>
+    <td>The body for a request, or the partial body (see <a href="#json-matching">matching</a>)
+        for a response. If the value is a string, it must be a relative file reference to
+        a JSON object to be used in its place.</td>
+  </tr><tr>
+    <td style="font-weight:bold">response</td>
+    <td>step</td>
+    <td>object</td>
+    <td></td>
+    <td>A specification for assertions to make on the body of the HTTP response obtained
+        by executing the HTTP request in the same step.</td>
+  </tr><tr>
+    <td style="font-weight:bold">code</td>
+    <td>response</td>
+    <td>number</td>
+    <td>200</td>
+    <td>The status code the response should have.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+<h3 id="json-matching">JSON matching</h3>
+<p>
+  All requests and responses must be in JSON format.
+  The tests allow simple JSON verification,
+  by describing <em>what should be present</em> in the actual response.
+  This is done by specifying a JSON structure, a <em>template</em>, for each response,
+  and requiring each field present in the template to match fields in the actual response.
+  Unmatched fields result in test failure, with the following rules:
+</p>
+<ul>
+  <li>Objects must contain all listed fields, and may also contain unlisted ones.</li>
+  <li>Arrays must match element-by-element.</li>
+  <li>Numbers must match within precision <code>1e-9</code>.</li>
+  <li>All other values must match exactly.</li>
+</ul>
+<p>
+  Note that the empty object <code>{ }</code> matches any other object,
+  and can be used to fill elements of an array that require no further validation.
+</p>
+
+
+<h2 id="system-tests">System tests</h2>
+<p>
+  Tests located under <code>src/test/application/tests/system-test</code> are <em>system tests</em>.
+  A system test is a functional test of a Vespa deployment,
+  and each test in a system test suite should be self-contained.
+  To achieve this, the first step should be to clear all existing documents.
+  The next steps then set up a particular state, which is then verified by the final steps.
+</p>
+<p>
+  To run a system test, configure the Vespa CLI as in the
+  <a href="../getting-started.html">getting started guides</a>, and then run:
+</p>
+<pre>
+$ vespa deploy --wait 600
+$ vespa test src/test/application/tests/system-test/feed-and-search-test.json
+</pre>
+<p>
+  Refer to an example system test in
+  <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/src/test/application/tests/system-test/feed-and-search-test.json">
+    feed-and-search-test.json</a>, or check the <a href="#test-file-structure">example</a> above.
+</p>
+
+
+
+<h2 id="staging-tests">Staging tests</h2>
+<p>
+  Tests under <code>src/test/application/tests/staging-setup/</code>
+  and <code>src/test/application/tests/staging-test/</code> together comprise a
+  staging test suite.
+</p>
+<p>
+  The HTTP requests in the staging setup and test represent the clients using the application,
+  and should be kept in sync with these.
+  A staging test can be used to verify both upgrades of clients, or the application itself:
+</p>
+<ul>
+  <li>To verify an upgrade of clients, change only the <em>staging-test</em> files, and run both phases
+    against the same application.</li>
+  <li>
+    To verify an upgrade of the application, keep the tests fixed, but change the application itself, and
+    deploy that change between running the <em>staging-setup</em> files and the <em>staging-test</em> files.
+    An application upgrade includes both deploying a new application package and upgrading Vespa.
+  </li>
+</ul>
+<p>Example:</p>
+<pre>
+$ vespa deploy --wait 600
+$ vespa test src/test/application/tests/staging-setup
+
+$ # make changes to the application
+
+$ vespa deploy --wait 600
+$ vespa test src/test/application/tests/staging-test
+</pre>
+
+
+
+<h2 id="production-tests">Production tests</h2>
+<p>
+  Tests under <code>src/test/application/tests/production/</code> can be executed in a production test step.
+</p>
+<pre>
+{
+    "steps": [
+        {
+            "request": {
+                "uri": "https://my.external.service/metrics/?query=customer-engagement"
+            }
+        }
+    ]
+}
+</pre>
