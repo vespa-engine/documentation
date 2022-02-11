@@ -1,0 +1,104 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: Testing with Java JUnit tests
+---
+
+<p>
+  This is the Vespa Testing reference for <a href="../testing.html">Vespa application system tests</a>
+  written in Java, as JUnit 5 unit test.
+</p>
+<p>
+  These tests verify the behaviour of a Vespa application by using its HTTP interfaces.
+  To write tests without Java, see <a href="testing.html">basic HTTP test reference</a>.
+</p>
+<p>
+  See <a href="#running-tests">below</a> for how to run the tests.
+</p>
+
+
+
+<h2 id="test-suites">Test suites</h2>
+<p>
+  The <a href="../testing.html">testing documentation</a> defines three test scenarios,
+  comprised of four test code categories. The <em>system test framework</em> in
+  <code><a href="https://search.maven.org/artifact/com.yahoo.vespa/tenant-cd-api">com.yahoo.vespa:tenant-cd-api</a></code>
+  uses Java annotations to declare what category a JUnit test class belongs to.
+  To run tests with Maven belonging to a specific category, a JUnit 5 test <em>tag</em> must be specified:
+</p>
+<pre>
+$ mvn test -D test.categories=system -D vespa.test.config=/path-to/test-config.json
+</pre>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:200px;font-weight:bold">Category</th>
+    <th style="width:200px">Annotation</th>
+    <th style="width:200px">JUnit tag</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td style="font-weight:bold">System test</td>
+    <td>@SystemTest</td>
+    <td>system</td>
+    <td>Independent, functional tests</td>
+  </tr><tr>
+    <td style="font-weight:bold">Staging setup</td>
+    <td>@StagingSetup</td>
+    <td>staging-setup</td>
+    <td>Set state before upgrade</td>
+  </tr><tr>
+    <td style="font-weight:bold">Staging test</td>
+    <td>@StagingTest</td>
+    <td>staging</td>
+    <td>Verify state after upgrade</td>
+  </tr><tr>
+    <td style="font-weight:bold">Production test</td>
+    <td>@ProductionTest</td>
+    <td>production</td>
+    <td>Verify domain specific metrics</td>
+  </tr>
+</table>
+<p>
+For an example including system and staging tests, check out
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/">
+  this sample application test suite</a>.
+</p>
+
+
+
+<h2 id="running-tests">Running tests</h2>
+<p>
+  The <em><a href="https://docs.vespa.ai/en/vespa-cli.html">Vespa CLI</a></em> makes it easy to set up a test
+  deployment on the local machine, and tests can then be run by pointing the test runtime at this deployment:
+</p>
+<pre>
+$ vespa deploy --wait 600
+$ mvn test -D test.categories=system -D vespa.test.config=/path-to/test-config.json
+</pre>
+<p>
+  The test config file should define the endpoints for each of the clusters in
+  <a href="services.html">services.xml</a> as fields under a <code>localEndpoints</code> JSON object, like:
+</p>
+<pre>
+{
+    "localEndpoints": {
+        "query-service": "http://localhost:8080/",
+        "feed-service" : "http://localhost:8081/"
+    }
+}
+</pre>
+{% include note.html content="System tests typically clear all existing documents as a first step,
+to ensure they are independent of each other."%}
+<p>
+  To run a staging test, set up a test deployment with old code, run setup, upgrade the deployment, run verification:
+</p>
+<pre>
+$ # load old application code, e.g., using git, then deploy it
+$ vespa deploy --wait 600
+$ mvn test -D test.categories=staging-setup -D vespa.test.config=/path-to/test-config.json
+$ # make changes to the application, or use, e.g., git to check out the new code, then deploy again
+$ vespa deploy --wait 120
+$ mvn test -D test.categories=staging -D vespa.test.config=/path-to/test-config.json
+</pre>

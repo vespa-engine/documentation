@@ -1,0 +1,202 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Testing"
+redirect_from:
+- /documentation/testing.html
+---
+
+<p>
+See <a href="https://cloud.vespa.ai/en/automated-deployments.html">automated deployments</a>
+for how to implement system, staging and production verification tests using Vespa Cloud.
+</p>
+
+
+
+<h2 id="unit-testing-using-application">Unit testing using Application</h2>
+<p>
+The <code><a href="https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html">
+Application</a></code> class is useful when writing unit tests.
+Application uses the application package configuration and set up a container instance for testing.
+The <code><a href="https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/container/JDisc.html">
+JDisc</a></code> class that is accessed by
+the test through <code><a href="https://javadoc.io/page/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html#getJDisc-java.lang.String-">app.getJDisc(clusterName)</a></code> -
+this class has methods for using all common <a href="reference/component-reference.html">component types</a>.
+</p><p>
+Refer to <a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/MetalSearcherTest.java">
+MetalSearcherTest.java</a> for example use.
+Notice how the test disables the network layer in order to run tests in parallel.
+</p>
+{% include note.html content="<code>Application</code> does not set up <em>content</em> nodes, only <em>container</em>.
+It is hence fully stateless, and intended for unit testing the functionality of application components.
+The <em>ClusterSearcher</em> will not find any content nodes and log errors if invoked.
+Write a <em>System Test</em> to test end-to-end features like search."%}
+<p>
+For prototyping, enable the network interface,
+instantiate the Container and run requests using a browser:
+</p>
+<pre>{% highlight java%}
+public class ApplicationMain {
+  @Test
+  public static void main(String[] args) throws Exception {
+    try (com.yahoo.application.Application app = com.yahoo.application.Application.fromApplicationPackage(
+        FileSystems.getDefault().getPath("src/main/application"),
+        Networking.enable)) {
+      app.getClass();
+      Thread.sleep(Long.MAX_VALUE);
+    }
+  }
+}
+{% endhighlight %}</pre>
+
+
+
+<h2 id="unit-testing-configurable-components">Unit Testing Configurable Components</h2>
+<p>
+How to programmatically build configuration instances for unit testing.
+Read the <a href="developer-guide.html">Developer Guide</a> first.
+</p><p>
+To be able to write self-contained unit tests using configuration classes
+generated from a schema, it is necessary to instantiate the configuration
+without the use of for instance an external services file. Configuration classes
+contain their own builders which are useful for solving exactly this problem. By
+using builders, the configuration will be created as an immutable, type-safe
+object, exactly the same as used during deployment.
+</p>
+
+
+<h3 id="definition">Configuration schema</h3>
+<p>
+Assume the config definition file <code>demo.def</code> with the following schema:
+</p>
+<pre>
+package=com.mydomain.demo
+
+toplevel[].term string
+toplevel[].number int
+toplevel[].largenumber long
+toplevel[].secondlevel[].name string
+toplevel[].secondlevel[].magnitude double
+
+simplename string
+simplenumber int
+simplevaluearray[] string
+
+coordinate.x double
+coordinate.y double
+coordinate.name string
+</pre>
+<p>
+In other words, the configuration class will be <code>com.mydomain.demo.DemoConfig</code>,
+and it will contain an array of structures,
+a couple of top-level primitives (<em>simplename</em> and <em>simplenumber</em>),
+an array of primitive values (<em>simplevaluearray</em>) and a structure (<em>coordinate</em>).
+</p>
+
+
+<h3 id="using-configuration-builders">Using configuration builders</h3>
+<p>
+All structured objects in the cloud configuration system have their own
+Builder as a nested class. So, in the above example, one would get
+<code>DemoConfig.Builder</code> for the complete configuration class,
+<code>DemoConfig.Toplevel.Builder</code> for the top-level array,
+<code>DemoConfig.Toplevel.Secondlevel.Builder</code> for the inner array, and
+<code>DemoConfig.Coordinate.Builder</code> for the structure.
+</p><p>
+A configuration object, or substructure, is easiest instantiated using a
+constructor accepting the corresponding <em>Builder</em> class, an array of structures
+should use the constructor accepting an array of <em>Builder</em> instances, and an
+array of primitive values simply accepts a java.util.Collection of the
+corresponding primitive value class:
+</p>
+<pre>
+package com.mydomain.demo;
+
+import static org.junit.Assert.*;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import org.junit.Test;
+
+import static com.mydomain.demo.DemoConfig.Toplevel;
+import static com.mydomain.demo.DemoConfig.Toplevel.Secondlevel;
+import static com.mydomain.demo.DemoConfig.Coordinate;
+
+public class DemoTest {
+
+    /**
+     * An example showing how to build a relatively complex, mixed type
+     * configuration including arrays of primitive elements, nested arrays and
+     * arrays of structures and so on.
+     */
+    @Test
+    public final void test() {
+        // We need use builders to safely create the graph of immutable
+        // configuration objects. Each generated configuration class contains
+        // the builder for creating an instance of itself. This pattern is
+        // repeated for structures. So, in our case, we have four structured
+        // levels. The complete configuration class, DemoConfig, the top-level,
+        // nested array, Toplevel, the contained array, Secondlevel and the
+        // structure Coordinate. This leaves us with using four distinct
+        // builder classes: DemoConfig.Builder, Toplevel.Builder,
+        // Secondlevel.Builder and Coordinate.Builder.
+
+        // Chained setters are the most used pattern for the builders:
+        DemoConfig forTesting = new DemoConfig(new DemoConfig.Builder()
+                .simplename("basic chained setter for the string simplename")
+                .simplenumber(42)
+                .toplevel(buildTopLevelArray())
+                .simplevaluearray(
+                        Arrays.asList(new String[] { "primitive", "arrays",
+                                "are", "easier", "to", "build", "than",
+                                "arrays", "of", "structures" }))
+                .coordinate(
+                        new Coordinate.Builder()
+                                .name("have no idea what to call this one")
+                                .x(1e300d).y(1e-300d)));
+        assertTrue(forTesting != null); // ;)
+    }
+
+    /**
+     * It is often the more readable solution to use helper methods to build
+     * configuration arrays.
+     *
+     * @return a list of Toplevel.Builder instances
+     */
+    private List&lt;Toplevel.Builder&gt; buildTopLevelArray() {
+        // Note how the Builder classes tend to work on Collection classes and
+        // mutable objects, while the config ready for use is bolted down and
+        // immutable:
+        List&lt;Toplevel.Builder&gt; configArray = new ArrayList&lt;Toplevel.Builder&gt;(3);
+        String[] configStrings = new String[] { "a", "b", "c" };
+        int[] configNumbers = new int[] { 1, 2, 3 };
+        long[] configLargeNumbers = new long[] { 1L + (long) Integer.MAX_VALUE,
+                2L + (long) Integer.MAX_VALUE, 3L + (long) Integer.MAX_VALUE };
+        for (int i = 0; i &lt; configStrings.length; ++i) {
+            configArray.add(new Toplevel.Builder().number(configNumbers[i])
+                    .largenumber(configLargeNumbers[i]).term(configStrings[i])
+                    .secondlevel(buildSecondLevelArray(2)));
+        }
+        return configArray;
+    }
+
+    /**
+     * Once again, the building of an array is delegated to a helper method
+     *
+     * @param subelements
+     *            the length of the returned list
+     * @return a list of SecondLevel.Builder
+     */
+    private List&lt;Secondlevel.Builder&gt; buildSecondLevelArray(int subelements) {
+        List&lt;Secondlevel.Builder&gt; builders = new ArrayList&lt;Secondlevel.Builder&gt;(
+                subelements);
+        for (int i = 0; i &lt; subelements; ++i) {
+            builders.add(new Secondlevel.Builder().name(String.valueOf(i))
+                    .magnitude((double) i));
+        }
+        return builders;
+    }
+
+}
+</pre>

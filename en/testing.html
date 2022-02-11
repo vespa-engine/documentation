@@ -1,202 +1,117 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Testing"
-redirect_from:
-- /documentation/testing.html
+title: Vespa application system tests
 ---
 
 <p>
-See <a href="https://cloud.vespa.ai/en/automated-deployments.html">automated deployments</a>
-for how to implement system, staging and production verification tests using Vespa Cloud.
+  System tests are an invaluable tool both when developing and maintaing a complex Vespa application.
+  These are functional tests which are run against a deployment of the application package to verify,
+  and use its HTTP APIs to execute feed and query operations which are compared to expected outcomes. 
+  Vespa provides two formalizations of this:
 </p>
-
-
-
-<h2 id="unit-testing-using-application">Unit testing using Application</h2>
+<ul>
+  <li><p><a href="reference/testing.html">Basic HTTP tests</a>, expressing requests and expected responses as JSON,
+    and run with the <a href="vespa-cli.html">Vespa CLI</a>.</p></li>
+  <li><p><a href="reference/testing-java.html">Java JUnit tests</a>, for more advanced tests,
+    run as regular Java tests, with some extra configuration.</p></li>
+</ul>
 <p>
-The <code><a href="https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html">
-Application</a></code> class is useful when writing unit tests.
-Application uses the application package configuration and set up a container instance for testing.
-The <code><a href="https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/container/JDisc.html">
-JDisc</a></code> class that is accessed by
-the test through <code><a href="https://javadoc.io/page/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html#getJDisc-java.lang.String-">app.getJDisc(clusterName)</a></code> -
-this class has methods for using all common <a href="reference/component-reference.html">component types</a>.
-</p><p>
-Refer to <a href="https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/album-recommendation-java/src/test/java/ai/vespa/example/album/MetalSearcherTest.java">
-MetalSearcherTest.java</a> for example use.
-Notice how the test disables the network layer in order to run tests in parallel.
+  These two frameworks also includes an upgrade—or staging—test construct for scenarios where the application
+  is upgraded, and state in the backend depends on the old application configuration;
+  as well as a production verification test—basically a health check for production deployments.
+  For system and staging tests, the frameworks provide an easy way to perform HTTP request against a
+  designated test deployment, separating the tests from the deployment and configuration of the test clusters.
 </p>
-{% include note.html content="<code>Application</code> does not set up <em>content</em> nodes, only <em>container</em>.
-It is hence fully stateless, and intended for unit testing the functionality of application components.
-The <em>ClusterSearcher</em> will not find any content nodes and log errors if invoked.
-Write a <em>System Test</em> to test end-to-end features like search."%}
 <p>
-For prototyping, enable the network interface,
-instantiate the Container and run requests using a browser:
+  The rest of this document describes how each of these test categories can be run as part of an imagined
+  CI/CD system for safely deploying changes to a Vespa application in a continuous manner. 
 </p>
-<pre>{% highlight java%}
-public class ApplicationMain {
-  @Test
-  public static void main(String[] args) throws Exception {
-    try (com.yahoo.application.Application app = com.yahoo.application.Application.fromApplicationPackage(
-        FileSystems.getDefault().getPath("src/main/application"),
-        Networking.enable)) {
-      app.getClass();
-      Thread.sleep(Long.MAX_VALUE);
-    }
-  }
-}
-{% endhighlight %}</pre>
 
 
 
-<h2 id="unit-testing-configurable-components">Unit Testing Configurable Components</h2>
+<h2 id="system-tests">System tests</h2>
 <p>
-How to programmatically build configuration instances for unit testing.
-Read the <a href="developer-guide.html">Developer Guide</a> first.
-</p><p>
-To be able to write self-contained unit tests using configuration classes
-generated from a schema, it is necessary to instantiate the configuration
-without the use of for instance an external services file. Configuration classes
-contain their own builders which are useful for solving exactly this problem. By
-using builders, the configuration will be created as an immutable, type-safe
-object, exactly the same as used during deployment.
+  System tests are just functional tests that verify a deployed Vespa application behaves as expected
+  when fed and queried. Running a system test is as simple as making a separate deployment with the
+  application package to test, and then running the system test suite, or one or a few or those tests.
 </p>
-
-
-<h3 id="definition">Configuration schema</h3>
 <p>
-Assume the config definition file <code>demo.def</code> with the following schema:
+  Each system test should be self-contained, i.e., it should be able to run each test in isolation;
+  or all tests, in any order. To achieve this, <strong>system tests should generally start by clearing all
+  documents from the cluster to test.</strong> This is the case with our sample system tests, so take
+  care to not run them against a production cluster.
 </p>
-<pre>
-package=com.mydomain.demo
-
-toplevel[].term string
-toplevel[].number int
-toplevel[].largenumber long
-toplevel[].secondlevel[].name string
-toplevel[].secondlevel[].magnitude double
-
-simplename string
-simplenumber int
-simplevaluearray[] string
-
-coordinate.x double
-coordinate.y double
-coordinate.name string
-</pre>
 <p>
-In other words, the configuration class will be <code>com.mydomain.demo.DemoConfig</code>,
-and it will contain an array of structures,
-a couple of top-level primitives (<em>simplename</em> and <em>simplenumber</em>),
-an array of primitive values (<em>simplevaluearray</em>) and a structure (<em>coordinate</em>).
+  For the most part, system tests must be updated due to changes in the application package.
+  Rarely, an upgrade of the Vespa version may also lead to changed functionality, but within
+  major versions, this should only be new features and bug fixes. In any case, it is a good idea
+  to always run system tests against a dedicated test deployment—both before upgrading the Vespa
+  platform, and the application package—before deploying the change to production.
 </p>
 
 
-<h3 id="using-configuration-builders">Using configuration builders</h3>
+
+<h2 id="staging-tests">Staging tests</h2>
 <p>
-All structured objects in the cloud configuration system have their own
-Builder as a nested class. So, in the above example, one would get
-<code>DemoConfig.Builder</code> for the complete configuration class,
-<code>DemoConfig.Toplevel.Builder</code> for the top-level array,
-<code>DemoConfig.Toplevel.Secondlevel.Builder</code> for the inner array, and
-<code>DemoConfig.Coordinate.Builder</code> for the structure.
-</p><p>
-A configuration object, or substructure, is easiest instantiated using a
-constructor accepting the corresponding <em>Builder</em> class, an array of structures
-should use the constructor accepting an array of <em>Builder</em> instances, and an
-array of primitive values simply accepts a java.util.Collection of the
-corresponding primitive value class:
+  The goal of staging (upgrade) tests is <em>not</em> to ensure the new deployment
+  satisfies its functional specifications, as that should be covered by
+  system tests; rather, it is to ensure the upgrade of the application
+  package and/or Vespa platform does not break the application, and is
+  compatible with the behavior expected by existing clients.
 </p>
-<pre>
-package com.mydomain.demo;
+<p>
+  Running a staging test therefore requires more steps than a system test:
+</p>
+  <ol>
+    <li><p>First, a dedicated deployment is made with the <em>current</em> setup (package and Vespa version).</p></li>
+    <li><p>Next, <em>staging setup</em> code is run to put the test cluster in a particular state—typically
+      one that mimics the state in production clusters.</p></li>
+    <li><p>When this is done, the deployment is upgraded to the <em>new</em> setup (package and/or Vespa version).</p></li>
+    <li><p>Finally, <em>staging test</em> code is run to verify the cluster behaves as expected post-upgrade.</p></li>
+  </ol>
+<p>
+  As an example, consider a change in how documents are indexed, e.g., a adding new document processor.
+  A system test would test verify this new behavior by feeding a document, and then verifying the
+  document processor modified the document, or perhaps did something else.
+  A staging test, on the other hand, would feed the document <em>before</em> the document processor was added,
+  and querying for the document after the upgrade could give different results
+  from what the system test would expect.
+</p>
+<p>Many such changes, which require additional action post-deployment, are also guarded by 
+  <a href="reference/validation-overrides.html">validation overrides</a>,
+  but the staging test is then a great way of figuring out what the exact consequences of the change are,
+  and how to deal with it. 
+</p>
+<p>
+  As opposed to system tests, staging tests are not self-contained, as the state change during upgrade is
+  precisely what is tested. Instead, execution order of any staging tests that modify state, particularly
+  after upgrade, must be controlled. Indeed, some changes will require refeeding data, and this should then be
+  part of the <em>staging test</em> code. Finally, it is also good to verify the expected state prior to upgrade.
+</p>
+<p>
+  The clients of a Vespa application should be compatible with both the system and staging test expectations,
+  and this dictates the workflow when deploying a breaking change:
+</p>
+<ol>
+  <li><p>First, the application code and system and and staging tests are updated, so tests pass; 
+    and clients are updated to reflect the updated test code.<p></li>
+  <li><p>Next, the application is upgraded.</p></li>
+  <li><p>Finally, the <em>staging setup</em> code is updated to match the new application code.</p></li>
+</ol>
+<p>
+  Again, it is a good idea to always run staging tests before deployment of every change—be it a
+  change in the application package, or an upgrade of the Vespa platform.
+</p>
 
-import static org.junit.Assert.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
-import org.junit.Test;
-
-import static com.mydomain.demo.DemoConfig.Toplevel;
-import static com.mydomain.demo.DemoConfig.Toplevel.Secondlevel;
-import static com.mydomain.demo.DemoConfig.Coordinate;
-
-public class DemoTest {
-
-    /**
-     * An example showing how to build a relatively complex, mixed type
-     * configuration including arrays of primitive elements, nested arrays and
-     * arrays of structures and so on.
-     */
-    @Test
-    public final void test() {
-        // We need use builders to safely create the graph of immutable
-        // configuration objects. Each generated configuration class contains
-        // the builder for creating an instance of itself. This pattern is
-        // repeated for structures. So, in our case, we have four structured
-        // levels. The complete configuration class, DemoConfig, the top-level,
-        // nested array, Toplevel, the contained array, Secondlevel and the
-        // structure Coordinate. This leaves us with using four distinct
-        // builder classes: DemoConfig.Builder, Toplevel.Builder,
-        // Secondlevel.Builder and Coordinate.Builder.
-
-        // Chained setters are the most used pattern for the builders:
-        DemoConfig forTesting = new DemoConfig(new DemoConfig.Builder()
-                .simplename("basic chained setter for the string simplename")
-                .simplenumber(42)
-                .toplevel(buildTopLevelArray())
-                .simplevaluearray(
-                        Arrays.asList(new String[] { "primitive", "arrays",
-                                "are", "easier", "to", "build", "than",
-                                "arrays", "of", "structures" }))
-                .coordinate(
-                        new Coordinate.Builder()
-                                .name("have no idea what to call this one")
-                                .x(1e300d).y(1e-300d)));
-        assertTrue(forTesting != null); // ;)
-    }
-
-    /**
-     * It is often the more readable solution to use helper methods to build
-     * configuration arrays.
-     *
-     * @return a list of Toplevel.Builder instances
-     */
-    private List&lt;Toplevel.Builder&gt; buildTopLevelArray() {
-        // Note how the Builder classes tend to work on Collection classes and
-        // mutable objects, while the config ready for use is bolted down and
-        // immutable:
-        List&lt;Toplevel.Builder&gt; configArray = new ArrayList&lt;Toplevel.Builder&gt;(3);
-        String[] configStrings = new String[] { "a", "b", "c" };
-        int[] configNumbers = new int[] { 1, 2, 3 };
-        long[] configLargeNumbers = new long[] { 1L + (long) Integer.MAX_VALUE,
-                2L + (long) Integer.MAX_VALUE, 3L + (long) Integer.MAX_VALUE };
-        for (int i = 0; i &lt; configStrings.length; ++i) {
-            configArray.add(new Toplevel.Builder().number(configNumbers[i])
-                    .largenumber(configLargeNumbers[i]).term(configStrings[i])
-                    .secondlevel(buildSecondLevelArray(2)));
-        }
-        return configArray;
-    }
-
-    /**
-     * Once again, the building of an array is delegated to a helper method
-     *
-     * @param subelements
-     *            the length of the returned list
-     * @return a list of SecondLevel.Builder
-     */
-    private List&lt;Secondlevel.Builder&gt; buildSecondLevelArray(int subelements) {
-        List&lt;Secondlevel.Builder&gt; builders = new ArrayList&lt;Secondlevel.Builder&gt;(
-                subelements);
-        for (int i = 0; i &lt; subelements; ++i) {
-            builders.add(new Secondlevel.Builder().name(String.valueOf(i))
-                    .magnitude((double) i));
-        }
-        return builders;
-    }
-
-}
-</pre>
+<h2 id="production-tests">Production tests</h2>
+<p>
+  Some changes cannot be properly tested outside of a production setting; examples include user engagement,
+  and other high level metrics. Upgrading a subset of production clusters first, allows detecting a regression
+  here, and stopping the change from deploying to the rest of the production clusters.
+</p>
+<p>
+  These tests will be completely domain-dependent, and typically not run against the Vespa application
+  itself. The test framework therefore has less tooling here, and really only specifies this is a separate category. 
+</p>
