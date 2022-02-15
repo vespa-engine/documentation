@@ -6,75 +6,90 @@ redirect_from:
 ---
 
 <p>
-This document has a set of example configurations
-for content clusters using flat or grouped data distribution.
-Data is distributed over nodes and groups
-using a Vespa's <a href="../reference/services-content.html#distribution">distribution algorithm</a>.
-See <a href="sizing-search.html">Scaling Vespa</a> for when to use grouped or flat data distribution.
-These examples illustrate common deployment patterns.
-In all examples, the number of stateless <a href="../jdisc/">container</a> nodes is fixed.
-The examples are <em>services.xml</em> deployed using
-<a href="../cloudconfig/application-packages.html">Application Packages</a>.
-See <a href="../reference/services-content.html">services.xml - 'content' element</a> reference documentation.
-</p><p>
-  Note: the configuration below is not valid when using <a href="https://cloud.vespa.ai/">Vespa Cloud</a>,
-  see <a href="https://cloud.vespa.ai/en/reference/services">services.xml</a>.
+  This document has a set of example configurations
+  for content clusters using flat or grouped data distribution.
+  Data is distributed over nodes and groups
+  using a Vespa's <a href="../reference/services-content.html#distribution">distribution algorithm</a>.
+  See <a href="sizing-search.html">Scaling Vespa</a> for when to use grouped or flat data distribution.
+  These examples illustrate common deployment patterns.
+  In all examples, the number of stateless <a href="../jdisc/">container</a> nodes is fixed.
+  The examples are <em>services.xml</em> deployed using
+  <a href="../cloudconfig/application-packages.html">Application Packages</a>.
+  See <a href="../reference/services-content.html">services.xml - 'content' element</a> reference documentation.
+</p>
+<p>
+  Refer to the <a href="https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode-HA">
+  multinode-HA</a> sample application for how to get started from a deployable multinode starting point.
+  The examples below are trimmed down for readability in the <code>admin</code> and <code>container</code> sections.
+  See the <a href="#appendix-hosts-xml">appendix</a> for <em>hosts.xml</em> to use when testing deployments.
 </p>
 
 
 
 <h2 id="flat-distribution">Flat Distribution</h2>
 <p>
-Flat (single group) distribution with <em>redundancy</em> 3 and <em>searchable-copies</em> 1.
-Data is distributed and partitioned over 9 nodes and there are 3 copies of each document stored on 3 different nodes. 
-Queries are dispatched in parallel to all nodes, and with <em>searchable-copies</em> 1,
-only one of the 3 copies of a document is indexed and active.
-This means less resource usage (memory, disk, and cpu).
-In case of a node failure, the remaining nodes will index (make ready)
-and activate the <em>not ready</em> (stored) copies to restore full search coverage.
+  Flat (single group) distribution with <em>redundancy</em> 3 and <em>searchable-copies</em> 1.
+  Data is distributed and partitioned over 9 nodes and there are 3 copies of each document stored on 3 different nodes.
+  Queries are dispatched in parallel to all nodes, and with <em>searchable-copies</em> 1,
+  only one of the 3 copies of a document is indexed and active.
+  This means less resource usage (memory, disk, and cpu).
+  In case of a node failure, the remaining nodes will index (make ready)
+  and activate the <em>not ready</em> (stored) copies to restore full search coverage.
 </p>
-<pre>
-&lt;services version="1.0"&gt;
-  &lt;container id="stateless-container-cluster" version="1.0"&gt;  
-    &lt;search/&gt;
-    &lt;document-api/&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias="container0"/&gt;
-      &lt;node hostalias="container1"/&gt;
-      &lt;node hostalias="container2"/&gt;
-    &lt;/nodes&gt;
-  &lt;/container&gt;
+<pre>{% highlight xml%}
+<services version="1.0">
+    <admin version="2.0">
+        <configservers>
+            <configserver hostalias="node0" />
+        </configservers>
+        <cluster-controllers>
+            <cluster-controller hostalias="node0" />
+        </cluster-controllers>
+        <slobroks>
+            <slobrok hostalias="node0" />
+        </slobroks>
+        <adminserver hostalias="node0" />
+    </admin>
 
-  &lt;content id="my-content" version="1.0"&gt;
-    &lt;documents&gt;
-      &lt;document type="my-document" mode="index"&gt;
-    &lt;/documents&gt;
-    &lt;redundancy&gt;3&lt;/redundancy&gt;
-    &lt;engine&gt;
-      &lt;proton&gt;
-        &lt;searchable-copies&gt;1&lt;/searchable-copies&gt;
-      &lt;/proton&gt;
-     &lt;/engine&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias="searcher0" distribution-key="0"/&gt;
-      &lt;node hostalias="searcher1" distribution-key="1"/&gt;
-      &lt;node hostalias="searcher2" distribution-key="2"/&gt;
-      &lt;node hostalias="searcher3" distribution-key="3"/&gt;
-      &lt;node hostalias="searcher4" distribution-key="4"/&gt;
-      &lt;node hostalias="searcher5" distribution-key="5"/&gt;
-      &lt;node hostalias="searcher6" distribution-key="6"/&gt;
-      &lt;node hostalias="searcher7" distribution-key="7"/&gt;
-      &lt;node hostalias="searcher8" distribution-key="8"/&gt;
-    &lt;/nodes&gt;
-  &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <container id="stateless-container-cluster" version="1.0">
+        <search/>
+        <document-api/>
+        <nodes>
+            <node hostalias="node0"/>
+        </nodes>
+    </container>
+
+    <content id="my-content" version="1.0">
+        <documents>
+            <document type="music" mode="index"/>
+        </documents>
+        <redundancy>3</redundancy>
+        <engine>
+            <proton>
+                <searchable-copies>1</searchable-copies>
+            </proton>
+        </engine>
+        <nodes>
+            <node hostalias="node0" distribution-key="0"/>
+            <node hostalias="node1" distribution-key="1"/>
+            <node hostalias="node2" distribution-key="2"/>
+            <node hostalias="node3" distribution-key="3"/>
+            <node hostalias="node4" distribution-key="4"/>
+            <node hostalias="node5" distribution-key="5"/>
+            <node hostalias="node6" distribution-key="6"/>
+            <node hostalias="node7" distribution-key="7"/>
+            <node hostalias="node8" distribution-key="8"/>
+        </nodes>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 
 
 <h2 id="grouped-distribution">Grouped Distribution</h2>
 <p>
-When using grouped distribution in an indexed content cluster, the following restrictions apply:
+  When using grouped distribution in an indexed content cluster, the following restrictions apply:
+</p>
 <ul>
   <li>There can only be a single level of leaf groups under the top group</li>
   <li>Each leaf group must have the same number of nodes </li>
@@ -87,179 +102,239 @@ When using grouped distribution in an indexed content cluster, the following res
   <li>The number of leaf groups must be a factor of <em>searchable-copies</em></li>
 </ul>
 <p>
-With a low number of nodes per group, it's important to remember that a node failure
-will cause the data to be re-distributed to the remaining nodes
-and their memory footprint and disk usage will grow
-when those nodes start activating the documents originally activated on the failed node.
-E.g. with 2 nodes per group, the remaining healthy node will start activating all the content,
-which will cause a 2x memory and disk footprint compared with the ideal state.
-</p><p>
-The <a href="../reference/services-content.html#min-node-ratio-per-group">min-node-ratio-per-group</a>
-controls the data distribution behavior inside a group in cases of node failures.
-This sets a lower bound on the ratio of nodes within groups
-that must be online and accepting feed and query traffic,
-before the entire group is automatically taken out of service from both feed and search/serving.
-Once number of nodes in the group have been restored, and ideal state has been achieved,
-the group will be automatically set in service.  
+  With a low number of nodes per group, it's important to remember that a node failure
+  will cause the data to be re-distributed to the remaining nodes
+  and their memory footprint and disk usage will grow
+  when those nodes start activating the documents originally activated on the failed node.
+  E.g. with 2 nodes per group, the remaining healthy node will start activating all the content,
+  which will cause a 2x memory and disk footprint compared with the ideal state.
+</p>
+<p>
+  The <a href="../reference/services-content.html#min-node-ratio-per-group">min-node-ratio-per-group</a>
+  controls the data distribution behavior inside a group in cases of node failures.
+  This sets a lower bound on the ratio of nodes within groups
+  that must be online and accepting feed and query traffic,
+  before the entire group is automatically taken out of service from both feed and search/serving.
+  Once number of nodes in the group have been restored, and ideal state has been achieved,
+  the group will be automatically set in service.
 </p>
 
 
 <h2>9 nodes, 3 groups with 3 nodes per group</h2>
 <p>
-This example has 3 groups and each group index all the documents over the 3 nodes in the group.
-With 3 groups there are 3 replicas in total of each document, and each replica is indexed and active.
-Losing a node does not reduce search coverage.
+  This example has 3 groups and each group index all the documents over the 3 nodes in the group.
+  With 3 groups there are 3 replicas in total of each document, and each replica is indexed and active.
+  Losing a node does not reduce search coverage.
 </p>
-<pre>
-&lt;services version="1.0"&gt;
-  &lt;container id="stateless-container-cluster" version="1.0"&gt;  
-    &lt;search/&gt;
-    &lt;document-api/&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias="container0"/&gt;
-      &lt;node hostalias="container1"/&gt;
-      &lt;node hostalias="container2"/&gt;
-    &lt;/nodes&gt;
-  &lt;/container&gt;
+<pre>{% highlight xml%}
+<services version="1.0">
+    <admin version="2.0">
+        <configservers>
+            <configserver hostalias="node0" />
+        </configservers>
+        <cluster-controllers>
+            <cluster-controller hostalias="node0" />
+        </cluster-controllers>
+        <slobroks>
+            <slobrok hostalias="node0" />
+        </slobroks>
+        <adminserver hostalias="node0" />
+    </admin>
 
-  &lt;content id="my-content" version="1.0"&gt;
-    &lt;documents&gt;
-      &lt;document type="my-document" mode="index"&gt;
-    &lt;/documents&gt;
-    &lt;redundancy&gt;3&lt;/redundancy&gt;
-     &lt;engine&gt;
-      &lt;proton&gt;
-        &lt;searchable-copies&gt;3&lt;/searchable-copies&gt;
-      &lt;/proton&gt;
-     &lt;/engine&gt;
-    &lt;group name="top-group"&gt;
-      &lt;distribution partitions="*|*|*"/&gt;
-      &lt;group name="group0" distribution-key="0"&gt;
-        &lt;node hostalias="searcher1" distribution-key="0"/&gt;
-        &lt;node hostalias="searcher2" distribution-key="1"/&gt;
-        &lt;node hostalias="searcher3" distribution-key="2"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group1" distribution-key="1"&gt;
-        &lt;node hostalias="searcher4" distribution-key="3"/&gt;
-        &lt;node hostalias="searcher5" distribution-key="4"/&gt;
-        &lt;node hostalias="searcher6" distribution-key="5"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group3" distribution-key="2"&gt;
-        &lt;node hostalias="searcher7" distribution-key="6"/&gt;
-        &lt;node hostalias="searcher8" distribution-key="7"/&gt;
-        &lt;node hostalias="searcher9" distribution-key="8"/&gt;
-      &lt;/group&gt;
-    &lt;/group&gt;
-  &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <container id="stateless-container-cluster" version="1.0">
+        <search/>
+        <document-api/>
+        <nodes>
+            <node hostalias="node0"/>
+        </nodes>
+    </container>
+
+    <content id="my-content" version="1.0">
+        <documents>
+            <document type="music" mode="index"/>
+        </documents>
+        <redundancy>3</redundancy>
+        <engine>
+            <proton>
+                <searchable-copies>3</searchable-copies>
+            </proton>
+        </engine>
+        <group>
+            <distribution partitions="1|1|*"/>
+            <group name="group0" distribution-key="0">
+                <node hostalias="node0" distribution-key="0"/>
+                <node hostalias="node1" distribution-key="1"/>
+                <node hostalias="node2" distribution-key="2"/>
+            </group>
+            <group name="group1" distribution-key="1">
+                <node hostalias="node3" distribution-key="3"/>
+                <node hostalias="node4" distribution-key="4"/>
+                <node hostalias="node5" distribution-key="5"/>
+            </group>
+            <group name="group3" distribution-key="2">
+                <node hostalias="node6" distribution-key="6"/>
+                <node hostalias="node7" distribution-key="7"/>
+                <node hostalias="node8" distribution-key="8"/>
+            </group>
+        </group>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 
 
 <h2>9 nodes, 9 groups with 1 node per group</h2>
 <p>
-This example has 9 groups and each group index all the documents on a single node.
-With 9 groups there are 9 replicas in total of each document, and each replica is indexed and active.
-Losing a node does not reduce search coverage.
-With a single node, indexing throughput is limited by the single node performance,
-as all data needs to go all nodes.
+  This example has 9 groups and each group index all the documents on a single node.
+  With 9 groups there are 9 replicas in total of each document, and each replica is indexed and active.
+  Losing a node does not reduce search coverage.
+  With a single node, indexing throughput is limited by the single node performance,
+  as all data needs to go all nodes.
 </p>
-<pre>
-&lt;services version="1.0"&gt;
-  &lt;container id="stateless-container-cluster" version="1.0"&gt;  
-    &lt;search/&gt;
-    &lt;document-api/&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias="container0"/&gt;
-      &lt;node hostalias="container1"/&gt;
-      &lt;node hostalias="container2"/&gt;
-    &lt;/nodes&gt;
-  &lt;/container&gt;
+<pre>{% highlight xml%}
+<services version="1.0">
+    <admin version="2.0">
+        <configservers>
+            <configserver hostalias="node0" />
+        </configservers>
+        <cluster-controllers>
+            <cluster-controller hostalias="node0" />
+        </cluster-controllers>
+        <slobroks>
+            <slobrok hostalias="node0" />
+        </slobroks>
+        <adminserver hostalias="node0" />
+    </admin>
 
-  &lt;content id="my-content" version="1.0"&gt;
-    &lt;documents&gt;
-      &lt;document type="my-document" mode="index"&gt;
-    &lt;/documents&gt;
-    &lt;redundancy&gt;9&lt;/redundancy&gt;
-     &lt;engine&gt;
-      &lt;proton&gt;
-        &lt;searchable-copies&gt;9&lt;/searchable-copies&gt;
-      &lt;/proton&gt;
-     &lt;/engine&gt;
-    &lt;group name="top-group"&gt;
-      &lt;distribution partitions="*|*|*|*|*|*|*|*|*"/&gt;
-      &lt;group name="group0" distribution-key="0"&gt;
-        &lt;node hostalias="searcher1" distribution-key="0"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group1" distribution-key="1"&gt;
-        &lt;node hostalias="searcher2" distribution-key="1"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group2" distribution-key="2"&gt;
-        &lt;node hostalias="searcher3" distribution-key="2"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group3" distribution-key="3"&gt;
-        &lt;node hostalias="searcher4" distribution-key="3"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group4" distribution-key="4"&gt;
-        &lt;node hostalias="searcher5" distribution-key="4"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group5" distribution-key="5"&gt;
-        &lt;node hostalias="searcher6" distribution-key="5"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group6" distribution-key="6"&gt;
-        &lt;node hostalias="searcher7" distribution-key="6"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group7" distribution-key="7"&gt;
-        &lt;node hostalias="searcher8" distribution-key="7"/&gt;
-      &lt;/group&gt;
-      &lt;group name="group8" distribution-key="8"&gt;
-        &lt;node hostalias="searcher9" distribution-key="8"/&gt;
-      &lt;/group&gt;
-    &lt;/group&gt;
-  &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <container id="stateless-container-cluster" version="1.0">
+        <search/>
+        <document-api/>
+        <nodes>
+            <node hostalias="node0"/>
+        </nodes>
+    </container>
+
+    <content id="my-content" version="1.0">
+        <documents>
+            <document type="music" mode="index"/>
+        </documents>
+        <redundancy>9</redundancy>
+        <engine>
+            <proton>
+                <searchable-copies>9</searchable-copies>
+            </proton>
+        </engine>
+        <group>
+            <distribution partitions="1|1|1|1|1|1|1|1|*"/>
+            <group name="group0" distribution-key="0">
+                <node hostalias="node0" distribution-key="0"/>
+            </group>
+            <group name="group1" distribution-key="1">
+                <node hostalias="node1" distribution-key="1"/>
+            </group>
+            <group name="group2" distribution-key="2">
+                <node hostalias="node2" distribution-key="2"/>
+            </group>
+            <group name="group3" distribution-key="3">
+                <node hostalias="node3" distribution-key="3"/>
+            </group>
+            <group name="group4" distribution-key="4">
+                <node hostalias="node4" distribution-key="4"/>
+            </group>
+            <group name="group5" distribution-key="5">
+                <node hostalias="node5" distribution-key="5"/>
+            </group>
+            <group name="group6" distribution-key="6">
+                <node hostalias="node6" distribution-key="6"/>
+            </group>
+            <group name="group7" distribution-key="7">
+                <node hostalias="node7" distribution-key="7"/>
+            </group>
+            <group name="group8" distribution-key="8">
+                <node hostalias="node8" distribution-key="8"/>
+            </group>
+        </group>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 
 
 <h2 id="serving-availability-tuning">Serving Availability Tuning</h2>
 <p>
-When using flat distribution,
-<em>soft failing nodes</em> is a challenge for serving with high availability and low latency.
-Soft failing nodes are nodes which answers health checks from 
-<a href="../content/content-nodes.html">cluster controllers</a>
-and search container dispatch health checks,
-but still experiences issues which impacts serving latency
-(e.g. cpu frequency throttling due to thermal heating, memory corruptions and so forth).
-In a cluster with a flat distribution,
-the slowest node determines the latency,
-as the query request is dispatched to all content nodes in parallel.
-The probability of a soft failing node increases with the number of nodes used to distribute the data over.
-</p><p>
-Use <a href="../reference/services-content.html#coverage">adaptive coverage timeout</a>
-to prevent slow soft failing nodes to impact availability.
-This allows the dispatcher to stop waiting for the slowest node(s).
-See also <a href="../graceful-degradation.html">graceful search degradation</a>.
-</p><p>
-Grouped distributions are less impacted by soft failing nodes in general,
-as queries are dispatched to one group at a time using a
-<a href="../reference/services-content.html#dispatch-policy">dispatch policy</a>.
-The <em>adaptive</em> policy takes group latency into account
-when deciding which group the query request should be routed to.
+  When using flat distribution,
+  <em>soft failing nodes</em> is a challenge for serving with high availability and low latency.
+  Soft failing nodes are nodes which answers health checks from
+  <a href="../content/content-nodes.html">cluster controllers</a>
+  and search container dispatch health checks,
+  but still experiences issues which impacts serving latency
+  (e.g. cpu frequency throttling due to thermal heating, memory corruptions and so forth).
+  In a cluster with a flat distribution,
+  the slowest node determines the latency,
+  as the query request is dispatched to all content nodes in parallel.
+  The probability of a soft failing node increases with the number of nodes used to distribute the data over.
+</p>
+<p>
+  Use <a href="../reference/services-content.html#coverage">adaptive coverage timeout</a>
+  to prevent slow soft failing nodes to impact availability.
+  This allows the dispatcher to stop waiting for the slowest node(s).
+  See also <a href="../graceful-degradation.html">graceful search degradation</a>.
+</p>
+<p>
+  Grouped distributions are less impacted by soft failing nodes in general,
+  as queries are dispatched to one group at a time using a
+  <a href="../reference/services-content.html#dispatch-policy">dispatch policy</a>.
+  The <em>adaptive</em> policy takes group latency into account
+  when deciding which group the query request should be routed to.
 </p>
 
 
 
 <h2 id="changing-group-configuration">Changing Group Configuration</h2>
 <p>
-Migrating from flat distribution to a
-<a href="../elastic-vespa.html#grouped-distribution">hierarchy</a>
-will temporarily reduce query coverage
-(likewise for changing from grouped config to another).
-When adding new group(s), it will take some time to populate the new nodes.
-During this transition period, queries hitting these nodes will return partial results.
-<a href="../reference/services-content.html#nodes">Reference documentation</a>.
-</p><p>
-A possible workaround for some cases is increasing <em>redundancy</em>
-and let replicas re-distribute, before changing the group configuration.
+  Migrating from flat distribution to a
+  <a href="../elastic-vespa.html#grouped-distribution">hierarchy</a>
+  will temporarily reduce query coverage
+  (likewise for changing from grouped config to another).
+  When adding new group(s), it will take some time to populate the new nodes.
+  During this transition period, queries hitting these nodes will return partial results.
+  <a href="../reference/services-content.html#nodes">Reference documentation</a>.
 </p>
+<p>
+  A possible workaround for some cases is increasing <em>redundancy</em>
+  and let replicas re-distribute, before changing the group configuration.
+</p>
+
+
+<h2 id="appendix-hosts-xml">Appendix: hosts.xml</h2>
+<pre>{% highlight xml%}
+<hosts>
+    <host name="localhost">
+        <alias>node0</alias>
+    </host>
+    <host name="localhost1">
+        <alias>node1</alias>
+    </host>
+    <host name="localhost2">
+        <alias>node2</alias>
+    </host>
+    <host name="localhost3">
+        <alias>node3</alias>
+    </host>
+    <host name="localhost4">
+        <alias>node4</alias>
+    </host>
+    <host name="localhost5">
+        <alias>node5</alias>
+    </host>
+    <host name="localhost6">
+        <alias>node6</alias>
+    </host>
+    <host name="localhost7">
+        <alias>node7</alias>
+    </host>
+    <host name="localhost8">
+        <alias>node8</alias>
+    </host>
+</hosts>
+{% endhighlight %}</pre>
