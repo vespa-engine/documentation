@@ -18,8 +18,6 @@ but can be set a set of targets that act like sinks for the documents -
 see <a href="../reference/vespa-cmdline-tools.html#vespa-visit-target">vespa-visit-target</a>.
 </p><p>
 Typical use cases are data dump and reprocessing that are not time sensitive.
-However, <a href="../streaming-search.html">streaming search</a>
-uses visiting in a latency-critical context.
 </p><p>
 It is possible so prioritize visit load higher/lower, and throughput can be throttled.
 </p><p>
@@ -109,11 +107,12 @@ $ vespa-visit -v --priority LOW_1 -p progress-file -s 'id.hash().abs() % 100 = 0
     <em>[document]</em> is a shorthand for all fields for the given document type.
   </li>
 </ul>
-Import into a cluster using the <a href="../vespa-feed-client.html">vespa-feed-client</a>:
+<p>Import into a cluster using the <a href="../vespa-feed-client.html">vespa-feed-client</a>:</p>
 <pre>
 $ vespa-feed-client --file 100.json --endpoint https://container-endpoint:443/
 </pre>
-Or see next section, routing output directly to another Vespa cluster.
+<p>
+  Or see next section, routing output directly to another Vespa cluster.
 </p>
 
 
@@ -126,11 +125,13 @@ serialization format, from the source nodes to the targets,
 this is performance optimal (data is not piped through the visit client).
 Implement backup this way, or dump to file.
 </p><p>
-Search node recovery: Feed the documents directly to a search cluster.
-Example, selecting documents of type <em>music</em>:
+  Search node recovery: Feed the documents directly to a search cluster.
+  Example, selecting documents of type <em>music</em>:
+</p>
 <pre>
 $ vespa-visit --selection music --datahandler indexing
 </pre>
+<p>
 This feeds from the source into the search cluster in the same application.
 Note that simultaneous feed can make updates go lost.
 </p><p>
@@ -147,8 +148,9 @@ an example, the following route routes to the content cluster
 <pre>
 [Content:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]
 </pre>
-The following examples illustrate
-how to copy all data from a source cluster to another cluster using vespa-visit:
+<p>
+  The following examples illustrate how to copy all data from a source cluster to another cluster using vespa-visit:
+</p>
 <pre>
 # Copies all data in the local cluster, routing it to the remote <em>mycluster</em>
 $ vespa-visit --datahandler '[Content:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]'
@@ -161,13 +163,13 @@ $ vespa-visit --datahandler '[Content:config=tcp/myconfigserver.mydomain.com:190
 $ vespa-visit --datahandler '[Content:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]' \
   --selection id.user=1234
 </pre>
-</p>
 
 
 
 <h2 id="reprocessing">Reprocessing</h2>
 <p>
 Reprocessing is used to solve these use cases:
+</p>
 <ul>
   <li>
     To change the document type used in ways that will not be
@@ -179,6 +181,7 @@ Reprocessing is used to solve these use cases:
     Search documents can be reindexed after indexing steps have been changed.
   </li>
 </ul>
+<p>
 This example illustrates how one can identify a subset of the
 documents in a content cluster, reprocess these, and write them back.
 It is assumed that a Vespa cluster is set up, with data.
@@ -186,8 +189,7 @@ It is assumed that a Vespa cluster is set up, with data.
 
 
 <h3 id="set-up-a-document-reprocessing-cluster">1. Set up a document reprocessing cluster</h3>
-<p>
-  This example document processor:
+<p>This example document processor:</p>
 <ul>
   <li>deletes documents with an <em>artist</em> field whose value contains <em>Metallica</em></li>
   <li>uppercases <em>title</em> field values of all other documents</li>
@@ -243,16 +245,17 @@ public class ReProcessor extends DocumentProcessor {
     }
 }
 </pre>
+<p>
 To compile this processor, see the <a href="../developer-guide.html">Developer Guide</a>.
 For more information on document processing, refer
 to <a href="../document-processing.html">Document processor Development</a>.
 After having changed the Vespa setup, reload config:
+</p>
 <pre>
 $ vespa-deploy prepare music
 $ vespa-deploy activate
 </pre>
-Restart nodes as well to activate.
-</p>
+<p>Restart nodes as well to activate.</p>
 
 
 <h3 id="select-documents">2. Select documents</h3>
@@ -267,6 +270,7 @@ The selection string <em>music.year &gt; 1995</em> does this.
 <h3 id="set-route">3. Set route</h3>
 <p>
 The visitor sends documents to a <a href="../routing.html">Messagebus route</a> - examples:
+</p>
 <ul>
 <li><strong>default</strong> - Documents are sent to the <em>default</em>
     route.</li>
@@ -275,26 +279,25 @@ The visitor sends documents to a <a href="../routing.html">Messagebus route</a> 
     Documents are sent to the document processing chain <em>chainname</em> running in
     cluster <em>clustername</em>.</li>
 </ul>
+<p>
 Assume you have a container cluster with id <em>reprocessing</em>
 containing a docproc chain with id <em>reprocessing-chain</em>.
 This example route sends documents from the content node,
 into the document reprocessing chain, and ultimately, into indexing:
+</p>
 <pre>
 reprocessing/chain.reprocessing-chain indexing
 </pre>
-Details: <a href="../routing.html">Message Bus Routing Guide</a>.
-</p>
+<p>Details: <a href="../routing.html">Message Bus Routing Guide</a>.</p>
 
 
 <h3 id="reprocess">4. Reprocess</h3>
-<p>
-Start reprocessing:
+<p>Start reprocessing:</p>
 <pre>
 $ vespa-visit -v --selection "music.year &gt; 1995" \
   --datahandler "reprocessing/chain.reprocessing-chain indexing"
 </pre>
-The '-v' option emits progress information on standard error.
-</p>
+<p>The '-v' option emits progress information on standard error.</p>
 
 
 <h3 id="notes">Notes</h3>
@@ -322,7 +325,7 @@ use a selection string to reprocess one document type at a time.
 If the selection criteria managed to map the visitor to a specific set of buckets,
 these will be used when sending distributor visit requests.
 If not, the visit client will iterate the entire bucket space,
-typically at the minimum split level required to decide correct distributor.
+typically at the minimum split-level required to decide correct distributor.
 </p><p>
 The distributors will receive the requests and look at what buckets it has
 that are contained by the requested bucket.
@@ -332,12 +335,14 @@ it will reply to the visitor client with the last bucket processed.
 </p><p>
 As all buckets have a natural order, the client can use the returned bucket as a progress counter.
 Thus, after a distributor request has returned, the client knows one of the following:
+</p>
 <ul>
   <li>All buckets contained within the bucket sent have been visited</li>
   <li>All buckets contained within the bucket sent,
     up to this specific bucket in the order, have been visited</li>
   <li>No buckets existed that was contained within the requested bucket</li>
 </ul>
+<p>
 The client can decide whether to visit in strict order,
 allowing only one bucket to be pending at a time,
 or whether to start visiting many buckets at a time, allowing great throughput.
@@ -368,7 +373,7 @@ The content layer use the progress counter to avoid revisiting documents already
 If the distributor only starts one bucket visitor at a time,
 it can ensure the visitor order is kept.
 Starting multiple buckets at a time may improve throughput and decrease latency,
-but progress tracking will be less fine grained,
+but progress tracking will be less fine-grained,
 so a bit more documents may need to be revisited when continued after a failure.
 </p>
 
@@ -404,11 +409,11 @@ A low priority reprocessing visitor will end up sending
 low priority visitor requests to the content nodes,
 which will send low priority put operations to be reprocessed,
 which will end up as low priority put operations to the backend. Example:
+</p>
 <pre>
 $ vespa-visit --priority LOW_1
 </pre>
-Refer to <a href="../reference/services.html#clients">load types</a> for priority values.
-</p>
+<p>Refer to <a href="../reference/services.html#clients">load types</a> for priority values.</p>
 
 
 <h3 id="max-concurrent-visitors-on-content-nodes">Max concurrent visitors on content nodes</h3>
@@ -488,7 +493,8 @@ this is not expected to be an issue.
 
 <h2 id="visitor-targets">Visitor targets</h2>
 <p>
-Requests sent from the visitor processor are sent to a visitor target - types:
+  Requests sent from the visitor processor are sent to a visitor target - types:
+</p>
 <table class="table">
   <thead></thead><tbody>
     <tr>
@@ -549,4 +555,3 @@ Requests sent from the visitor processor are sent to a visitor target - types:
     </tr>
   </tbody>
 </table>
-</p>

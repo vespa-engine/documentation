@@ -224,10 +224,6 @@ Notes:
   <li>The files are written in sequence. <em>proton</em> starts with one pair
     and grows it until <em>maxfilesize</em>. Once full, a new pair is started.</li>
   <li>This means, the pair is immutable, except the last pair, which is written to.</li>
-  <li>This also implies that documents for a given group or user (i.e. bucket)
-    will be distributed to multiple such pairs, depending on insertion order.</li>
-  <li>This also means that a <a href="streaming-search.html">streaming search</a> potentially hits multiple
-    files per bucket searched, impacting search latency if disk access time is high.</li>
   <li>Documents exist in multiple versions in multiple files.
     Older versions are compacted away when a pair is scheduled for being the new active pair -
     obsolete versions are removed, leaving only the active document version left in a new file pair
@@ -239,19 +235,6 @@ Notes:
 </ul>
 
 
-<h3 id="visiting-the-document-store">Visiting the document store</h3>
-<p>
-  A streaming search is a <a href="content/visiting.html">visit</a>, by buckets, in sequence or (semi)parallel.
-  Access to the document store is by local ID - LID.
-  In proton, a bucket is just a property on the <a href="documents.html">document's ID</a>.
-  As documents are added to the file pairs in insertion order,
-  a scan of all documents in a bucket is hence a set of random file accesses,
-  unless some kind of bucket localization is done.
-  The set of document IDs for a given bucket is easily generated from memory structures
-  and assumed to take little resources.
-</p>
-
-
 <h3 id="defragmentation">Defragmentation</h3>
 <p>
   <a href="#document-store-compaction">Document store compaction</a>,
@@ -261,7 +244,6 @@ Notes:
   times <a href="reference/services-content.html#flushstrategy-native-total-diskbloatfactor">
   diskbloatfactor</a>.
   Refer to <a href="reference/services-content.html#summary">summary tuning</a> for details.
-  As streaming accesses are organized per bucket, latencies are cut by co-locating documents by bucket.
 </p>
 <p>
   Defragmentation status is hence best observed by tracking <em>max_bucket_spread</em> over time,
@@ -282,7 +264,7 @@ Notes:
 <p>
   As documents are clustered within the .dat file,
   proton optimizes reads by reading larger chunks when accessing documents.
-  When visiting (as in streaming search), documents are read in <em>bucket</em> order.
+  When visiting, documents are read in <em>bucket</em> order.
   This is the same order as the defragmentation jobs uses.
 </p>
 <p>
@@ -321,10 +303,9 @@ Notes:
     Larger files give less files and hence better locality,
     but compaction requires more memory and more time to complete.</li>
   <li>chunk size - <em>maxsize</em>.
-    Smaller chunks give less wasted IO bytes but more IO operations.
+    Smaller chunks give less wasted IO bytes but more IO operations.</li>
   <li>bucket size - <em>bucket-splitting</em>.
-    Larger buckets give less buckets and hence better locality to nodes and files.
-    Larger buckets means higher streaming search latency per bucket.</li>
+    Larger buckets give less buckets and hence better locality to nodes and files.</li>
 </ul>
 
 
@@ -501,8 +482,8 @@ Metrics are available at the <a href="reference/metrics.html">Metrics API</a>.
   <tr id="document-store-compaction">
     <th rowspan="7">document store compaction</th>
     <td colspan="2">
-      Defragment and sort <a href="#document-store"> document store</a> files as documents are updated and deleted,
-      in order to reduce disk space and speed up <a href="streaming-search.html">streaming search</a>.
+      Defragment and sort <a href="#document-store">document store</a> files as documents are updated and deleted,
+      in order to reduce disk usage.
       The file is sorted in bucket order on output. Triggered by
       <a href="reference/services-content.html#flushstrategy-native-total-diskbloatfactor">
         diskbloatfactor</a>.
