@@ -211,9 +211,9 @@ feed `mind/vespa_user_embeddings.json` and `mind/vespa_news_embeddings.json`:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
-$ java -jar vespa-http-client-jar-with-dependencies.jar \
+$ ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --file mind/vespa_user_embeddings.json --endpoint http://localhost:8080
-$ java -jar vespa-http-client-jar-with-dependencies.jar \
+$ ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --file mind/vespa_news_embeddings.json --endpoint http://localhost:8080
 </pre>
 </div>
