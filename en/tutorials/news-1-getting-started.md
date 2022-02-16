@@ -162,26 +162,27 @@ was exposed when starting the Docker container, so we can query it directly.
 We must index data before we can search for it. This is called 'feeding', and
 we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
-document. We'll use the `vespa-http-client` Java feeder for this:
+document. We'll use the `vespa-feed-client` Java feeder for this:
 
 <!-- ToDo: Replace with vespa-feed-client -->
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ curl -L -o vespa-http-client-jar-with-dependencies.jar \
-  https://search.maven.org/classic/remotecontent?filepath=com/yahoo/vespa/vespa-http-client/7.391.28/vespa-http-client-7.391.28-jar-with-dependencies.jar
+$ curl -L -o vespa-feed-client-cli.zip \
+    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/7.527.20/vespa-feed-client-cli-7.527.20-zip.zip
+$ unzip vespa-feed-client-cli.zip
 </pre>
 </div>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
-$ java -jar vespa-http-client-jar-with-dependencies.jar \
+$ ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --file doc.json --endpoint http://localhost:8080
 </pre>
 </div>
 
-This runs the `vespa-http-client` Java client with the file `doc.json` file.
+This runs the `vespa-feed-client` Java client with the file `doc.json` file.
 This contains a single document which we'll query for below.
 
 

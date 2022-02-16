@@ -98,7 +98,7 @@ If this algorithmic transformation is followed it is possible to link to this se
 
 * Link to javadoc for an artifact: https://javadoc.io/doc/com.yahoo.vespa/container-search
 * Link to javadoc for a package: https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/federation/vespa/package-summary.html
-* Link to javadoc for a class: https://javadoc.io/doc/com.yahoo.vespa/vespa-http-client/latest/com/yahoo/vespa/http/client/config/ConnectionParams.Builder.html
+* Link to javadoc for a class: https://javadoc.io/doc/com.yahoo.vespa/vespa-feed-client-api/latest/ai/vespa/feed/client/JsonFeeder.html
 
 *By Jon Bratseth, June 2016*
 

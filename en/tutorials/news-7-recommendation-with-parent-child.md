@@ -307,9 +307,9 @@ document needs to exist before the child documents can reference it.
 <pre data-test="exec">
 $ cd ..
 $ ./src/python/create_category_ctrs.py mind
-$ java -jar vespa-http-client-jar-with-dependencies.jar \
+$ ./vespa-feed-client-cli/vespa-feed-client \
 --verbose --file mind/global_category_ctr.json --endpoint http://localhost:8080
-$ java -jar vespa-http-client-jar-with-dependencies.jar \
+$ ./vespa-feed-client-cli/vespa-feed-client \
 --verbose --file mind/news_category_ctr_update.json --endpoint http://localhost:8080
 </pre>
 

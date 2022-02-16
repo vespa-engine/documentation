@@ -328,12 +328,12 @@ The argument is where to find the downloaded data above, which was in the
 `mind` directory. This script creates a new file in that directory called
 `vespa.json`. This contains all 28603 news articles in the data set. This
 file can now be fed to Vespa. Use the method described in the previous part,
-using the `vespa-http-client`:
+using the `vespa-feed-client`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ java -jar vespa-http-client-jar-with-dependencies.jar \
+$ ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --file mind/vespa.json --endpoint http://localhost:8080
 </pre>
 </div>
