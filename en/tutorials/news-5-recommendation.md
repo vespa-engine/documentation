@@ -298,7 +298,7 @@ First, let's find the user `U33527`:
 <pre data-test="exec" data-test-assert-contains='"id": "id:user:user::U33527"'>
 $ curl -s -H "Content-Type: application/json" --data \
     '{"yql" : "select * from sources user where user_id contains \"U33527\";", "hits": 1}' \
-    http://localhost:8080/search/ | python -m json.tool
+    http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
 

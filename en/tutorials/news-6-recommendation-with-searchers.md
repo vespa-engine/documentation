@@ -301,7 +301,7 @@ Now we can search for a user's recommended news articles directly from the `user
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"documents": 28603'>
-$ curl -s 'http://localhost:8080/search/?user_id=U33527&searchchain=user' | python -m json.tool
+$ curl -s 'http://localhost:8080/search/?user_id=U33527&searchchain=user' | python3 -m json.tool
 </pre>
 </div>
 
@@ -360,7 +360,7 @@ If we take a closer look at the query above, and search for the top 100 hits:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -s "http://localhost:8080/search/?user_id=U33527&amp;hits=100" | \
-  python -m json.tool | grep "category\": \"sports" | \
+  python3 -m json.tool | grep "category\": \"sports" | \
   wc -l
 </pre>
 </div>
