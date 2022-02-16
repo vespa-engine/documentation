@@ -136,7 +136,7 @@ Now try to send the following query to Vespa, and look at the order of the hits:
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date;"}' \
-  http://localhost:8080/search/ | python -m json.tool
+  http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
 
@@ -149,7 +149,7 @@ descending order:
 <pre>
 $ curl -s -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date <span class="pre-hilite">desc</span>;"}' \
-  http://localhost:8080/search/ | python -m json.tool
+  http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
 
@@ -182,7 +182,7 @@ documents they occur in and top 3 is shown:
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 | all(group(category) max(3) order(-count())each(output(count())));"}' \
-  http://localhost:8080/search/ | python -m json.tool
+  http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
 
@@ -475,7 +475,7 @@ Run a query:
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where default contains \"music\";", "ranking" : "popularity"}' \
-  http://localhost:8080/search/ | python -m json.tool
+  http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
 

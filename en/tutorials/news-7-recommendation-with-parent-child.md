@@ -322,7 +322,7 @@ After feeding the above files, we can now test the application with a query:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -s "http://localhost:8080/search/?user_id=U33527&amp;ranking.profile=recommendation_with_global_category_ctr" | \
-    python -m json.tool
+    python3 -m json.tool
 </pre>
 </div>
 

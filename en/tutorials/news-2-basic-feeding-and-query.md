@@ -354,7 +354,7 @@ document id using the [Document API](../api.html):
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="id:news:news::N10864">
-$ curl -s 'http://localhost:8080/document/v1/news/news/docid/N10864' | python -m json.tool
+$ curl -s 'http://localhost:8080/document/v1/news/news/docid/N10864' | python3 -m json.tool
 </pre>
 </div>
 
@@ -389,7 +389,7 @@ GET query:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' |\
-  python -m json.tool
+  python3 -m json.tool
 </pre>
 </div>
 
@@ -400,7 +400,7 @@ or a POST JSON query:
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
   --data '{"yql" : "select * from sources * where default contains \"music\";"}' \
-  http://localhost:8080/search/ | python -m json.tool
+  http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
 
