@@ -91,7 +91,7 @@ You can store this data as a separate document type in Vespa and look it up befo
 or store this customer meta-data as part of the other meta-data for the customer
 (i.e. login information) and pass it along the query when you send it to the backend.
 Find an example on how to look up data in
-[album-recommendation-docproc](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/document-processing).
+[album-recommendation-docproc](https://github.com/vespa-engine/sample-apps/tree/master/examples/vespa-cloud/document-processing).
 
 #### How to create a tensor on the fly in the ranking expression?
 Create a tensor in the ranking function from arrays or weighted sets using `tensorFrom...` functions -
@@ -366,14 +366,14 @@ and avoid unnecessary noop changes.
 #### Deployment fails / nothing is listening on 19071
 Make sure all [Config servers](operations/configuration-server.html#troubleshooting) are started,
 and are able to establish ZooKeeper quorum (if more than one) -
-see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode) sample application.
+see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) sample application.
 Validate that the container has [enough memory](operations/docker-containers.html).
 
 #### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
 The Config Server cluster with 3 nodes fails to start.
 The ZooKeeper cluster the Config Servers use waits for hosts on the network,
 the hosts wait for ZooKeeper in a catch 22 -
-see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/operations#troubleshooting).
+see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 #### Starting Vespa using Docker on M1 fails
 Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
@@ -381,7 +381,7 @@ Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
 WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
 and no specific platform was requested
 ```
-Refer to [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/operations#troubleshooting).
+Refer to [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 #### How fast can nodes be added and removed from a running cluster?
 [Elasticity](elastic-vespa.html) is a core Vespa strength -
@@ -426,7 +426,7 @@ Failure response will be given in case the document is not written on some repli
 
 #### When the doc is not written to some nodes, will the document become available due to replica reconciliation?
 Yes, it will be available, eventually.
-Also try [Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/operations/multinode).
+Also try [Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode).
 
 #### Does vespa provide soft delete functionality?
 Yes just add a `deleted` attribute, add [fast-search](attributes.html#fast-search) on it
