@@ -365,39 +365,390 @@ and has been converted from the <em>flat</em> dot notation to a <em>nested</em> 
 
 <h3 id="query-tracing">Query tracing</h3>
 <p>
-  Use <a href="reference/default-result-format.html#trace">query tracing</a> to debug query execution.
+  Use <em>query tracing</em> to debug query execution.
   Enable by using <a href="reference/query-api-reference.html#tracelevel">tracelevel=1</a> (or higher).
   Add <a href="reference/query-api-reference.html#trace.timestamps">trace.timestamps=true</a>
-  for timing info for every searcher invoked. Example:
+  for timing info for every searcher invoked.
+  Find a trace example in the result examples below.
 </p>
-<pre>
-http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22hi%22%3B&amp;tracelevel=6&amp;trace.timestamps=true
-
-{
-    trace: {
-        children: [
-            {
-                message: "No query profile is used"
-            },
-            {
-                message: "Resolved properties: tracelevel=6 (value from request) yql=select * from sources * where default contains "hi"; (value from request) trace.timestamps=true (value from request) "
-            },
-            {
-                message: "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -> com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -> ... -> federation@native]"
-            },
-            {
-            children: [
-                {
-                    timestamp: 0,
-                    message: "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'"
-                },
-                {
-                    timestamp: 14,
-                    message: "com.yahoo.prelude.statistics.StatisticsSearcher in native Dependencies{provides=[StatisticsSearcher, com.yahoo.prelude.statistics.StatisticsSearcher], before=[rawQuery], after=[]}"
-                },
-</pre>
 <p>
   In custom code, use
   <a href="https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query.html">Query.trace</a>
   to add trace output.
 </p>
+
+
+
+<h2 id="result-examples">Result examples</h2>
+<p>A regular query result:</p>
+<pre>{% highlight json %}
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 3,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:mynamespace:music::a-head-full-of-dreams",
+                "relevance": 0.16343879032006284,
+                "source": "music",
+                "fields": {
+                    "sddocname": "music",
+                    "documentid": "id:mynamespace:music::a-head-full-of-dreams",
+                    "artist": "Coldplay",
+                    "album": "A Head Full of Dreams",
+                    "year": 2015,
+                    "category_scores": {
+                        "cells": [
+                            {
+                                "address": {
+                                    "cat": "pop"
+                                },
+                                "value": 1.0
+                            },
+                            {
+                                "address": {
+                                    "cat": "rock"
+                                },
+                                "value": 0.20000000298023224
+                            },
+                            {
+                                "address": {
+                                    "cat": "jazz"
+                                },
+                                "value": 0.0
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>
+<p>An empty result:</p>
+<pre>{% highlight json %}
+{
+    "root": {
+        "fields": {
+            "totalCount": 0
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+{% endhighlight %}</pre>
+<p>An error result:</p>
+<pre>{% highlight json %}
+{
+    "root": {
+        "errors": [
+            {
+                "code": 1234,
+                "message": "top of the day",
+                "stackTrace": "java.lang.Throwable\n\tat com.yahoo.search.rendering.JsonRendererTestCase.testErrorWithStackTrace(JsonRendererTestCase.java:732)",
+                "summary": "hello"
+            }
+        ],
+        "fields": {
+            "totalCount": 0
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+{% endhighlight %}</pre>
+<p>A simple search application, many undefined fields. Result for the query
+  <code>/search/?query=blues&amp;hits=3&amp;tracelevel=2</code></p>
+<pre>{% highlight json %}
+{
+
+    "trace": {
+        "children": [
+            {
+                "message": "No query profile is used"
+            },
+            {
+                "message": "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -&gt; com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -&gt; ... -&gt; federation@native]"
+            },
+            {
+                "children": [
+                    {
+                        "message": "Detected language: ENGLISH"
+                    },
+                    {
+                        "message": "Language ENGLISH determined by the characters in the terms."
+                    },
+                    {
+                        "message": "Query parsed to: select * from sources * where default contains \"blues\" limit 3;"
+                    },
+                    {
+                        "message": "Child execution",
+                        "children": [
+                            {
+                                "message": "Stemming: [select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false}]\"blue\") limit 3;]"
+                            },
+                            {
+                                "message": "Lowercasing: [select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false}]\"blue\") limit 3;]"
+                            },
+                            {
+                                "message": "sc0.num0 search to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}]\"blue\") limit 3;"
+                            },
+                            {
+                                "message": "sc0.num0 dispatch response: Result (3 of total 10 hits)"
+                            },
+                            {
+                                "message": "sc0.num0 fill to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music] summary=[null]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ([{\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}]\"blue\") limit 3;"
+                            }
+                        ]
+                    },
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 10
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 10,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:0/0/0/dfd9fcfa650b44545ef0b8b2",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Electric Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1807865261",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1807865261"
+                }
+            },
+            {
+                "id": "index:0/0/0/273d384dc214386c934d793f",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Delta Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1804905714",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1804905714"
+                }
+            },
+            {
+                "id": "index:0/0/0/b3c74a9bf3aea1e2260311c0",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Chicago Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1804905710",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1804905710"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  Result for the grouping query
+  <code>
+    /search/?hits=0&amp;yql=select * from sources * where sddocname contains purchase | all(group(customer) each(output(sum(price))));
+  </code>
+</p>
+<pre>{% highlight json %}
+{
+
+    "trace": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 20
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 20,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "group:root:0",
+                "relevance": 1,
+                "continuation": {
+                    "this": ""
+                },
+                "children": [
+                    {
+                        "id": "grouplist:customer",
+                        "relevance": 1,
+                        "label": "customer",
+                        "children": [
+                            {
+                                "id": "group:string:Jones",
+                                "relevance": 9870,
+                                "value": "Jones",
+                                "fields": {
+                                    "sum(price)": 39816
+                                }
+                            },
+                            {
+                                "id": "group:string:Brown",
+                                "relevance": 8000,
+                                "value": "Brown",
+                                "fields": {
+                                    "sum(price)": 20537
+                                }
+                            },
+                            {
+                                "id": "group:string:Smith",
+                                "relevance": 6100,
+                                "value": "Smith",
+                                "fields": {
+                                    "sum(price)": 19484
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>
