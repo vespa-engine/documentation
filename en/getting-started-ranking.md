@@ -393,7 +393,7 @@ curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc
 </pre>
 
 {% include query.html content=
-"[select * from doc where [{\"scoreThreshold\": 0, \"targetHits\": 10}]weakAnd(default contains \"vespa\", default contains \"documents\", default contains \"about\", default contains \"ranking\", default contains \"and\", default contains \"retrieval\");](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22)%3B)"%}
+"[select * from doc where {scoreThreshold: 0, targetHits: 10}weakAnd(default contains \"vespa\", default contains \"documents\", default contains \"about\", default contains \"ranking\", default contains \"and\", default contains \"retrieval\");](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22)%3B)"%}
 
 Note that this blurs the distinction between filtering (retrieval) and ranking a little -
 here the `weakAnd` does <span style="text-decoration: underline">both</span> filtering and ranking

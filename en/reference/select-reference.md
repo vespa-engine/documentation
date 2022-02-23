@@ -434,7 +434,7 @@ Format of this in JSON:
 ```
 
 ###### weakAnd
-YQL: `where [{"scoreThreshold": 41, "targetHits": 7}]weakAnd(a contains "A", b contains "B")`.
+YQL: `where {scoreThreshold: 41, "targetHits": 7}weakAnd(a contains "A", b contains "B")`.
 
 Format of this in JSON:
 

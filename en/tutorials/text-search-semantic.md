@@ -94,11 +94,12 @@ A sample query looks like this:
 
 The match operator `OR` means that we are matching documents that contain any of the query terms
 either in the title or in the body.
-The only difference is the inclusion of the `[{"grammar": "any"}]` in the [YQL](../query-language.html) expression:
+The only difference is the inclusion of the `{grammar: "any"}` in the
+[YQL](../reference/query-language-reference.html#grammar) expression:
 
 ```
 {
-	"yql":"select * from sources * where ([{"grammar": "any"}]userInput(@userQuery));"
+	"yql":"select * from sources * where ({grammar: "any"}userInput(@userQuery))"
 	...
 }
 ```
@@ -271,7 +272,7 @@ together with the appropriate rank-profile:
 
 ```
 {
-	"yql":"select * from sources * where ([{"targetHits": 1000, "label": "nns"}]nearestNeighbor(title_bert, tensor_bert));"
+	"yql":"select * from sources * where ({targetHits: 1000, label: "nns"}nearestNeighbor(title_bert, tensor_bert))"
 	"userQuery":"what types of plate boundaries cause deep sea trenches"
 	"ranking":{
 		"profile":"bert_title_body_all"
@@ -339,7 +340,7 @@ with an annotation that sets the target number of documents to be 1.000:
 
 ```
 {
-	"yql":"select * from sources * where ([{"targetHits": 1000}]weakAnd(default contains "what", default contains "types", default contains "of", default contains "plate", default contains "boundaries", default contains "cause", default contains "deep", default contains "sea", default contains "trenches"));"
+	"yql":"select * from sources * where ({targetHits: 1000}weakAnd(default contains "what", default contains "types", default contains "of", default contains "plate", default contains "boundaries", default contains "cause", default contains "deep", default contains "sea", default contains "trenches"))"
 	"userQuery":"what types of plate boundaries cause deep sea trenches"
 	"ranking":{
 		"profile":"bm25"
