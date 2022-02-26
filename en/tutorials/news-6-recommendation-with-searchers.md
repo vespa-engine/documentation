@@ -388,7 +388,7 @@ it's important to perform some form of de-duplication before returning the final
 
 A common way of performing blending from multiple sources is to implement a specialized
 blending searcher. This searcher can, for instance, use an approach such 
-[reciprocal rank fusion](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.150.2291&rep=rep1&type=pdf) 
+[reciprocal rank fusion](https://research.google/pubs/pub36196/) 
 which gives decent results. However, when it comes to diversity,
 there are usually some goals or restrictions that needs to be controlled.
 In this case the business rules can be hand-written in the blending searcher.
