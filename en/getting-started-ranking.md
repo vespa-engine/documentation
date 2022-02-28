@@ -360,10 +360,10 @@ Read more in [first-phase](reference/schema-reference.html#firstphase-rank).
 This guide will not go deep in query operators in the retrieval phase,
 see [query-api](query-api.html) for details.
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
+<pre style="display:none" data-test="exec" data-test-assert-contains="getting-started-ranking.html">
 curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20AND%20default%20contains%20%22documents%22%20AND%20default%20contains%20%22about%22%20AND%20default%20contains%20%22ranking%22%20AND%20default%20contains%20%22and%22%20AND%20default%20contains%20%22retrieval%22)%3B'
 </pre>
-<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
+<pre style="display:none" data-test="exec" data-test-assert-contains="getting-started-ranking.html">
 curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20OR%20default%20contains%20%22documents%22%20OR%20default%20contains%20%22about%22%20OR%20default%20contains%20%22ranking%22%20OR%20default%20contains%20%22and%22%20OR%20default%20contains%20%22retrieval%22)%3B'
 </pre>
 Consider a query like _"vespa documents about ranking and retrieval"_.
@@ -388,7 +388,7 @@ To find the least relevant candidates, a simple scoring function is used:
 As the point of [weakAnd](reference/query-language-reference.html#weakand) is to early discard the worst candidates,
 _totalCount_ is an approximation:
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
+<pre style="display:none" data-test="exec" data-test-assert-contains="getting-started-ranking.html">
 curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22)%3B'
 </pre>
 
