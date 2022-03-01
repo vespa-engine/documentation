@@ -49,7 +49,7 @@ FUNCTION : [
 YQL is a regular language and is parsed into a query-tree when parsed in Vespa. That tree can also be built
 with the `WHERE`-parameter in JSON. 
 
-Let's take a look at this yql: `select * from sources * where default contains foo and rank(a contains "A", b contains "B");`, which will create the following query-tree:
+Let's take a look at this yql: `select * from sources * where default contains foo and rank(a contains "A", b contains "B")`, which will create the following query-tree:
 
 <img src="/assets/img/querytree.svg" width="737px" height="auto" alt="Example query tree" />
 

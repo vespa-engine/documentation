@@ -38,7 +38,7 @@ and returns the rank features associated with each of the results returned.
 
 ```
 body = {
-    "yql": 'select * from sources * where (userInput(@userQuery));',
+    "yql": 'select * from sources * where (userInput(@userQuery))',
     "userQuery": "what is dad bod",
     "presentation.format": "json",
     "ranking": {"profile": "bm25", "listFeatures": "true"},
@@ -239,7 +239,7 @@ and `relevant_id` is the document id that is said to be relevant to that specifi
 The body of the request is given by:
 ```
 body = {
-    "yql": "select id, rankfeatures from sources * where  (userInput(@userQuery));",
+    "yql": "select id, rankfeatures from sources * where  (userInput(@userQuery))",
     "userQuery": query,
     "hits": 1,
     "recall": "+id:" + str(relevant_id),
@@ -272,7 +272,7 @@ which specify how many documents we should sample from the matched set.
 The body of the request is given by
 ```
 body = {
-    "yql": "select id, rankfeatures from sources * where (userInput(@userQuery));",
+    "yql": "select id, rankfeatures from sources * where (userInput(@userQuery))",
     "userQuery": query,
     "hits": number_random_sample,
     "ranking": {"profile": collect_features, "listFeatures": "true"},

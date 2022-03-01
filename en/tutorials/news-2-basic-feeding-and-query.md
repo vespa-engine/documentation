@@ -378,7 +378,7 @@ details can be found in the [Query API](../query-api.html).
 
 Consider the query:
 
-	select * from sources * where default contains \"music\";"
+	select * from sources * where default contains \"music\""
 
 Given the above schema, where the fields `title`, `abstract` and `body` are
 part of the `fieldset default`, any document containing the word "music" in one
@@ -388,7 +388,7 @@ GET query:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22%3B' |\
+$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22' |\
   python3 -m json.tool
 </pre>
 </div>
@@ -399,7 +399,7 @@ or a POST JSON query:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\";"}' \
+  --data '{"yql" : "select * from sources * where default contains \"music\""}' \
   http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
@@ -425,20 +425,20 @@ Looking at the output, please note:
 
 ### Other examples
 
-    {"yql" : "select title from sources * where title contains \"music\";"}
+    {"yql" : "select title from sources * where title contains \"music\""}
 
 Again, this is a search for the single term "music", but this time explicitly in the 
 `title` field. This means that we only want to match documents that contain the
 word "music" in the field `title`. As expected, you will see fewer hits for
 this query than for the previous one.
 
-    {"yql" : "select * from sources * where title contains \"music\" AND default contains \"festival\";"}
+    {"yql" : "select * from sources * where title contains \"music\" AND default contains \"festival\""}
 
 This is a query for the two terms "music" and "festival", combined with an
 `AND` operation; it finds documents that match both terms — but not just one of
 them.
 
-    {"yql" : "select * from news * where true;"}
+    {"yql" : "select * from news * where true"}
 
 This is a common and useful Vespa trick to get the number of indexed
 documents for a certain document type. 

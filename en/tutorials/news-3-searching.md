@@ -79,20 +79,20 @@ include `attribute: fast-search` in the field definition." %}
 
 ### Example queries using attribute field
 
-    {"yql" : "select * from sources * where default contains \"20191110\";"}
+    {"yql" : "select * from sources * where default contains \"20191110\""}
 
 This is a single-term query for the term _20191110_ in the `default` field
 set. In the search definition, the field `date` is not included in the
 `default` fieldset, so no results are found.
 
-    {"yql" : "select * from sources * where date contains \"20191110\";"}
+    {"yql" : "select * from sources * where date contains \"20191110\""}
 
 To get documents that were created 10 November 2019, and whose `date` field is
 _20191110_, replace `default` with `date` in the YQL query string.  Note that
 since `date` has not been defined with `attribute:fast-search`, searching will
 be done by scanning _all_ documents.
 
-    {"yql" : "select * from sources * where default contains \"weather\" AND date contains \"20191110\";"}
+    {"yql" : "select * from sources * where default contains \"weather\" AND date contains \"20191110\""}
 
 This is a query with two terms; a search in the `default` field set for the term
 "weather" combined with a search in the `date` field for the value _20191110_.
@@ -109,12 +109,12 @@ _int_, however, we can use it for _range searches_ as well, using the "less
 than" and "greater than" operators (`<` and `>`, or `%3C` and `%3E` URL
 encoded if using GET-queries). The query
 
-    {"yql" : "select * from sources * where date < 20191110;"}
+    {"yql" : "select * from sources * where date < 20191110"}
 
 finds all documents where the value of `date` is less than _20191110_, i.e.,
 all documents from before 10 November 2019, while
 
-    {"yql" : "select * from sources * where date <= 20191110 AND date >= 20191108;"}
+    {"yql" : "select * from sources * where date <= 20191110 AND date >= 20191108"}
 
 finds all news articles from 8 November 2019 to 10 November 2019, inclusive.
 
@@ -135,7 +135,7 @@ Now try to send the following query to Vespa, and look at the order of the hits:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date;"}' \
+  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date"}' \
   http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
@@ -148,7 +148,7 @@ descending order:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date <span class="pre-hilite">desc</span>;"}' \
+  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date <span class="pre-hilite">desc</span>"}' \
   http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
@@ -181,7 +181,7 @@ documents they occur in and top 3 is shown:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 | all(group(category) max(3) order(-count())each(output(count())));"}' \
+  --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 | all(group(category) max(3) order(-count())each(output(count())))"}' \
   http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>

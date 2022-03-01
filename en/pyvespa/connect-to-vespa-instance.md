@@ -32,7 +32,7 @@ We have full flexibility to specify the request body based on the
 
 ```python
 body = {
-  'yql': 'select cord_uid, title, abstract from sources * where userQuery();',
+  'yql': 'select cord_uid, title, abstract from sources * where userQuery()',
   'hits': 5,
   'query': 'Is remdesivir an effective treatment for COVID-19?',
   'type': 'any',
