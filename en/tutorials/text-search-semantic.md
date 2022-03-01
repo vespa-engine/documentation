@@ -82,7 +82,7 @@ A sample query looks like this:
 
 ```
 {
-	"yql":"select * from sources * where (userInput(@userQuery));"
+	"yql":"select * from sources * where (userInput(@userQuery))"
 	"userQuery":"what types of plate boundaries cause deep sea trenches"
 	"ranking":{
 		"profile":"bm25"

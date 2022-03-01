@@ -297,7 +297,7 @@ First, let's find the user `U33527`:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"id": "id:user:user::U33527"'>
 $ curl -s -H "Content-Type: application/json" --data \
-    '{"yql" : "select * from sources user where user_id contains \"U33527\";", "hits": 1}' \
+    '{"yql" : "select * from sources user where user_id contains \"U33527\"", "hits": 1}' \
     http://localhost:8080/search/ | python3 -m json.tool
 </pre>
 </div>
@@ -349,7 +349,7 @@ search looks like this:
 ```
 {
     "hits": 10,
-    "yql": "select * from sources news where (nearestNeighbor(embedding, user_embedding));',
+    "yql": "select * from sources news where (nearestNeighbor(embedding, user_embedding))',
     "ranking.features.query(user_embedding)": "{ ... }" ,
     "ranking.profile": "recommendation"
 }

@@ -107,7 +107,7 @@ We can query the application using the [Vespa Query Language](../query-language.
 
 ```python
 result = app.query(body={
-  'yql': 'select text from sources sentence  where userQuery();',
+  'yql': 'select text from sources sentence  where userQuery()',
   'query': 'What is in front of the Notre Dame Main Building?',
   'type': 'any',
   'hits': 5,

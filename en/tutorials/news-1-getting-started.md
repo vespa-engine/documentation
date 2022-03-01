@@ -195,7 +195,7 @@ We can query the endpoint:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Hello world!'>
-$ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddocname+contains+%22news%22;"
+$ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddocname+contains+%22news%22"
 </pre>
 </div>
 
