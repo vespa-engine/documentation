@@ -10,11 +10,15 @@ This is a complete reference to the <em>ranking expressions</em>
 used to configure application specific ranking functions.
 For examples and an overview of how to use ranking expressions,
 see the <a href="../ranking.html">ranking overview</a>.
-</p><p>
+</p>
+
+<p>
 Ranking expressions are written in a simple language similar to ordinary functional notation.
 The atoms in ranking expressions are <em>rank features</em> and <em>constants</em>.
-These atoms can be combined by <em>arithmetic operations</em> and <em>built-in functions</em>.
+These atoms can be combined by <em>arithmetic operations</em> and other
+<em>built-in functions</em> over scalars and tensor.
 </p>
+
 <table class="table">
 <thead>
 </thead><tbody>
@@ -25,10 +29,14 @@ each query/document combination.  See the
 <a href="rank-features.html">rank feature reference</a>
 for a list of all the rank features available to ranking expressions.
 </td>
-</tr><tr id="constants"><th>Constants</th>
+</tr>
+<tr id="constants"><th>Constants</th>
   <td>
-    A constant is either a floating point number, or a quoted string.
-    Strings are only useful for equality comparison in the if function.
+    A constant is either a floating point number, a boolean (true/false) or a quoted string.
+    Since ranking expressions can only work on scalars and tensors, strings and booleans are
+    immediately converted to scalars - true becomes 1.0, false 0.0 and a string its hash value.
+    This means that <b>strings can only be used for equality comparisons</b>, other purposes
+    such as parametrizing the key to slice out of a tensor will not work correctly.
   </td>
 </tr>
 </tbody>
@@ -51,7 +59,7 @@ Terms can be ordered using parentheses when it is necessary to override default 
 
 
 
-<h2 id="mathematical-functions">Mathematical Functions</h2>
+<h2 id="mathematical-scalar-functions">Mathematical scalar functions</h2>
 <table class="table">
   <thead>
   <tr>
@@ -98,7 +106,7 @@ Terms can be ordered using parentheses when it is necessary to override default 
 
 
 
-<h2 id="the-if-function">The if Function</h2>
+<h2 id="the-if-function">The if function</h2>
 <p>
 The <code>if</code> function chooses between two sub-expressions based on the truth value of a condition.
 </p>
@@ -138,15 +146,16 @@ then trueExpression is used, otherwise falseExpression.
 
 
 
-<h2 id="the-foreach-function">The foreach Function</h2>
+<h2 id="the-foreach-function">The foreach function</h2>
+
 <p>
 The foreach function is not really part of the expression language but implemented as a
 <a href="rank-features.html#foreach(dimension,variable,feature,condition,operation)">rank feature</a>.
 </p>
 
 
+<h2 id="tensor-functions">Tensor functions</h2>
 
-<h2 id="tensor-functions">Tensor Functions</h2>
 <p>
 The following set of tensors functions are available to use in ranking expressions.
 The functions are grouped in primitive functions
@@ -253,7 +262,8 @@ reduce(t, count, x)    # Count number of cells along dimension x
 t1 = {{x:0}: 1.0, {x:1}: 2.0}
 t2 = {{x:0,y:0}: 3.0, {x:0,y:1}: 4.0, {x:1,y:0}: 5.0, {x:1,y:1}: 6.0}
 
-join(t1, t2, f(x,y)(x * y)) = {{x:0,y:0}: 3.0, {x:0,y:1}: 4.0, {x:1,y:0}: 10.0, {x:1,y:1}: 12.0}
+join(t1, t2, f(x,y)(x * y)) = { {x:0,y:0}:  3.0, {x:0,y:1}:  4.0,
+                                {x:1,y:0}: 10.0, {x:1,y:1}: 12.0 }
 
 reduce(join(t1, t2, f(x,y)(x * y)), sum) = 29.0
 {% endraw %}</pre>
@@ -311,8 +321,12 @@ merge(t1, t2, f(left,right)(right)) = tensor(key{},x[2]):{a:[1,2],b:[5,6],c:[7,8
 t1 = tensor(x[4]):[1.0, 2.0, 3.0, 4.0]
 
 tensor&lt;float&gt;(x[3])(x) = [0.0, 1.0, 2.0]
-tensor&lt;float&gt;(x[2],y[2])(x == y) = {{x:0,y:0}: 1.0, {x:0,y:1}: 0.0, {x:1,y:0}: 0.0, {x:1,y:1}: 1.0}
-tensor(f[2])(t1{x: f + f()})) - Create a size 2 1d tensor by accessing t1 at two indexes given by adding the index of it (f - which is 0 and 1) by a function also named f.
+tensor&lt;float&gt;(x[2],y[2])(x == y) = { {x:0,y:0}: 1.0, {x:0,y:1}: 0.0,
+                                     {x:1,y:0}: 0.0, {x:1,y:1}: 1.0 }
+
+# Create a size 2 1d tensor by accessing t1 at two indexes given by adding
+# the index of it (f - which is 0 and 1) by a function also named f.
+tensor(f[2])(t1{x: f + f()}))
 {% endraw %}</pre>
     </td>
 </tr>
@@ -410,8 +424,9 @@ t3{key:key1,x:(3-2)} = {2.0}
 t1 = tensor(x[2]):[1.0, 2.0]]
 
 tensor(x{}):{x1:3, x2:4} = tensor(x{}):{x1:3.0, x2:4.0}
-tensor(x{}):{x1:t1[1], x2:t1[0]} = tensor(x{}):{x1:2.0, x2:1.0} - Used in conjunction with slice,
-                                                                  to convert an indexed tensor to mapped form.
+
+# Used in conjunction with slice, to convert an indexed tensor to mapped form:
+tensor(x{}):{x1:t1[1], x2:t1[0]} = tensor(x{}):{x1:2.0, x2:1.0}
 {% endraw %}</pre>
     </td>
 </tr>
