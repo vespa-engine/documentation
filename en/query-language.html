@@ -6,114 +6,116 @@ redirect_from:
 ---
 
 <p>
-Vespa accepts unstructured human input and structured queries for application logic separately,
-then combines them into a single data structure for executing.
-Human input is parsed heuristically, while application queries are formulated in YQL.
-</p><p>
-A simple query URL looks like:
+  Vespa accepts unstructured human input and structured queries for application logic separately,
+  then combines them into a single data structure for executing.
+  Human input is parsed heuristically, see <a href="query-api.html#input">Query API input</a>.
+  Application logic is expressed in YQL, use this guide for examples -
+  also see the <a href="reference/query-language-reference.html">YQL reference</a>.
 </p>
-<pre>
-http://myhost.mydomain.com:8080/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22%3B
-</pre>
-<p>In other words, <em>yql</em> contains:</p>
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22%3B
-</pre>
+
+
+
+<h2 id="live-query-examples">Live query examples</h2>
 <p>
-This matches all documents where the field named <em>text</em> contains the word <em>blues</em>.
-</p><p>
-This document has examples and guides for how to use search operators as found in the
-<a href="reference/query-language-reference.html">query language reference</a>.
-</p><p>
-Example queries:
+  The following are live YQL examples:
 </p>
-<table class="table">
-  <thead></thead><tbody>
-    <tr>
-      <th>Ordering</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where default contains \"bad\" order by year desc;"}' \
-    http://localhost:8080/search/
+
+<p><a class="docsearch-x">select * from doc where true</a></p>
+<p>
+  Selection: Select all documents from the "doc" source.
+  This is the easiest way to count all documents in a source.
+</p>
+
+<p><a class="docsearch-x">select * from doc where title contains "ranking"</a></p>
+<p>
+  Filtering: Find all documents with "ranking" in the "title" field.
+</p>
+
+<p><a class="docsearch-x">select * from doc where default contains "ranking"</a></p>
+<p>
+  Filtering: Find all documents with "ranking" in the "default" <a href="schemas.html#fieldset">fieldset</a>.
+</p>
+
+<p><a class="docsearch-x">select * from doc where true order by term_count desc</a></p>
+<p>
+  Ordering: Order by number of terms in the document, descending.
+</p>
+
+<p><a class="docsearch-x">select * from doc where true limit 15 offset 5</a></p>
+<p>
+  Pagination: Select all documents, return hits 6-15.
+</p>
+
+<p><a class="docsearch-x">select * from doc where true limit 0 |
+  all(
+    group( fixedwidth(term_count,100) )
+    each( output( avg(term_count) ) )
+  )</a></p>
+<p>
+  Grouping:
+</p>
+<ul>
+  <li>Select all documents from the "doc" source.</li>
+  <li>Group by term count in buckets of 100, display average term count per bucket.</li>
+  <li>Note "limit 0": This will return 0 regular hits, hence only the grouping result.</li>
+</ul>
+<p>
+  Find more <a href="grouping.html">grouping examples</a>.
+</p>
+
+<p><a class="docsearch-x">select * from doc where last_updated > 1646167144</a></p>
+<p>
+  Numeric: Select documents with attribute "last_updated" > 1646167144.
+</p>
+
+<p><a class="docsearch-x">select * from doc where default contains phrase("question","answering")</a></p>
+<p>
+  Phrase: Select documents with the phrase "question answering".
+</p>
+
+<p><a class="docsearch-x">select * from doc where true timeout 100</a></p>
+<p>
+  Timeout: Time out query execution after 100 ms. This will be default return hits found so far,
+  see <a href="reference/query-api-reference.html#ranking.softtimeout">ranking.softtimeout</a>.
+  <!-- ToDo: link to the $timeout= query API - this defaults to seconds -->
+</p>
+
+<p><a class="docsearch-x">select * from doc where namespace matches "op.*"</a></p>
+<p>
+  Regular expressions: Select documents matching the regular expression in the "namespace" attribute field.
+</p>
+
+<p><a class="cord19-x">select * from doc where has_full_text = false</a></p>
+<p>
+  Boolean: Select documents with boolean attribute field "has_full_text" = false.
+</p>
+
+
+<h3 id="command-line-queries">Command-line queries</h3>
+<p>
+To run a query from the command-line, set the query as the <code>yql</code> parameter like:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+  <pre>
+$ curl --data-urlencode 'yql=select * from doc where true' \
+  https://doc-search.vespa.oath.cloud/search/
 </pre>
-      </td>
-    </tr><tr>
-      <th>Grouping</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where default contains \"bad\" | all(group(year) each(output(sum(duration))));"}' \
-    http://localhost:8080/search/
+</div>
+<p>
+  Alternatively, use the <a href="vespa-cli.html">Vespa CLI</a>:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+  <pre>
+$ vespa query 'select * from doc where true'
 </pre>
-      </td>
-    </tr><tr>
-      <th>Pagination</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where default contains \"bad\" limit 2 offset 1;"}' \
-    http://localhost:8080/search/
-</pre>
-      </td>
-    </tr><tr>
-      <th>Numeric</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where year > 2000;"}' \
-    http://localhost:8080/search/
-</pre>
-      </td>
-    </tr><tr>
-      <th>Boolean</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where alive = true;"}' \
-    http://localhost:8080/search/
-</pre>
-      </td>
-    </tr><tr>
-      <th>Phrase</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where artist contains phrase(\"michael\", \"jackson\");"}' \
-    http://localhost:8080/search/
-</pre>
-      </td>
-    </tr><tr>
-      <th>Timeout</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where default contains \"bad\" timeout 100;"}' \
-    http://localhost:8080/search/
-</pre>
-      </td>
-    </tr><tr>
-      <th>Regexp</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources * where title matches \"mado[n]+a\";"}' \
-    http://localhost:8080/search/
-</pre>
-      </td>
-    </tr><tr>
-      <th>Count</th>
-      <td>
-<pre>
-$ curl -H "Content-Type: application/json" \
-    --data '{"yql" : "select * from sources music where true;"}' \
-    http://localhost:8080/search/
-</pre>
-      </td>
-    </tr><tr>
-      <th>Map</th>
-      <td>
-        <p id="map"></p>
+</div>
+
+
+<!-- ToDo: move this to a live query - need to add a map field to a sample app -->
+<h2 id="query-examples">Query examples</h2>
+<p id="map">Map</p>
 <pre>
 $ curl -H "Content-Type: application/json" \
     --data '{"yql" : "select * from sources * where my_map contains sameElement(key contains \"Coldplay\", weight > 10);"}' \
@@ -125,9 +127,25 @@ field my_map type map&lt;string, int&gt; {
     struct-field value { indexing: attribute }
 }
 </pre>
-      </td>
-    </tr>
-  </tbody>
-</table>
 
-<script src="/js/copy_urlencoded.js"></script>
+
+<script>
+  function generateQueryExamples () {
+    let docsearchQueries = document.getElementsByClassName("docsearch-x");
+    for (let anchor of docsearchQueries) {
+      generateQuery(anchor, "https://doc-search.vespa.oath.cloud/search/");
+    }
+    let cord19Queries = document.getElementsByClassName("cord19-x");
+    for (let anchor of cord19Queries) {
+      generateQuery(anchor, "https://api.cord19.vespa.ai/search/");
+    }
+  }
+
+  function generateQuery(anchor, endpoint) {
+    let hr = document.createElement("hr");
+    anchor.parentElement.insertBefore(hr, anchor);
+    anchor.setAttribute("href", encodeURI(endpoint + "?yql=" + anchor.innerText));
+  }
+
+  document.addEventListener("DOMContentLoaded", generateQueryExamples);
+</script>
