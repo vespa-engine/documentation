@@ -65,11 +65,50 @@ ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.
   This is the integration point to plug in code to enrich a query - example:
   Look up user profile data from a user ID in the request.
   Set <em>&amp;tracelevel=2</em> to inspect the search chain components.
-</p><p>
-  An application can have multiple content clusters - Vespa searches in all by default.
-  <a href="federation.html">Federation</a> controls how to query the clusters,
-  <a href="reference/query-api-reference.html#model.sources">sources</a> names the clusters
 </p>
+
+
+<h3 id="input-and-yql-example">Input and YQL - example</h3>
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20userInput%28%40animal%29&amp;animal=panda
+</pre>
+<p>
+  The userInput() function will access the query property "animal",
+  and parse the property value as an <a href="reference/query-language-reference.html#grammar">"all"</a> query,
+  resulting in:
+</p>
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20default%20contains%20%22panda%22
+</pre>
+<p>Changing the value of "animal" without changing the rest of the expression:</p>
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20userInput%28%40animal%29&amp;animal=panda%20smokey
+</pre>
+<p>The result is:</p>
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20default%20contains%20%22panda%22%20and%20default%20contains%20%22smokey%22
+</pre>
+<p>Combining multiple query properties, and having a more complex expression:</p>
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28userInput%28%40animal%29%20or%20userInput%28%40teddy%29%29&amp;animal=panda&amp;teddy=bear%20roosevelt
+</pre>
+<p>The resulting YQL expression is:</p>
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28default%20contains%20%22panda%22%20or%20%28default%20contains%20%22bear%22%20and%20default%20contains%20%22roosevelt%22%29%29
+</pre>
+<p>
+  Now, consider we do not want the "teddy" field to be treated as its own query segment,
+  it should only be segmented with the linguistic libraries to get recall.
+  Do this by adding a <a href="reference/query-language-reference.html#grammar">"grammar"</a>
+  annotation to the userInput() call:
+</p>
+<pre class="urlunencode" oncopy="">
+yql=select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28userInput%28%40animal%29%20or%20%7Bgrammar%3A%20%22segment%22%7DuserInput%28%40teddy%29%29&amp;animal=panda&amp;teddy=bear%20roosevelt
+</pre>
+<p>Then, the linguistic library will split on space, and the resulting expression is:</p>
+<pre class="urlunencode" oncopy="">
+select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28default%20contains%20%22panda%22%20or%20default%20contains%20phrase%28%22bear%22%2C%20%22roosevelt%22%29%29
+</pre>
 
 
 <h3 id="query-profiles">Query Profiles</h3>
@@ -191,15 +230,18 @@ use this to write code to manipulate results.
     Adding <code>&amp;tracelevel=4</code> (or higher) to the query will
     emit the components invoked in the query, and is useful to analyze ordering.
   </li><li>
-    <p>
+  <p>
     The query is sent from the container to
     the <a href="schemas.html#content-cluster-mapping">content cluster</a>  -
     see <a href="federation.html">federation</a> for more details.
+    An application can have multiple content clusters - Vespa searches in all by default.
+    <a href="federation.html">Federation</a> controls how to query the clusters,
+    <a href="reference/query-api-reference.html#model.sources">sources</a> names the clusters
     The illustration above has one content cluster but multiple is fully supported
     and allows scaling <a href="schemas.html">document types</a> differently.
     E.g. a <em>tweet</em> document type can be indexed in a separate content cluster
     from a <em>user</em> document type, enabling independent scaling of the two.
-    </p>
+  </p>
     <img src="/assets/img/query-dispatch.svg" width="570px" height="auto"
          alt="Query processing and dispatch"/>
   </li>
@@ -752,3 +794,5 @@ and has been converted from the <em>flat</em> dot notation to a <em>nested</em> 
     }
 }
 {% endhighlight %}</pre>
+
+<script src="/js/copy_urlencoded.js"></script>
