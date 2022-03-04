@@ -27,7 +27,6 @@ Install [bundler](https://bundler.io/), then
 
 to set up a local server at localhost:4000 to see the pages as they will look when served.
 If you get strange errors on bundle install try
-If you get confusing errors when you try bundle install, try to set
 
     $ export PATH=“/usr/local/opt/ruby@2.6/bin:$PATH”
     $ export LDFLAGS=“-L/usr/local/opt/ruby@2.6/lib”
