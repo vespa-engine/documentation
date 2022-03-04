@@ -26,6 +26,13 @@ Install [bundler](https://bundler.io/), then
     $ bundle exec jekyll serve --incremental --drafts --trace
 
 to set up a local server at localhost:4000 to see the pages as they will look when served.
+If you get strange errors on bundle install try
+
+    $ export PATH=“/usr/local/opt/ruby@2.6/bin:$PATH”
+    $ export LDFLAGS=“-L/usr/local/opt/ruby@2.6/lib”
+    $ export CPPFLAGS=“-I/usr/local/opt/ruby@2.6/include”
+    $ export PKG_CONFIG_PATH=“/usr/local/opt/ruby@2.6/lib/pkgconfig”
+
 The output will highlight rendering/other problems when starting serving.
 
 Alternatively, use the docker image `jekyll/jekyll` to run the local server on
