@@ -90,13 +90,11 @@ $ vespa-visit
 </pre>
 As a full data dump takes time / space / resources, refine as needed:
 <pre>
-$ vespa-visit -v --priority LOW_1 -p progress-file -s 'id.hash().abs() % 100 = 0' \
+$ vespa-visit -v -p progress-file -s 'id.hash().abs() % 100 = 0' \
   --fieldset 'music:[document]' > 100.json
 </pre>
 <ul>
   <li><em>-v</em> prints a % finished</li>
-  <li><em>--priority LOW_1</em> <a href="#priority">de-prioritizes</a> the data dump -
-    useful in live applications.</li>
   <li><em>-p progress-file</em> saves progress, allowing the visitor to resume at next startup.
     Always remove the progress file to run the visiting operation from the start.</li>
   <li><em>-s 'id.hash().abs() % 100 = 0'</em> dumps 1% of the corpus - see <a href="#selection">selection</a>.</li>
@@ -399,64 +397,6 @@ The default is one iterator request is pending to the backend at any time.
 By sending many small iterator requests, having several pending at a time,
 the processing may occur in parallel with the document fetching.
 </p>
-
-
-<h3 id="priority">Priority</h3>
-<p>
-Visitor requests have priorities just like any other requests.
-These priorities are kept throughout the chain of requests.
-A low priority reprocessing visitor will end up sending
-low priority visitor requests to the content nodes,
-which will send low priority put operations to be reprocessed,
-which will end up as low priority put operations to the backend. Example:
-</p>
-<pre>
-$ vespa-visit --priority LOW_1
-</pre>
-<p>Refer to <a href="../reference/services.html#clients">load types</a> for priority values.</p>
-
-
-<h3 id="max-concurrent-visitors-on-content-nodes">Max concurrent visitors on content nodes</h3>
-<p>
-Content nodes process <a href="../reference/services-content.html#max-concurrent">max-concurrent</a>
-visitors at a time.
-This enforces enough memory for the currently active ones,
-and that the active ones will complete in reasonable time.
-To prevent a lot of low priority visitors to stop high priority visitors from being started,
-the maximum amount of concurrent visitors is a function that depends on the priority:
-</p><p><!-- depends on mathjax -->
-$$\text{maxconcurrent}_{V} = \text{fixed + variable} \times \frac{255 - \text{priority}_{V}}{255}$$
-</p><p>
-The <em>fixed</em> value represent the number always allowed to process in parallel regardless of priority,
-and the <em>variable</em> represent how many additional visitors can be run at maximum priority.
-Thus, if only low priority visitors are running,
-there will be free slots in the queue for high priority visitors incoming.
-</p><p>
-Once visitors have started, backend requests for documents are also prioritized,
-but the processing of the documents are not.
-However, as the high priority backend requests will take priority,
-the high priority visitors should also get responses to process faster.
-</p>
-
-
-<h3 id="queueing">Queueing</h3>
-<p>
-Visitor requests may be queued at several layers.
-Visitor clients have a virtual queue by deciding only to send requests for a few buckets at a time.
-Distributors have a virtual queue deciding to only forward requests for some buckets at a time.
-These queues are per visitor, and can be adjusted through visitor parameters.
-</p><p>
-The content node queues up visitor requests if the maximum allowed is already running.
-If doing so, this queue will be kept in priority order.
-In the event of client hammering, this queue may also fill up, replying busy back to the clients.
-</p><p>
-The partition threads will queue up requests to read needed parts of data.
-These requests will be tagged with the priority of the visitor itself.
-Additionally, the responses from the backend will be queued for processing in the visitor thread.
-This queue is not a priority queue, but as it contains replies from data processed of a priority queue,
-this is not expected to be an issue.
-</p>
-
 
 
 <h2 id="visitor-processor-types">Visitor processor types</h2>
