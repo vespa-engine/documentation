@@ -146,41 +146,22 @@ service. Write the following to `my-app/services.xml`:
 
 Quite a lot is set up here:
 
-- `<container>` defines the [container cluster](../jdisc/index.html) for
+- `<container>` defines the stateless [container cluster](../jdisc/index.html) for
   document, query and result processing
 - `<search>` sets up the [query endpoint](../query-api.html).  The default port
   is 8080.
 - `<document-api>` sets up the [document
-  endpoint](../reference/document-v1-api-reference.html) for feeding.
+  endpoint](../reference/document-v1-api-reference.html) for feeding and visiting.
 - `<nodes>` defines the nodes required per service.  (See the
   [reference](../reference/services-container.html) for more on container
   cluster setup).
-- `<content>` defines how documents are stored and searched.
-- `<redundancy>` denotes how many copies to keep of each document.
+- `<content>` The stateful content cluster
+- `<redundancy>` denotes how many copies to store of each document.
 - `<documents>` assigns the document types in the _schema_ — the content
   cluster capacity can be increased by adding node elements — see [elastic
   Vespa](../elastic-vespa.html). (See also the
   [reference](../reference/services-content.html) for more on content cluster
   setup.)
-
-
-### Deployment Specification
-
-The [hosts.xml](../reference/hosts.html) file contains a list of all the
-hosts/nodes that are part of the application, with an alias for each of them.
-Write the following to `my-app/hosts.xml`:
-
-<pre data-test="file" data-path="sample-apps/news/my-app/hosts.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;hosts&gt;
-  &lt;host name="localhost"&gt;
-    &lt;alias&gt;node1&lt;/alias&gt;
-  &lt;/host&gt;
-&lt;/hosts&gt;
-</pre>
-
-This sets up the alias `node1` to represent the localhost. You 
-saw this alias in the services specification above.
 
 
 ### Schema
@@ -264,7 +245,7 @@ indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
 - `attribute:` Store this field in memory as an [attribute](../attributes.html)
-  — for [sorting](../reference/sorting.html), [querying](../query-api.html) and
+  — for [sorting](../reference/sorting.html), [querying](../query-api.html), [ranking](../ranking.html) and
   [grouping](../grouping.html).
 - `summary:` Lets this field be part of the [document
   summary](../document-summaries.html) in the result set.
@@ -285,7 +266,6 @@ Make sure it looks like this (use `ls` if `tree` is not installed):
 <pre>
 $ tree my-app/
 my-app/
-├── hosts.xml
 ├── schemas
 │   └── news.sd
 └── services.xml
@@ -293,22 +273,10 @@ my-app/
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd my-app && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec" data-test-assert-contains="Success">
+$ (cd my-app && vespa deploy) 
 </pre>
 </div>
-
-Continue after the application is successfully deployed:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-</div>
-
 
 ## Feeding data
 
@@ -338,13 +306,12 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-Wait for all 28 603 documents to be indexed:
+Once the feed job finishes, all our 28 603 documents are searchable, let us do a quick query to verify:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ curl -s 'http://localhost:19092/metrics/v1/values' | \
-  tr "," "\n" | grep content.proton.documentdb.documents.active
+<pre data-test="exec" data-test-assert-contains='28603'>
+$ vespa query -v 'yql=select * from news where true' 'hits=0'
 </pre>
 </div>
 
@@ -354,7 +321,7 @@ document id using the [Document API](../api.html):
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="id:news:news::N10864">
-$ curl -s 'http://localhost:8080/document/v1/news/news/docid/N10864' | python3 -m json.tool
+$ vespa document -v get id:news:news::N10864
 </pre>
 </div>
 
@@ -363,13 +330,13 @@ $ curl -s 'http://localhost:8080/document/v1/news/news/docid/N10864' | python3 -
 
 Searching with Vespa is done using HTTP GET or HTTP POST requests, like:
 
-    <host:port>/search?yql=value1&param2=value2...
+    <host:port>/search?yql=select..&hits=1...
 
-or with a JSON-query: <br/>
+or with a JSON POST Body: <br/>
 
     {
-    	"yql" : value1,
-    	param2 : value2,
+    	"yql" : "select ..",
+    	"hits" : 2,
     	...
     }
 
@@ -378,7 +345,7 @@ details can be found in the [Query API](../query-api.html).
 
 Consider the query:
 
-	select * from sources * where default contains \"music\""
+	select * from news where default contains \"music\""
 
 Given the above schema, where the fields `title`, `abstract` and `body` are
 part of the `fieldset default`, any document containing the word "music" in one
@@ -388,8 +355,7 @@ GET query:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22' |\
-  python3 -m json.tool
+$ vespa query -v 'yql=select * from news where default contains "music"'  
 </pre>
 </div>
 
@@ -419,31 +385,75 @@ Looking at the output, please note:
 - When multiple hits have the same relevance score, their internal ordering is
   undefined. However, their internal ordering will not change unless the
   documents are re-indexed.
-- You can add `&tracelevel=9` to dump query parsing details.
+- You can add `&tracelevel=3` to dump query parsing details.
 - The `totalCount` field at the top level contains the number of documents
   that matched the query.
+- Also note the `coverage` element, this tells us how many documents and nodes we searched over.
+Coverage might be degraded, in case of timeouts, see [graceful degradation](../graceful-degradation.html).
 
-### Other examples
+### Query examples
 
-    {"yql" : "select title from sources * where title contains \"music\""}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where title contains "music"'  
+</pre>
+</div>
 
 Again, this is a search for the single term "music", but this time explicitly in the 
 `title` field. This means that we only want to match documents that contain the
 word "music" in the field `title`. As expected, you will see fewer hits for
-this query than for the previous one.
+this query than for the previous one. Also note that we scope the select to only return the title, this
+can improve network latency as less data is returned to the client.
 
-    {"yql" : "select * from sources * where title contains \"music\" AND default contains \"festival\""}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where default contains "music" and default contains "festival"'  
+</pre>
+</div>
 
 This is a query for the two terms "music" and "festival", combined with an
 `AND` operation; it finds documents that match both terms — but not just one of
-them.
+them. 
 
-    {"yql" : "select * from news * where true"}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where userQuery()' 'query=music festival' 'type=all'
+</pre>
+</div>
 
-This is a common and useful Vespa trick to get the number of indexed
-documents for a certain document type. 
-This means that the query above really means "return all documents of type
-news", and as such, all documents in the index are returned.
+This combines YQL (userQuery()) with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
+default query type is using all, in this case, documents needs to match both music and festival. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where userQuery()' 'query=music festival' 'type=any'
+</pre>
+</div>
+
+Above changes the query type from all to any, so that all documents that match either (or both)
+of the terms are returned. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where userQuery()' \
+'query=music festival' 'type=phrase' 'default-index=title' 
+</pre>
+</div>
+
+Search for the phrase 'music festival' in the title.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where rank(userQuery(), title contains "festival")' 'query=music'
+</pre>
+</div>
+Search for music in the default index, boost documents with festival in the title. 
 
 ## Conclusion
 

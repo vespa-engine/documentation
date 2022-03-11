@@ -271,7 +271,7 @@ after feeding some data.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-expect="BUILD SUCCESS" data-test-timeout="300">
 $ cd ../app-7-parent-child
 $ mvn package
 </pre>
@@ -279,9 +279,8 @@ $ mvn package
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ curl --header Content-Type:application/zip --data-binary @target/application.zip \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec" data-test-assert-contains="Success">
+$ vespa deploy --wait 300
 </pre>
 </div>
 
@@ -320,9 +319,8 @@ After feeding the above files, we can now test the application with a query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ curl -s "http://localhost:8080/search/?user_id=U33527&amp;ranking.profile=recommendation_with_global_category_ctr" | \
-    python3 -m json.tool
+<pre data-test="exec" data-test-assert-contains="N25904">
+$ vespa query 'user_id=U33527' 'ranking.profile=recommendation_with_global_category_ctr' 'hits=1' 
 </pre>
 </div>
 

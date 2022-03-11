@@ -441,7 +441,7 @@ Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/Xbox
 
 See [Nearest Neighbor
 Search](https://docs.vespa.ai/en/nearest-neighbor-search.html) for more
-information on nearest neighbor search and distance metrics in Vespa.
+information on nearest neighbor search and supported distance metrics in Vespa.
 
 We've included a script to map the embeddings to euclidean space and create
 a feed suitable for Vespa:
@@ -453,8 +453,7 @@ $ python3 src/python/convert_embeddings_to_vespa_format.py mind
 </pre>
 </div>
 
-We are now ready to feed these vectors to Vespa.
-
+We are now ready to feed these embedding vectors to Vespa.
 
 ## Conclusion
 

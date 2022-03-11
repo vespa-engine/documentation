@@ -69,7 +69,7 @@ An [_attribute_](../attributes.html) is an in-memory field - this is different
 from  _index_ fields, which may be moved to a disk-based index as more
 documents are added and the index grows.  Since attributes are kept in memory,
 they are excellent for fields that require fast access, e.g., fields used for
-sorting or grouping query results.  The downside is higher memory usage.  
+sorting or grouping query results. The downside is higher memory usage.  
 
 
 {% include note.html content="By default, no index is generated for attributes, and search over these defaults
@@ -78,28 +78,41 @@ include `attribute: fast-search` in the field definition." %}
 
 
 ### Example queries using attribute field
-
-    {"yql" : "select * from sources * where default contains \"20191110\""}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select * from news where default contains "20191110"'
+</pre>
+</div>
 
 This is a single-term query for the term _20191110_ in the `default` field
 set. In the search definition, the field `date` is not included in the
 `default` fieldset, so no results are found.
 
-    {"yql" : "select * from sources * where date contains \"20191110\""}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select * from news where date=20191110'
+</pre>
+</div>
 
 To get documents that were created 10 November 2019, and whose `date` field is
 _20191110_, replace `default` with `date` in the YQL query string.  Note that
 since `date` has not been defined with `attribute:fast-search`, searching will
 be done by scanning _all_ documents.
 
-    {"yql" : "select * from sources * where default contains \"weather\" AND date contains \"20191110\""}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select * from news where date=20191110 and default contains "weather"'
+</pre>
+</div>
 
 This is a query with two terms; a search in the `default` field set for the term
 "weather" combined with a search in the `date` field for the value _20191110_.
 This search will be faster than the previous example, as the term "weather" is
 for a field where there is an index. The search core will evaluate this 
 term first.
-
 
 ### Range searches
 
@@ -108,13 +121,22 @@ documents where the value was exactly _20191110_.  Since the field is of type
 _int_, however, we can use it for _range searches_ as well, using the "less
 than" and "greater than" operators (`<` and `>`, or `%3C` and `%3E` URL
 encoded if using GET-queries). The query
-
-    {"yql" : "select * from sources * where date < 20191110"}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select * from news where date < 20191110'
+</pre>
+</div>
 
 finds all documents where the value of `date` is less than _20191110_, i.e.,
 all documents from before 10 November 2019, while
 
-    {"yql" : "select * from sources * where date <= 20191110 AND date >= 20191108"}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select * from news where date <= 20191110 AND date >= 20191108'
+</pre>
+</div>
 
 finds all news articles from 8 November 2019 to 10 November 2019, inclusive.
 
@@ -134,9 +156,7 @@ Now try to send the following query to Vespa, and look at the order of the hits:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date"}' \
-  http://localhost:8080/search/ | python3 -m json.tool
+$ vespa query -v 'yql=select date from news where default contains phrase("music","festival") order by date' 
 </pre>
 </div>
 
@@ -146,10 +166,8 @@ descending order:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\" AND default contains \"festival\" order by date <span class="pre-hilite">desc</span>"}' \
-  http://localhost:8080/search/ | python3 -m json.tool
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select date from news where default contains phrase("music","festival") order by date desc' 
 </pre>
 </div>
 
@@ -170,6 +188,7 @@ across all the documents — some common use cases include:
   creation into the buckets _Today_, _Past Week_, _Past Month_, _Past Year_,
   and _Everything else_.
 - Calculate the **minimum/maximum/average value** for a given field.
+- [Result diversification](https://blog.vespa.ai/result-diversification-with-vespa/)
 
 Displaying such groups and their sizes (in terms of matching documents per
 group) on a search result page, with a link to each such group, is a common way
@@ -180,15 +199,15 @@ documents they occur in and top 3 is shown:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where sddocname contains \"news\" limit 0 | all(group(category) max(3) order(-count())each(output(count())))"}' \
-  http://localhost:8080/search/ | python3 -m json.tool
+$ vespa query -v 'yql=select * from news where true limit 0 | all(group(category) max(3) order(-count())each(output(count())))'
 </pre>
 </div>
 
 Note that expression after the pipe (`|`): this is the grouping expression that
 determines how grouping will be performed. You can read more about the grouping 
-syntax in the [grouping reference documentation](../reference/grouping-syntax.html).
+syntax in the [grouping reference documentation](../reference/grouping-syntax.html). Limit 0 is 
+an alternative syntax for the native `hits` parameter, in this case we are only interested in the group counts so
+we set limit to 0. 
 
 For this query, you will get something like the following:
 
@@ -269,20 +288,35 @@ query changes.  If you try to search for a single term that is *not* present in
 the document set, you will see that the list of groups is empty as no
 documents have been matched.
 
+In the following example we use the [select](../reference/query-api-reference.html#select) 
+parameter to pass the grouping specification. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select * from news where userQuery() limit 0' \
+'select=all(group(category) max(2) each(max(2)each(output(summary()))))' 'query=drinks'
+</pre>
+</div>
+
+This request searches for drinks, groups by category and for each unique category output the 2 best ranking hits.
+Groups are sorted by default by maxium relevance in the group. Notice that we also set an upper limit
+on the number of unique groups. This is important in cases with many unique values. See also
+[Result diversification using Vespa result grouping](https://blog.vespa.ai/result-diversification-with-vespa/). 
+
 Please refer to the [grouping guide](../grouping.html) for more information 
-and examples on grouping.
+and examples using Vespa grouping.
 
+### Matching - index versus attribute
 
-### Attribute limitations
-
-Before we move on to ranking, it's important to know that use attributes 
-has some limitations.
-
+Before we move on to ranking, it's important to know some of the differences between
+`index` and `attribute`. 
 
 #### Memory usage
 
-Attributes are kept in memory, as opposed to normal indexes where
-the data is mostly kept on disk.  Even with large content nodes, one will notice
+Attributes are kept in memory, as opposed to fields with indexes where
+the data is mostly kept on disk (paged in on-demand and cached by the OS buffer cache). 
+Even with large content nodes, one will notice
 that it is not practical to define all the document type fields as
 attributes, as it will heavily restrict the number of documents per search
 node.  Some Vespa applications have more than 1 billion documents per node —
@@ -291,14 +325,13 @@ having megabytes of text in memory per document is not cost-effective.
 
 #### Matching
 
-Another limitation is the way *matching* is done for attributes.  Consider the
-`title` field from our schema, and the document for the article with title "A
+ Consider the `title` field from our schema, and the document for the article with title "A
 little snow causes a big mess, more than 100 crashes on Minnesota roads". In
 the original input, the value for `title` is a string built of up the 14 words,
 with a single white space character between them. How should we be able to
 search this field?
 
-For normal index fields, Vespa [tokenizes](../linguistics.html#tokenization)
+For string fields with `index`, Vespa [tokenizes](../linguistics.html#tokenization)
 the string.  In our case this means that the string above is split into the 14
 tokens, enabling Vespa to match this document for:
 
@@ -308,26 +341,39 @@ tokens, enabling Vespa to match this document for:
 
 This is how we all have come to expect normal free text search to work.
 
-However, there is a limitation in Vespa when it comes to attribute fields and
-matching; string attributes do not support normal token-based matching — only *exact
+However,  attribute fields and matching; string attributes do not support normal text-based matching — only *exact
 matching* or *prefix matching*. Exact matching is the default, and, as the name
 implies, it requires you to search for the exact contents of the field in order
-to get a match.
+to get a match. See supported [match](../reference/schema-reference.html#match) modes
+and the differences in support between `attribute` and `index`. 
 
 
 #### When to use attributes
 
 There are both advantages and drawbacks of using attributes — it enables
-sorting and grouping, but requires more memory and gives limited matching
-capabilities. When to use attributes depends on the application; in general,
+sorting, ranking and grouping, but requires more memory and does not support `match:text`
+capabilities. Attribute fields do support at least one order higher update throughput then 
+regular `index` fields, see [partial updates](../partial-updates.html).
+
+When to use attributes depends on the application; in general,
 use attributes for:
 
 - fields used for sorting, e.g., a last-update timestamp,
 - fields used for grouping, e.g., problem severity, and
 - fields that are not long string fields.
 
-Finally, all numeric fields should always be attributes.
+Finally, all numeric and [tensors](../tensor-user-guide.html) fields used in ranking must be 
+defined with attribute
 
+#### Combining index and attribute
+
+    field category type string {
+        indexing: summary | attribute | index
+    }
+
+Combining both index and attribute for the same field is supported. In this case, we can sort and group on the category, 
+while search or matching will be using index matching with `match:text` which will tokenize and stem the contents
+of the field.
 
 ## Relevance and Ranking
 
@@ -358,7 +404,8 @@ During the conversion of the news dataset, the conversion script counted both th
 number of times a news article was shown (impressions) and how many
 clicks it received. A high number of clicks relative to impressions indicates
 that the news article was generally popular. We can use this signal in our
-ranking.
+ranking. Since both clicks and impressions are attribute fields, these fields be 
+[updated](https://docs.vespa.ai/en/partial-updates.html) at scale with very high throughput.  
 
 We can do this by including a `popularity` rank profile below at the bottom of
 `schemas/news.sd`:
@@ -429,7 +476,7 @@ schema news {
   Relevance calculations in Vespa are two-phased. The calculations done in the
   first phase are performed on every single document matching your query,
   while the second phase calculations are only done on the top `n` documents
-  as determined by the calculations done in the first phase.
+  as determined by the calculations done in the first phase. See [phased ranking](../phased-ranking.html).
 
 - `function popularity()`
 
@@ -457,37 +504,27 @@ Deploy the _popularity_ rank profile:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd my-app && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+$ (cd my-app && vespa deploy --wait 300) 
 </pre>
 </div>
-
-<!-- Give the container some time to load new config -->
-<pre data-test="exec" style="display:none">
-$ sleep 3
-</pre>
 
 Run a query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\";", "ranking" : "popularity"}' \
-  http://localhost:8080/search/ | python3 -m json.tool
+$ vespa query -v 'yql=select * from news where default contains "music"' 'ranking=popularity' 
 </pre>
 </div>
 
 and find documents with high `popularity` values at the top. Note that
 we must specify the ranking profile to use with the `ranking` parameter.
 
-
 ## Conclusion
 
 After completing this part of the tutorial, you should now have a basic
 understanding of how you can load data into Vespa and effectively search for
 content. In the [next part of the tutorial](news-4-embeddings.html), we'll
-start with the basics for transforming this into a recommendation system.
+start with the basics for transforming this search app into a recommendation system.
 
 <script src="/js/process_pre.js"></script>

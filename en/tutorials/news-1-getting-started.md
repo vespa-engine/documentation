@@ -33,24 +33,33 @@ In this part we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.
 In the next part of the tutorial, we'll start developing our application.
 
-
-
 ## Prerequisites
 
-- [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
-  or Docker on Linux
-- [Git](https://git-scm.com/downloads) - or download the
-  [sample apps](https://github.com/vespa-engine/sample-apps/archive/master.zip)
-- python 3
-- Operating system: macOS or Linux
-- Architecture: x86_64
-- Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
+* [Docker](https://www.docker.com/) Desktop installed and running. 6GB available memory for Docker is recommended.
+  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+  for details and troubleshooting
+* Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
+* Architecture: x86_64
+* Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
+* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
+  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
+* python3 
 
 In upcoming parts of this series, we will have some additional python dependencies -
-we use PyTorch to train vector representations for news and users
+we use [PyTorch](https://pytorch.org/) to train vector representations for news and users
 and train machine learning models for use in ranking.
 
+## Installing vespa-cli 
 
+This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), Vespa CLI is the official command-line client for Vespa.ai.
+It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ brew install vespa-cli 
+</pre>
+</div>
 
 ## A minimal Vespa application
 
@@ -64,21 +73,18 @@ Let's start by cloning the sample application:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/news
+$ vespa clone news news
+$ cd news
 </pre>
 </div>
 
 The `app-1-getting-started` directory contains a minimal Vespa application.
-There are three files there:
+There are two files there:
 
 - `services.xml` -  defines the services the application consists of
-- `hosts.xml` - defines which hosts or nodes the application will run on
 - `schemas/news.sd` - defines the schema for searchable content. 
 
 We will get back to these files in the next part of the tutorial.
-
-
 
 ## Starting Vespa
 
@@ -100,24 +106,21 @@ start it with the name `vespa`. This starts the Docker container and the
 initial Vespa services to be able to deploy an application.
 
 Starting the container can take a short while. Before continuing, make sure
-that the configuration service is running. This is signified by a `200 OK`
-response when querying the configuration service, running on port 19071:
+that the configuration service is running. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:19071/ApplicationStatus
+<pre data-test="exec" data-test-wait-for="is ready">
+$ vespa status deploy
 </pre>
 </div>
 
-With the config server up and running, deploy the application:
+With the config server up and running, deploy the application using vespa-cli:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd app-1-getting-started && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ (cd app-1-getting-started && vespa deploy --wait 300)  
 </pre>
 </div>
 
@@ -129,42 +132,19 @@ Whenever you have a new version of your application,
 run the same command to deploy the application.
 In most cases, there is no need to restart the application.
 Vespa takes care of reconfiguring the system.
-If a restart is required in some rare case, however, the output will notify you.
+If a restart of services is required in some rare case, however, the output will notify you.
 
 In the upcoming parts of the tutorials, we'll frequently deploy the 
 application in this manner. 
-
-{% include note.html content="We prepare the application <em>directory</em>.
-Both application directories and a zip file containing the application are accepted.
-A zip file is created when compiling and packaging an application containing custom Java code.
-We'll get back to that in part 6 of the tutorial."%}
-
-
-The first time you deploy your application, it might take a while to
-start the services. Like the configuration server, you can query the 
-status:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-</div>
-
-This returns a `200 OK` when it is ready for receiving traffic. Note here 
-that we don't run the command inside the Docker container. The port `8080`
-was exposed when starting the Docker container, so we can query it directly.
-
-
 
 ## Feeding to Vespa
 
 We must index data before we can search for it. This is called 'feeding', and
 we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
-document. We'll use the `vespa-feed-client` Java feeder for this:
+document. We'll use the [vespa-feed-client](https://docs.vespa.ai/en/vespa-feed-client.html) 
+Java feeder for this:
 
-<!-- ToDo: Replace with vespa-feed-client -->
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -174,6 +154,10 @@ $ unzip vespa-feed-client-cli.zip
 </pre>
 </div>
 
+We can also feed using [Vespa document api](https://docs.vespa.ai/en/document-v1-api-guide.html) directly,
+ or using vespa-cli which uses the document api. 
+
+This runs the `vespa-feed-client` Java client with the file `doc.json` file.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
@@ -182,36 +166,42 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-This runs the `vespa-feed-client` Java client with the file `doc.json` file.
-This contains a single document which we'll query for below.
+This runs the `vespa`cli with the file `doc.json` file. The `-v` option will make vespa-cli
+print the http request:
 
-
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" >
+$ vespa document -v doc.json
+</pre>
+</div>
 
 ## Testing Vespa
 
 If everything is ok so far, our application should be up and running.
-We can query the endpoint:
+
+We can query the endpoint using the vespa-cli (including verbose output with `-v`)
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Hello world!'>
-$ curl -s "http://localhost:8080/search/?yql=select+*+from+sources+*+where+sddocname+contains+%22news%22"
+$ vespa query -v 'yql=select * from news where true'
 </pre>
 </div>
 
 This uses the `search` API to search for all documents of type `news`.
-This should return `1` result, which is the document we fed above.
+This should return `1` result, which is the document we fed above. 
 
 Remove the document:
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='id:news:news::1'>
-$ curl -X DELETE "http://localhost:8080/document/v1/news/news/docid/1"
+$ vespa document -v remove id:news:news::1
 </pre>
 </div>
 
 Well done!
-
 
 
 ## Stopping and starting Vespa
@@ -263,8 +253,6 @@ $ docker rm -f vespa
 </div>
 
 This will delete the Vespa application, including all data, so don't do this unless you are sure.
-
-
 
 ## Conclusion
 
