@@ -32,7 +32,7 @@ For reference, the final state of this tutorial can be found in the
 First, we need to modify the `news.sd` search definition to include a field
 to hold the embedding and a recommendation rank profile:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
         field news_id type string {
@@ -145,7 +145,7 @@ for more information on feeding formats.
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/user.sd">
+<pre data-test="file" data-path="news/my-app/schemas/user.sd">
 schema user {
     document user {
         field user_id type string {
@@ -165,7 +165,7 @@ retrieve the user's embedding vector.
 We also need to let Vespa know we want to use this document type,
 so we modify `services.xml` and add it under `documents` in the `content` section:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/services.xml">
+<pre data-test="file" data-path="news/my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
 
@@ -193,10 +193,15 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Success">
-$ (cd my-app && vespa deploy --wait 300) 
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ vespa deploy --wait 300 --color never my-app 
 </pre>
 </div>
+
+<!-- Sometimes a query timeout, increase stability of auto testing -->
+<pre data-test="exec" style="display:none">
+$ sleep 20
+</pre>
 
 After redeploying with the updates schemas and `services.xml`,
 feed `mind/vespa_user_embeddings.json` and `mind/vespa_news_embeddings.json`: 
@@ -213,6 +218,11 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 
 Once the feeding jobs finishes our index is ready to be used, we can verify that we have 
 28,603 news documents and 5000 user documents:
+
+<!-- Sometimes a query timeout, increase stability of auto testing -->
+<pre data-test="exec" style="display:none">
+$ sleep 20
+</pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -240,16 +250,16 @@ that can be set as default, so you don't have to pass them along with the query.
 We don't use this in this sample application. Still we need to set up a default 
 query profile to set up the types of query parameters we expect to pass. 
 
-So, write the following to `search/query-profiles/default.xml`:
+So, write the following to `news/my-app/search/query-profiles/default.xml`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/search/query-profiles/default.xml">
+<pre data-test="file" data-path="news/my-app/search/query-profiles/default.xml">
 &lt;query-profile id="default" type="root" /&gt;
 </pre>
 
 To set up the query profile types, write them to the file
 `search/query-profiles/types/root.xml`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/search/query-profiles/types/root.xml">
+<pre data-test="file" data-path="news/my-app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id="root" inherits="native"&gt;
     &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[51])" /&gt;
 &lt;/query-profile-type&gt;
@@ -266,8 +276,8 @@ but that is required to successfully set up the query profile type." %}
 Deploy the updates to query profiles:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Success">
-$ (cd my-app && vespa deploy --wait 300) 
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ vespa deploy --wait 300 --color never my-app
 </pre>
 </div>
 
@@ -278,8 +288,8 @@ First, let's find the user `U33527`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"id": "id:user:user::U33527"'>
-$ vespa query -v 'yql=select embedding from user where user_id contains "U33527"' 'hits=1'
+<pre data-test="exec" data-test-assert-contains='U33527'>
+$ vespa query -v 'yql=select user_id, embedding from user where user_id contains "U33527"' 'hits=1'
 </pre>
 </div>
 
@@ -312,8 +322,8 @@ It's also possible to emit the tensor field using short format:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"id": "id:user:user::U33527"'>
-$ vespa query -v 'yql=select embedding from user where user_id contains "U33527"' \
+<pre data-test="exec" data-test-assert-contains='U33527'>
+$ vespa query -v 'yql=select user_id, embedding from user where user_id contains "U33527"' \
  'hits=1' 'format.tensors=short'
 </pre>
 </div>
@@ -430,7 +440,7 @@ times a document has been put in the top 10 results during this linear scan.
 
 Let's switch to using approximate nearest-neighbors by adding `index` to the embedding field in `news.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
         field news_id type string {
@@ -501,8 +511,8 @@ restart is required so that the index can be built:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Success">
-$ (cd my-app && vespa deploy --wait 300) 
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ vespa deploy --wait 300 --color never my-app
 </pre>
 </div>
 

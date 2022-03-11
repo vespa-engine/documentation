@@ -274,18 +274,30 @@ the combined title and abstract.
 
 To generate these embeddings for all news content, run the following.
 This might take a while, around an hour for all news articles in
-the `train` and `dev` demo dataset.
+the `train` and `dev` demo dataset. 
+Alternatively, skip this step and download pre-processed embeddings, see step below.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ python3 src/python/create_bert_embeddings.py mind
+</pre>
+</div>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ python3 src/python/create_bert_embeddings.py mind
+$ mkdir -p news/mind/train
+$ mkdir -p news/mind/dev
+$ curl -L -o mind/train/news_embeddings.tsv \
+  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding.tsv 
+$ curl -L -o mind/dev/news_embeddings.tsv \
+  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding_dev.tsv 
 </pre>
 </div>
 
 This creates a `news_embeddings.tsv` file under the `mind/train` and
 `mind/dev` subdirectories.
-
 
 ## Training the model
 

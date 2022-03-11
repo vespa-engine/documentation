@@ -35,7 +35,7 @@ In the next part of the tutorial, we'll start developing our application.
 
 ## Prerequisites
 
-* [Docker](https://www.docker.com/) Desktop installed and running. 6GB available memory for Docker is recommended.
+* [Docker](https://www.docker.com/) Desktop installed and running. 10GB available memory for Docker is recommended.
   Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
   for details and troubleshooting
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
@@ -110,8 +110,8 @@ that the configuration service is running.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for="is ready">
-$ vespa status deploy
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ vespa status deploy --wait 300 --color never
 </pre>
 </div>
 
@@ -120,7 +120,7 @@ With the config server up and running, deploy the application using vespa-cli:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="is ready">
-$ (cd app-1-getting-started && vespa deploy --wait 300)  
+$ (cd app-1-getting-started && vespa deploy --wait 300 --color never)  
 </pre>
 </div>
 

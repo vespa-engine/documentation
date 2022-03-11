@@ -276,8 +276,8 @@ The vespa-cli detects that this app has custom Java components:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Success">
-$ vespa deploy --wait 300
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ vespa deploy --wait 300 --color never
 </pre>
 </div>
 

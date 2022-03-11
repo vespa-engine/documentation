@@ -269,9 +269,11 @@ after feeding some data.
 
 ## Feeding parent and child updates
 
+Deploy the application 
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-expect="BUILD SUCCESS" data-test-timeout="300">
+<pre data-test="exec">
 $ cd ../app-7-parent-child
 $ mvn package
 </pre>
@@ -279,8 +281,8 @@ $ mvn package
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Success">
-$ vespa deploy --wait 300
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ vespa deploy --wait 300 --color never
 </pre>
 </div>
 
@@ -319,7 +321,7 @@ After feeding the above files, we can now test the application with a query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="N25904">
+<pre data-test="exec" data-test-assert-contains="U33527">
 $ vespa query 'user_id=U33527' 'ranking.profile=recommendation_with_global_category_ctr' 'hits=1' 
 </pre>
 </div>

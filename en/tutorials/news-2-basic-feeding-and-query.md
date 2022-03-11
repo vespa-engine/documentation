@@ -117,9 +117,9 @@ services specification.
 
 The [services.xml](../reference/services.html) file defines the services that
 make up the Vespa application — which services to run and how many nodes per
-service. Write the following to `my-app/services.xml`:
+service. Write the following to `news/my-app/services.xml`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/services.xml">
+<pre data-test="file" data-path="news/my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
 
@@ -184,9 +184,9 @@ package, and **must** have the same name as the document type mentioned
 in `services.xml`.
 
 Given the MIND dataset described above, we'll set up the schema as follows.
-Write the following to `my-app/schemas/news.sd`:
+Write the following to `news/my-app/schemas/news.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
         field news_id type string {
@@ -271,10 +271,15 @@ my-app/
 └── services.xml
 </pre>
 
+<pre data-test="exec">
+$ pwd
+$ tree my-app/
+</pre>
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Success">
-$ (cd my-app && vespa deploy) 
+$ vespa deploy --wait 300 my-app/
 </pre>
 </div>
 
@@ -307,6 +312,11 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </div>
 
 Once the feed job finishes, all our 28 603 documents are searchable, let us do a quick query to verify:
+
+<!-- Sometimes a query timeout, increase stability of auto testing -->
+<pre data-test="exec" style="display:none">
+$ sleep 20
+</pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

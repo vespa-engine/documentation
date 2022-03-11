@@ -410,7 +410,7 @@ ranking. Since both clicks and impressions are attribute fields, these fields be
 We can do this by including a `popularity` rank profile below at the bottom of
 `schemas/news.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
         field news_id type string {
@@ -503,8 +503,8 @@ Deploy the _popularity_ rank profile:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd my-app && vespa deploy --wait 300) 
+<pre data-test="exec" data-test-assert-contains="is ready">
+$ vespa deploy --wait 300 --color never my-app
 </pre>
 </div>
 
