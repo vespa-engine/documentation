@@ -313,11 +313,6 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 
 Once the feed job finishes, all our 28 603 documents are searchable, let us do a quick query to verify:
 
-<!-- Sometimes a query timeout, increase stability of auto testing -->
-<pre data-test="exec" style="display:none">
-$ sleep 20
-</pre>
-
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='28603'>

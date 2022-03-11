@@ -516,7 +516,7 @@ $ vespa deploy --wait 300 --color never my-app
 </pre>
 </div>
 
-Introducing the HNSW `index` requires a restart, in this case we restart the entire system:
+Introducing the HNSW `index` requires a content node restart, in this case we restart all services:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

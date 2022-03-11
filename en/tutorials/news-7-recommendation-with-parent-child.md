@@ -321,8 +321,8 @@ After feeding the above files, we can now test the application with a query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="U33527">
-$ vespa query 'user_id=U33527' 'ranking.profile=recommendation_with_global_category_ctr' 'hits=1' 
+<pre data-test="exec" data-test-assert-contains='"totalCount": 10'>
+$ vespa query 'user_id=U33527' 'ranking.profile=recommendation_with_global_category_ctr' 'hits=10' 
 </pre>
 </div>
 
