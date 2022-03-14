@@ -503,7 +503,7 @@ Deploy the _popularity_ rank profile:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
+<pre data-test="exec">
 $ vespa deploy --wait 300 my-app
 </pre>
 </div>
