@@ -121,8 +121,8 @@ that the configuration service is running by using `vespa status`.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
-$ vespa status deploy --wait 300 --color never
+<pre data-test="exec">
+$ vespa status deploy --wait 300 
 </pre>
 </div>
 
@@ -130,8 +130,8 @@ With the config server up and running, deploy the application using vespa-cli:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
-$ vespa deploy --wait 300 --color never app-1-getting-started 
+<pre data-test="exec">
+$ vespa deploy --wait 300 app-1-getting-started 
 </pre>
 </div>
 

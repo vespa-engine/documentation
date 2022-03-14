@@ -273,7 +273,7 @@ my-app/
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Success">
-$ vespa deploy --wait 300 my-app/
+$ vespa deploy --wait 300 my-app
 </pre>
 </div>
 

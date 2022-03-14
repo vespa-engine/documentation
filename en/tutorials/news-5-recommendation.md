@@ -193,8 +193,8 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
-$ vespa deploy --wait 300 --color never my-app 
+<pre data-test="exec">
+$ vespa deploy --wait 300 my-app 
 </pre>
 </div>
 
@@ -276,8 +276,8 @@ but that is required to successfully set up the query profile type." %}
 Deploy the updates to query profiles:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
-$ vespa deploy --wait 300 --color never my-app
+<pre data-test="exec">
+$ vespa deploy --wait 300 my-app
 </pre>
 </div>
 
@@ -511,8 +511,8 @@ restart is required so that the index can be built:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
-$ vespa deploy --wait 300 --color never my-app
+<pre data-test="exec">
+$ vespa deploy --wait 300 my-app
 </pre>
 </div>
 

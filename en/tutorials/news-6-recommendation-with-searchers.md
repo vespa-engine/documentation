@@ -262,8 +262,7 @@ a Java project. We can now compile and package this application:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ cd app-6-recommendation-with-searchers
-$ mvn package
+$ (cd app-6-recommendation-with-searchers && mvn package)
 </pre>
 </div>
 
@@ -276,8 +275,8 @@ The vespa-cli detects that this app has custom Java components:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
-$ vespa deploy --wait 300 --color never
+<pre data-test="exec">
+$ vespa deploy --wait 300 app-6-recommendation-with-searchers
 </pre>
 </div>
 

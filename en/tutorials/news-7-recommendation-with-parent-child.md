@@ -274,15 +274,14 @@ Deploy the application
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ cd ../app-7-parent-child
-$ mvn package
+$ (cd app-7-parent-child && mvn package)
 </pre>
 </div>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="is ready">
-$ vespa deploy --wait 300 --color never
+<pre data-test="exec">
+$ vespa deploy --wait 300 app-7-parent-child
 </pre>
 </div>
 
@@ -305,15 +304,20 @@ These files can now be fed to Vespa, but note that the
 `mind/global_category_ctr.json` need to be fed first because the global
 document needs to exist before the child documents can reference it.
 
+Create feed files:
+
 <pre data-test="exec">
-$ cd ..
 $ ./src/python/create_category_ctrs.py mind
+</pre>
+
+Feed the created feed files:
+
+<pre data-test="exec">
 $ ./vespa-feed-client-cli/vespa-feed-client \
 --verbose --file mind/global_category_ctr.json --endpoint http://localhost:8080
 $ ./vespa-feed-client-cli/vespa-feed-client \
 --verbose --file mind/news_category_ctr_update.json --endpoint http://localhost:8080
 </pre>
-
 
 ## Testing the application
 
