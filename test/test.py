@@ -253,7 +253,12 @@ def run_url(url):
     print_cmd_header("Testing", url)
     allpages = b""
     for page in url.split(","):
-        allpages += urllib.request.urlopen(page).read()
+        page = page.strip()
+        if url.startswith("http"):
+            allpages += urllib.request.urlopen(page).read()
+        else:
+          with open(page, 'rb') as f:
+              allpages += f.read()
 
     process_page(allpages, url)
 
