@@ -20,8 +20,6 @@ The parts are:
 5. [News recommendation](news-5-recommendation.html) - partial updates (news embeddings), ANNs, filtering
 6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
-8. Advanced news recommendation - intermission - training a ranking model
-9. Advanced news recommendation - ML models
 
 There are different entry points to this tutorial. This one is for getting
 started using Docker on your local machine. Getting started on 
@@ -43,7 +41,7 @@ In the next part of the tutorial, we'll start developing our application.
 * Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
 * [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
-* python3 
+* python 3 
 
 In upcoming parts of this series, we will have some additional python dependencies -
 we use [PyTorch](https://pytorch.org/) to train vector representations for news and users
@@ -51,7 +49,8 @@ and train machine learning models for use in ranking.
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), Vespa CLI is the official command-line client for Vespa.ai.
+This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
 
 <div class="pre-parent">
@@ -73,8 +72,19 @@ Let's start by cloning the sample application:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa clone news news
-$ cd news
+$ vespa clone -f news news && cd news
+</pre>
+</div>
+
+The above download the `news` directory from the Vespa 
+[sample apps repository](https://github.com/vespa-engine/sample-apps/) and
+places the contents in a folder called `news`. Use `--help` to see documentation 
+for the vespa-cli utility:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa clone --help
 </pre>
 </div>
 
