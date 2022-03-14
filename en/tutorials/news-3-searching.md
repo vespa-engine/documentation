@@ -48,11 +48,10 @@ Calculating a score to order by is generally called "ranking". As these
 scores are usually dependent upon both query and document, they can also 
 be called "relevance". Such expressions can be arbitrarily complex, 
 but in general, require some form of computation to find this score. Ranking 
-can be divided into multiple phases as well.
+can be divided into [multiple rank phases](../phased-ranking.html) as well.
 
 We'll start by looking at attribute-based sorting and grouping before 
 moving on to ranking.
-
 
 ## What is an attribute?
 
@@ -60,6 +59,7 @@ We saw multiple examples of attributes in the `news.sd` schema, for instance:
 
     field date type int {
         indexing: summary | attribute
+        attribute: fast-search
     }
 
 Note that this `date` field has been defined as an `int` here, and when
@@ -68,14 +68,14 @@ feeding document, we convert the date to the format `YYYYMMDD`.
 An [_attribute_](../attributes.html) is an in-memory field - this is different
 from  _index_ fields, which may be moved to a disk-based index as more
 documents are added and the index grows.  Since attributes are kept in memory,
-they are excellent for fields that require fast access, e.g., fields used for
-sorting or grouping query results. The downside is higher memory usage.  
+they are excellent for fields that require fast access for many documents, e.g., 
+fields used for sorting, ranking or grouping query results. The downside is higher memory usage.  
 
-
-{% include note.html content="By default, no index is generated for attributes, and search over these defaults
-to a linear scan - to build an index for an attribute field,
-include `attribute: fast-search` in the field definition." %}
-
+In the above field definition we have included an additional property `attribute: fast-search`
+which will inform Vespa that we want to build inverted index structures (dictionary and posting lists)
+for *fast* *matching* in the field. See more about [when to 
+use fast-search](../performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields)
+in the performance feature tuning section.
 
 ### Example queries using attribute field
 <div class="pre-parent">
@@ -87,7 +87,8 @@ $ vespa query -v 'yql=select * from news where default contains "20191110"'
 
 This is a single-term query for the term _20191110_ in the `default` field
 set. In the search definition, the field `date` is not included in the
-`default` fieldset, so no results are found.
+`default` fieldset, so no results are found. Instead we search using `=` which can
+be used for numeric and bool fields:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -95,11 +96,8 @@ set. In the search definition, the field `date` is not included in the
 $ vespa query -v 'yql=select * from news where date=20191110'
 </pre>
 </div>
-
 To get documents that were created 10 November 2019, and whose `date` field is
-_20191110_, replace `default` with `date` in the YQL query string.  Note that
-since `date` has not been defined with `attribute:fast-search`, searching will
-be done by scanning _all_ documents.
+_20191110_, replace `default` with `date` in the YQL query string. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -110,9 +108,6 @@ $ vespa query -v 'yql=select * from news where date=20191110 and default contain
 
 This is a query with two terms; a search in the `default` field set for the term
 "weather" combined with a search in the `date` field for the value _20191110_.
-This search will be faster than the previous example, as the term "weather" is
-for a field where there is an index. The search core will evaluate this 
-term first.
 
 ### Range searches
 
@@ -174,7 +169,7 @@ $ vespa query -v 'yql=select date from news where default contains phrase("music
 So, sorting is simply defined by the `order by` statement in YQL.
 
 
-### Query time data grouping
+### Query time result grouping
 
 [Grouping](../grouping.html) is the concept of looking through all matching
 documents at query-time and then performing operations with specified fields
@@ -188,7 +183,8 @@ across all the documents — some common use cases include:
   creation into the buckets _Today_, _Past Week_, _Past Month_, _Past Year_,
   and _Everything else_.
 - Calculate the **minimum/maximum/average value** for a given field.
-- [Result diversification](https://blog.vespa.ai/result-diversification-with-vespa/)
+- [Result diversification](https://blog.vespa.ai/result-diversification-with-vespa/), e.g, 
+to only display 3 best ranking results per category for up to 5 categories. 
 
 Displaying such groups and their sizes (in terms of matching documents per
 group) on a search result page, with a link to each such group, is a common way
@@ -286,7 +282,8 @@ a text match of "weather", or restrict `date` to be less than 20191110, and see
 how the list of unique values changes as the set of matching documents for your
 query changes.  If you try to search for a single term that is *not* present in
 the document set, you will see that the list of groups is empty as no
-documents have been matched.
+documents have been matched. Vespa grouping is only applied over the documents
+which matched the query.
 
 In the following example we use the [select](../reference/query-api-reference.html#select) 
 parameter to pass the grouping specification. 
@@ -299,9 +296,10 @@ $ vespa query -v 'yql=select * from news where userQuery() limit 0' \
 </pre>
 </div>
 
-This request searches for drinks, groups by category and for each unique category output the 2 best ranking hits.
+This request searches for drinks, groups by category and for each unique category output the 
+2 top ranking hits (according to the ranking profile used).
 Groups are sorted by default by maxium relevance in the group. Notice that we also set an upper limit
-on the number of unique groups. This is important in cases with many unique values. See also
+on the number of unique groups my the outermost max. This is important in cases with many unique values. See also
 [Result diversification using Vespa result grouping](https://blog.vespa.ai/result-diversification-with-vespa/). 
 
 Please refer to the [grouping guide](../grouping.html) for more information 
@@ -320,8 +318,7 @@ Even with large content nodes, one will notice
 that it is not practical to define all the document type fields as
 attributes, as it will heavily restrict the number of documents per search
 node.  Some Vespa applications have more than 1 billion documents per node —
-having megabytes of text in memory per document is not cost-effective.
-
+having megabytes of text per document in memory per document might not be cost-effective.
 
 #### Matching
 
@@ -353,17 +350,17 @@ and the differences in support between `attribute` and `index`.
 There are both advantages and drawbacks of using attributes — it enables
 sorting, ranking and grouping, but requires more memory and does not support `match:text`
 capabilities. Attribute fields do support at least one order higher update throughput then 
-regular `index` fields, see [partial updates](../partial-updates.html).
+regular `index` fields, see [partial updates with Vespa](../partial-updates.html).
 
 When to use attributes depends on the application; in general,
 use attributes for:
 
 - fields used for sorting, e.g., a last-update timestamp,
-- fields used for grouping, e.g., problem severity, and
+- fields used for grouping, e.g., category, and
 - fields that are not long string fields.
 
 Finally, all numeric and [tensors](../tensor-user-guide.html) fields used in ranking must be 
-defined with attribute
+defined with attribute.
 
 #### Combining index and attribute
 
@@ -391,12 +388,13 @@ terms in the query.  Some use cases for tweaking the relevance calculations:
   language, friends and friends of friends.
 - Rank fresh (age) documents higher, while still considering other relevance measures.
 - Rank documents by geographical location, searching for relevant resources nearby.
+- Rank documents by machine learned ranking functions - Learning to Rank (LTR).
+- Rank documents by business constraints like prefer product availability 
 
 Vespa allows creating any number of _rank profiles_: named collections of
 ranking and relevance calculations that one can choose from at query time.  A
 number of built-in functions and expressions are available to create highly
 specialized rank expressions.
-
 
 ### News article popularity signal
 
@@ -404,11 +402,11 @@ During the conversion of the news dataset, the conversion script counted both th
 number of times a news article was shown (impressions) and how many
 clicks it received. A high number of clicks relative to impressions indicates
 that the news article was generally popular. We can use this signal in our
-ranking. Since both clicks and impressions are attribute fields, these fields be 
+ranking. Since both clicks and impressions are attribute fields, these fields can be 
 [updated](https://docs.vespa.ai/en/partial-updates.html) at scale with very high throughput.  
 
-We can do this by including a `popularity` rank profile below at the bottom of
-`schemas/news.sd`:
+We can use this signal in our ranking, by including a `popularity` rank profile, as defined below at the bottom of
+`schemas/news.sd`. Note that ranking profiles are defined outside of the `document` block:
 
 <pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
@@ -440,6 +438,7 @@ schema news {
         }
         field date type int {
             indexing: summary | attribute
+            attribute: fast-search
         }
         field clicks type int {
             indexing: summary | attribute
@@ -476,7 +475,8 @@ schema news {
   Relevance calculations in Vespa are two-phased. The calculations done in the
   first phase are performed on every single document matching your query,
   while the second phase calculations are only done on the top `n` documents
-  as determined by the calculations done in the first phase. See [phased ranking](../phased-ranking.html).
+  as determined by the calculations done in the first phase. 
+  See [phased ranking](../phased-ranking.html).
 
 - `function popularity()`
 
@@ -494,7 +494,7 @@ schema news {
   the `popularity` function. The weighted sum of these two terms is the 
   final relevance for each document. Note that the weight here, `100`, 
   is set by observation. A better approach would be to learn such values 
-  using machine learning, which we'll get back to later in the tutorial.
+  using machine learning.
 
 More information can be found in the [schema
 reference](../reference/schema-reference.html#rank-profile).

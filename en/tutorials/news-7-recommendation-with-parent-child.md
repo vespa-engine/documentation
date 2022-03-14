@@ -59,7 +59,7 @@ use in ranking. The benefit is that the global category CTR values only need to
 be written to one place: the global document.
 
 Please see the [guide on parent-child relationships](../parent-child.html) for more
-information and examples.
+information and examples. 
 
 ## Setting up a global category CTR document
 
@@ -122,13 +122,14 @@ To use this document, we need to add it to `services.xml`:
 
 Notice that we've set `global="true"`, which instructs Vespa to keep a copy 
 of these documents on all content nodes. This is required for using it in a 
-parent-child relationship.
+parent-child relationship. This also put limits on how many parent documents a system can have
+as all nodes needs to index all parent documents. 
 
 
 ## Importing parent values in child documents
 
 To use the `category_ctr` tensor when ranking `news` documents, we need to
-"import" the tensor. There are two things we need to set up: the reference to
+"import" the tensor into the child document type. There are two things we need to set up: the reference to
 the parent document, and which fields to import. We modify our
 `schemas/news.sd`:
 
@@ -378,7 +379,6 @@ address this in the next part of this series.
 
 This tutorial introduced parent-child relationships and demonstrated it
 through a global CTR feature we used in ranking. As this feature was based on
-tensors, we also introduced ranking with tensor expressions. In the next part
-of the tutorial, we will start using a machine-learned model in ranking.
+tensors, we also introduced ranking with tensor expressions. 
 
 <script src="/js/process_pre.js"></script>

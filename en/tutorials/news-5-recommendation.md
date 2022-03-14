@@ -470,6 +470,7 @@ schema news {
         }
         field date type int {
             indexing: summary | attribute
+            attribute: fast-search
         }
         field clicks type int {
             indexing: summary | attribute
