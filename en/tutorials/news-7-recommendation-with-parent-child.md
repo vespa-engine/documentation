@@ -366,19 +366,24 @@ immediately available. As such, the system responds quickly to changes in the gl
 parameters.
 
 Now, a simple multiplication between these features might not give us what we
-want. For instance, these features have different average values different
+want. For instance, these features have different average values and different
 standard deviations. Particularly, if we add multiple additional features,
 just multiplying them together will probably not give a great user
-experience.
+experience. Instead of a hand-tuned final relevancy calculation as demonstrated
+above we could use a machine learned function with these as feature inputs.  
 
-To remedy this, we will try to learn a suitable weighting between features. We'll 
-address this in the next part of this series.
+Ultimately, these features are computed in real-time for every news article during ranking. 
+These features can then be added to any machine-learned ranking model. Vespa supports gradient-boosted trees 
+from [XGBoost](../xgboost.html) and [LightGBM](../lightgbm.html), and also
+ neural networks in [ONNX](../onnx.html) format, exported from popular ML frameworks like 
+ [PyTorch](https://pytorch.org/) and [Tensorflow](https://www.tensorflow.org/).
 
 
 ## Conclusion
 
 This tutorial introduced parent-child relationships and demonstrated it
 through a global CTR feature we used in ranking. As this feature was based on
-tensors, we also introduced ranking with tensor expressions. 
+tensors, we also introduced ranking with tensor expressions. For a real-world use-case
+using parent-child tensors, see this [blog post](https://blog.vespa.ai/parent-child-joins-tensors-content-recommendation/).
 
 <script src="/js/process_pre.js"></script>

@@ -46,7 +46,7 @@ example is to group the results by a `category` attribute.
 
 Calculating a score to order by is generally called "ranking". As these 
 scores are usually dependent upon both query and document, they can also 
-be called "relevance". Such expressions can be arbitrarily complex, 
+be called *relevance*. Such expressions can be arbitrarily complex, 
 but in general, require some form of computation to find this score. Ranking 
 can be divided into [multiple rank phases](../phased-ranking.html) as well.
 
@@ -136,7 +136,7 @@ $ vespa query -v 'yql=select * from news where date <= 20191110 AND date >= 2019
 finds all news articles from 8 November 2019 to 10 November 2019, inclusive.
 
 
-### Sorting
+### Sorting on attribute fields
 
 The first feature we will look at is how an attribute can be used to change the
 hit order.  By now, you have probably noticed that hits are returned in order
@@ -144,7 +144,7 @@ of descending relevance, i.e., how well the document matches the query — if
 not, take a moment to verify this. You might ask how Vespa does this since 
 we haven't even touched upon ranking yet. The answer is that
 Vespa uses its [nativeRank](../nativerank.html) score unless anything else 
-is defined. We'll get back to this later.
+is defined in the schema. We'll get back to defining custom ranking later on.
 
 Now try to send the following query to Vespa, and look at the order of the hits:
 
@@ -156,7 +156,7 @@ $ vespa query -v 'yql=select date from news where default contains phrase("music
 </div>
 
 By default, sorting is done in ascending order. This can also be specified by
-appending `asc` after the sort attribute name. Use `desc` to sort the  in
+appending `asc` after the sort attribute name. Use `desc` to sort the results in
 descending order:
 
 <div class="pre-parent">
@@ -166,8 +166,7 @@ $ vespa query -v 'yql=select date from news where default contains phrase("music
 </pre>
 </div>
 
-So, sorting is simply defined by the `order by` statement in YQL.
-
+Attempting to sort on a field which is not defined as attribute in the schema will create an error. 
 
 ### Query time result grouping
 
@@ -303,22 +302,14 @@ on the number of unique groups my the outermost max. This is important in cases 
 [Result diversification using Vespa result grouping](https://blog.vespa.ai/result-diversification-with-vespa/). 
 
 Please refer to the [grouping guide](../grouping.html) for more information 
-and examples using Vespa grouping.
+and examples using Vespa grouping. Similar to with sorting, attempting to group on a field 
+which is not defined as attribute in the schema will create an error. 
+
 
 ### Matching - index versus attribute
 
 Before we move on to ranking, it's important to know some of the differences between
 `index` and `attribute`. 
-
-#### Memory usage
-
-Attributes are kept in memory, as opposed to fields with indexes where
-the data is mostly kept on disk (paged in on-demand and cached by the OS buffer cache). 
-Even with large content nodes, one will notice
-that it is not practical to define all the document type fields as
-attributes, as it will heavily restrict the number of documents per search
-node.  Some Vespa applications have more than 1 billion documents per node —
-having megabytes of text per document in memory per document might not be cost-effective.
 
 #### Matching
 
@@ -328,8 +319,11 @@ the original input, the value for `title` is a string built of up the 14 words,
 with a single white space character between them. How should we be able to
 search this field?
 
-For string fields with `index`, Vespa [tokenizes](../linguistics.html#tokenization)
-the string.  In our case this means that the string above is split into the 14
+For string fields with `index` which defaults to `match:text`, Vespa performs linguistic processing of the string. 
+This includes [tokenization](../linguistics.html#tokenization), [normalization](../linguistics.html#normalization)
+and language dependent [stemming](../linguistics.html#stemming) of the string.  
+
+In our example, this means that the string above is split into the 14
 tokens, enabling Vespa to match this document for:
 
 - the single-term queries such as "Michigan", "snow" and "roads", 
@@ -338,12 +332,21 @@ tokens, enabling Vespa to match this document for:
 
 This is how we all have come to expect normal free text search to work.
 
-However,  attribute fields and matching; string attributes do not support normal text-based matching — only *exact
+However, string fields with `indexing:attributes` do not support `match:text`, only *exact
 matching* or *prefix matching*. Exact matching is the default, and, as the name
 implies, it requires you to search for the exact contents of the field in order
 to get a match. See supported [match](../reference/schema-reference.html#match) modes
-and the differences in support between `attribute` and `index`. 
+and the differences in support between `attribute` and `index`.  
 
+#### Memory usage
+
+Attributes are stored in memory, as opposed to fields with `index` where
+the data is mostly kept on disk but paged in on-demand and cached by the OS buffer cache. 
+Even with large flavor types, one will notice
+that it is not practical to define all the document type fields as
+attributes, as it will heavily restrict the number of documents per search
+node.  Some Vespa applications have more than 1 billion documents per node —
+having megabytes of text per document in memory per document might not be cost-effective.
 
 #### When to use attributes
 
@@ -357,10 +360,10 @@ use attributes for:
 
 - fields used for sorting, e.g., a last-update timestamp,
 - fields used for grouping, e.g., category, and
-- fields that are not long string fields.
+- fields accessed in ranking expressions 
 
 Finally, all numeric and [tensors](../tensor-user-guide.html) fields used in ranking must be 
-defined with attribute.
+defined with attribute. 
 
 #### Combining index and attribute
 
@@ -380,21 +383,29 @@ calculations? It is time to introduce _rank profiles_ and _rank expressions_ —
 simple, yet powerful methods for tuning the relevance.
 
 Relevance is a measure of how well a given document matches a query.  The
-default relevance is calculated by a formula that takes several factors into
+default relevance is calculated by a formula that takes several *matching* factors into
 consideration. It computes, in essence, how well the document matches the
-terms in the query.  Some use cases for tweaking the relevance calculations:
+terms in the query. The default Vespa ranking function and its limitations
+is described in [ranking with nativeRank](../nativerank.html).
+
+Ranking signals that might be useful, like freshness (the age of the document 
+compared to the time of the query) or any other document or query features, 
+are not a part of the nativeRank calculation. These need to be added to the 
+ranking function depending on application specifics.
+
+Some use cases for tweaking the relevance calculations:
 
 - Personalize search results based on some property; age, nationality,
   language, friends and friends of friends.
 - Rank fresh (age) documents higher, while still considering other relevance measures.
 - Rank documents by geographical location, searching for relevant resources nearby.
 - Rank documents by machine learned ranking functions - Learning to Rank (LTR).
-- Rank documents by business constraints like prefer product availability 
+- Rank documents by business constraints - For example by product availability.  
 
 Vespa allows creating any number of _rank profiles_: named collections of
-ranking and relevance calculations that one can choose from at query time.  A
-number of built-in functions and expressions are available to create highly
-specialized rank expressions.
+ranking and relevance calculations that one can choose from at query time.  
+A number of built-in functions and expressions are available to create highly
+specialized rank expressions and users can define their own functions in the schema.
 
 ### News article popularity signal
 
@@ -518,7 +529,7 @@ $ vespa query -v 'yql=select * from news where default contains "music"' 'rankin
 </div>
 
 and find documents with high `popularity` values at the top. Note that
-we must specify the ranking profile to use with the `ranking` parameter.
+we must specify the ranking profile to use with the run time `ranking` parameter.
 
 ## Conclusion
 
