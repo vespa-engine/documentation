@@ -205,7 +205,7 @@ $ vespa query -v 'yql=select * from news where true'
 </pre>
 </div>
 
-This example uses [YQL (Vespa Query Language)](../en/query-language.html) to 
+This example uses [YQL (Vespa Query Language)](../query-language.html) to 
 search for all documents of type `news`. This query request will return `1` result, which is the document we fed above. 
 
 <div class="pre-parent">
