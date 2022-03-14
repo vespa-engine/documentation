@@ -87,7 +87,7 @@ for the vespa-cli utility:
 $ vespa clone --help
 </pre>
 </div>
-
+In the `news` diretory there are several pre-configuration applications packages. 
 The `app-1-getting-started` directory contains a minimal Vespa application.
 There are two files there:
 
@@ -111,12 +111,13 @@ $ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
 </pre>
 </div>
 
-First, we pull the latest Vespa-image from the Docker repository, then we
+First, we pull the latest [vespa-image](https://hub.docker.com/r/vespaengine/vespa/)
+from the Docker hub, then we
 start it with the name `vespa`. This starts the Docker container and the
 initial Vespa services to be able to deploy an application.
 
 Starting the container can take a short while. Before continuing, make sure
-that the configuration service is running. 
+that the configuration service is running by using `vespa status`. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -130,7 +131,7 @@ With the config server up and running, deploy the application using vespa-cli:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="is ready">
-$ (cd app-1-getting-started && vespa deploy --wait 300 --color never)  
+$ vespa deploy --wait 300 --color never app-1-getting-started 
 </pre>
 </div>
 
@@ -140,20 +141,23 @@ otherwise this switches the application to a live status.
 
 Whenever you have a new version of your application, 
 run the same command to deploy the application.
-In most cases, there is no need to restart the application.
+In most cases, there is no need to restart services.
 Vespa takes care of reconfiguring the system.
-If a restart of services is required in some rare case, however, the output will notify you.
+If a restart of services is required in some rare case, however, the output will notify 
+which services needs restart to make the change effective. 
 
 In the upcoming parts of the tutorials, we'll frequently deploy the 
-application in this manner. 
+application changes in this manner. 
 
 ## Feeding to Vespa
 
 We must index data before we can search for it. This is called 'feeding', and
 we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
-document. We'll use the [vespa-feed-client](https://docs.vespa.ai/en/vespa-feed-client.html) 
-Java feeder for this:
+document. 
+
+The first example uses the [vespa-feed-client](https://docs.vespa.ai/en/vespa-feed-client.html)
+to index a document:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -165,7 +169,7 @@ $ unzip vespa-feed-client-cli.zip
 </div>
 
 We can also feed using [Vespa document api](https://docs.vespa.ai/en/document-v1-api-guide.html) directly,
- or using vespa-cli which uses the document api. 
+ or using vespa cli which also uses the http document api. 
 
 This runs the `vespa-feed-client` Java client with the file `doc.json` file.
 <div class="pre-parent">
@@ -176,7 +180,7 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-This runs the `vespa`cli with the file `doc.json` file. The `-v` option will make vespa-cli
+This runs the `vespa` cli with the file `doc.json` file. The `-v` option will make vespa-cli
 print the http request:
 
 <div class="pre-parent">
@@ -186,11 +190,13 @@ $ vespa document -v doc.json
 </pre>
 </div>
 
-## Testing Vespa
+Once the feed operation is acked by Vespa, the operation is visible in search. 
 
-If everything is ok so far, our application should be up and running.
+## Querying Vespa
 
-We can query the endpoint using the vespa-cli (including verbose output with `-v`)
+We can query the endpoint using the vespa-cli's suppport for performing queries. The vespa cli
+uses the [Vespa query api](../query-api.html) to query vespa, including `-v` 
+in the command we can see the exact endpoint and url request parameters used. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -199,11 +205,32 @@ $ vespa query -v 'yql=select * from news where true'
 </pre>
 </div>
 
-This uses the `search` API to search for all documents of type `news`.
-This should return `1` result, which is the document we fed above. 
+This example uses [YQL (Vespa Query Language)](../en/query-language.html) to 
+search for all documents of type `news`. This query request will return `1` result, which is the document we fed above. 
 
-Remove the document:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Hello world!'>
+$ vespa query 'yql=select * from news where userQuery()' 'query=hello world' 'default-index=title'
+</pre>
+</div>
 
+Another query language example that searches for hello AND world in the title.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Hello world!'>
+$ vespa query 'yql=select * from news where title contains phrase("hello","world")' 
+</pre>
+</div>
+
+Another query language example that searches for the phrase hello world in the title.
+In the [next part
+of the tutorial](news-2-basic-feeding-and-query.html) we'll demonstrate more query examples, and
+also ranking and grouping of results.
+
+## Remove documents
+Run the following to remove the document from the index
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='id:news:news::1'>
@@ -238,7 +265,8 @@ $ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-services'
 </pre>
 </div>
 
-If a restart is required due to changes in the application package,
+If a [restart is required](../reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
+due to change in the application package,
 these two steps are what you need to do.
 
 To wipe the index and restart:
@@ -253,7 +281,7 @@ $ docker exec vespa bash -c ' \
 </pre>
 </div>
 
-You can stop and kill the Vespa Docker application like this:
+You can stop and kill the Vespa container application like this:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -262,7 +290,8 @@ $ docker rm -f vespa
 </pre>
 </div>
 
-This will delete the Vespa application, including all data, so don't do this unless you are sure.
+This will delete the Vespa application, including all data and configuration. See 
+[container tuning for production](../operations/docker-containers.html). 
 
 ## Conclusion
 

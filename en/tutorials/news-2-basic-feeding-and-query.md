@@ -264,16 +264,10 @@ search.
 With the three necessary files above, we are ready to deploy the application package.
 Make sure it looks like this (use `ls` if `tree` is not installed):
 <pre>
-$ tree my-app/
 my-app/
 ├── schemas
 │   └── news.sd
 └── services.xml
-</pre>
-
-<pre data-test="exec">
-$ pwd
-$ tree my-app/
 </pre>
 
 <div class="pre-parent">
@@ -286,7 +280,7 @@ $ vespa deploy --wait 300 my-app/
 ## Feeding data
 
 The data fed to Vespa must match the schema for the document type. The
-downloaded MIND data must be converted to a valid Vespa [document
+downloaded MIND data must be converted to a valid Vespa JSON [document
 format](../reference/document-json-format.html) before it can be fed to
 Vespa. Again, we have a script to help us with this:
 
@@ -350,7 +344,7 @@ details can be found in the [Query API](../query-api.html).
 
 Consider the query:
 
-	select * from news where default contains \"music\""
+	select * from news where default contains "music"
 
 Given the above schema, where the fields `title`, `abstract` and `body` are
 part of the `fieldset default`, any document containing the word "music" in one
@@ -377,7 +371,7 @@ $ curl -s -H "Content-Type: application/json" \
 
 {% include note.html content="You can use the built-in query builder found at 
 <a href='http://localhost:8080/querybuilder/' data-proofer-ignore>localhost:8080/querybuilder/</a>
-which can help you build queries with, for instance, autocompletion of YQL." %}
+which can help you build queries with, for instance, auto-completion of YQL." %}
 
 Looking at the output, please note:
 
@@ -392,7 +386,7 @@ Looking at the output, please note:
   documents are re-indexed.
 - You can add `&tracelevel=3` to dump query parsing details.
 - The `totalCount` field at the top level contains the number of documents
-  that matched the query.
+  that *matched* the query.
 - Also note the `coverage` element, this tells us how many documents and nodes we searched over.
 Coverage might be degraded, in case of timeouts, see [graceful degradation](../graceful-degradation.html).
 
