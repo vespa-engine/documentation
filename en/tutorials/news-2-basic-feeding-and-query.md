@@ -159,7 +159,7 @@ Quite a lot is set up here:
 - `<redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_ — the content
   cluster capacity can be increased by adding node elements — see [elastic
-  Vespa](../elastic-vespa.html). (See also the
+  Vespa](../elasticity.html). (See also the
   [reference](../reference/services-content.html) for more on content cluster
   setup.)
 
