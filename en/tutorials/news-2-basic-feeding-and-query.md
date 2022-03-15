@@ -107,19 +107,25 @@ set of configuration files and Java plugins that together define the behavior
 of a Vespa system: what functionality to use, the available document types, how
 ranking will be done and how data will be processed during feeding and
 indexing.  The schema, e.g., `news.sd`, is a required part of an
-application package — the other files needed are `services.xml` and
-`hosts.xml`. We mentioned these files in the previous part but didn't really 
+application package — the other file needed is `services.xml`.
+
+For self-hosted multi-node deployments, a `hosts.xml` file is also needed. 
+For multi-node self-hosted deployments using `hosts.xml`, see
+the [multinode high 
+availability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
+sample application. 
+
+We mentioned these files in the previous part but didn't really 
 explain them at the time. We'll go through them here, starting with the
 services specification.
-
 
 ### Services Specification
 
 The [services.xml](../reference/services.html) file defines the services that
 make up the Vespa application — which services to run and how many nodes per
-service. Write the following to `my-app/services.xml`:
+service. Write the following to `news/my-app/services.xml`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/services.xml">
+<pre data-test="file" data-path="news/my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
 
@@ -146,41 +152,23 @@ service. Write the following to `my-app/services.xml`:
 
 Quite a lot is set up here:
 
-- `<container>` defines the [container cluster](../jdisc/index.html) for
+- `<container>` defines the stateless [container cluster](../jdisc/index.html) for
   document, query and result processing
 - `<search>` sets up the [query endpoint](../query-api.html).  The default port
-  is 8080.
+  is 8080. See also [Securing Vespa with mutually authenticated TLS (mTLS)](https://blog.vespa.ai/securing-vespa-with-mutually-authenticated-tls/)
+  for how to use mTLS with Vespa.
 - `<document-api>` sets up the [document
-  endpoint](../reference/document-v1-api-reference.html) for feeding.
+  endpoint](../reference/document-v1-api-reference.html) for feeding and visiting.
 - `<nodes>` defines the nodes required per service.  (See the
   [reference](../reference/services-container.html) for more on container
   cluster setup).
-- `<content>` defines how documents are stored and searched.
-- `<redundancy>` denotes how many copies to keep of each document.
+- `<content>` The stateful content cluster
+- `<redundancy>` denotes how many copies to store of each document.
 - `<documents>` assigns the document types in the _schema_ — the content
   cluster capacity can be increased by adding node elements — see [elastic
   Vespa](../elastic-vespa.html). (See also the
   [reference](../reference/services-content.html) for more on content cluster
   setup.)
-
-
-### Deployment Specification
-
-The [hosts.xml](../reference/hosts.html) file contains a list of all the
-hosts/nodes that are part of the application, with an alias for each of them.
-Write the following to `my-app/hosts.xml`:
-
-<pre data-test="file" data-path="sample-apps/news/my-app/hosts.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;hosts&gt;
-  &lt;host name="localhost"&gt;
-    &lt;alias&gt;node1&lt;/alias&gt;
-  &lt;/host&gt;
-&lt;/hosts&gt;
-</pre>
-
-This sets up the alias `node1` to represent the localhost. You 
-saw this alias in the services specification above.
 
 
 ### Schema
@@ -192,10 +180,9 @@ type must be defined in the Vespa configuration through a
 [schema](../schemas.html).  Think of the document type in a schema as 
 similar to a table definition in a relational database - it consists of a set
 of fields, each with a given name, a specific type, and some optional
-properties.
-
-The data fed into Vespa must match the structure of the schema, and the results
-returned when searching will be in this format as well.
+properties.The data fed into Vespa must match the structure of the schema, and the results
+returned when searching will be in this format as well. There is no dynamic 
+field creation support in Vespa, one can say Vespa document schemas are strongly typed. 
 
 The `news` document type mentioned in the `services.xml` file above is defined
 in a schema. Schemas are found under the `schemas` directory in the application 
@@ -203,9 +190,9 @@ package, and **must** have the same name as the document type mentioned
 in `services.xml`.
 
 Given the MIND dataset described above, we'll set up the schema as follows.
-Write the following to `my-app/schemas/news.sd`:
+Write the following to `news/my-app/schemas/news.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
         field news_id type string {
@@ -235,6 +222,7 @@ schema news {
         }
         field date type int {
             indexing: summary | attribute
+            attribute: fast-search
         }
         field clicks type int {
             indexing: summary | attribute
@@ -264,7 +252,7 @@ indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
 - `attribute:` Store this field in memory as an [attribute](../attributes.html)
-  — for [sorting](../reference/sorting.html), [querying](../query-api.html) and
+  — for [sorting](../reference/sorting.html), [querying](../query-api.html), [ranking](../ranking.html) and
   [grouping](../grouping.html).
 - `summary:` Lets this field be part of the [document
   summary](../document-summaries.html) in the result set.
@@ -280,12 +268,10 @@ search.
 
 ## Deploy the Application Package
 
-With the three necessary files above, we are ready to deploy the application package.
+With the two necessary files above, we are ready to deploy the application package.
 Make sure it looks like this (use `ls` if `tree` is not installed):
 <pre>
-$ tree my-app/
 my-app/
-├── hosts.xml
 ├── schemas
 │   └── news.sd
 └── services.xml
@@ -293,29 +279,17 @@ my-app/
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd my-app && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec" data-test-assert-contains="Success">
+$ vespa deploy --wait 300 my-app
 </pre>
 </div>
-
-Continue after the application is successfully deployed:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-</div>
-
 
 ## Feeding data
 
 The data fed to Vespa must match the schema for the document type. The
-downloaded MIND data must be converted to a valid Vespa [document
+downloaded MIND data must be converted to a valid Vespa JSON [document
 format](../reference/document-json-format.html) before it can be fed to
-Vespa. Again, we have a script to help us with this:
+Vespa. Luckily, we have a script to help us with this:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -338,47 +312,48 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-Wait for all 28 603 documents to be indexed:
+The `vespa-feed-client` can read an JSON array of document operations, or JSONL with
+one Vespa document JSON formatted operation per line. Once the feed job finishes, 
+all our 28 603 documents are searchable, let us do a quick query to verify:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec"  data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ curl -s 'http://localhost:19092/metrics/v1/values' | \
-  tr "," "\n" | grep content.proton.documentdb.documents.active
+<pre data-test="exec" data-test-assert-contains='28603'>
+$ vespa query -v 'yql=select * from news where true' 'hits=0'
 </pre>
 </div>
 
-You can verify that specific documents are fed by fetching documents by
-document id using the [Document API](../api.html):
+You can verify that specific documents are indexed by fetching documents by
+document id using the [Document V1 API](../document-v1-api-guide.html):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="id:news:news::N10864">
-$ curl -s 'http://localhost:8080/document/v1/news/news/docid/N10864' | python3 -m json.tool
+$ vespa document -v get id:news:news::N10864
 </pre>
 </div>
 
 
 ## The first query
 
-Searching with Vespa is done using HTTP GET or HTTP POST requests, like:
+Searching with Vespa is done using HTTP(S) GET or HTTP(S) POST requests, like:
 
-    <host:port>/search?yql=value1&param2=value2...
+    <host:port>/search?yql=select..&hits=1...
 
-or with a JSON-query: <br/>
+or with a JSON POST Body: <br/>
 
     {
-    	"yql" : value1,
-    	param2 : value2,
+    	"yql" : "select ..",
+    	"hits" : 2,
     	...
     }
 
-The only mandatory parameter is the query, using `yql=<yql query>`. More
-details can be found in the [Query API](../query-api.html).
+The only mandatory parameter is the query, using either `yql=<yql query>` or `query=<simple-query>`. 
+More details on the [Query API](../query-api.html).
 
 Consider the query:
 
-	select * from sources * where default contains \"music\""
+	select * from news where default contains "music"
 
 Given the above schema, where the fields `title`, `abstract` and `body` are
 part of the `fieldset default`, any document containing the word "music" in one
@@ -388,12 +363,11 @@ GET query:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s 'http://localhost:8080/search/?yql=select+*+from+sources+*+where+default+contains+%22music%22' |\
-  python3 -m json.tool
+$ vespa query -v 'yql=select * from news where default contains "music"'  
 </pre>
 </div>
 
-or a POST JSON query:
+or a POST JSON query (Notice the *Content-Type* header specification):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -406,7 +380,7 @@ $ curl -s -H "Content-Type: application/json" \
 
 {% include note.html content="You can use the built-in query builder found at 
 <a href='http://localhost:8080/querybuilder/' data-proofer-ignore>localhost:8080/querybuilder/</a>
-which can help you build queries with, for instance, autocompletion of YQL." %}
+which can help you build queries with, for instance, auto-completion of YQL." %}
 
 Looking at the output, please note:
 
@@ -415,35 +389,88 @@ Looking at the output, please note:
 - Each hit has a property named relevance, which indicates how well the given
   document matches our query, using a pre-defined default ranking function. You
   have full control over ranking — more about ranking and ordering later. The
-  hits are sorted by this value.
+  hits are sorted by this value (descending).
 - When multiple hits have the same relevance score, their internal ordering is
   undefined. However, their internal ordering will not change unless the
   documents are re-indexed.
-- You can add `&tracelevel=9` to dump query parsing details.
+- You can add `&tracelevel=3` to dump query parsing details and execution plan.
 - The `totalCount` field at the top level contains the number of documents
-  that matched the query.
+  that *matched* the query.
+- Also note the `coverage` element, this tells us how many documents and nodes we searched over.
+Coverage might be degraded, see [graceful degradation](../graceful-degradation.html).
 
-### Other examples
+Prefer HTTP POST over GET in production due to limitations on URI length (64KB). 
 
-    {"yql" : "select title from sources * where title contains \"music\""}
+### Query examples
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where title contains "music"'  
+</pre>
+</div>
 
 Again, this is a search for the single term "music", but this time explicitly in the 
 `title` field. This means that we only want to match documents that contain the
 word "music" in the field `title`. As expected, you will see fewer hits for
-this query than for the previous one.
+this query than for the previous one searching the `fieldset default`. 
+Also note that we scope the select to only return the title.
 
-    {"yql" : "select * from sources * where title contains \"music\" AND default contains \"festival\""}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where default contains "music" and default contains "festival"'  
+</pre>
+</div>
 
 This is a query for the two terms "music" and "festival", combined with an
 `AND` operation; it finds documents that match both terms — but not just one of
-them.
+them. 
 
-    {"yql" : "select * from news * where true"}
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where userQuery()' 'query=music festival' 'type=all'
+</pre>
+</div>
 
-This is a common and useful Vespa trick to get the number of indexed
-documents for a certain document type. 
-This means that the query above really means "return all documents of type
-news", and as such, all documents in the index are returned.
+This combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
+with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
+default query type is using `all`. In this case, documents needs to match both music and festival. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where userQuery()' 'query=music festival -beer' 'type=any'
+</pre>
+</div>
+
+Above changes the query type from all to any, so that all documents that match either (or both)
+of the terms are returned, exluding documents with the term 'beer'. 
+Note that number of hits which are matched and ranked increases 
+the computional complexity of the query execution. See [using WAND with Vespa](..//using-wand-with-vespa.html) 
+for a way to speed up evaluation of type any/or-like queries. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where userQuery()' \
+'query=music festival' 'type=phrase' 'default-index=title' 
+</pre>
+</div>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"coverage": 100'>
+$ vespa query -v 'yql=select title from news where rank(userQuery(), title contains "festival")' 'query=music'
+</pre>
+</div>
+Search for 'music' in the default fieldset, boost documents with festival in the title. 
+The [rank()](../reference/query-language-reference.html#rank) query operator allows 
+us to retrieve on the first operand, and have match ranking features
+calculated for the the second operand argument. The second and further operands does not impact recall 
+(which documents matches the query) but can be used to tune precision (ordering of the results). More
+on ranking in the next part of the tutorial. 
 
 ## Conclusion
 

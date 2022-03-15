@@ -6,11 +6,12 @@ redirect_from:
 ---
 
 Learn how [ranking](ranking.html) works in Vespa by using the open [query API](query-api.html) of
-[vespa-documentation-search](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/vespa-documentation-search).
+[vespa-documentation-search](https://github.com/vespa-cloud/vespa-documentation-search).
 In this article, find a set of queries invoking different `rank-profiles`, which is the ranking definition.
 
 Ranking is the user-defined computation that scores documents to a query,
-here configured in [doc.sd](https://github.com/vespa-engine/sample-apps/blob/master/vespa-cloud/vespa-documentation-search/src/main/application/schemas/doc.sd),
+here configured in [doc.sd]
+(https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd),
 also see [schema documentation](schemas.html).
 This schema has a set of (contrived) ranking functions, to help learn Vespa ranking.
 
@@ -181,7 +182,7 @@ where the document name is the address in the tensor, using a value of 1 for eac
 {% include important.html content="Vespa cannot know the query tensor type from looking at it -
 it must be configured using a [query profile type](ranking-expressions-features.html#query-feature-types).
 Below, we use `queryProfile=links` in the query.
-Explore the [configuration](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/vespa-documentation-search/src/main/application/search/query-profiles):"%}
+Explore the [configuration](https://github.com/vespa-cloud/vespa-documentation-search/tree/main/src/main/application/search/query-profiles):"%}
 
 ```
 └── query-profiles

@@ -59,7 +59,7 @@ use in ranking. The benefit is that the global category CTR values only need to
 be written to one place: the global document.
 
 Please see the [guide on parent-child relationships](../parent-child.html) for more
-information and examples.
+information and examples. 
 
 ## Setting up a global category CTR document
 
@@ -122,13 +122,14 @@ To use this document, we need to add it to `services.xml`:
 
 Notice that we've set `global="true"`, which instructs Vespa to keep a copy 
 of these documents on all content nodes. This is required for using it in a 
-parent-child relationship.
+parent-child relationship. This also put limits on how many parent documents a system can have
+as all nodes needs to index all parent documents. 
 
 
 ## Importing parent values in child documents
 
 To use the `category_ctr` tensor when ranking `news` documents, we need to
-"import" the tensor. There are two things we need to set up: the reference to
+"import" the tensor into the child document type. There are two things we need to set up: the reference to
 the parent document, and which fields to import. We modify our
 `schemas/news.sd`:
 
@@ -269,19 +270,19 @@ after feeding some data.
 
 ## Feeding parent and child updates
 
+Deploy the application 
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ cd ../app-7-parent-child
-$ mvn package
+$ (cd app-7-parent-child && mvn package)
 </pre>
 </div>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ curl --header Content-Type:application/zip --data-binary @target/application.zip \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec">
+$ vespa deploy --wait 300 app-7-parent-child
 </pre>
 </div>
 
@@ -304,15 +305,20 @@ These files can now be fed to Vespa, but note that the
 `mind/global_category_ctr.json` need to be fed first because the global
 document needs to exist before the child documents can reference it.
 
+Create feed files:
+
 <pre data-test="exec">
-$ cd ..
 $ ./src/python/create_category_ctrs.py mind
+</pre>
+
+Feed the created feed files:
+
+<pre data-test="exec">
 $ ./vespa-feed-client-cli/vespa-feed-client \
 --verbose --file mind/global_category_ctr.json --endpoint http://localhost:8080
 $ ./vespa-feed-client-cli/vespa-feed-client \
 --verbose --file mind/news_category_ctr_update.json --endpoint http://localhost:8080
 </pre>
-
 
 ## Testing the application
 
@@ -320,9 +326,8 @@ After feeding the above files, we can now test the application with a query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ curl -s "http://localhost:8080/search/?user_id=U33527&amp;ranking.profile=recommendation_with_global_category_ctr" | \
-    python3 -m json.tool
+<pre data-test="exec" data-test-assert-contains='"totalCount": 10'>
+$ vespa query 'user_id=U33527' 'ranking.profile=recommendation_with_global_category_ctr' 'hits=10' 
 </pre>
 </div>
 
@@ -361,20 +366,24 @@ immediately available. As such, the system responds quickly to changes in the gl
 parameters.
 
 Now, a simple multiplication between these features might not give us what we
-want. For instance, these features have different average values different
+want. For instance, these features have different average values and different
 standard deviations. Particularly, if we add multiple additional features,
 just multiplying them together will probably not give a great user
-experience.
+experience. Instead of a hand-tuned final relevancy calculation as demonstrated
+above we could use a machine learned function with these as feature inputs.  
 
-To remedy this, we will try to learn a suitable weighting between features. We'll 
-address this in the next part of this series.
+Ultimately, these features are computed in real-time for every news article during ranking. 
+These features can then be added to any machine-learned ranking model. Vespa supports gradient-boosted trees 
+from [XGBoost](../xgboost.html) and [LightGBM](../lightgbm.html), and also
+ neural networks in [ONNX](../onnx.html) format, exported from popular ML frameworks like 
+ [PyTorch](https://pytorch.org/) and [Tensorflow](https://www.tensorflow.org/).
 
 
 ## Conclusion
 
 This tutorial introduced parent-child relationships and demonstrated it
 through a global CTR feature we used in ranking. As this feature was based on
-tensors, we also introduced ranking with tensor expressions. In the next part
-of the tutorial, we will start using a machine-learned model in ranking.
+tensors, we also introduced ranking with tensor expressions. For a real-world use-case
+using parent-child tensors, see this [blog post](https://blog.vespa.ai/parent-child-joins-tensors-content-recommendation/).
 
 <script src="/js/process_pre.js"></script>

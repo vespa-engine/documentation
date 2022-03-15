@@ -184,19 +184,19 @@ unique, we only expect a single hit. We then extract the `embedding` tensor
 from the user document.
 
 {% include note.html content="We explicitly call a *fill* on the results before returning.
-A query is  usually passed to the search backend at least twice: one to retrieve the results,
+A query is  usually passed to the search backend at least twice: one to retrieve the top ranked results,
 another to retrieve the summary data of the final result set.
 This is to avoid sending excess data between services.
 For instance, if searching for the top 10 results with two search backends,
 each backend will retrieve the top 10 results from the local content on that node.
-A searcher will determine the \"globally\" top 10
+A searcher will determine the global top ten ranked results (potentially including diversification) 
 and only issue a *fill* to retrieve the summary features for those top 10." %}
 
 Now that we've retrieved the user embedding, we programmatically set up a
 nearest-neighbor search, and add the user embedding to the query as the
 ranking feature `query(user_embedding)`. The search is then passed along to
 the next searcher in the chain. We do not need to explicitly fill the 
-result here, as that is guaranteed to happen before ultimately returning
+result here, as that is guaranteed to happen before ultimately rendering
 the results.
 
 Again, note that all this is pretty much the same as what we did in
@@ -239,7 +239,6 @@ changed compared to the previous parts in the tutorial. The structure is now:
 ├── src
 │   └── main
 │       ├── application
-│       │   ├── hosts.xml
 │       │   ├── schemas
 │       │   │   ├── news.sd
 │       │   │   └── user.sd
@@ -263,8 +262,7 @@ a Java project. We can now compile and package this application:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ cd app-6-recommendation-with-searchers
-$ mvn package
+$ (cd app-6-recommendation-with-searchers && mvn package)
 </pre>
 </div>
 
@@ -273,26 +271,18 @@ which is what we referred to in `services.xml`. When the command
 finishes, we can see this artifact in  `target/application.zip`,
 This contains the full Vespa application, with Java components.
 
-Until now, we've deployed the entire application directory. From now on 
-we deploy this `application.zip` file.
+The vespa-cli detects that this app has custom Java components:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ curl --header Content-Type:application/zip --data-binary @target/application.zip \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec">
+$ vespa deploy --wait 300 app-6-recommendation-with-searchers
 </pre>
 </div>
 
-<!-- Wait for bundle load -->
-<pre data-test="exec" style="display:none">
-$ sleep 3
-</pre>
-
-After this file has been deployed, we are ready to test this. Please 
+After the application has been deployed, we are ready to test. Please 
 refer to [the searcher development guide](../searcher-development.html)
-for much more on searchers and the Java API.
-
+for much more on custom searchers and the Java API.
 
 ## Testing
 
@@ -301,12 +291,19 @@ Now we can search for a user's recommended news articles directly from the `user
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"documents": 28603'>
-$ curl -s 'http://localhost:8080/search/?user_id=U33527&searchchain=user' | python3 -m json.tool
+$ vespa query -v 'user_id=U33527' 'searchChain=user'
 </pre>
 </div>
 
 This should now return the top 10 recommended news articles for this user. Indeed,
-if we now add a with a `&tracelevel=5`, we see the searcher being invoked:
+if we now add a with a `tracelevel=5`, we see the searcher being invoked:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"documents": 28603'>
+$ vespa query -v 'user_id=U33527' 'searchChain=user' 'tracelevel=5'
+</pre>
+</div>
 
 ```
 ...
@@ -320,8 +317,8 @@ if we now add a with a `&tracelevel=5`, we see the searcher being invoked:
 ...
 ```
 
-Note that the `searchchain` query parameter can be set as default so this does not have to 
-be passed along with the query by adding it to the default query profile in 
+Note that the `searchChain` query parameter can be set as default so this does not have to 
+be passed with the query request. This is done by adding it to the default query profile in 
 `src/main/application/search/query-profiles/default.xml`:
 
 <div class="pre-parent">
@@ -359,8 +356,7 @@ If we take a closer look at the query above, and search for the top 100 hits:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ curl -s "http://localhost:8080/search/?user_id=U33527&amp;hits=100" | \
-  python3 -m json.tool | grep "category\": \"sports" | \
+$ vespa query 'user_id=U33527' 'searchChain=user' 'hits=100' | grep "category\": \"sports" | \
   wc -l
 </pre>
 </div>

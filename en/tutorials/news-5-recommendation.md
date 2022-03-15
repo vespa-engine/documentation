@@ -32,7 +32,7 @@ For reference, the final state of this tutorial can be found in the
 First, we need to modify the `news.sd` search definition to include a field
 to hold the embedding and a recommendation rank profile:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
         field news_id type string {
@@ -145,7 +145,7 @@ for more information on feeding formats.
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/user.sd">
+<pre data-test="file" data-path="news/my-app/schemas/user.sd">
 schema user {
     document user {
         field user_id type string {
@@ -165,7 +165,7 @@ retrieve the user's embedding vector.
 We also need to let Vespa know we want to use this document type,
 so we modify `services.xml` and add it under `documents` in the `content` section:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/services.xml">
+<pre data-test="file" data-path="news/my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
 
@@ -193,16 +193,14 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd my-app && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec">
+$ vespa deploy --wait 300 my-app 
 </pre>
 </div>
 
-<!-- Give the container some time to load new config -->
+<!-- Sometimes a query timeout, increase stability of auto testing -->
 <pre data-test="exec" style="display:none">
-$ sleep 60
+$ sleep 20
 </pre>
 
 After redeploying with the updates schemas and `services.xml`,
@@ -218,24 +216,27 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-Wait for 5 000 user and 28 603 news documents to be indexed:
+Once the feeding jobs finishes our index is ready to be used, we can verify that we have 
+28,603 news documents and 5000 user documents:
+
+<!-- Sometimes a query timeout, increase stability of auto testing -->
+<pre data-test="exec" style="display:none">
+$ sleep 20
+</pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for='"content.proton.documentdb.documents.active.last":5000'>
-$ curl -s 'http://localhost:19092/metrics/v1/values' | \
-  tr "," "\n" | grep content.proton.documentdb.documents.active
+<pre data-test="exec" data-test-assert-contains='28603'>
+$ vespa query -v 'yql=select * from news where true' 'hits=0'
 </pre>
 </div>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for='"content.proton.documentdb.documents.active.last":28603'>
-$ curl -s 'http://localhost:19092/metrics/v1/values' | \
-  tr "," "\n" | grep content.proton.documentdb.documents.active
+<pre data-test="exec" data-test-assert-contains='5000'>
+$ vespa query -v 'yql=select * from user where true' 'hits=0'
 </pre>
 </div>
-
 
 ## Query profiles and query profile types
 
@@ -249,16 +250,16 @@ that can be set as default, so you don't have to pass them along with the query.
 We don't use this in this sample application. Still we need to set up a default 
 query profile to set up the types of query parameters we expect to pass. 
 
-So, write the following to `search/query-profiles/default.xml`:
+So, write the following to `news/my-app/search/query-profiles/default.xml`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/search/query-profiles/default.xml">
+<pre data-test="file" data-path="news/my-app/search/query-profiles/default.xml">
 &lt;query-profile id="default" type="root" /&gt;
 </pre>
 
 To set up the query profile types, write them to the file
 `search/query-profiles/types/root.xml`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/search/query-profiles/types/root.xml">
+<pre data-test="file" data-path="news/my-app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id="root" inherits="native"&gt;
     &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[51])" /&gt;
 &lt;/query-profile-type&gt;
@@ -275,18 +276,10 @@ but that is required to successfully set up the query profile type." %}
 Deploy the updates to query profiles:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd my-app && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec">
+$ vespa deploy --wait 300 my-app
 </pre>
 </div>
-
-<!-- Give the container some time to load new config -->
-<pre data-test="exec" style="display:none">
-$ sleep 3
-</pre>
-
 
 ## Testing the application
 
@@ -295,10 +288,8 @@ First, let's find the user `U33527`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"id": "id:user:user::U33527"'>
-$ curl -s -H "Content-Type: application/json" --data \
-    '{"yql" : "select * from sources user where user_id contains \"U33527\"", "hits": 1}' \
-    http://localhost:8080/search/ | python3 -m json.tool
+<pre data-test="exec" data-test-assert-contains='U33527'>
+$ vespa query -v 'yql=select user_id, embedding from user where user_id contains "U33527"' 'hits=1'
 </pre>
 </div>
 
@@ -327,6 +318,16 @@ This returns the document containing the user's embedding:
   }
 }
 ```
+It's also possible to emit the tensor field using short format: 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='U33527'>
+$ vespa query -v 'yql=select user_id, embedding from user where user_id contains "U33527"' \
+ 'hits=1' 'format.tensors=short'
+</pre>
+</div>
+
 
 Now we can use this vector to query the news articles. You can either write this
 query by hand, but we've added a convenience script which queries Vespa:
@@ -366,6 +367,7 @@ When Vespa receives this query, it will scan linearly through all documents
 in the system (28603 if you are using the MIND DEMO dataset), and score them
 using the `recommendation` ranking profile we set up above. Recall that we
 converted the problem from maximum inner product to euclidean distance.
+
 However, Vespa sorts the final results by decreasing rank score. With a
 euclidean distance search, we want to find the smallest distances. To invert
 the rank order, Vespa provides the `closeness` feature which is calculated as
@@ -396,13 +398,13 @@ resulting rank scores are different, but the transformation evidently
 retains the same ordering.
 
 
-## ANNs
+## Approximate Nearest Neighbor Search 
 
-So far, we've been using nearest-neighbor search. This is a linear scan 
-through all matching documents. For the MIND demo dataset we've been using,
+So far, we've been using exact nearest-neighbor search. This is a linear scan 
+through all documents. For the MIND demo dataset we've been using,
 this isn't a problem as it only contains roughly 28000 documents, and 
 Vespa only uses a few milliseconds to scan through these. However, as 
-the index grows, the time spent becomes significant. 
+the index grows, the time (and computional cost) becomes significant. 
 
 Unfortunately, there are no exact methods for finding the nearest-neighbors
 efficiently. So we trade accuracy for efficiency in what is called
@@ -412,7 +414,7 @@ while still being compatible with other facets of the search such as filtering.
 We'll get back to this in the next section.
 
 If you recall, Vespa returned something like the following when searching 
-for single users above (with hits equals to 10):
+for single users above (with `targetHits` equals to 10):
 
 ```
   "root": {
@@ -438,7 +440,7 @@ times a document has been put in the top 10 results during this linear scan.
 
 Let's switch to using approximate nearest-neighbors by adding `index` to the embedding field in `news.sd`:
 
-<pre data-test="file" data-path="sample-apps/news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
         field news_id type string {
@@ -468,6 +470,7 @@ schema news {
         }
         field date type int {
             indexing: summary | attribute
+            attribute: fast-search
         }
         field clicks type int {
             indexing: summary | attribute
@@ -509,12 +512,12 @@ restart is required so that the index can be built:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd my-app && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec">
+$ vespa deploy --wait 300 my-app
 </pre>
 </div>
+
+Introducing the HNSW `index` requires a content node restart, in this case we restart all services:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -526,7 +529,7 @@ $ docker exec vespa /usr/bin/sh -c \
 
 <!-- Give the container some time to reindex -->
 <pre data-test="exec" style="display:none">
-$ sleep 300
+$ vespa status --wait 300 
 </pre>
 
 
@@ -562,7 +565,7 @@ Here, `coverage` is still 100%, but the `totalCount` has been reduced to
 field, Vespa built a HNSW graph structure for the values in this field.
 When used in an approximate nearest-neighbor search, this graph 
 is queried and only the closest points as determined by this graph is 
-added to the list. Thus, Vespa can stop searching early.
+added to the list. 
 
 The particularly observant might have noticed that the result set 
 has changed. Indeed, the third result when using exact nearest 
@@ -575,7 +578,10 @@ cost. In our case, since we only have a relatively small amount of documents,
 there isn't that much gain in efficiency. However, as the number of documents
 grow, this starts to pay off. See [Approximate nearest neighbor search in
 Vespa](https://blog.vespa.ai/approximate-nearest-neighbor-search-in-vespa-part-1/)
-for more of a discussion around this.
+for more of a discussion around this. 
+See also [Billion-scale vector search with Vespa - part one](https://blog.vespa.ai/billion-scale-knn/)
+and [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
+which covers the many trade-offs related to approximate nearest neighbor search.
 
 The implementation of ANN using HNSW in Vespa has some nice features.
 Notice that we did not have to re-feed the corpus to enable ANN. Many 
@@ -634,7 +640,7 @@ As a note, strict filters that filter away a large part of the
 corpus would entail that many candidates in the graph are skipped 
 while searching for the results that fulfill the filters. This can take 
 an exponential amount of time. For this case, Vespa falls back to 
-a linear, brute-force scan for efficiency.
+a linear, brute-force search over the few documents which matches the filter for efficiency.
 
 
 ## Conclusion
@@ -643,7 +649,7 @@ We now have a basic recommendation system up and running. We can query
 for a user, retrieve the embedding vector and use that for querying
 the news articles. Right now, this means two calls to Vespa. In 
 the [next part of the tutorial](news-6-recommendation-with-searchers.html), we will introduce `searchers` which 
-allows for custom logic during query processing, so we only 
-need one pass.
+allows for custom logic during query processing inside the Vespa cluster, so we only 
+need one client - vespa endpoint pass.
 
 <script src="/js/process_pre.js"></script>

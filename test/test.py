@@ -21,6 +21,7 @@ from pseudo_terminal import PseudoTerminal
 ################################################################################
 
 verbose = False
+workdir = "."
 project_root = os.getcwd()
 work_dir = os.path.join(project_root, "_work")
 
@@ -253,7 +254,12 @@ def run_url(url):
     print_cmd_header("Testing", url)
     allpages = b""
     for page in url.split(","):
-        allpages += urllib.request.urlopen(page).read()
+        page = page.strip()
+        if url.startswith("http"):
+            allpages += urllib.request.urlopen(page).read()
+        else:
+          with open(workdir + '/' + page, 'rb') as f:
+              allpages += f.read()
 
     process_page(allpages, url)
 
@@ -288,14 +294,15 @@ def run_file(file_name):
 
 
 def run_with_arguments():
-    global verbose
+    global verbose 
+    global workdir 
     config_file = ""
     argv = sys.argv[1:]
 
     try:
-        opts, args = getopt.getopt(argv, "vc:")
+        opts, args = getopt.getopt(argv, "vc:w:")
     except getopt.GetoptError:
-        print("test.py [-v] [-c configfile] [file-to-run]")
+        print("test.py [-v] [-c configfile] [-w workdir] [file-to-run]")
         sys.exit(2)
 
     for opt, arg in opts:
@@ -303,6 +310,9 @@ def run_with_arguments():
             verbose = True
         elif opt in "-c":
             config_file = arg
+
+        elif opt in "-w":
+            workdir = arg
 
     if len(config_file):
         run_config(config_file)
