@@ -331,7 +331,7 @@ Some more examples and thoughts can be found in the [scaling guide](performance/
 #### Is there a batch ingestion mode, what limits apply?
 Vespa does not have a concept of "batch ingestion"
 as it contradicts many of the core features that are the strengths of Vespa,
-including [serving elasticity](elastic-vespa.html) and sub-second indexing latency.
+including [serving elasticity](elasticity.html) and sub-second indexing latency.
 That said, we have numerous use-cases in production
 that do high throughput updates to large parts of the (sometimes entire) document set.
 In cases where feed throughput is more important than indexing latency, you can tune this to meet your requirements.
@@ -384,7 +384,7 @@ and no specific platform was requested
 Refer to [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 #### How fast can nodes be added and removed from a running cluster?
-[Elasticity](elastic-vespa.html) is a core Vespa strength -
+[Elasticity](elasticity.html) is a core Vespa strength -
 easily add and remove nodes with minimal (if any) serving impact.
 The exact time needed depends on how much data will need to be migrated in the background
 for the system to converge to [ideal data distribution](content/idealstate.html).

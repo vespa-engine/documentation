@@ -1,54 +1,61 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Elastic Vespa"
+title: "Content Cluster Elasticity"
 redirect_from:
 - /documentation/elastic-vespa.html
 ---
 
 <p>
-  A Vespa instance can grow and shrink while serving queries, reads and writes.
-  To maintain a uniform data distribution due to changes in size or topology,
-  documents are automatically redistributed, with minimal data movement.
+  Vespa clusters can be grown and shrunk while serving queries and writes.
+  Documents in content clusters are automatically redistributed on changes to maintain an even distribution
+  with minimal data movement.
   To resize, just change the <a href="reference/services-content.html#nodes">nodes</a>
   and redeploy the application - no restarts needed.
 </p>
 <img src="https://vespa.ai/assets/elastic-grow.svg" style="max-width: 300px;"
      alt="A cluster growing in two dimensions" />
+
 <p>
-  The elasticity mechanism is also used to recover from a node loss -
-  new replicas of documents are auto-created to maintain redundancy.
-  Failed nodes is hence not a problem that requires immediate attention -
-  as long as the instance has sufficient capacity to handle the data and load,
-  it self-heals from node failures.
+  Documents are management by Vespa in chunked called <a href="#buckets">buckets</a>.
+  The size and number of buckets are completely managed by Vespa and there is never any
+  need to manually control sharding.
+</p>
+
+<p>
+  The elasticity mechanism is also used to recover from a node loss:
+  New replicas of documents are created automatically on other nodes to maintain
+  the configured redundancy.
+  Failed nodes is therefore not a problem that requires immediate attention -
+  clusters will self-heal from node failures as long as there are sufficient resources.
+
 </p>
 <img src="https://vespa.ai/assets/elastic-fail.svg" style="max-width: 300px;"
      alt="A cluster with a node failure" />
+
 <p>
-  Planned node retirements is done by marking nodes as <em>retired</em> -
-  this generates replicas on the other nodes, so the set of retired nodes can safely be shut down.
-  This makes it easy to migrate to a new node resource profile, like nodes with more memory.
+  When you want to remove nodes from a content cluster, you can have the system migrate data
+  off them in an orderly fashion prior to removal. This is done by marking nodes as <em>retired</em>.
+  This is useful to remove nodes that should be retired, but also to migrate a cluster to entirely new nodes
+  while online: Add the new nodes, mark the old nodes retired, wait for the data to be redistributed
+  and remove the old nodes.
 </p>
 <p>
   The auto-elasticity is configured for a normal fail-safe operation,
   but there are tradeoffs like recovery speed and resource usage.
   Learn more in <a href="operations/admin-procedures.html#content-cluster-configuration">procedures</a>.
 </p>
-<p>
-  Document management is chunked into <a href="#buckets">buckets</a> with dynamic size and count.
-  This means, there is no <em>shard</em> configuration in Vespa
-  and managing a cluster of dynamic size and load is as easy as adding or removing nodes.
-</p>
 
 
 <h2 id="adding-nodes">Adding nodes</h2>
+
 <p>
-  Modify the configuration to add/remove nodes,
-  then <a href="cloudconfig/application-packages.html#deploy">deploy</a>.
-  Add an elastic content cluster to the application by adding a
-  <a href="reference/services-content.html">content</a> element
-  in <a href="reference/services.html">services.xml</a>.
+  To add or remove nodes from a content cluster, just <code>nodes</code>
+  tag of the <a href="reference/services-content.html">content</a> cluster in
+  <a href="reference/services.html">services.xml</a>
+  and <a href="cloudconfig/application-packages.html#deploy">redeploy</a>.
   Read more in <a href="operations/admin-procedures.html">procedures</a>.
 </p>
+
 <p>
   When adding a new node, a new <em>ideal state</em> is calculated for all buckets.
   The buckets mapped to the new node are moved, the superfluous are removed.
@@ -67,13 +74,12 @@ redirect_from:
   No buckets are moved between the existing nodes when a new node is added.
   Based on the pseudo-random sequences, some buckets change from primary to secondary, or are removed.
   Multiple nodes can be added in the same deployment.
-  Adding more than one minimizes the total bucket redistribution,
-  but increases the time to get to the <em>ideal state</em>.
 </p>
 
 
 
 <h2 id="removing-nodes">Removing nodes</h2>
+
 <p>
   Whether a node fails or is <em>retired</em>, the same redistribution happens.
   If the node is retired, replicas are generated on the other nodes
@@ -95,77 +101,88 @@ redirect_from:
 
 
 <h2 id="grouped-distribution">Grouped distribution</h2>
+
 <p>
-  Use the <a href="reference/services-content.html#group">group</a> configuration
-  to build a topology of the nodes.
-  This enables replica placement for use cases listed below:
+  Nodes in content clusters can be placed in <a href="reference/services-content.html#group">groups</a>.
+  A group of nodes in a content cluster will have one or more complete replicas of the entire document corpus.
 </p>
 <img src="https://vespa.ai/assets/query-groups.svg" style="max-width: 400px;"
      alt="A cluster changes from using one to many groups" />
+
+<p>This is useful in the cases listed below:</p>
+
 <table class="table">
   <thead></thead><tbody>
 <tr>
   <th>Cluster upgrade</th>
   <td>
-    Take out a full group for upgrade, instead of a node at a time.
+    With multiple groups it becomes safe to take out a full group for upgrade instead of just one a node at a time.
     <a href="operations/live-upgrade.html">Read more</a>.
   </td>
 </tr><tr>
   <th style="white-space: nowrap">Query throughput</th>
   <td>
-    Applications with high query rates / high static query cost
-    can confine queries to fewer nodes.
+    Applications with high query rates and/or high static query cost can use groups to scale to higher query rates
+    since Vespa will automatically send a query to just a single group.
     <a href="performance/sizing-search.html">Read more</a>.
   </td>
 </tr><tr>
   <th>Topology</th>
   <td>
-    Place replicas based on network topology / racking of hosts
+    By using groups you can control replica placement over network switches or racks to
+    ensure there is redundancy at the switch and rack level.
   </td>
 </tr>
 </tbody>
 </table>
 <p>
   Data redistribution after changing cluster topology is automatic,
-  however note that query coverage is reduced in the redistribution period.
+  However, if you change between a grouped and non-grouped configuration,
+  there will be a period of reduced query coverage during the transition.
   Read more in <a href="performance/sizing-examples.html">sizing examples</a>.
-</p><p>
+</p>
+<p>
   Tuning group sizes and node resources enables applications to easily find the latency/cost sweet spot,
-  the elasticity operations are automatic and queries / reads / writes work as usual - no downtime!
+  the elasticity operations are automatic and queries and writes work as usual with no downtime.
 </p>
 
 
 
 <h2 id="buckets">Buckets</h2>
+
 <p>
   To manage documents, Vespa groups them in <em>buckets</em>,
   using hashing or hints in the <a href="documents.html">document id</a>.
-</p><p>
+</p>
+
+<p>
   A document Put or Update is sent to all replicas of the bucket with the document.
   If bucket replicas are out of sync, a bucket merge operation is run to re-sync the bucket.
   A bucket contains <a href="operations/admin-procedures.html#data-retention-vs-size">tombstones</a>
   of recently removed documents.
-</p><p>
+</p>
+
+<p>
   Buckets are split when they grow too large, and joined when they shrink.
   This is a key feature for high performance in small to large instances,
   and eliminates need for downtime or manual operations when scaling.
+  Buckets are purely a content management concept, and data is not stored or
+  indexed in separate buckets, nor does queries relate to buckets in any way.
   Read more in <a href="content/buckets.html">buckets</a>.
-</p><p>
-  Buckets can be viewed as sophisticated shards, and are not configured, they are dynamic.
-  Query operations are run ignorant of buckets and makes query sizing independent of bucket distribution.
-</p>
-<p>
-  Read more about <a href="content/buckets.html">buckets</a>.
 </p>
 
 
 
 <h2 id="ideal-state-distribution-algorithm">Ideal state distribution algorithm</h2>
+
 <p>
   The <a href="content/idealstate.html">ideal state distribution algorithm</a>
-  uses a variation of the <em>RUSH algorithms</em> to distribute documents.
-  Under normal circumstances, it makes a minimal number of documents move when nodes are added or removed.
-</p><p>
+  uses a variant of the <a href="https://ceph.com/assets/pdfs/weil-crush-sc06.pdf">CRUSH algorithm</a>
+  to decide bucket placement.
+  It makes a minimal number of documents move when nodes are added or removed.
+</p>
+
+<p>
   Central to the algorithm is the assignment of a node sequence to each bucket.
   The illustration shows how each bucket uses a pseudo-random sequence of numbers to derive the node sequence.
   The pseudo-random generator is seeded with the bucket id, so each bucket will always get the same sequence:
@@ -183,13 +200,16 @@ redirect_from:
 
 
 <h2 id="consistency">Consistency</h2>
+
 <p>
   Consistency is maintained at bucket level.
   Content nodes calculate checksums based on the bucket contents,
   and the content nodes compare checksums among the bucket replicas.
   A <em>bucket merge</em> is issued to resolve inconsistency, when detected.
   While there are inconsistent bucket replicas, operations are routed to the "best" replica.
-</p><p>
+</p>
+
+<p>
   As buckets are split and joined, it is possible for replicas of a bucket to be split at different levels.
   A node may have been down while its buckets have been split or joined.
   This is called <em>inconsistent bucket splitting</em>.
@@ -204,6 +224,7 @@ redirect_from:
 
 
 <h2 id="further-reading">Further reading</h2>
+
 <ul>
   <li><a href="content/content-nodes.html">content nodes</a></li>
   <li><a href="proton.html">proton</a> - see <em>ready</em> state</li>
