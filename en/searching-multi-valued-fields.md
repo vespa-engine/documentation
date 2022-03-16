@@ -28,7 +28,7 @@ designing both our document schema and the way we query the schema
 [linguistic processing](linguistics.html) like [tokenization](linguistics.html#tokenization), 
 normalization and language dependent [stemming](linguistics.html#stemming).
 - String fields which shares the same match and linguistic processing settings can be combined 
-  schema [fieldset](eference/schema-reference.html#fieldset). 
+  schema [fieldset](reference/schema-reference.html#fieldset). 
 - Should query matching in the field impact ranking, or is it just a filter which should not impact ranking order?
 
 At query time, we can take the user query and translate it into a valid Vespa query request which implements
@@ -245,7 +245,7 @@ Changing the type to `any`, recalls our sample document as we no longer require 
 Now, let us explore how Vespa matches the multi-valued tags field of 
 type [weightedset](reference/schema-reference.html#weightedset). Notice that we change
 back to default `type=all`. 
-In this example we also use the [default-index](en/reference/query-api-reference.html#model.defaultIndex) 
+In this example we also use the [default-index](reference/query-api-reference.html#model.defaultIndex) 
 parameter to limit matching to the `tags` field.
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
@@ -283,7 +283,7 @@ exact, in order matches are ranked higher.
 We have now explored matching, now it's time to focus on how we want to rank the documents matched. 
 You might not have noticed, but in the above examples, each of the queries produced a `relevance` score, 
 this was in our previous examples calculated using the `default` ranking profile which in our case
-used [nativeRank](nativeRank.html). 
+used [nativeRank](nativerank.html). 
 
 We start with having Vespa calculate [rank features](reference/rank-features.html), then we can explore
 and create a baseline ranking function which be better for our data and domain usage. 
