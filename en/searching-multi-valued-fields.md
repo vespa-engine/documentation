@@ -14,33 +14,35 @@ When building a search application we need to think about
 
 During the matching or retriveal stage, Vespa calculates several matching rank features 
 which can influence the order of the documents retrieved. This process is called ranking. A
-single query request might retrieve documents into ranking phase by multiple different 
+single query request might retrieve documents using multiple different 
 retriveal strategies combined using logical disjunction (OR).
-
 
 ### Matching
 
-There is a lot of matching options we should think about when 
-designing both our document schema and the way we query the schema
+There is a lot of text matching options we should think about when 
+designing and mapping or document model to a Vespa document schema:
 
-- For string fields we need to decide if we want to use text style matching or database-style exact matching?
-- For free text string fields, we need to think about;
-[linguistic processing](linguistics.html) like [tokenization](linguistics.html#tokenization), 
+- For string fields we should think about using text style matching or database-style exact matching.
+- For string fields there are also several
+[linguistic processing](linguistics.html) options like [tokenization](linguistics.html#tokenization), 
 normalization and language dependent [stemming](linguistics.html#stemming).
-- String fields which shares the same match and linguistic processing settings can be combined 
-  schema [fieldset](reference/schema-reference.html#fieldset). 
-- Should query matching in the field impact ranking, or is it just a filter which should not impact ranking order?
+- String fields which shares the same [match](reference/schema-reference.html#match) 
+and linguistic processing settings can be combined using [fieldsets](reference/schema-reference.html#fieldset). 
 
 At query time, we can take the user query and translate it into a valid Vespa query request which implements
-our matching and retrieval strategy. 
+our matching and retrieval strategy over the designed document schema.
 
 ### Ranking 
 
-The documents which matches the query and is retrieved by the query is ranked. Once a document
-is retrieved by the query logic the document can be ranked using the full flexibility of the Vespa ranking framework. 
-In the following section we explore both retrieval and ranking. 
+The documents which matches the query and is retrieved by the query is scored using a ranking model. 
+Once a document is retrieved by the query logic the document can be scored using the full 
+flexibility of the Vespa [ranking](ranking.html) framework. 
 
-## Prerequisites
+## Exploration
+
+In the following sections we explore matching and ranking over multi-valued string fields.  
+
+### Prerequisites
 - [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
   or Docker on Linux
 - Operating system: macOS or Linux
@@ -48,22 +50,10 @@ In the following section we explore both retrieval and ranking.
 - [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download 
  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 
-## A minimal Vespa application
+### A minimal Vespa application
 
 Assuming we have the following sample data document where we have a structured
 tag-like field where there is a weight associated with each element. 
-
-Data like this where we both want to match and rank is best represented using 
-the [weightedset](reference/schema-reference.html#type:weightedset)
-[field type](reference/schema-reference.html#field-types).
-
-Vespa weightedset field type can be used to represent:
-
-- Document side tags
-- [Document expansion by query prediction](https://github.com/castorini/docTTTTTquery) 
-for example using past queries  
-- Editoral ranking overrides where we can use prior knowledge to determine which documents are
-great for a given query 
 
 <pre data-test="file" data-path="doc.json"> 
 {
@@ -82,15 +72,20 @@ great for a given query
 }
 </pre>
 
+Structured data like the <code>tags</code>, where we both want to match and rank is best represented using 
+the [weightedset](reference/schema-reference.html#type:weightedset)
+[field type](reference/schema-reference.html#field-types). The Vespa weightedset field type can be used to represent:
+
+- Document side tags like in the above example
+- [Document expansion by query prediction](https://github.com/castorini/docTTTTTquery)  
+- Editoral ranking overrides, for example sponsored search listings.
+
 How should we design our Vespa schema, and how should we match and search this data model for 
 end user free text queries? 
 
 - We want to use text matching when searching the title and description
-- We also want to match the free form tags field as these tags might increase recall and the weight might
-impact the ranking. 
-
-We can start with the following schema:
-
+- We also want to match the free form tags field as these tags might increase recall and the weight of the matched
+element(s) could influence scoring and ranking. We can start with the following schema:
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 schema photo {
 
@@ -132,14 +127,15 @@ schema photo {
 }
 </pre>
 
-We disable [stemming](reference/schema-reference.html#stemming) and
-also enable [bm25](reference/bm25.html) ranking for all string fields. 
+In the schema we disable [stemming](reference/schema-reference.html#stemming) and
+also enable [bm25](reference/bm25.html) text ranking fature for all string fields.
+
 Since all string fields shares the same [match](reference/schema-reference.html#match)
 settings we can use a [fieldset](reference/schema-reference.html#fieldset) 
-so that searches does not need to mention all 3 fields we plan to match queries against. 
+so that queries does not need to mention all three fields.
 
 We also include a default ranking profile (this is the implicit default ranking profile)
-using the Vespa [nativeRank](nativerank.html).
+using the Vespa [nativeRank](nativerank.html) text ranking feature.
 
 Along with the schema, we also need a [services.xml](reference/services.html) file:
 
@@ -168,9 +164,9 @@ Along with the schema, we also need a [services.xml](reference/services.html) fi
 &lt;/services&gt;
 </pre>
 
-## Starting Vespa
+### Starting Vespa
 
-This example uses docker container:
+This example uses the vespa container image:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -182,13 +178,13 @@ $ docker run --detach --name vespa --hostname vespa-container \
 </pre>
 </div>
 
-Install [Vespa-cli](vespa-cli.html):
+Install [Vespa-cli](vespa-cli.html) using Homebrew:
 
 <pre>
 brew install vespa-cli
 </pre>
 
-Deploy the application using vespa-cli:
+Now we can deploy the application using vespa-cli:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -197,7 +193,7 @@ $ vespa deploy --wait 300 my-app
 </pre>
 </div>
 
-## Feeding to Vespa
+### Feeding to Vespa
 
 Feed the sample document 
 
@@ -208,7 +204,7 @@ $ vespa document -v doc.json
 </pre>
 </div>
 
-## Query our data
+### Query our data
 Assuming a free text query *sunset photos featuring dogs*, we translate the user query into
 a Vespa query reques using YQL:
 
@@ -272,27 +268,22 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 Also matches our document. This is an example of cross-element matching. With weightedset
-usig `indexing:index` with `match:text` multi term queries might match across elements. 
+usig `indexing:index` with `match:text` multi term queries match across elements. 
 
 This might be a good decision, as we increase recall, however
 in some cases we want to differentiate an exact match from a partial match during ranking, so that
-exact, in order matches are ranked higher. 
+exact matches are ranked higher than partial matches. This is however highly domain-dependent. 
 
-## Ranking
+### Ranking
 
 We have now explored matching, now it's time to focus on how we want to rank the documents matched. 
 You might not have noticed, but in the above examples, each of the queries produced a `relevance` score, 
-this was in our previous examples calculated using the `default` ranking profile which in our case
+this score was in our previous examples calculated using the `default` ranking profile which in our case
 used [nativeRank](nativerank.html). 
-
-We start with having Vespa calculate [rank features](reference/rank-features.html), then we can explore
-and create a baseline ranking function which be better for our data and domain usage. 
-
-We use [match-features](reference/schema-reference.html#match-features) to return 
-rank features. We explicit mention which ranking features we want to look at. Notice that
-we don't change the actual scoring, we still use `nativeRank` as the scoring function.
-These features are all built-in [rank features](reference/rank-features.html).
-
+We can start by analyzing other [rank features](reference/rank-features.html) we can ask Vespa to produce
+for us.We use [match-features](reference/schema-reference.html#match-features) to return 
+rank features with the retrieved documents. We explicit mention which ranking features we want to have calculated
+and returned. Notice that we don't change the actual scoring, we still use `nativeRank` as the scoring function.
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 schema photo {
 
@@ -580,17 +571,17 @@ $ vespa query 'yql=select * from photos where userQuery()' \
  'ranking.features.query(tagWeight)=3' 
 </pre>
 
-That concludes the experiments. To shutdown the container run:
+That concludes our matching and ranking experiments. To shutdown the container run:
 
 <pre data-test="after">
 $ docker rm -f vespa
 </pre>
 
-# Conclusion
+## Conclusion
 In this guide we have looked at how one can build a query retrieval strategy and how to change ranking 
 when searching multi-valued fields using the weightedset field type. A natural continuation is to look
 at how to use the many rank features by learning a ranking function. See for example
-[learning to rank](learning-to-rank.html). 
+[learning to rank](learning-to-rank.html) and [improving text search through ML](tutorials/text-search-ml.html). 
 
 
 <script src="/js/process_pre.js"></script>
