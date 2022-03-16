@@ -427,7 +427,7 @@ statements of this field.</td>
 </tr>
 
 <tr><td><a href="#normalizing">normalizing</a></td>
-<td>Specifies the kind of spelling normalizing to do on this field.</td>
+<td>Specifies the kind of text normalizing to do on a string field.</td>
 <td>Zero or one.</td>
 </tr>
 
@@ -437,7 +437,7 @@ statements of this field.</td>
 </tr>
 
 <tr><td><a href="#rank">rank</a></td>
-<td>The high level ranking method to use for the field</td>
+<td>Specify if the field is used for ranking.</td>
 <td>Zero or one</td>
 </tr>
 
@@ -452,7 +452,7 @@ statements of this field.</td>
 </tr>
 
 <tr><td><a href="#stemming">stemming</a></td>
-<td>Specifies the kind of stemming to use for this field.</td>
+<td>Specifies stemming options to use for this field.</td>
 <td>Zero or one.</td>
 </tr>
 
@@ -478,25 +478,16 @@ to make a dynamic summary.</td>
 </tr>
 
 <tr><td><a href="#weight">weight</a></td>
-<td>The importance of a term boost field, a positive integer.</td>
+<td>The importance of a field when searching multiple fields and using <code>nativeRank</em>.</td>
 <td>Zero to one</td>
 </tr>
 
 <tr><td><a href="#weightedset">weightedset</a></td>
-<td>Attributes of a weighted set type.</td>
+<td>Properties of a weightedset <a href="#type:weightedset">weightedset&lt;element-type&gt;</a></td>
 <td>Zero to one</td>
 </tr>
 </tbody>
 </table>
-<p>
-If the field is part of a struct definition, i.e. contained in the
-<code><a href="#struct">struct</a></code> element,
-only <code><a href="#match">match</a></code> may be specified.
-</p><p>
-If the field is of type struct, only
-<code><a href="#indexing">indexing</a></code>,
-<code><a href="#match">match</a></code> and
-<code><a href="#query-command">query-command</a></code> may be specified.</p>
 <p>
 Fields can be declared outside the document block in the schema.
 These fields are not part of the document type but behave like regular fields for queries.
@@ -540,14 +531,14 @@ struct-field [name] {
     <td>Zero to one</td>
   </tr>
   <tr><td><a href="#attribute">attribute</a></td>
-    <td>Specifies an attribute setting.</td>
+    <td>Specifies an attribute setting. For example <code>attribute:fast-search</code>.</td>
     <td>Zero to many</td>
   </tr>
   </tbody>
 </table>
 <p>
   If this struct field is of type struct (i.e. a nested struct),
-  only <code><a href="#indexing">indexing</a></code> may be specified.
+  only <code><a href="#indexing">indexing:summary</a></code> may be specified.
 </p>
 
 
@@ -559,23 +550,25 @@ struct-field [name] {
   {% include note.html content="this is not related to the
   <a href='../documents.html#fieldsets'>Document fieldset</a>"%}
 <p>
-  Fieldsets provide a way to group fields together for searching, to search multiple fields - example:
-</p>
-<pre>
-fieldset myfieldset {
+  Fieldsets provide a way to group fields with the same <code>match</code> settings together for searching. 
+  To search multiple fields - example:
+  </p>
+  <pre>
+  fieldset myfieldset {
     fields: a,b,c
-}
-</pre>
-<p>
-Using the query <code>yql=select+*+from+sources+*+where+myfieldset+contains+"foo"</code>
+  }
+  </pre>
+  <p>
+Using the query <code>yql=select from sources * where myfieldset contains "foo"</code>
 will return all the documents for which one or more of the fields a, b or c contain "foo".
-By naming the field set 'default', those fields are searched without
-specifying the field set in unstructured queries: <code>query=foo</code>.
+By naming the field set <em>default</em>, those fields are searched without
+specifying the field set in unstructured queries: 
+<code>query=foo</code>.
 </p><p>
-The fields making up the field set should be as similar as possible in terms of indexing clause, matching etc.
-If they are not, test the application thoroughly.
-For example, it will work for a mix of attributes and indexes,
-but the matching for attribute fields will always be exact.
+
+The fields making up the fieldset should be as similar as possible in terms of indexing clause and match mode.
+If they are not, test the application thoroughly. Having different match modes for the fields in the
+fieldset will generate an warning during application deployment.
 </p><p>
 If specific match settings for the field set is needed, such as exact, specify it using a
 <a href="#match">match</a> clause:
@@ -754,7 +747,7 @@ Inheriting multiple profiles which define the same elements leads to a deploy er
   <p id="num-search-partitions">
     Number of logical partitions the corpus on a searchnode is divided in.
     By default, this is the same as <a href="#num-threads-per-search">num-threads-per-search</a>.
-    A partition is the smallest unit a thread will handle.
+    A partition is the smallest unit a search thread will handle.
     If you have a locality in time when searching and feeding documents,
     you might want to split it into more, smaller partitions.
     That way you avoid that one costly partition leaves some threads idle while others are working hard.
@@ -779,7 +772,7 @@ Inheriting multiple profiles which define the same elements leads to a deploy er
 <td>Zero or more</td>
 </tr>
 <tr><td><a href="#rank">rank</a></td>
-<td>The high level ranking method to use for a field in this profile.</td>
+<td>Specify if the field is used for ranking.</td>
 <td>Zero or more</td>
 </tr>
 <tr><td><a href="#rank-type">rank-type</a></td>
@@ -848,7 +841,8 @@ match-phase {
 Contained in <code><a href="#match-phase">match-phase</a></code>.
 Diversity is used to specify diversity in different phases -
 supported in <code><a href="#match-phase">match-phase</a></code>.
-It is used to guarantee a minimum result set  diversity.
+It is used to guarantee a minimum result set  diversity. Note that this feature is only relevant
+in the context of match-phase degradation.
 </p><p>
 Specify the name of an attribute that will be used to provide diversity.
 Result sets are guaranteed to get at least <code><a href="#diversity-min-groups">min-groups</a></code>
@@ -894,8 +888,12 @@ diversity {
 <h2 id="firstphase-rank">first-phase</h2>
 <p>
 Contained in <code><a href="#rank-profile">rank-profile</a></code>.
-The config specifying the first phase of ranking.
-This is the initial ranking performed on all hits, and you should therefore avoid doing heavy rank-calculations here.
+The config specifying the first phase of ranking. 
+See <a href="../phased-ranking.html">
+phased ranking with Vespa</a>.
+
+This is the initial ranking performed on all matching documents, you should therefore avoid doing 
+computationally expensive relevancy calculations here.
 By default, this will use the ranking feature <code>nativeRank</code>.
 <pre>
 first-phase {
@@ -1093,8 +1091,14 @@ This is faster for small and cheap functions (and more expensive for others).
 <h2 id="secondphase-rank">second-phase</h2>
 <p>
 Contained in <code><a href="#rank-profile">rank-profile</a></code>.
-The config specifying the second phase of ranking. This is the optional re-ranking performed on the best hits from the
-first phase, and where you should put any advanced ranking calculations (e.g. MLR).
+The config specifying the second phase of ranking. 
+See <a href="../phased-ranking.html">
+phased ranking with Vespa</a>.
+
+This is the optional re-ranking phase performed on the top ranking hits from the
+<code>first-phase</code>, and where you should put any advanced relevancy calculations.
+For example Machine Learned Ranking (MLR) models.
+ 
 By default, no second-phase ranking is performed.
 <pre>
 second-phase {
@@ -1115,6 +1119,7 @@ The body of a secondphase-ranking statement consists of:
   <p id="rerank-count">
     Optional argument. Specifies the number of hits to be re-ranked in the second phase.
     Default value is 100. This can also be <a href="query-api-reference.html#ranking.rerankCount">set in the query</a>.
+    Note that this value is local to each node involved in a query.  
   </p>
 </td>
 </tbody>
@@ -1135,6 +1140,8 @@ The body of a secondphase-ranking statement consists of:
   Refer to <a href="../schemas.html#schema-inheritance">schema inheritance</a> for examples.
   The rank features specified here are computed in the <em>fill</em> phase
   (see <a href="../searcher-development.html#multiphase-searching">multiphase searching</a>).
+  Note that rank-features references in summary-features are re-calculated during the fill protocol phase for the hits which made
+  it into the global top ranking hits (from all nodes).
 </p>
 <pre>
 summary-features: [feature] [feature]&hellip;
@@ -1511,8 +1518,9 @@ or by letting multiple fields write their value to the attribute field.
 </p><p>
 Note that <a href="#normalizing">normalizing</a> and
 <a href="../linguistics.html#tokenization">tokenization</a>
-is not enabled by default for attribute fields.
-Queries in attribute fields are hence not normalized.
+is not supported for attribute fields.
+
+Queries in attribute fields are hence not normalized, nor stemmed.
 Use <a href="#index">index</a> on fields to enable.
 Both <em>index</em> and <em>attribute</em> can be set on a field.
 </p>
@@ -1969,7 +1977,8 @@ Supported expressions for fields are:
 <tr><th>index</th>
 <td>
   <p id="indexing-index">
-  Creates a searchable <a href="../proton.html#index">index</a> for the values of this field.
+  Creates a searchable <a href="../proton.html#index">index</a> for the values of this field
+  using <a href="#match">match</a> mode <code>text</code>.
   All strings are lower-cased before stored in the index.
   By default, the index name will be the same as the name of the schema field.
   Use a <a href="#fieldset">fieldset</a> to combine fields in the same set for searching.
@@ -1988,7 +1997,7 @@ Supported expressions for fields are:
 </table>
 <p>
 When combining both <code>index</code> and <code>attribute</code> in the indexing statement for a field,
-e.g <code>indexing: summary|attribute|index</code>,
+e.g <code>indexing: summary | attribute | index</code>,
 the <a href="#match">match</a> mode becomes <code>text</code> for the field.
 So searches in this field will not search the contents in the <a href="#attribute">attribute</a> but the index.
 </p><p>
@@ -2048,15 +2057,15 @@ Also see search using <a href="query-language-reference.html#matches">regular ex
 <tr><th>Property</th><th>Valid with</th><th>Description</th></tr>
 </thead><tbody>
 <tr><td><code>text</code></td>
-<td>Indexes</td>
+<td>index</td>
 <td><p>
-  Default for indexes. Can not be combined with exact matching.
+  Default for string fields with <code>index</code>. Can not be combined with exact matching.
   The field is matched per <a href="../linguistics.html#tokenization">token</a>.
 </p></td>
 </tr>
 
 <tr><td><code>exact</code></td>
-<td>Indexes, attributes</td>
+<td>index, attribute</td>
 <td><p id="exact">
   Can not be combined with <em>text</em> matching.
   </p><p>
@@ -2074,18 +2083,18 @@ Also see search using <a href="query-language-reference.html#matches">regular ex
 </tr>
 
 <tr><td style="white-space:nowrap;"><code>exact-terminator</code></td>
-<td>Indexes, attributes</td>
+<td>index, attribute</td>
 <td><p id="exact-terminator">
   Only valid for <code>match: exact</code>. Default is <code>@@</code>.
   Specify terminator in query strings.
   If the query strings can contain <code>@@</code>, set a different terminator,
   or use <code>match: word</code>, see below. Example - use:
-<pre>
-match {
+  <pre>
+  match {
     exact
     exact-terminator: "@%"
-}
-</pre>
+  }
+  </pre>
 <p>
   on a field called <code>tag</code> to make query <code>tag:a b c!@%</code>
   match documents with the string <em>a b c!</em>
@@ -2102,7 +2111,7 @@ someword AND (tag:!*!@@ OR tag:(kanoo)@@)
 </tr>
 
 <tr><td><code>word</code></td>
-<td>Indexes, attributes</td>
+<td>index, attribute</td>
 <td><p id="word">
   This is the default matching mode for <a href="../attributes.html">string attributes</a>.
   Can not be combined with <em>text</em> matching.
@@ -2127,7 +2136,7 @@ foo AND (artist:"'N Sync" OR artist:"*NSYNC" OR artist:A*teens OR artist:"Wham!"
 </tr>
 
 <tr><td><code>prefix</code></td>
-<td>Attributes</td>
+<td>attribute</td>
 <td><p id="prefix">
   Set default match mode to <em>prefix</em> for the field -
   i.e. queries do not need to specify prefix matching.
@@ -2140,28 +2149,28 @@ foo AND (artist:"'N Sync" OR artist:"*NSYNC" OR artist:A*teens OR artist:"Wham!"
 </tr>
 
 <tr><td><code>cased</code></td>
-<td>Attributes</td>
+<td>attribute</td>
 <td><p id="cased">
   Enable case-sensitive matching. Only relevant for string attributes.
 </p></td>
 </tr>
 
 <tr><td><code>uncased</code></td>
-<td>Indexes, attributes</td>
+<td>index, attribute</td>
 <td><p id="uncased">
   Enable case-insensitive matching. This is the default for all string fields.
 </p></td>
 </tr>
 
 <tr><td><code>max-length</code></td>
-<td>Indexes</td>
+<td>index</td>
 <td><p id="max-length">
   Limit the length of the field that will be used for matching.
 </p></td>
 </tr>
 
 <tr><td><code>gram</code></td>
-<td>Indexes</td>
+<td>index</td>
 <td><p id="gram">
   This field is matched using n-grams.
   For example, with the default gram size 2 the string "hi blue" is tokenized to "hi bl lu ue"
@@ -2182,7 +2191,7 @@ foo AND (artist:"'N Sync" OR artist:"*NSYNC" OR artist:A*teens OR artist:"Wham!"
 </tr>
 
 <tr><td><code>gram-size</code></td>
-<td>Indexes</td>
+<td>index</td>
 <td><p id="gram-size">
   A positive, nonzero, number, default 2.
   Sets the gram size when gram matching is used. Example:</p>
@@ -2581,7 +2590,7 @@ field surname type string {
 <table class="table">
 <thead></thead><tbody>
   <tr>
-    <th style="width:100px">Indexing</th>
+    <th style="width:100px">Index</th>
     <td>
       By default, strings are <a href="../linguistics.html#tokenization">tokenized</a> before
       indexing.
@@ -2613,7 +2622,7 @@ field release_year type int {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported. An attribute will automatically be used instead</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2636,7 +2645,7 @@ field bignumber type long {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported. An attribute will automatically be used instead</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2659,7 +2668,7 @@ field alive type bool {
   <table class="table">
        <thead></thead><tbody>
   <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported</td>
   </tr><tr>
       <th>Attribute</th>
@@ -2683,7 +2692,7 @@ field smallnumber type byte {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported. An attribute will automatically be used instead</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2706,7 +2715,7 @@ field myfloat type float {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported. An attribute will automatically be used instead</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2729,7 +2738,7 @@ field mydouble type double {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported. An attribute will automatically be used instead</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2756,7 +2765,7 @@ field location type position {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2792,7 +2801,7 @@ field predicate_field type predicate {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Indexed in a variable size binary format that is optimized for application during query evaluation</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2815,7 +2824,7 @@ field rawfield type raw {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2836,7 +2845,7 @@ field rawfield type raw {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>
 <p>
 The URL is split into the different components which are indexed
@@ -2919,7 +2928,7 @@ For single-value (primitive) types, use array&lt;type&gt; to create an array fie
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Each element is indexed separately</td>
     </tr><tr>
       <th>Attribute</th>
@@ -2942,13 +2951,19 @@ struct person {
 
 field people type array&lt;person&gt; {
     indexing: summary
-    struct-field first_name { indexing: attribute }
-    struct-field last_name  { indexing: attribute }
+    struct-field first_name { 
+      indexing: attribute
+      attribute: fast-search
+     }
 }
 </pre>
 <p>
 The entire <em>people</em> field is part of document summary, and the <a href="#struct-field">struct fields</a>
-<em>first_name</em> and <em>last_name</em> are defined as attributes available for searching.
+<em>first_name</em> and <em>last_name</em> is defined as attribute for searching, the
+example also builds a b+ tree structure for fast-search. 
+See <a href="../performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">
+when to use fast-search</a>.
+
 Note that you can define only a subset of the struct fields as attributes.
 Use the <a href="query-language-reference.html#sameelement">sameElement</a>
 operator to ensure matches in same struct field instance.
@@ -2957,12 +2972,14 @@ to reduce the amount of data that is returned in document summary.
 </p><p>
 Restrictions:
 <ul>
+  <li>Array of struct types does not support <a href="../ranking.html">ranking features</a> and can only be used for matching
+  and filtering.</li>
   <li>All struct arrays can be fed, retrieved and used in document summaries in indexed search</li>
   <li>Some parts of struct arrays can be searched in indexed search:
     <table class="table">
       <thead></thead><tbody>
         <tr>
-          <th style="width:100px">Indexing</th>
+          <th style="width:100px">Index</th>
           <td>Not supported</td>
         </tr><tr>
           <th>Attribute</th>
@@ -2992,22 +3009,29 @@ field tag type weightedset&lt;string&gt; {
     indexing: attribute | summary
 }
 </pre>
-The element type can be any single value type.
-The weights may be assigned any semantics by the application, default 1. Two main use cases:
-<ol>
+The element type can be any single value type. Prefer not to use floating point number types 
+like <em>float</em> or <em>double</em>.
+
+The weights may be assigned any semantics by the application. 
+Two main use cases:
+<ul>
 	<li>The weight symbolizes the number of occurrences</li>
 	<li>The weight specifies another value type, for instance the importance of the document</li>
-</ol>
+</ul>
+
 <p>
 The weight of a matching value is by default used in <code><a href="../nativerank.html">nativeRank</a></code>
-directly as the rank score of the field.
-It is also possible to create a rank type which uses a rank boost table,
-<code>weightboost</code> to calculate the rank value from the weight (the tags rank type does this by default).
+directly as the rank score of the field. For fine control of how weights are used in ranking when
+using <code>index</code>, see 
+<a href="rank-features.html#features-for-indexed-multivalue-string-fields">ranking features
+for indexed multi-valued fields</a>. When using <code>index</code> with weightedset, queries
+are matching across elements in the set.
 </p><p>
 It is possible to specify that a new key should be created if it does not exist before the update,
 and that it should be removed if the weight is set to zero -
 see the <a href="#weightedset">reference</a> for an example.
 </p><p>
+
 The weightedset field does not support filtering on weight.
 Solve this using the <a href="#type:map">map</a> type and
 <a href="query-language-reference.html#sameelement">sameElement</a> query operator -
@@ -3016,7 +3040,7 @@ see <a href="../query-language.html#map">example</a>.
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>
         Each token present in the field is indexed separately.
         Information indexed includes element number, element weight and a
@@ -3057,7 +3081,7 @@ field tensorfield type tensor&lt;float&gt;(x[2],y[2]) {
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Supported for single-order dense (indexed) tensors. 
       See <a href="../approximate-nn-hnsw.html">approximate nearest neighbor search</a>.</td>
     </tr><tr>
@@ -3100,7 +3124,7 @@ Restrictions:
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported.</td>
     </tr><tr>
       <th>Attribute</th>
@@ -3117,7 +3141,7 @@ Restrictions:
 <td>
 <p id="type:map">
 Use to create a map where each unique key is mapped to a single value.
-Any primitive type is used as <em>key-type</em> and any Vespa type as <em>value-type</em>.
+Any primitive type can be used as <em>key-type</em> and any Vespa primitive type as <em>value-type</em>.
 A map entry is handled as a struct with a <em>key</em> and <em>value</em> field
 with <em>key-type</em> and <em>value-type</em> as types. Example:
 <pre>
@@ -3127,16 +3151,21 @@ struct person {
 }
 field identities type map&lt;string, person&gt; {
     indexing: summary
-    struct-field key { indexing: attribute }
-    struct-field value.last_name { indexing: attribute }
+    struct-field key {
+      indexing: attribute
+      attribute: fast-search
+    }
 }
 </pre>
 <p>
 The entire <em>identities</em> field is part of document summary,
 and the <a href="#struct-field">struct fields</a>
-<em>key</em> and <em>value.last_name</em> are attributes available for searching using the
+<em>key</em> is defined as an attribute, available for searching using the
 <a href="query-language-reference.html#sameelement">sameElement</a> operator, and
-<a href="grouping-syntax.html#multivalue-attributes">grouping</a>.
+<a href="grouping-syntax.html#multivalue-attributes">grouping</a>. The <code>key</code>
+attribute also has <code>fast-search</code>. See
+<a href="../performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">when to use fast-search</a>.
+
 Note that you can define only a subset of the struct fields as attributes.
 Use <a href="#matched-elements-only">matched-elements-only</a>
 to reduce the amount of data that is returned in document summary.
@@ -3150,7 +3179,7 @@ field my_map type map&lt;string, int&gt; {
     struct-field value { indexing: attribute }
 }
 </pre>
-The previous example is similar to the following,
+The following array of struct example is similar to the the above,
 the difference being that an array can contain the same element multiple times and maintains order.
 <pre>
 struct mystruct {
@@ -3159,19 +3188,23 @@ struct mystruct {
 }
 field my_array type array&lt;mystruct&gt; {
     indexing: summary
-    struct-field key { indexing: attribute }
-    struct-field value { indexing: attribute }
+    struct-field key { 
+      indexing: attribute
+      attribute: fast-search 
+    }
 }
 </pre>
 Restrictions:
 <ul>
+  <li>Map of struct or primitive types does not support <a href="../ranking.html">ranking featueres</a>
+ and can only be used for matching and filtering.</li>
   <li>All map types can be fed, retrieved and used in document summaries in  indexed search mode</li>
   <li>Some map types can be searched in indexed search mode. See table below for supported cases</li>
 </ul>
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Not supported</td>
       </tr><tr>
       <th>Attribute</th>
@@ -3212,7 +3245,7 @@ annotation bar { }
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>N/A</td>
     </tr><tr>
       <th>Attribute</th>
@@ -3250,7 +3283,7 @@ Note that this will be a linear scan as <a href="#attribute">fast-search</a> is 
 <table class="table">
   <thead></thead><tbody>
     <tr>
-      <th style="width:100px">Indexing</th>
+      <th style="width:100px">Index</th>
       <td>Invalid - deployment will fail</td>
     </tr><tr>
       <th>Attribute</th>
@@ -3305,23 +3338,25 @@ schema example {
 
     field title type string {
       indexing: summary | index
+      index: enable-bm25
     }
 
     field description type string {
       indexing: summary | index
+      index: enable-bm25
     }
 
     field author type string {
       indexing: summary | index
-      # author name only, so no stemming
-      stemming: none
+      stemming: none #disable stemming
+      rank:filter 
     }
 
     field category type string {
       indexing: summary | attribute
       attribute: fast-search
-      match: exact #Don't tokenize
-      rank:filter # Only for matching. Most efficient search of a string type
+      match: word 
+      rank:filter 
     }
 
     field popularity type int {
@@ -3333,15 +3368,19 @@ schema example {
       indexing: summary | attribute
     }
 
-    # Categories as an array - preferable
     field morecategories type array&lt;string&gt; {
-       indexing: index
-        match: exact
+      indexing: index
+      match: word 
     }
 
   }
   fieldset default {
     fields: title, description
+  }
+  rank-profile bm25 inherits default {
+    first-phase {
+      expression: bm25(title) + bm25(description) + attribute(popularity)
+    }
   }
 }
 </pre>
