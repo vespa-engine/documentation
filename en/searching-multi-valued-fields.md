@@ -580,6 +580,11 @@ $ vespa query 'yql=select * from photos where userQuery()' \
  'ranking.features.query(tagWeight)=3' 
 </pre>
 
+That concludes the experiments. To shutdown the container run:
+
+<pre data-test="after">
+$ docker rm -f vespa
+</pre>
 
 # Conclusion
 In this guide we have looked at how one can build a query retrieval strategy and how to change ranking 
