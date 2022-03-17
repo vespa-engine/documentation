@@ -34,7 +34,7 @@ our matching and retrieval strategy over the designed document schema.
 
 ### Ranking 
 
-The documents which matches the query and is retrieved by the query is scored using a ranking model. 
+The documents which match the query and are retrieved by the query are scored using a ranking model. 
 Once a document is retrieved by the query logic the document can be scored using the full 
 flexibility of the Vespa [ranking](ranking.html) framework. 
 
@@ -286,7 +286,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 Also matches our document. This is an example of cross-element matching. With weightedset
-usig `indexing:index` with `match:text` multi term queries match across elements.
+using `indexing:index` with `match:text` multi term queries match across elements.
 
 This might be a good decision, as we increase recall, however
 in some cases we want to differentiate an exact match from a partial match during ranking, so that
