@@ -236,7 +236,7 @@ We can relax the query matching to instead of requiring that **all** terms match
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
- 'query=sunset photos featuring a dog' 'type=any'
+ 'query=sunset photos featuring dogs 'type=any'
 </pre>
 
 Changing the type to `any`, recalls our sample document as we no longer require that all query terms must match.
@@ -244,9 +244,17 @@ With `type` it also possible to require that indivudual query terms match by usi
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
- 'query=+sunset photos featuring a +dog' 'type=any'
+ 'query=+sunset photos featuring +dogs' 'type=any'
 </pre>
-In this example `sunset` and `dog` must be matched. 
+
+In this example `sunset` and `dogs` must be matched. Note that we have disabled stemming so querying
+for `dogs` won't recall documents with `dog`. This is one of the reasons we disabled stemming, to demonstrate
+that stemming has impact on recall. Requiring `dog` will cause the query to not recall our sample document.
+
+<pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
+$ vespa query 'yql=select * from photos where userQuery()' \
+ 'query=+sunset photos featuring +dog' 'type=any'
+</pre>
 
 Now, let us explore how Vespa matches the multi-valued tags field of 
 type [weightedset](reference/schema-reference.html#weightedset). 
