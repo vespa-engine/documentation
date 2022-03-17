@@ -3,7 +3,11 @@
 title: "Searching and ranking of multi-valued fields"
 ---
 
-This guide explores how to search and rank over structured multi-valued fields. 
+This guide explores how to search and rank over structured multi-valued fields. The examples
+in this guide uses the [weightedset](reference/schema-reference.html#type:weightedset)
+[field type](reference/schema-reference.html#field-types). The generic
+[map<key-type,value-type>](reference/schema-reference.html#type:map) field type does not currently support
+ranking and can only be used for matching and filtering. 
 
 ## Introduction
 
