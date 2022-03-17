@@ -7,20 +7,16 @@ This guide explores how to search and rank over structured multi-valued fields.
 
 ## Introduction
 
-When building a search application we need to think about
+When building a search application we need to think about:
 
-- How to [match](query-language.html) a user query against our document schema  
+- How to [match](query-language.html) a user query against a [document schema](schemas.html) using 
+Vespa [query language](query-language.html).   
 - How to [rank](ranking.html) documents matching the query 
-
-During the matching or retriveal stage, Vespa calculates several matching rank features 
-which can influence the order of the documents retrieved. This process is called ranking. A
-single query request might retrieve documents using multiple different 
-retriveal strategies combined using logical disjunction (OR).
 
 ### Matching
 
 There is a lot of text matching options we should think about when 
-designing and mapping or document model to a Vespa document schema:
+designing and mapping our document model to a Vespa document schema:
 
 - For string fields we should think about using text style matching or database-style exact matching.
 - For string fields there are also several
@@ -81,11 +77,11 @@ the [weightedset](reference/schema-reference.html#type:weightedset)
 - Editoral ranking overrides, for example sponsored search listings.
 
 How should we design our Vespa schema, and how should we match and search this data model for 
-end user free text queries? 
+end-user free text queries? 
 
 - We want to use text matching when searching the title and description
 - We also want to match the free form tags field as these tags might increase recall and the weight of the matched
-element(s) could influence scoring and ranking. We can start with the following schema:
+element(s) could influence ranking of documents matched. We can start with the following schema:
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 schema photo {
 
@@ -128,16 +124,17 @@ schema photo {
 </pre>
 
 In the schema we disable [stemming](reference/schema-reference.html#stemming) and
-also enable [bm25](reference/bm25.html) text ranking fature for all string fields.
+also enable [bm25](reference/bm25.html) text ranking fature for all string fields. 
 
 Since all string fields shares the same [match](reference/schema-reference.html#match)
 settings we can use a [fieldset](reference/schema-reference.html#fieldset) 
 so that queries does not need to mention all three fields.
 
 We also include a default ranking profile (this is the implicit default ranking profile)
-using the Vespa [nativeRank](nativerank.html) text ranking feature.
+using the Vespa [nativeRank](nativerank.html) text matching rank feature. 
 
-Along with the schema, we also need a [services.xml](reference/services.html) file:
+Along with the schema, we also need a [services.xml](reference/services.html) file
+to make up a Vespa [application package](reference/application-packages-reference.html):
 
 <pre data-test="file" data-path="my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
@@ -214,7 +211,8 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 The above query returns 0 hits, since by default query will require that *all* query terms matches the document. 
-By adding [tracelevel](reference/query-api-reference.html#tracelevel) to the query request we can see this:
+By adding [tracelevel](reference/query-api-reference.html#tracelevel) to the query request we can see
+how the query is parsed and executed against the content nodes:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
@@ -226,23 +224,31 @@ In the trace we can see the query which is dispatched to the content nodes:
 <pre>
 query=[AND sunshot photos featuring dogs]
 </pre>
+Using tracing is very useful when debugging why documents match or does not match. 
 
- Since our sample document does not contain the term *featuring* or *photos*, the query fails to retrieve the example document. 
- We can relax the query matching to instead of requiring that **all** terms match, to use **any**. See
- [model.type](reference/query-api-reference.html#model.type) query api reference for supported query types.
+Since our sample document does not contain the term *featuring* or *photos*, the query fails to retrieve the example document. 
+We can relax the query matching to instead of requiring that **all** terms match, to use **any**. See
+[model.type](reference/query-api-reference.html#model.type) query api reference for supported query types.
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
- 'query=sunshot photos featuring a dog' 'type=any'
+ 'query=sunset photos featuring a dog' 'type=any'
 </pre>
 
-Changing the type to `any`, recalls our sample document as we no longer require that all query terms needs to match.
+Changing the type to `any`, recalls our sample document as we no longer require that all query terms must match.
+With `type` it also possible to require that indivudual query terms match by using `+`:
+
+<pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
+$ vespa query 'yql=select * from photos where userQuery()' \
+ 'query=+sunset photos featuring a +dog' 'type=any'
+</pre>
+In this example `sunset` and `dog` must be matched. 
 
 Now, let us explore how Vespa matches the multi-valued tags field of 
-type [weightedset](reference/schema-reference.html#weightedset). Notice that we change
-back to default `type=all`. 
+type [weightedset](reference/schema-reference.html#weightedset). 
+Notice that we change back to default `type=all`. 
 In this example we also use the [default-index](reference/query-api-reference.html#model.defaultIndex) 
-parameter to limit matching to the `tags` field.
+query parameter to limit matching to the `tags` field.
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
@@ -258,7 +264,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 Also matches the document, this demonstrates that matching is partial, it does not require
-to match the element exactly. `clear` matches `clear sky` and `sky` will match `clear sky`.  
+to match the set element exactly. `clear` matches `clear sky` and `sky` will match `clear sky`.  
 
 But what about `black sky`:
 
@@ -268,20 +274,20 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 Also matches our document. This is an example of cross-element matching. With weightedset
-usig `indexing:index` with `match:text` multi term queries match across elements. 
+usig `indexing:index` with `match:text` multi term queries match across elements.
 
 This might be a good decision, as we increase recall, however
 in some cases we want to differentiate an exact match from a partial match during ranking, so that
-exact matches are ranked higher than partial matches. This is however highly domain-dependent. 
+exact matches are ranked higher than partial matches. 
 
 ### Ranking
 
-We have now explored matching, now it's time to focus on how we want to rank the documents matched. 
-You might not have noticed, but in the above examples, each of the queries produced a `relevance` score, 
+We have now explored querying and matching, now it's time to focus on how to rank the documents matched. 
+You might not have noticed, but in the above examples, each of the queries produced a `relevance` score per hit, 
 this score was in our previous examples calculated using the `default` ranking profile which in our case
 used [nativeRank](nativerank.html). 
-We can start by analyzing other [rank features](reference/rank-features.html) we can ask Vespa to produce
-for us.We use [match-features](reference/schema-reference.html#match-features) to return 
+We can start by analyzing other [rank features](reference/rank-features.html) by asking Vespa to produce
+them for us. We use [match-features](reference/schema-reference.html#match-features) to return 
 rank features with the retrieved documents. We explicit mention which ranking features we want to have calculated
 and returned. Notice that we don't change the actual scoring, we still use `nativeRank` as the scoring function.
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
@@ -371,12 +377,10 @@ the weight of the best matched element.
 The `elementSimilarity(tags)` ranking feature is very flexible and even allow us to override
 the [calculation and output new features](reference/rank-feature-configuration.html#elementSimilarity). 
 
-In this example we produce two new ranking feature
+In this example we defined two new ranking feature
 
 - `elementSimilarity(tags).sumWeight` which uses the sum of matching elements using field completeness x weight.
 - `elementSimilarity(tags).maxWeight` which uses the max over the matching elements using field completeness x weight.
-
-
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 schema photo {
 
@@ -459,14 +463,14 @@ $ vespa query 'yql=select * from photos where userQuery()' \
  'query=clear sky' 'type=any'
 </pre>
 
-The output includes `matchfeatures` where we can see the various scores for the features:
+Each hit returned contains a `matchfeatures` fields where we can see the various scores for the features:
 
-
-Now, we can include these features in a ranking expression used in `first-phase`. The actual
-best function is data dependend, and a trained function using machine learned ranking is by far the
+Now, we can include these features in a ranking expression used in `first-phase` to actually change the ranking. 
+The actual <em>best</em> scoring function is data dependend obviously. A trained function using machine learning is by far the
 easiest way. The bag of words [bm25](reference/bm25.html) ranking feature is not normalized so combining
-it in a linear function is challenging as the score range is unbound. We can make the parameters in our function
-overridable on a per query basis by 
+it in a linear function is challenging as the score range of the feature is unbound. 
+To overcome this and allow easy exploration without changing the rank profile we can make the 
+parameters in our function overridable on a per query basis by 
 
 <pre>
   first-phase {
@@ -476,7 +480,6 @@ overridable on a per query basis by
     }
   }
 </pre>
-
 
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 
@@ -559,11 +562,12 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 With the function above, since 'clear sky' does not match any of the title or description
-fields, the bm25 features are 0 for those fields.  
+fields, the bm25 features becomes zero.
+
 Our `elementSimilarity(tags).maxWeight` feature is 2.0 and the first phase
 expression becomes 4 which is reflected in the hit relevance score.
 
-Change the tagWeight and observe that the relevance becomes 6.0
+Change the <code>query(tagWeight)</code> with the query request and observe that the relevance becomes 6.0
 
 <pre data-test="exec" data-test-assert-contains='"relevance": 6.0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
