@@ -236,7 +236,7 @@ We can relax the query matching to instead of requiring that **all** terms match
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
- 'query=sunset photos featuring dogs 'type=any'
+ 'query=sunset photos featuring dogs' 'type=any'
 </pre>
 
 Changing the type to `any`, recalls our sample document as we no longer require that all query terms must match.
