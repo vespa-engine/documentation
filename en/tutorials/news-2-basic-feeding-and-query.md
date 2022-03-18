@@ -459,12 +459,15 @@ $ vespa query -v 'yql=select title from news where userQuery()' \
 </pre>
 </div>
 
+Above searches using `type=phrase` which require the exact phrase "music festival" to match in the title.
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
 $ vespa query -v 'yql=select title from news where rank(userQuery(), title contains "festival")' 'query=music'
 </pre>
 </div>
+
 Search for 'music' in the default fieldset, boost documents with festival in the title. 
 The [rank()](../reference/query-language-reference.html#rank) query operator allows 
 us to retrieve on the first operand, and have match ranking features
