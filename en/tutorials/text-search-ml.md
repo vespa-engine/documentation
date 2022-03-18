@@ -36,14 +36,13 @@ For example, below is the body of a post request that in a [query](../query-lang
 selects the `bm25` _ranking-profile_ developed in our previous tutorial
 and returns the rank features associated with each of the results returned.
 
-```
-body = {
-    "yql": 'select * from sources * where (userInput(@userQuery))',
-    "userQuery": "what is dad bod",
-    "presentation.format": "json",
-    "ranking": {"profile": "bm25", "listFeatures": "true"},
-}
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="rankfeatures">
+$ vespa query 'yql=select id,rankfeatures from msmarco where userQuery()' 'query=what is dad bod' \
+  'ranking=bm25' 'type=weakAnd' 'ranking.listFeatures=true'
+</pre>
+</div>
 
 The list of rank features that are returned by default can change in the future - the current list can be checked in the
 [system test](https://github.com/vespa-engine/system-test/blob/master/tests/search/rankfeatures/dump.txt).
@@ -90,14 +89,18 @@ Each result will contain a field called `rankfeatures` containing the set of def
 
 ### Chose and process specific rank features
 
-If instead of returning the default ranking features you want to select [specific ones](../reference/rank-features.html),
+If instead of returning the complete set of rank features you want to select [specific ones](../reference/rank-features.html),
 you can add a new _ranking-profile_ (let's call it `collect_rank_features`) to our _msmarco.sd_ schema definition
 and disable the default ranking features by adding `ignore-default-rank-features` to the new _ranking-profile_.
 In addition, we can specify the desired features within the `rank-features` element.
 In the example below we explicitly configured Vespa to only return
 `bm25(title)`, `bm25(body)`, `nativeRank(title)` and `nativeRank(body)`.
 
-<pre data-test="file" data-path="sample-apps/text-search/application/schemas/msmarco.sd">
+Note that using _all_ available ranking features comes with computional cost as Vespa needs
+to calculate all these features. Using many features is usually only advisable using
+second phase ranking, see [phased ranking with Vespa](../phased-ranking.html).
+
+<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
     document msmarco {
         field id type string {
@@ -159,13 +162,10 @@ After adding the _rank-profile_ `collect_rank_features` to our _msmarco.sd_ file
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd application && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec">
+$ vespa deploy --wait 300 app
 </pre>
 </div>
-
 
 ## Create a training dataset
 
@@ -181,9 +181,10 @@ we want to point out that the whole process can be replicated by the following c
 to the data collection script `collect_training_data.py`
 available in [this tutorial repository](https://github.com/vespa-engine/sample-apps/tree/master/text-search):
 
+The following routine requires that you have downloaded the full dataset.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<<pre>
 $ ./src/python/collect_training_data.py data collect_rank_features 99
 </pre>
 </div>
@@ -239,8 +240,8 @@ and `relevant_id` is the document id that is said to be relevant to that specifi
 The body of the request is given by:
 ```
 body = {
-    "yql": "select id, rankfeatures from sources * where  (userInput(@userQuery))",
-    "userQuery": query,
+    "yql": "select id, rankfeatures from sources * where userQuery()",
+    "query": query,
     "hits": 1,
     "recall": "+id:" + str(relevant_id),
     "ranking": {"profile": rank_profile, "listFeatures": "true"},
@@ -256,10 +257,23 @@ and enable the rank features dumping by setting `listFeatures` to `True`.
 
 Note that the parameter `recall` only works if the document is matched by the query,
 which is exactly the behavior we want in this case.
+
 The `recall` syntax to retrieve one document with id equal to 1 is given by `"recall": "+id:1"`
 and the syntax to retrieve more than one document,
 say documents with ids 1 and 2 is given by `"recall": "+(id:1 id:2)"`.
 
+If we wanted to retrieve the document even if it did not match the query specification we could
+alter the query to use the following query specification:
+
+```
+body = {
+    "yql": "select id, rankfeatures from sources * where true or userQuery()",
+    "query": query,
+    "hits": 1,
+    "recall": "+id:" + str(relevant_id),
+    "ranking": {"profile": rank_profile, "listFeatures": "true"},
+}
+```
 
 ### Get random hits
 
