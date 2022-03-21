@@ -393,6 +393,7 @@ In this example we defined two new ranking feature
 
 - `elementSimilarity(tags).sumWeight` which uses the sum of matching elements using field completeness x weight.
 - `elementSimilarity(tags).maxWeight` which uses the max over the matching elements using field completeness x weight.
+
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 schema photo {
 
@@ -493,6 +494,8 @@ parameters in our function overridable on a per query basis by
   }
 </pre>
 
+See [using query variables](ranking-expressions-features.html#using-query-variables). 
+
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 
 schema photo {
@@ -587,16 +590,38 @@ $ vespa query 'yql=select * from photos where userQuery()' \
  'ranking.features.query(tagWeight)=3' 
 </pre>
 
+Similar, we could also include a document-only signal to our ranking function by
+
+<pre>
+rank-properties {
+  query(titleWeight): 2
+  query(descriptionWeight): 1
+  query(tagWeight): 2
+  query(staticWeight): 1
+  elementSimilarity(tags).output.sumWeight: "sum(f*w)"
+  elementSimilarity(tags).output.maxWeight: "max(f*w)"
+}
+first-phase {
+  expression {
+   query(titleWeight)*bm25(title) + query(descriptionWeight)*bm25(description) +
+   query(tagWeight)*elementSimilarity(tags).maxWeight + query(staticWeight)*attribute(interestingness)
+  }
+}
+</pre>
+
 That concludes our matching and ranking experiments. To shutdown the container run:
 
 <pre data-test="after">
 $ docker rm -f vespa
 </pre>
 
+
 ## Conclusion
 In this guide we have looked at how one can build a query retrieval strategy and how to change ranking 
 when searching multi-valued fields using the weightedset field type. A natural continuation is to look
 at how to use the many rank features by learning a ranking function. See for example
 [learning to rank](learning-to-rank.html) and [improving text search through ML](tutorials/text-search-ml.html). 
+
+
 
 <script src="/js/process_pre.js"></script>
