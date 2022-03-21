@@ -16,26 +16,46 @@ We will cover how to create, deploy and feed the Vespa application.
 We are going to go from raw data to a fully functional text search app.
 In addition, we will showcase how easy it is to switch and experiment with different ranking functions in Vespa.
 
+## Prerequisites
 
-## Preamble
+* [Docker](https://www.docker.com/) Desktop installed and running. 10GB available memory for Docker is recommended.
+  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+  for details and troubleshooting
+* Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
+* Architecture: x86_64
+* Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
+* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
+  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
+* python 3 
+
+## Installing vespa-cli 
+
+This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+Vespa CLI is the official command-line client for Vespa.ai. 
+It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ brew install vespa-cli 
+</pre>
+</div>
 
 We start by acquiring the scripts and code required to follow this tutorial from
 [our sample apps repository](https://github.com/vespa-engine/sample-apps).
+
 The first step is then to clone the `sample-apps` repo from GitHub and move into the `text-search` directory.
 Start in an empty directory:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
-$ cd sample-apps/text-search
+$ vespa clone text-search text-search && cd text-search
 </pre>
 </div>
 
-This repository contains a fully-fledged Vespa application including a front-end search UI. 
+The repository contains a fully-fledged Vespa application including a front-end search UI. 
 This tutorial however will start with the basics and develop the application over multiple parts.
-
-
 
 ## Dataset
 
@@ -47,10 +67,11 @@ but here we are interested in the task of building an end-to-end search applicat
 capable of returning relevant documents to a text query.
 
 For the purposes of this tutorial we have included a small sample of the dataset under the `msmarco/sample` directory
-which contains only around 1000 documents.
-This is sufficient for following along with this tutorial,
-however if you want to experiment with the entire dataset of more than 3 million documents,
-download the data with the following command:
+which contains only around 1000 documents. This is sufficient for following along with this tutorial.
+
+However if you want to experiment with the entire dataset of more than 3 million documents,
+download the data. Make sure to accept the [terms and conditions](https://microsoft.github.io/msmarco/) 
+MS MARCO dataset is released under. The following will download the entire MS Marco Document Ranking collection:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -65,10 +86,9 @@ Note that it currently takes around 21G of disk space, and the conversion script
 The sample or downloaded data needs to be converted to
 [the format expected by Vespa](../reference/document-json-format.html).
 This includes extracting documents, queries and relevance judgements from the files we downloaded
-and then converting to the Vespa format.
-If you downloaded the entire dataset,
+and then converting to the Vespa format. If you downloaded the entire dataset,
 we take a small sample of 1,000 queries and 100,000 documents for the convenience of following this tutorial on a laptop.
-To convert the data, run the following script (for either the sample or downloaded dataset):
+To convert the data, run the following script:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -94,20 +114,18 @@ After running the script we end up with a file `msmarco/vespa.json` containing l
 
 In addition to `vespa.json` we also have a `test-queries.tsv` file containing a list of the sampled queries
 along with the document id that is relevant to each particular query.
-Each of those relevant documents are guaranteed to be on the sampled pool of documents that is included on `vespa.json`
+Each of those relevant documents are guaranteed to be in the sampled pool of documents that is included on `vespa.json`
 so that we have a fair chance of retrieving it when sending sample queries to our Vespa application.
-
 
 
 ## Create a Vespa Application Package
 
-A Vespa application package is the set of configuration files and Java plugins
+A [Vespa application package[](../cloudconfig/application-packages.html) is the set of configuration files and Java plugins
 that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done
 and how data will be processed during feeding and indexing.
 Let's define the minimum set of required files to create our basic text search application,
-which are `msmarco.sd`, `services.xml` and `hosts.xml`.
-All those files need to be included within the application package directory.
+which are `msmarco.sd`, `services.xml`.
 
 For this tutorial we will create a new Vespa application rather than using the one in the repository,
 so we create a directory for this application:
@@ -115,57 +133,54 @@ so we create a directory for this application:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir application
+$ mkdir app
 </pre>
 </div>
-
-
 
 ### Schema
 
 A [schema](../schemas.html) is a configuration of a document type and what we should compute over it.
 For this application we define a document type called `msmarco`.
-Write the following to `application/schemas/msmarco.sd`:
+Write the following to `text-search/app/schemas/msmarco.sd`:
 
-<pre data-test="file" data-path="sample-apps/text-search/application/schemas/msmarco.sd">
+<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
-    document msmarco {
-        field id type string {
-            indexing: attribute | summary
-        }
-        field title type string {
-            indexing: index | summary
-            index: enable-bm25
-        }
-        field url type string {
-            indexing: summary
-        }
-        field body type string {
-            indexing: index | summary
-            index: enable-bm25
-            summary: dynamic
-        }
+  document msmarco {
+    field id type string {
+      indexing: attribute | summary
     }
+    field title type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+    field url type string {
+      indexing: index | summary
+    }
+    field body type string {
+      indexing: index
+      index: enable-bm25
+    }
+  }
 
-    document-summary minimal {
-        summary id type string {  }
-    }
+  document-summary minimal {
+    summary id type string {  }
+  }
 
-    fieldset default {
-        fields: title, body
-    }
+  fieldset default {
+    fields: title, body, url
+  }
 
-    rank-profile default {
-        first-phase {
-            expression: nativeRank(title, body)
-        }
+  rank-profile default {
+    first-phase {
+      expression: nativeRank(title, body, url)
     }
+  }
 
-    rank-profile bm25 inherits default {
-        first-phase {
-            expression: bm25(title) + bm25(body)
-        }
+  rank-profile bm25 inherits default {
+    first-phase {
+      expression: bm25(title) + bm25(body) + bm25(url)
     }
+  }
 }
 </pre>
 
@@ -176,56 +191,47 @@ and a definition on how Vespa should rank documents given a query.
 The `document` section contains the fields of the document, their types and how Vespa should index them.
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information see [schemas - indexing](../schemas.html#indexing).
-Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body`
+Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title`, `body` and `url`
 by including `index: enable-bm25` in the respective fields.
-This is a necessary step to allow us to use them in the `bm25` ranking profile.
 
 Next, the [document summary class](../document-summaries.html) `minimal` is defined.
 Document summaries are used to control what data is returned for a query.
 The `minimal` summary here only returns the document id,
 which is useful for speeding up relevance testing as less data needs to be returned.
 The default document summary is defined by which fields are indexed with the `summary` command,
-which in this case are all the fields.
-In addition, we've set up the `body` field to show a dynamic summary,
-meaning that Vespa will try to extract relevant parts of the document.
-For more information, refer to the [the reference documentation on document summaries](../reference/schema-reference.html#summary).
+which in this case are all the fields. We do not include `body` in the summary, this to save disk usage.
 
-Document summaries can be selected by using the `summary` query parameter.
+For more information, refer to the [document summaries reference](../reference/schema-reference.html#summary).
+Document summaries can be selected by using 
+the [summary](../reference/query-api-reference.html#presentation.summary) query api parameter.
 
 [Fieldsets](../reference/schema-reference.html#fieldset) provide a way to group fields together
-to be able to search multiple fields. That way a query such as
+to be able to search multiple fields. String fields grouped using fieldsets should share the same
+[match](../reference/schema-reference.html#match) and [linguistic processing](../linguistics.html) settings. 
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ curl -s http://localhost:8080/search/?query=what+is+dad+bod
-</pre>
-</div>
-
-will match all documents containing the words `what`, `is`, `dad`, and `bod` in either the _title_ and/or the _body_.
-
-Vespa allows creating any number of rank profiles:
+Vespa allows creating any number of [rank](../ranking.html) profiles which are
 named collections of ranking and relevance calculations that one can choose from at query time.
-A number of built-in functions and expressions are available to create highly specialized rank expressions.
-In this tutorial we define our default _ranking-profile_ to be based on nativeRank,
+
+A number of built-in [rank features](../reference/rank-features.html) are available to 
+create highly specialized rank expressions.
+In this tutorial we define our default _rank-profile_ to be based on `nativeRank`,
 which is a linear combination of the normalized scores computed by the several term-matching features
-described in the [nativeRank documentation](../reference/nativerank.html).
-In addition, we created a _bm25 ranking-profile_ to compare with the one based on _nativeRank_.
-_BM25_ is faster to compute than _nativeRank_ while still giving better results than _nativeRank_ in some applications.
+described in the [nativeRank documentation](../reference/nativerank.html).In addition, 
+we created a _bm25 ranking-profile_ to compare with the one based on _nativeRank_.
+[BM25](../reference/bm25.html) is faster to compute than _nativeRank_ while still giving better results than _nativeRank_ in some applications.
+
 The `first-phase` keyword indicates that the `expression` defined in the _ranking-profile_
-will be computed for every document matching your query.
-
-Rank profiles are selected by using the `ranking` query parameter.
-
-
+will be computed for every document matching the query. Vespa ranking supports [phased ranking](../phased-ranking.html)
+Rank profiles are selected at run-time by using the [ranking](../reference/query-api-reference.html#ranking.profile)
+query api parameter.
 
 ### Services Specification
 
 The [services.xml](../reference/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
-Write the following to `application/services.xml`:
+Write the following to `text-search/app/services.xml`:
 
-<pre data-test="file" data-path="sample-apps/text-search/application/services.xml">
+<pre data-test="file" data-path="text-search/app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
 
@@ -261,24 +267,6 @@ Some notes about the elements above:
   (See also the [reference](../reference/services-content.html) for more on content cluster setup.)
 - `<nodes>` defines the hosts for the content cluster.
 
-
-### Deployment Specification
-
-[hosts.xml](../reference/hosts.html) contains a list of all the hosts/nodes
-that is part of the application, with an alias for each of them. This tutorial
-uses a single node. Write the following to `application/hosts.xml`:
-
-<pre data-test="file" data-path="sample-apps/text-search/application/hosts.xml">
-&lt;?xml version="1.0" encoding="utf-8"?&gt;
-&lt;hosts&gt;
-  &lt;host name="localhost"&gt;
-    &lt;alias&gt;node1&lt;/alias&gt;
-  &lt;/host&gt;
-&lt;/hosts&gt;
-</pre>
-
-
-
 ## Deploy the application package
 
 Once we have finished writing our application package, we can deploy it in a Docker container.
@@ -297,42 +285,24 @@ $ docker run -m 12G --detach --name vespa-msmarco --hostname vespa-msmarco \
 </pre>
 </div>
 
-Make sure that the configuration server is running - signified by a 200 OK response:
+Starting the container can take a short while. Before continuing, make sure
+that the configuration service is running by using `vespa status`. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:19071/ApplicationStatus
+<pre data-test="exec">
+$ vespa status deploy --wait 300 
 </pre>
 </div>
 
-Now, to deploy the Vespa application:
+Now, deploy the Vespa application:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="prepared and activated.">
-$ (cd application && zip -r - .) | \
-  curl --header Content-Type:application/zip --data-binary @- \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+<pre data-test="exec">
+$ vespa deploy --wait 300 app
 </pre>
 </div>
-
-This prints that the application was activated successfully
-and also the checksum, timestamp and generation for this deployment.
-The generation will increase by 1 each time a new application is successfully deployed,
-and is the easiest way to verify that the correct version is active.
-
-After a short while, querying the port 8080 should return a 200 status code,
-indicating the application is up and running.
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-wait-for="200 OK">
-$ curl -s --head http://localhost:8080/ApplicationStatus
-</pre>
-</div>
-
-
 
 ## Feed the data
 
@@ -361,52 +331,67 @@ Once the data has started feeding, we can already send queries to our search app
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ curl -s "http://localhost:8080/search/?query=what+is+dad+bod&amp;summary=minimal"
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' 
 </pre>
 </div>
+This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
+with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
+default query type is using `all` requiring that all the terms match the document. 
 
 Following is a partial output of the query above when using the small dataset sample:
-
 ```
 {
   "root": {
     "id": "toplevel",
     "relevance": 1.0,
     "fields": {
-      "totalCount": 3
-    },
-    "coverage": {
-      "coverage": 100,
-      "documents": 1000,
-      "full": true,
-      "nodes": 1,
-      "results": 1,
-      "resultsFull": 1
-    },
-    "children": [
-      {
-        "id": "index:msmarco/0/59444ddd06537a24953b73e6",
-        "relevance": 0.2747543357589305,
-        "source": "msmarco",
-        "fields": {
-          "sddocname": "msmarco",
-          "id": "D2977840"
-        }
-      },
-      ...
-    ]
+    "totalCount": 3
+  },
+  "children": [
+    {
+      "id": "index:msmarco/0/59444ddd06537a24953b73e6",
+      "relevance": 0.2747543357589305,
+      "source": "msmarco",
+      "fields": {
+        "id": "D2977840",
+        "title": "What Is A  Dad Bod   An Insight Into The Latest Male Body Craze To Sweep The Internet",
+        "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html"
+      }
+    } ..
+  ]
   }
 }
 ```
 
 As we can see, there was 3 documents that matched the query out of 1000 available in the corpus.
-The number of matched documents will be much larger when using the full dataset.
-The results are ranked by the relevance score,
-which in this case is delivered by the `nativeRank` algorithm
+The number of matched documents will be much larger when using the full dataset. We can 
+change retriveal mode from all to any 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' \
+  'type=any'
+</pre>
+</div>
+
+Which will retrieve and rank all documents which matches _any_ of the query terms. As can be seen
+from the result, almost all our documents matched the query. 
+These type of queries can be performance optimized using the [Vespa WeakAnd query operator](../using-wand-with-vespa.html):
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' \
+  'type=weakAnd'
+</pre>
+</div>
+In this case, a much lesser set of documents where fully ranked due to using _weakAnd_ instead of _any_.
+
+In any case, the retrieved documents are ranked by the relevance score,
+which in this case is delivered by the `nativeRank` rank feature
 that we defined as the default _ranking-profile_ in our schema definition file.
-
-
 
 ## Compare and evaluate different ranking functions
 
@@ -416,10 +401,14 @@ by including the `ranking` parameter in the query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ curl -s "http://localhost:8080/search/?query=what+is+dad+bod&amp;ranking=bm25"
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' \
+  'ranking=bm25' 'type=weakAnd'
 </pre>
 </div>
+Note that the relevance score which is normalized in the range [0,1] for the default ranking profile
+using _nativeRank_ changed to an unormalized range when using the _bm25_ ranking feature. 
+
 
 In order to align with the guidelines of the [MS MARCO competition](http://www.msmarco.org/leaders.aspx),
 we have created an `evaluate.py` script to compute the
@@ -459,15 +448,14 @@ For the full MSMARCO dataset on the other hand, we see a different picture:
 Looking at the figure we can see that the faster BM25 feature
 has delivered superior results for this specific application.
 
-To stop and remove the Docker container for this application:
+To stop and remove the container for this application (This deletes all data):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
-$ docker rm -f vespa-msmarco
+$ # docker rm -f vespa-msmarco
 </pre>
 </div>
-
 
 
 ## Next steps
