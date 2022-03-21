@@ -145,43 +145,42 @@ Write the following to `text-search/app/schemas/msmarco.sd`:
 
 <pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
-    document msmarco {
-        field id type string {
-            indexing: attribute | summary
-        }
-        field title type string {
-            indexing: index | summary
-            index: enable-bm25
-        }
-        field url type string {
-            indexing: summary
-        }
-        field body type string {
-            indexing: index | summary
-            index: enable-bm25
-            summary: dynamic
-        }
+  document msmarco {
+    field id type string {
+      indexing: attribute | summary
     }
+    field title type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+    field url type string {
+      indexing: index | summary
+    }
+    field body type string {
+      indexing: index
+      index: enable-bm25
+    }
+  }
 
-    document-summary minimal {
-        summary id type string {  }
-    }
+  document-summary minimal {
+    summary id type string {  }
+  }
 
-    fieldset default {
-        fields: title, body
-    }
+  fieldset default {
+    fields: title, body, url
+  }
 
-    rank-profile default {
-        first-phase {
-            expression: nativeRank(title, body)
-        }
+  rank-profile default {
+    first-phase {
+      expression: nativeRank(title, body, url)
     }
+  }
 
-    rank-profile bm25 inherits default {
-        first-phase {
-            expression: bm25(title) + bm25(body)
-        }
+  rank-profile bm25 inherits default {
+    first-phase {
+      expression: bm25(title) + bm25(body) + bm25(url)
     }
+  }
 }
 </pre>
 
@@ -192,18 +191,16 @@ and a definition on how Vespa should rank documents given a query.
 The `document` section contains the fields of the document, their types and how Vespa should index them.
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information see [schemas - indexing](../schemas.html#indexing).
-Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body`
+Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title`, `body` and `url`
 by including `index: enable-bm25` in the respective fields.
-This is a necessary step to allow us to use them in the `bm25` ranking profile.
 
 Next, the [document summary class](../document-summaries.html) `minimal` is defined.
 Document summaries are used to control what data is returned for a query.
 The `minimal` summary here only returns the document id,
 which is useful for speeding up relevance testing as less data needs to be returned.
 The default document summary is defined by which fields are indexed with the `summary` command,
-which in this case are all the fields.
-In addition, we've set up the `body` field to show a dynamic summary,
-meaning that Vespa will try to extract relevant parts of the document matching the query.
+which in this case are all the fields. We do not include `body` in the summary, this to save disk usage.
+
 For more information, refer to the [document summaries reference](../reference/schema-reference.html#summary).
 Document summaries can be selected by using 
 the [summary](../reference/query-api-reference.html#presentation.summary) query api parameter.

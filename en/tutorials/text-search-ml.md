@@ -102,56 +102,60 @@ second phase ranking, see [phased ranking with Vespa](../phased-ranking.html).
 
 <pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
-    document msmarco {
-        field id type string {
-            indexing: attribute | summary
-        }
-        field title type string {
-            indexing: index | summary
-            index: enable-bm25
-        }
-        field url type string {
-            indexing: summary
-        }
-        field body type string {
-            indexing: index | summary
-            index: enable-bm25
-            summary: dynamic
-        }
+  document msmarco {
+    field id type string {
+      indexing: attribute | summary
+    }
+    field title type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+    field url type string {
+      indexing: index | summary
+    }
+    field body type string {
+      indexing: index
+      index: enable-bm25
+    }
+  }
+
+  document-summary minimal {
+    summary id type string {  }
+  }
+
+  fieldset default {
+    fields: title, body, url
+  }
+
+  rank-profile default {
+    first-phase {
+      expression: nativeRank(title, body, url)
+    }
+  }
+
+  rank-profile bm25 inherits default {
+    first-phase {
+      expression: bm25(title) + bm25(body) + bm25(url)
+    }
+  }
+
+  rank-profile collect_rank_features inherits default {
+    first-phase {
+        expression: bm25(title) + bm25(body) + bm25(url)
+    }
+    second-phase {
+        expression: random
     }
 
-    document-summary minimal {
-        summary id type string {  }
+    match-features {
+        bm25(title)
+        bm25(body)
+        bm25(url)
+        nativeRank(title)
+        nativeRank(body)
+        nativeRank(url)
     }
-
-    fieldset default {
-        fields: title, body
-    }
-
-    rank-profile default {
-        first-phase {
-            expression: nativeRank(title, body)
-        }
-    }
-
-    rank-profile bm25 inherits default {
-        first-phase {
-            expression: bm25(title) + bm25(body)
-        }
-    }
-
-    rank-profile collect_rank_features inherits default {
-        first-phase {
-            expression: random
-        }
-        ignore-default-rank-features
-        rank-features {
-            bm25(title)
-            bm25(body)
-            nativeRank(title)
-            nativeRank(body)
-        }
-    }
+  }
 }
 </pre>
 
@@ -184,8 +188,8 @@ available in [this tutorial repository](https://github.com/vespa-engine/sample-a
 The following routine requires that you have downloaded the full dataset.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<<pre>
-$ ./src/python/collect_training_data.py data collect_rank_features 99
+<pre>
+$ ./src/python/collect_training_data.py msmarco collect_rank_features 99
 </pre>
 </div>
 
@@ -252,8 +256,6 @@ along with the selected _rankfeatures_ defined in the _collect_rank_features_ ra
 The `hits` parameter is set to 1 because we know there are only one relevant id for each query,
 so we set Vespa to return only one document in the result set.
 The `recall` parameter allow us to specify the exact document _id_ we want to retrieve.
-The `ranking` parameter specify which _rank_profile_ we want to use
-and enable the rank features dumping by setting `listFeatures` to `True`.
 
 Note that the parameter `recall` only works if the document is matched by the query,
 which is exactly the behavior we want in this case.
@@ -294,17 +296,17 @@ body = {
 ```
 where the only changes with respect to the `get_relevant_hit` is that we no longer need to use the `recall` parameter
 and that we set the number of hits returned by Vespa to be equal to `number_random_sample`.
-This works as intended because we have used:
+
+Remember we had configured the second phase to use random scoring:
 ```
-first-phase {
-    expression: random
+second-phase {
+  expression: random
 }
 ```
-in the `collect_rank_features` _rank-profile_ defined earlier in this tutorial.
-Using `random` as our first-phase ranking function
+
+Using `random` as our second-phase ranking function
 ensures that the top documents returned by Vespa are randomly selected
 from the set of documents that were matched by the query.
-
 
 ### Annotated data
 
