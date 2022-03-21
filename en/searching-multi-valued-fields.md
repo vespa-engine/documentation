@@ -13,7 +13,7 @@ ranking and can only be used for matching and filtering.
 
 When building a search application we need to think about:
 
-- How to [match](query-language.html) a user query against a [document schema](schemas.html) using 
+- How to [match](query-language.html) a user specified query against a [document schema](schemas.html) using 
 Vespa [query language](query-language.html).   
 - How to [rank](ranking.html) documents matching the query 
 
@@ -598,6 +598,5 @@ In this guide we have looked at how one can build a query retrieval strategy and
 when searching multi-valued fields using the weightedset field type. A natural continuation is to look
 at how to use the many rank features by learning a ranking function. See for example
 [learning to rank](learning-to-rank.html) and [improving text search through ML](tutorials/text-search-ml.html). 
-
 
 <script src="/js/process_pre.js"></script>
