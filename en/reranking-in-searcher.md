@@ -4,29 +4,28 @@ title: "Re-ranking using a custom Searcher"
 ---
 
 This guide demonstrates how to deploy a [stateless searcher](searcher-development.html) 
-implementing a last stage of [phased ranking](phased-ranking.html). 
-
-The searcher re-ranks the global top 200 documents which have been ranked the 
-content nodes using the configurable [ranking](ranking.html)
+implementing a last stage of [phased ranking](phased-ranking.html). The searcher re-ranks the 
+global top 200 documents which have been ranked the content nodes using the configurable [ranking](ranking.html)
 specification in the document [schema(s)](schemas.html).  
 
 The reranking searcher uses [multiphase searching](searcher-development.html#multiphase-searching):
 
-*matching phase*
+*matching query protocol phase* 
 - The matching protocol phase which asks each content node involved in the query to return the locally
-best ranking hits (ranked by the configurable ranking expressions defined in the schema). In this query protocol phase
-the content nodes can also return [match-features](reference/schema-reference.html#match-features) which
-a re-ranking searcher can use to re-rank results. In a custom searcher one is working on the global best ranking hits, and
-can have access to aggregated features which is calculated across the top-ranking documents.
+best ranking hits (ranked by the configurable ranking expressions defined in the schema). This protocol
+phase might include several ranking phases local to each node. 
+In the query protocol phase the content nodes can also return [match-features](reference/schema-reference.html#match-features) which
+a re-ranking searcher can use to re-rank results (or feature logging). 
+In the custom searcher one is working on the global best ranking hits, and
+can have access to aggregated features which is calculated across the top-ranking documents (the global best documents).
 
-*fill phase*
-- Fill summary data for the global top ranking hits after all ranking steps
+*fill query protocol phase*
+- Fill summary data for the global top ranking hits after all ranking phases.
 
 See also [Life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
 
-This guide uses docker to demonstrate the searcher:
 
-### Prerequisites
+### Guide prerequisites
 - [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
   or Docker on Linux
 - Operating system: macOS or Linux
@@ -183,7 +182,7 @@ public class ReRankingSearcher extends Searcher {
 
 We also need a [services.xml](reference/services.html) file
 to make up a Vespa [application package](reference/application-packages-reference.html). 
-Here we include our custom searcher in the `default` vespa search chain:
+Here we include our custom searcher in the `default` Vespa search chain:
 
 <pre data-test="file" data-path="my-app/src/main/application/services.xml">
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
@@ -212,11 +211,12 @@ Here we include our custom searcher in the `default` vespa search chain:
 &lt;/services&gt;
 </pre>
 
-Notice the `bundle` name, this is from the `artifactId` defined in the `pom.xml` defined as:
+Notice the `bundle` name of the searcher, this needs to be in synch with the `artifactId` defined in the `pom.xml`. 
+
+The `pom.xml` file is defined as:
 
 <pre data-test="file" data-path="my-app/pom.xml">
 &lt;?xml version=&quot;1.0&quot;?&gt;
-&lt;!-- Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. --&gt;
 &lt;project xmlns=&quot;http://maven.apache.org/POM/4.0.0&quot;
          xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
          xsi:schemaLocation=&quot;http://maven.apache.org/POM/4.0.0
@@ -240,8 +240,7 @@ Notice the `bundle` name, this is from the `artifactId` defined in the `pom.xml`
 </pre>
 
 ### Starting Vespa
-
-This example uses the vespa container image:
+Now, we have our files and we can start Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -259,13 +258,13 @@ Install [Vespa-cli](vespa-cli.html) using Homebrew:
 $ brew install vespa-cli
 </pre>
 
-Build the Maven project:
+Build the Maven project, this step creates the application package including the custom searcher:
 
 <pre data-test="exec">
 $ (cd my-app && mvn package)
 </pre>
 
-Now we can deploy the application using vespa-cli:
+Now we can deploy the application to Vespa using vespa-cli:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -298,6 +297,8 @@ Create a few sample docs:
 }
 </pre>
 
+Feed them to Vespa using the CLI:
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -312,8 +313,62 @@ Run a query - this will invoke the reranking searcher since it was included in a
 $ vespa query 'yql=select * from doc where userQuery()' \
  'query=sample' 
 </pre>
+The above will output the following response:
+<pre>
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 2
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 2,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:docs:doc::0",
+                "relevance": 1.1823215567939547,
+                "source": "docs",
+                "fields": {
+                    "matchfeatures": {
+                        "attribute(downloads)": 100.0,
+                        "bm25(name)": 0.1823215567939546
+                    },
+                    "rerank-score": 1.1823215567939547,
+                    "sddocname": "doc",
+                    "documentid": "id:docs:doc::0",
+                    "name": "A sample document",
+                    "downloads": 100
+                }
+            },
+            {
+                "id": "id:docs:doc::1",
+                "relevance": 0.2823215567939546,
+                "source": "docs",
+                "fields": {
+                    "matchfeatures": {
+                        "attribute(downloads)": 10.0,
+                        "bm25(name)": 0.1823215567939546
+                    },
+                    "rerank-score": 0.2823215567939546,
+                    "sddocname": "doc",
+                    "documentid": "id:docs:doc::1",
+                    "name": "Another sample document",
+                    "downloads": 10
+                }
+            }
+        ]
+    }
+}
+</pre>
 
-<pre data-test="exec" data-test-assert-contains='"rerank-score": 1.18'>
+<pre style="display:none" data-test="exec" data-test-assert-contains='"rerank-score": 1.18'>
 $ vespa query 'yql=select * from doc where userQuery()' \
  'query=sample' 
 </pre>
