@@ -29,7 +29,7 @@ app_package = QuestionAnswering()
 
 It is required to deploy the application to follow the commands below.
 Deploy the `app_package` using either [Docker](deploy-vespa-docker)
-or [Vespa Cloud](https://cloud.vespa.ai/en/getting-started-python).
+or [Vespa Cloud](https://pyvespa.readthedocs.io/en/latest/deploy-vespa-cloud.html).
 The resulting Vespa connection should be stored in the `app` variable.
 For example, to deploy using Docker:
 
