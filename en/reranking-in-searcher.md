@@ -12,18 +12,20 @@ The reranking searcher uses [multiphase searching](searcher-development.html#mul
 
 *matching query protocol phase* 
 - The matching protocol phase which asks each content node involved in the query to return the locally
-best ranking hits (ranked by the configurable ranking expressions defined in the schema). This protocol
-phase might include several ranking phases local to each node. 
+best ranking hits (ranked by the configurable ranking expressions defined in the schema). This matching query protocol
+phase might include several ranking phases which are executed per content node. 
 In the query protocol phase the content nodes can also return [match-features](reference/schema-reference.html#match-features) which
 a re-ranking searcher can use to re-rank results (or feature logging). 
-In the custom searcher one is working on the global best ranking hits, and
+In the custom searcher one is working on the global best ranking hits from the content nodes, and
 can have access to aggregated features which is calculated across the top-ranking documents (the global best documents).
 
 *fill query protocol phase*
-- Fill summary data for the global top ranking hits after all ranking phases.
+- Fill summary data for the global top ranking hits after all ranking phases. If one needs access to the document fields, 
+the searcher would need to call `execution.fill` before the re-ranking logic, this would then cost more resources
+then just using `match-features` which is delivered in the first protocol matching phase. If one needs 
+access to a subset of fields during stateless re-ranking, consider configuring a dedicated [document summary](document-summaries.html).
 
 See also [Life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
-
 
 ### Guide prerequisites
 - [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
