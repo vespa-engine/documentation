@@ -5,7 +5,7 @@ title: "Re-ranking using a custom Searcher"
 
 This guide demonstrates how to deploy a [stateless searcher](searcher-development.html) 
 implementing a last stage of [phased ranking](phased-ranking.html). The searcher re-ranks the 
-global top 200 documents which have been ranked the content nodes using the configurable [ranking](ranking.html)
+global top 200 documents which have been ranked by the content nodes using the configurable [ranking](ranking.html)
 specification in the document [schema(s)](schemas.html).  
 
 The reranking searcher uses [multiphase searching](searcher-development.html#multiphase-searching):
@@ -40,7 +40,7 @@ to build the application.
 
 ### A minimal Vespa application
 
-To define the Vespa app package using our custom reranking searcher we need four files
+To define the Vespa app package using our custom reranking searcher we need four files:
 
 - The schema.
 - The deployment specification `services.xml`.
@@ -77,7 +77,7 @@ schema doc {
 }
 </pre>
 
-The searcher impementing the re-ranking logic:
+The searcher implementing the re-ranking logic:
 
 <pre style="display:none" data-test="file" data-path="my-app/src/main/java/ai/vespa/example/searcher/ReRankingSearcher.java">
 package ai.vespa.example.searcher;
