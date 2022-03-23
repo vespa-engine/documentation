@@ -40,7 +40,7 @@ def print_cmd_header(cmd, extra="", print_header=True):
 def exec_wait(cmd, pty):
     command = cmd["$"]
     expect = cmd["wait-for"]
-    max_wait = 300  # todo: max this configurable
+    max_wait = 300 if not ("timeout" in cmd) else int(cmd["timeout"])
     try_interval = 5  # todo: max this configurable too
     print_cmd_header(command, "Waiting for '{0}'".format(expect))
 
@@ -157,7 +157,13 @@ def parse_cmd(cmd, attrs):
         return None
 
     if "data-test-wait-for" in attrs:
-        return {"$": cmd, "type": "wait", "wait-for": attrs["data-test-wait-for"]}
+        if "data-test-timeout" in attrs:
+            return {"$": cmd,
+                    "type": "wait",
+                    "wait-for": attrs["data-test-wait-for"],
+                    "timeout": attrs["data-test-timeout"]}
+        else:
+            return {"$": cmd, "type": "wait", "wait-for": attrs["data-test-wait-for"]}
     if "data-test-assert-contains" in attrs:
         return {"$": cmd, "type": "assert", "contains": attrs["data-test-assert-contains"]}
     if "data-test-expect" in attrs:
@@ -255,11 +261,11 @@ def run_url(url):
     allpages = b""
     for page in url.split(","):
         page = page.strip()
-        if url.startswith("http"):
+        if page.startswith("http"):
             allpages += urllib.request.urlopen(page).read()
         else:
-          with open(workdir + '/' + page, 'rb') as f:
-              allpages += f.read()
+            with open(workdir + '/' + page, 'rb') as f:
+                allpages += f.read()
 
     process_page(allpages, url)
 
@@ -294,7 +300,7 @@ def run_file(file_name):
 
 
 def run_with_arguments():
-    global verbose 
+    global verbose
     global workdir 
     config_file = ""
     argv = sys.argv[1:]
@@ -302,7 +308,7 @@ def run_with_arguments():
     try:
         opts, args = getopt.getopt(argv, "vc:w:")
     except getopt.GetoptError:
-        print("test.py [-v] [-c configfile] [-w workdir] [file-to-run]")
+        print("test.py [-v] [-c configfile] -w [workdir] [file-to-run]")
         sys.exit(2)
 
     for opt, arg in opts:
