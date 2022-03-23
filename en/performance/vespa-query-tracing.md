@@ -529,7 +529,7 @@ In this case, there is no index structure, let us do a search for a popular tag 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="TRFPDMZ128F1491C75">
-$ vespa query 'yql=select track_id from track tags contains "rock"' \
+$ vespa query 'yql=select track_id from track where tags contains "rock"' \
   'hits=1' 
 </pre>
 </div>
