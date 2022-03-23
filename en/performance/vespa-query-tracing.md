@@ -17,7 +17,7 @@ aspects.
   for details and troubleshooting
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
 * Architecture: x86_64
-* Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
+* Minimum **6 GB** memory dedicated to Docker (the default is 2 GB on Macs)
 * [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 
@@ -33,7 +33,6 @@ It is a single binary without any runtime dependencies and is available for Linu
 $ brew install vespa-cli 
 </pre>
 </div>
-
 
 ## Dataset
 
@@ -56,7 +55,7 @@ $ unzip lastfm_test.zip
 The downloaded data needs to be converted to
 [the JSON format expected by Vespa](../reference/document-json-format.html). 
 
-We can use this small python script to traverse the track files and create a JSONL 
+We use this small python script to traverse the track files and create a JSONL 
 file with Vespa feed operations. We will introduce the schema to be used with this 
 feed in the next section. 
 
@@ -231,8 +230,8 @@ Start the Vespa container image:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker run -m 12G --detach --name vespa --hostname vespa-msmarco \
-  --publish 8080:8080 --publish 19112:19112 --publish 19071:19071 \
+$ docker run -m 6G --detach --name vespa --hostname vespa-msmarco \
+  --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa
 </pre>
 </div>
@@ -335,15 +334,17 @@ The result output for the above query will look something like this:
 Observations: 
 
 - The query searched one node and coverage was 100%, see [graceful-degradation](../graceful-degradation.html). 
-- The query matched a total of 8 documents (`totalCount`) and we got the best ranking hit back (since we asked for hits=1).
-A total of 8 documents matched the query and was fully ranked 
-- We searched over 104,212 documents 
+- The query matched a total of 8 documents (`totalCount`) and we got back the best [ranking](../ranking.html). 
+A total of 8 documents matched the query and was fully ranked. 
+- We searched 104,212 documents in total. 
 
 The `timing` has 3 fields:
 
-- `querytime` - This is the first query protocol Vespa which searches all content nodes 
-- `summaryfetchtime` - This is the second query protocol which fills summary data for the top k (&hits) parameter.
-- `searchtime` Is roughly the sum of the above and is close to what a benchmarking client will see (except network latency).
+- `querytime` - This is the first matching query protocol where Vespa searches all content nodes 
+and where each content node retrieves and ranks documents. The results are merged. 
+- `summaryfetchtime` - This is the second query protocol which fills summary data for the top k (&hits) parameter after the global
+best ranking documents have been found from the previous protocol phase.
+- `searchtime` Is roughly the sum of the above and is close to what a benchmarking client will observe (except network latency).
 
 Now, we can change our matching to instead of `type=all` to use `type=any`. 
 
@@ -382,6 +383,7 @@ $ vespa query 'yql=select artist, title, track_id from track where rank(true,use
  'query=the sad songs' 'hits=1' 'type=any'
 </pre>
 </div>
+
 Now, our query matched all documents (Compare `totalCount` with `documents`) and latency is much higher than the previous query.  
 
 So for query and matching performance is greatly impacted by the number of documents that matches the query. Or like queries with
@@ -527,7 +529,7 @@ In this case, there is no index structure, let us do a search for a popular tag 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="TRFPDMZ128F1491C75">
-$ vespa query 'yql=select track_id from track where tag contains "rock"' \
+$ vespa query 'yql=select track_id from track tags contains "rock"' \
   'hits=1' 
 </pre>
 </div>
@@ -538,15 +540,12 @@ for a less frequent tag, e.g. *remix*:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="TRKOOUV128F931E8F0">
-$ vespa query 'yql=select track_id from track where tag contains "remix"' \
+$ vespa query 'yql=select track_id from track where tags contains "remix"' \
   'hits=1' 
 </pre>
 </div>
 
 We get less hits (319), but roughly the same `querytime`. 
-
-
-
 
 
 ## Tear down the container
