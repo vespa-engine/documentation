@@ -54,7 +54,7 @@ $ unzip lastfm_test.zip
 </div>
 
 The sample or downloaded data needs to be converted to
-[the JSON format expected by Vespa](reference/document-json-format.html).
+[the JSON format expected by Vespa](../reference/document-json-format.html).
 
 <pre data-test="file" data-path="create-vespa-feed.py">
 import os
@@ -125,7 +125,7 @@ $ python3 create-vespa-feed.py lastfm_test > feed.jsonl
 
 ## Create a Vespa Application Package
 
-A [Vespa application package[](cloudconfig/application-packages.html) is the set of configuration files and Java plugins
+A [Vespa application package[](../cloudconfig/application-packages.html) is the set of configuration files and Java plugins
 that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done
 and how data will be processed during feeding and indexing.
@@ -212,7 +212,9 @@ In addition we need plan to use our `similar` tensor field for ranking so we als
 </pre>
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
-&lt;query-profile id=&quot;default&quot; type=&quot;root&quot;/&gt;
+&lt;query-profile id=&quot;default&quot; type=&quot;root&quot;&gt;
+  &lt;field name=&quot;presentation.timing&quot;&gt;true&lt;/field&gt;
+&lt;/query-profile&gt;
 </pre>
 ## Deploy the application package
 
@@ -278,13 +280,123 @@ Once the data has started feeding, we can already send queries to our search app
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Sad Song">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' 'query=sad songs' 
+$ vespa query 'yql=select artist, title, track_id from track where userQuery()' 'query=sad songs' 'hits=1'
 </pre>
 </div>
 
 This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
 with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
 default query type is using `all` requiring that all the terms match the document. 
+
+
+The above example searches for *sad AND songs* in the `default` fieldset, 
+which in our schema includes the track `title` and `artist` fields. 
+
+The result output for the above query will look something like this:
+
+<pre>
+{
+    "timing": {
+        "querytime": 0.007,
+        "summaryfetchtime": 0.0,
+        "searchtime": 0.009000000000000001
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 8
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 104212,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/9820cd837f7687739120d201",
+                "relevance": 0.17032164450816525,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRNYPDO128F92F61AC",
+                    "title": "Sad Song",
+                    "artist": "Davell Crawford"
+                }
+            }
+        ]
+    }
+}
+</pre>
+
+Observations: 
+
+- The query searched one node and coverage was 100%, see [graceful-degradation](../graceful-degradation.html). 
+- The query matched a total of 8 documents (`totalCount`) and we got the best ranking hit back (since we asked for hits=1).
+A total of 8 documents matched document were ranked
+
+The `timing` has 3 fields:
+
+- `querytime` - This is the first query protocol Vespa which searches all content nodes 
+- `summaryfetchtime` - This is the second query protocol which fills summary data for the top k (&hits) parameter.
+- `searchtime` Is roughly the sum of the above 
+
+Now, we change our matching to instead of `type=all` to use `type=any`. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Sad Song">
+$ vespa query 'yql=select artist, title, track_id from track where userQuery()' 'query=sad songs' 'hits=1' 'type=any'
+</pre>
+</div>
+
+Now, our query matches 956 documents and is slightly slower than than the previous query. If we include a query term which is frequent
+we start recalling more documents. *The* is a very common word in English:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Sad Country Song">
+$ vespa query 'yql=select artist, title, track_id from track where userQuery()' 'query=the sad songs' 'hits=1' 'type=any'
+</pre>
+</div>
+
+Now, our query matches 22,763 documents, or roughly 20% of the total number of documents. 
+If you compare the `querytime` of these queries you see that this metric increased as we started to match more documents. 
+
+We can try a different query specification where we retrieve all documents and instead 
+use the [rank()](../reference/query-language-reference.html#rank) query. The first operand is 'true' which 
+means just match all documents, then rank by the query terms. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Sad Country Song">
+$ <div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Sad Song">
+$ vespa query 'yql=select artist, title, track_id from track where rank(true,userQuery())' 'query=the sad songs' 'hits=1' 'type=any'
+</pre>
+</div>
+</pre>
+</div>
+
+Now, our query matched all documents (Compare `totalCount` with `documents`) and latency is much higher than the previous query.  
+
+So for query and matching performance is greatly impacted by the number of documents that matches the query. Or like queries with
+type `any` requires more compute resources than type `all`.  There is an optimization of or-like queries, using
+`weakAnd` instead. See [using wand with vespa](../using-wand-with-vespa.html). 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Sad Song">
+$ vespa query 'yql=select artist, title, track_id from track where userQuery()' 'query=the sad songs' 'hits=1' 'type=weakAnd'
+</pre>
+</div>
+
+Compared to the type `any` query which fully ranked 22,763 documents we now only rank 2,590 documents and latency is much lower. 
+
+
 
 
 <div class="pre-parent">
