@@ -868,13 +868,12 @@ $ vespa query \
 </pre>
 
 Notice that the query above, would brute force rank tracks where tags would match any of the multi-valued inputs so 
-the totalCount becomes 12,191 tracks. Including *pop* in the list increases the number of hits to 14,573. For a large
+the `totalCount` becomes 12,191 tracks. Including *pop* in the list increases the number of hits to 14,573. For a large
 user profile with many tags, we would easily retrieve and rank the entire document collection. Also notice the 
 `relevance` score which is 300, since the top document matches all 3 query tags (1x100 + 1x100 + 1x100 = 300)
 
-This brings us 
-to the [wand query operator](../reference/query-language-reference.html#wand). With `wand` we can 
-specify the target number of hits that we want to retrieve, so instead of brute forcing ranking all tracks
+This brings us to the [wand query operator](../reference/query-language-reference.html#wand). 
+With `wand` we can specify the target number of hits that we want to retrieve, so instead of brute forcing ranking all tracks
 which matched at least one of the user profile tags we want just to retrieve the best:
 
 <div class="pre-parent">
@@ -889,7 +888,11 @@ $ vespa query \
 </div>
 
 For larger document collections, the *wand* query operator can significantly improve query performance. We can also combine wand 
-with for example the rank() query operator. 
+with for example the rank() query operator. *wand* tries to do matching and ranking interlaved and skipping documents
+which cannot compete. The effectiveness of wand compared with brute force dotProduct depends on many factors:
+
+- Number of query features and document features 
+- The feature space and weight distributions
 
 
 ### Tensor Ranking 
@@ -1085,7 +1088,9 @@ $ vespa deploy --wait 300 app
 
 Here we use a query tensor with our three tracks 
 <pre>
+{% raw %}
 ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}'
+{% endraw %}
 </pre>
 
 In the first query we simply rank all documents using `where true`:
@@ -1120,7 +1125,7 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={"TRUAXHV128F42694E8":1,"TRWJIPT128E0791D99":1,"TRHQMMO128E0791D97":1}'
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1173,6 +1178,11 @@ schema track {
       expression: rawScore(tags)
     }
   }
+   rank-profile similar {
+    first-phase {
+      expression: sum(attribute(similar) * query(user_liked))
+    }
+  }
 }
 </pre>
 
@@ -1204,7 +1214,7 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={"TRUAXHV128F42694E8":1,"TRWJIPT128E0791D99":1,"TRHQMMO128E0791D97":1}'
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1213,9 +1223,155 @@ The `querytime` dropped down to 40 ms instead of 120 ms without the `fast-search
 
 
 ### Multi-threaded search and ranking 
+So far in this guide all our searches have been performed using single threaded matching. To enable multi-threaded
+execution we need to change our `services.xml`. 
 
+<pre data-test="file" data-path="app/services.xml">
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;services version="1.0"&gt;
+
+    &lt;container id="default" version="1.0"&gt;
+        &lt;search/&gt;
+        &lt;document-api/&gt;
+      &lt;/container&gt;
+
+      &lt;content id="tracks" version="1.0"&gt;
+          &lt;engine&gt;
+              &lt;proton&gt;
+                  &lt;tuning&gt;
+                      &lt;searchnode&gt;
+                          &lt;requestthreads&gt;
+                              &lt;persearch&gt;4&lt;/persearch&gt;
+                          &lt;/requestthreads&gt;
+                      &lt;/searchnode&gt;
+                  &lt;/tuning&gt;
+            &lt;/proton&gt;
+          &lt;/engine&gt;
+          &lt;redundancy&gt;1&lt;/redundancy&gt;
+          &lt;documents&gt;
+              &lt;document type="track" mode="index"&gt;&lt;/document&gt;
+          &lt;/documents&gt;
+          &lt;nodes&gt;
+              &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
+          &lt;/nodes&gt;
+      &lt;/content&gt;
+&lt;/services&gt;
+</pre>
+
+Deploy the application again :
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa deploy --wait 300 app
+</pre>
+</div>
+
+Changing threads per search requires a restart of the searchnode process:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnode"
+</pre>
+</div>
+
+Then we can repeat our tensor ranking query again:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+{% raw %}
+$ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking=similar' \
+'hits=5' \
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
+{% endraw %}
+</pre>
+</div>
+
+Now, the content node will parallelize the matching and ranking using multiple search threads and `querytime` drops to about 15 ms. 
+
+The setting in services.xml sets to the global value, we can override down using rank profiles:
+
+<pre data-test="file" data-path="app/schemas/track.sd">
+schema track {
+
+  document track {
+
+    field track_id type string {
+      indexing: summary | attribute
+    }
+    field title type string {
+      indexing: summary | index
+      index: enable-bm25
+    }
+    field artist type string {
+      indexing: summary | index
+    }
+    field tags type weightedset&lt;string&gt; {
+      indexing: summary | attribute
+      attribute: fast-search
+    }
+    field similar type tensor&lt;float&gt;(trackid{}) {
+      indexing: summary | attribute
+      attribute: fast-search 
+    }
+  }
+
+  fieldset default {
+    fields: title, artist
+  }
+
+  document-summary track_id {
+    summary track_id type string { 
+      source: track_id
+    }
+  }
+  rank-profile personalized {
+    first-phase {
+      expression: rawScore(tags)
+    }
+  }
+  rank-profile similar {
+    first-phase {
+      expression: sum(attribute(similar) * query(user_liked))
+    }
+  }
+  rank-profile similar-t2 inherits similar {
+    num-threads-per-search: 2
+  }
+}
+</pre>
+
+Deploy the application again :
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa deploy --wait 300 app
+</pre>
+</div>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+{% raw %}
+$ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking=similar-t2' \
+'hits=5' \
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
+{% endraw %}
+</pre>
+</div>
+
+This way we can find the sweet spot where latency does not get any better. Using more threads then nessacary limits
+throughput, but for many applications throughput is not a concern at all. 
 
 ### Advanced query tracing 
+
 
 
 ### Performance benchmarking 
