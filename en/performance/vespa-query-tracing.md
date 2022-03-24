@@ -524,12 +524,13 @@ Now let us focus on the `tags` field which we defined with `attribute`.
  }
  </pre>
 
-In this case, there is no index structure, let us do a search for a popular tag *rock*
+In this case, there is no index structure, searching the `attribute` 
+field is performed as a linear scan, let us do a search for a popular tag *rock*:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="TRFPDMZ128F1491C75">
-$ vespa query 'yql=select track_id from track where tags contains "rock"' \
+<pre data-test="exec" data-test-assert-contains='"item": "rock"'>
+$ vespa query 'yql=select track_id, tags from track where tags contains "rock"' \
   'hits=1' 
 </pre>
 </div>
@@ -539,8 +540,8 @@ for a less frequent tag, e.g. *remix*:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="TRKOOUV128F931E8F0">
-$ vespa query 'yql=select track_id from track where tags contains "remix"' \
+<pre data-test="exec" data-test-assert-contains='"item": "remix"'>
+$ vespa query 'yql=select track_id, tags from track where tags contains "remix"' \
   'hits=1' 
 </pre>
 </div>
