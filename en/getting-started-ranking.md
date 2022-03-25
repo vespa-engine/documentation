@@ -10,8 +10,7 @@ Learn how [ranking](ranking.html) works in Vespa by using the open [query API](q
 In this article, find a set of queries invoking different `rank-profiles`, which is the ranking definition.
 
 Ranking is the user-defined computation that scores documents to a query,
-here configured in [doc.sd]
-(https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd),
+here configured in [doc.sd](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd),
 also see [schema documentation](schemas.html).
 This schema has a set of (contrived) ranking functions, to help learn Vespa ranking.
 
@@ -117,6 +116,8 @@ In the query results, here we observe a document with 27 in-links, 9703 seconds 
 }
 ```
 Using `summary-features` makes it easy to validate and develop the rank expression.
+
+<!-- ToDo: also use https://docs.vespa.ai/en/reference/schema-reference.html#match-features -->
 
 
 
@@ -424,3 +425,7 @@ ToDo, next steps:
 * from here, POST YQL for better readability
 * explain, tracing ...
 -->
+
+## Next steps
+* Read more about custom re-ranking of the final result set in
+  [reranking in searcher](reranking-in-searcher.html).
