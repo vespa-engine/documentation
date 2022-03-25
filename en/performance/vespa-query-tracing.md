@@ -1600,6 +1600,8 @@ $ vespa query 'yql=select track_id from track where tags contains "rock"' \
 </pre>
 </div>
 
+With tracing we can analyze indivual queries to understand what type of changes we can make 
+
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
