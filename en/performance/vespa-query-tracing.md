@@ -1589,6 +1589,234 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 This way we can find the sweet spot where latency does not get any better. Using more threads then nessacary limits
 throughput, but for many applications throughput is not a concern. 
 
+### Advanced query operators 
+
+Vespa has a advanced query operator which allows you to select the K largest or K smallest values of a `fast-search` attribute. 
+
+Let us first define a new field, which we call `popularity`, since we don't have  real popularity value from the dataset, we create
+a proxy of the popularity, the number of tags per track:
+
+<pre style="display:none" data-test="file" data-path="create-popularity-updates.py">
+import os
+import sys
+import json
+
+directory = sys.argv[1]
+seen_tracks = set() 
+
+def process_file(filename):
+  global seen_tracks
+  with open(filename) as fp:
+    doc = json.load(fp)
+    title = doc['title']
+    artist = doc['artist']
+    hash = title + artist
+    if hash in seen_tracks:
+      return
+    else:
+      seen_tracks.add(hash) 
+
+    track_id = doc['track_id']
+    tags = doc['tags']
+    tags_dict = dict()
+    for t in tags:
+      k,v = t[0],int(t[1])
+      tags_dict[k] = v
+    n = len(tags_dict)
+
+    vespa_doc = {
+      "update": "id:music:track::%s" % track_id,
+      "fields": {
+        "popularity": {
+          "assign": n
+        }
+      }
+    }
+    print(json.dumps(vespa_doc))
+
+for root, dirs, files in os.walk(directory):
+  for filename in files:
+    filename = os.path.join(root, filename)
+    process_file(filename)
+</pre>
+
+<pre>
+{% highlight python%}
+import os
+import sys
+import json
+
+directory = sys.argv[1]
+seen_tracks = set() 
+
+def process_file(filename):
+  global seen_tracks
+  with open(filename) as fp:
+    doc = json.load(fp)
+    title = doc['title']
+    artist = doc['artist']
+    hash = title + artist
+    if hash in seen_tracks:
+      return
+    else:
+      seen_tracks.add(hash) 
+
+    track_id = doc['track_id']
+    tags = doc['tags']
+    tags_dict = dict()
+    for t in tags:
+      k,v = t[0],int(t[1])
+      tags_dict[k] = v
+    n = len(tags_dict)
+
+    vespa_doc = {
+      "update": "id:music:track::%s" % track_id,
+      "fields": {
+        "popularity": {
+          "assign": n
+        }
+      }
+    }
+    print(json.dumps(vespa_doc))
+
+for root, dirs, files in os.walk(directory):
+  for filename in files:
+    filename = os.path.join(root, filename)
+    process_file(filename)
+{% endhighlight %}
+</pre>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ python3 create-popularity-updates.py lastfm_test > updates.jsonl
+</pre>
+</div>
+
+<pre data-test="file" data-path="app/schemas/track.sd">
+schema track {
+
+  document track {
+
+    field track_id type string {
+      indexing: summary | attribute
+      rank: filter
+      match: word
+    }
+    field title type string {
+      indexing: summary | index
+      index: enable-bm25
+    }
+    field artist type string {
+      indexing: summary | index
+    }
+    field tags type weightedset&lt;string&gt; {
+      indexing: summary | attribute
+      attribute: fast-search
+    }
+    field similar type tensor&lt;float&gt;(trackid{}) {
+      indexing: summary | attribute
+      attribute: fast-search 
+    }
+    field popularity type int {
+      indexing: summary | attribute
+      attribute: fast-search
+    }
+  }
+
+  fieldset default {
+    fields: title, artist
+  }
+
+  document-summary track_id {
+    summary track_id type string { 
+      source: track_id
+    }
+  }
+  rank-profile personalized {
+    first-phase {
+      expression: rawScore(tags)
+    }
+  }
+  rank-profile similar {
+    first-phase {
+      expression: sum(attribute(similar) * query(user_liked))
+    }
+  }
+  rank-profile similar-t2 inherits similar {
+    num-threads-per-search: 2
+  }
+}
+</pre>
+
+Deploy the application again :
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa deploy --wait 300 app
+</pre>
+</div>
+
+Feed and update the index with the popularity proxy signal:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ ./vespa-feed-client-cli/vespa-feed-client \
+  --verbose --file updates.jsonl --endpoint http://localhost:8080
+</pre>
+</div>
+
+
+Get the at least 5 tracks with the highest popularity
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="1352">
+$ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity)'
+</pre>
+</div>
+
+The search returned 1352 documents, that is because the popularity seem to be capped at max 100 elements, 
+so there are many documents with the same popularity. The hitLimit only specifies the lower bound, the search might return 
+more. Let us double check how many documents have the popularity equal to 100:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="1352">
+$ vespa query 'yql=select track_id, popularity from track where popularity=100'
+</pre>
+</div>
+
+We can use this feature in many ways, for example, returning to our recommendation search using tensors, 
+we can use the range search with hitLimit to only run the tensor ranking over the most popular documents:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="1349">
+{% raw %}
+$ vespa query 'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !weightedSet(track_id, @userLiked)' \
+'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking=similar' \
+'hits=5' \
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+{% endraw %}
+</pre>
+</div>
+
+Notice that we get a totalCount of 1349, the original range search from above returned 1352 documents, and 3 were removed. 
+The range limit can be used for cases where we want to select efficiently top-k for a single valued numeric attribute:
+
+- We can use it to for example only rank the 1000 most recent documents using a long to represent a timestamp
+- We can use it as above to rank the most popular documents 
+
+Do note that any other query terms in the query are applied after having found the top-k documents, hence, a strict filter which removes many documents
+might end up recalling 0 documents. 
+
+### Match phase result degrading 
+
+
+
 ### Advanced query tracing 
 In this section we introduce query tracing, which can allow developers to understand query latency 
 
