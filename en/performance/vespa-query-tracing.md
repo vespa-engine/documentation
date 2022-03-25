@@ -296,7 +296,7 @@ Start the Vespa container image:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ docker run -m 6G --detach --name vespa --hostname vespa-container \
-  --publish 8080:8080 --publish 19071:19071 \
+  --publish 8080:8080 --publish 19071:19071 19110:19110 \
   vespaengine/vespa
 </pre>
 </div>
@@ -604,7 +604,7 @@ $ vespa deploy --wait 300 app
 And re-execute the query, now using this `document-summary` instead:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
+<pre data-test="exec" data-test-assert-contains="track_id">
 $ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
   'query=total eclipse of the heart' 'hits=200' 'type=weakAnd' \
   'summary=track_id' |head -40 
@@ -688,7 +688,7 @@ We can combine the tag search with query terms searching fields that do have ind
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"item": "rock"'>
+<pre data-test="exec" data-test-assert-contains='"rock"'>
 $ vespa query 'yql=select track_id, tags from track where tags contains "rock" and userQuery()' \
   'hits=1' 'query=total eclipse of the heart'
 </pre>
@@ -771,6 +771,15 @@ This example uses [vespa-sentinel-cmd command tool](../reference/vespa-cmdline-t
 $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnode"
 </pre>
 </div>
+
+Wait for the searchnode to start up 
+<pre>
+curl -s localhost:19110/state/v1/health
+</pre>
+
+<pre style="display:none" data-test="exec">
+$ sleep 30
+</pre>
 
 We can now try our multi tag search again:
 
@@ -1284,6 +1293,9 @@ $ vespa query 'yql=select title,artist, track_id from track where tags contains 
 </pre>
 </div>
 
+With fewer matches to rank using the tensor expression the latency decreases. In this query case,
+ latency is strictly linear with number of matches. 
+
 The `querytime` of the unconstrained search was around 120 ms which is on the high side for real time serving. 
 We can optimize this as well by adding `fast-search` to the mapped field tensor. 
 `fast-search` is supported for `tensor` fields using sparse mapped dimensions, or mixed tensors using both sparse and dense dimensions.
@@ -1353,6 +1365,15 @@ And again, since we added `fast-search` we need to restart the searchnode proces
 $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnode"
 </pre>
 </div>
+
+Wait for the searchnode to start up 
+<pre>
+curl -s localhost:19110/state/v1/health
+</pre>
+
+<pre style="display:none" data-test="exec">
+$ sleep 30
+</pre>
 
 Repating our query again :
 
@@ -1428,6 +1449,15 @@ Changing threads per search requires a restart of the searchnode process:
 $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnode"
 </pre>
 </div>
+
+Wait for the searchnode to start up 
+<pre>
+curl -s localhost:19110/state/v1/health
+</pre>
+
+<pre style="display:none" data-test="exec">
+$ sleep 30
+</pre>
 
 Then we can repeat our tensor ranking query again:
 
@@ -1525,16 +1555,15 @@ This way we can find the sweet spot where latency does not get any better. Using
 throughput, but for many applications throughput is not a concern. 
 
 ### Advanced query tracing 
+In this section we introduce query tracing, which can allow developers to understand query latency
 
 
-
-### Performance benchmarking 
 
 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
-$ docker rm -f vespa
+$ #docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
