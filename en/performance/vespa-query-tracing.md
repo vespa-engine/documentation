@@ -220,6 +220,8 @@ schema track {
 
     field track_id type string {
       indexing: summary | attribute
+      rank: filter
+      match: word
     }
     field title type string {
       indexing: summary | index
@@ -296,7 +298,7 @@ Start the Vespa container image:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ docker run -m 6G --detach --name vespa --hostname vespa-container \
-  --publish 8080:8080 --publish 19071:19071 19110:19110 \
+  --publish 8080:8080 --publish 19071:19071 --publish 19110:19110 \
   vespaengine/vespa
 </pre>
 </div>
@@ -542,7 +544,7 @@ does less work.
 - [summary-features](../reference/schema-reference.html#summary-features) used to return computed
  [rank features](../reference/rank-features.html) from the content nodes.
 
-Let us create a dedicated [document-summary](../document-summaries.html) which
+Let us create an explicit [document-summary](../document-summaries.html) which
 only contain the `track_id` field. Since `track_id` is defined in the schema as `attribute`, summary
 fetches using this document summary will be requesting data from in-memory. Plus the network 
 footprint per hit becomes smaller.
@@ -564,6 +566,8 @@ schema track {
 
     field track_id type string {
       indexing: summary | attribute
+      rank: filter
+      match: word
     }
     field title type string {
       indexing: summary | index
@@ -709,6 +713,8 @@ schema track {
 
     field track_id type string {
       indexing: summary | attribute
+      rank: filter
+      match: word
     }
     field title type string {
       indexing: summary | index
@@ -772,16 +778,28 @@ $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnod
 </pre>
 </div>
 
-Wait for the searchnode to start up 
+Wait for the searchnode to start up using the [healt state api](../reference/metrics.html):
+
 <pre>
-curl -s localhost:19110/state/v1/health
+curl -s http://localhost:19110/state/v1/health
+</pre>
+
+We want the page to return: 
+<pre>
+{% highlight json%}
+{
+  "status": {
+    "code": "up"
+  }
+}
+{% endhighlight %}
 </pre>
 
 <pre style="display:none" data-test="exec">
-$ sleep 30
+$ sleep 60
 </pre>
 
-We can now try our multi tag search again:
+We can now try our multi-tag search again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -818,6 +836,8 @@ schema track {
 
     field track_id type string {
       indexing: summary | attribute
+      rank: filter
+      match: word
     }
     field title type string {
       indexing: summary | index
@@ -1071,20 +1091,22 @@ Which returns:
 }
 {% endhighlight %}
 </pre>
+The `TRGWUEG128F4270721` track is *Africa* by *Toto*. Note that since the dataset is limited, some similar tracks might
+not be present in the index.
 
-Similiar (pun intended), the `TRGWUEG128F4270721` track is *Africa* by *Toto*.
-
-Now, if we have have listened to these three tracks:
+Now, if a user have have listened to these three tracks and *liked* them 
 
 - `TRUAXHV128F42694E8` Summer Of '69 by Bryan Adams
 - `TRWJIPT128E0791D99` Run To You by Bryan Adams
 - `TRGWUEG128F4270721` Africa by Toto
 
-What should our algorithm suggest next? We can use tensor ranking expression for this by passing
-these song track ids with the query and performing a tensor dotproduct with the document side similarity tensor.
+What should our algorithm suggest next? It is straight forward to suggest tracks given a single track, but a sequence
+of tracks player or liked in real time has a very high cardinality which makes it next to impossible to
+generate offline. We can use tensor ranking expression for this by passing
+the liked song track identifies with the query and performing a tensor dotproduct with the document side similarity tensor.
 
-We add a new ranking profile with a tensor dotproduct between the `query(user_liked)` query tensor and the 
-the `similar` document tensor. See [tensor user guide](../tensor-user-guide.html).
+To do so we need to add a new rank profile with a tensor dotproduct between the `query(user_liked)` query tensor and the 
+the `similar` document tensor. See [tensor user guide](../tensor-user-guide.html) for more on tensors.
 
 <pre>
 rank-profile similar {
@@ -1094,7 +1116,7 @@ rank-profile similar {
 }
 </pre>
 
-Our schema becomes:
+Our complete track schema then becomes:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1103,6 +1125,8 @@ schema track {
 
     field track_id type string {
       indexing: summary | attribute
+      rank: filter
+      match: word
     }
     field title type string {
       indexing: summary | index
@@ -1129,16 +1153,19 @@ schema track {
       source: track_id
     }
   }
+
   rank-profile personalized {
     first-phase {
       expression: rawScore(tags)
     }
   }
+
   rank-profile similar {
     first-phase {
       expression: sum(attribute(similar) * query(user_liked))
     }
   }
+
 }
 </pre>
 
@@ -1151,14 +1178,14 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-Here we use a query tensor with our three tracks 
+Here we use a query tensor with our three sample tracks using the short query tensor format:
 <pre>
 {% raw %}
 ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGWUEG128F4270721}:1.0}
 {% endraw %}
 </pre>
 
-In the first query we simply rank all documents using the tensor expression using `where true`:
+In the first query example we simply rank all documents using the tensor expression using `where true`:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -1171,23 +1198,23 @@ $ vespa query 'yql=select title, artist, track_id from track where true' \
 </pre>
 </div>
 
-Notice here that we matched all documents and ranked them using the `similar` ranking expression, executing 
-the tensor expression. However, as we can also see, we retrieved some of the liked docments 
-
-Let us get rid of them using the not query operator (!) in YQL:
+Notice here that we matched all documents and ranked them using the `similar` rank-profile with our tensor expression.
+ However, as we can see,  we retrieved some of the liked docments as well. Let us eliminate these
+ from the result using the `not` query operator (`!`) in YQL:
 
 <pre>
 where !weightedSet(track_id, @userLiked) 
 </pre>
 
-At the same time we introduced the [weightedSet query operator](../reference/query-language-reference.html#weightedset)
-which can be used for massive filtering.
+The [weightedSet query operator](../reference/query-language-reference.html#weightedset) is a handy query operator
+when we don't need any ranking and can be used for large scale filters. 
+See [feature-tuning set filtering](feature-tuning.html#multi-lookup-set-filtering)
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bryan Adams">
 {% raw %}
-$ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+$ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id, @userLiked)' \
 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
 'ranking=similar' \
 'hits=5' \
@@ -1196,7 +1223,8 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 </pre>
 </div>
 
-The above query produces the following result
+Note that the tensor query input format is slightly different from the variable subsitution supported for wand/weightedSet/dotProduct
+multi-valued query operators. The above query produces the following result:
 
 <pre>
 {% highlight json%}
@@ -1277,8 +1305,11 @@ The above query produces the following result
 {% endhighlight %}
 </pre>
 
-Some quality love songs from the 80s right there. Now we can notice that with the `not` filter, we retrieved 9,5663 documents
-as our 3 tracks where filtered out. We can also add tag filters, here we filter the recommended by `tags:popular`:
+Now we can notice that with the `not` filter, we retrieved 9,5663 documents
+as our 3 tracks where filtered out as compared with `documents`. 
+
+We can also add tag filters, here we filter the recommended by `tags:popular`, by filtering we reduce the complexity of the
+query as few documents gets ranked by the tensor ranking expression:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1308,6 +1339,8 @@ schema track {
 
     field track_id type string {
       indexing: summary | attribute
+      rank: filter
+      match: word
     }
     field title type string {
       indexing: summary | index
@@ -1372,7 +1405,7 @@ curl -s localhost:19110/state/v1/health
 </pre>
 
 <pre style="display:none" data-test="exec">
-$ sleep 30
+$ sleep 60
 </pre>
 
 Repating our query again :
@@ -1456,7 +1489,7 @@ curl -s localhost:19110/state/v1/health
 </pre>
 
 <pre style="display:none" data-test="exec">
-$ sleep 30
+$ sleep 60
 </pre>
 
 Then we can repeat our tensor ranking query again:
@@ -1486,6 +1519,8 @@ schema track {
 
     field track_id type string {
       indexing: summary | attribute
+      rank: filter
+      match: word
     }
     field title type string {
       indexing: summary | index
@@ -1555,15 +1590,20 @@ This way we can find the sweet spot where latency does not get any better. Using
 throughput, but for many applications throughput is not a concern. 
 
 ### Advanced query tracing 
-In this section we introduce query tracing, which can allow developers to understand query latency
+In this section we introduce query tracing, which can allow developers to understand query latency 
 
-
-
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="track_id">
+$ vespa query 'yql=select track_id from track where tags contains "rock"' \
+  'tracelevel=3'
+</pre>
+</div>
 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
-$ #docker rm -f vespa
+$ docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
