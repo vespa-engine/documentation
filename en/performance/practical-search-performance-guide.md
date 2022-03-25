@@ -993,8 +993,16 @@ Let us quickly look at one of the tracks in our collection:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ grep "id:music:track::TRUAXHV128F42694E8" feed.jsonl
+</pre>
+</div>
+
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bryan Adams">
-$ vespa document get id:music:track::TRUAXHV128F42694E8
+$ vespa document get "id:music:track::TRUAXHV128F42694E8"
 </pre>
 </div>
 
@@ -1872,7 +1880,7 @@ With tracing we can analyze indivual queries to understand what type of changes 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
-$ #docker rm -f vespa
+$ docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
