@@ -193,7 +193,7 @@ Here we include our custom searcher in the `default` Vespa search chain:
     &lt;document-api/&gt;
     &lt;search&gt;
       &lt;chain id=&quot;default&quot; inherits=&quot;vespa&quot;&gt;
-        &lt;searcher id=&quot;ai.vespa.example.searcher.ReRankingSearcher&quot; bundle=&quot;ranking&quot;/&gt;
+        &lt;searcher id=&quot;ai.vespa.example.searcher.ReRankingSearcher&quot; bundle=&quot;the name in &lt;artifactId&gt; in your pom.xml&quot; ;/&gt;
       &lt;/chain&gt;
     &lt;/search&gt;
     &lt;nodes&gt;
