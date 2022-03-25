@@ -1,14 +1,9 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Vespa query performance tracing"
+title: "Vespa query performance - practical guide"
 ---
 
-In this guide, we will guide you through how to to understand Vespa query performance by using
-query tracing. This is a practical guide which uses a concrete application and steps 
-through how to optimize query serving performance. 
-
-Since Vespa can be used for a wide range of serving use cases this guide is not complete, but covers some important
-aspects. 
+ This is a practical query performance guide. 
 
 ## Prerequisites
 
@@ -57,7 +52,8 @@ The downloaded data needs to be converted to
 
 We use this small python script to traverse the track files and create a JSONL 
 file with Vespa feed operations. We will introduce the schema to be used with this 
-feed in the next section. 
+feed in the next section. The dataset contains some duplicates which we remove based
+on the combination of artist name and title. 
 
 <pre style="display:none" data-test="file" data-path="create-vespa-feed.py">
 import os
@@ -66,15 +62,23 @@ import json
 import unicodedata
 
 directory = sys.argv[1]
+seen_tracks = set() 
 
 def remove_control_characters(s):
   return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
 
 def process_file(filename):
+  global seen_tracks
   with open(filename) as fp:
     doc = json.load(fp)
     title = doc['title']
     artist = doc['artist']
+    hash = title + artist
+    if hash in seen_tracks:
+      return
+    else:
+      seen_tracks.add(hash) 
+
     track_id = doc['track_id']
     tags = doc['tags']
     tags_dict = dict()
@@ -139,7 +143,8 @@ def process_file(filename):
     tags_dict = dict()
     for t in tags:
       k,v = t[0],int(t[1])
-      tags_dict[k] = v
+      if v > 0:
+        tags_dict[k] = v
     similars = doc['similars']
     tensor_cells = []
     keys_seen = dict()
@@ -276,12 +281,13 @@ In addition we plan to use our `similar` tensor field for ranking so we also nee
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
 &lt;query-profile id=&quot;default&quot; type=&quot;root&quot;&gt;
     &lt;field name=&quot;presentation.timing&quot;&gt;true&lt;/field&gt;
+    &lt;field name=&quot;renderer.json.jsonWsets&quot;&gt;true&lt;/field&gt;
 &lt;/query-profile&gt;
 </pre>
 
 ## Deploy the application package
 
-Once we have finished writing our application package, we can deploy it in a Docker container.
+Once we have finished writing our application package, we can deploy it to a running Vespa instance.
 See also the [vespa quick start guide](../vespa-quick-start.html).
 
 Start the Vespa container image:
@@ -289,7 +295,7 @@ Start the Vespa container image:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker run -m 6G --detach --name vespa --hostname vespa-msmarco \
+$ docker run -m 6G --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa
 </pre>
@@ -330,46 +336,48 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-Now, we have our dataset indexed and we can start look at query performance.
+Now, we have our dataset indexed and we can start querying our data. 
 
-## Basic query performance understanding
+## Basic query performance
+The following sections uses the Vespa [query api](../reference/query-api-reference.html) and 
+formulate queries using Vespa [query language](../query-language.html). We use the
+[vespa-cli](../vespa-cli.html) command which supports running queries. The CLI
+uses the Vespa http search api. Use `-v` to see the actual http request sent:
 
-Once the data has started feeding, we can already send queries to our search app 
+<pre>
+$ vespa query -v 'yql=select ..'
+</pre>
+
+In the first query example we simply match everything using `where true` and we 
+use the [hits](..(reference/query-api-reference.html#hits) to specify how many documents we want to be returned 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Sad Song">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' 'query=sad songs' 'hits=1'
+<pre data-test="exec" data-test-assert-contains='"documents": 95666'>
+$ vespa query 'yql=select artist, title, track_id, tags from track where true' 'hits=1'
 </pre>
 </div>
 
-This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
-default query type is using `all` requiring that all the terms match the document. 
-
-
-The above example searches for *sad AND songs* in the `default` fieldset, 
-which in our schema includes the track `title` and `artist` fields. 
-
-The result output for the above query will look something like this:
+The [result json output](../reference/default-result-format.html) for this query will 
+look something like this:
 
 <pre>
 {% highlight json%}
 {
     "timing": {
-        "querytime": 0.007,
-        "summaryfetchtime": 0.0,
-        "searchtime": 0.009000000000000001
+        "querytime": 0.009000000000000001,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.011
     },
     "root": {
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 8
+            "totalCount": 95666
         },
         "coverage": {
             "coverage": 100,
-            "documents": 104212,
+            "documents": 95666,
             "full": true,
             "nodes": 1,
             "results": 1,
@@ -377,13 +385,13 @@ The result output for the above query will look something like this:
         },
         "children": [
             {
-                "id": "index:tracks/0/9820cd837f7687739120d201",
-                "relevance": 0.17032164450816525,
+                "id": "index:tracks/0/632facf01973795ba294b7d5",
+                "relevance": 0.0,
                 "source": "tracks",
                 "fields": {
-                    "track_id": "TRNYPDO128F92F61AC",
-                    "title": "Sad Song",
-                    "artist": "Davell Crawford"
+                    "track_id": "TRRRGWV128F92FC7E0",
+                    "title": "Zombies",
+                    "artist": "True Blood"
                 }
             }
         ]
@@ -394,112 +402,150 @@ The result output for the above query will look something like this:
 
 Observations: 
 
-- The query searched one node and coverage was 100%, see [graceful-degradation](../graceful-degradation.html). 
-- The query matched a total of 8 documents (`totalCount`) and we got back the best [ranking](../ranking.html). 
-A total of 8 documents matched the query and was fully ranked. 
-- We searched 104,212 documents in total. 
+- The query searched one node (`coverage.nodes`) and the coverage (`coverage.coverage`) was 100%, 
+see [graceful-degradation](../graceful-degradation.html) for more information about 
+coverage and Vespa timeout behaviour. Vespa's default timeout is 0.5 seconds.   
+- The query matched a total of 95666 documents (`totalCount`) out of 95666 documents searched (`coverage.documents`).
 
-The `timing` has 3 fields:
+The response `timing` has 3 fields:
 
 - `querytime` - This is the first matching query protocol where Vespa searches all content nodes 
-and where each content node retrieves and ranks documents. The results are merged. 
-- `summaryfetchtime` - This is the second query protocol which fills summary data for the global top-k (&hits) parameter 
+and where each content node matches and ranks the documents and the container merges the results from each node
+involved in the query into a global ordering. See [Life of a query in Vespa](sizing-search.html#life-of-a-query-in-vespa).
+
+- `summaryfetchtime` - This is the second query protocol which fills summary data for the global top-k parameter 
 after the globalb top ranking documents have been found from the previous protocol phase.
 - `searchtime` Is roughly the sum of the above and is close to what a benchmarking client will observe (except network latency).
 
-All 3 metrics are reported in seconds. 
+All 3 metrics are reported in seconds.
 
-Now, we can change our matching to instead of `type=all` to use `type=any`. See 
-[supported query types](../reference/query-api-reference.html#model.type)
+Now, we can try to search for *total eclipse of the heart*
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Sad Song">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
- 'query=sad songs' 'hits=1' 'type=any'
+  'query=total eclipse of the heart' 'hits=1'
 </pre>
 </div>
 
-Now, our query matches 956 documents and is slightly slower than than the previous query. 
-If we include a query term which is frequent in the collection we will recall more documents as
-with `type=any` we match all documents that at least contains one of the query terms. 
-For example *the* is a very common word in English, let us try:
+This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
+with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
+default query type is using `all` requiring that all the terms match the document. 
+
+The above example searches for *total AND eclipse AND of AND the AND heart* in the `default` fieldset, 
+which in our schema includes the track `title` and `artist` fields. The result output for the 
+above query will look something like this:
+
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.012,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.014
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/3f18869c19c25e3ae237702f",
+                "relevance": 0.13274821039905835,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRUKHZD128F92DF70A",
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}
+</pre>
+
+This query only matched one document because the query terms were ANDed. 
+We can change matching  to use `type=any` instead of the default `type=all`. See 
+[supported query types](../reference/query-api-reference.html#model.type).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Sad Country Song">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
- 'query=the sad songs' 'hits=1' 'type=any'
+  'query=total eclipse of the heart' 'hits=1' 'type=any'
 </pre>
 </div>
 
-Now, our query matches 22,763 documents, or roughly 20% of the total number of documents. 
-If you compare the `querytime` of these two querie, the one which matches the most documents have highest `querytime`. 
-In worst case, the search matches all documents.  
+Now, our query matches 24,053 documents and is slower than than the previous query. 
+If we compare the `querytime` of these two query examples, the one which matches the most documents have highest `querytime`. 
+In worst case, the search query matches all documents.
 
-We can try a different query specification where we retrieve all documents and instead 
-use the [rank()](../reference/query-language-reference.html#rank) query. The first operand is 'true' which 
-means just match all documents, then rank by the query terms. 
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Sad Country Song">
-$ vespa query 'yql=select artist, title, track_id from track where rank(true,userQuery())' \
- 'query=the sad songs' 'hits=1' 'type=any'
-</pre>
-</div>
-
-Now, our query matched all documents (Compare `totalCount` with `documents`) and latency is much higher than the previous query.  
-
-So for query and matching performance is greatly impacted by the number of documents that matches the query. Or like queries with
-type `any` requires more compute resources than type `all`.  There is an optimization of *or-like* queries, using
-`weakAnd`. See the [using wand with vespa](../using-wand-with-vespa.html) guide for details. 
+Query matching performance is greatly impacted by the number of documents that matches the query specification. 
+Type `any` queries requires more compute resources than type `all`.  There is an optimization of `any` queries, using
+the `weakAnd` query operator which implements the WAND algorithm. 
+See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
 
 Run the same query, but instead of `type=any` use `type=weakAnd`, 
 see [supported query types](../reference/query-api-reference.html#model.type)
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Sad Country Song">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' 'query=the sad songs' 'hits=1' 'type=weakAnd'
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
+$ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
+  'query=total eclipse of the heart' 'hits=1' 'type=weakAnd'
 </pre>
 </div>
 
-Compared to the type `any` query which fully ranked 22,763 documents we now only rank 2,590 documents and latency is much lower, 
+Compared to the type `any` query which fully ranked 24,053 documents, we now only rank 3,679 documents.   
 also notice that the much faster search returns the same document at the first position. 
 
 
 ### Hits and summaries 
 In the previous examples we only asked for one hit with `hits=1` parameter, also if you have been paying attention you would
 see that the `summaryfetchtime` have been pretty constant over the previous text search examples. Let us see 
-what happens when we ask for 200 hits:
+what happens when we ask for 200 hits (Note that we pipe the large result into `head`):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Sad Country Song">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
- 'query=the sad songs' 'hits=200' 'type=weakAnd' | head -31
+  'query=total eclipse of the heart' 'hits=200' 'type=weakAnd' |head -40 
 </pre>
 </div>
 
-Now, we can notice that the `summaryfetchtime` increases significantly,
- while `querytime` is relatively unchanged. Repeating the query a second time will reduce the time
- due to the summary cache, see [caches in vespa](../performance/caches-in-vespa.html).
+Now, we can notice that the `summaryfetchtime` increases significantly from the previous query examples,
+while `querytime` is relatively unchanged. Repeating the query a second time will reduce the `summaryfetchtime`
+due to the summary cache, see [caches in Vespa](../performance/caches-in-vespa.html) for details.
 
-There are largely four factors which determines the `summaryfetchtime`
+There are largely four factors which determines the `summaryfetchtime`:
 
 - The number of hits requested and number of content nodes that produced the query result. With many content nodes
-in the group the query was dispatched to we expect that hits should be distributed across the nodes so that each node
-does less work.  
-- The network package size of each hit (larger fields, more resources spent)
+in the group the query was dispatched to, we expect that top-ranking hits would be distributed across the nodes so that each node
+does less work.
+- The network package size of each hit (larger fields returned means more resources spent and higher summary fetch latency).
 - The summary used and which fields goes into the summary. For example, a
- [document-summary](../document-summaries.html) which only contain fields that are `attribute` fields will
+ [document-summary](../document-summaries.html) which only contain fields that are defined as `attribute` will
  be fetched out of memory, while the `default` summary, or others containing at least one none-attribute
- field will potentially touch disk. 
-- [summary-features](../reference/schema-reference.html#summary-features) used to return [rank features](../reference/rank-features.html)
+ field will potentially access data from disk storage. Read more about [Vespa attributes](../attributes.html).
+- [summary-features](../reference/schema-reference.html#summary-features) used to return computed
+ [rank features](../reference/rank-features.html) from the content nodes.
 
 Let us create a dedicated [document-summary](../document-summaries.html) which
-only contain the `track_id` field. 
+only contain the `track_id` field. Since `track_id` is defined in the schema as `attribute`, summary
+fetches using this document summary will be requesting data from in-memory. Plus the network 
+footprint per hit becomes smaller.
 
 <pre>
 document-summary track_id {
@@ -509,7 +555,7 @@ document-summary track_id {
 }
 </pre>
 
-The full new schema:
+The new schema:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -556,32 +602,47 @@ $ vespa deploy --wait 300 app
 </div>
 
 And re-execute the query, now using this `document-summary` instead:
-
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="TRTCULM128F933542C">
-$ vespa query 'yql=select track_id from track where userQuery()' \
- 'query=the sad songs' 'hits=200' 'type=weakAnd' 'summary=track_id' | head -31
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
+$ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
+  'query=total eclipse of the heart' 'hits=200' 'type=weakAnd' \
+  'summary=track_id' |head -40 
 </pre>
 </div>
 
-In this particular case the difference is not that large, but for larger number of hits and larger documents. 
-A note on select scoping, e.g, `select title, track_id from ..`. When using the default summary, all
-fields are regardless delivered to the stateless container, which removes the set of fields not wanted. Hence select
+In this particular case the `summaryfetchtime` difference is not that large, but for larger number of hits and 
+larger documents the difference is significant. 
+
+A note on select field scoping with YQL. For example `select title, track_id from ..`. When using the default summary, all
+fields are regardless of field scoping delivered from the content nodes to the search container. 
+The search container removes the set of fields not selected. Hence select
 scoping only reduces the amount of data transfered back to the client, and does not impact the performance of
-the internal communication.
+the internal communication and potential summary cache miss. 
 
 ### Searching attribute fields 
-In the previous sections we looked at text searching over a `default` `fieldset` using fields with
-`indexing:index`. With `index` Vespa builds inverted index structures for faster evaluation of the query. 
 
-<pre>
-field title type string {
-  indexing: summary | index
-}
-</pre>
+In the previous sections we looked at text searching in a `fieldset` containing fields with
+`indexing:index`. See [indexing reference](../reference/schema-reference.html#indexing). 
+Fields of [type string](../reference/schema-reference.html#field-types) are 
+treated differently depending on having `index` or `attribute`:
 
-Now let us focus on the `tags` field which we defined with `attribute`. 
+- `index` integrates with [linguistic](../linguistics.html) processing and is matched using 
+[match:text](../reference/schema-reference.html#match). 
+
+- `attribute` does not integarte with lingustic processing and is matched using 
+[match:word](../reference/schema-reference.html#match). 
+
+With `index` Vespa builds inverted index data structures which consists of
+- A dictionary of the unique text tokens (after linguistic processing)
+- Posting lists for each unique text token in the collection 
+
+With `attribute` Vespa per default does not build any inverted index like data structures for 
+potential faster query evaluation. See [Wikipedia:Inverted Index](https://en.wikipedia.org/wiki/Inverted_index) 
+and [Vespa internals](../proton.html#index).
+
+Now let us focus on the `tags` field which we defined with `attribute`, matching
+in this fields will be performed using `match:word`. 
 
 <pre>
  field tags type weightedset&lt;string&gt; {
@@ -594,42 +655,52 @@ field is performed as a linear scan, let us do a search for a popular tag *rock*
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"item": "rock"'>
+<pre data-test="exec" data-test-assert-contains='"rock":'>
 $ vespa query 'yql=select track_id, tags from track where tags contains "rock"' \
   'hits=1' 
 </pre>
 </div>
 
-The recalls 9,872 documents and takes roughly 22 ms (Dependent on the HW you run on) - If we search
-for a less frequent tag, e.g. *remix*:
+The query matches 8,160 documents, notice that for attribute search, matching can also include
+white space, or generally puncation characters which are removed and not searchable
+when using `match:text` with fields that have `index`. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"item": "remix"'>
-$ vespa query 'yql=select track_id, tags from track where tags contains "remix"' \
+<pre data-test="exec" data-test-assert-contains='"classic rock":'>
+$ vespa query 'yql=select track_id, tags from track where tags contains "classic rock"' \
   'hits=1' 
 </pre>
 </div>
 
-We match fewer documents (319), but roughly the same `querytime` because the matching is performed linearly, 
-with millions and millions of documents these two queries would be slow. 
+Another query searching for *rock* or *pop*:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"rock":'>
+$ vespa query 'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
+  'hits=1' 
+</pre>
+</div>
 
-We can combine the tag search with query terms that do have index structures:
+In all these examples searching the `tags` field, the matching is performed by a linear scan through all our documents. 
+
+We can combine the tag search with query terms searching fields that do have index structures:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"item": "rock"'>
 $ vespa query 'yql=select track_id, tags from track where tags contains "rock" and userQuery()' \
-  'hits=1' 'query=love'
+  'hits=1' 'query=total eclipse of the heart'
 </pre>
 </div>
-In this case - the *love* term will restrict the number of documents that needs to be matched with the tags 
-search because the two query terms are ANDed. 
+
+In this case - the query terms searching the default fieldset will restrict the number of 
+documents that needs to be scanned for the tags constraint. 
 
 #### Searching attribute fields using fast-search 
 As we have seen in the previous section, fields with `attribute` does per default does not
 build any [inverted index](https://en.wikipedia.org/wiki/Inverted_index) data structures. We can modify
-the tags field and add `attribute:fast-search`:
+the tags field and add `attribute:fast-search` which will add inverted index structures for the attribute as well:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -701,28 +772,32 @@ $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnod
 </pre>
 </div>
 
-We can now try our *remix* tag search again:
+We can now try our multi tag search again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"item": "remix"'>
-$ vespa query 'yql=select track_id, tags from track where tags contains "remix"' \
+<pre data-test="exec" data-test-assert-contains='"rock":'>
+$ vespa query 'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
   'hits=1' 
 </pre>
 </div>
 
-Now the query latency will be a few milliseconds since Vespa has built index structures to support
+Now the `querytime` will be a few milliseconds since Vespa has built index structures to support
 fast-search in the attribute. The downside is increased memory usage and reduced indexing
 throughput. See also [when to use fast-search for attributes](feature-tuning.html#when-to-use-fast-search-for-attribute-fields).
+
+Finally, for those interested in using `match:text` for searching multi-valued field types like `weightedset`, see
+[searching multi-value fields](../searching-multi-valued-fields.html).
 
 ### Multi-valued query operators
 
 In this section we look at [multi-value query operators](../multivalue-query-operators.html) and performance
 characteristics. Many real-world use cases want to retrieve using structured queries with many values. 
 
-For example, for personalization. Let us assume that we have a process which have built a user profile 
-where user x is interested in tags *hard rock*, *rock* and *metal*. How can we retrieve and rank results using
-that information? 
+Let us assume that we have a process which have built a user profile where we have identified tags which
+the user has shown previous interest for. For example *hard rock*, *rock* and *metal*. 
+How can we retrieve and rank results using that information? One way is to search and rank using
+the dotproduct between the sparse user profile representation and the track tags representation.
 
 We can start with the [dotProduct()](../reference/query-language-reference.html#dotproduct) query operator.
 To gain control of [ranking](../ranking.html) we need to add a `rank-profile` to our schema:
@@ -781,32 +856,31 @@ Now, we query our data using the `dotProduct`
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="300.0">
+<pre data-test="exec" data-test-assert-contains="Vastarannan valssi">
 $ vespa query \
  'yql=select track_id, title, artist, tags from track where dotProduct(tags,@userProfile)' \
- 'userProfile={"hard rock":1, "rock":1,"metal":1}' \
+ 'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
  'hits=1' \
  'ranking=personalized'
 </pre>
 </div>
-
 <pre>
 {% highlight json%}
 {
     "timing": {
-        "querytime": 0.007,
+        "querytime": 0.004,
         "summaryfetchtime": 0.001,
-        "searchtime": 0.009000000000000001
+        "searchtime": 0.006
     },
     "root": {
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 12191
+            "totalCount": 10323
         },
         "coverage": {
             "coverage": 100,
-            "documents": 104212,
+            "documents": 95666,
             "full": true,
             "nodes": 1,
             "results": 1,
@@ -815,50 +889,23 @@ $ vespa query \
         "children": [
             {
                 "id": "index:tracks/0/74d3f4df2989650b2cc095be",
-                "relevance": 300.0,
+                "relevance": 400.0,
                 "source": "tracks",
                 "fields": {
                     "track_id": "TRJTBAO128F932191C",
                     "title": "Vastarannan valssi",
                     "artist": "Viikate",
-                    "tags": [
-                        {
-                            "item": "finnish",
-                            "weight": 100
-                        },
-                        {
-                            "item": "Suomi",
-                            "weight": 100
-                        },
-                        {
-                            "item": "finnish metal",
-                            "weight": 100
-                        },
-                        {
-                            "item": "melodic metal",
-                            "weight": 100
-                        },
-                        {
-                            "item": "metal",
-                            "weight": 100
-                        },
-                        {
-                            "item": "rock",
-                            "weight": 100
-                        },
-                        {
-                            "item": "hard rock",
-                            "weight": 100
-                        },
-                        {
-                            "item": "suomi rock",
-                            "weight": 100
-                        },
-                        {
-                            "item": "rautalanka",
-                            "weight": 100
-                        }
-                    ]
+                    "tags": {
+                        "Suomi": 100,
+                        "rautalanka": 100,
+                        "suomi rock": 100,
+                        "hard rock": 100,
+                        "melodic metal": 100,
+                        "finnish": 100,
+                        "finnish metal": 100,
+                        "metal": 100,
+                        "rock": 100
+                    }
                 }
             }
         ]
@@ -867,39 +914,37 @@ $ vespa query \
 {% endhighlight %}
 </pre>
 
-Notice that the query above, would brute force rank tracks where tags would match any of the multi-valued inputs so 
-the `totalCount` becomes 12,191 tracks. Including *pop* in the list increases the number of hits to 14,573. For a large
-user profile with many tags, we would easily retrieve and rank the entire document collection. Also notice the 
-`relevance` score which is 300, since the top document matches all 3 query tags (1x100 + 1x100 + 1x100 = 300)
+Notice that the query above, it brute force rank tracks where tags would match any of the multi-valued inputs so 
+the `totalCount` 10,323 tracks. Including *pop* in the userProfile list increases the number of hits to 13,638. 
+For a large user profile with many tags, we would easily retrieve and rank the entire document collection. 
+Also notice the `relevance` score which is 400 as the document 
 
 This brings us to the [wand query operator](../reference/query-language-reference.html#wand). 
 With `wand` we can specify the target number of hits that we want to retrieve, so instead of brute forcing ranking all tracks
-which matched at least one of the user profile tags we want just to retrieve the best:
-
+which matched at least one of the user profile tags we want just to retrieve the k top-ranking documents:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" >
+<pre data-test="exec" data-test-assert-contains="Vastarannan valssi">
 $ vespa query \
- 'yql=select track_id, title, artist, tags from track where ({targetHits:5}wand(tags,@userProfile))' \
- 'hits=5' \
- 'userProfile={"hard rock":1, "rock":1,"metal":1}' \
+ 'yql=select track_id, title, artist, tags from track where {targetHits:10}wand(tags,@userProfile)' \
+ 'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
+ 'hits=1' \
  'ranking=personalized'
 </pre>
 </div>
-
+The `wand` query retrieves the exact same hit at rank 1.
 For larger document collections, the *wand* query operator can significantly improve query performance. We can also combine wand 
-with for example the rank() query operator. *wand* tries to do matching and ranking interlaved and skipping documents
-which cannot compete. The effectiveness of wand compared with brute force dotProduct depends on many factors:
-
-- Number of query features and document features 
-- The feature space and weight distributions
+with for example the rank() query operator. *wand* tries to do matching and ranking interleaved and skipping documents
+which cannot compete into the best k. See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
 
 
 ### Tensor Ranking 
 In the previous sections we looked at matching and where matching also produced rank features which we could
-use to influence the order of the hits returned. In this section we look at ranking using tensor expressions. 
+use to influence the order of the hits returned. In this section we look at ranking 
+using [tensor expressions](../tensor-user-guide.html).
 
-For each of the indexed tracks we have a field named `similar` which is of type `tensor`.
+For each of the indexed tracks we have a field named `similar` which is of type `tensor`
+with one named *mapped* dimension. *Mapped* tensors can be used to represent sparse feature representations:
 
 <pre>
 field similar type tensor&lt;float&gt;(trackid{}) {
@@ -909,15 +954,14 @@ field similar type tensor&lt;float&gt;(trackid{}) {
 
 Let us quickly look at one of the tracks in our collection:
 
-
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" >
-$ vespa document id:music:track::TRUAXHV128F42694E8
+<pre data-test="exec" data-test-assert-contains="Bryan Adams">
+$ vespa document get id:music:track::TRUAXHV128F42694E8
 </pre>
 </div>
 
-We leave out some of the tags and the tensor cells from the output, but below is an executive summary:
+We leave out some of the tags and the tensor cells from the output, but below is an summary:
 
 <pre>
 {% highlight json%}
@@ -937,22 +981,31 @@ We leave out some of the tags and the tensor cells from the output, but below is
                 },
                 {
                     "address": {
-                        "trackid": "TRHQMMO128E0791D97"
+                        "trackid": "TRFHGWV128E0792EC8"
                     },
                     "value": 0.9855849742889404
+                },
+                 {
+                    "address": {
+                        "trackid": "TRGWUEG128F4270721"
+                    },
+                    "value": 0.3856630027294159
                 }
             ]
         },
         "tags": {
             "All time favourites": 1,
-            "legend": 0,
+            "male vocalists": 7,
+            "singer-songwriter": 6,
             "happy": 2,
             "Driving": 3,
-            "Love it": 0,
-            "Awesome": 0,
-            "fhEasy": 0,
-            "youth": 0,
-            "classic rock": 
+            "classic rock": 59,
+            "loved": 1,
+            "Energetic": 2,
+            "male vocalist": 1,
+            "dance": 1,
+            "soft rock": 2,
+            "1980s": 1
         }
     }
 }
@@ -960,24 +1013,25 @@ We leave out some of the tags and the tensor cells from the output, but below is
 </pre>
 
 In the lastfm collection, each track lists similar tracks with a similarity score using float resolution, according to this
-algorithm the most similar track to `TRUAXHV128F42694E8` is `TRWJIPT128E0791D99` with a similarity score of 1.0. Let
-us search for that document using the query api this time:
+algorithm the most similar track to out sample document is `TRWJIPT128E0791D99` with a similarity score of 1.0. 
+Let us search for that document using the query api this time:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" >
+<pre data-test="exec" data-test-assert-contains="Bryan Adams">
 $ vespa query 'yql=select title,artist from track where track_id contains "TRWJIPT128E0791D99"' 'hits=1'  
 </pre>
 </div>
 
-Which is 
+Which returns:
+
 <pre>
 {% highlight json%}
 {
     "timing": {
-        "querytime": 0.007,
+        "querytime": 0.01,
         "summaryfetchtime": 0.002,
-        "searchtime": 0.01
+        "searchtime": 0.013000000000000001
     },
     "root": {
         "id": "toplevel",
@@ -987,7 +1041,7 @@ Which is
         },
         "coverage": {
             "coverage": 100,
-            "documents": 104212,
+            "documents": 95666,
             "full": true,
             "nodes": 1,
             "results": 1,
@@ -1009,16 +1063,18 @@ Which is
 {% endhighlight %}
 </pre>
 
-Similiar (pun intended), the `TRHQMMO128E0791D97` track is *Heaven* with the same artist. 
+Similiar (pun intended), the `TRGWUEG128F4270721` track is *Africa* by *Toto*.
 
 Now, if we have have listened to these three tracks:
 
 - `TRUAXHV128F42694E8` Summer Of '69 by Bryan Adams
 - `TRWJIPT128E0791D99` Run To You by Bryan Adams
-- `TRHQMMO128E0791D97` Heaven by Bryan Adams
+- `TRGWUEG128F4270721` Africa by Toto
 
-What should our algorithm suggest next? We add a new ranking profile with
-a tensor dot product between the `query(user_liked)` query tensor and the 
+What should our algorithm suggest next? We can use tensor ranking expression for this by passing
+these song track ids with the query and performing a tensor dotproduct with the document side similarity tensor.
+
+We add a new ranking profile with a tensor dotproduct between the `query(user_liked)` query tensor and the 
 the `similar` document tensor. See [tensor user guide](../tensor-user-guide.html).
 
 <pre>
@@ -1089,55 +1145,149 @@ $ vespa deploy --wait 300 app
 Here we use a query tensor with our three tracks 
 <pre>
 {% raw %}
-ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}'
+ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGWUEG128F4270721}:1.0}
 {% endraw %}
 </pre>
 
-In the first query we simply rank all documents using `where true`:
+In the first query we simply rank all documents using the tensor expression using `where true`:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 {% raw %}
-$ vespa query 'yql=select title,artist from track where true' \
- 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+$ vespa query 'yql=select title, artist, track_id from track where true' \
+ 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGWUEG128F4270721}:1.0}' \
  'ranking=similar' \
  'hits=5'
  {% endraw %}
 </pre>
 </div>
 
-Notice here that we retrieved all documents and ranked them using the `similar` ranking expression, executing 
-the tensor expression. However, as we can also see, we retrieved also the same documents that the user had liked. 
+Notice here that we matched all documents and ranked them using the `similar` ranking expression, executing 
+the tensor expression. However, as we can also see, we retrieved some of the liked docments 
 
 Let us get rid of them using the not query operator (!) in YQL:
 
 <pre>
-where !weightedSet(track_id, {"TRUAXHV128F42694E8":1,"TRWJIPT128E0791D99":1,"TRHQMMO128E0791D97":1}) 
+where !weightedSet(track_id, @userLiked) 
 </pre>
 
-At the same time we introduced the [weightedSet query operator](../reference/query-language-reference.html#weightedset).
+At the same time we introduced the [weightedSet query operator](../reference/query-language-reference.html#weightedset)
+which can be used for massive filtering.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-assert-contains="Bryan Adams">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
 {% endraw %}
 </pre>
 </div>
 
-We do get back duplicate tracks back, this something that is an issue with the dataset, but the first non-duplicate hits are
+The above query produces the following result
 
-- Please Forgive Me by Bryan Adams
-- Total Eclipse Of The Heart by Bonnie Tyler
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.121,
+        "summaryfetchtime": 0.002,
+        "searchtime": 0.124
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 95663
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/0d32f413f8c708d3efe860ff",
+                "relevance": 0.8617870211601257,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRFLCMC128E0792ECE",
+                    "title": "Please Forgive Me",
+                    "artist": "Bryan Adams"
+                }
+            },
+            {
+                "id": "index:tracks/0/3f18869c19c25e3ae237702f",
+                "relevance": 0.846807986497879,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRUKHZD128F92DF70A",
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler"
+                }
+            },
+            {
+                "id": "index:tracks/0/83b83fed0f2353b738591b15",
+                "relevance": 0.6428640186786652,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRGJNAN128F42AEEF6",
+                    "title": "Holding Out For A Hero",
+                    "artist": "Bonnie Tyler"
+                }
+            },
+            {
+                "id": "index:tracks/0/1c3ab39c8ffa4fd2ba388b4e",
+                "relevance": 0.5086669921875,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRAFGCY128F92E5F6C",
+                    "title": "Hold The Line",
+                    "artist": "Toto"
+                }
+            },
+            {
+                "id": "index:tracks/0/55780374225acdb37c36595d",
+                "relevance": 0.48578600585460663,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRMWFPK128F42766A3",
+                    "title": "It's A Heartache",
+                    "artist": "Bonnie Tyler"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}
+</pre>
 
-Some quality love songs right there. Now we can notice that with the not filter, the fully ranked 10,4209 documents out of 10,4212.
-The `querytime` is around 120 ms which is on the higher end. We can optimize this as well by adding `fast-search`, which is 
-supported for `tensor` fields using sparse mapped dimensions, or mixed tensors using both sparse and dense dimensions. 
+Some quality love songs from the 80s right there. Now we can notice that with the `not` filter, we retrieved 9,5663 documents
+as our 3 tracks where filtered out. We can also add tag filters, here we filter the recommended by `tags:popular`:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Ronan Keating">
+{% raw %}
+$ vespa query 'yql=select title,artist, track_id from track where tags contains "popular" and !weightedSet(track_id,@userLiked)' \
+'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking=similar' \
+'hits=5' \
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+{% endraw %}
+</pre>
+</div>
+
+The `querytime` of the unconstrained search was around 120 ms which is on the high side for real time serving. 
+We can optimize this as well by adding `fast-search` to the mapped field tensor. 
+`fast-search` is supported for `tensor` fields using sparse mapped dimensions, or mixed tensors using both sparse and dense dimensions.
+Adding it does increase memory usage. 
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1208,23 +1358,26 @@ Repating our query again :
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-assert-contains="Bryan Adams">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
 {% endraw %}
 </pre>
 </div>
 
 The `querytime` dropped down to 40 ms instead of 120 ms without the `fast-search` option. 
 
-
 ### Multi-threaded search and ranking 
-So far in this guide all our searches have been performed using single threaded matching. To enable multi-threaded
-execution we need to change our `services.xml`. 
+So far in this guide all our searches have been performed using single threaded matching and ranking. To enable multi-threaded
+execution we need to change our `services.xml`. Multi-threaded search and ranking can improve latency significantly and make
+use of multi-cpu core architectures better. Search and ranking has evolved since 1998. 
+
+We add a `tuning` element where we override 
+[requestthreads:persearch](../reference/services-content.html#requestthreads-persearch). Default is 1. 
 
 <pre data-test="file" data-path="app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
@@ -1280,20 +1433,21 @@ Then we can repeat our tensor ranking query again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-assert-contains="Bryan Adams">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
 {% endraw %}
 </pre>
 </div>
 
 Now, the content node will parallelize the matching and ranking using multiple search threads and `querytime` drops to about 15 ms. 
 
-The setting in services.xml sets to the global value, we can override down using rank profiles:
+The setting in services.xml sets to the global value, we can override number of threads used with 
+`rank-profile` overrides using [num-threads-per-search](../reference/schema-reference.html#num-threads-per-search)
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1356,19 +1510,19 @@ $ vespa deploy --wait 300 app
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-assert-contains="Bryan Adams">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
-'ranking=similar-t2' \
+'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRHQMMO128E0791D97:1}'
+'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
 {% endraw %}
 </pre>
 </div>
 
 This way we can find the sweet spot where latency does not get any better. Using more threads then nessacary limits
-throughput, but for many applications throughput is not a concern at all. 
+throughput, but for many applications throughput is not a concern. 
 
 ### Advanced query tracing 
 
