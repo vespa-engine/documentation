@@ -115,14 +115,14 @@ def process_file(filename):
     }
     print(json.dumps(vespa_doc))
 
+sorted_files = []
 for root, dirs, files in os.walk(directory):
-  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
     sorted_files.append(filename)
-  sorted_files.sort()
-  for filename in sorted_files:
-    process_file(filename)
+sorted_files.sort()
+for filename in sorted_files:
+  process_file(filename)
 </pre>
 
 <pre>
@@ -179,14 +179,14 @@ def process_file(filename):
     }
     print(json.dumps(vespa_doc))
 
+sorted_files = []
 for root, dirs, files in os.walk(directory):
-  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
     sorted_files.append(filename)
-  sorted_files.sort()
-  for filename in sorted_files:
-    process_file(filename)
+sorted_files.sort()
+for filename in sorted_files:
+  process_file(filename)
 {% endhighlight %}
 </pre>
 
@@ -989,20 +989,12 @@ field similar type tensor&lt;float&gt;(trackid{}) {
 }
 </pre>
 
-Let us quickly look at one of the tracks in our collection:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ grep "id:music:track::TRUAXHV128F42694E8" feed.jsonl
-</pre>
-</div>
-
+Let us look at one of the tracks in our collection:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bryan Adams">
-$ vespa document get "id:music:track::TRUAXHV128F42694E8"
+$ vespa document get id:music:track::TRQIQMT128E0791D9C
 </pre>
 </div>
 
@@ -1026,15 +1018,15 @@ We leave out some of the tags and the tensor cells from the output, but below is
                 },
                 {
                     "address": {
-                        "trackid": "TRFHGWV128E0792EC8"
+                        "trackid": "TRKPGHH128F1453DD0"
                     },
-                    "value": 0.9855849742889404
+                    "value": 0.9129049777984619
                 },
                  {
                     "address": {
-                        "trackid": "TRGWUEG128F4270721"
+                        "trackid": "TRGVORX128F4291DF1"
                     },
-                    "value": 0.3856630027294159
+                    "value": 0.3269079923629761
                 }
             ]
         },
@@ -1107,14 +1099,12 @@ Which returns:
 }
 {% endhighlight %}
 </pre>
-The `TRGWUEG128F4270721` track is *Africa* by *Toto*. Note that since the dataset is limited, some similar tracks might
-not be present in the index.
 
 Now, if a user have have listened to these three tracks and *liked* them 
 
-- `TRUAXHV128F42694E8` Summer Of '69 by Bryan Adams
+- `TRQIQMT128E0791D9C` Summer Of '69 by Bryan Adams
 - `TRWJIPT128E0791D99` Run To You by Bryan Adams
-- `TRGWUEG128F4270721` Africa by Toto
+- `TRGVORX128F4291DF1` Broken Wings by Mr. Mister
 
 What should our algorithm suggest next? It is straight forward to suggest tracks given a single track, but a sequence
 of tracks player or liked in real time has a very high cardinality which makes it next to impossible to
@@ -1195,19 +1185,24 @@ $ vespa deploy --wait 300 app
 </div>
 
 Here we use a query tensor with our three sample tracks using the short query tensor format:
+
+- `TRQIQMT128E0791D9C` Summer Of '69 by Bryan Adams
+- `TRWJIPT128E0791D99` Run To You by Bryan Adams
+- `TRGVORX128F4291DF1` Broken Wings by Mr. Mister
+
 <pre>
 {% raw %}
-ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGWUEG128F4270721}:1.0}
+ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
 {% endraw %}
 </pre>
 
 In the first query example we simply rank all documents using the tensor expression using `where true`:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
 $ vespa query 'yql=select title, artist, track_id from track where true' \
- 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGWUEG128F4270721}:1.0}' \
+ 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
  'ranking=similar' \
  'hits=5'
  {% endraw %}
@@ -1228,13 +1223,13 @@ See [feature-tuning set filtering](feature-tuning.html#multi-lookup-set-filterin
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bryan Adams">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id, @userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1247,8 +1242,8 @@ multi-valued query operators. The above query produces the following result:
 {
     "timing": {
         "querytime": 0.121,
-        "summaryfetchtime": 0.002,
-        "searchtime": 0.124
+        "summaryfetchtime": 0.004,
+        "searchtime": 0.125
     },
     "root": {
         "id": "toplevel",
@@ -1266,28 +1261,8 @@ multi-valued query operators. The above query produces the following result:
         },
         "children": [
             {
-                "id": "index:tracks/0/0d32f413f8c708d3efe860ff",
-                "relevance": 0.8617870211601257,
-                "source": "tracks",
-                "fields": {
-                    "track_id": "TRFLCMC128E0792ECE",
-                    "title": "Please Forgive Me",
-                    "artist": "Bryan Adams"
-                }
-            },
-            {
-                "id": "index:tracks/0/3f18869c19c25e3ae237702f",
-                "relevance": 0.846807986497879,
-                "source": "tracks",
-                "fields": {
-                    "track_id": "TRUKHZD128F92DF70A",
-                    "title": "Total Eclipse Of The Heart",
-                    "artist": "Bonnie Tyler"
-                }
-            },
-            {
                 "id": "index:tracks/0/83b83fed0f2353b738591b15",
-                "relevance": 0.6428640186786652,
+                "relevance": 1.1211640238761902,
                 "source": "tracks",
                 "fields": {
                     "track_id": "TRGJNAN128F42AEEF6",
@@ -1296,23 +1271,43 @@ multi-valued query operators. The above query produces the following result:
                 }
             },
             {
+                "id": "index:tracks/0/be76cb3bc209be6f818c91a7",
+                "relevance": 1.0151770114898682,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRAONMM128F92DF7B0",
+                    "title": "Africa",
+                    "artist": "Toto"
+                }
+            },
+            {
+                "id": "index:tracks/0/074b6b937d0ff7b59710c279",
+                "relevance": 1.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRFQRYC12903CD0BB9",
+                    "title": "Kyrie",
+                    "artist": "Mr. Mister"
+                }
+            },
+            {
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 0.7835690081119537,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRKLIXH128F42766B6",
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler"
+                }
+            },
+            {
                 "id": "index:tracks/0/1c3ab39c8ffa4fd2ba388b4e",
-                "relevance": 0.5086669921875,
+                "relevance": 0.7503079921007156,
                 "source": "tracks",
                 "fields": {
                     "track_id": "TRAFGCY128F92E5F6C",
                     "title": "Hold The Line",
                     "artist": "Toto"
-                }
-            },
-            {
-                "id": "index:tracks/0/55780374225acdb37c36595d",
-                "relevance": 0.48578600585460663,
-                "source": "tracks",
-                "fields": {
-                    "track_id": "TRMWFPK128F42766A3",
-                    "title": "It's A Heartache",
-                    "artist": "Bonnie Tyler"
                 }
             }
         ]
@@ -1332,10 +1327,10 @@ query as few documents gets ranked by the tensor ranking expression:
 <pre data-test="exec" data-test-assert-contains="Ronan Keating">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where tags contains "popular" and !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1428,13 +1423,13 @@ Repating our query again :
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bryan Adams">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1512,13 +1507,13 @@ Then we can repeat our tensor ranking query again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bryan Adams">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1591,13 +1586,13 @@ $ vespa deploy --wait 300 app
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bryan Adams">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1650,14 +1645,14 @@ def process_file(filename):
     }
     print(json.dumps(vespa_doc))
 
+sorted_files = []
 for root, dirs, files in os.walk(directory):
-  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
     sorted_files.append(filename)
-  sorted_files.sort()
-  for filename in sorted_files:
-    process_file(filename)
+sorted_files.sort()
+for filename in sorted_files:
+  process_file(filename)
 </pre>
 
 <pre>
@@ -1699,14 +1694,14 @@ def process_file(filename):
     }
     print(json.dumps(vespa_doc))
 
+sorted_files = []
 for root, dirs, files in os.walk(directory):
-  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
     sorted_files.append(filename)
-  sorted_files.sort()
-  for filename in sorted_files:
-    process_file(filename)
+sorted_files.sort()
+for filename in sorted_files:
+  process_file(filename)
 {% endhighlight %}
 </pre>
 
@@ -1823,10 +1818,10 @@ we can use the range search with `hitLimit` to only run the personalization over
 <pre data-test="exec" data-test-assert-contains="1349">
 {% raw %}
 $ vespa query 'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !weightedSet(track_id, @userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRHQMMO128E0791D97}:1.0}' \
+'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
 'ranking=similar' \
 'hits=5' \
-'userLiked={TRUAXHV128F42694E8:1,TRWJIPT128E0791D99:1,TRGWUEG128F4270721:1}'
+'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1855,9 +1850,9 @@ $ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,desc
 This query fails to retrieve any documents becase the range search finds 1352 documents where popularity is 100, anding that 
 result with the popularity=99 constraint leaves us with 0 results. 
 
-### Match phase result degrading 
-
-
+### Match phase 
+A more relaxed alternative to range search with `hitLimit` is using
+[match-phase](../reference/schema-reference.html#match-phase) which will use a document side signal. 
 
 
 ### Advanced query tracing 
@@ -1865,7 +1860,6 @@ result with the popularity=99 constraint leaves us with 0 results.
 In this section we introduce query tracing, which can allow developers to understand the latency of
 any given Vespa query request. 
 
-TODO
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1874,8 +1868,6 @@ $ vespa query 'yql=select track_id from track where tags contains "rock"' \
   'tracelevel=4' 'trace.timestamps=true' 'hits=1'
 </pre>
 </div>
-
-With tracing we can analyze indivual queries to understand what type of changes we can make 
 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
