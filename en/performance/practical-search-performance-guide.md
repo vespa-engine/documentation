@@ -1,6 +1,6 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Vespa query performance - practical guide"
+title: "Vespa query performance - a practical guide"
 ---
 
  This is a practical query performance guide. 
@@ -1686,12 +1686,16 @@ for root, dirs, files in os.walk(directory):
 {% endhighlight %}
 </pre>
 
+Run through the dataset and create the [partial update](../partial-updates.html) feed :
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ python3 create-popularity-updates.py lastfm_test > updates.jsonl
 </pre>
 </div>
+
+Add the `popularity` field to the track schema:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1769,7 +1773,7 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </div>
 
 
-Get the at least 5 tracks with the highest popularity
+Select 5 tracks with the highest popularity
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="1352">
@@ -1777,9 +1781,9 @@ $ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,desc
 </pre>
 </div>
 
-The search returned 1352 documents, that is because the popularity seem to be capped at max 100 elements, 
-so there are many documents with the same popularity. The hitLimit only specifies the lower bound, the search might return 
-more. Let us double check how many documents have the popularity equal to 100:
+The search returned 1352 documents, that is because the popularity is capped at 100 and several tracks share the same unique value.
+The `hitLimit` annotation for the `range` operator only specifies the lower bound, the search might return 
+more, like in this case. Let us double check how many documents have the popularity equal to 100:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1787,9 +1791,8 @@ more. Let us double check how many documents have the popularity equal to 100:
 $ vespa query 'yql=select track_id, popularity from track where popularity=100'
 </pre>
 </div>
-
-We can use this feature in many ways, for example, returning to our recommendation search using tensors, 
-we can use the range search with hitLimit to only run the tensor ranking over the most popular documents:
+Which checks out. We can use this feature in many ways, for example, returning to our recommendation search using tensors, 
+we can use the range search with `hitLimit` to only run the personalization over the generally most popular tracks:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1805,26 +1808,46 @@ $ vespa query 'yql=select title,artist, track_id, popularity from track where {h
 </div>
 
 Notice that we get a totalCount of 1349, the original range search from above returned 1352 documents, and 3 were removed. 
-The range limit can be used for cases where we want to select efficiently top-k for a single valued numeric attribute:
+
+The range search with `hitLimit` can be used for cases where we want to select efficiently top-k for a 
+single valued numeric `attribute` with `fast-search`:
 
 - We can use it to for example only rank the 1000 most recent documents using a long to represent a timestamp
-- We can use it as above to rank the most popular documents 
+- We can use it as above to rank the most popular documents.
+- Optimize sorting queries, instead of sorting a large result, find the smallest or largest values quickly with `hitLimit`.
 
-Do note that any other query terms in the query are applied after having found the top-k documents, hence, a strict filter which removes many documents
-might end up recalling 0 documents. 
+Do note that any other query terms in the query are applied after having found the top-k documents, 
+hence, a strict filter which removes many documents might end up recalling 0 documents. 
+
+We can illustrate this with this query:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
+$ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and popularity=99'
+</pre>
+</div>
+
+This query fails to retrieve any documents becase the range search finds 1352 documents where popularity is 100, anding that 
+result with the popularity=99 constraint leaves us with 0 results. 
 
 ### Match phase result degrading 
 
 
 
+
 ### Advanced query tracing 
-In this section we introduce query tracing, which can allow developers to understand query latency 
+
+In this section we introduce query tracing, which can allow developers to understand the latency of
+any given Vespa query request. 
+
+TODO
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="track_id">
 $ vespa query 'yql=select track_id from track where tags contains "rock"' \
-  'tracelevel=3'
+  'tracelevel=4' 'trace.timestamps=true' 'hits=1'
 </pre>
 </div>
 
