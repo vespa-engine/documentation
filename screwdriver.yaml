@@ -6,14 +6,16 @@ shared:
   environment:
     USER_SHELL_BIN: bash
   annotations:
-    install-deps-new: &install-deps-new
-      install-deps-new: |
+    install-deps: &install-deps
+      install-deps: |
         apt update
         apt install -y docker.io zstd maven zip unzip python3-pip net-tools bundler
         python3 -m pip install -qqq -r test/requirements.txt --user
-        VESPA_CLI_VERSION=$(curl -fsSL https://api.github.com/repos/vespa-engine/vespa/releases/latest | grep -Po '"tag_name": "v\K.*?(?=")') && \
-          curl -fsSL https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz | tar -zxf - -C /opt && \
+        VESPA_CLI_VERSION=$(curl -fsSL https://api.github.com/repos/vespa-engine/vespa/releases/latest | grep -Po '"tag_name": "v\K.*?(?=")')
+        echo "VESPA_CLI_VERSION=$VESPA_CLI_VERSION"
+        curl -fsSL https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz | tar -zxf - -C /opt && \
           ln -sf /opt/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa /usr/local/bin/
+        which vespa
 
 jobs:
   link-checker-documentation:
@@ -49,7 +51,7 @@ jobs:
       screwdriver.cd/dockerRam: HIGH
       screwdriver.cd/buildPeriodically: H H(0-5) * * 1-5 # some time between 12:00 AM UTC (midnight) to 5:59 AM UTC Mon-Fri
     steps:
-      - *install-deps-new
+      - *install-deps
       - run-tests: |
           cd $SD_DIND_SHARE_PATH
           $SD_SOURCE_DIR/test/test.py -c $SD_SOURCE_DIR/test/_test_config.yml -w $SD_SOURCE_DIR
@@ -67,7 +69,7 @@ jobs:
       screwdriver.cd/timeout: 180
       screwdriver.cd/buildPeriodically: H H(0-5) * * 1-5 # some time between 12:00 AM UTC (midnight) to 5:59 AM UTC Mon-Fri
     steps:
-      - *install-deps-new
+      - *install-deps
       - run-tests: |
           cd $SD_DIND_SHARE_PATH
           $SD_SOURCE_DIR/test/test.py -c $SD_SOURCE_DIR/test/_test_config-large.yml -w $SD_SOURCE_DIR
