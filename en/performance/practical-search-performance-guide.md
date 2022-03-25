@@ -116,8 +116,12 @@ def process_file(filename):
     print(json.dumps(vespa_doc))
 
 for root, dirs, files in os.walk(directory):
+  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
+    sorted_files.append(filename)
+  sorted_files.sort()
+  for filename in sorted_files:
     process_file(filename)
 </pre>
 
@@ -176,8 +180,12 @@ def process_file(filename):
     print(json.dumps(vespa_doc))
 
 for root, dirs, files in os.walk(directory):
+  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
+    sorted_files.append(filename)
+  sorted_files.sort()
+  for filename in sorted_files:
     process_file(filename)
 {% endhighlight %}
 </pre>
@@ -1635,8 +1643,12 @@ def process_file(filename):
     print(json.dumps(vespa_doc))
 
 for root, dirs, files in os.walk(directory):
+  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
+    sorted_files.append(filename)
+  sorted_files.sort()
+  for filename in sorted_files:
     process_file(filename)
 </pre>
 
@@ -1680,8 +1692,12 @@ def process_file(filename):
     print(json.dumps(vespa_doc))
 
 for root, dirs, files in os.walk(directory):
+  sorted_files = []
   for filename in files:
     filename = os.path.join(root, filename)
+    sorted_files.append(filename)
+  sorted_files.sort()
+  for filename in sorted_files:
     process_file(filename)
 {% endhighlight %}
 </pre>
@@ -1856,7 +1872,7 @@ With tracing we can analyze indivual queries to understand what type of changes 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
-$ docker rm -f vespa
+$ #docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
