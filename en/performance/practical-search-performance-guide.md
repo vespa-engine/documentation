@@ -7,16 +7,33 @@ title: "Vespa query performance - a practical guide"
  [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset to illustrate Vespa query performance. 
  Latency numbers mentioned in the guide are obtained from running this guide on a Macbook Pro x86.  
 
-## Prerequisites
+This guide covers the following query serving performance aspects:
+- [Basic text search query performance](#basic-text-search-query-performance)
+- [Hits and summaries](#hits-and-summaries)
+- [Multi-valued query operators (dotProduct and wand)](#multi-valued-query-operators)
+- [Searching attribute fields](#searching-attribute-fields)
+- [Searching attribute fields with fast-search](#searching-attribute-fields-using-fast-search)
+- [Ranking with tensor computations](#tensor-computations)
+- [Multi-threaded search and ranking](#multi-threaded-search-and-ranking)
+- [Advanced range search with hit limits for early termination](#advanced-range-search-with-hitlimit)
+- [Early termination using match phase limits](#match-phase-limit---early-termination)
+- [Advanced query tracing](#advanced-query-tracing)
 
-* [Docker](https://www.docker.com/) Desktop installed and running. 10GB available memory for Docker is recommended.
-  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
-  for details and troubleshooting
+The guide includes step-by-step instructions on how to reproduce the experiments. 
+
+## Prerequisites
+These are the prerequisites for reproducing this guide:
+
+* [Docker](https://www.docker.com/) Desktop installed and running.
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
 * Architecture: x86_64
-* Minimum **6 GB** memory dedicated to Docker (the default is 2 GB on Macs)
+* Minimum **6 GB** memory dedicated to Docker (the default is 2 GB on Macs).
+Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+  for details and troubleshooting
 * [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
+* Python3 for converting the dataset to Vespa json. 
+* curl to download the dataset. 
 
 ## Installing vespa-cli 
 
@@ -32,7 +49,6 @@ $ brew install vespa-cli
 </div>
 
 ## Dataset
-
 This guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset, we use the the
 TEST SET split with about 100k documents. Note that the dataset is released under the following terms:
 
@@ -52,8 +68,8 @@ $ unzip lastfm_test.zip
 The downloaded data needs to be converted to
 [the JSON format expected by Vespa](../reference/document-json-format.html). 
 
-We use this small python script to traverse the track files and create a JSONL 
-file with Vespa feed operations. We will introduce the schema to be used with this 
+We use this small python script to traverse the track files and create a JSONL formatted 
+feed file with Vespa put operations. We will introduce the schema to be used with this 
 feed in the next section. The dataset contains some duplicates which we remove based
 on the combination of artist name and title. 
 
@@ -257,8 +273,10 @@ schema track {
 
 Already here we introduce an optimization for the `track_id` field:
 
-- We do not want to compute any rank-features for the track_id so so we use `rank:filter` 
-- We do not want to tokenize the field, we want to match it exact using `match: word`
+- We do not want to compute any rank-features for the `track_id` so so we 
+declare this by setting [rank: filter](../reference/schema-reference.html#rank) 
+- We do not want to tokenize the `track_id` field, we want to match against the
+field using [match: word](../reference/schema-reference.html#match). 
 
 ### Services Specification
 
@@ -339,7 +357,7 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-## Feed the data
+## Index the dataset
 
 The data fed to Vespa must match the document type in the schema. 
 We use the [vespa feed client](../vespa-feed-client.html):
@@ -360,15 +378,16 @@ Now, we have our dataset indexed and we can start querying our data.
 ## Basic text search query performance
 The following sections uses the Vespa [query api](../reference/query-api-reference.html) and 
 formulate queries using Vespa [query language](../query-language.html). We use the
-[vespa-cli](../vespa-cli.html) command which supports running queries. The CLI
-uses the Vespa http search api. Use `-v` to see the actual http request sent:
+[vespa-cli](../vespa-cli.html) command which supports running queries. 
+The CLI uses the Vespa http search api. Use `vespa query -v` to see the actual http request sent:
 
 <pre>
 $ vespa query -v 'yql=select ..'
 </pre>
 
-In the first query example we simply match everything using `where true` and we 
-use the [hits](..(reference/query-api-reference.html#hits) to specify how many documents we want to be returned 
+In the first query example, we simply match everything using `where true` and we 
+use the [hits](..(reference/query-api-reference.html#hits) to specify how many
+documents we want to be returned in the response:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -436,9 +455,7 @@ involved in the query into a global ordering. See [Life of a query in Vespa](siz
 after the globalb top ranking documents have been found from the previous protocol phase.
 - `searchtime` Is roughly the sum of the above and is close to what a benchmarking client will observe (except network latency).
 
-All 3 metrics are reported in seconds.
-
-Now, we can try to search for *total eclipse of the heart*
+All 3 metrics are reported in seconds. Now, with that introduction, we can try to search for *total eclipse of the heart*
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -450,7 +467,8 @@ $ vespa query 'yql=select artist, title, track_id from track where userQuery()' 
 
 This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
 with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
-default query type is using `all` requiring that all the terms match the document. 
+default [query type](../reference/query-api-reference.html#model.type) is 
+using `all` requiring that all the terms match. 
 
 The above example searches for *total AND eclipse AND of AND the AND heart* in the `default` fieldset, 
 which in our schema includes the track `title` and `artist` fields. The result output for the 
@@ -496,7 +514,7 @@ above query will look something like this:
 </pre>
 
 This query only matched one document because the query terms were ANDed. 
-We can change matching  to use `type=any` instead of the default `type=all`. See 
+We can change matching to use `type=any` instead of the default `type=all`. See 
 [supported query types](../reference/query-api-reference.html#model.type).
 
 <div class="pre-parent">
@@ -507,7 +525,7 @@ $ vespa query 'yql=select artist, title, track_id from track where userQuery()' 
 </pre>
 </div>
 
-Now, our query matches 24,053 documents and is slower than than the previous query. 
+Now, our query matches 24,053 documents and is considerably slower than than the previous query. 
 If we compare the `querytime` of these two query examples, the one which matches the most documents have highest `querytime`. 
 In worst case, the search query matches all documents.
 
@@ -530,11 +548,16 @@ $ vespa query 'yql=select artist, title, track_id from track where userQuery()' 
 Compared to the type `any` query which fully ranked 24,053 documents, we now only rank 3,679 documents.   
 also notice that the much faster search returns the same document at the first position. 
 
+Conceptually a search query is about finding the documents that match the query, then score the 
+documents using a rank model. In the worst case, our search query can match all documents.
 
 ## Hits and summaries 
-In the previous examples we only asked for one hit with `hits=1` parameter, also if you have been paying attention you would
-see that the `summaryfetchtime` have been pretty constant over the previous text search examples. Let us see 
-what happens when we ask for 200 hits (Note that we pipe the large JSON result payload into `head`):
+In the previous examples, we only asked Vespa to return one hit 
+using the `hits=1` query parameter. If you have been paying attention, 
+you would see that the `summaryfetchtime` have been 
+close to constant in the previous text search examples. 
+Let us see  what happens when we ask for 200 hits 
+(note that we pipe the large JSON result payload into `head`):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -544,17 +567,23 @@ $ vespa query 'yql=select artist, title, track_id from track where userQuery()' 
 </pre>
 </div>
 
-Now, we can notice that the `summaryfetchtime` increases significantly from the previous query examples,
-while `querytime` is relatively unchanged. Repeating the query a second time will reduce the `summaryfetchtime`
-due to the summary cache, see [caches in Vespa](../performance/caches-in-vespa.html) for details.
+Now, we can notice that the `summaryfetchtime` increases significantly from 
+the previous query examples, while `querytime` is relatively unchanged. 
+Repeating the query a second time will reduce the `summaryfetchtime`
+due to the default content node summary cache, 
+see [caches in Vespa](../performance/caches-in-vespa.html) for details.
 
 There are largely four factors which determines the `summaryfetchtime`:
 
-- The number of hits requested and number of content nodes that produced the query result. With many content nodes
-in the group the query was dispatched to, we expect that top-ranking hits would be distributed across the nodes so that each node
-does less work.
-- The network package size of each hit (larger fields returned means more resources spent and higher summary fetch latency).
-- The summary used and which fields goes into the summary. For example, a
+- The number of hits requested and number of content nodes that produced the 
+query result which makes up the `querytime`.
+ With many content nodes in the group the query was dispatched to,
+ we expect that top-ranking hits would be distributed across the nodes so that each node
+ does less work.
+- The network package size of each hit. 
+Returning hits with larger fields, costs more resources and 
+higher `summaryfetchtime` than smaller docs. Less is more. 
+- The summary used with the query, and which fields goes into the summary. For example, a
  [document-summary](../document-summaries.html) which only contain fields that are defined as `attribute` will
  be fetched out of memory, while the `default` summary, or others containing at least one none-attribute
  field will potentially access data from disk storage. Read more about [Vespa attributes](../attributes.html).
@@ -563,8 +592,8 @@ does less work.
 
 Let us create an explicit [document-summary](../document-summaries.html) which
 only contain the `track_id` field. Since `track_id` is defined in the schema as `attribute`, summary
-fetches using this document summary will be requesting data from in-memory. Plus the network 
-footprint per hit becomes smaller.
+fetches using this document summary will be requesting data from in-memory. In addition, we
+save the network as we are transferring less data per hit. 
 
 <pre>
 document-summary track_id {
@@ -574,7 +603,7 @@ document-summary track_id {
 }
 </pre>
 
-The new schema:
+The new schema then becomes:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -622,7 +651,10 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-And re-execute the query, now using this `document-summary` instead:
+And re-execute the query, now using this `document-summary` using the 
+[summary](../reference/query-api-reference.html#presentation.summary) 
+query request parameter:
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="track_id">
@@ -633,15 +665,24 @@ $ vespa query 'yql=select artist, title, track_id from track where userQuery()' 
 </div>
 
 In this particular case the `summaryfetchtime` difference is not that large, but for larger number of hits and 
-larger documents the difference is significant. 
+larger documents the difference is significant. Especially in single content node deployments. 
 
-A note on select field scoping with YQL. For example `select title, track_id from ..`. When using the default summary, all
-fields are regardless of field scoping delivered from the content nodes to the search container in the summary fill phase. 
-The search container removes the set of fields not selected and renders the result. Hence select
-scoping only reduces the amount of data transfered back to the client, and does not impact the performance of
-the internal communication and potential summary cache miss. For optimial performance with large hit request, use dedicated
+A note on select field scoping with YQL. For example `select title, track_id from ..`. 
+When using the default summary, all fields are regardless of field scoping delivered 
+from the content nodes to the search container in the summary fill phase. 
+The search container removes the set of fields not selected and renders the result.
+Hence select scoping only reduces the amount of data transfered back to the client, 
+and does not impact the performance of the internal communication and potential summary cache miss. 
+For optimial performance where one wants to deliver large number of hits to the client, use dedicated
 document summaries. Note also that Vespa per default limits the max hits to 400 per default, 
 this can be overriden in the [default queryProfile](../reference/query-api-reference.html#queryProfile).
+
+When requesting large amount of data from Vespa with hits it is recommended to to use result compression 
+which Vespa will do if the http client uses
+the `Accept-Encoding` [HTTP request header](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html)
+<pre>
+Accept-Encoding: gzip
+</pre>
 
 ## Searching attribute fields 
 
@@ -656,14 +697,16 @@ treated differently depending on having `index` or `attribute`:
 - `attribute` does not integarte with lingustic processing and is matched using 
 [match:word](../reference/schema-reference.html#match). 
 
-With `index` Vespa builds inverted index data structures which consists of
+With `index` Vespa builds inverted index data structures which roughly consists of:
+
 - A dictionary of the unique text tokens (after linguistic processing)
 - Posting lists for each unique text token in the collection 
 
 With `attribute` Vespa per default does not build any inverted index like data structures for 
 potential faster query evaluation. See [Wikipedia:Inverted Index](https://en.wikipedia.org/wiki/Inverted_index) 
 and [Vespa internals](../proton.html#index). The reason for this is that Vespa `attribute` fields can be used
-for many different things: ranking, grouping, sorting, and potentially searching. 
+for many different things: [ranking](../ranking.html), [result grouping](../grouping.html),
+ [result sorting](../reference/sorting.html), and finally searching/matching. 
 
 Now let us focus on the `tags` field which we defined with `attribute`, matching
 in this fields will be performed using `match:word`. 
@@ -806,7 +849,8 @@ Wait for the searchnode to start up using the [healt state api](../reference/met
 curl -s http://localhost:19110/state/v1/health
 </pre>
 
-We want the page to return: 
+We want to status code to flip to up before querying again:
+
 <pre>
 {% highlight json%}
 {
@@ -821,7 +865,7 @@ We want the page to return:
 $ sleep 60
 </pre>
 
-We can now try our multi-tag search again:
+We can now try our multi-tag search again - now using the fast-search attribute:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -832,8 +876,9 @@ $ vespa query 'yql=select track_id, tags from track where tags contains "rock" o
 </div>
 
 Now the `querytime` will be a few milliseconds since Vespa has built index structures to support
-fast-search in the attribute. The downside is increased memory usage and reduced indexing
-throughput. See also [when to use fast-search for attributes](feature-tuning.html#when-to-use-fast-search-for-attribute-fields).
+fast-search in the attribute. The downside is increased memory usage and slightly reduced indexing
+throughput. See also
+[when to use fast-search for attributes](feature-tuning.html#when-to-use-fast-search-for-attribute-fields).
 
 Finally, for those interested in using `match:text` for searching multi-valued field types like `weightedset`, see
 [searching multi-value fields](../searching-multi-valued-fields.html).
@@ -845,8 +890,9 @@ and their query performance characteristics.
 Many real-world use cases needs search using structured queries with many values. 
 
 Let us assume that we have a process which have built a user profile where we have identified tags which
-the user has shown previous interest for. For example *hard rock*, *rock* and *metal*. 
-How can we retrieve and rank results using that information? One way is to search and rank using
+the user has shown previous interest for. 
+For example *hard rock*, *rock*, *metal* and *finnish metal*. How can we retrieve and rank 
+results using that information? One way is to search and rank using
 the dotproduct between the sparse user profile representation and the track tags representation.
 
 We can start with the [dotProduct()](../reference/query-language-reference.html#dotproduct) query operator.
@@ -895,7 +941,10 @@ schema track {
 }
 </pre>
 
-Deploy the application again :
+The `dotProduct`and `wand` query operators produces a rank feature called `rawScore(name)`, 
+we use this as our first-phase rank expression. 
+
+Deploy the application again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -904,7 +953,7 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-Now, we query our data using the `dotProduct` 
+Now, we query our data using the `dotProduct` query operator:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -966,14 +1015,17 @@ $ vespa query \
 {% endhighlight %}
 </pre>
 
-Notice that the query above, it brute force rank tracks where tags would match any of the multi-valued inputs so 
-the `totalCount` 10,323 tracks. Including *pop* in the userProfile list increases the number of hits to 13,638. 
-For a large user profile with many tags, we would easily retrieve and rank the entire document collection. 
-Also notice the `relevance` score which is 400 as the document 
+Notice that the query above, brute-force rank tracks where the `tags` field match *any* of the multi-valued 
+query feature inputs. The `totalCount` becomes 10,323 tracks. 
+Including *pop* in the userProfile list increases the number of hits to 13,638. 
+
+For a large user profile with many tags, we would easily match and rank the entire document collection. 
+Also notice the `relevance` score which is 400 since the document matches all the query input tags (4x100 = 400).
 
 This brings us to the [wand query operator](../reference/query-language-reference.html#wand). 
-With `wand` we can specify the target number of hits that we want to retrieve, so instead of brute forcing ranking all tracks
-which matched at least one of the user profile tags we want just to retrieve the k top-ranking documents:
+With `wand` we can specify the target number of hits that we want to retrieve, and 
+expose to the `first-phase` ranking function. Instead of brute forcing ranking all tracks
+which matched at least one of the user profile tags we want just to retrieve the k-top-ranking documents:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Vastarannan valssi">
@@ -984,18 +1036,22 @@ $ vespa query \
  'ranking=personalized'
 </pre>
 </div>
-The `wand` query retrieves the exact same hit at rank 1.
-For larger document collections, the *wand* query operator can significantly improve query performance. We can also combine wand 
-with for example the rank() query operator. *wand* tries to do matching and ranking interleaved and skipping documents
-which cannot compete into the best k. See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
+The `wand` query operator retrieves the exact same hit at rank 1 which is the behaviour we want. 
+The `wand` query operator is safe, meaning, it returns the same top-k results as the `dotProduct` query operator. 
+
+For larger document collections, the *wand* query operator can significantly
+improve query performance. We can also combine `wand` with for example the `rank()` query operator. 
+*wand* tries to do matching and ranking interleaved and skipping documents
+which cannot compete into the best k results. 
+See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
 
 Finally, these query operators all works on both single valued fields, and array fields, but optimal performance
-is obtained when using the weightedset field type. Weightedsets can only use integer to represent the weight. In the 
-next section we look at Tensors which supports floating point numbers. 
-
+is obtained when using the [weightedset](../reference/schema-reference.html#type:weightedset) 
+field type. With `weightedset` one can only use integer precision to represent the weight. 
+In the next section we look at tensor fields which supports floating point numbers. 
 
 ## Tensor Computations
-In the previous sections we looked at matching and where matching also produced rank features which we could
+In the previous sections we looked at matching and where query matching query operator also produced rank features which we could
 use to influence the order of the hits returned. In this section we look at [tensor computations](../tensor-examples.html) 
 using [tensor expressions](../tensor-user-guide.html). Tensor computations can be used to calculate dense dot products, sparse
 dotproducts, matrix multiplication, neural networks and more. 
@@ -1229,7 +1285,8 @@ ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:T
 {% endraw %}
 </pre>
 
-In the first query example we simply run our tensor computation over all documents using `where true`:
+In the first query example we simply run our tensor computation over all documents using `where true` as
+the matching:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
@@ -1242,16 +1299,19 @@ $ vespa query 'yql=select title, artist, track_id from track where true' \
 </pre>
 </div>
 
-However, as we can see,  we retrieved some of the liked docments as well. Let us eliminate these
-from the result using the `not` query operator (`!`) in YQL:
+However, as we can see,  we retrieved some of the previous *liked* tracks as well. Let us eliminate these
+from the result using the `not` query operator (`!`) in the Vespa YQL query language:
 
 <pre>
 where !weightedSet(track_id, @userLiked) 
 </pre>
 
 The [weightedSet query operator](../reference/query-language-reference.html#weightedset) is a handy query operator
-when we don't need any rank feature calculated, it can also be used for large scale filters (x in large list of options).
- See [feature-tuning set filtering](feature-tuning.html#multi-lookup-set-filtering)
+when we don't need any rank feature calculated, it can also be used for large scale filters, either
+positive filters (match if any of the keys matches) or negative filter (remove if any of the keys matches).
+See more examples in [feature-tuning set filtering](feature-tuning.html#multi-lookup-set-filtering).
+
+Run query with not filter:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1349,10 +1409,10 @@ multi-valued query operators. The above query produces the following result:
 </pre>
 
 Now we can notice that with the `not` filter, we retrieved 9,5663 documents
-as our 3 tracks where filtered out as compared with `documents`. 
+as our 3 tracks previously *liked*, where filtered out. 
 
 We can also add tag filters, here we filter the recommended by `tags:popular`, by filtering we reduce the complexity of the
-query as few documents gets ranked by the tensor ranking expression:
+query as fewer documents gets ranked by the tensor ranking expression:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1371,6 +1431,7 @@ With fewer matches to score using the tensor expression the latency decreases. I
 latency is strictly linear with number of matches. 
 
 The `querytime` of the unconstrained search was around 120 ms which is on the high side for real time serving. 
+
 We can optimize this as well by adding `fast-search` to the mapped field tensor. 
 `fast-search` is supported for `tensor` fields using mapped dimensions, or mixed tensors using both mapped and dense dimensions.
 
@@ -1467,18 +1528,23 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 
 The `querytime` dropped down to 40 ms instead of 120 ms without the `fast-search` option. 
 See also [performance considerations](../tensor-user-guide.html#performance-considerations)
-when using tensor expressions and especially the tensor cell precision used. Vespa supports both `int8`, `bfloat16`, `float` and
+when using tensor expressions and especially the tensor cell precision used.
+Vespa supports both `int8`, `bfloat16`, `float` and
 `double` precision cell types.  
 
 ## Multi-threaded search and ranking 
-So far in this guide all our searches and computations have been performed using single threaded matching and ranking. 
-To enable multi-threaded execution we need to change our `services.xml`. 
-Multi-threaded search and ranking can improve latency significantly and make
-use of multi-cpu core architectures better. Search and ranking has evolved since 1998 and using multi-threaded execution
-we can significantly reduce serving latency. In many deployment systems, low latency is critical.  
+So far in this guide all our searches and computations have been performed using 
+single threaded matching and ranking. To enable multi-threaded execution we 
+need to change our `services.xml`. 
+Multi-threaded search and ranking can improve query latency significantly and make
+use of multi-cpu core architectures better. Search and ranking has evolved since 1998 and by 
+using multi-threaded execution we can significantly reduce serving latency. 
+In many deployment systems, low latency is critical.  
 
-To enable multi-threaded matching and ranking we need to add a `tuning` element to `services.xml` where we override 
-[requestthreads:persearch](../reference/services-content.html#requestthreads-persearch). The default is 1. 
+To enable multi-threaded matching and ranking we need to 
+add a `tuning` element to `services.xml` where we override 
+[requestthreads:persearch](../reference/services-content.html#requestthreads-persearch).
+The default number of threads used `persearch` is 1. 
 
 <pre data-test="file" data-path="app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
@@ -1554,11 +1620,16 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 </pre>
 </div>
 
-Now, the content node will parallelize the matching and ranking 
+Now, the content node(s) will parallelize the matching and ranking 
 using multiple search threads and `querytime` drops to about 15 ms. 
 
-The setting in services.xml sets to the global value, we can override number of threads used with 
-`rank-profile` overrides using [num-threads-per-search](../reference/schema-reference.html#num-threads-per-search)
+The setting in services.xml sets to the global *persearch* value, 
+We can override the number of threads used with 
+`rank-profile` overrides using [num-threads-per-search](../reference/schema-reference.html#num-threads-per-search).
+Note that the per rank-profile setting can only be used to tune the number of threads
+to a lower number than the global default. 
+
+Our new schema with a new ranking profile overriding `num-threads-per-search`:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1635,21 +1706,22 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 </div>
 
 By using multiple ranking profiles like above, we can find the sweet spot where latency
-does not improve much
-Using more threads then nessacary limits query throughput as more threads will be occupied
+does not improve much by using more threads. 
+Using more thread per search limits query concurrency as more threads will be occupied
 per query. Read more in [Vespa sizing guide:reduce latecy with 
 multi-threaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
+Note also that the number of search threads versus number of threads per search limits the
+the number of **concurrent** queries a content node can handle. 
 
 ## Advanced range search with hitLimit  
 
 Vespa has a advanced query operator which allows you to select the 
-documents with the k-largest or k-smallest values of a `fast-search` attribute. 
-This allows users so skip static processes like pre-defined index sorting, 
-one can chose at query runtime which field is used for selecting top-k.
+documents with the k-largest or k-smallest values of a `fast-search` attribute field. 
 
 Let us first define a new field, which we call `popularity`, 
 since we don't have real popularity value from the last.fm dataset, 
 we use the number of tags per track as a proxy of the true track popularity.  
+
 The following script runs through the dataset and 
 count the number of tags and creates a Vespa
 [partial update](../partial-updates.html) operation per track. 
@@ -1909,23 +1981,29 @@ $ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,desc
 </pre>
 </div>
 
-This query fails to retrieve any documents becase the range search finds 1352 documents where popularity is 100, *and'ing* that 
+This query fails to retrieve any documents becase the range search finds 
+1352 documents where popularity is 100, *and'ing* that 
 top-k result with the popularity=99 filter constraint leaves us with 0 results. 
+
+Using range search query operator with `hitLimit` can be particular handy for use cases like auto-complete or search suggestions
+where one typically uses a query searching with [match: prefix](../eference/schema-reference.html#match). Limiting
+the first few character searches to include a `hitLimit` range on popularity can greatly improve the query performance. 
 
 ### Match phase limit - early termination 
 An alternative to range search with `hitLimit` is using
-early termination with [match-phase](../reference/schema-reference.html#match-phase) which enables early-termination 
-of search and ranking using a document field to determine the evaluation order. 
+early termination with [match-phase](../reference/schema-reference.html#match-phase)
+which enables early-termination 
+of search and ranking using a document field to determine the search evaluation order. 
 
-Match-phase early-termination uses a document side signal during matching and ranking to impact the
-order the search and ranking is performed in. If a query is likely to generate more than
- `ranking.matchPhase.maxHits` per node, the search core
+Match-phase early-termination uses a field with attribute during matching and ranking to impact the
+order the search and ranking is performed in. 
+If a query is likely to generate more than `ranking.matchPhase.maxHits` per node, the search core
 will early terminate the search and matching and while doing that, evaluate the query in the order dictated
 by the `ranking.matchPhase.attribute` attribute field. Match phase early termination requires an
-single valued numeric `attribute` field with `fast-search`. See 
-[Match phase query parameters](../reference/query-api-reference.html#ranking.matchPhase). Match-phase
-limit cannot early terminate second-phase ranking, only matching and first-phase ranking, hence
-the name: match phase limit. Let us run a query with match phase early termination enabled:   
+single valued numeric `attribute` field with `fast-search`. 
+See [Match phase query parameters](../reference/query-api-reference.html#ranking.matchPhase). 
+Match-phase limit cannot terminate second-phase ranking, only matching and first-phase ranking, hence
+the name: *match phase limit*. Let us run a query with match phase early termination enabled:   
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1993,16 +2071,25 @@ Which will produce the following result:
 {% endhighlight %}
 </pre>
 In this case, totalCount became 1476, a few more than the capped `range` search with `hitLimit`. Notice
-also the presence of `coverage:degraded` - This incidates to the caller that this result was not fully evaluated 
-over all documents. We asked Vespa to do early termination and this is the signal that it did terminate early.
-Read more about [graceful result degradation](../graceful-degradation.html). 
+also the presence of `coverage:degraded` - This informs the client that this result was not fully evaluated 
+over all potential documents. We asked Vespa to do early termination and this is the signal that it did terminate early.
+Read more about [graceful result degradation](../graceful-degradation.html). Note also that the example uses
+the `popularity` rank-profile which was configured with 1 thread per search, for low settings of `maxHits`, this
+is the recommended setting:
+<pre>
+rank-profile popularity {
+    num-threads-per-search: 1
+    first-phase {
+      expression: attribute(popularity)
+    }
+  }
+</pre>
 
 The core difference from capped range search is that `match-phase` is safe as filters works in 
 the way we expect, for example searching for popularity=99. As we saw in the previous example with `range`,
 it picked the k best results from the attribute and applied the filter *after*, which could cause 0 hits. 
 
-This query does not trigger match-phase early termination 
-because there are few hits matching the query:
+This query does not trigger match-phase early termination because there are few hits matching the query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2016,8 +2103,7 @@ $ vespa query 'yql=select track_id, popularity from track where popularity=99' \
 </div>
 
 Generally, prefer match phase early termination over capped range search with hitLimit. It's a
-a more flexible feature. Notice that maxHits is a per node. 
-
+a more flexible feature. Notice that `maxHits` is a per node. 
 We can also combine text search queries with match phase early termination: 
 
 <div class="pre-parent">
@@ -2032,13 +2118,15 @@ $ vespa query 'yql=select title, artist, popularity from track where userQuery()
   'hits=2'
 </pre>
 </div>
+
 Since we use `type=any` the above query retrieves a lot more documents than `matchPhase.maxHits` so
 early termination is triggered, which will then cause the search core to match 
 and rank tracks with the higest popularity. 
 
 Early termination using match-phase limits is a very powerful feature 
 that can keep latency and cost in check for many large scale serving use cases 
-where a document side signal is available. Match phase termination also supports result diversity constraint.
+where a document quality signal is available. 
+Match phase termination also supports specifying a result diversity constraint.
 See [Result diversification blog post](https://blog.vespa.ai/result-diversification-with-vespa/). 
 Note that result diversity is normally obtained with Vespa [result grouping](../grouping.html), 
 the match-phase diversity is used to ensure that diverse hits are also collected **if** 
