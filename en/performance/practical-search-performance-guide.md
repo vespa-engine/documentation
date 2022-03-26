@@ -852,20 +852,18 @@ curl -s http://localhost:19110/state/v1/health
 We want to status code to flip to up before querying again:
 
 <pre>
-{% highlight json%}
 {
   "status": {
     "code": "up"
   }
 }
-{% endhighlight %}
 </pre>
 
 <pre style="display:none" data-test="exec">
 $ sleep 60
 </pre>
 
-We can now try our multi-tag search again - now using the fast-search attribute:
+Once up, we can try our multi-tag search again - now using the `fast-search` attribute:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -876,11 +874,12 @@ $ vespa query 'yql=select track_id, tags from track where tags contains "rock" o
 </div>
 
 Now the `querytime` will be a few milliseconds since Vespa has built index structures to support
-fast-search in the attribute. The downside is increased memory usage and slightly reduced indexing
-throughput. See also
+`fast-search` in the attribute. The downside of enabling `fast-search` is 
+increased memory usage and slightly reduced indexing throughput. See also
 [when to use fast-search for attributes](feature-tuning.html#when-to-use-fast-search-for-attribute-fields).
 
-Finally, for those interested in using `match:text` for searching multi-valued field types like `weightedset`, see
+Finally, for those interested in using `match:text` for searching multi-valued field types 
+like [weightedset](../reference/schema-reference.html#type:weightedset), see
 [searching multi-value fields](../searching-multi-valued-fields.html).
 
 ## Multi-valued query operators
@@ -1705,9 +1704,9 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 </pre>
 </div>
 
-By using multiple ranking profiles like above, we can find the sweet spot where latency
-does not improve much by using more threads. 
-Using more thread per search limits query concurrency as more threads will be occupied
+By using multiple ranking profiles like above, we can find the sweet-spot where latency
+does not improve much by using more threads. Using more thread per search 
+limits query concurrency as more threads will be occupied
 per query. Read more in [Vespa sizing guide:reduce latecy with 
 multi-threaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
 Note also that the number of search threads versus number of threads per search limits the
@@ -1715,12 +1714,12 @@ the number of **concurrent** queries a content node can handle.
 
 ## Advanced range search with hitLimit  
 
-Vespa has a advanced query operator which allows you to select the 
+Vespa has an advanced query operator that allows you to select the 
 documents with the k-largest or k-smallest values of a `fast-search` attribute field. 
 
 Let us first define a new field, which we call `popularity`, 
 since we don't have real popularity value from the last.fm dataset, 
-we use the number of tags per track as a proxy of the true track popularity.  
+we use the number of tags per track as a *proxy* of the true track popularity.  
 
 The following script runs through the dataset and 
 count the number of tags and creates a Vespa
@@ -1834,7 +1833,8 @@ $ python3 create-popularity-updates.py lastfm_test > updates.jsonl
 </div>
 
 Add the `popularity` field to the track schema, notice we defined this field with 
-`fast-search`. We also add a popularity rank profile which uses 1 thread per search. 
+`fast-search`. We also add a `popularity` rank profile which is configured
+to to use one thread per search. 
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1989,7 +1989,7 @@ Using range search query operator with `hitLimit` can be particular handy for us
 where one typically uses a query searching with [match: prefix](../eference/schema-reference.html#match). Limiting
 the first few character searches to include a `hitLimit` range on popularity can greatly improve the query performance. 
 
-### Match phase limit - early termination 
+## Match phase limit - early termination 
 An alternative to range search with `hitLimit` is using
 early termination with [match-phase](../reference/schema-reference.html#match-phase)
 which enables early-termination 
@@ -2132,7 +2132,7 @@ Note that result diversity is normally obtained with Vespa [result grouping](../
 the match-phase diversity is used to ensure that diverse hits are also collected **if** 
 match-phase early termination kicks in.  
 
-### Advanced query tracing 
+## Advanced query tracing 
 
 In this section we introduce query tracing, which allows developers to understand the latency of
 any given Vespa query request. Tracing helps understand where time (and cost) is spent, and how
