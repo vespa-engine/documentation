@@ -192,8 +192,8 @@ for filename in sorted_files:
 {% endhighlight %}
 </pre>
 
-With this small script we can process the lastfm test dataset and convert it a
-format which Vespa can understand. See [Vespa document json format](../reference/document-json-format.html).
+With this small script we can process the lastfm test dataset and convert it to a Vespa
+JSON document operation format. See [Vespa document json format](../reference/document-json-format.html).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -259,7 +259,6 @@ Already here we introduce an optimization for the `track_id` field:
 
 - We do not want to compute any rank-features for the track_id so so we use `rank:filter` 
 - We do not want to tokenize the field, we want to match it exact using `match: word`
-
 
 ### Services Specification
 
@@ -1635,21 +1634,22 @@ $ vespa query 'yql=select title,artist, track_id from track where !weightedSet(t
 </pre>
 </div>
 
-By using multiple ranking profiles like above we can find the sweet spot where latency does not get any better.
-Using more threads then nessacary limits throughput. See 
-[Vespa sizing guide:reduce latecy with 
+By using multiple ranking profiles like above, we can find the sweet spot where latency
+does not improve much
+Using more threads then nessacary limits query throughput as more threads will be occupied
+per query. Read more in [Vespa sizing guide:reduce latecy with 
 multi-threaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
 
 ## Advanced range search with hitLimit  
 
 Vespa has a advanced query operator which allows you to select the 
-k-largest or K-smallest values of a `fast-search` attribute. 
-This allows users so skip pre-defined index sorting, 
+documents with the k-largest or k-smallest values of a `fast-search` attribute. 
+This allows users so skip static processes like pre-defined index sorting, 
 one can chose at query runtime which field is used for selecting top-k.
 
 Let us first define a new field, which we call `popularity`, 
-since we don't have real popularity value from the dataset, we create
-a proxy of the popularity, the number of tags per track. 
+since we don't have real popularity value from the last.fm dataset, 
+we use the number of tags per track as a proxy of the true track popularity.  
 The following script runs through the dataset and 
 count the number of tags and creates a Vespa
 [partial update](../partial-updates.html) operation per track. 
@@ -1844,7 +1844,7 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-With that feed job completed we can select 5 tracks with the highest popularity by 
+With that feed job completed, we can select 5 (`hitLimit`) tracks with the highest popularity by 
 using the [range()](../reference/query-language-reference.html) query operator:
 
 <div class="pre-parent">
@@ -1856,7 +1856,7 @@ $ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,desc
 </div>
 
 The search returned 1352 documents, that is because the popularity is capped at 100 
-and several tracks share the same unique value.
+and several tracks share the same unique value of 100.
 The `hitLimit` annotation for the `range` operator only specifies the lower bound, the search might return 
 more, like in this case. Let us double check how many documents have the popularity equal to 100:
 
@@ -1867,9 +1867,11 @@ $ vespa query 'yql=select track_id, popularity from track where popularity=100' 
   'ranking=popularity'
 </pre>
 </div>
-Which also returns 1352 documents as expected. We can use the `range` query operator in many ways, 
+Which also returns 1352 documents as expected. 
+We can use the `range` query operator in many ways, 
 for example, returning to our recommendation search using tensors, 
-we can use the range search with `hitLimit` to only run the tensor computation over the generally most popular tracks:
+we can use the range search with `hitLimit` to only run the 
+advanced tensor computation over the most popular tracks:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1893,14 +1895,13 @@ single valued numeric `attribute` with `fast-search`:
 - We can use it to for example to only run computations over the 1,000 most recent documents 
 using a long to represent a timestamp
 - We can use it as above to compute and rank the most popular documents.
-- Optimize sorting queries, instead of sorting a large result, 
-find the smallest or largest values quickly with `hitLimit`.
+- Optimize [sorting](../reference/sorting.html) queries, instead of sorting a large result, 
+find the smallest or largest values quickly by using range search with `hitLimit`.
 
-Do note that any other query terms in the query are applied after having found the top-k documents, 
+Do note that any other query or filter terms in the query are applied after having found the top-k documents, 
 hence, an aggresive filter removing many documents might end up recalling 0 documents. 
 
-We can illustrate this with the following query:
-
+We can illustrate this behaviour with the following query:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
@@ -1909,12 +1910,12 @@ $ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,desc
 </div>
 
 This query fails to retrieve any documents becase the range search finds 1352 documents where popularity is 100, *and'ing* that 
-result with the popularity=99 filter constraint leaves us with 0 results. 
+top-k result with the popularity=99 filter constraint leaves us with 0 results. 
 
 ### Match phase limit - early termination 
-A more relaxed early alternative to range search with `hitLimit` is using
-[match-phase](../reference/schema-reference.html#match-phase) which enables early-termination 
-of search and ranking using a document field to determine the order. 
+An alternative to range search with `hitLimit` is using
+early termination with [match-phase](../reference/schema-reference.html#match-phase) which enables early-termination 
+of search and ranking using a document field to determine the evaluation order. 
 
 Match-phase early-termination uses a document side signal during matching and ranking to impact the
 order the search and ranking is performed in. If a query is likely to generate more than
@@ -2014,7 +2015,10 @@ $ vespa query 'yql=select track_id, popularity from track where popularity=99' \
 </pre>
 </div>
 
-We can also use text search with match-phase limit
+Generally, prefer match phase early termination over capped range search with hitLimit. It's a
+a more flexible feature. Notice that maxHits is a per node. 
+
+We can also combine text search queries with match phase early termination: 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2028,14 +2032,24 @@ $ vespa query 'yql=select title, artist, popularity from track where userQuery()
   'hits=2'
 </pre>
 </div>
+Since we use `type=any` the above query retrieves a lot more documents than `matchPhase.maxHits` so
+early termination is performed, focusing on the tracks with the higest popularity. 
 
-Match-phase early termination is a very powerful feature which can keep latency and cost in check 
-for many serving use cases. Match phase also supports adding a result diversity constraint (e.g category).
+Early termination using match-phase limits is a very powerful feature which can keep latency and cost in check 
+for many large scale serving use cases where a document side signal is present. 
+Match phase also supports adding a result diversity constraint (e.g category).
+See [Result diversification blog post](https://blog.vespa.ai/result-diversification-with-vespa/). 
 
 ### Advanced query tracing 
 
-In this section we introduce query tracing, which can allow developers to understand the latency of
-any given Vespa query request. 
+In this section we introduce query tracing, which allows developers to understand the latency of
+any given Vespa query request. Tracing helps understand where time (and cost) is spent, and how
+to best optimize the query or schema setings. Tracing can be enabled using the following parameters
+
+- tracelevel
+- trace.timestamps
+
+A simple example query with tracing enabled:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2045,7 +2059,7 @@ $ vespa query 'yql=select track_id from track where tags contains "rock"' \
 </pre>
 </div>
 
-Explanation of the trace is coming soon:
+Explanation of the trace is coming soon.
 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
