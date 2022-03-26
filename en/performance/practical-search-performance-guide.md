@@ -1911,11 +1911,123 @@ $ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,desc
 This query fails to retrieve any documents becase the range search finds 1352 documents where popularity is 100, *and'ing* that 
 result with the popularity=99 filter constraint leaves us with 0 results. 
 
-### Match phase 
-A more relaxed alternative to range search with `hitLimit` is using
-[match-phase](../reference/schema-reference.html#match-phase) which will use a document side signal during matching and ranking,
-if the result set is estimated to become too large, documents with the highest or lowest value (depending on config) is
-evaluated first. 
+### Match phase limit - early termination 
+A more relaxed early alternative to range search with `hitLimit` is using
+[match-phase](../reference/schema-reference.html#match-phase) which enables early-termination 
+of search and ranking using a document field to determine the order. 
+
+Match-phase early-termination uses a document side signal during matching and ranking to impact the
+order the search and ranking is performed in. If a query is likely to generate more than
+ `ranking.matchPhase.maxHits` per node, the search core
+will early terminate the search and matching and while doing that, evaluate the query in the order dictated
+by the `ranking.matchPhase.attribute` attribute field. Match phase early termination requires an
+single valued numeric `attribute` field with `fast-search`. See 
+[Match phase query parameters](../reference/query-api-reference.html#ranking.matchPhase). Match-phase
+limit cannot early terminate second-phase ranking, only matching and first-phase ranking, hence
+the name: match phase limit. Let us run a query with match phase early termination enabled:   
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"match-phase": true'>
+$ vespa query 'yql=select track_id, popularity from track where true' \
+  'ranking=popularity' \
+  'ranking.matchPhase.maxHits=100' \
+  'ranking.matchPhase.attribute=popularity' \
+  'hits=2'
+</pre>
+</div>
+
+Which will produce the following result:
+
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.007,
+        "summaryfetchtime": 0.002,
+        "searchtime": 0.01
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1476
+        },
+        "coverage": {
+            "coverage": 0,
+            "documents": 252,
+            "degraded": {
+                "match-phase": true,
+                "timeout": false,
+                "adaptive-timeout": false,
+                "non-ideal-state": false
+            },
+            "full": false,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 0
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/63f963f1f9372275e12d9e9c",
+                "relevance": 100.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRGCNGP12903CFA2BA",
+                    "popularity": 100
+                }
+            },
+            {
+                "id": "index:tracks/0/7a74f1cd064acef348a1a701",
+                "relevance": 100.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRFVTTT128F930D148",
+                    "popularity": 100
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}
+</pre>
+In this case, totalCount became 1476, a few more than the capped `range` search with `hitLimit`. Notice
+also the presence of `coverage:degraded` - This incidates to the caller that this result was not fully evaluated 
+over all documents. We asked Vespa to do early termination and this is the signal that it did terminate early.
+Read more about [graceful result degradation](../graceful-degradation.html). 
+
+The core difference from capped range search is that `match-phase` is safe as filters works in 
+the way we expect, for example searching for popularity=99. As we saw in the previous example with `range`,
+it picked the k best results from the attribute and applied the filter *after*, which could cause 0 hits. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"match-phase": true'>
+$ vespa query 'yql=select track_id, popularity from track where popularity=99' \
+  'ranking=popularity' \
+  'ranking.matchPhase.maxHits=100' \
+  'ranking.matchPhase.attribute=popularity' \
+  'hits=2'
+</pre>
+</div>
+
+We can also use text search with match-phase limit
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"match-phase": true'>
+$ vespa query 'yql=select title, artist, popularity from track where userQuery()' \
+  'query=love songs' \
+  'type=any' \ 
+  'ranking=popularity' \
+  'ranking.matchPhase.maxHits=100' \
+  'ranking.matchPhase.attribute=popularity' \
+  'hits=2'
+</pre>
+</div>
+
+Match-phase early termination is a very powerful feature which can keep latency and cost in check 
+for many serving use cases. 
 
 ### Advanced query tracing 
 
@@ -1936,7 +2048,7 @@ Explanation of the trace is coming soon:
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
-$ docker rm -f vespa
+$ #docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
