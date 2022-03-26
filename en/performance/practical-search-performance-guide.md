@@ -2033,21 +2033,26 @@ $ vespa query 'yql=select title, artist, popularity from track where userQuery()
 </pre>
 </div>
 Since we use `type=any` the above query retrieves a lot more documents than `matchPhase.maxHits` so
-early termination is performed, focusing on the tracks with the higest popularity. 
+early termination is triggered, which will then cause the search core to match 
+and rank tracks with the higest popularity. 
 
-Early termination using match-phase limits is a very powerful feature which can keep latency and cost in check 
-for many large scale serving use cases where a document side signal is present. 
-Match phase also supports adding a result diversity constraint (e.g category).
+Early termination using match-phase limits is a very powerful feature 
+that can keep latency and cost in check for many large scale serving use cases 
+where a document side signal is available. Match phase termination also supports result diversity constraint.
 See [Result diversification blog post](https://blog.vespa.ai/result-diversification-with-vespa/). 
+Note that result diversity is normally obtained with Vespa [result grouping](../grouping.html), 
+the match-phase diversity is used to ensure that diverse hits are also collected **if** 
+match-phase early termination kicks in.  
 
 ### Advanced query tracing 
 
 In this section we introduce query tracing, which allows developers to understand the latency of
 any given Vespa query request. Tracing helps understand where time (and cost) is spent, and how
-to best optimize the query or schema setings. Tracing can be enabled using the following parameters
+to best optimize the query or schema setings. Tracing can be enabled using the following parameters:
 
-- tracelevel
-- trace.timestamps
+- [tracelevel](../reference/query-api-reference.html#tracelevel)
+- [explainLevel](../reference/query-api-reference.html#explainlevel)
+- [trace.timestamps](../reference/query-api-reference.html#trace.timestamps)
 
 A simple example query with tracing enabled:
 
@@ -2055,7 +2060,7 @@ A simple example query with tracing enabled:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="track_id">
 $ vespa query 'yql=select track_id from track where tags contains "rock"' \
-  'tracelevel=4' 'trace.timestamps=true' 'hits=1'
+  'tracelevel=3' 'trace.timestamps=true' 'explainLevel=1' 'hits=1'
 </pre>
 </div>
 
