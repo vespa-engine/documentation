@@ -1985,25 +1985,34 @@ This query fails to retrieve any documents becase the range search finds
 1352 documents where popularity is 100, *and'ing* that 
 top-k result with the popularity=99 filter constraint leaves us with 0 results. 
 
-Using range search query operator with `hitLimit` can be particular handy for use cases like auto-complete or search suggestions
-where one typically uses a query searching with [match: prefix](../eference/schema-reference.html#match). Limiting
-the first few character searches to include a `hitLimit` range on popularity can greatly improve the query performance. 
+Using range search query operator with `hitLimit` can be particular handy for search use cases 
+like auto-complete or [search suggestions](https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-suggestions)
+where one typically use [match: prefix](../reference/schema-reference.html#match) or
+n-gram matching using [match: gram](../reference/schema-reference.html#match). 
+
+Limiting the short few first character searches to include a `hitLimit` range on popularity 
+can greatly improve the query performance and at the same time produce the general most popular suggestions. 
+As the user types more characters, the number of matches is greatly reduce, so ranking can focus on more factors
+than just the single popularity attribute. 
 
 ## Match phase limit - early termination 
-An alternative to range search with `hitLimit` is using
+An alternative to `range` search with `hitLimit` is using
 early termination with [match-phase](../reference/schema-reference.html#match-phase)
-which enables early-termination 
-of search and ranking using a document field to determine the search evaluation order. 
+which enables early-termination of search and `first-phase` ranking 
+using a document field to determine the search evaluation order. 
 
 Match-phase early-termination uses a field with attribute during matching and ranking to impact the
 order the search and ranking is performed in. 
 If a query is likely to generate more than `ranking.matchPhase.maxHits` per node, the search core
-will early terminate the search and matching and while doing that, evaluate the query in the order dictated
-by the `ranking.matchPhase.attribute` attribute field. Match phase early termination requires an
-single valued numeric `attribute` field with `fast-search`. 
+will early terminate the search and matching and evaluate the query in the order dictated
+by the `ranking.matchPhase.attribute` attribute field. 
+
+Match phase early termination requires an single valued numeric field with `attribute` and `fast-search`. 
 See [Match phase query parameters](../reference/query-api-reference.html#ranking.matchPhase). 
-Match-phase limit cannot terminate second-phase ranking, only matching and first-phase ranking, hence
-the name: *match phase limit*. Let us run a query with match phase early termination enabled:   
+Match-phase limit cannot terminate/early stop any potential `second-phase` ranking expression, 
+only matching and `first-phase` ranking, hence the name: *match phase limit*. 
+
+Let us run a query with match phase early termination enabled, setting `maxHits` to 100:   
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
