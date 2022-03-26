@@ -2000,9 +2000,12 @@ The core difference from capped range search is that `match-phase` is safe as fi
 the way we expect, for example searching for popularity=99. As we saw in the previous example with `range`,
 it picked the k best results from the attribute and applied the filter *after*, which could cause 0 hits. 
 
+This query does not trigger match-phase early termination 
+because there are few hits matching the query:
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"match-phase": true'>
+<pre data-test="exec" data-test-assert-contains='"full": true'>
 $ vespa query 'yql=select track_id, popularity from track where popularity=99' \
   'ranking=popularity' \
   'ranking.matchPhase.maxHits=100' \
@@ -2027,13 +2030,12 @@ $ vespa query 'yql=select title, artist, popularity from track where userQuery()
 </div>
 
 Match-phase early termination is a very powerful feature which can keep latency and cost in check 
-for many serving use cases. 
+for many serving use cases. Match phase also supports adding a result diversity constraint (e.g category).
 
 ### Advanced query tracing 
 
 In this section we introduce query tracing, which can allow developers to understand the latency of
 any given Vespa query request. 
-
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2048,7 +2050,7 @@ Explanation of the trace is coming soon:
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
-$ #docker rm -f vespa
+$ docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
