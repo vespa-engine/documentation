@@ -411,7 +411,8 @@ documents we want to be returned in the response:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"documents": 95666'>
 $ vespa query \
-    'yql=select artist, title, track_id, tags from track where true' 'hits=1'
+    'yql=select artist, title, track_id, tags from track where true' \
+    'hits=1'
 </pre>
 </div>
 
@@ -486,7 +487,8 @@ search for *total eclipse of the heart*
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
     'yql=select artist, title, track_id from track where userQuery()' \
-    'query=total eclipse of the heart' 'hits=1'
+    'query=total eclipse of the heart' \
+    'hits=1'
 </pre>
 </div>
 
@@ -550,7 +552,9 @@ We can change matching to use `type=any` instead of the default `type=all`. See
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
     'yql=select artist, title, track_id from track where userQuery()' \
-    'query=total eclipse of the heart' 'hits=1' 'type=any'
+    'query=total eclipse of the heart' \
+    'hits=1' \
+    'type=any'
 </pre>
 </div>
 
@@ -571,8 +575,11 @@ see [supported query types](../reference/query-api-reference.html#model.type)
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
-  'query=total eclipse of the heart' 'hits=1' 'type=weakAnd'
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=1' \
+    'type=weakAnd'
 </pre>
 </div>
 
@@ -947,7 +954,7 @@ Let us assume that we have a process which have built a user profile where we ha
 the user has shown previous interest for. 
 For example *hard rock*, *rock*, *metal* and *finnish metal*. How can we retrieve and rank 
 results using that information? One way is to search and rank using
-the dotproduct between the sparse user profile representation and the track tags representation.
+the dot product between the sparse user profile representation and the track tags representation.
 
 We can start with the [dotProduct()](../reference/query-language-reference.html#dotproduct) query operator.
 To configure [ranking](../ranking.html), add a `rank-profile` to the schema:
