@@ -9,13 +9,13 @@ title: "Vespa query performance - a practical guide"
 
 This guide covers the following query serving performance aspects:
 - [Basic text search query performance](#basic-text-search-query-performance)
-- [Hits and summaries](#hits-and-summaries)
-- [Multi-valued query operators (dotProduct and wand)](#multi-valued-query-operators)
+- [Hits and document summaries](#hits-and-summaries)
+- [Multi-valued query operators (dotProduct, weakAnd, wand, weightedSet)](#multi-valued-query-operators)
 - [Searching attribute fields](#searching-attribute-fields)
 - [Searching attribute fields with fast-search](#searching-attribute-fields-using-fast-search)
 - [Ranking with tensor computations](#tensor-computations)
 - [Multi-threaded search and ranking](#multi-threaded-search-and-ranking)
-- [Advanced range search with hit limits for early termination](#advanced-range-search-with-hitlimit)
+- [Range search with hit limits for early termination](#advanced-range-search-with-hitlimit)
 - [Early termination using match phase limits](#match-phase-limit---early-termination)
 - [Advanced query tracing](#advanced-query-tracing)
 
@@ -2171,9 +2171,8 @@ match-phase early termination kicks in.
 
 ## Advanced query tracing 
 
-In this section we introduce query tracing, which allows developers to understand the latency of
-any given Vespa query request. Tracing helps understand where time (and cost) is spent, and how
-to best optimize the query or schema settings. Tracing can be enabled using the following parameters:
+In this section we introduce query tracing. Tracing helps understand where time (and cost) is spent, and how
+to best optimize the query or schema settings. Query tracing can be enabled using the following parameters:
 
 - [tracelevel](../reference/query-api-reference.html#tracelevel)
 - [explainLevel](../reference/query-api-reference.html#explainlevel)
@@ -2189,7 +2188,86 @@ $ vespa query 'yql=select track_id from track where tags contains "rock"' \
 </pre>
 </div>
 
-Explanation of the trace is coming soon.
+The first part of the trace traces the query through the stateless container search 
+chain. For each searcher invoked in the chain a timestamp relative to the start of the query 
+is provided:
+<pre>
+{
+  "trace": {
+    "children": [
+      {
+        "message": "Using query profile 'default' of type 'root'"
+      },
+      {
+        "message": "Invoking chain 'vespa' [com.yahoo.search.querytransform.WeakAndReplacementSearcher@vespa -> com.yahoo.prelude.statistics.StatisticsSearcher@native -> ... -> federation@native]"
+      },
+      {
+        "children": [
+          {
+            "timestamp": 0,
+            "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'"
+          },
+         ..
+</pre>
+The trace runs all the way to the query is dispatched to the content node(s)
+
+<pre>
+ {
+  "timestamp": 2,
+  "message": "sc0.num0 search to dispatch: query=[tags:rock] timeout=9993ms offset=0 hits=1 restrict=[track]"
+ }
+</pre>
+In this case, with tracing it has taken 2ms of processing in the stateless container, 
+before the query is on the wire on its way 
+to the content nodes. The first protocol phase is the next trace message. 
+In this case the reply, is ready read from the wire at timestamp 6, 
+so approximately 4 ms was spent in the first protocol matching phase, 
+including network serialization and deserialization. 
+<pre>
+{
+  "timestamp": 6,
+  "message": [
+    {
+      "start_time": "2022-03-27 15:03:20.769 UTC",
+      "traces": [
+        ...
+      ],
+      "distribution-key": 0,
+      "duration_ms": 1.9814
+    }
+}
+</pre>
+Inside this message is the content node traces of the query, `timestamp_ms` is relative to the start of the query
+on the content node. In this case, the content node uses 1.98 ms to evaluate the first protocol phase 
+of the query (`duration_ms`). 
+
+More explanation of the content node `traces` is coming soon. It includes information like
+- How much time was spent traversing the dictionary and setting up the query.
+- How much time was spent on matching and first-phase ranking.
+- How much time was spent on second-phase ranking (if enabled).
+
+These traces can help guide both feature tuning decisions and [scaling and sizing](sizing-search.html).
+
+Later in the trace one can also see the second query protocol phase which is the summary fill:
+<pre>
+{
+  timestamp: 7,
+  message: "sc0.num0 fill to dispatch: query=[tags:rock] timeout=9997ms offset=0 hits=1 restrict=[track] summary=[null]"
+}
+</pre>
+
+And finally an overall break down of the two phases:
+<pre>
+{
+  timestamp: 9,
+  message: "Query time query 'tags:rock': 7 ms"
+},
+{
+  timestamp: 9,
+  message: "Summary fetch time query 'tags:rock': 2 ms"
+}
+</pre>
+
 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
