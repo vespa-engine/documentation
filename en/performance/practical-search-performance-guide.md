@@ -84,64 +84,65 @@ directory = sys.argv[1]
 seen_tracks = set() 
 
 def remove_control_characters(s):
-  return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
+    return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
 
 def process_file(filename):
-  global seen_tracks
-  with open(filename) as fp:
-    doc = json.load(fp)
-    title = doc['title']
-    artist = doc['artist']
-    hash = title + artist
-    if hash in seen_tracks:
-      return
-    else:
-      seen_tracks.add(hash) 
+    global seen_tracks
+    with open(filename) as fp:
+        doc = json.load(fp)
+        title = doc['title']
+        artist = doc['artist']
+        hash = title + artist
+        if hash in seen_tracks:
+            return
+        else:
+            seen_tracks.add(hash) 
 
-    track_id = doc['track_id']
-    tags = doc['tags']
-    tags_dict = dict()
-    for t in tags:
-      k,v = t[0],int(t[1])
-      tags_dict[k] = v
-    similars = doc['similars']
-    tensor_cells = []
-    keys_seen = dict()
-    for s in similars:
-      k,v = s[0],float(s[1])
-      if k in keys_seen:
-        continue
-      else:
-        keys_seen[k] = 1
-      cell = {
-        "address": {
-           "trackid": k
-        },
-        "value": v }
-      tensor_cells.append(cell)
+        track_id = doc['track_id']
+        tags = doc['tags']
+        tags_dict = dict()
+        for t in tags:
+            k,v = t[0],int(t[1])
+            tags_dict[k] = v
+        similars = doc['similars']
+        tensor_cells = []
+        keys_seen = dict()
+        for s in similars:
+            k,v = s[0],float(s[1])
+            if k in keys_seen:
+                continue
+            else:
+                keys_seen[k] = 1
+            cell = {
+                "address": {
+                    "trackid": k
+                },
+                "value": v
+            }
+            tensor_cells.append(cell)
 
-    vespa_doc = {
-      "put": "id:music:track::%s" % track_id,
-      "fields": {
-        "title": remove_control_characters(title),
-        "track_id": track_id,
-        "artist": remove_control_characters(artist),
-        "tags": tags_dict,
-        "similar": {
-          "cells": tensor_cells
+        vespa_doc = {
+            "put": "id:music:track::%s" % track_id,
+                "fields": {
+                    "title": remove_control_characters(title),
+                    "track_id": track_id,
+                    "artist": remove_control_characters(artist),
+                    "tags": tags_dict,
+                    "similar": {
+                        "cells": tensor_cells
+                    }
+            }
         }
-      }
-    }
-    print(json.dumps(vespa_doc))
+        print(json.dumps(vespa_doc))
 
 sorted_files = []
 for root, dirs, files in os.walk(directory):
-  for filename in files:
-    filename = os.path.join(root, filename)
-    sorted_files.append(filename)
+    for filename in files:
+        filename = os.path.join(root, filename)
+        sorted_files.append(filename)
 sorted_files.sort()
 for filename in sorted_files:
-  process_file(filename)
+    process_file(filename)
 </pre>
 
 <pre>
@@ -152,60 +153,68 @@ import json
 import unicodedata
 
 directory = sys.argv[1]
+seen_tracks = set() 
 
 def remove_control_characters(s):
-  return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
+    return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
 
 def process_file(filename):
-  with open(filename) as fp:
-    doc = json.load(fp)
-    title = doc['title']
-    artist = doc['artist']
-    track_id = doc['track_id']
-    tags = doc['tags']
-    tags_dict = dict()
-    for t in tags:
-      k,v = t[0],int(t[1])
-      if v > 0:
-        tags_dict[k] = v
-    similars = doc['similars']
-    tensor_cells = []
-    keys_seen = dict()
-    for s in similars:
-      k,v = s[0],float(s[1])
-      if k in keys_seen:
-        continue
-      else:
-        keys_seen[k] = 1
-      cell = {
-        "address": {
-           "trackid": k
-        },
-        "value": v }
-      tensor_cells.append(cell)
+    global seen_tracks
+    with open(filename) as fp:
+        doc = json.load(fp)
+        title = doc['title']
+        artist = doc['artist']
+        hash = title + artist
+        if hash in seen_tracks:
+            return
+        else:
+            seen_tracks.add(hash) 
 
-    vespa_doc = {
-      "put": "id:music:track::%s" % track_id,
-      "fields": {
-        "title": remove_control_characters(title),
-        "track_id": track_id,
-        "artist": remove_control_characters(artist),
-        "tags": tags_dict,
-        "similar": {
-          "cells": tensor_cells
+        track_id = doc['track_id']
+        tags = doc['tags']
+        tags_dict = dict()
+        for t in tags:
+            k,v = t[0],int(t[1])
+            tags_dict[k] = v
+        similars = doc['similars']
+        tensor_cells = []
+        keys_seen = dict()
+        for s in similars:
+            k,v = s[0],float(s[1])
+            if k in keys_seen:
+                continue
+            else:
+                keys_seen[k] = 1
+            cell = {
+                "address": {
+                    "trackid": k
+                },
+                "value": v
+            }
+            tensor_cells.append(cell)
+
+        vespa_doc = {
+            "put": "id:music:track::%s" % track_id,
+                "fields": {
+                    "title": remove_control_characters(title),
+                    "track_id": track_id,
+                    "artist": remove_control_characters(artist),
+                    "tags": tags_dict,
+                    "similar": {
+                        "cells": tensor_cells
+                    }
+            }
         }
-      }
-    }
-    print(json.dumps(vespa_doc))
+        print(json.dumps(vespa_doc))
 
 sorted_files = []
 for root, dirs, files in os.walk(directory):
-  for filename in files:
-    filename = os.path.join(root, filename)
-    sorted_files.append(filename)
+    for filename in files:
+        filename = os.path.join(root, filename)
+        sorted_files.append(filename)
 sorted_files.sort()
 for filename in sorted_files:
-  process_file(filename)
+    process_file(filename)
 {% endhighlight %}
 </pre>
 
@@ -244,31 +253,35 @@ Write the following to `app/schemas/track.sd`:
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
-  document track {
+    document track {
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-    }
-  }
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
 }
 </pre>
 
@@ -293,17 +306,17 @@ Write the following to `app/services.xml`:
     &lt;container id="default" version="1.0"&gt;
         &lt;search/&gt;
         &lt;document-api/&gt;
-      &lt;/container&gt;
+    &lt;/container&gt;
 
-      &lt;content id="tracks" version="1.0"&gt;
-          &lt;redundancy&gt;1&lt;/redundancy&gt;
-          &lt;documents&gt;
-              &lt;document type="track" mode="index"&gt;&lt;/document&gt;
-          &lt;/documents&gt;
-          &lt;nodes&gt;
-              &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
-          &lt;/nodes&gt;
-      &lt;/content&gt;
+    &lt;content id="tracks" version="1.0"&gt;
+        &lt;redundancy&gt;1&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="track" mode="index"&gt;&lt;/document&gt;
+        &lt;/documents&gt;
+        &lt;nodes&gt;
+            &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
 &lt;/services&gt;
 </pre>
 
@@ -617,7 +630,7 @@ In addition, we save network time as we are transferring less data per hit.
 <pre>
 document-summary track_id {
     summary track_id type string { 
-      source: track_id
+        source: track_id
     }
 }
 </pre>
@@ -627,37 +640,41 @@ The new schema then becomes:
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
-  document track {
+    document track {
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-    }
-  }
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
 
-  document-summary track_id {
-    summary track_id type string { 
-      source: track_id
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+        }
     }
-  }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id type string { 
+            source: track_id
+        }
+    }
 }
 </pre>
 
@@ -793,38 +810,42 @@ the tags field and add `attribute:fast-search` which will add inverted index str
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
-  document track {
+    document track {
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-      attribute: fast-search
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-    }
-  }
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
 
-  document-summary track_id {
-    summary track_id type string { 
-      source: track_id
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+        }
     }
-  }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id type string { 
+            source: track_id
+        }
+    }
 }
 </pre>
 
@@ -872,9 +893,9 @@ We want to status code to flip to up before querying again:
 
 <pre>
 {
-  "status": {
-    "code": "up"
-  }
+    "status": {
+        "code": "up"
+    }
 }
 </pre>
 
@@ -919,43 +940,48 @@ To gain control of [ranking](../ranking.html) we need to add a `rank-profile` to
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
-  document track {
+    document track {
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-      attribute: fast-search
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-    }
-  }
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
 
-  document-summary track_id {
-    summary track_id type string { 
-      source: track_id
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+        }
     }
-  }
-  rank-profile personalized {
-    first-phase {
-      expression: rawScore(tags)
+
+    fieldset default {
+        fields: title, artist
     }
-  }
+
+    document-summary track_id {
+        summary track_id type string { 
+            source: track_id
+        }
+    }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
 }
 </pre>
 
@@ -1217,7 +1243,7 @@ computation:
 <pre>
 rank-profile similar {
     first-phase {
-      expression: sum(attribute(similar) * query(user_liked))
+        expression: sum(attribute(similar) * query(user_liked))
     }
 }
 </pre>
@@ -1229,10 +1255,10 @@ also use [phased ranking](../phased-ranking.html) to reduce the computational co
 <pre>
 rank-profile similar {
     first-phase {
-      expression: sum(attribute(similar) * query(user_liked))
+        expression: sum(attribute(similar) * query(user_liked))
     }
     second-phase {
-      expression: #Even more compute, but only for the top-scoring docs from first-phase
+        expression: #Even more compute, but only for the top-scoring docs from first-phase
     }
 }
 </pre>
@@ -1242,51 +1268,54 @@ Our complete track schema becomes:
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
-  document track {
+    document track {
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-      attribute: fast-search
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-    }
-  }
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
 
-  document-summary track_id {
-    summary track_id type string { 
-      source: track_id
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+        }
     }
-  }
 
-  rank-profile personalized {
-    first-phase {
-      expression: rawScore(tags)
+    fieldset default {
+        fields: title, artist
     }
-  }
 
-  rank-profile similar {
-    first-phase {
-      expression: sum(attribute(similar) * query(user_liked))
+    document-summary track_id {
+        summary track_id type string { 
+            source: track_id
+        }
     }
-  }
 
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile similar {
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
 }
 </pre>
 
@@ -1464,50 +1493,55 @@ We can optimize this as well by adding `fast-search` to the mapped field tensor.
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
+    document track {
 
-  document track {
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-      attribute: fast-search
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-      attribute: fast-search 
-    }
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field artist type string {
+            indexing: summary | index
+        }
 
-  document-summary track_id {
-    summary track_id type string { 
-      source: track_id
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+            attribute: fast-search 
+        }
     }
-  }
-  rank-profile personalized {
-    first-phase {
-      expression: rawScore(tags)
+
+    fieldset default {
+        fields: title, artist
     }
-  }
-   rank-profile similar {
-    first-phase {
-      expression: sum(attribute(similar) * query(user_liked))
+
+    document-summary track_id {
+        summary track_id type string { 
+            source: track_id
+        }
     }
-  }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile similar {
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
 }
 </pre>
 
@@ -1580,28 +1614,28 @@ The default number of threads used `persearch` is 1.
     &lt;container id="default" version="1.0"&gt;
         &lt;search/&gt;
         &lt;document-api/&gt;
-      &lt;/container&gt;
+    &lt;/container&gt;
 
-      &lt;content id="tracks" version="1.0"&gt;
-          &lt;engine&gt;
-              &lt;proton&gt;
-                  &lt;tuning&gt;
-                      &lt;searchnode&gt;
-                          &lt;requestthreads&gt;
-                              &lt;persearch&gt;4&lt;/persearch&gt;
-                          &lt;/requestthreads&gt;
-                      &lt;/searchnode&gt;
-                  &lt;/tuning&gt;
+    &lt;content id="tracks" version="1.0"&gt;
+        &lt;engine&gt;
+            &lt;proton&gt;
+                &lt;tuning&gt;
+                    &lt;searchnode&gt;
+                        &lt;requestthreads&gt;
+                            &lt;persearch&gt;4&lt;/persearch&gt;
+                        &lt;/requestthreads&gt;
+                    &lt;/searchnode&gt;
+                &lt;/tuning&gt;
             &lt;/proton&gt;
-          &lt;/engine&gt;
-          &lt;redundancy&gt;1&lt;/redundancy&gt;
-          &lt;documents&gt;
-              &lt;document type="track" mode="index"&gt;&lt;/document&gt;
-          &lt;/documents&gt;
-          &lt;nodes&gt;
-              &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
-          &lt;/nodes&gt;
-      &lt;/content&gt;
+        &lt;/engine&gt;
+        &lt;redundancy&gt;1&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="track" mode="index"&gt;&lt;/document&gt;
+        &lt;/documents&gt;
+        &lt;nodes&gt;
+            &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
 &lt;/services&gt;
 </pre>
 
@@ -1661,52 +1695,59 @@ Our new schema with a new ranking profile overriding `num-threads-per-search`:
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
-  document track {
+    document track {
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-      attribute: fast-search
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-      attribute: fast-search 
-    }
-  }
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
 
-  document-summary track_id {
-    summary track_id type string { 
-      source: track_id
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+            attribute: fast-search 
+        }
     }
-  }
-  rank-profile personalized {
-    first-phase {
-      expression: rawScore(tags)
+
+    fieldset default {
+        fields: title, artist
     }
-  }
-  rank-profile similar {
-    first-phase {
-      expression: sum(attribute(similar) * query(user_liked))
+
+    document-summary track_id {
+        summary track_id type string { 
+            source: track_id
+        }
     }
-  }
-  rank-profile similar-t2 inherits similar {
-    num-threads-per-search: 2
-  }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile similar {
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
+
+    rank-profile similar-t2 inherits similar {
+        num-threads-per-search: 2
+    }
 }
 </pre>
 
@@ -1762,43 +1803,43 @@ directory = sys.argv[1]
 seen_tracks = set() 
 
 def process_file(filename):
-  global seen_tracks
-  with open(filename) as fp:
-    doc = json.load(fp)
-    title = doc['title']
-    artist = doc['artist']
-    hash = title + artist
-    if hash in seen_tracks:
-      return
-    else:
-      seen_tracks.add(hash) 
+    global seen_tracks
+    with open(filename) as fp:
+        doc = json.load(fp)
+        title = doc['title']
+        artist = doc['artist']
+        hash = title + artist
+        if hash in seen_tracks:
+            return
+        else:
+            seen_tracks.add(hash) 
 
-    track_id = doc['track_id']
-    tags = doc['tags']
-    tags_dict = dict()
-    for t in tags:
-      k,v = t[0],int(t[1])
-      tags_dict[k] = v
-    n = len(tags_dict)
+        track_id = doc['track_id']
+        tags = doc['tags']
+        tags_dict = dict()
+        for t in tags:
+            k,v = t[0],int(t[1])
+            tags_dict[k] = v
+        n = len(tags_dict)
 
-    vespa_doc = {
-      "update": "id:music:track::%s" % track_id,
-      "fields": {
-        "popularity": {
-          "assign": n
+        vespa_doc = {
+            "update": "id:music:track::%s" % track_id,
+                "fields": {
+                    "popularity": {
+                        "assign": n
+                    }
+                }
         }
-      }
-    }
-    print(json.dumps(vespa_doc))
+        print(json.dumps(vespa_doc))
 
 sorted_files = []
 for root, dirs, files in os.walk(directory):
-  for filename in files:
-    filename = os.path.join(root, filename)
-    sorted_files.append(filename)
+    for filename in files:
+        filename = os.path.join(root, filename)
+        sorted_files.append(filename)
 sorted_files.sort()
 for filename in sorted_files:
-  process_file(filename)
+    process_file(filename)
 </pre>
 
 <pre>
@@ -1811,43 +1852,43 @@ directory = sys.argv[1]
 seen_tracks = set() 
 
 def process_file(filename):
-  global seen_tracks
-  with open(filename) as fp:
-    doc = json.load(fp)
-    title = doc['title']
-    artist = doc['artist']
-    hash = title + artist
-    if hash in seen_tracks:
-      return
-    else:
-      seen_tracks.add(hash) 
+    global seen_tracks
+    with open(filename) as fp:
+        doc = json.load(fp)
+        title = doc['title']
+        artist = doc['artist']
+        hash = title + artist
+        if hash in seen_tracks:
+            return
+        else:
+            seen_tracks.add(hash) 
 
-    track_id = doc['track_id']
-    tags = doc['tags']
-    tags_dict = dict()
-    for t in tags:
-      k,v = t[0],int(t[1])
-      tags_dict[k] = v
-    n = len(tags_dict)
+        track_id = doc['track_id']
+        tags = doc['tags']
+        tags_dict = dict()
+        for t in tags:
+            k,v = t[0],int(t[1])
+            tags_dict[k] = v
+        n = len(tags_dict)
 
-    vespa_doc = {
-      "update": "id:music:track::%s" % track_id,
-      "fields": {
-        "popularity": {
-          "assign": n
+        vespa_doc = {
+            "update": "id:music:track::%s" % track_id,
+                "fields": {
+                    "popularity": {
+                        "assign": n
+                    }
+                }
         }
-      }
-    }
-    print(json.dumps(vespa_doc))
+        print(json.dumps(vespa_doc))
 
 sorted_files = []
 for root, dirs, files in os.walk(directory):
-  for filename in files:
-    filename = os.path.join(root, filename)
-    sorted_files.append(filename)
+    for filename in files:
+        filename = os.path.join(root, filename)
+        sorted_files.append(filename)
 sorted_files.sort()
 for filename in sorted_files:
-  process_file(filename)
+    process_file(filename)
 {% endhighlight %}
 </pre>
 
@@ -1867,62 +1908,71 @@ to to use one thread per search.
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
-  document track {
+    document track {
 
-    field track_id type string {
-      indexing: summary | attribute
-      rank: filter
-      match: word
-    }
-    field title type string {
-      indexing: summary | index
-      index: enable-bm25
-    }
-    field artist type string {
-      indexing: summary | index
-    }
-    field tags type weightedset&lt;string&gt; {
-      indexing: summary | attribute
-      attribute: fast-search
-    }
-    field similar type tensor&lt;float&gt;(trackid{}) {
-      indexing: summary | attribute
-      attribute: fast-search 
-    }
-    field popularity type int {
-      indexing: summary | attribute
-      attribute: fast-search
-    }
-  }
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
 
-  fieldset default {
-    fields: title, artist
-  }
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
 
-  document-summary track_id {
-    summary track_id type string { 
-      source: track_id
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor&lt;float&gt;(trackid{}) {
+            indexing: summary | attribute
+            attribute: fast-search 
+        }
+
+        field popularity type int {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
     }
-  }
-  rank-profile personalized {
-    first-phase {
-      expression: rawScore(tags)
+
+    fieldset default {
+        fields: title, artist
     }
-  }
-  rank-profile similar {
-    first-phase {
-      expression: sum(attribute(similar) * query(user_liked))
+
+    document-summary track_id {
+        summary track_id type string { 
+            source: track_id
+        }
     }
-  }
-  rank-profile similar-t2 inherits similar {
-    num-threads-per-search: 2
-  }
-  rank-profile popularity {
-    num-threads-per-search: 1
-    first-phase {
-      expression: attribute(popularity)
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
     }
-  }
+
+    rank-profile similar {
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
+
+    rank-profile similar-t2 inherits similar {
+        num-threads-per-search: 2
+    }
+
+    rank-profile popularity {
+        num-threads-per-search: 1
+        first-phase {
+            expression: attribute(popularity)
+        }
+    }
 }
 </pre>
 
@@ -2117,9 +2167,9 @@ is the recommended setting:
 rank-profile popularity {
     num-threads-per-search: 1
     first-phase {
-      expression: attribute(popularity)
+        expression: attribute(popularity)
     }
-  }
+}
 </pre>
 
 The core difference from capped range search is that `match-phase` is safe as filters works in 
