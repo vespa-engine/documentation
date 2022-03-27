@@ -345,7 +345,7 @@ we also enable [timing](../reference/query-api-reference.html#presentation.timin
 Once we have finished writing our application package, we can deploy it to a running Vespa instance.
 See also the [Vespa quick start guide](../vespa-quick-start.html).
 
-Start the Vespa container image using docker:
+Start the Vespa container image using Docker:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -404,7 +404,7 @@ $ vespa query -v 'yql=select ..'
 </pre>
 
 In the first query example, we simply match everything using `where true` and we 
-use the [hits](..(reference/query-api-reference.html#hits) to specify how many
+use the [hits](../reference/query-api-reference.html#hits) to specify how many
 documents we want to be returned in the response:
 
 <div class="pre-parent">
@@ -468,7 +468,7 @@ The response `timing` has 3 fields. A Vespa query is executed in two protocol ph
 
 - Query matching phase which fans the query out from the stateless container 
 to a content group, each node in the group finds the nodes top-k documents and returns k. 
-The stateless container then merges the nodes x k hits to obtain a globally ordered top-k documents.
+The stateless container then merges the nodes' k hits each to obtain a globally ordered top-k documents.
 - Summary phase which asks the content nodes that produced the global top-k hits for summary data. 
 
 See also [Life of a query in Vespa](sizing-search.html#life-of-a-query-in-vespa). The `timing`
@@ -577,8 +577,8 @@ $ vespa query 'yql=select artist, title, track_id from track where userQuery()' 
 </div>
 
 Compared to the type `any` query which fully ranked 24,053 documents, 
-we now only rank 3,679 documents. Also notice that the f
-aster search returns the same document at the first position. 
+we now only rank 3,679 documents.
+Also notice that the faster search returns the same document at the first position. 
 
 Conceptually a search query is about finding the documents that match the query, 
 then score the documents using a ranking model. 
@@ -760,7 +760,7 @@ in this fields will be performed using `match:word`.
  field tags type weightedset&lt;string&gt; {
       indexing: summary | attribute
  }
- </pre>
+</pre>
 
 In this case, there is no index structure, searching the `attribute` 
 field is performed as a linear scan, let us do a search for a popular tag *rock*:
@@ -903,7 +903,7 @@ Wait for the searchnode to start up using the [health state api](../reference/me
 curl -s http://localhost:19110/state/v1/health
 </pre>
 
-We want to status code to flip to up before querying again:
+We want the status code to flip to up before querying again:
 
 <pre>
 {
@@ -950,7 +950,7 @@ results using that information? One way is to search and rank using
 the dotproduct between the sparse user profile representation and the track tags representation.
 
 We can start with the [dotProduct()](../reference/query-language-reference.html#dotproduct) query operator.
-To gain control of [ranking](../ranking.html) we need to add a `rank-profile` to our schema:
+To configure [ranking](../ranking.html), add a `rank-profile` to the schema:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1384,7 +1384,7 @@ when we don't need any rank feature calculated, it can also be used for large sc
 positive filters (match if any of the keys matches) or negative filter (remove if any of the keys matches).
 See more examples in [feature-tuning set filtering](feature-tuning.html#multi-lookup-set-filtering).
 
-Run query with the not filter:
+Run query with the `not` filter:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1483,7 +1483,7 @@ The above query produces the following result:
 {% endhighlight %}
 </pre>
 
-Now we can notice that with the `not` filter, we retrieved 9,5663 documents
+Now we can notice that with the `not` filter, we retrieved 95,663 documents
 as our 3 tracks previously *liked*, where filtered out. 
 
 We can also add tag filters, here we filter the recommended by `tags:popular`, by filtering we reduce the complexity of the
@@ -1618,8 +1618,8 @@ Vespa supports both `int8`, `bfloat16`, `float` and
 So far in this guide all our searches and ranking computations have been performed using 
 single threaded matching and ranking. To enable multi-threaded execution we 
 need to change our `services.xml`. 
-Multi-threaded search and ranking can improve query latency significantly and make
-use of multi-cpu core architectures better. Search and ranking has evolved since 1998 and by 
+Multi-threaded search and ranking can improve query latency significantly and make better
+use of multi-cpu core architectures. Search and ranking has evolved since 1998 and by 
 using multi-threaded execution we can significantly reduce serving latency. 
 In many deployment systems, low latency is critical.  
 
@@ -1706,7 +1706,7 @@ $ vespa query \
 Now, the content node(s) will parallelize the matching and ranking 
 using multiple search threads and `querytime` drops to about 15 ms. 
 
-The setting in services.xml sets to the global *persearch* value, 
+The setting in `services.xml` sets the global *persearch* value, 
 We can override the number of threads used with 
 `rank-profile` overrides using [num-threads-per-search](../reference/schema-reference.html#num-threads-per-search).
 Note that the per rank-profile setting can only be used to tune the number of threads
@@ -2007,7 +2007,7 @@ Deploy the application again :
 $ vespa deploy --wait 300 app
 </pre>
 </div>
-Adding a new field, does not require any restart but we need to populate the popularity field:
+Adding a new field does not require any restart, but we need to populate the popularity field:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2096,7 +2096,7 @@ n-gram matching using [match: gram](../reference/schema-reference.html#match).
 
 Limiting the short few first character searches to include a `hitLimit` range on popularity 
 can greatly improve the query performance and at the same time produce the general most popular suggestions. 
-As the user types more characters, the number of matches is greatly reduce, so ranking can focus on more factors
+As the user types more characters, the number of matches is greatly reduced, so ranking can focus on more factors
 than just the single popularity attribute. 
 
 ## Match phase limit - early termination 
@@ -2218,7 +2218,7 @@ $ vespa query \
 </div>
 
 Generally, prefer match phase early termination over capped range search with hitLimit. It's a
-a more flexible feature. Notice that `maxHits` is a per node. 
+a more flexible feature. Notice that `maxHits` is _per node_. 
 We can also combine text search queries with match phase early termination: 
 
 <div class="pre-parent">
@@ -2335,7 +2335,7 @@ Later in the trace one can also see the second query protocol phase which is the
     "message": "sc0.num0 fill to dispatch: query=[tags:rock] timeout=9997ms offset=0 hits=1 restrict=[track] summary=[null]"
 }
 </pre>
-And finally an overall break down of the two phases:
+And finally an overall breakdown of the two phases:
 <pre>
 {
     "timestamp": 9,
