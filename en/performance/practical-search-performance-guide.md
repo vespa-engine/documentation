@@ -61,7 +61,7 @@ To download the dataset directly (About 120MB zip file):
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o lastfm_test.zip \
- http://millionsongdataset.com/sites/default/files/lastfm/lastfm_test.zip 
+    http://millionsongdataset.com/sites/default/files/lastfm/lastfm_test.zip 
 $ unzip lastfm_test.zip
 </pre>
 </div>
@@ -410,7 +410,8 @@ documents we want to be returned in the response:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"documents": 95666'>
-$ vespa query 'yql=select artist, title, track_id, tags from track where true' 'hits=1'
+$ vespa query \
+    'yql=select artist, title, track_id, tags from track where true' 'hits=1'
 </pre>
 </div>
 
@@ -483,8 +484,9 @@ search for *total eclipse of the heart*
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
-  'query=total eclipse of the heart' 'hits=1'
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' 'hits=1'
 </pre>
 </div>
 
@@ -546,8 +548,9 @@ We can change matching to use `type=any` instead of the default `type=all`. See
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
-  'query=total eclipse of the heart' 'hits=1' 'type=any'
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' 'hits=1' 'type=any'
 </pre>
 </div>
 
@@ -593,8 +596,11 @@ Let us see  what happens when we ask for 200 hits
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
-  'query=total eclipse of the heart' 'hits=200' 'type=weakAnd' |head -40 
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=200' \
+    'type=weakAnd' |head -40 
 </pre>
 </div>
 
@@ -694,9 +700,12 @@ query request parameter:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="track_id">
-$ vespa query 'yql=select artist, title, track_id from track where userQuery()' \
-  'query=total eclipse of the heart' 'hits=200' 'type=weakAnd' \
-  'summary=track_id' |head -40 
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=200' \
+    'type=weakAnd' \
+    'summary=track_id' |head -40 
 </pre>
 </div>
 
@@ -759,8 +768,9 @@ field is performed as a linear scan, let us do a search for a popular tag *rock*
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"rock":'>
-$ vespa query 'yql=select track_id, tags from track where tags contains "rock"' \
-  'hits=1' 
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock"' \
+    'hits=1' 
 </pre>
 </div>
 
@@ -771,8 +781,9 @@ when using `match:text` with string fields that have `index`.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"classic rock":'>
-$ vespa query 'yql=select track_id, tags from track where tags contains "classic rock"' \
-  'hits=1' 
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "classic rock"' \
+    'hits=1' 
 </pre>
 </div>
 
@@ -781,8 +792,9 @@ Another query searching for *rock* or *pop*:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"rock":'>
-$ vespa query 'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
-  'hits=1' 
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
+    'hits=1' 
 </pre>
 </div>
 
@@ -793,8 +805,10 @@ We can combine the tag search with query terms searching fields that do have ind
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"rock"'>
-$ vespa query 'yql=select track_id, tags from track where tags contains "rock" and userQuery()' \
-  'hits=1' 'query=total eclipse of the heart'
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock" and userQuery()' \
+    'hits=1' \
+    'query=total eclipse of the heart'
 </pre>
 </div>
 
@@ -908,8 +922,9 @@ Once up, we can try our multi-tag search again - now using the `fast-search` att
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"rock":'>
-$ vespa query 'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
-  'hits=1' 
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
+    'hits=1' 
 </pre>
 </div>
 
@@ -1006,10 +1021,10 @@ substition is recommended for large inputs as it saves resources when parsing th
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Vastarannan valssi">
 $ vespa query \
- 'yql=select track_id, title, artist, tags from track where dotProduct(tags, @userProfile)' \
- 'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
- 'hits=1' \
- 'ranking=personalized'
+    'yql=select track_id, title, artist, tags from track where dotProduct(tags, @userProfile)' \
+    'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
+    'hits=1' \
+    'ranking=personalized'
 </pre>
 </div>
 <pre>
@@ -1077,10 +1092,10 @@ which matched at least one of the user profile tags we want just to retrieve the
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Vastarannan valssi">
 $ vespa query \
- 'yql=select track_id, title, artist, tags from track where {targetHits:10}wand(tags, @userProfile)' \
- 'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
- 'hits=1' \
- 'ranking=personalized'
+    'yql=select track_id, title, artist, tags from track where {targetHits:10}wand(tags, @userProfile)' \
+    'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
+    'hits=1' \
+    'ranking=personalized'
 </pre>
 </div>
 
@@ -1103,7 +1118,7 @@ In the next section we look at tensor fields which supports floating point numbe
 In the previous sections we looked at matching and where query matching query operator also produced rank features which we could
 use to influence the order of the hits returned. In this section we look at [tensor computations](../tensor-examples.html) 
 using [tensor expressions](../tensor-user-guide.html). Tensor computations can be used to calculate dense dot products, sparse
-dotproducts, matrix multiplication, neural networks and more. 
+dot products, matrix multiplication, neural networks and more. 
 
 For each of the track documents we have a field named `similar` which is of type `tensor`
 with one named *mapped* dimension. *Mapped* tensors can be used to represent sparse feature representations. 
@@ -1181,7 +1196,9 @@ Let us search for that document using the query api this time:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bryan Adams">
-$ vespa query 'yql=select title, artist from track where track_id contains "TRWJIPT128E0791D99"' 'hits=1'  
+$ vespa query \
+    'yql=select title, artist from track where track_id contains "TRWJIPT128E0791D99"' \
+    'hits=1'  
 </pre>
 </div>
 
@@ -1346,10 +1363,11 @@ the matching:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
-$ vespa query 'yql=select title, artist, track_id from track where true' \
- 'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
- 'ranking=similar' \
- 'hits=5'
+$ vespa query \
+    'yql=select title, artist, track_id from track where true' \
+    'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5'
  {% endraw %}
 </pre>
 </div>
@@ -1372,11 +1390,12 @@ Run query with the not filter:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
-$ vespa query 'yql=select title, artist, track_id from track where !weightedSet(track_id, @userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
-'ranking=similar' \
-'hits=5' \
-'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+$ vespa query \
+    'yql=select title, artist, track_id from track where !weightedSet(track_id, @userLiked)' \
+    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1474,11 +1493,12 @@ query as fewer documents gets ranked by the tensor ranking expression:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Ronan Keating">
 {% raw %}
-$ vespa query 'yql=select title,artist, track_id from track where tags contains "popular" and !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
-'ranking=similar' \
-'hits=5' \
-'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+$ vespa query \
+    'yql=select title,artist, track_id from track where tags contains "popular" and !weightedSet(track_id,@userLiked)' \
+    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1578,11 +1598,12 @@ Let us re-run our query example :
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
-$ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
-'ranking=similar' \
-'hits=5' \
-'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+$ vespa query \
+    'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1672,11 +1693,12 @@ Then we can repeat our tensor ranking query again:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
-$ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
-'ranking=similar' \
-'hits=5' \
-'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+$ vespa query \
+    'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1764,11 +1786,12 @@ $ vespa deploy --wait 300 app
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 {% raw %}
-$ vespa query 'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
-'ranking=similar' \
-'hits=5' \
-'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+$ vespa query \
+    'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -1990,7 +2013,7 @@ Adding a new field, does not require any restart but we need to populate the pop
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --file updates.jsonl --endpoint http://localhost:8080
+    --verbose --file updates.jsonl --endpoint http://localhost:8080
 </pre>
 </div>
 
@@ -2000,8 +2023,9 @@ using the [range()](../reference/query-language-reference.html) query operator:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="1352">
-$ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity)' \
-  'ranking=popularity'
+$ vespa query \
+    'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity)' \
+    'ranking=popularity'
 </pre>
 </div>
 
@@ -2013,8 +2037,9 @@ more, like in this case. Let us double check how many documents have the popular
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="1352">
-$ vespa query 'yql=select track_id, popularity from track where popularity=100' \
-  'ranking=popularity'
+$ vespa query \
+    'yql=select track_id, popularity from track where popularity=100' \
+    'ranking=popularity'
 </pre>
 </div>
 Which also returns 1352 documents as expected. 
@@ -2027,11 +2052,12 @@ advanced tensor computation over the most popular tracks:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="1349">
 {% raw %}
-$ vespa query 'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !weightedSet(track_id, @userLiked)' \
-'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
-'ranking=similar' \
-'hits=5' \
-'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+$ vespa query \
+    'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !weightedSet(track_id, @userLiked)' \
+    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
 {% endraw %}
 </pre>
 </div>
@@ -2095,11 +2121,12 @@ Let us run a query with match phase early termination enabled, setting `maxHits`
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"match-phase": true'>
-$ vespa query 'yql=select track_id, popularity from track where true' \
-  'ranking=popularity' \
-  'ranking.matchPhase.maxHits=100' \
-  'ranking.matchPhase.attribute=popularity' \
-  'hits=2'
+$ vespa query \
+    'yql=select track_id, popularity from track where true' \
+    'ranking=popularity' \
+    'ranking.matchPhase.maxHits=100' \
+    'ranking.matchPhase.attribute=popularity' \
+    'hits=2'
 </pre>
 </div>
 
@@ -2181,11 +2208,12 @@ This query does not trigger match-phase early termination because there are few 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"full": true'>
-$ vespa query 'yql=select track_id, popularity from track where popularity=99' \
-  'ranking=popularity' \
-  'ranking.matchPhase.maxHits=100' \
-  'ranking.matchPhase.attribute=popularity' \
-  'hits=2'
+$ vespa query \
+    'yql=select track_id, popularity from track where popularity=99' \
+    'ranking=popularity' \
+    'ranking.matchPhase.maxHits=100' \
+    'ranking.matchPhase.attribute=popularity' \
+    'hits=2'
 </pre>
 </div>
 
@@ -2196,13 +2224,14 @@ We can also combine text search queries with match phase early termination:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"match-phase": true'>
-$ vespa query 'yql=select title, artist, popularity from track where userQuery()' \
-  'query=love songs' \
-  'type=any' \ 
-  'ranking=popularity' \
-  'ranking.matchPhase.maxHits=100' \
-  'ranking.matchPhase.attribute=popularity' \
-  'hits=2'
+$ vespa query \
+    'yql=select title, artist, popularity from track where userQuery()' \
+    'query=love songs' \
+    'type=any' \ 
+    'ranking=popularity' \
+    'ranking.matchPhase.maxHits=100' \
+    'ranking.matchPhase.attribute=popularity' \
+    'hits=2'
 </pre>
 </div>
 
@@ -2243,29 +2272,30 @@ chain. For each searcher invoked in the chain a timestamp relative to the start 
 is provided:
 <pre>
 {
-  "trace": {
-    "children": [
-      {
-        "message": "Using query profile 'default' of type 'root'"
-      },
-      {
-        "message": "Invoking chain 'vespa' [com.yahoo.search.querytransform.WeakAndReplacementSearcher@vespa -> com.yahoo.prelude.statistics.StatisticsSearcher@native -> ... -> federation@native]"
-      },
-      {
+    "trace": {
         "children": [
-          {
-            "timestamp": 0,
-            "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'"
-          },
+            {
+                "message": "Using query profile 'default' of type 'root'"
+            },
+            {
+                "message": "Invoking chain 'vespa' [com.yahoo.search.querytransform.WeakAndReplacementSearcher@vespa -> com.yahoo.prelude.statistics.StatisticsSearcher@native -> ... -> federation@native]"
+            },
+            {
+                "children": [
+                {
+                    "timestamp": 0,
+                    "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'"
+                },
          ..
 </pre>
+
 The trace runs all the way to the query is dispatched to the content node(s)
 
 <pre>
- {
-  "timestamp": 2,
-  "message": "sc0.num0 search to dispatch: query=[tags:rock] timeout=9993ms offset=0 hits=1 restrict=[track]"
- }
+{
+    "timestamp": 2,
+    "message": "sc0.num0 search to dispatch: query=[tags:rock] timeout=9993ms offset=0 hits=1 restrict=[track]"
+}
 </pre>
 In this case, with tracing it has taken 2ms of processing in the stateless container, 
 before the query is on the wire on its way 
@@ -2275,16 +2305,16 @@ so approximately 4 ms was spent in the first protocol matching phase,
 including network serialization and deserialization. 
 <pre>
 {
-  "timestamp": 6,
-  "message": [
-    {
-      "start_time": "2022-03-27 15:03:20.769 UTC",
-      "traces": [
-        ...
-      ],
-      "distribution-key": 0,
-      "duration_ms": 1.9814
-    }
+    "timestamp": 6,
+    "message": [
+        {
+            "start_time": "2022-03-27 15:03:20.769 UTC",
+            "traces": [
+                ...
+            ],
+            "distribution-key": 0,
+            "duration_ms": 1.9814
+        }
 }
 </pre>
 Inside this message is the content node traces of the query, `timestamp_ms` is relative to the start of the query
@@ -2301,20 +2331,19 @@ These traces can help guide both feature tuning decisions and [scaling and sizin
 Later in the trace one can also see the second query protocol phase which is the summary fill:
 <pre>
 {
-  timestamp: 7,
-  message: "sc0.num0 fill to dispatch: query=[tags:rock] timeout=9997ms offset=0 hits=1 restrict=[track] summary=[null]"
+    "timestamp": 7,
+    "message": "sc0.num0 fill to dispatch: query=[tags:rock] timeout=9997ms offset=0 hits=1 restrict=[track] summary=[null]"
 }
 </pre>
-
 And finally an overall break down of the two phases:
 <pre>
 {
-  timestamp: 9,
-  message: "Query time query 'tags:rock': 7 ms"
+    "timestamp": 9,
+    "message": "Query time query 'tags:rock': 7 ms"
 },
 {
-  timestamp: 9,
-  message: "Summary fetch time query 'tags:rock': 2 ms"
+    "timestamp": 9,
+    "message": "Summary fetch time query 'tags:rock': 2 ms"
 }
 </pre>
 
