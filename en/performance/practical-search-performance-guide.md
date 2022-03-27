@@ -1000,8 +1000,10 @@ schema track {
 }
 </pre>
 
-The `dotProduct`and `wand` query operators produces a rank feature called `rawScore(name)`, 
-we use this as our first-phase rank expression. 
+The `dotProduct`and `wand` query operators produces a rank feature called
+ [rawScore(name)](../reference/rank-features.html#rawScore(field)), which calculates
+ the dot product between the query and document weights. We use 
+ `rank-feature` as our first-phase rank expression. 
 
 Deploy the application again:
 
@@ -2081,7 +2083,8 @@ We can illustrate this behaviour with the following query:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
-$ vespa query 'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and popularity=99'
+$ vespa query \
+    'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and popularity=99'
 </pre>
 </div>
 
@@ -2271,6 +2274,7 @@ The first part of the trace traces the query through the stateless container sea
 chain. For each searcher invoked in the chain a timestamp relative to the start of the query 
 is provided:
 <pre>
+{% highlight json%}
 {
     "trace": {
         "children": [
@@ -2285,17 +2289,23 @@ is provided:
                 {
                     "timestamp": 0,
                     "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'"
-                },
-         ..
+                }]
+            }
+        ]
+    }
+}    
+{% endhighlight %}   
 </pre>
 
 The trace runs all the way to the query is dispatched to the content node(s)
 
 <pre>
+{% highlight json%}
 {
     "timestamp": 2,
     "message": "sc0.num0 search to dispatch: query=[tags:rock] timeout=9993ms offset=0 hits=1 restrict=[track]"
 }
+{% endhighlight %} 
 </pre>
 In this case, with tracing it has taken 2ms of processing in the stateless container, 
 before the query is on the wire on its way 
@@ -2304,18 +2314,21 @@ In this case the reply, is ready read from the wire at timestamp 6,
 so approximately 4 ms was spent in the first protocol matching phase, 
 including network serialization and deserialization. 
 <pre>
+{% highlight json%}
 {
     "timestamp": 6,
     "message": [
         {
             "start_time": "2022-03-27 15:03:20.769 UTC",
             "traces": [
-                ...
+
             ],
             "distribution-key": 0,
             "duration_ms": 1.9814
         }
+    ]
 }
+{% endhighlight %}  
 </pre>
 Inside this message is the content node traces of the query, `timestamp_ms` is relative to the start of the query
 on the content node. In this case, the content node uses 1.98 ms to evaluate the first protocol phase 
@@ -2330,21 +2343,27 @@ These traces can help guide both feature tuning decisions and [scaling and sizin
 
 Later in the trace one can also see the second query protocol phase which is the summary fill:
 <pre>
+{% highlight json%}
 {
     "timestamp": 7,
     "message": "sc0.num0 fill to dispatch: query=[tags:rock] timeout=9997ms offset=0 hits=1 restrict=[track] summary=[null]"
 }
+{% endhighlight %}  
 </pre>
+
 And finally an overall breakdown of the two phases:
+
 <pre>
+{% highlight json%}
 {
     "timestamp": 9,
     "message": "Query time query 'tags:rock': 7 ms"
-},
+}
 {
     "timestamp": 9,
     "message": "Summary fetch time query 'tags:rock': 2 ms"
 }
+{% endhighlight %} 
 </pre>
 
 
