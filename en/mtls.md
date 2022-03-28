@@ -491,7 +491,7 @@ Certificate:
          c1:18:e8:0d:55:3a:57:f6:e0:c6:5b:72:57:e4:d9:6a:d8
 ```
 
-Copy `host.key` and `host.key` to your Vespa host and point the `"private-key"` and
+Copy `host.key` and `host.pem` to your Vespa host and point the `"private-key"` and
 `"certificates"` TLS config fields to their respective absolute paths. The CSR and
 extension config files can be safely discarded.
 
