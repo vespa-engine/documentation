@@ -69,10 +69,10 @@ $ unzip lastfm_test.zip
 The downloaded data needs to be converted to
 [the JSON format expected by Vespa](../reference/document-json-format.html). 
 
-We use this small [python](https://www.python.org/) script to traverse the dataset 
-track files and create a JSONL formatted feed file with Vespa put operations. 
-We will introduce the schema to be used with this feed in the next section. 
-The dataset contains some duplicates which we remove based on the combination of artist name and title. 
+We use a [python](https://www.python.org/) script to traverse the dataset
+track files and create a JSONL formatted feed file with Vespa put operations.
+We will introduce the schema to be used with this feed in the next section.
+The dataset contains some duplicates which we remove based on the combination of artist name and title.
 
 <pre style="display:none" data-test="file" data-path="create-vespa-feed.py">
 import os
@@ -145,8 +145,7 @@ for filename in sorted_files:
     process_file(filename)
 </pre>
 
-<pre>
-{% highlight python%}
+<pre>{% highlight python%}
 import os
 import sys
 import json
@@ -215,10 +214,9 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
-With this small script we can process the lastfm test dataset and convert it to a Vespa
+With this script we can process the lastfm test dataset and convert it to a Vespa
 JSON document operation format. See [Vespa document json format](../reference/document-json-format.html).
 
 <div class="pre-parent">
@@ -235,12 +233,13 @@ that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done
 and how data will be processed during feeding and indexing.
 Let's define the minimum set of required files to create our basic search application,
-which are `track.sd`, `services.xml`.
+which are `track.sd` and `services.xml`.
+Create directories for the configuration files:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir app
+$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/types
 </pre>
 </div>
 
@@ -342,7 +341,7 @@ we also enable [timing](../reference/query-api-reference.html#presentation.timin
 
 ## Deploy the application package
 
-Once we have finished writing our application package, we can deploy it to a running Vespa instance.
+The application package can now be deployed to a running Vespa instance.
 See also the [Vespa quick start guide](../vespa-quick-start.html).
 
 Start the Vespa container image using Docker:
@@ -362,6 +361,7 @@ that the configuration service is running by using `vespa status deploy`.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
+$ vespa config set target local
 $ vespa status deploy --wait 300 
 </pre>
 </div>
@@ -419,8 +419,7 @@ $ vespa query \
 The [result json output](../reference/default-result-format.html) for this query will 
 look something like this:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.009000000000000001,
@@ -455,8 +454,7 @@ look something like this:
         ]
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 Observations: 
 
@@ -504,8 +502,7 @@ text rank feature: [nativeRank](../nativerank.html).
 
 The result output for the above query will look something like this:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.012,
@@ -540,8 +537,7 @@ The result output for the above query will look something like this:
         ]
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 This query only matched one document because the query terms were ANDed. 
 We can change matching to use `type=any` instead of the default `type=all`. See 
@@ -593,7 +589,7 @@ In the worst case, our search query can match all documents which will expose
 all of them to the ranking. 
 
 ## Hits and summaries 
-In the previous examples, we only asked Vespa to return one hit 
+In the previous examples, we asked Vespa to return only one hit 
 using the `hits=1` query parameter. If you have been paying attention, 
 you would see that the `summaryfetchtime` have been 
 close to constant in the previous text search examples. 
@@ -631,7 +627,7 @@ higher `summaryfetchtime` than smaller docs. Less is more.
 For example, a [document-summary](../document-summaries.html) which only contain 
 fields that are defined as `attribute` will be read from memory. For the `default` summary, or others 
 containing at least one non-attribute field, a fill will potentially access data 
-from summary storage on disk. Read more about [Vespa attributes](../attributes.html).
+from summary storage on disk. Read more about [attributes](../attributes.html).
 - [summary-features](../reference/schema-reference.html#summary-features) used to return computed
  [rank features](../reference/rank-features.html) to be returned from the content nodes.
 
@@ -719,9 +715,10 @@ $ vespa query \
 In this particular case the `summaryfetchtime` difference is not that large, but for larger number of hits and 
 larger documents the difference is significant. Especially in single content node deployments. 
 
-A note on select field scoping with YQL. For example `select title, track_id from ..`. 
-When using the default summary, all fields are regardless of field scoping delivered 
-from the content nodes to the search container in the summary fill phase. 
+A note on select field scoping with YQL, e.g. `select title, track_id from ..`. 
+When using the default summary,
+all fields are delivered from the content nodes to the search container in the summary fill phase,
+regardless of field scoping. 
 The search container removes the set of fields not selected and renders the result.
 Hence, select scoping only reduces the amount of data transferred back to the client, 
 and does not impact the performance of the internal communication and potential summary cache miss. 
@@ -729,9 +726,9 @@ For optimal performance where one wants to deliver large number of hits to the c
 document summaries. Note also that Vespa per default limits the max hits to 400 per default, 
 this can be overridden in the [default queryProfile](../reference/query-api-reference.html#queryProfile).
 
-When requesting large amount of data from Vespa with hits it is recommended to use result compression 
-which Vespa will do if the http client uses
-the `Accept-Encoding` [HTTP request header](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html)
+When requesting large amount of data with hits, it is recommended to use result compression. 
+Vespa will compress if the http client uses
+the `Accept-Encoding` [HTTP request header](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html):
 <pre>
 Accept-Encoding: gzip
 </pre>
@@ -879,7 +876,7 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-The above will print 
+The above will print:
 
 <pre>
 vespa deploy --wait 300 app/ 
@@ -905,20 +902,22 @@ $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnod
 </div>
 
 Wait for the searchnode to start up using the [health state api](../reference/metrics.html):
-
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-curl -s http://localhost:19110/state/v1/health
+$ curl -s http://localhost:19110/state/v1/health
 </pre>
+</div>
 
 We want the status code to flip to up before querying again:
 
-<pre>
+<pre>{% highlight json%}
 {
     "status": {
         "code": "up"
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 <pre style="display:none" data-test="exec">
 $ sleep 60
@@ -1036,8 +1035,7 @@ $ vespa query \
     'ranking=personalized'
 </pre>
 </div>
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.004,
@@ -1083,8 +1081,7 @@ $ vespa query \
         ]
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 Notice that the query above, will brute-force rank tracks where the `tags` field match *any* of the multi-valued 
 query feature inputs. Due to this, our query ranks 10,323 tracks (`totalCount`). 
@@ -1108,7 +1105,7 @@ $ vespa query \
 </pre>
 </div>
 
-The `wand` query operator retrieves the exact same hit at rank 1 which is the expected behavior.  
+The `wand` query operator retrieves the exact same hit at rank 1 which is the expected behavior.
 The `wand` query operator is safe, meaning, it returns the same top-k results as the `dotProduct` query operator. 
 
 For larger document collections, the *wand* query operator can significantly
@@ -1130,7 +1127,7 @@ using [tensor expressions](../tensor-user-guide.html). Tensor computations can b
 dot products, matrix multiplication, neural networks and more. 
 
 For each of the track documents we have a field named `similar` which is of type `tensor`
-with one named *mapped* dimension. *Mapped* tensors can be used to represent sparse feature representations. 
+with one named *mapped* dimension. *Mapped* tensors can be used to represent sparse feature representations:
 
 <pre>
 field similar type tensor&lt;float&gt;(trackid{}) {
@@ -1149,8 +1146,7 @@ $ vespa document get id:music:track::TRQIQMT128E0791D9C
 
 We leave out some of the tags and the tensor cells from the output, but below is a summary:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "pathId": "/document/v1/music/track/docid/TRUAXHV128F42694E8",
     "id": "id:music:track::TRUAXHV128F42694E8",
@@ -1195,8 +1191,7 @@ We leave out some of the tags and the tensor cells from the output, but below is
         }
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 In the lastfm collection, each track lists similar tracks with a similarity score using float resolution, according to this
 similarity algorithm the most similar track to our sample document is `TRWJIPT128E0791D99` with a similarity score of 1.0. 
@@ -1216,8 +1211,7 @@ query a linear scan over the document collection.
 
 Which returns:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.01,
@@ -1251,8 +1245,7 @@ Which returns:
         ]
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 Now, if a user has listened to these three tracks in a session:
 
@@ -1275,8 +1268,8 @@ rank-profile similar {
 </pre>
 
 The `similar` rank profile with defines a sparse tensor dot product between the `query(user_liked)` query tensor and the 
-the `attribute(similar)` document tensor. See [tensor user guide](../tensor-user-guide.html) for more on tensors. We could
-also use [phased ranking](../phased-ranking.html) to reduce the computational complexity.  
+the `attribute(similar)` document tensor. See [tensor user guide](../tensor-user-guide.html) for more on tensors.
+We could also use [phased ranking](../phased-ranking.html) to reduce the computational complexity:
 
 <pre>
 rank-profile similar {
@@ -1360,11 +1353,9 @@ Here we use a query tensor with our three sample tracks using the short query te
 - `TRWJIPT128E0791D99` Run To You by Bryan Adams
 - `TRGVORX128F4291DF1` Broken Wings by Mr. Mister
 
-<pre>
-{% raw %}
+<pre>{% raw %}
 ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 
 In the first query example we simply run our tensor computation over all documents using `where true` as
 the matching:
@@ -1397,24 +1388,21 @@ Run query with the `not` filter:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-{% raw %}
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title, artist, track_id from track where !weightedSet(track_id, @userLiked)' \
     'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 </div>
 
 Note that the tensor query input format is slightly different from the variable substitution supported for 
 the multi-valued query operators `wand`, `weightedSet` and `dotProduct`.
 The above query produces the following result:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.121,
@@ -1489,8 +1477,7 @@ The above query produces the following result:
         ]
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 Now we can notice that with the `not` filter, we retrieved 95,663 documents
 as our 3 tracks previously *liked*, where filtered out. 
@@ -1500,16 +1487,14 @@ query as fewer documents gets ranked by the tensor ranking expression:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Ronan Keating">
-{% raw %}
+<pre data-test="exec" data-test-assert-contains="Ronan Keating">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where tags contains "popular" and !weightedSet(track_id,@userLiked)' \
     'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 </div>
 
 With fewer matches to score using the tensor expression the latency decreases. In this query case,
@@ -1592,10 +1577,13 @@ $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnod
 </pre>
 </div>
 
-Wait for the searchnode to start up 
+Wait for the searchnode to start:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-curl -s http://localhost:19110/state/v1/health
+$ curl -s http://localhost:19110/state/v1/health
 </pre>
+</div>
 
 <pre style="display:none" data-test="exec">
 $ sleep 60
@@ -1605,16 +1593,14 @@ Let us re-run our query example :
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-{% raw %}
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
     'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 </div>
 
 The `querytime` dropped to 40 ms instead of 120 ms without the `fast-search` option. 
@@ -1687,10 +1673,13 @@ $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnod
 </pre>
 </div>
 
-Wait for the searchnode to start up 
+Wait for the searchnode to start:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-curl -s localhost:19110/state/v1/health
+$ curl -s localhost:19110/state/v1/health
 </pre>
+</div>
 
 <pre style="display:none" data-test="exec">
 $ sleep 60
@@ -1700,16 +1689,14 @@ Then we can repeat our tensor ranking query again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-{% raw %}
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
     'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 </div>
 
 Now, the content node(s) will parallelize the matching and ranking 
@@ -1793,20 +1780,18 @@ $ vespa deploy --wait 300 app
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-{% raw %}
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
     'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 </div>
 
 By using multiple ranking profiles like above, we can find the sweet-spot where latency
-does not improve much by using more threads. Using more thread per search 
+does not improve much by using more threads. Using more threads per search 
 limits query concurrency as more threads will be occupied
 per query. Read more in [Vespa sizing guide:reduce latency with 
 multi-threaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
@@ -1874,8 +1859,7 @@ for filename in sorted_files:
     process_file(filename)
 </pre>
 
-<pre>
-{% highlight python%}
+<pre>{% highlight python%}
 import os
 import sys
 import json
@@ -1921,8 +1905,7 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 With this script, run through the dataset and create the [partial update](../partial-updates.html) feed :
 
@@ -2058,16 +2041,14 @@ advanced tensor computation over the most popular tracks:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="1349">
-{% raw %}
+<pre data-test="exec" data-test-assert-contains="1349">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !weightedSet(track_id, @userLiked)' \
     'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 </div>
 
 Notice that we get a totalCount of 1349, the range search from previous example returned 1352 documents, 
@@ -2141,8 +2122,7 @@ $ vespa query \
 
 Which will produce the following result:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.007,
@@ -2191,8 +2171,7 @@ Which will produce the following result:
         ]
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 In this case, totalCount became 1476, a few more than the capped `range` search with `hitLimit`. Notice
 also the presence of `coverage:degraded` - This informs the client that this result was not fully evaluated 
 over all potential documents. We asked Vespa to do early termination and this is the signal that it did terminate early.
@@ -2236,7 +2215,7 @@ We can also combine text search queries with match phase early termination:
 $ vespa query \
     'yql=select title, artist, popularity from track where userQuery()' \
     'query=love songs' \
-    'type=any' \ 
+    'type=any' \
     'ranking=popularity' \
     'ranking.matchPhase.maxHits=100' \
     'ranking.matchPhase.attribute=popularity' \
@@ -2279,8 +2258,7 @@ $ vespa query 'yql=select track_id from track where tags contains "rock"' \
 The first part of the trace traces the query through the stateless container search 
 chain. For each searcher invoked in the chain a timestamp relative to the start of the query 
 is provided:
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "trace": {
         "children": [
@@ -2300,27 +2278,23 @@ is provided:
         ]
     }
 }    
-{% endhighlight %}   
-</pre>
+{% endhighlight %}</pre>
 
 The trace runs all the way to the query is dispatched to the content node(s)
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timestamp": 2,
     "message": "sc0.num0 search to dispatch: query=[tags:rock] timeout=9993ms offset=0 hits=1 restrict=[track]"
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 In this case, with tracing it has taken 2ms of processing in the stateless container, 
 before the query is on the wire on its way 
 to the content nodes. The first protocol phase is the next trace message. 
 In this case the reply, is ready read from the wire at timestamp 6, 
 so approximately 4 ms was spent in the first protocol matching phase, 
 including network serialization and deserialization. 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timestamp": 6,
     "message": [
@@ -2334,8 +2308,7 @@ including network serialization and deserialization.
         }
     ]
 }
-{% endhighlight %}  
-</pre>
+{% endhighlight %}</pre>
 Inside this message is the content node traces of the query, `timestamp_ms` is relative to the start of the query
 on the content node. In this case, the content node uses 1.98 ms to evaluate the first protocol phase 
 of the query (`duration_ms`). 
@@ -2348,19 +2321,16 @@ More explanation of the content node `traces` is coming soon. It includes inform
 These traces can help guide both feature tuning decisions and [scaling and sizing](sizing-search.html).
 
 Later in the trace one can also see the second query protocol phase which is the summary fill:
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timestamp": 7,
     "message": "sc0.num0 fill to dispatch: query=[tags:rock] timeout=9997ms offset=0 hits=1 restrict=[track] summary=[null]"
 }
-{% endhighlight %}  
-</pre>
+{% endhighlight %}</pre>
 
 And finally an overall breakdown of the two phases:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timestamp": 9,
     "message": "Query time query 'tags:rock': 7 ms"
@@ -2369,14 +2339,16 @@ And finally an overall breakdown of the two phases:
     "timestamp": 9,
     "message": "Summary fetch time query 'tags:rock': 2 ms"
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
 $ docker rm -f vespa
 </pre>
+</div>
 
 <script src="/js/process_pre.js"></script>
