@@ -280,7 +280,7 @@ Start the Vespa container:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ docker run -m 12G --detach --name vespa-msmarco --hostname vespa-msmarco \
-  --publish 8080:8080 --publish 19112:19112 --publish 19071:19071 \
+  --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa
 </pre>
 </div>
