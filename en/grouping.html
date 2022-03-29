@@ -340,6 +340,11 @@ the latter is the number of groups returned per content node to be merged to the
 Larger document distribution skews hence require a higher <code>precision</code> for accurate results.
 </p>
 <p>
+  An implicit limit can be specified through the
+  <code><a href="reference/query-api-reference.html#grouping.defaultMaxGroups">grouping.defaultMaxGroups</a></code> query parameter.
+  This value will always be overridden if <code>max</code> explicitly specified in the query.
+</p>
+<p>
   Example: To find the 2 globally best groups, make an educated guess on how
   many samples are needed to fetch from each node in order to get the right groups.
   This is the <code>precision</code>.
@@ -356,8 +361,10 @@ However there is one exception.
 Without an <code>order</code> constraint, <code>precision</code> is not required.
 Then local ordering will be the same as global ordering.
 Ordering will not change after a merge operation.
-</p><p>
-Example: <em>The two customers with most purchases, returning the sum for each:</em>
+</p>
+<h3 id="ordering-and-limiting-groups-example">Example</h3>
+<p>
+  Example: <em>The two customers with most purchases, returning the sum for each:</em>
 </p>
 <pre>
 select (&hellip;) | all(group(customer) max(2) precision(12) order(-count())
@@ -388,7 +395,16 @@ select (&hellip;) | all(group(customer) max(2) precision(12) order(-count())
 <p>
 Use <code>summary</code> to print the fields for a hit,
 and <code>max</code> to limit the number of hits per group.
-Example: Return the three most expensive parts per customer:
+</p>
+<p>
+  An implicit limit can be specified through the
+  <code><a href="reference/query-api-reference.html#grouping.defaultMaxHits">grouping.defaultMaxHits</a></code> query parameter.
+  This value will always be overridden if <code>max</code> explicitly specified in the query.
+</p>
+
+<h3 id="hits-per-group-example">Example</h3>
+<p>
+  Example: Return the three most expensive parts per customer:
 </p>
 <pre>
 /search/?yql=select * from sources * where true |
@@ -548,6 +564,48 @@ rank-profile pricerank inherits default {
 </li>
 </ul>
 
+<h2 id="global-limit">Global limit for grouping queries</h2>
+Use the <code><a href="query-api-reference.html#grouping.globalMaxGroups">grouping.globalMaxGroups</a></code> query parameter
+to restrict execution of queries that are potentially too expensive in terms of compute and bandwidth.
+Queries that may return a result exceeding this threshold are failed preemptively.
+This limit is compared against the total number of groups and hits that query could return at worst-case.
+
+<h3 id="resource-control-example">Examples</h3>
+<p>
+  The following query may return 5 groups and 0 hits.
+  It will be rejected when <code>grouping.globalMaxGroups &lt; 5</code>
+</p>
+<pre>
+select (&hellip;) |
+  all(group(a) max(5)
+    each(output(count())))
+</pre>
+
+<p>
+  The following query may return 5 groups and 35 hits.
+  It will be rejected when <code>grouping.globalMaxGroups &lt; 5+5*7</code>.
+</p>
+<pre>
+select (&hellip;) |
+  all(group(a) max(5)
+    each(output(count()) max(7)
+      each(output(summary()))))
+</pre>
+
+<p>
+  The following query may return 6 groups and 30 hits.
+  It will be rejected when <code>grouping.globalMaxGroups &lt; 2*(3+3*5)</code>.
+</p>
+<pre>
+select (&hellip;) |
+  all(
+    all(group(a) max(3)
+      each(output(count()) max(5)
+        each(output(summary()))))
+    all(group(b) max(3)
+      each(output(count()) max(5)
+        each(output(summary())))))
+</pre>
 
 
 <h2 id="nested-groups">Nested Groups</h2>
