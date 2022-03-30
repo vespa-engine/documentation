@@ -283,12 +283,10 @@ schema track {
 
 Notice that the `track_id` field has :
 
-- `track_id` is not used for rank computations and is defined with 
-[rank: filter](../reference/schema-reference.html#rank). 
+- [rank: filter](../reference/schema-reference.html#rank). 
 This setting can save resources when matching against the field.   
-- `track_id` is matched against using [match: word](../reference/schema-reference.html#match), 
-this is a database-style matching mode, preserving only punctuation characters which are normally
-removed.
+- [match: word](../reference/schema-reference.html#match). 
+This is a database-style matching mode, preserving punctuation characters. 
 
 ### Services Specification
 
@@ -557,7 +555,6 @@ Now, the query matches 24,053 documents and is considerably slower than the prev
 Comparing `querytime` of these two query examples, the one which matches the most documents 
 have the highest `querytime`. In worst case, the search query matches all documents, and 
 without any techniques for early termination or skipping, all matches are exposed to ranking.
-
 Query performance is greatly impacted by the number of documents 
 that matches the query specification. Generally, type `any` queries 
 requires more query compute resources than type `all`.  
@@ -565,9 +562,8 @@ requires more query compute resources than type `all`.
 There is an algorithmic optimization available for `type=any` queries, using
 the `weakAnd` query operator which implements the WAND algorithm. 
 See the [using wand with Vespa](../using-wand-with-vespa.html) for an 
-introduction to the algorithm,
-
-Run the same query, but instead of `type=any` use `type=weakAnd`:
+introduction to the algorithm. Run the same query, 
+but instead of `type=any` use `type=weakAnd`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -583,7 +579,6 @@ $ vespa query \
 Compared to the type `any` query which fully ranked 24,053 documents, 
 , `weakAnd` only fully rank 3,679 documents.
 Also notice that the faster search returns the same document at the first position. 
-
 Conceptually a search query is about finding the documents that match the query, 
 then score the documents using a ranking model. 
 In the worst case, a search query can match all documents which will expose
@@ -592,10 +587,8 @@ all of them to the ranking.
 ## Hits and summaries 
 The previous examples used `hits=1` query parameter, and in the previous
 query examples, the `summaryfetchtime` have been 
-close to a constant. 
-
-The following query requests considerably more, note that the result is piped to `head`
-to increase readbility:
+close to a constant. The following query requests considerably more,
+note that the result is piped to `head` to increase readability:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -633,9 +626,7 @@ from summary storage on disk. Read more about in-memory [attribute](../attribute
  [rank features](../reference/rank-features.html) from the content nodes. 
 
 Creating a dedicated [document-summary](../document-summaries.html) which
-only contain the `track_id` field can improve performance.
-
-In this case, since `track_id` is defined in the schema with
+only contain the `track_id` field can improve performance, since `track_id` is defined in the schema with
 `attribute`, any summary fetches using this document summary will be reading data from in-memory. 
 In addition, since the summary only contain one field, it saves network time as less data is
 transferred during the summary fill phase. 
@@ -1303,11 +1294,13 @@ to the following tracks
 
 Could be represented as a query tensor `query(user_liked)` and passed with the query request like this:
 
-<pre>
-ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
+<pre>{% raw %}
+ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
+{% endraw %}
 </pre>
 
-The tensor type of this query tensor was introduced in previous sections
+The tensor type of this query tensor was introduced in 
+[create a Vespa application package](#create-a-vespa-application-package) section.
 
 <pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;
@@ -1664,13 +1657,10 @@ So far in this guide all search queries and ranking computations have been perfo
 single threaded execution. To enable multi-threaded execution, a setting needs to be 
 added to `services.xml`. 
 Multi-threaded search and ranking can improve query latency significantly and make better
-use of multi-cpu core architectures. Search and ranking has evolved since 1998 and by 
-using multi-threaded execution, serving latency can be reduced significantly.  
-In many deployed search and recommendation systems, low serving latency is critical.  
-
+use of multi-cpu core architectures. 
 The following adds a `tuning` element to `services.xml` overriding 
 [requestthreads:persearch](../reference/services-content.html#requestthreads-persearch).
-The default number of threads used `persearch` is 1. 
+The default number of threads used `persearch` is one. 
 
 <pre data-test="file" data-path="app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
@@ -2072,15 +2062,15 @@ $ vespa query \
 </pre>
 </div>
 
-The search returned 1352 documents, that is because the popularity is capped at 100 
-and several tracks share the same unique value of 100.
-The `hitLimit` annotation for the `range` operator only specifies the lower bound, the search might return 
-more, like in this case. 
+The search returned 1,352 documents, while we asked for just five. The reason
+is that the `hitLimit` annotation for the `range` operator only specifies the lower bound.
+Documents that are tied with the same `popularity` value within the 5 largest values are returned.
 
 The `range()` query operator with `hitLimit` can be used to efficiently implement 
-top-k selection for ranking a subset of the documents.  
-for example, use the `range` search with `hitLimit` to only run the 
-track recommendation tensor computation over the most popular tracks:
+*top-k* selection for ranking a subset of the documents in the index.  
+For example, use the `range` search with `hitLimit` to only run the 
+track [recommendation tensor computation](#tensor-computations) 
+over the most popular tracks:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2094,23 +2084,23 @@ $ vespa query \
 {% endraw %}</pre>
 </div>
 
-Notice that this query returns 1349 documents while the `range` search from previous example returned 1352 documents.
-This is due to the `not` filter. 
+Notice that this query returns 1,349 documents while the `range` search from previous example returned 
+1,352 documents. This is due to the `not` filter. 
 
 The range search with `hitLimit` can be used for cases where one wants to select efficiently *top-k* of a 
 single valued numeric `attribute` with `fast-search`. Some use cases which can be efficiently implemented
-with it:
+by using it:
 
 - Run ranking computations over the most recent documents 
 using a long to represent a timestamp (e.g, using Unix epoch).
-- Compute personalization tensor expressions over pre-selected content, e.g using popularity.
+- Compute personalization tensor expressions over query time selected documents, e.g using popularity.
 - Optimize [sorting](../reference/sorting.html) queries, instead of sorting a large result, 
 find the smallest or largest values quickly by using range search with `hitLimit`.
 
 Do note that any other query or filter terms in the query are applied after having found the 
 top-k documents, hence, an aggressive filter removing many documents might end up recalling 0 documents. 
 
-This behaviour is illustrated with this query:
+This behavior is illustrated with this query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2121,16 +2111,14 @@ $ vespa query \
 </div>
 
 This query fails to retrieve any documents because the range search finds 
-1352 documents where popularity is 100, *and'ing* that 
+1,352 documents where popularity is 100, *and'ing* that 
 top-k result with the popularity=99 filter constraint ends up with 0 results. 
 
 Using range search query operator with `hitLimit` is practical for search use cases 
-like auto-complete or 
-[search suggestions](https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-suggestions)
+like auto-complete or [search suggestions](https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-suggestions)
 where one typically use [match: prefix](../reference/schema-reference.html#match) or
-n-gram matching using [match: gram](../reference/schema-reference.html#match). 
-
-Limiting the short few first character searches to include a `hitLimit` range on popularity 
+n-gram matching using [match: gram](../reference/schema-reference.html#match). Limiting the short 
+few first character searches to include a `hitLimit` range on popularity 
 can greatly improve the query performance and at the same time match against popular suggestions. 
 As the user types more characters, the number of matches is greatly reduced, so ranking can focus on more factors
 than just the single popularity attribute and increase the `hitLimit`. 
@@ -2218,12 +2206,12 @@ Which will produce the following result:
     }
 }
 {% endhighlight %}</pre>
-In this case, totalCount became 1476, a few more than the capped `range` search with `hitLimit`. Notice
+In this case, totalCount became 1,476, a few more than the `range` search with `hitLimit`. Notice
 also the presence of `coverage:degraded` - This informs the client that this result was not fully evaluated 
-over all potential documents. Read more about [graceful result degradation](../graceful-degradation.html). 
-Note that the example uses
-the `popularity` rank-profile which was configured with 1 thread per search, for low settings of `maxHits`, this
-is the recommended setting:
+over all matched documents. Read more about [graceful result degradation](../graceful-degradation.html). 
+Note that the example uses the `popularity` rank-profile which was configured with one 
+thread per search, for low settings of `maxHits`, this is the recommended setting. 
+
 <pre>
 rank-profile popularity {
     num-threads-per-search: 1
@@ -2251,8 +2239,7 @@ $ vespa query \
 </pre>
 </div>
 
-Generally, prefer `match-phase` early termination over capped range search with hitLimit.
-It's a more flexible feature. Notice that `maxHits` is _per node_. 
+Generally, prefer `match-phase` early termination over `range` search with `hitLimit`.
 Match phase limiting can also be used in combination with text search queries:
 
 <div class="pre-parent">
@@ -2269,8 +2256,8 @@ $ vespa query \
 </pre>
 </div>
 
-Since this query uses `type=any` the above query retrieves a lot more documents than `matchPhase.maxHits` so
-early termination is triggered, which will then cause the search core to match 
+Since this query uses `type=any` the above query retrieves a lot more documents than
+the target `matchPhase.maxHits` so early termination is triggered, which will then cause the search core to match 
 and rank tracks with the highest popularity. 
 
 Early termination using match-phase limits is a powerful feature 
