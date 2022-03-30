@@ -565,7 +565,7 @@ requires more query compute resources than type `all`.
 There is an algorithmic optimization available for `type=any` queries, using
 the `weakAnd` query operator which implements the WAND algorithm. 
 See the [using wand with Vespa](../using-wand-with-vespa.html) for an 
-introduction to the algorithm,
+introduction to the algorithm.
 
 Run the same query, but instead of `type=any` use `type=weakAnd`:
 
@@ -581,7 +581,7 @@ $ vespa query \
 </div>
 
 Compared to the type `any` query which fully ranked 24,053 documents, 
-, `weakAnd` only fully rank 3,679 documents.
+, `weakAnd` only fully ranks 3,679 documents.
 Also notice that the faster search returns the same document at the first position. 
 
 Conceptually a search query is about finding the documents that match the query, 
@@ -591,8 +591,7 @@ all of them to the ranking.
 
 ## Hits and summaries 
 The previous examples used `hits=1` query parameter, and in the previous
-query examples, the `summaryfetchtime` have been 
-close to a constant. 
+query examples, the `summaryfetchtime` has been close to constant. 
 
 The following query requests considerably more, note that the result is piped to `head`
 to increase readbility:
@@ -768,8 +767,8 @@ for many different aspects: [ranking](../ranking.html), [result grouping](../gro
 
 The following section focuses on the `tags` field which we defined with `attribute`,
 matching in this field will be performed using `match:word` which is the
-default match mode for string fields with `indexing: attribute`. The
-`tags` field is as type [weightedset](../reference/schema-reference.html#type:weightedset).
+default match mode for string fields with `indexing: attribute`.
+The `tags` field is of type [weightedset](../reference/schema-reference.html#type:weightedset).
 
 <pre>
  field tags type weightedset&lt;string&gt; {
@@ -777,9 +776,10 @@ default match mode for string fields with `indexing: attribute`. The
  }
 </pre>
 
-Weightedset is a field type that allow representing a tag with a integer weight, which can be used for ranking. 
-In this case, there is no inverted index structure and matching against the `tags` field 
-is performed as a linear scan, the following scans for documents where `tags` match *rock*:
+Weightedset is a field type that allows representing a tag with an integer weight, which can be used for ranking. 
+In this case, there is no inverted index structure,
+and matching against the `tags` field is performed as a linear scan.
+The following scans for documents where `tags` match *rock*:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -815,7 +815,7 @@ $ vespa query \
 </pre>
 </div>
 
-In all these examples searching the `tags` field, the matching is performed by a linear scan through all
+In all these examples searching the `tags` field, the matching is done by a linear scan through all
 `track` documents. The `tags` search can be combined with regular 
 free text query terms searching fields that do have inverted index structures:
 
@@ -835,7 +835,7 @@ by the Vespa query planner.
 
 ### Searching attribute fields using fast-search 
 This section adds `fast-search` to the `tags` field to speed up searches where there are no 
-other query filters which restricts the search. The schema with `fast-serch`:
+other query filters which restricts the search. The schema with `fast-search`:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -888,7 +888,7 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-The above will print a `WARNING:
+The above will print a WARNING:
 
 <pre>
 vespa deploy --wait 300 app/ 
@@ -903,7 +903,7 @@ In cluster 'tracks' of type 'search':
 Waiting up to 300 seconds for query service to become available ...
 </pre>   
 
-To enable `fast-search` Vespa content node(s) needs to be restarted to re-build the fast-search data structures
+To enable `fast-search`, content node(s) needs to be restarted to re-build the fast-search data structures
 for the attribute. 
 
 The following uses [vespa-sentinel-cmd command tool](../reference/vespa-cmdline-tools.html#vespa-sentinel-cmd)
@@ -916,7 +916,7 @@ $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnod
 </pre>
 </div>
 
-This step requires to wait for the searchnode, use [health state api](../reference/metrics.html):
+This step requires waiting for the searchnode, use the [health state api](../reference/metrics.html):
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
@@ -938,7 +938,7 @@ Wait for status code to flip to `up` before querying again:
 $ sleep 60
 </pre>
 
-Once up, execute the `tags`query again:
+Once up, execute the `tags` query again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -962,7 +962,7 @@ like [weightedset](../reference/schema-reference.html#type:weightedset), see
 
 This section covers [multi-value query operators](../multivalue-query-operators.html) 
 and their query performance characteristics. Many real-world search and recommendation use cases 
-involves structured multi-valued queries. 
+involve structured multi-valued queries. 
 
 Assuming a process has learned a sparse user profile representation, which, for a given user, based
 on past interactions with a service, could produce a user profile with 
@@ -1027,7 +1027,7 @@ schema track {
 }
 </pre>
 
-The `dotProduct`and `wand` query operators produces a `rank feature` called
+The `dotProduct`and `wand` query operators produce a `rank feature` called
 [rawScore(name)](../reference/rank-features.html#rawScore(field)). This feature calculates
 the sparse dot product between the query and document weights. 
 
@@ -1157,7 +1157,7 @@ covers tensors that support more floating point number types.
 
 ## Tensor Computations
 The previous sections covered matching and where query matching query operators 
-also produced rank features which could use to influence the order of the hits returned. 
+also produced rank features which could be used to influence the order of the hits returned. 
 In this section we look at ranking with [tensor computations](../tensor-examples.html) 
 using [tensor expressions](../tensor-user-guide.html). 
 
@@ -1168,9 +1168,9 @@ dense single order tensors (vectors) where Vespa also supports "matching" using 
 neighbor search](..//approximate-nn-hnsw.html). 
 
 
-The `track` schema was defined a `similar` tensor field with one named *mapped* dimension. 
+The `track` schema was defined with a `similar` tensor field with one named *mapped* dimension. 
 *Mapped* tensors can be used to represent sparse feature representations, similar
-to our `weightedset` field, but in a more generic way, and here using `float` to represent
+to the `weightedset` field, but in a more generic way, and here using `float` to represent
 the tensor cell value. 
 
 <pre>
@@ -1179,7 +1179,7 @@ field similar type tensor&lt;float&gt;(trackid{}) {
 }
 </pre>
 
-Inspecting one document, using the vespa-cli (Wraps [Vespa document/v1 api](../document-v1-api-guide.html)).
+Inspecting one document, using the vespa-cli (Wraps [Vespa document/v1 api](../document-v1-api-guide.html)):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1188,7 +1188,7 @@ $ vespa document get id:music:track::TRQIQMT128E0791D9C
 </pre>
 </div>
 
-Returns the following
+Returns:
 
 <pre>{% highlight json%}
 {
@@ -1295,7 +1295,7 @@ The query returns:
 Given a single track, one could just retrieve the document and display the offline computed similar tracks, but,
 if a user has listened to multiple tracks in a real time session, one could use a sparse dot product
 between the user recent activity and the track similarity fields. For example, listening
-to the following tracks 
+to the following tracks:
 
 - `TRQIQMT128E0791D9C` Summer Of '69 by Bryan Adams
 - `TRWJIPT128E0791D99` Run To You by Bryan Adams
@@ -1307,7 +1307,7 @@ Could be represented as a query tensor `query(user_liked)` and passed with the q
 ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
 </pre>
 
-The tensor type of this query tensor was introduced in previous sections
+The tensor type of this query tensor was introduced in previous sections:
 
 <pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;
@@ -1316,7 +1316,7 @@ The tensor type of this query tensor was introduced in previous sections
 </pre>
 
 Both the document tensor and the query tensor are defined with `trackid{}` as the *named* *mapped* dimension. The 
-sparse tensor dot product can then be expression in a `rank-profile` like this:
+sparse tensor dot product can then be expression in a `rank-profile`:
 
 <pre>
 rank-profile similar {
@@ -1528,9 +1528,9 @@ The above query produces the following result:
 }
 {% endhighlight %}</pre>
 
-This query retrieves 95,663 document and the three tracks previously *liked*, where removed from the result.
+This query retrieves 95,663 documents, and the three tracks previously *liked* were removed from the result.
 
-The following example filters by a tags query, `tags:popular`, which reduces the complexity of the
+The following example filters by a tags query, `tags:popular`, reducing the complexity of the
 query as fewer documents gets ranked by the tensor ranking expression:
 
 <div class="pre-parent">
@@ -1656,7 +1656,7 @@ $ vespa query \
 
 The `querytime` dropped to 40 ms instead of 120 ms without the `fast-search` option. 
 See also [performance considerations](../tensor-user-guide.html#performance-considerations)
-when using tensor expression. Vespa supports both `int8`, `bfloat16`, `float` and
+when using tensor expression. Vespa supports `int8`, `bfloat16`, `float` and
 `double` precision cell types. A tradeoff between speed, accuracy and memory usage.
 
 ## Multi-threaded search and ranking 
@@ -1666,7 +1666,7 @@ added to `services.xml`.
 Multi-threaded search and ranking can improve query latency significantly and make better
 use of multi-cpu core architectures. Search and ranking has evolved since 1998 and by 
 using multi-threaded execution, serving latency can be reduced significantly.  
-In many deployed search and recommendation systems, low serving latency is critical.  
+In many search and recommendation systems, low serving latency is critical.  
 
 The following adds a `tuning` element to `services.xml` overriding 
 [requestthreads:persearch](../reference/services-content.html#requestthreads-persearch).
@@ -1851,7 +1851,7 @@ multi-threaded search](sizing-search.html#reduce-latency-with-multi-threaded-per
 
 ## Advanced range search with hitLimit  
 
-Vespa has an advanced query operator that allows select the 
+Vespa has an advanced query operator that allows selecting the 
 documents with the k-largest or k-smallest values of a `fast-search` attribute field. 
 
 To demonstrate this query operator, this guide introduces a `popularity`
@@ -2050,7 +2050,7 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-Adding a new field does not require any restart, apply the partial updates by:
+Adding a new field does not require a restart, apply the partial updates by:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2060,7 +2060,7 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-With that feed job completed, it is possible to use select the five tracks with the highest popularity by 
+With that feed job completed, it is possible to select the five tracks with the highest popularity by 
 using the [range()](../reference/query-language-reference.html) query operator with `hitLimit`:
 
 <div class="pre-parent">
@@ -2102,8 +2102,8 @@ single valued numeric `attribute` with `fast-search`. Some use cases which can b
 with it:
 
 - Run ranking computations over the most recent documents 
-using a long to represent a timestamp (e.g, using Unix epoch).
-- Compute personalization tensor expressions over pre-selected content, e.g using popularity.
+using a `long` to represent a timestamp (e.g., using Unix epoch).
+- Compute personalization tensor expressions over pre-selected content, e.g. using popularity.
 - Optimize [sorting](../reference/sorting.html) queries, instead of sorting a large result, 
 find the smallest or largest values quickly by using range search with `hitLimit`.
 
