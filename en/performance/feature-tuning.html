@@ -88,7 +88,10 @@ select * from sources * where range(timestamp, 0, 100) and uuid contains "123e45
   Adding or removing <em>fast-search</em> requires restart.
 </p>
 
-
+<p>Note that <em>attribute</em> fields with <em>fast-search</em> that are not used in term based
+  <a href="../ranking.html">ranking</a> should use <em>rank: filter</em>
+for optimal performance. See reference <a href="../reference/schema-reference.html#rank">rank: filter</a>.
+</p>
 
 <h2 id="hybrid-taat-daat">Hybrid TAAT and DAAT query evaluation</h2>
 <p>
@@ -124,15 +127,16 @@ select * from sources * where range(timestamp, 0, 100) and uuid contains "123e45
   which also requires unpacking of positions of the term within the document.
 </p>
 <p>
-  The way hybrid evaluation is done is that <em>TAAT</em> is used for sub-branches
+  The way hybrid query evaluation is done is that <em>TAAT</em> is used for sub-branches
   of the overall query tree which is not used for term based ranking.
 </p>
 <p>
-  Using <em>TAAT</em> can speed up query matching significantly (up to 20-30%)
+  Using <em>TAAT</em> can speed up query matching significantly (up to 30-50%)
   in cases where the query tree is large and complex,
   and where only parts of the query tree is used for term based ranking.
-  Examples of branches that would require <em>DAAT</em>
-  is using text ranking features like <a href="../reference/rank-features.html">bm25/nativeRank</a>.
+  Examples of query tree branches that would require <em>DAAT</em>
+  is using text ranking features like <a href="../reference/rank-features.html">bm25 or nativeRank</a>.
+  
   The list of ranking features which can handle <em>TAAT</em> is long,
   but using <a href="../tensor-user-guide.html">attribute or tensor</a> features only
   can have the entire tree evaluated using <em>TAAT</em>.
@@ -151,9 +155,13 @@ search news {
     field popularity type float {} 
     field market type string {
       rank:filter
+      indexing: attribute
+      attribute: fast-search
     } 
     field language type string {
       rank:filter 
+      indexing: attribute
+      attribute: fast-search
     } 
   }
   fieldset default {
@@ -170,7 +178,7 @@ search news {
   In this case the ranking profile only uses two ranking features,
   the popularity attribute and the <a href="../reference/bm25.html">bm25</a> score of the userQuery().
   These are used in the default fieldset containing the title and body.
-  Notice how market or language is not used in the ranking expression.
+  Notice how neither <em>market</em>market or <em>language</em> is used in the ranking expression.
 </p>
 <p>
   In this query example, there is a language constraint and a market constraint,
@@ -183,8 +191,9 @@ search news {
   'ranking.profile': text-and-popularity",
   'yql': 'select * from sources * where userQuery() and \
    (language contains "en" or language contains "br") and \
-   (market contains "us" or market contains "eu" or market contains "apac" or market contains ".." ... ..... ..)'
-  'query': 'cat video'
+   (market contains "us" or market contains "eu" or market contains "apac" or market contains ".." ... ..... ..)',
+  'query': 'cat video',
+  'ranking.matching.termwiselimit': 0.01
 }
 </pre>
 <p>
@@ -192,8 +201,9 @@ search news {
   ranking score and that part of the query tree could be evaluated using <em>TAAT</em>.
   See also <a href="#multi-lookup-set-filtering">multi lookup set filter</a>
   for how to most efficiently search with large set filters where we want at least one of the constraints to match.
+  
   The sub-tree result is then passed as a bit vector into the <em>DAAT</em> query evaluation,
-  which could speed up the overall evaluation.
+  which could speed up the overall evaluation significantly.
 </p>
 <p>
   Enabling hybrid <em>TAAT</em> is done by passing
@@ -309,15 +319,14 @@ field user_id type long {
 <p>
   E.g if we have 10M unique user_ids in the dictionary, and we search for 1000 users per query,
   <em>btree</em> dictionary would be 1000 lookup times log(10M),
-  while hash based would be 1000 lookups times 1.
+  while <em>hash</em> based would be 1000 lookups times 1.
+
   The <code>weightedSet</code> query set filtering also work brilliantly in combination with <em>TAAT</em>,
   see <a href="#hybrid-taat-daat">hybrid TAAT/DAAT</a> section.
 </p>
 <p>
   Also see the <a href="../reference/schema-reference.html#dictionary">dictionary schema reference</a>.
 </p>
-
-
 
 <h2 id="document-summaries-hits">Document summaries - hits</h2>
 <p>
@@ -328,7 +337,11 @@ field user_id type long {
   Vespa can support memory-only summary/hit fetching if fields referenced in document summary are
   <strong>all</strong> defined as <em>attribute</em>.
 </p>
-
+<p>
+  See also the <a href="practical-search-performance-guide.html#hits-and-summaries">practical 
+    search performance guide</a>. 
+  </a>
+</p>
 
 
 <h2 id="boolean-numeric-text-attribute">Boolean, numeric, text attribute</h2>
