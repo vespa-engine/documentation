@@ -959,7 +959,7 @@ to use [rank: filter](../reference/schema-reference.html#rank).
 field availability type int {
     indexing: summary | attribute
     rank: filter
-    attribute:{
+    attribute {
         fast-search
     }
 }
