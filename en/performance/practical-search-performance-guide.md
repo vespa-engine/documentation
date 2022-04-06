@@ -952,6 +952,24 @@ For use cases requiring `match:text` when searching multi-valued string field ty
 like [weightedset](../reference/schema-reference.html#type:weightedset), see
 [searching multi-value fields](../searching-multi-valued-fields.html).
 
+For fields that don't need any match ranking features, it's strongly recommended
+to use [rank: filter](../reference/schema-reference.html#rank).
+
+<pre>
+field availability type int {
+    indexing: summary | attribute
+    rank: filter
+    attribute {
+        fast-search
+    }
+}
+</pre>
+
+With the settings above, bit vector posting list representations are used. This is especially efficient
+when used in combination with [TAAT (term at a time)](feature-tuning.html#hybrid-taat-daat) 
+query evaluation. For some cases with many query terms, enabling `rank: filter` can reduce match latency
+by 75%. 
+
 ## Multi-valued query operators
 
 This section covers [multi-value query operators](../multivalue-query-operators.html) 
