@@ -2405,7 +2405,7 @@ This concludes this tutorial. The following removes the container and the data:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
-$ #docker rm -f vespa
+$ docker rm -f vespa
 </pre>
 </div>
 
