@@ -967,7 +967,7 @@ field availability type int {
 
 Using the above, will create bit vector postings representations which is especially efficient
 when used in combination with [TAAT (term at a time)](feature-tuning.html#hybrid-taat-daat) 
-query evaluation. For some cases with man query terms, enabling `rank: filter` can reduce match latency
+query evaluation. For some cases with many query terms, enabling `rank: filter` can reduce match latency
 by 75%. 
 
 ## Multi-valued query operators
