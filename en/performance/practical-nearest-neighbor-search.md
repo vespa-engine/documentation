@@ -662,21 +662,21 @@ See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more de
 Vespa's nearest neighbor search operator supports doing exact brute force nearest neighbor search
 using dense representations. This guide uses
 the [sentence-transformers/all-MiniLM-L6-V2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
-embedding model. 
-
-A pre-generated a set of document embeddings are available for download. 
+embedding model. Download the pre-generated document embeddings and feed them to Vespa. 
+The feed file uses [partial updates](../partial-updates.html) to add the vector embedding. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o lastfm_embeddings.jsonl.zst \
     https://data.vespa.oath.cloud/sample-apps-data/lastfm_embeddings.jsonl.zst
-$ zstdcat lastfm_embeddings.jsonl.zst | ./vespa-feed-client-cli/vespa-feed-client \
+$ zstdcat lastfm_embeddings.jsonl.zst | ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --stdin --endpoint http://localhost:8080
 </pre>
 </div>
 
-Throughout the nearest neighbor search examples a pre-generated query vector embedding is used:
+Throughout the nearest neighbor search examples a pre-generated query vector embedding is used. The
+query encoding is obtained using the following python snippet:
 
 <pre>
 {% highlight python%}
@@ -1302,7 +1302,7 @@ or `attribute` with `fast-search` and `rank: filter`.
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
 <pre data-test="after">
-$ #docker rm -f vespa
+$ docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
