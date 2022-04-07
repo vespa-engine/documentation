@@ -551,8 +551,6 @@ the query only expose about 3,600 documents to the `first-phase` ranking express
 Also notice that the faster search returns the same document at the first position. 
 
 
-One can also express a phrase search 
-
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
@@ -570,14 +568,13 @@ search only finds 1 document matching the exact phrase.
 ## Maximum Inner Product Search using Vespa WAND
 
 The previous section introduced the `weakAnd` query operator which integrates with linguistic processing and 
-string matching using `match: text`.  This section focus on the 
-[wand](../multivalue-query-operators.html#wand-example) query operator which allow querying
-using sparse feature representations using integer weights. 
+string matching using `match: text`.  
 
-Both the [wand](../multivalue-query-operators.html#wand-example) and
-[dotProduct](../multivalue-query-operators.html#dotproduct-example) query operators produces a rank feature called
-[rawScore(name)](../reference/rank-features.html#rawScore(field)), which calculates
-the sparse dot product between the sparse query and document integer weights. 
+The following examples uses the
+[wand()](../reference/query-language-reference.html#wand) query operator. The `wand` query operator
+calculates the maximum inner product search between the sparse query and document feature integer
+weights. The inner product ranking score can be used in a ranking expression using 
+the [rawScore(name)](../reference/rank-features.html#match-operator-scores). 
 
 <pre>
 rank-profile tags {
