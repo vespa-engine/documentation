@@ -9,7 +9,7 @@ title: "Vespa nearest neighbor search - a practical guide"
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset to illustrate Vespa query performance. 
  Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.  
- See also the the generic [Vespa performance - a practical guide](practical-search-performance-guide.md).
+ See also the the generic [Vespa performance - a practical guide](practical-search-performance-guide.html).
 
 This guide covers the following:
 
@@ -387,7 +387,7 @@ Start the Vespa container image using Docker:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ docker run -m 6G --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa
@@ -571,11 +571,11 @@ search only finds 1 document matching the exact phrase.
 
 The previous section introduced the `weakAnd` query operator which integrates with linguistic processing and 
 string matching using `match: text`.  This section focus on the 
-[wand](../multivalue-query-operators.html#wand) query operator which allow querying
+[wand](../multivalue-query-operators.html#wand-example) query operator which allow querying
 using sparse feature representations using integer weights. 
 
-Both the [wand](../multivalue-query-operators.html#wand) and
-[dotProduct](../multivalue-query-operators.html#dotProduct) query operators produces a rank feature called
+Both the [wand](../multivalue-query-operators.html#wand-example) and
+[dotProduct](../multivalue-query-operators.html#dotproduct-example) query operators produces a rank feature called
 [rawScore(name)](../reference/rank-features.html#rawScore(field)), which calculates
 the sparse dot product between the sparse query and document integer weights. 
 
@@ -776,7 +776,7 @@ $ vespa query \
 </div>
 
 Now, the exact search latency is reduced by using more threads, 
-see [multi-threaded searching and ranking](practical-search-performance-guide.md#multi-threaded-search-and-ranking).
+see [multi-threaded searching and ranking](practical-search-performance-guide.html#multi-threaded-search-and-ranking).
 <pre>
 {% highlight json%}
 {
