@@ -245,6 +245,16 @@ also see [weightedset](reference/query-language-reference.html#weightedset)
 for writing a YQL query to select multiple IDs.
 The ID must be a field in the document type.
 
+#### How to count hits / all documents without returning results?
+Count all documents using a query like [select * from doc where true](query-language.html) -
+this counts all documents from the "doc" source.
+Using `select * from doc where true limit 0` will return the count and no hits,
+alternatively add [hits=0](reference/query-api-reference.html#hits).
+Pass [ranking.profile=unranked](reference/query-api-reference.html#ranking.profile)
+to make the query less expensive to run.
+If an _estimate_ is good enough, use [hitcountestimate=true](reference/query-api-reference.html#hitcountestimate).
+
+
 
 {:.faq-section}
 ### Feeding
