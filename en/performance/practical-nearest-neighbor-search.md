@@ -4,7 +4,7 @@ title: "Vespa nearest neighbor search - a practical guide"
 ---
 
  This is a practical guide to using Vespa nearest neighbor search query operator and how to combine nearest
- neighbor search, or dense retrieval with other Vespa query operators. The guide also covers
+ neighbor search, or dense evalretri with other Vespa query operators. The guide also covers
  diverse efficient candidate retrievers which can be used in a multi-phase ranking funnel. 
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset to illustrate Vespa query performance. 
@@ -256,6 +256,7 @@ schema track {
         field popularity type int {
             indexing: summary | attribute
             attribute: fast-search
+            rank: filter
         }
     }
 
@@ -567,12 +568,13 @@ search only finds 1 document matching the exact phrase.
 
 ## Maximum Inner Product Search using Vespa WAND
 
-The previous section introduced the `weakAnd` query operator which integrates with linguistic processing and 
-string matching using `match: text`.  
+The previous section introduced the `weakAnd` query operator which integrates 
+with [linguistic processing](../linguistics.html) and string matching using `match: text`.  
 
 The following examples uses the
-[wand()](../reference/query-language-reference.html#wand) query operator. The `wand` query operator
-calculates the maximum inner product search between the sparse query and document feature integer
+[wand()](../reference/query-language-reference.html#wand) query operator. 
+The `wand` query operator calculates the maximum inner product search 
+between the sparse query and document feature integer
 weights. The inner product ranking score can be used in a ranking expression using 
 the [rawScore(name)](../reference/rank-features.html#match-operator-scores). 
 
@@ -648,12 +650,12 @@ $ vespa query \
 
 {% endhighlight %}
 </pre>
-The *wand* query operator exposed a total of about 60 documents to the first phase ranking which 
-used the `rawScore` rank-feature directly, hence the `relevancy` is the 
-result of the sparse dot product.
+The `wand` query operator exposed a total of about 60 documents to the first phase ranking which 
+uses the `rawScore(tag)` rank-feature directly, hence the `relevancy` is the 
+result of the sparse dot product between the user profile and the document tags. 
 
 The `wand` query operator is safe, meaning, it returns the same top-k results as 
-the brute-force `dotProduct` query operator. *wand* is a type of query operator which
+the brute-force `dotProduct` query operator. `wand` is a type of query operator which
 performs matching and ranking interleaved and skipping documents
 which cannot compete into the top-k results. 
 See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
@@ -676,7 +678,7 @@ $ zstdcat lastfm_embeddings.jsonl.zst | ./vespa-feed-client-cli/vespa-feed-clien
 </div>
 
 Throughout the nearest neighbor search examples a pre-generated query vector embedding is used. The
-query encoding is obtained using the following python snippet:
+query encoding is obtained using the following snippet:
 
 <pre>
 {% highlight python%}
@@ -689,11 +691,11 @@ print(model.encode("Total Eclipse Of The Heart").tolist())
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ export Q="[-0.008065593428909779, 0.08453001081943512, 0.05018267780542374, -0.00884118303656578, -0.03753741458058357, -0.002897844184190035, 0.018800711259245872, -0.08455602824687958, 0.12270907312631607, -0.11035755276679993, 0.02900831587612629, -0.03181139752268791, -0.059499651193618774, -0.005452691577374935, -0.021512603387236595, 0.03091139905154705, 0.007443971000611782, 0.0033167325891554356, 0.006025344133377075, 0.0407075360417366, -0.09435737133026123, -0.043547291308641434, -0.003722529858350754, 0.04549279063940048, -0.01646103896200657, 0.10117562115192413, -0.028849618509411812, -0.02792065404355526, -0.04440610110759735, -0.012309690937399864, 0.02463461086153984, -0.010905942879617214, 0.016348496079444885, 0.03120623156428337, -0.03689209371805191, -0.026606908068060875, 0.007187394890934229, 0.026255015283823013, -0.027878889814019203, 0.04887397959828377, -0.040938086807727814, -0.04059148579835892, -0.018180137500166893, 0.03347662836313248, 0.034363873302936554, -0.009773473255336285, -0.03761803358793259, -0.05165955796837807, 0.02030535228550434, 0.029069935902953148, -0.029270710423588753, -0.04302166402339935, -0.14273975789546967, -0.054517582058906555, 0.05221065133810043, -0.021013369783759117, -0.011579306796193123, -0.05847478657960892, 0.017305167391896248, -0.01687753014266491, 0.02265619859099388, 0.016990581527352333, -0.07423004508018494, 0.0670929029583931, -0.043099191039800644, -0.06476132571697235, -0.02833601087331772, 0.06560441106557846, -0.04813879355788231, 0.034389808773994446, 0.025906093418598175, -0.03387472406029701, 0.08512983471155167, -0.08200040459632874, -0.043198585510253906, 0.05377274006605148, -1.3492515790858306e-05, -0.07457280158996582, -0.011894909664988518, -0.056003738194704056, 0.02744675986468792, -0.02683129347860813, -0.08751800656318665, 0.009949575178325176, 0.009947385638952255, 0.07105473428964615, 0.006816620007157326, 0.02214016579091549, -0.03223466873168945, 0.06848280131816864, -0.002865268150344491, -0.10906799882650375, -0.004794569220393896, 0.0700574591755867, -0.017358610406517982, 0.005850719287991524, -0.007386602461338043, -0.03422526270151138, -0.06186102703213692, 0.09635236859321594, 0.03765295445919037, 0.03840741887688637, -0.031325798481702805, -0.022597692906856537, 0.06412969529628754, -0.04569492116570473, 0.05510227382183075, -0.011190789751708508, 0.016163261607289314, -0.01587338000535965, -0.006616983097046614, -0.08257699012756348, 0.061467889696359634, -0.036905497312545776, 0.0396663062274456, 0.09937333315610886, 0.0628795400261879, 0.031959712505340576, 0.018774161115288734, 0.09851669520139694, 0.10548844188451767, -0.04587824270129204, 0.08409712463617325, 0.0408954881131649, -0.08757888525724411, -0.015198812820017338, -0.0015260233776643872, -4.5127051803914994e-33, 0.04512721300125122, 0.02022739127278328, 0.10873544216156006, 0.031336165964603424, 0.020439941436052322, 0.01180290151387453, -0.04260794073343277, 0.034157123416662216, -0.0530574694275856, -0.02271156944334507, -0.07331117987632751, -0.051517896354198456, -0.006412195973098278, 0.004073905758559704, -0.01808927021920681, -0.03291923180222511, -0.06715051829814911, 0.1264735609292984, 0.01830722764134407, -0.006467769853770733, -0.02958807535469532, -0.04435303434729576, -0.08525101095438004, -0.0426446832716465, -0.05052332580089569, 0.056784987449645996, 0.04760073125362396, 0.04232100024819374, -0.012680839747190475, 0.04057534411549568, -0.016715282574295998, -0.038503557443618774, 0.05970745533704758, 0.015299498103559017, -0.030979091301560402, 0.04322757199406624, -0.04851067438721657, 0.007697853725403547, -0.00765706691890955, 0.028058459982275963, -0.013527121394872665, 0.03533558547496796, -0.08002450317144394, -0.05159372836351395, 0.016727318987250328, 0.020383279770612717, 0.058962564915418625, 0.04943905025720596, 0.0484146922826767, 0.03329985961318016, 0.024137509986758232, 0.00945933535695076, 0.02096088044345379, -0.042136695235967636, -0.020796949043869972, 0.048218026757240295, 0.014527356252074242, 0.04205385595560074, -0.0037270491011440754, -0.012404494918882847, 0.0406918004155159, 0.052811697125434875, 0.014659274369478226, -0.0343233197927475, -0.004552842583507299, 0.06838028877973557, -0.05307793244719505, -0.1066446378827095, -0.05113332346081734, 0.029849926009774208, -0.06266053766012192, -0.03584916889667511, 0.03204002231359482, -0.05363399535417557, 0.08498287945985794, 0.022012196481227875, 0.07978614419698715, 0.05392017215490341, -0.04454052820801735, -0.05780909210443497, -0.16149619221687317, 0.06632131338119507, 0.06512226164340973, -0.04338205233216286, 0.08380760252475739, 0.043481167405843735, -0.00976069737225771, -0.010386576876044273, -0.08425439894199371, -0.020755212754011154, 0.04098920896649361, 0.025638438761234283, -0.011476637795567513, -0.0652712807059288, -0.0458490215241909, 3.3561006564449414e-33, -0.045877546072006226, -0.014327161014080048, -0.00889583770185709, -0.07991943508386612, 0.06335989385843277, 0.020355327054858208, -0.08159274607896805, 0.08775875717401505, 0.04613940790295601, 0.058199282735586166, 0.004947203677147627, -0.024214154109358788, 0.04702865704894066, 0.018762843683362007, 0.05060647055506706, -0.020737560465931892, 0.020449569448828697, -0.00315210223197937, -0.019496789202094078, 0.08003784716129303, 0.030812574550509453, 0.021192725747823715, 0.04074690118432045, -0.010161326266825199, -0.01750219613313675, 0.07027928531169891, 0.07621443271636963, -0.021291153505444527, 0.02731945924460888, -0.08593399077653885, 0.05897112935781479, -0.06813547760248184, -0.12615789473056793, 0.024827904999256134, -0.036509256809949875, 0.03583522513508797, -0.028349364176392555, 0.03544466942548752, -0.06820773333311081, 0.004819205962121487, -0.031920406967401505, 0.02264106273651123, 0.012271669693291187, 0.07367941737174988, 0.02805280312895775, -0.019734136760234833, 0.05411006510257721, 0.1244635060429573, 0.02204885520040989, -0.020645083859562874, -0.09927894175052643, -0.04384636506438255, -0.044096820056438446, 0.09273523837327957, 0.0036650339607149363, -0.00589165510609746, -0.03742601349949837, 0.03430400416254997, -0.021355658769607544, -0.046258632093667984, -0.03139067813754082, -0.03371819108724594, 0.015043865889310837, -0.040960583835840225, 0.0005861789686605334, 0.022100983187556267, 0.014802497811615467, 0.01974347233772278, -0.15989500284194946, 0.06509614735841751, -0.016112778335809708, 0.059294622391462326, -0.24891476333141327, 0.023260807618498802, 0.030897853896021843, 0.04748426005244255, 0.06302175670862198, -0.060118284076452255, -0.0019891539122909307, -0.04915579780936241, -0.05969022586941719, -0.014428123831748962, 0.012632399797439575, 0.004207937978208065, 0.019165141507983208, -0.039342571049928665, 0.006500255316495895, 0.024150803685188293, -0.004393275361508131, 0.0450282096862793, -0.02574659138917923, 0.07830891013145447, -0.01446054968982935, -0.03755667433142662, 0.0028512096032500267, -1.3547870381103166e-08, 0.019127607345581055, 0.039926059544086456, -0.017314990982413292, -0.0884983018040657, -0.03971191495656967, -0.02919849194586277, 0.05020134150981903, 0.012144864536821842, -0.042309850454330444, 0.05202021449804306, 0.035093676298856735, 0.06074520945549011, 0.011429301463067532, 0.030419116839766502, -0.06799472123384476, 0.014796014875173569, 0.03248818218708038, -0.02767939120531082, -0.045667778700590134, -0.032344453036785126, 0.09448641538619995, 0.006221190560609102, 0.08226171135902405, -0.10274671763181686, 0.012639115564525127, -0.053681086748838425, 0.037539899349212646, 0.010317509062588215, 0.028925608843564987, -0.025364894419908524, 0.11875864863395691, 0.03408011421561241, 0.02434944547712803, -0.034273095428943634, -0.05486215278506279, -0.013620521873235703, 0.025710809975862503, 0.06839863955974579, -0.008693386800587177, 0.08522018790245056, 0.027604777365922928, -0.08558861166238785, 0.03820370137691498, 0.009757391177117825, -0.023547468706965446, 0.010406864807009697, 0.07114516198635101, -0.07792956382036209, -0.033378396183252335, -0.02428746409714222, 0.02293989062309265, -0.004945156630128622, -0.001709840609692037, -0.04669877141714096, 0.031319715082645416, 0.022594738751649857, 0.004356659483164549, 0.069020576775074, -0.017948495224118233, 0.03409144654870033, 0.10871049016714096, 0.03606746718287468, 0.009485756978392601, 0.028754733502864838]"
+$ export Q="[-0.0080656, 0.08453, 0.0501827, -0.0088412, -0.0375374, -0.0028978, 0.0188007, -0.084556, 0.1227091, -0.1103576, 0.0290083, -0.0318114, -0.0594996, -0.0054527, -0.0215126, 0.0309114, 0.007444, 0.0033167, 0.0060253, 0.0407075, -0.0943574, -0.0435473, -0.0037225, 0.0454928, -0.016461, 0.1011756, -0.0288496, -0.0279207, -0.0444061, -0.0123097, 0.0246346, -0.0109059, 0.0163485, 0.0312062, -0.0368921, -0.0266069, 0.0071874, 0.026255, -0.0278789, 0.048874, -0.0409381, -0.0405915, -0.0181801, 0.0334766, 0.0343639, -0.0097735, -0.037618, -0.0516596, 0.0203054, 0.0290699, -0.0292707, -0.0430217, -0.1427398, -0.0545176, 0.0522107, -0.0210134, -0.0115793, -0.0584748, 0.0173052, -0.0168775, 0.0226562, 0.0169906, -0.07423, 0.0670929, -0.0430992, -0.0647613, -0.028336, 0.0656044, -0.0481388, 0.0343898, 0.0259061, -0.0338747, 0.0851298, -0.0820004, -0.0431986, 0.0537727, -1.35e-05, -0.0745728, -0.0118949, -0.0560037, 0.0274468, -0.0268313, -0.087518, 0.0099496, 0.0099474, 0.0710547, 0.0068166, 0.0221402, -0.0322347, 0.0684828, -0.0028653, -0.109068, -0.0047946, 0.0700575, -0.0173586, 0.0058507, -0.0073866, -0.0342253, -0.061861, 0.0963524, 0.037653, 0.0384074, -0.0313258, -0.0225977, 0.0641297, -0.0456949, 0.0551023, -0.0111908, 0.0161633, -0.0158734, -0.006617, -0.082577, 0.0614679, -0.0369055, 0.0396663, 0.0993733, 0.0628795, 0.0319597, 0.0187742, 0.0985167, 0.1054884, -0.0458782, 0.0840971, 0.0408955, -0.0875789, -0.0151988, -0.001526, -0.0, 0.0451272, 0.0202274, 0.1087354, 0.0313362, 0.0204399, 0.0118029, -0.0426079, 0.0341571, -0.0530575, -0.0227116, -0.0733112, -0.0515179, -0.0064122, 0.0040739, -0.0180893, -0.0329192, -0.0671505, 0.1264736, 0.0183072, -0.0064678, -0.0295881, -0.044353, -0.085251, -0.0426447, -0.0505233, 0.056785, 0.0476007, 0.042321, -0.0126808, 0.0405753, -0.0167153, -0.0385036, 0.0597075, 0.0152995, -0.0309791, 0.0432276, -0.0485107, 0.0076979, -0.0076571, 0.0280585, -0.0135271, 0.0353356, -0.0800245, -0.0515937, 0.0167273, 0.0203833, 0.0589626, 0.0494391, 0.0484147, 0.0332999, 0.0241375, 0.0094593, 0.0209609, -0.0421367, -0.0207969, 0.048218, 0.0145274, 0.0420539, -0.003727, -0.0124045, 0.0406918, 0.0528117, 0.0146593, -0.0343233, -0.0045528, 0.0683803, -0.0530779, -0.1066446, -0.0511333, 0.0298499, -0.0626605, -0.0358492, 0.03204, -0.053634, 0.0849829, 0.0220122, 0.0797861, 0.0539202, -0.0445405, -0.0578091, -0.1614962, 0.0663213, 0.0651223, -0.0433821, 0.0838076, 0.0434812, -0.0097607, -0.0103866, -0.0842544, -0.0207552, 0.0409892, 0.0256384, -0.0114766, -0.0652713, -0.045849, 0.0, -0.0458775, -0.0143272, -0.0088958, -0.0799194, 0.0633599, 0.0203553, -0.0815927, 0.0877588, 0.0461394, 0.0581993, 0.0049472, -0.0242142, 0.0470287, 0.0187628, 0.0506065, -0.0207376, 0.0204496, -0.0031521, -0.0194968, 0.0800378, 0.0308126, 0.0211927, 0.0407469, -0.0101613, -0.0175022, 0.0702793, 0.0762144, -0.0212912, 0.0273195, -0.085934, 0.0589711, -0.0681355, -0.1261579, 0.0248279, -0.0365093, 0.0358352, -0.0283494, 0.0354447, -0.0682077, 0.0048192, -0.0319204, 0.0226411, 0.0122717, 0.0736794, 0.0280528, -0.0197341, 0.0541101, 0.1244635, 0.0220489, -0.0206451, -0.0992789, -0.0438464, -0.0440968, 0.0927352, 0.003665, -0.0058917, -0.037426, 0.034304, -0.0213557, -0.0462586, -0.0313907, -0.0337182, 0.0150439, -0.0409606, 0.0005862, 0.022101, 0.0148025, 0.0197435, -0.159895, 0.0650961, -0.0161128, 0.0592946, -0.2489148, 0.0232608, 0.0308979, 0.0474843, 0.0630218, -0.0601183, -0.0019892, -0.0491558, -0.0596902, -0.0144281, 0.0126324, 0.0042079, 0.0191651, -0.0393426, 0.0065003, 0.0241508, -0.0043933, 0.0450282, -0.0257466, 0.0783089, -0.0144606, -0.0375567, 0.0028512, -0.0, 0.0191276, 0.0399261, -0.017315, -0.0884983, -0.0397119, -0.0291985, 0.0502013, 0.0121449, -0.0423099, 0.0520202, 0.0350937, 0.0607452, 0.0114293, 0.0304191, -0.0679947, 0.014796, 0.0324882, -0.0276794, -0.0456678, -0.0323445, 0.0944864, 0.0062212, 0.0822617, -0.1027467, 0.0126391, -0.0536811, 0.0375399, 0.0103175, 0.0289256, -0.0253649, 0.1187586, 0.0340801, 0.0243494, -0.0342731, -0.0548621, -0.0136205, 0.0257108, 0.0683986, -0.0086934, 0.0852202, 0.0276048, -0.0855886, 0.0382037, 0.0097574, -0.0235475, 0.0104069, 0.0711452, -0.0779296, -0.0333784, -0.0242875, 0.0229399, -0.0049452, -0.0017098, -0.0466988, 0.0313197, 0.0225947, 0.0043567, 0.0690206, -0.0179485, 0.0340914, 0.1087105, 0.0360675, 0.0094858, 0.0287547]"
 </pre>
 </div>
 
-The first query example uses exact nearest neighbor search: 
+The first query example uses [exact nearest neighbor search](../nearest-neighbor-search.html): 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -713,9 +715,13 @@ document tensor field.
 - The annotation `approximate:false` tells Vespa to perform exact search.
 - The `hits` parameter controls how many results are returned in the response. 
 - `ranking=closeness` tells Vespa which rank-profile to use. One must 
-specify how to rank the `targetHits` documents retrieved and exposed to `first-phase` rank expression.
+specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` rank expression.
+Not specifying [ranking](..//reference/query-api-reference.html#ranking.profile) will cause
+Vespa to use [nativeRank](../nativerank.html) which does not use the semantic similarity, causing
+results to be randomly sorted. 
 
-The above exact nearest neighbor search will return the following:
+The above exact nearest neighbor search will return the following
+[result](../reference/default-result-format.html):
 
 <pre>
 {% highlight json%}
@@ -756,10 +762,12 @@ The above exact nearest neighbor search will return the following:
 </pre>
 The exact search takes approximately 51ms, performing 95,666 distance calculations. 
 A total of about 120 documents were exposed to the first-phase ranking during the search as can be seen from
-`totalCount`.  
+`totalCount`.  Vespa's brute force nearest neighbor search uses chunked distance calculations, splitting
+the vector into chunks - this way Vespa does not need to fully evaluate all distance calculations using
+the complete representation. 
 
-It is possible to reduce search latency of the exact search by throwing more cpu resources at it. 
-Changing the rank-profile used with the search to `closeness-t4` uses four threads:
+It is possible to reduce search latency of the exact search by throwing more CPU resources at it. 
+Changing the rank-profile used with the search to `closeness-t4` makes Vespa use four threads:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -789,9 +797,11 @@ see [multi-threaded searching and ranking](practical-search-performance-guide.ht
 ## Approximate nearest neighbor search
 This section covers using the faster, but approximate, nearest neighbor search. The 
 `track` schema's `embedding` field has `index` enabled which means Vespa builds a 
-`HNSW` index to support fast, approximate search.
+`HNSW` index to support fast, approximate search. See 
+[Approximate Nearest Neighbor Search using HNSW Index](../approximate-nn-hnsw.html).
 
-The default query behavior is using `approximate:true` :
+The default query behavior is using `approximate:true` when the `embedding` 
+field has `index`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -848,24 +858,28 @@ Now, the query is significantly faster, but also uses less resources during the 
 to 20 ms with the exact search one had to use 4 matching threads, in this case, the
 result latency is down to 4ms with a single matching thread. 
 
-In this case, the approximate search returned the exact same top-1 hit, so no accuracy loss compared
-to the exact search.
+In this case, the approximate search returned the exact same top-1 hit, so for this query, there was
+no accuracy loss for the top-1 position. 
 
-A few key differences with approximate versus exact:
+A few key differences with approximate versus exact search:
 
-- `totalCount` is different, when using the approximate version, it exposes exactly `targethits` to the 
-configurable `first-phase` rank expression. The exact search is using a scoring heap during scoring and documents which at some time
-were put on the heap are exposed to first phase ranking.
+- `totalCount` is different, when using the approximate version, Vespa exposes exactly `targethits` to the 
+configurable `first-phase` rank expression in the chosen `rank-profile`.
+ The exact search is using a scoring heap during distance calculations, and documents which at some time
+were put on the top-k heap are exposed to first phase ranking.
 - The search is approximate, it might not return the exact top 10 closest vectors as with exact search, this
 is a complex tradeoff between accuracy, query performance , and memory usage. 
+See [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
+for a deep-dive into these trade-offs.
 
 With the support for setting `approximate:false|true` a developer can quantify accuracy loss by comparing the 
-k exact nearest neighbor search with the k returned by the approximate search. 
-By doing so, developers can quantify the recall@k or overlap@k, and find the right balance between search performance and accuracy. 
+results of exact nearest neighbor search with the results of the approximate search. 
+By doing so, developers can quantify the recall@k or overlap@k, 
+and find the right balance between search performance and accuracy. 
 
 ## Combining approximate nearest neighbor search with query filters
-Vespa allows combining the search for nearest neighbors to be constrained by regular query filters:
-
+Vespa allows combining the search for nearest neighbors to be constrained by regular query filters. 
+In this example the `title` must contain the term `heart`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -927,30 +941,39 @@ Which returns the following response:
 </pre>
 
 When using filtering, it is important for performance reasons that the fields that are included in the filters have
-been defined with `index` or `attribute:fast-search`. 
+been defined with `index` or `attribute:fast-search`.
+See [searching attribute fields](../practical-search-performance-guide#searching-attribute-fields).
 
-The optimal performance for pure filtering (where the query term does not influence ranking) is achieved
-using `rank: filter` in the schema. 
+The optimal performance for pure filtering, where the query term(s) does not influence ranking, is achieved
+using `rank: filter` in the schema.
 
 <pre>
-field category type string {
+field popularity type int {
     indexing: summary | attribute
     rank: filter
     attribute: fast-search
 }
 </pre>
-
-Or 
+Matching against the popularity field does not influence ranking and Vespa can use the most efficient posting
+list representation. Note that one can still access the value of
+the attribute in ranking expressions. 
 
 <pre>
-field category type string {
-    indexing: summary | index
-    rank: filter
+rank-profile popularity {
+    first-phase {
+        expression: attribute(popularity)
+    }
 }
 </pre>
 
-In this case, where searching in the `title` field which one can specify `ranked:false` for the query term, which
-disables term ranking and the search can use the most efficient posting list representation which is a bit vector.
+
+In the following example, since the `title` field does not have `rank: filter` one can instead
+flag that the term should not be used by any ranking expression by 
+using the [`ranked` query annotation](../reference/query-language-reference.html#ranked). 
+
+The following disables term based ranking and 
+the matching against the `title` field can use the most efficient 
+posting list representation.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -963,9 +986,10 @@ $ vespa query \
 </pre>
 </div>
 
-In these examples, since we did not change the rank profile, the matching would not impact the rank score anyway. 
+In the previous examples, since the rank-profile did only use the `closeness` rank feature,  
+the matching would not impact the score anyway. 
 
-The filter expression can be also complex using the full Vespa query language:
+Vespa also allow combining the `nearestNeighbor` query operator with any other Vespa query operator.  
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -978,13 +1002,16 @@ $ vespa query \
 </pre>
 </div>
 
-## Hybrid sparse and dense retrieval methods with Vespa
-In the previous filtering examples the result ranking was not impacted by the filters, the filters were only used to impact recall, not the
-order of the results. The following examples demonstrates how to perform hybrid retrieval combining the efficient query operators in 
-a single query. 
+In this case restricting the nearest neighbor search to tracks by `Bonnie Tyler` with `popularity > 20`.
 
-The first example combines nearestNeighbor search with the `weakAnd` query operator, combining them using logical
-disjunction (OR):
+## Hybrid sparse and dense retrieval methods with Vespa
+In the previous filtering examples the ranking was not impacted by the filters, the filters were only used to impact recall, not the
+order of the results. The following examples demonstrates how to perform hybrid retrieval combining the efficient query operators in 
+a single query. Hybrid retrieval can be used as the first phase in a multi-phase ranking funnel, see 
+[phased ranking](../phased-ranking.html).
+
+The first example combines the `nearestNeighbor` operator with the `weakAnd` query operator, combining them using logical
+disjunction (`OR`):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -999,8 +1026,10 @@ $ vespa query \
 </pre>
 </div>
 
-The query above uses both efficient retrievers to retrieve hits which are ranked using the ranking profile `hybrid`
-which is defined as:
+The query combines the `weakAnd` and `nearestNeighbor` query operator using logical disjunction. Both query operator retrievers
+the target number of hits ranked by it's inner raw score/distance. The list of documents exposed to configurable ranking expression
+is hence a combination of the best of two different strategies. The ranking is performed using the following
+`hybrid` rank profile:
 
 <pre>
 rank-profile hybrid {
@@ -1087,11 +1116,13 @@ The query returns the following result:
     }
 {% endhighlight %} 
 </pre>
-The result also include [match-features](../reference/schema-reference.html#match-features) which 
-can be used for feature logging for [learning to rank](../learning-to-rank.html) or to simply
-debug the final relevancy score. 
 
-In the below query, the weight of the embedding score is increased:
+The result hits also include [match-features](../reference/schema-reference.html#match-features) which 
+can be used for feature logging for [learning to rank](../learning-to-rank.html) or to simply
+debug the final score. 
+
+In the below query, the weight of the embedding similarity (closeness) is increased by overriding
+the `query(wWector)` weight:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1107,6 +1138,7 @@ $ vespa query \
 </pre>
 </div>
 
+Which changes the order and a different hit is surfaced at position two:
 
 <pre>
 {% highlight json%}
@@ -1168,13 +1200,13 @@ $ vespa query \
 </pre>
 
 One can also throw the personalization component using the sparse
-user profile into the retriever mix using 
+user profile into the retriever mix. For example having a user profile:
 
 <pre>
 userProfile={"love songs":1, "love":1,"80s":1}
-<pre>
+</pre>
 
-In combination with the wand query operator: 
+One can add the `wand` query operator using the sparse user profile representation to the retrieval mix:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1190,6 +1222,9 @@ $ vespa query \
     'userProfile={"love songs":1, "love":1,"80s":1}' 
 </pre>
 </div>
+
+In this case, another document is surfaced at position 2, which have a non-zero personalized score,
+notice that `totalCount` increases as the `wand` query operator brought more hits into the mix.
 
 <pre>
 {% highlight json%}
@@ -1254,13 +1289,14 @@ In the examples above, some of the hits had
 <pre>
 "closeness(field,embedding)": 0.0
 </pre>
-This means that the hit was not retrieved by the nearest neighbor search operator,similar rawScore(tags) might
+This means that the hit was not retrieved by the nearest neighbor search operator, similar `rawScore(tags)` might
 also be 0 if a hit was not retrieved by the `wand` query operator. This is because of two things:
 
 - The skipping query operator rank feature is only valid in the case where the hit was retrieved by the operator
-- The query used logical disjunction to retrieve. 
+- The query used logical disjunction to retrieve hits into ranking. 
 
-Changing to `AND` instead:
+Changing from logical `OR` to `AND` instead will intersect the result of the sub retrievers, the
+search for nearest neighbors is constrained to documents at least matching one query term. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1276,10 +1312,8 @@ $ vespa query \
 </pre>
 </div>
 
-In this case, the documents must be in the top 100 hits returned from the nearest neighbor search operator
-and match at least one of the query terms. 
-
-Finally, it is possible to combine hybrid search with filters:
+In this case, the documents exposed to ranking must match at least one of the query terms (for WAND to retrieve it).
+It is also possible to combine hybrid search with filters:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1295,9 +1329,108 @@ $ vespa query \
 </pre>
 </div>
 
-In this case, `popularity` is not defined with `fast-search`, but since the data volume is so small 
-it's not a problem, but for optimal performance make sure that fields that are used have either `index`
-or `attribute` with `fast-search` and `rank: filter`. 
+Another interesting approach for hybrid retrieval is to use Vespa's 
+[rank()](../reference/query-language-reference.html#rank) query operator. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
+$ vespa query \
+    'yql=select title, matchfeatures, artist from track where rank({targetHits:100}nearestNeighbor(embedding,q), userQuery())' \
+    'query=total eclipse of the heart' \
+    'type=weakAnd' \
+    'hits=2' \
+    'ranking=hybrid' \
+    "ranking.features.query(q)=$Q" \
+    'ranking.features.query(wVector)=340' 
+</pre>
+</div>
+
+This query returns 100 documents, since only the first operand of the `rank` query operator was used for 
+*retrieval*, the sparse `userQuery()` representation was only use to calculate sparse rank features for
+the results retrieved by the nearest neighbor search. 
+
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.01,
+        "summaryfetchtime": 0.002,
+        "searchtime": 0.015
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 100
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 326.34896241725517,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "attribute(popularity)": 100.0,
+                        "bm25(title)": 22.590435952092836,
+                        "closeness(field,embedding)": 0.5992897837210658,
+                        "rawScore(tags)": 0.0
+                    },
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler"
+                }
+            },
+            {
+                "id": "index:tracks/0/3517728cc88356c8ca6de0d9",
+                "relevance": 276.90138973270746,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "attribute(popularity)": 100.0,
+                        "bm25(title)": 6.721990635032981,
+                        "closeness(field,embedding)": 0.5005276444049249,
+                        "rawScore(tags)": 0.0
+                    },
+                    "title": "Closer To The Heart",
+                    "artist": "Rush"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %} 
+</pre>
+
+One can also do this the other way around, retrieve using the sparse representation, and have
+Vespa calculate the closeness rank feature for the hits retrieved by the sparse query representation. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
+$ vespa query \
+    'yql=select title, matchfeatures, artist from track where rank(userQuery(),{targetHits:100}nearestNeighbor(embedding,q))' \
+    'query=total eclipse of the heart' \
+    'type=weakAnd' \
+    'hits=2' \
+    'ranking=hybrid' \
+    "ranking.features.query(q)=$Q" \
+    'ranking.features.query(wVector)=340' 
+</pre>
+</div>
+
+The `weakAnd` query operator exposes more hits to ranking than approximate nearest neighbor search, similar
+to the `wand` query operator. Generally, using the `rank` query operator is more efficient than combining
+query retriever operators using `or`. See also the 
+[Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/passage-ranking.md)
+for complete examples of different retrieval and multi-phase ranking using Transformer models. 
 
 ## Tear down the container
 This concludes this tutorial. The following removes the container and the data:
