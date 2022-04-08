@@ -23,7 +23,7 @@ This guide covers the following:
 The guide includes step-by-step instructions on how to reproduce the experiments. 
 
 <pre style="display:none" data-test="exec">
-$ export A='0.1'
+$ export A='[0.1]'
 </pre>
 
 <pre style="display:none" data-test="exec">
