@@ -23,11 +23,7 @@ This guide covers the following:
 The guide includes step-by-step instructions on how to reproduce the experiments. 
 
 <pre style="display:none" data-test="exec">
-$ export A='[0.1]'
-</pre>
-
-<pre style="display:none" data-test="exec">
-$ echo 'hello'
+$ export A='[-0.0080656, 0.08453, 0.0501827, -0.0088412, -0.0375374, -0.0028978, 0.0188007, -0.084556, 0.1227091]'
 </pre>
 
 <pre style="display:none" data-test="exec">
