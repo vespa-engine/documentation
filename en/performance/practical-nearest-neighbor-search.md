@@ -697,7 +697,7 @@ The first query example uses exact nearest neighbor search:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Boonie Tyler">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
     'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
@@ -763,7 +763,7 @@ Changing the rank-profile used with the search to `closeness-t4` uses four threa
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Boonie Tyler">
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
     'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
@@ -795,7 +795,7 @@ The default query behavior is using `approximate:true` :
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec"  data-test-assert-contains="Boonie Tyler">
+<pre data-test="exec"  data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
     'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
