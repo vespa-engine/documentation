@@ -1052,18 +1052,19 @@ exact search. When using exact search with filters, the search can also use mult
 helps reducing the latency impact. 
 
 With strict filters that removes many hits, the hits (nearest neighbors) might not be *near* in the embedding space, but *far*,
-or *distant* neighbors. Remember, all document vectors are technically a neighbor of the query, 
-but with a different distance. 
+or *distant* neighbors. Technically, all document vectors are a neighbor of the query, 
+but with a varying distance, some are close, others are distant.
+
 With strict filters, the neighbors that are returned might be of low quality (far distance). 
-One way to combat this is to use the [distanceTreshold](../reference/query-language-reference.html#distancethreshold)
+One way to combat this is to use the [distanceThreshold](../reference/query-language-reference.html#distancethreshold)
 query annotation parameter of the `nearestNeighbor` query operator. 
 The value of the `distance` depends on the [distance-metric](../reference/schema-reference.html#distance-metric) used. 
 By adding the [distance(field,embedding)](../reference/rank-features.html#distance(dimension,name)) rank-feature to
-the `match-features` like done for the `closeness` rank-profiles,  it is possible to analyze what distance 
+the `match-features` of the `closeness` rank-profiles, it is possible to analyze what distance 
 could be consider too far. 
 
-Note that distance of 0 is perfect, while distance of 1 is distant,
-so the `distanceThreshold` remove hits that have a **higher** `distance` than `distanceThreshold`. The
+Note that distance of 0 is perfect, while distance of 1 is distant. The `distanceThreshold` 
+remove hits that have a **higher** `distance(field, embedding)` than `distanceThreshold`. The
 `distanceThreshold` is applied regardless of performing exact or approximate search. 
 
 The following query with a restrictive filter on popularity is used for illustration:
@@ -1136,8 +1137,8 @@ The above query returns
 {% endhighlight %} 
 </pre>
 
-Using a `distanceTreshold` of 0.7 and the `Closer To The Heart` track will be removed from the result
-because it's `distance` is close to 1. 
+By using a `distanceTreshold` of 0.7,  the `Closer To The Heart` track will be removed from the result
+because it's `distance(field, embedding)` is close to 1. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1150,7 +1151,6 @@ $ vespa query \
 </pre>
 </div>
 
-Now, the query only returns 1 hit which satisfied the `distanceThreshold`:
 <pre>
 {% highlight json%}
 {
@@ -1193,21 +1193,27 @@ Now, the query only returns 1 hit which satisfied the `distanceThreshold`:
 {% endhighlight %} 
 </pre>
 
-Setting appropriate `distanceThreshold` is best handled by supervised training as the threshold 
-should be calibrated based on the query complexity and possibly the feature distributions of the 
-returned top-k hits. Having the `distance` rank feature returned as `match-features`, enables post-processing of the 
-result using a custom [re-ranking/filtering searcher](../reranking-in-searcher.html). The post processing searcher
-can analyze the score distributions of the returned top-k hits (using the features returned with `match-features`),
-and remove low scoring hits before presenting the result to the end user, or not return any results at all. 
+Setting appropriate `distanceThreshold` is best handled by supervised learning as 
+the distance threshold should be calibrated based on the query complexity 
+and possibly also the feature distributions of the returned top-k hits. 
+Having the `distance` rank feature returned as `match-features`, 
+enables post-processing of the result using a custom 
+[re-ranking/filtering searcher](../reranking-in-searcher.html). 
+The post processing searcher can analyze the score distributions of the returned top-k hits
+(using the features returned with `match-features`), 
+remove low scoring hits before presenting the result to the end user, 
+or not return any results at all. 
 
 ## Hybrid sparse and dense retrieval methods with Vespa
-In the previous filtering examples the ranking was not impacted by the filters, the filters were only used to impact recall, not the
-order of the results. The following examples demonstrates how to perform hybrid retrieval combining the efficient query operators in 
+In the previous filtering examples the ranking was not impacted by the filters, the filters were 
+only used to impact recall, not the order of the results. The following examples 
+demonstrates how to perform hybrid retrieval combining the efficient query operators in 
 a single query. Hybrid retrieval can be used as the first phase in a multi-phase ranking funnel, see 
 Vespa's [phased ranking](../phased-ranking.html).
 
-The first query example combines the `nearestNeighbor` operator with the `weakAnd` query operator, combining them using logical
-disjunction (`OR`):
+The first query example combines the `nearestNeighbor` operator with the `weakAnd` query operator, 
+combining them using logical disjunction (`OR`). This type of query enable retrieving
+both based on semantic (vector distance) and traditional sparse (exact) matching. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1222,10 +1228,13 @@ $ vespa query \
 </pre>
 </div>
 
-The query combines the `weakAnd` and `nearestNeighbor` query operator using logical disjunction. Both query operator retrievers
-the target number of hits ranked by it's inner raw score/distance. The list of documents exposed to configurable ranking expression
-is hence a combination of the best of two different strategies. The ranking is performed using the following
-`hybrid` rank profile:
+The query combines the sparse `weakAnd` and the dense `nearestNeighbor` query operators 
+using logical disjunction. 
+Both query operator retrievers the target number of hits (or more) ranked by it's inner 
+raw score/distance.The list of documents exposed to the configurable ranking expression is a combination 
+of the best of these two different retrieval strategies. 
+The ranking is performed using the following`hybrid` rank profile which serves as an example
+how to combine the different scoring techniques. 
 
 <pre>
 rank-profile hybrid {
@@ -1314,11 +1323,11 @@ The query returns the following result:
 </pre>
 
 The result hits also include [match-features](../reference/schema-reference.html#match-features) which 
-can be used for feature logging for [learning to rank](../learning-to-rank.html) or to simply
+can be used for feature logging for [learning to rank](../learning-to-rank.html), or to simply
 debug the final score. 
 
-In the below query, the weight of the embedding similarity (closeness) is increased by overriding
-the `query(wWector)` weight:
+In the below query, the `weight` of the embedding similarity (closeness) is increased by overriding
+the `query(wVector)` weight:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1401,8 +1410,7 @@ user profile into the retriever mix. For example having a user profile:
 <pre>
 userProfile={"love songs":1, "love":1,"80s":1}
 </pre>
-
-One can add the `wand` query operator using the sparse user profile representation to the retrieval mix:
+Which can be used with the `wand` query operator:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1485,13 +1493,10 @@ In the examples above, some of the hits had
 <pre>
 "closeness(field,embedding)": 0.0
 </pre>
-This means that the hit was not retrieved by the nearest neighbor search operator, similar `rawScore(tags)` might
-also be 0 if a hit was not retrieved by the `wand` query operator. This is because of two things:
+This means that the hit was not retrieved by the `nearestNeighbor` operator, similar `rawScore(tags)` might
+also be 0 if the hit was not retrieved by the `wand` query operator. 
 
-- The skipping query operator rank feature is only valid in the case where the hit was retrieved by the operator
-- The query used logical disjunction to retrieve hits into ranking. 
-
-It's is nevertheless possible to calculate the semantic distance/similarity using 
+It is nevertheless possible to calculate the semantic distance/similarity using 
 [tensor computations](../tensor-examples.html) for the hits that were not retrieved by the `nearestNeighbor`
 query operator. See also [tensor functions](../reference/ranking-expressions.html#tensor-functions). 
 For example to compute the `euclidean` distance one can add a 
@@ -1550,7 +1555,9 @@ $ vespa query \
 </div>
 
 Another interesting approach for hybrid retrieval is to use Vespa's 
-[rank()](../reference/query-language-reference.html#rank) query operator. 
+[rank()](../reference/query-language-reference.html#rank) query operator. The first operand
+of the `rank()` operator is used to retrieve by, and the remaining operands are only used to compute
+rank features for those hits retrieved by the first operand. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1569,7 +1576,7 @@ $ vespa query \
 This query returns 100 documents, since only the first operand of the `rank` query operator was used for 
 *retrieval*, the sparse `userQuery()` representation was only used to calculate sparse 
 [rank features](../reference/rank-features.html) for
-the results retrieved by the nearest neighbor search. Features such as `bm25(title)`:
+the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm25(title)` for example.
 
 <pre>
 {% highlight json%}
@@ -1631,7 +1638,7 @@ the results retrieved by the nearest neighbor search. Features such as `bm25(tit
 </pre>
 
 One can also do this the other way around, retrieve using the sparse representation, and have
-Vespa calculate the `vector similarity` rank features for the hits 
+Vespa calculate the `closeness(field, embedding)` or related rank features for the hits 
 retrieved by the sparse query representation. 
 
 <div class="pre-parent">
@@ -1655,7 +1662,7 @@ query retriever operators using `or`. See also the
 for complete examples of different retrieval strategies for multi-phase ranking funnels.
 
 ## Multiple nearest neighbor search operators in the same query 
-This example combines two `nearestNeighbor` query operators in the same Vespa query request. 
+This section looks at how to use multiple `nearestNeighbor` query operator instances in the same Vespa query request. 
 
 First, the query embedding for *Total Eclipse Of The Heart*:
 
@@ -1671,7 +1678,7 @@ print(model.encode("Total Eclipse Of The Heart").tolist())
 $ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
 </pre>
 
-Secondly,  the query embedding for *Summer of '69*:
+Secondly, the query embedding for *Summer of '69*:
 <pre>
 {% highlight python%}
 from sentence_transformers import SentenceTransformer
@@ -1898,8 +1905,7 @@ can be seen from the `relevance` value, compared with the labeled `closeness()` 
 </pre>
 
 Vespa also supports having multiple document side embedding fields, which also
-can be searched using multiple `nearestNeighbor` query operators in the query, preferably
-using `or`. 
+can be searched using multiple `nearestNeighbor` query operators in the query.
 
 <pre>
 field embedding type tensor&lt;float&gt;(x[384]) {
@@ -1927,8 +1933,6 @@ field embedding type tensor&lt;float&gt;(x[384]) {
     }
  }
 </pre>
-
-
 
 
 ## Tear down the container
