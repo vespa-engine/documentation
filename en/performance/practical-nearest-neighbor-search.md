@@ -1195,19 +1195,18 @@ Now, the query only returns 1 hit which satisfied the `distanceThreshold`:
 
 Setting appropriate `distanceThreshold` is best handled by supervised training as the threshold 
 should be calibrated based on the query complexity and possibly the feature distributions of the 
-returned top-k hits. 
-Having the distance returned as `match-features`,  enables post-processing of the result using a
-custom [re-ranking/filtering searcher](../reranking-in-searcher.html). The post processing searcher
+returned top-k hits. Having the `distance` rank feature returned as `match-features`, enables post-processing of the 
+result using a custom [re-ranking/filtering searcher](../reranking-in-searcher.html). The post processing searcher
 can analyze the score distributions of the returned top-k hits (using the features returned with `match-features`),
-and remove low scoring hits before presenting the end result to the end user, or not return any results at all. 
+and remove low scoring hits before presenting the result to the end user, or not return any results at all. 
 
 ## Hybrid sparse and dense retrieval methods with Vespa
 In the previous filtering examples the ranking was not impacted by the filters, the filters were only used to impact recall, not the
 order of the results. The following examples demonstrates how to perform hybrid retrieval combining the efficient query operators in 
 a single query. Hybrid retrieval can be used as the first phase in a multi-phase ranking funnel, see 
-[phased ranking](../phased-ranking.html).
+Vespa's [phased ranking](../phased-ranking.html).
 
-The first example combines the `nearestNeighbor` operator with the `weakAnd` query operator, combining them using logical
+The first query example combines the `nearestNeighbor` operator with the `weakAnd` query operator, combining them using logical
 disjunction (`OR`):
 
 <div class="pre-parent">
@@ -1421,7 +1420,7 @@ $ vespa query \
 </div>
 
 In this case, another document is surfaced at position 2, which have a non-zero personalized score,
-notice that `totalCount` increases as the `wand` query operator brought more hits into the mix.
+notice that `totalCount` increases as the `wand` query operator brought more hits into `first-phase` ranking.
 
 <pre>
 {% highlight json%}
@@ -1492,8 +1491,13 @@ also be 0 if a hit was not retrieved by the `wand` query operator. This is becau
 - The skipping query operator rank feature is only valid in the case where the hit was retrieved by the operator
 - The query used logical disjunction to retrieve hits into ranking. 
 
-Changing from logical `OR` to `AND` instead will intersect the result of the sub retrievers, the
-search for nearest neighbors is constrained to documents at least matching one query term. 
+It's is nevertheless possible to calculate the semantic distance/similarity using 
+[tensor computations](../tensor-examples.html) for the hits that were not retrieved by the `nearestNeighbor`
+query operator. See also [tensor functions](../reference/ranking-expressions.html#tensor-functions).
+
+Changing from logical `OR` to `AND` instead will intersect the result of the two efficient retrievers, the
+search for nearest neighbors is then constrained to documents which at least matches one of
+the query terms in the `weakAnd`.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
