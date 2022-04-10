@@ -7,7 +7,7 @@ title: "Vespa nearest neighbor search - a practical guide"
  neighbor search with other Vespa query operators. The guide also covers
  diverse, efficient candidate retrievers which can be used as candidate retrievers in a multi-phase ranking funnel. 
 
- The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset to illustrate Vespa query performance. 
+ The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset for illustration. 
  Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.  
  See also the the generic [Vespa performance - a practical guide](practical-search-performance-guide.html).
 
@@ -15,10 +15,12 @@ This guide covers the following:
 
 - [Free text search using Vespa weakAnd](#free-text-search-using-vespa-weakand)
 - [Sparse maximum inner product search using Vespa wand](#maximum-inner-product-search-using-vespa-wand)
-- [Brute-force exact nearest neighbor search](#brute-force-exact-nearest-neighbor-search)
+- [Exact nearest neighbor search](#exact-nearest-neighbor-search)
 - [Approximate nearest neighbor search](#approximate-nearest-neighbor-search)
 - [Combining approximate nearest neighbor search with filters](#combining-approximate-nearest-neighbor-search-with-query-filters)
+- [Strict filters and distant neighbors - distanceThresholding](#strict-filters-and-distant-neighbors)
 - [Hybrid sparse and dense retrieval methods with Vespa](#hybrid-sparse-and-dense-retrieval-methods-with-vespa)
+- [Using multiple nearest neighbor search operators in the same query](#multiple-nearest-neighbor-search-operators-in-the-same-query)
 
 The guide includes step-by-step instructions on how to reproduce the experiments. 
 
@@ -294,6 +296,10 @@ schema track {
         num-threads-per-search: 4
     }
 
+    rank-profile closeness-label inherits closeness {
+        match-features: closeness(label, q) closeness(label, qa)
+    }
+
     rank-profile hybrid {
         num-threads-per-search: 1
         rank-properties {
@@ -386,6 +392,7 @@ query operator, the input query tensor type must be defined:
 <pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;   
     &lt;field name=&quot;ranking.features.query(q)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(x[384])&quot; /&gt;
+    &lt;field name=&quot;ranking.features.query(qa)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(x[384])&quot; /&gt;
 &lt;/query-profile-type&gt;
 </pre>
 
@@ -603,8 +610,9 @@ The following examples uses the
 [wand()](../reference/query-language-reference.html#wand) query operator. 
 The `wand` query operator calculates the maximum inner product search 
 between the sparse query and document feature integer
-weights. The inner product ranking score can be used in a ranking expression using 
-the [rawScore(name)](../reference/rank-features.html#match-operator-scores). 
+weights. The inner product ranking score calculated by the `wand` query operator 
+can be used in a ranking expression by the [rawScore(name)](../reference/rank-features.html#match-operator-scores)
+rank feature. 
 
 <pre>
 rank-profile tags {
@@ -614,7 +622,8 @@ rank-profile tags {
 }
 </pre>
 
-This query searches the tracks using a sparse learned *userProfile* representation:
+This query searches the track document type using a learned sparse *userProfile* representation, 
+performing a maxium inner product search over the `tags` weightedset field. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -626,7 +635,7 @@ $ vespa query \
     'ranking=tags'
 </pre>
 </div>
-
+The query asks for 2 hits to be returned, and uses the `tags` ranking profile. 
 The [result](../reference/default-result-format.html) 
 for the above query will look something like this:
 
@@ -686,10 +695,11 @@ result of the sparse dot product between the sparse user profile and the documen
 The `wand` query operator is safe, meaning, it returns the same top-k results as 
 the brute-force `dotProduct` query operator. `wand` is a type of query operator which
 performs matching and ranking interleaved and skipping documents
-which cannot compete into the top-k results. 
-See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
+which cannot compete into the final top-k results. 
+See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details on 
+using `wand` and `weakAnd` query operators. 
 
-## Brute-force exact nearest neighbor search
+## Exact nearest neighbor search
 Vespa's nearest neighbor search operator supports doing exact brute force nearest neighbor search
 using dense representations. This guide uses
 the [sentence-transformers/all-MiniLM-L6-V2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
@@ -1620,6 +1630,246 @@ to the `wand` query operator. Generally, using the `rank` query operator is more
 query retriever operators using `or`. See also the 
 [Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/passage-ranking.md)
 for complete examples of different retrieval strategies for multi-phase ranking funnels.
+
+## Multiple nearest neighbor search operators in the same query 
+This example combines two `nearestNeighbor` query operators in the same Vespa query request. 
+
+First, the query embedding for *Total Eclipse Of The Heart*:
+
+<pre>
+{% highlight python%}
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+print(model.encode("Total Eclipse Of The Heart").tolist())
+{% endhighlight %}
+</pre>
+
+<pre data-test="exec">
+$ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
+</pre>
+
+Secondly,  the query embedding for *Summer of '69*:
+<pre>
+{% highlight python%}
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+print(model.encode("Summer of '69").tolist())
+{% endhighlight %}
+</pre>
+
+
+<pre data-test="exec">
+$ export QA='[-0.043,0.027,-0.017,0.018,0.034,0.067,0.037,-0.046,-0.014,-0.114,0.033,-0.028,0.02,0.024,0.025,0.019,0.045,0.007,0.018,-0.035,-0.126,0.024,0.005,0.05,-0.005,0.048,0.059,0.07,-0.041,0.006,-0.008,0.113,-0.046,-0.007,0.065,-0.02,-0.007,-0.067,-0.099,0.069,-0.068,-0.013,0.054,0.029,-0.031,-0.018,0.036,-0.015,0.027,0.011,0.04,0.038,-0.046,-0.025,-0.042,0.028,-0.006,-0.091,0.033,-0.016,-0.079,-0.058,-0.044,-0.022,0.086,-0.107,0.002,-0.037,-0.058,-0.039,-0.028,0.037,-0.015,0.035,0.0,0.072,-0.021,-0.01,0.044,-0.094,0.116,-0.109,-0.04,0.01,0.012,-0.031,0.087,0.005,-0.035,0.049,-0.088,-0.02,-0.023,-0.01,-0.063,-0.018,-0.024,-0.05,-0.009,0.115,0.049,0.017,-0.05,0.017,0.084,-0.053,0.051,0.033,-0.001,-0.087,-0.031,-0.019,0.132,0.006,0.056,-0.117,0.043,0.01,-0.03,0.176,0.055,0.042,0.051,0.025,-0.041,-0.027,0.041,-0.0,0.01,-0.016,0.048,-0.031,0.103,-0.044,-0.003,-0.005,-0.029,-0.032,-0.046,-0.095,-0.074,-0.094,0.111,-0.042,0.004,0.048,0.006,0.042,-0.092,0.109,0.016,-0.04,-0.01,0.033,-0.034,0.049,0.03,0.02,0.04,0.015,0.007,0.03,0.018,0.017,-0.029,-0.082,0.015,0.002,-0.048,0.047,-0.03,-0.029,-0.008,0.088,0.04,0.023,0.052,-0.034,0.006,0.003,-0.048,-0.094,-0.014,-0.086,-0.052,-0.01,0.062,-0.03,0.062,0.058,-0.027,-0.04,-0.084,-0.061,0.09,-0.049,-0.032,0.007,-0.071,-0.052,0.055,-0.064,0.041,-0.008,0.076,-0.018,-0.025,-0.034,0.016,-0.007,0.041,0.023,-0.021,-0.046,0.01,-0.022,-0.019,-0.027,-0.039,-0.037,0.014,0.004,0.017,0.0,0.034,0.003,0.015,-0.019,0.02,0.025,-0.05,0.056,-0.047,-0.088,0.004,-0.116,0.07,-0.057,0.032,0.006,-0.021,0.09,-0.02,0.035,-0.114,-0.006,-0.01,-0.005,0.025,-0.046,0.054,-0.002,-0.003,0.028,-0.025,0.001,-0.003,0.09,-0.084,0.058,0.091,-0.025,-0.034,-0.032,0.026,-0.032,0.054,0.039,0.033,-0.029,0.015,0.076,-0.054,0.021,-0.069,-0.049,-0.051,-0.006,0.002,-0.058,-0.021,-0.011,0.025,-0.003,-0.001,-0.018,-0.064,-0.023,-0.013,0.029,-0.022,0.023,-0.019,-0.028,-0.072,-0.044,-0.082,0.074,0.086,-0.016,0.041,0.004,-0.047,-0.029,-0.137,0.005,-0.075,0.136,0.054,0.024,0.052,0.01,0.024,-0.038,0.078,0.005,0.013,-0.034,-0.051,-0.0,0.03,-0.007,0.025,-0.042,0.065,0.02,0.05,0.045,0.004,0.095,0.044,0.044,0.091,0.024,0.0,0.022,0.027,0.011,-0.011,0.009,-0.056,-0.026,0.173,-0.019,0.024,-0.014,-0.064,0.079,0.083,-0.033,0.051,-0.005,-0.056,-0.043,-0.061,-0.034,0.112,0.072,0.042,-0.047,0.055,0.058,0.015,0.017,0.015,0.083,0.024,-0.023,-0.024,0.007,0.043,0.042,0.025,0.011,0.042,-0.032,-0.044,0.021,-0.064,-0.065,0.078,0.051,-0.028,-0.136]'
+</pre>
+
+The following Vespa query combines two `nearestNeighbor` query operators 
+using logical disjunction (`OR`) and referencing two different
+query tensor inputs:
+
+- `ranking.features.query(q)` holding the **Total Eclipse Of The Heart* query vector.
+- `ranking.features.query(qa)` holding the *Summer of '69* query vector.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
+$ vespa query \
+    'yql=select title from track where ({targetHits:10}nearestNeighbor(embedding,q)) or ({targetHits:10}nearestNeighbor(embedding,qa))' \
+    'hits=2' \
+    'ranking=closeness-t4' \
+    "ranking.features.query(q)=$Q" \
+    "ranking.features.query(qa)=$QA" 
+</pre>
+</div>
+The above query returns 20 documents to first phase ranking (10 from each nearest neighbor query operator):
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.007,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.01
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 20
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 0.5992897917249415,
+                "source": "tracks",
+                "fields": {
+                    "title": "Total Eclipse Of The Heart"
+                }
+            },
+            {
+                "id": "index:tracks/0/5b1c2ae1024d88451c2f1c5a",
+                "relevance": 0.5794361034642413,
+                "source": "tracks",
+                "fields": {
+                    "title": "Summer of 69"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %} 
+</pre>
+
+One can also use `label` when there are multiple nearest neighbor search operators in the same query
+to differentiate which of them produced the match. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
+$ vespa query \
+    'yql=select title, matchfeatures from track where ({ "label":"q", targetHits:10}nearestNeighbor(embedding,q)) or ({"label":"qa",targetHits:10}nearestNeighbor(embedding,qa))' \
+    'hits=2' \
+    'ranking=closeness-label' \
+    "ranking.features.query(q)=$Q" \
+    "ranking.features.query(qa)=$QA" 
+</pre>
+</div>
+
+The above query annotates the two `nearestNeighbor` query operators using 
+[label](../reference/query-language-reference.html#label) query annotation. The result include 
+`match-features` so one can see which query operator retrieved the document. 
+
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.011,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.014
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 20
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 0.5992897917249415,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "closeness(label,q)": 0.5992897917249415,
+                        "closeness(label,qa)": 0.0
+                    },
+                    "title": "Total Eclipse Of The Heart"
+                }
+            },
+            {
+                "id": "index:tracks/0/5b1c2ae1024d88451c2f1c5a",
+                "relevance": 0.5794361034642413,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "closeness(label,q)": 0.0,
+                        "closeness(label,qa)": 0.5794361034642413
+                    },
+                    "title": "Summer of 69"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %} 
+</pre>
+
+Note that the previous examples used `or` to combine the two operators. Instead using `and` requires 
+that some document is in both the top-k results of each. Increasing `targetHits` to 500 we find 9 tracks that overlap:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Summer Of Love'>
+$ vespa query \
+    'yql=select title, matchfeatures from track where ({ "label":"q", targetHits:500}nearestNeighbor(embedding,q)) and ({"label":"qa",targetHits:500}nearestNeighbor(embedding,qa))' \
+    'hits=2' \
+    'ranking=closeness-label' \
+    "ranking.features.query(q)=$Q" \
+    "ranking.features.query(qa)=$QA" 
+</pre>
+</div>
+Which returns the following top two hits. Note that the `closeness-label` rank profile
+uses `closeness(field, embedding)` which in the case of multiple nearest neighbor search operators 
+uses the maxium to represent the rank-feature, as can be seen from the `relevance` compared with the
+labeled `closeness()` rank features. 
+
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.015,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.017
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 9
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/99a2a380cac4830bfee63ae0",
+                "relevance": 0.5174298300948759,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "closeness(label,q)": 0.4755796429687308,
+                        "closeness(label,qa)": 0.5174298300948759
+                    },
+                    "title": "Summer Of Love"
+                }
+            },
+            {
+                "id": "index:tracks/0/a373d26938a20dbdda8fc7c1",
+                "relevance": 0.5099393361432658,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "closeness(label,q)": 0.5099393361432658,
+                        "closeness(label,qa)": 0.47990179066646654
+                    },
+                    "title": "Midnight Heartache"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %} 
+</pre>
+
 
 ## Tear down the container
 This concludes this tutorial. 
