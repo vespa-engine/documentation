@@ -792,7 +792,7 @@ The above exact nearest neighbor search will return the following
 The exact search takes approximately 51ms, performing 95,666 distance calculations. 
 A total of about 120 documents were exposed to the first-phase ranking during the search as can be seen from
 `totalCount`.  Vespa's exact nearest neighbor search uses chunked vector distance calculations, splitting
-the vectors into chunks, the chunked distance calculates reduces the computational complexity. Onl
+the vectors into chunks, the chunked distance calculates reduces the computational complexity.
 
 It is possible to reduce search latency of the exact search by throwing more CPU resources at it. 
 Changing the rank-profile used with the search to `closeness-t4` makes Vespa use four threads:
