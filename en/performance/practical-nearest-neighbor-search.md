@@ -1187,7 +1187,7 @@ Setting appropriate `distanceThreshold` is best handled by supervised training a
 should be calibrated based on the query complexity and possibly the feature distributions of the 
 returned top-k hits. 
 Having the distance returned as `match-features`,  enables post-processing of the result using a
-custom [re-ranking/filtering searcher](./reranking-in-searcher.html). The post processing searcher
+custom [re-ranking/filtering searcher](../reranking-in-searcher.html). The post processing searcher
 can analyze the score distributions of the returned top-k hits (using the features returned with `match-features`),
 and remove low scoring hits before presenting the end result to the end user, or not return any results at all. 
 
