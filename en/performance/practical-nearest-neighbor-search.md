@@ -8,7 +8,7 @@ title: "Vespa nearest neighbor search - a practical guide"
  diverse, efficient candidate retrievers which can be used as candidate retrievers in a multi-phase ranking funnel. 
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset for illustration. 
- Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.  
+ Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.
  See also the the generic [Vespa performance - a practical guide](practical-search-performance-guide.html).
 
 This guide covers the following:
