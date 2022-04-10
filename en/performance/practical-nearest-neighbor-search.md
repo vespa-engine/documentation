@@ -3,9 +3,9 @@
 title: "Vespa nearest neighbor search - a practical guide"
 ---
 
- This is a practical guide to using Vespa nearest neighbor search query operator and how to combine nearest
- neighbor search, or dense evalretri with other Vespa query operators. The guide also covers
- diverse efficient candidate retrievers which can be used in a multi-phase ranking funnel. 
+ This guide is a practical introduction to using Vespa nearest neighbor search query operator and how to combine nearest
+ neighbor search with other Vespa query operators. The guide also covers
+ diverse, efficient candidate retrievers which can be used as candidate retrievers in a multi-phase ranking funnel. 
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset to illustrate Vespa query performance. 
  Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.  
@@ -21,10 +21,6 @@ This guide covers the following:
 - [Hybrid sparse and dense retrieval methods with Vespa](#hybrid-sparse-and-dense-retrieval-methods-with-vespa)
 
 The guide includes step-by-step instructions on how to reproduce the experiments. 
-
-<pre style="display:none" data-test="exec">
-$ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
-</pre>
 
 ## Prerequisites
 These are the prerequisites for reproducing the steps in this performance guide:
@@ -288,6 +284,7 @@ schema track {
 
     rank-profile closeness {
         num-threads-per-search: 1
+        match-features: distance(field, embedding)
         first-phase {
             expression: closeness(field, embedding)
         }
@@ -318,10 +315,32 @@ schema track {
             attribute(popularity)
             bm25(title)
             closeness(field, embedding)
+            distance(field, embedding)
         }
     }
 }
 </pre>
+
+This schema is explained in the [practical search performance guide](../practical-search-performance-guide.html),
+the addition is the `embedding` field:
+
+<pre>
+field embedding type tensor&lt;float&gt;(x[384]) {
+    indexing: attribute | index
+    attribute {
+        distance-metric: euclidean
+    }
+    index {
+        hnsw {
+            max-links-per-node: 16
+            neighbors-to-explore-at-insert: 50
+        }
+    }
+ }
+</pre>
+See 
+[Approximate Nearest Neighbor Search using HNSW Index](../approximate-nn-hnsw.html)
+for an introduction to `HNSW` and the `HNSW` tuning parameters.
 
 ### Services Specification
 
@@ -362,7 +381,7 @@ Write the following to `app/services.xml`:
 </pre>
 
 To query with the [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor)
-query operator the input query tensor type must be defined:
+query operator, the input query tensor type must be defined:
 
 <pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;   
@@ -372,6 +391,10 @@ query operator the input query tensor type must be defined:
 
 Note that the query tensor's dimensionality (*384*) and dimension name (*x*) 
 must match the document tensor. 
+
+<pre>
+field embedding type tensor&lt;float&gt;(x[384]) 
+</pre>
 
 The tensor type must be reference in the the `default` [queryProfile](../query-profiles.html), 
 it also enables [timing](../reference/query-api-reference.html#presentation.timing).
@@ -465,10 +488,11 @@ with Vespa's [simple query language](../reference/simple-query-language-referenc
 default [query type](../reference/query-api-reference.html#model.type) is 
 using `all` requiring that all the terms match. 
 
-The above example searches for *total AND eclipse AND of AND the AND heart* in the `default` fieldset, 
-which in the schema includes the track `title` and `artist` fields. 
+The above query example searches for *total AND eclipse AND of AND the AND heart* 
+in the `default` fieldset,  which in the schema includes the track `title` and `artist` fields. 
 
-The result output for the above query will look something like this:
+The [result](../reference/default-result-format.html) 
+for the above query will look something like this:
 
 <pre>
 {% highlight json%}
@@ -509,7 +533,7 @@ The result output for the above query will look something like this:
 {% endhighlight %}
 </pre>
 
-This query only matched one document because the query terms were ANDed. 
+This query only matched one document because the query terms were `AND`ed. 
 We can change matching to use `type=any` instead of the default `type=all`. See 
 [supported query types](../reference/query-api-reference.html#model.type).
 
@@ -590,8 +614,7 @@ rank-profile tags {
 }
 </pre>
 
-This query searches using a pre-defined *userProfile* input with weights, this could be used
-to serve personalized search results:
+This query searches the tracks using a sparse learned *userProfile* representation:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -604,6 +627,8 @@ $ vespa query \
 </pre>
 </div>
 
+The [result](../reference/default-result-format.html) 
+for the above query will look something like this:
 
 <pre>
 {% highlight json%}
@@ -654,9 +679,9 @@ $ vespa query \
 
 {% endhighlight %}
 </pre>
-The `wand` query operator exposed a total of about 60 documents to the first phase ranking which 
+The `wand` query operator exposed a total of about 60 documents to the `first-phase` ranking which 
 uses the `rawScore(tag)` rank-feature directly, hence the `relevancy` is the 
-result of the sparse dot product between the user profile and the document tags. 
+result of the sparse dot product between the sparse user profile and the document tags. 
 
 The `wand` query operator is safe, meaning, it returns the same top-k results as 
 the brute-force `dotProduct` query operator. `wand` is a type of query operator which
@@ -681,8 +706,9 @@ $ zstdcat lastfm_embeddings.jsonl.zst | ./vespa-feed-client-cli/vespa-feed-clien
 </pre>
 </div>
 
-Throughout the nearest neighbor search examples a pre-generated query vector embedding is used. The
-query encoding is obtained using the following snippet:
+The following query examples uses a static query vector embedding for the
+query string *Total Eclipse Of The Heart*. The query embedding was obtained by the
+following snippet using [sentence-transformers](https://www.sbert.net/):
 
 <pre>
 {% highlight python%}
@@ -692,12 +718,9 @@ print(model.encode("Total Eclipse Of The Heart").tolist())
 {% endhighlight %}
 </pre>
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre data-test="exec">
 $ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
 </pre>
-</div>
 
 The first query example uses [exact nearest neighbor search](../nearest-neighbor-search.html): 
 
@@ -714,14 +737,16 @@ $ vespa query \
 
 The query expresses the following :
 
-- Search for 10 (`targetHits:10`) nearest neighbors of the `q` query tensor over the `embedding`
+- Search for 10 (`targetHits:10`) nearest neighbors of the `query(q)` query tensor over the `embedding`
 document tensor field. 
 - The annotation `approximate:false` tells Vespa to perform exact search.
-- The `hits` parameter controls how many results are returned in the response. 
-- `ranking=closeness` tells Vespa which rank-profile to use. One must 
-specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` rank expression.
-Not specifying [ranking](..//reference/query-api-reference.html#ranking.profile) will cause
-Vespa to use [nativeRank](../nativerank.html) which does not use the semantic similarity, causing
+- The `hits` parameter controls how many results are returned in the response. Number of `hits`
+requested does not impact `targetHits`. Notice that `targetHits` is per content node involved in the query. 
+- `ranking=closeness` tells Vespa which [rank-profile](../ranking.html) to score documents. One must 
+specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` rank expression
+in the `rank-profile`.
+Not specifying [ranking](../reference/query-api-reference.html#ranking.profile) will cause
+Vespa to use [nativeRank](../nativerank.html) which does not use the vector similarity, causing
 results to be randomly sorted. 
 
 The above exact nearest neighbor search will return the following
@@ -766,9 +791,8 @@ The above exact nearest neighbor search will return the following
 </pre>
 The exact search takes approximately 51ms, performing 95,666 distance calculations. 
 A total of about 120 documents were exposed to the first-phase ranking during the search as can be seen from
-`totalCount`.  Vespa's brute force nearest neighbor search uses chunked distance calculations, splitting
-the vector into chunks - this way Vespa does not need to fully evaluate all distance calculations using
-the complete representation. 
+`totalCount`.  Vespa's exact nearest neighbor search uses chunked vector distance calculations, splitting
+the vectors into chunks, the chunked distance calculates reduces the computational complexity. Onl
 
 It is possible to reduce search latency of the exact search by throwing more CPU resources at it. 
 Changing the rank-profile used with the search to `closeness-t4` makes Vespa use four threads:
@@ -785,7 +809,8 @@ $ vespa query \
 </div>
 
 Now, the exact search latency is reduced by using more threads, 
-see [multi-threaded searching and ranking](practical-search-performance-guide.html#multi-threaded-search-and-ranking).
+see [multi-threaded searching and ranking](practical-search-performance-guide.html#multi-threaded-search-and-ranking)
+for more on this topic.
 <pre>
 {% highlight json%}
 {
@@ -800,9 +825,10 @@ see [multi-threaded searching and ranking](practical-search-performance-guide.ht
 
 ## Approximate nearest neighbor search
 This section covers using the faster, but approximate, nearest neighbor search. The 
-`track` schema's `embedding` field has `index` enabled which means Vespa builds a 
-`HNSW` index to support fast, approximate search. See 
-[Approximate Nearest Neighbor Search using HNSW Index](../approximate-nn-hnsw.html).
+`track` schema's `embedding` field has the `index` property,  which means Vespa builds a 
+`HNSW` index to support fast, approximate vector search. See 
+[Approximate Nearest Neighbor Search using HNSW Index](../approximate-nn-hnsw.html)
+for an introduction to `HNSW` and the tuning parameters.
 
 The default query behavior is using `approximate:true` when the `embedding` 
 field has `index`:
@@ -861,15 +887,14 @@ Which returns the following response:
 Now, the query is significantly faster, but also uses less resources during the search. To get latency down 
 to 20 ms with the exact search one had to use 4 matching threads, in this case, the
 result latency is down to 4ms with a single matching thread. 
-
-In this case, the approximate search returned the exact same top-1 hit, so for this query, there was
+For this query example, the approximate search returned the exact same top-1 hit, so for this query, there was
 no accuracy loss for the top-1 position. 
 
-A few key differences with approximate versus exact search:
+A few key differences between `exact` and `approximate` neighbor search:
 
 - `totalCount` is different, when using the approximate version, Vespa exposes exactly `targethits` to the 
 configurable `first-phase` rank expression in the chosen `rank-profile`.
- The exact search is using a scoring heap during distance calculations, and documents which at some time
+ The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
 were put on the top-k heap are exposed to first phase ranking.
 - The search is approximate, it might not return the exact top 10 closest vectors as with exact search, this
 is a complex tradeoff between accuracy, query performance , and memory usage. 
@@ -883,7 +908,7 @@ and find the right balance between search performance and accuracy.
 
 ## Combining approximate nearest neighbor search with query filters
 Vespa allows combining the search for nearest neighbors to be constrained by regular query filters. 
-In this example the `title` must contain the term `heart`:
+In this query example the `title` field must contain the term `heart`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1007,6 +1032,164 @@ $ vespa query \
 </div>
 
 In this case restricting the nearest neighbor search to tracks by `Bonnie Tyler` with `popularity > 20`.
+
+### Strict filters and distant neighbors 
+When combining nearest neighbor search with strict filters which matches less than 5 percentage of the total number of documents, 
+Vespa will instead of searching the HNSW graph, constrained by the filter, fall back to using exact nearest neighbor search. When
+falling back to exact search users will observe that `totalCount` increases and is higher than `targetHits`.
+As seen from previous examples, more hits are exposed to the `first-phase` ranking expression when using 
+exact search. When using exact search with filters, the search can also use multiple threads to evaluate the query, which
+helps reducing the latency impact. 
+
+With strict filters that removes many hits, the hits (nearest neighbors) might not be *near* in the embedding space, but *far*,
+or *distant* neighbors. Remember, all document vectors are technically a neighbor of the query, 
+but with a different distance. 
+With strict filters, the neighbors that are returned might be of low quality (far distance). 
+One way to combat this is to use the [distanceTreshold](../reference/query-language-reference.html#distancethreshold)
+query annotation parameter of the `nearestNeighbor` query operator. 
+The value of the `distance` depends on the [distance-metric](../reference/schema-reference.html#distance-metric) used. 
+By adding the [distance(field,embedding)](../reference/rank-features.html#distance(dimension,name)) rank-feature to
+the `match-features` like done for the `closeness` rank-profiles,  it is possible to analyze what distance 
+could be consider too far. 
+
+Note that distance of 0 is perfect, while distance of 1 is distant,
+so the `distanceThreshold` remove hits that have a **higher** `distance` than `distanceThreshold`. The
+`distanceThreshold` is applied regardless of performing exact or approximate search. 
+
+The following query with a restrictive filter on popularity is used for illustration:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
+$ vespa query \
+    'yql=select matchfeatures, title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
+    'hits=2' \
+    'ranking=closeness-t4' \
+    "ranking.features.query(q)=$Q"
+</pre>
+</div>
+
+The above query returns 
+
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.008,
+        "summaryfetchtime": 0.002,
+        "searchtime": 0.011
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 63
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 0.5992897875290117,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.6686418170467985
+                    },
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler",
+                    "popularity": 100
+                }
+            },
+            {
+                "id": "index:tracks/0/3517728cc88356c8ca6de0d9",
+                "relevance": 0.5005276509131764,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.9978916213231626
+                    },
+                    "title": "Closer To The Heart",
+                    "artist": "Rush",
+                    "popularity": 100
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %} 
+</pre>
+
+Using a `distanceTreshold` of 0.7 and the `Closer To The Heart` track will be removed from the result
+because it's `distance` is close to 1. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
+$ vespa query \
+    'yql=select matchfeatures, title, popularity, artist from track where {distanceThreshold:0.7,targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
+    'hits=2' \
+    'ranking=closeness-t4' \
+    "ranking.features.query(q)=$Q"
+</pre>
+</div>
+
+Now, the query only returns 1 hit which satisfied the `distanceThreshold`:
+<pre>
+{% highlight json%}
+{
+    "timing": {
+        "querytime": 0.008,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.011
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 0.5992897875290117,
+                "source": "tracks",
+                "fields": {
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.6686418170467985
+                    },
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler",
+                    "popularity": 100
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %} 
+</pre>
+
+Setting appropriate `distanceThreshold` is best handled by supervised training as the threshold 
+should be calibrated based on the query complexity and possibly the feature distributions of the 
+returned top-k hits. 
+Having the distance returned as `match-features`,  enables post-processing of the result using a
+custom [re-ranking/filtering searcher](./reranking-in-searcher.html). The post processing searcher
+can analyze the score distributions of the returned top-k hits (using the features returned with `match-features`),
+and remove low scoring hits before presenting the end result to the end user, or not return any results at all. 
 
 ## Hybrid sparse and dense retrieval methods with Vespa
 In the previous filtering examples the ranking was not impacted by the filters, the filters were only used to impact recall, not the
@@ -1351,8 +1534,9 @@ $ vespa query \
 </div>
 
 This query returns 100 documents, since only the first operand of the `rank` query operator was used for 
-*retrieval*, the sparse `userQuery()` representation was only use to calculate sparse rank features for
-the results retrieved by the nearest neighbor search. 
+*retrieval*, the sparse `userQuery()` representation was only used to calculate sparse 
+[rank features](../reference/rank-features.html) for
+the results retrieved by the nearest neighbor search. Features such as `bm25(title)`:
 
 <pre>
 {% highlight json%}
@@ -1414,7 +1598,8 @@ the results retrieved by the nearest neighbor search.
 </pre>
 
 One can also do this the other way around, retrieve using the sparse representation, and have
-Vespa calculate the closeness rank feature for the hits retrieved by the sparse query representation. 
+Vespa calculate the `vector similarity` rank features for the hits 
+retrieved by the sparse query representation. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1434,10 +1619,11 @@ The `weakAnd` query operator exposes more hits to ranking than approximate neare
 to the `wand` query operator. Generally, using the `rank` query operator is more efficient than combining
 query retriever operators using `or`. See also the 
 [Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/passage-ranking.md)
-for complete examples of different retrieval and multi-phase ranking using Transformer models. 
+for complete examples of different retrieval strategies for multi-phase ranking funnels.
 
 ## Tear down the container
-This concludes this tutorial. The following removes the container and the data:
+This concludes this tutorial. 
+The following removes the container and the data:
 <pre data-test="after">
 $ docker rm -f vespa
 </pre>
