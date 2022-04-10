@@ -41,8 +41,8 @@ Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.h
 ## Installing vespa-cli 
 
 This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
-Vespa CLI is the official command-line client for Vespa.ai. 
-It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
+the official command-line client for Vespa.ai. 
+It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -69,9 +69,9 @@ $ unzip lastfm_test.zip
 </div>
 
 The downloaded data needs to be converted to
-[the JSON format expected by Vespa](../reference/document-json-format.html). 
+[the Vespa JSON format](../reference/document-json-format.html). 
 
-This small [python](https://www.python.org/) script can be used to traverse 
+This [python](https://www.python.org/) script can be used to traverse 
 the dataset files and create a JSONL formatted feed file with Vespa put operations. 
 The schema used with this feed format is introduced in the next section. 
 The number of unique `tags` is used as a proxy for the popularity of the track. 
@@ -130,8 +130,7 @@ for filename in sorted_files:
     process_file(filename)
 </pre>
 
-<pre>
-{% highlight python%}
+<pre>{% highlight python%}
 import os
 import sys
 import json
@@ -183,11 +182,10 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
-Process the dataset and convert it to a Vespa
-JSON document operation format. See [Vespa document json format](../reference/document-json-format.html).
+Process the dataset and convert it to
+[Vespa JSON document operation](../reference/document-json-format.html) format.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -493,7 +491,7 @@ $ vespa query \
 This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
 with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
 default [query type](../reference/query-api-reference.html#model.type) is 
-using `all` requiring that all the terms match. 
+using `all`, requiring that all the terms match. 
 
 The above query example searches for *total AND eclipse AND of AND the AND heart* 
 in the `default` fieldset,  which in the schema includes the track `title` and `artist` fields. 
@@ -501,8 +499,7 @@ in the `default` fieldset,  which in the schema includes the track `title` and `
 The [result](../reference/default-result-format.html) 
 for the above query will look something like this:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.007,
@@ -537,8 +534,7 @@ for the above query will look something like this:
         ]
     }
 }
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 This query only matched one document because the query terms were `AND`ed. 
 We can change matching to use `type=any` instead of the default `type=all`. See 
@@ -568,7 +564,7 @@ the `weakAnd` query operator which implements the WAND algorithm.
 See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
 
 Run the same query, but instead of `type=any` use `type=weakAnd`, 
-see [supported query types](../reference/query-api-reference.html#model.type)
+see [supported query types](../reference/query-api-reference.html#model.type):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -639,8 +635,7 @@ The query asks for 2 hits to be returned, and uses the `tags` ranking profile.
 The [result](../reference/default-result-format.html) 
 for the above query will look something like this:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.051000000000000004,
@@ -686,8 +681,7 @@ for the above query will look something like this:
     }
 }
 
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 The `wand` query operator exposed a total of about 60 documents to the `first-phase` ranking which 
 uses the `rawScore(tag)` rank-feature directly, hence the `relevancy` is the 
 result of the sparse dot product between the sparse user profile and the document tags. 
@@ -720,13 +714,11 @@ The following query examples uses a static query vector embedding for the
 query string *Total Eclipse Of The Heart*. The query embedding was obtained by the
 following snippet using [sentence-transformers](https://www.sbert.net/):
 
-<pre>
-{% highlight python%}
+<pre>{% highlight python%}
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 print(model.encode("Total Eclipse Of The Heart").tolist())
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 <pre data-test="exec">
 $ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
@@ -745,7 +737,7 @@ $ vespa query \
 </pre>
 </div>
 
-The query expresses the following :
+Query breakdown:
 
 - Search for 10 (`targetHits:10`) nearest neighbors of the `query(q)` query tensor over the `embedding`
 document tensor field. 
@@ -762,8 +754,7 @@ results to be randomly sorted.
 The above exact nearest neighbor search will return the following
 [result](../reference/default-result-format.html):
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.051,
@@ -797,8 +788,7 @@ The above exact nearest neighbor search will return the following
         ]
     }
 }
-{% endhighlight %}  
-</pre>
+{% endhighlight %}</pre>
 The exact search takes approximately 51ms, performing 95,666 distance calculations. 
 A total of about 120 documents were exposed to the first-phase ranking during the search as can be seen from
 `totalCount`.  Vespa's exact nearest neighbor search uses chunked vector distance calculations, splitting
@@ -821,8 +811,7 @@ $ vespa query \
 Now, the exact search latency is reduced by using more threads, 
 see [multi-threaded searching and ranking](practical-search-performance-guide.html#multi-threaded-search-and-ranking)
 for more on this topic.
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.019,
@@ -830,8 +819,7 @@ for more on this topic.
         "searchtime": 0.021
     }
 }  
-{% endhighlight %}  
-</pre>
+{% endhighlight %}</pre>
 
 ## Approximate nearest neighbor search
 This section covers using the faster, but approximate, nearest neighbor search. The 
@@ -856,8 +844,7 @@ $ vespa query \
 
 Which returns the following response:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.004,
@@ -891,10 +878,9 @@ Which returns the following response:
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
-Now, the query is significantly faster, but also uses less resources during the search. To get latency down 
+Now, the query is significantly faster, and also uses less resources during the search. To get latency down 
 to 20 ms with the exact search one had to use 4 matching threads, in this case, the
 result latency is down to 4ms with a single matching thread. 
 For this query example, the approximate search returned the exact same top-1 hit, so for this query, there was
@@ -932,8 +918,7 @@ $ vespa query \
 </div>
 
 Which returns the following response:
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.005,
@@ -976,8 +961,7 @@ Which returns the following response:
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 When using filtering, it is important for performance reasons that the fields that are included in the filters have
 been defined with `index` or `attribute:fast-search`.
@@ -1028,7 +1012,7 @@ $ vespa query \
 In the previous examples, since the rank-profile did only use the `closeness` rank feature,  
 the matching would not impact the score anyway. 
 
-Vespa also allow combining the `nearestNeighbor` query operator with any other Vespa query operator.  
+Vespa also allows combining the `nearestNeighbor` query operator with any other Vespa query operator.  
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1082,8 +1066,7 @@ $ vespa query \
 
 The above query returns 
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.008,
@@ -1134,8 +1117,7 @@ The above query returns
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 By using a `distanceTreshold` of 0.7,  the `Closer To The Heart` track will be removed from the result
 because it's `distance(field, embedding)` is close to 1. 
@@ -1151,8 +1133,7 @@ $ vespa query \
 </pre>
 </div>
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.008,
@@ -1190,8 +1171,7 @@ $ vespa query \
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 Setting appropriate `distanceThreshold` is best handled by supervised learning as 
 the distance threshold should be calibrated based on the query complexity 
@@ -1264,8 +1244,7 @@ rank-profile hybrid {
 
 The query returns the following result:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.007,
@@ -1319,8 +1298,7 @@ The query returns the following result:
             }
         ]
     }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 The result hits also include [match-features](../reference/schema-reference.html#match-features) which 
 can be used for feature logging for [learning to rank](../learning-to-rank.html), or to simply
@@ -1345,8 +1323,7 @@ $ vespa query \
 
 Which changes the order and a different hit is surfaced at position two:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.011,
@@ -1401,8 +1378,7 @@ Which changes the order and a different hit is surfaced at position two:
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 One can also throw the personalization component using the sparse
 user profile into the retriever mix. For example having a user profile:
@@ -1430,8 +1406,7 @@ $ vespa query \
 In this case, another document is surfaced at position 2, which have a non-zero personalized score,
 notice that `totalCount` increases as the `wand` query operator brought more hits into `first-phase` ranking.
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.014,
@@ -1486,8 +1461,7 @@ notice that `totalCount` increases as the `wand` query operator brought more hit
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 In the examples above, some of the hits had 
 <pre>
@@ -1578,8 +1552,7 @@ This query returns 100 documents, since only the first operand of the `rank` que
 [rank features](../reference/rank-features.html) for
 the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm25(title)` for example.
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.01,
@@ -1634,8 +1607,7 @@ the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 One can also do this the other way around, retrieve using the sparse representation, and have
 Vespa calculate the `closeness(field, embedding)` or related rank features for the hits 
@@ -1666,26 +1638,22 @@ This section looks at how to use multiple `nearestNeighbor` query operator insta
 
 First, the query embedding for *Total Eclipse Of The Heart*:
 
-<pre>
-{% highlight python%}
+<pre>{% highlight python%}
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 print(model.encode("Total Eclipse Of The Heart").tolist())
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 <pre data-test="exec">
 $ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
 </pre>
 
 Secondly, the query embedding for *Summer of '69*:
-<pre>
-{% highlight python%}
+<pre>{% highlight python%}
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 print(model.encode("Summer of '69").tolist())
-{% endhighlight %}
-</pre>
+{% endhighlight %}</pre>
 
 
 <pre data-test="exec">
@@ -1696,7 +1664,7 @@ The following Vespa query combines two `nearestNeighbor` query operators
 using logical disjunction (`OR`) and referencing two different
 query tensor inputs:
 
-- `ranking.features.query(q)` holding the **Total Eclipse Of The Heart* query vector.
+- `ranking.features.query(q)` holding the *Total Eclipse Of The Heart* query vector.
 - `ranking.features.query(qa)` holding the *Summer of '69* query vector.
 
 <div class="pre-parent">
@@ -1712,8 +1680,7 @@ $ vespa query \
 </div>
 
 The above query returns 20 documents to first phase ranking, as seen from `totalCount`. Ten from each nearest neighbor query operator:
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.007,
@@ -1754,8 +1721,7 @@ The above query returns 20 documents to first phase ranking, as seen from `total
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 One can also use `label` annotation when there are multiple nearest neighbor search operators in the same query
 to differentiate which of them produced the match. 
@@ -1764,7 +1730,7 @@ to differentiate which of them produced the match.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures from track where ({ "label":"q", targetHits:10}nearestNeighbor(embedding,q)) or ({"label":"qa",targetHits:10}nearestNeighbor(embedding,qa))' \
+    'yql=select title, matchfeatures from track where ({ label:"q", targetHits:10}nearestNeighbor(embedding,q)) or ({label:"qa",targetHits:10}nearestNeighbor(embedding,qa))' \
     'hits=2' \
     'ranking=closeness-label' \
     "ranking.features.query(q)=$Q" \
@@ -1777,8 +1743,7 @@ The above query annotates the two `nearestNeighbor` query operators using
 `match-features` so one can see which query operator retrieved the document from the 
 `closeness(label, ..)` feature output:
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.011,
@@ -1827,8 +1792,7 @@ The above query annotates the two `nearestNeighbor` query operators using
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 Note that the previous examples used `or` to combine the two operators. Using `and` instead, requires 
 that there are documents that is in both the top-k results. Increasing `targetHits` to 500,  
@@ -1838,7 +1802,7 @@ finds 9 tracks that overlap. In this case both closeness labels have a non-zero 
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Summer Of Love'>
 $ vespa query \
-    'yql=select title, matchfeatures from track where ({ "label":"q", targetHits:500}nearestNeighbor(embedding,q)) and ({"label":"qa",targetHits:500}nearestNeighbor(embedding,qa))' \
+    'yql=select title, matchfeatures from track where ({label:"q", targetHits:500}nearestNeighbor(embedding,q)) and ({label:"qa",targetHits:500}nearestNeighbor(embedding,qa))' \
     'hits=2' \
     'ranking=closeness-label' \
     "ranking.features.query(q)=$Q" \
@@ -1851,8 +1815,7 @@ uses `closeness(field, embedding)` which in the case of multiple nearest neighbo
 uses the maximum score to represent the unlabeled `closeness(field,embedding)`. This
 can be seen from the `relevance` value, compared with the labeled `closeness()` rank features. 
 
-<pre>
-{% highlight json%}
+<pre>{% highlight json%}
 {
     "timing": {
         "querytime": 0.015,
@@ -1901,8 +1864,7 @@ can be seen from the `relevance` value, compared with the labeled `closeness()` 
         ]
     }
 }
-{% endhighlight %} 
-</pre>
+{% endhighlight %}</pre>
 
 Vespa also supports having multiple document side embedding fields, which also
 can be searched using multiple `nearestNeighbor` query operators in the query.
