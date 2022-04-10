@@ -1493,7 +1493,26 @@ also be 0 if a hit was not retrieved by the `wand` query operator. This is becau
 
 It's is nevertheless possible to calculate the semantic distance/similarity using 
 [tensor computations](../tensor-examples.html) for the hits that were not retrieved by the `nearestNeighbor`
-query operator. See also [tensor functions](../reference/ranking-expressions.html#tensor-functions).
+query operator. See also [tensor functions](../reference/ranking-expressions.html#tensor-functions). 
+For example to compute the `euclidean` distance one can add a 
+[function](../reference/schema-reference.html#function-rank) to the rank-profile:
+
+<pre>
+rank-profile compute-also-for-sparse {
+    function euclidean() {
+        expression: sqrt(sum(map(query(q) - attribute(embedding), f(x)(x * x))))
+    }
+    function match_closeness() {
+        expression: 1/(1 + euclidean())
+    }
+    first-phase {
+        expression {
+         bm25(title) + 
+         if(closeness(field, embedding) == 0, match_closeness(), closeness(field, embedding))
+        }
+    }
+}
+</pre>
 
 Changing from logical `OR` to `AND` instead will intersect the result of the two efficient retrievers, the
 search for nearest neighbors is then constrained to documents which at least matches one of
@@ -1684,7 +1703,8 @@ $ vespa query \
     "ranking.features.query(qa)=$QA" 
 </pre>
 </div>
-The above query returns 20 documents to first phase ranking (10 from each nearest neighbor query operator):
+
+The above query returns 20 documents to first phase ranking, as seen from `totalCount`. Ten from each nearest neighbor query operator:
 <pre>
 {% highlight json%}
 {
@@ -1730,7 +1750,7 @@ The above query returns 20 documents to first phase ranking (10 from each neares
 {% endhighlight %} 
 </pre>
 
-One can also use `label` when there are multiple nearest neighbor search operators in the same query
+One can also use `label` annotation when there are multiple nearest neighbor search operators in the same query
 to differentiate which of them produced the match. 
 
 <div class="pre-parent">
@@ -1747,7 +1767,8 @@ $ vespa query \
 
 The above query annotates the two `nearestNeighbor` query operators using 
 [label](../reference/query-language-reference.html#label) query annotation. The result include 
-`match-features` so one can see which query operator retrieved the document. 
+`match-features` so one can see which query operator retrieved the document from the 
+`closeness(label, ..)` feature output:
 
 <pre>
 {% highlight json%}
@@ -1802,8 +1823,9 @@ The above query annotates the two `nearestNeighbor` query operators using
 {% endhighlight %} 
 </pre>
 
-Note that the previous examples used `or` to combine the two operators. Instead using `and` requires 
-that some document is in both the top-k results of each. Increasing `targetHits` to 500 we find 9 tracks that overlap:
+Note that the previous examples used `or` to combine the two operators. Using `and` instead, requires 
+that there are documents that is in both the top-k results. Increasing `targetHits` to 500,  
+finds 9 tracks that overlap. In this case both closeness labels have a non-zero score. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1816,10 +1838,11 @@ $ vespa query \
     "ranking.features.query(qa)=$QA" 
 </pre>
 </div>
+
 Which returns the following top two hits. Note that the `closeness-label` rank profile
 uses `closeness(field, embedding)` which in the case of multiple nearest neighbor search operators 
-uses the maxium to represent the rank-feature, as can be seen from the `relevance` compared with the
-labeled `closeness()` rank features. 
+uses the maximum score to represent the unlabeled `closeness(field,embedding)`. This
+can be seen from the `relevance` value, compared with the labeled `closeness()` rank features. 
 
 <pre>
 {% highlight json%}
@@ -1873,6 +1896,39 @@ labeled `closeness()` rank features.
 }
 {% endhighlight %} 
 </pre>
+
+Vespa also supports having multiple document side embedding fields, which also
+can be searched using multiple `nearestNeighbor` query operators in the query, preferably
+using `or`. 
+
+<pre>
+field embedding type tensor&lt;float&gt;(x[384]) {
+    indexing: attribute | index
+    attribute {
+        distance-metric: euclidean
+    }
+    index {
+        hnsw {
+            max-links-per-node: 16
+            neighbors-to-explore-at-insert: 50
+        }
+    }
+ }
+ field embedding_two tensor&lt;float&gt;(x[768]) {
+    indexing: attribute | index
+    attribute {
+        distance-metric: euclidean
+    }
+    index {
+        hnsw {
+            max-links-per-node: 16
+            neighbors-to-explore-at-insert: 50
+        }
+    }
+ }
+</pre>
+
+
 
 
 ## Tear down the container
