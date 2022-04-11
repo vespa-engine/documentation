@@ -9,7 +9,7 @@ title: "Vespa nearest neighbor search - a practical guide"
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset for illustration. 
  Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.
- See also the the generic [Vespa performance - a practical guide](practical-search-performance-guide.html).
+ See also the the generic [Vespa performance - a practical guide](performance/practical-search-performance-guide.html).
 
 This guide covers the following:
 
@@ -809,7 +809,7 @@ $ vespa query \
 </div>
 
 Now, the exact search latency is reduced by using more threads, 
-see [multi-threaded searching and ranking](practical-search-performance-guide.html#multi-threaded-search-and-ranking)
+see [multi-threaded searching and ranking](performance/practical-search-performance-guide.html#multi-threaded-search-and-ranking)
 for more on this topic.
 <pre>{% highlight json%}
 {
@@ -965,7 +965,7 @@ Which returns the following response:
 
 When using filtering, it is important for performance reasons that the fields that are included in the filters have
 been defined with `index` or `attribute:fast-search`.
-See [searching attribute fields](practical-search-performance-guide.html#searching-attribute-fields).
+See [searching attribute fields](performance/practical-search-performance-guide.html#searching-attribute-fields).
 
 The optimal performance for pure filtering, where the query term(s) does not influence ranking, is achieved
 using `rank: filter` in the schema.
