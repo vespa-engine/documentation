@@ -69,7 +69,7 @@ $ unzip lastfm_test.zip
 </div>
 
 The downloaded data needs to be converted to
-[the Vespa JSON format](../reference/document-json-format.html). 
+[the Vespa JSON format](reference/document-json-format.html). 
 
 This [python](https://www.python.org/) script can be used to traverse 
 the dataset files and create a JSONL formatted feed file with Vespa put operations. 
@@ -185,7 +185,7 @@ for filename in sorted_files:
 {% endhighlight %}</pre>
 
 Process the dataset and convert it to
-[Vespa JSON document operation](../reference/document-json-format.html) format.
+[Vespa JSON document operation](reference/document-json-format.html) format.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -195,7 +195,7 @@ $ python3 create-vespa-feed.py lastfm_test > feed.jsonl
 </div>
 
 ## Create a Vespa Application Package
-A [Vespa application package](../cloudconfig/application-packages.html) is the set 
+A [Vespa application package](cloudconfig/application-packages.html) is the set 
 of configuration files and Java plugins that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done,
 and how data will be processed during feeding and indexing.
@@ -212,7 +212,7 @@ $ mkdir -p app/schemas; mkdir -p app/search/query-profiles/types
 
 ### Schema
 
-A [schema](../schemas.html) is a configuration of a document type and what we should compute over it.
+A [schema](schemas.html) is a configuration of a document type and what we should compute over it.
 For this application we define a document type called `track`.
 Write the following to `app/schemas/track.sd`:
 <pre data-test="file" data-path="app/schemas/track.sd">
@@ -325,7 +325,7 @@ schema track {
 }
 </pre>
 
-This schema is explained in the [practical search performance guide](../practical-search-performance-guide.html),
+This schema is explained in the [practical search performance guide](performance/practical-search-performance-guide.html),
 the addition is the `embedding` field:
 
 <pre>
@@ -343,12 +343,12 @@ field embedding type tensor&lt;float&gt;(x[384]) {
  }
 </pre>
 See 
-[Approximate Nearest Neighbor Search using HNSW Index](../approximate-nn-hnsw.html)
+[Approximate Nearest Neighbor Search using HNSW Index](approximate-nn-hnsw.html)
 for an introduction to `HNSW` and the `HNSW` tuning parameters.
 
 ### Services Specification
 
-The [services.xml](../reference/services.html) defines the services that make up
+The [services.xml](reference/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `app/services.xml`:
 
@@ -384,7 +384,7 @@ Write the following to `app/services.xml`:
 &lt;/services&gt;
 </pre>
 
-To query with the [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor)
+To query with the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
 query operator, the input query tensor type must be defined:
 
 <pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
@@ -401,8 +401,8 @@ must match the document tensor.
 field embedding type tensor&lt;float&gt;(x[384]) 
 </pre>
 
-The tensor type must be reference in the the `default` [queryProfile](../query-profiles.html), 
-it also enables [timing](../reference/query-api-reference.html#presentation.timing).
+The tensor type must be reference in the the `default` [queryProfile](query-profiles.html), 
+it also enables [timing](reference/query-api-reference.html#presentation.timing).
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
 &lt;query-profile id=&quot;default&quot; type=&quot;root&quot;&gt;
@@ -414,7 +414,7 @@ it also enables [timing](../reference/query-api-reference.html#presentation.timi
 ## Deploy the application package
 
 The application package can now be deployed to a running Vespa instance.
-See also the [Vespa quick start guide](../vespa-quick-start.html).
+See also the [Vespa quick start guide](vespa-quick-start.html).
 
 Start the Vespa container image using Docker:
 
@@ -463,9 +463,9 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </div>
 
 ## Free text search using Vespa weakAnd 
-The following sections uses the Vespa [query api](../reference/query-api-reference.html) and 
-formulate queries using Vespa [query language](../query-language.html). The examples uses the
-[vespa-cli](../vespa-cli.html) command which supports running queries.
+The following sections uses the Vespa [query api](reference/query-api-reference.html) and 
+formulate queries using Vespa [query language](query-language.html). The examples uses the
+[vespa-cli](vespa-cli.html) command which supports running queries.
 
 The CLI uses the Vespa http search api. Use `vespa query -v` to see the actual http request sent:
 
@@ -474,7 +474,7 @@ $ vespa query -v 'yql=select ..'
 </pre>
 
 The first example is searching and ranking using the `bm25` rank profile defined in the
-schema, it uses the [bm25](../reference/bm25.html) rank feature as the `first-phase` relevance
+schema, it uses the [bm25](reference/bm25.html) rank feature as the `first-phase` relevance
 score:
 
 <div class="pre-parent">
@@ -488,15 +488,15 @@ $ vespa query \
 </pre>
 </div>
 
-This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
-default [query type](../reference/query-api-reference.html#model.type) is 
+This query combines YQL [userQuery()](reference/query-language-reference.html#userquery) 
+with Vespa's [simple query language](reference/simple-query-language-reference.html), the 
+default [query type](reference/query-api-reference.html#model.type) is 
 using `all`, requiring that all the terms match. 
 
 The above query example searches for *total AND eclipse AND of AND the AND heart* 
 in the `default` fieldset,  which in the schema includes the track `title` and `artist` fields. 
 
-The [result](../reference/default-result-format.html) 
+The [result](reference/default-result-format.html) 
 for the above query will look something like this:
 
 <pre>{% highlight json%}
@@ -538,7 +538,7 @@ for the above query will look something like this:
 
 This query only matched one document because the query terms were `AND`ed. 
 We can change matching to use `type=any` instead of the default `type=all`. See 
-[supported query types](../reference/query-api-reference.html#model.type).
+[supported query types](reference/query-api-reference.html#model.type).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -561,10 +561,10 @@ Type `any` queries requires more compute resources than type `all`.
 
 There is an optimization available for `type=any` queries, using
 the `weakAnd` query operator which implements the WAND algorithm. 
-See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
+See the [using wand with Vespa](using-wand-with-vespa.html) guide for more details. 
 
 Run the same query, but instead of `type=any` use `type=weakAnd`, 
-see [supported query types](../reference/query-api-reference.html#model.type):
+see [supported query types](reference/query-api-reference.html#model.type):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -600,14 +600,14 @@ search only finds 1 document matching the exact phrase.
 ## Maximum Inner Product Search using Vespa WAND
 
 The previous section introduced the `weakAnd` query operator which integrates 
-with [linguistic processing](../linguistics.html) and string matching using `match: text`.  
+with [linguistic processing](linguistics.html) and string matching using `match: text`.  
 
 The following examples uses the
-[wand()](../reference/query-language-reference.html#wand) query operator. 
+[wand()](reference/query-language-reference.html#wand) query operator. 
 The `wand` query operator calculates the maximum inner product search 
 between the sparse query and document feature integer
 weights. The inner product ranking score calculated by the `wand` query operator 
-can be used in a ranking expression by the [rawScore(name)](../reference/rank-features.html#match-operator-scores)
+can be used in a ranking expression by the [rawScore(name)](reference/rank-features.html#match-operator-scores)
 rank feature. 
 
 <pre>
@@ -632,7 +632,7 @@ $ vespa query \
 </pre>
 </div>
 The query asks for 2 hits to be returned, and uses the `tags` ranking profile. 
-The [result](../reference/default-result-format.html) 
+The [result](reference/default-result-format.html) 
 for the above query will look something like this:
 
 <pre>{% highlight json%}
@@ -690,7 +690,7 @@ The `wand` query operator is safe, meaning, it returns the same top-k results as
 the brute-force `dotProduct` query operator. `wand` is a type of query operator which
 performs matching and ranking interleaved and skipping documents
 which cannot compete into the final top-k results. 
-See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details on 
+See the [using wand with Vespa](using-wand-with-vespa.html) guide for more details on 
 using `wand` and `weakAnd` query operators. 
 
 ## Exact nearest neighbor search
@@ -698,7 +698,7 @@ Vespa's nearest neighbor search operator supports doing exact brute force neares
 using dense representations. This guide uses
 the [sentence-transformers/all-MiniLM-L6-V2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
 embedding model. Download the pre-generated document embeddings and feed them to Vespa. 
-The feed file uses [partial updates](../partial-updates.html) to add the vector embedding. 
+The feed file uses [partial updates](partial-updates.html) to add the vector embedding. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -724,7 +724,7 @@ print(model.encode("Total Eclipse Of The Heart").tolist())
 $ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
 </pre>
 
-The first query example uses [exact nearest neighbor search](../nearest-neighbor-search.html): 
+The first query example uses [exact nearest neighbor search](nearest-neighbor-search.html): 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -744,15 +744,15 @@ document tensor field.
 - The annotation `approximate:false` tells Vespa to perform exact search.
 - The `hits` parameter controls how many results are returned in the response. Number of `hits`
 requested does not impact `targetHits`. Notice that `targetHits` is per content node involved in the query. 
-- `ranking=closeness` tells Vespa which [rank-profile](../ranking.html) to score documents. One must 
+- `ranking=closeness` tells Vespa which [rank-profile](ranking.html) to score documents. One must 
 specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` rank expression
 in the `rank-profile`.
-Not specifying [ranking](../reference/query-api-reference.html#ranking.profile) will cause
-Vespa to use [nativeRank](../nativerank.html) which does not use the vector similarity, causing
+Not specifying [ranking](reference/query-api-reference.html#ranking.profile) will cause
+Vespa to use [nativeRank](nativerank.html) which does not use the vector similarity, causing
 results to be randomly sorted. 
 
 The above exact nearest neighbor search will return the following
-[result](../reference/default-result-format.html):
+[result](reference/default-result-format.html):
 
 <pre>{% highlight json%}
 {
@@ -825,7 +825,7 @@ for more on this topic.
 This section covers using the faster, but approximate, nearest neighbor search. The 
 `track` schema's `embedding` field has the `index` property,  which means Vespa builds a 
 `HNSW` index to support fast, approximate vector search. See 
-[Approximate Nearest Neighbor Search using HNSW Index](../approximate-nn-hnsw.html)
+[Approximate Nearest Neighbor Search using HNSW Index](approximate-nn-hnsw.html)
 for an introduction to `HNSW` and the tuning parameters.
 
 The default query behavior is using `approximate:true` when the `embedding` 
@@ -965,7 +965,7 @@ Which returns the following response:
 
 When using filtering, it is important for performance reasons that the fields that are included in the filters have
 been defined with `index` or `attribute:fast-search`.
-See [searching attribute fields](../practical-search-performance-guide.html#searching-attribute-fields).
+See [searching attribute fields](practical-search-performance-guide.html#searching-attribute-fields).
 
 The optimal performance for pure filtering, where the query term(s) does not influence ranking, is achieved
 using `rank: filter` in the schema.
@@ -992,7 +992,7 @@ rank-profile popularity {
 
 In the following example, since the `title` field does not have `rank: filter` one can instead
 flag that the term should not be used by any ranking expression by 
-using the [`ranked` query annotation](../reference/query-language-reference.html#ranked). 
+using the [`ranked` query annotation](reference/query-language-reference.html#ranked). 
 
 The following disables term based ranking and 
 the matching against the `title` field can use the most efficient 
@@ -1040,10 +1040,10 @@ or *distant* neighbors. Technically, all document vectors are a neighbor of the 
 but with a varying distance, some are close, others are distant.
 
 With strict filters, the neighbors that are returned might be of low quality (far distance). 
-One way to combat this is to use the [distanceThreshold](../reference/query-language-reference.html#distancethreshold)
+One way to combat this is to use the [distanceThreshold](reference/query-language-reference.html#distancethreshold)
 query annotation parameter of the `nearestNeighbor` query operator. 
-The value of the `distance` depends on the [distance-metric](../reference/schema-reference.html#distance-metric) used. 
-By adding the [distance(field,embedding)](../reference/rank-features.html#distance(dimension,name)) rank-feature to
+The value of the `distance` depends on the [distance-metric](reference/schema-reference.html#distance-metric) used. 
+By adding the [distance(field,embedding)](reference/rank-features.html#distance(dimension,name)) rank-feature to
 the `match-features` of the `closeness` rank-profiles, it is possible to analyze what distance 
 could be consider too far. 
 
@@ -1178,7 +1178,7 @@ the distance threshold should be calibrated based on the query complexity
 and possibly also the feature distributions of the returned top-k hits. 
 Having the `distance` rank feature returned as `match-features`, 
 enables post-processing of the result using a custom 
-[re-ranking/filtering searcher](../reranking-in-searcher.html). 
+[re-ranking/filtering searcher](reranking-in-searcher.html). 
 The post processing searcher can analyze the score distributions of the returned top-k hits
 (using the features returned with `match-features`), 
 remove low scoring hits before presenting the result to the end user, 
@@ -1189,7 +1189,7 @@ In the previous filtering examples the ranking was not impacted by the filters, 
 only used to impact recall, not the order of the results. The following examples 
 demonstrates how to perform hybrid retrieval combining the efficient query operators in 
 a single query. Hybrid retrieval can be used as the first phase in a multi-phase ranking funnel, see 
-Vespa's [phased ranking](../phased-ranking.html).
+Vespa's [phased ranking](phased-ranking.html).
 
 The first query example combines the `nearestNeighbor` operator with the `weakAnd` query operator, 
 combining them using logical disjunction (`OR`). This type of query enable retrieving
@@ -1300,8 +1300,8 @@ The query returns the following result:
     }
 {% endhighlight %}</pre>
 
-The result hits also include [match-features](../reference/schema-reference.html#match-features) which 
-can be used for feature logging for [learning to rank](../learning-to-rank.html), or to simply
+The result hits also include [match-features](reference/schema-reference.html#match-features) which 
+can be used for feature logging for [learning to rank](learning-to-rank.html), or to simply
 debug the final score. 
 
 In the below query, the `weight` of the embedding similarity (closeness) is increased by overriding
@@ -1471,10 +1471,10 @@ This means that the hit was not retrieved by the `nearestNeighbor` operator, sim
 also be 0 if the hit was not retrieved by the `wand` query operator. 
 
 It is nevertheless possible to calculate the semantic distance/similarity using 
-[tensor computations](../tensor-examples.html) for the hits that were not retrieved by the `nearestNeighbor`
-query operator. See also [tensor functions](../reference/ranking-expressions.html#tensor-functions). 
+[tensor computations](tensor-examples.html) for the hits that were not retrieved by the `nearestNeighbor`
+query operator. See also [tensor functions](reference/ranking-expressions.html#tensor-functions). 
 For example to compute the `euclidean` distance one can add a 
-[function](../reference/schema-reference.html#function-rank) to the rank-profile:
+[function](reference/schema-reference.html#function-rank) to the rank-profile:
 
 <pre>
 rank-profile compute-also-for-sparse {
@@ -1529,7 +1529,7 @@ $ vespa query \
 </div>
 
 Another interesting approach for hybrid retrieval is to use Vespa's 
-[rank()](../reference/query-language-reference.html#rank) query operator. The first operand
+[rank()](reference/query-language-reference.html#rank) query operator. The first operand
 of the `rank()` operator is used to retrieve by, and the remaining operands are only used to compute
 rank features for those hits retrieved by the first operand. 
 
@@ -1549,7 +1549,7 @@ $ vespa query \
 
 This query returns 100 documents, since only the first operand of the `rank` query operator was used for 
 *retrieval*, the sparse `userQuery()` representation was only used to calculate sparse 
-[rank features](../reference/rank-features.html) for
+[rank features](reference/rank-features.html) for
 the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm25(title)` for example.
 
 <pre>{% highlight json%}
@@ -1739,7 +1739,7 @@ $ vespa query \
 </div>
 
 The above query annotates the two `nearestNeighbor` query operators using 
-[label](../reference/query-language-reference.html#label) query annotation. The result include 
+[label](reference/query-language-reference.html#label) query annotation. The result include 
 `match-features` so one can see which query operator retrieved the document from the 
 `closeness(label, ..)` feature output:
 
