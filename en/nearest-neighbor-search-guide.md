@@ -401,7 +401,7 @@ must match the document tensor.
 field embedding type tensor&lt;float&gt;(x[384]) 
 </pre>
 
-The tensor type must be reference in the the `default` [queryProfile](query-profiles.html), 
+The tensor type must be referenced in the the `default` [queryProfile](query-profiles.html),
 it also enables [timing](reference/query-api-reference.html#presentation.timing).
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
@@ -474,7 +474,7 @@ $ vespa query -v 'yql=select ..'
 </pre>
 
 The first example is searching and ranking using the `bm25` rank profile defined in the
-schema, it uses the [bm25](reference/bm25.html) rank feature as the `first-phase` relevance
+schema. It uses the [bm25](reference/bm25.html) rank feature as the `first-phase` relevance
 score:
 
 <div class="pre-parent">
@@ -489,12 +489,12 @@ $ vespa query \
 </div>
 
 This query combines YQL [userQuery()](reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](reference/simple-query-language-reference.html), the 
-default [query type](reference/query-api-reference.html#model.type) is 
+with Vespa's [simple query language](reference/simple-query-language-reference.html).
+The default [query type](reference/query-api-reference.html#model.type) is
 using `all`, requiring that all the terms match. 
 
 The above query example searches for *total AND eclipse AND of AND the AND heart* 
-in the `default` fieldset,  which in the schema includes the track `title` and `artist` fields. 
+in the `default` fieldset, which in the schema includes the `title` and `artist` fields.
 
 The [result](reference/default-result-format.html) 
 for the above query will look something like this:
@@ -604,7 +604,7 @@ with [linguistic processing](linguistics.html) and string matching using `match:
 
 The following examples uses the
 [wand()](reference/query-language-reference.html#wand) query operator. 
-The `wand` query operator calculates the maximum inner product search 
+The `wand` query operator calculates the maximum inner product
 between the sparse query and document feature integer
 weights. The inner product ranking score calculated by the `wand` query operator 
 can be used in a ranking expression by the [rawScore(name)](reference/rank-features.html#match-operator-scores)
@@ -710,7 +710,7 @@ $ zstdcat lastfm_embeddings.jsonl.zst | ./vespa-feed-client-cli/vespa-feed-clien
 </pre>
 </div>
 
-The following query examples uses a static query vector embedding for the
+The following query examples use a static query vector embedding for the
 query string *Total Eclipse Of The Heart*. The query embedding was obtained by the
 following snippet using [sentence-transformers](https://www.sbert.net/):
 
@@ -791,11 +791,11 @@ The above exact nearest neighbor search will return the following
 {% endhighlight %}</pre>
 The exact search takes approximately 51ms, performing 95,666 distance calculations. 
 A total of about 120 documents were exposed to the first-phase ranking during the search as can be seen from
-`totalCount`.  Vespa's exact nearest neighbor search uses chunked vector distance calculations, splitting
-the vectors into chunks, the chunked distance calculates reduces the computational complexity.
+`totalCount`. Vespa's exact nearest neighbor search uses chunked vector distance calculations.
+Splitting the vectors into chunks reduces the computational complexity.
 
 It is possible to reduce search latency of the exact search by throwing more CPU resources at it. 
-Changing the rank-profile used with the search to `closeness-t4` makes Vespa use four threads:
+Changing the rank-profile to `closeness-t4` makes Vespa use four threads per query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -881,9 +881,9 @@ Which returns the following response:
 {% endhighlight %}</pre>
 
 Now, the query is significantly faster, and also uses less resources during the search. To get latency down 
-to 20 ms with the exact search one had to use 4 matching threads, in this case, the
+to 20 ms with the exact search one had to use 4 matching threads. In this case the
 result latency is down to 4ms with a single matching thread. 
-For this query example, the approximate search returned the exact same top-1 hit, so for this query, there was
+For this query example, the approximate search returned the exact same top-1 hit and there was
 no accuracy loss for the top-1 position. 
 
 A few key differences between `exact` and `approximate` neighbor search:
@@ -892,7 +892,7 @@ A few key differences between `exact` and `approximate` neighbor search:
 configurable `first-phase` rank expression in the chosen `rank-profile`.
  The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
 were put on the top-k heap are exposed to first phase ranking.
-- The search is approximate, it might not return the exact top 10 closest vectors as with exact search, this
+- The search is approximate and might not return the exact top 10 closest vectors as with exact search. This
 is a complex tradeoff between accuracy, query performance , and memory usage. 
 See [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
 for a deep-dive into these trade-offs.
@@ -1046,6 +1046,8 @@ The value of the `distance` depends on the [distance-metric](reference/schema-re
 By adding the [distance(field,embedding)](reference/rank-features.html#distance(dimension,name)) rank-feature to
 the `match-features` of the `closeness` rank-profiles, it is possible to analyze what distance 
 could be consider too far. 
+See [match-features reference](reference/schema-reference.html#match-features).
+
 
 Note that distance of 0 is perfect, while distance of 1 is distant. The `distanceThreshold` 
 remove hits that have a **higher** `distance(field, embedding)` than `distanceThreshold`. The
@@ -1185,14 +1187,14 @@ remove low scoring hits before presenting the result to the end user,
 or not return any results at all. 
 
 ## Hybrid sparse and dense retrieval methods with Vespa
-In the previous filtering examples the ranking was not impacted by the filters, the filters were 
-only used to impact recall, not the order of the results. The following examples 
-demonstrates how to perform hybrid retrieval combining the efficient query operators in 
+In the previous filtering examples the ranking was not impacted by the filters.
+They were only used to impact recall, not the order of the results. The following examples
+demonstrate how to perform hybrid retrieval combining the efficient query operators in
 a single query. Hybrid retrieval can be used as the first phase in a multi-phase ranking funnel, see 
 Vespa's [phased ranking](phased-ranking.html).
 
-The first query example combines the `nearestNeighbor` operator with the `weakAnd` query operator, 
-combining them using logical disjunction (`OR`). This type of query enable retrieving
+The first query example combines the `nearestNeighbor` operator with the `weakAnd` operator,
+combining them using logical disjunction (`OR`). This type of query enables retrieving
 both based on semantic (vector distance) and traditional sparse (exact) matching. 
 
 <div class="pre-parent">
@@ -1211,7 +1213,7 @@ $ vespa query \
 The query combines the sparse `weakAnd` and the dense `nearestNeighbor` query operators 
 using logical disjunction. 
 Both query operator retrievers the target number of hits (or more) ranked by it's inner 
-raw score/distance.The list of documents exposed to the configurable ranking expression is a combination 
+raw score/distance. The list of documents exposed to the configurable ranking expression is a combination
 of the best of these two different retrieval strategies. 
 The ranking is performed using the following`hybrid` rank profile which serves as an example
 how to combine the different scoring techniques. 
@@ -1403,8 +1405,8 @@ $ vespa query \
 </pre>
 </div>
 
-In this case, another document is surfaced at position 2, which have a non-zero personalized score,
-notice that `totalCount` increases as the `wand` query operator brought more hits into `first-phase` ranking.
+In this case, another document is surfaced at position 2, which have a non-zero personalized score.
+Notice that `totalCount` increases as the `wand` query operator brought more hits into `first-phase` ranking.
 
 <pre>{% highlight json%}
 {
@@ -1493,8 +1495,8 @@ rank-profile compute-also-for-sparse {
 }
 </pre>
 
-Changing from logical `OR` to `AND` instead will intersect the result of the two efficient retrievers, the
-search for nearest neighbors is then constrained to documents which at least matches one of
+Changing from logical `OR` to `AND` instead will intersect the result of the two efficient retrievers.
+The search for nearest neighbors is then constrained to documents which at least matches one of
 the query terms in the `weakAnd`.
 
 <div class="pre-parent">
@@ -1530,7 +1532,7 @@ $ vespa query \
 
 Another interesting approach for hybrid retrieval is to use Vespa's 
 [rank()](reference/query-language-reference.html#rank) query operator. The first operand
-of the `rank()` operator is used to retrieve by, and the remaining operands are only used to compute
+of the `rank()` operator is used for retrieval, and the remaining operands are only used to compute
 rank features for those hits retrieved by the first operand. 
 
 <div class="pre-parent">
@@ -1723,7 +1725,7 @@ The above query returns 20 documents to first phase ranking, as seen from `total
 }
 {% endhighlight %}</pre>
 
-One can also use `label` annotation when there are multiple nearest neighbor search operators in the same query
+One can also use the `label` annotation when there are multiple `nearestNeighbor` operators in the same query
 to differentiate which of them produced the match. 
 
 <div class="pre-parent">
@@ -1867,7 +1869,7 @@ can be seen from the `relevance` value, compared with the labeled `closeness()` 
 {% endhighlight %}</pre>
 
 Vespa also supports having multiple document side embedding fields, which also
-can be searched using multiple `nearestNeighbor` query operators in the query.
+can be searched using multiple `nearestNeighbor` operators in the query.
 
 <pre>
 field embedding type tensor&lt;float&gt;(x[384]) {
