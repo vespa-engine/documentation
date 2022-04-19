@@ -7,21 +7,20 @@ redirect_from:
 
 
 <p>
-This document describes what grouping is and gives a few examples on how to use it.
-Refer to the <a href="reference/query-api-reference.html#select">Query API reference</a>
-for how to set the <em>select</em> parameter,
-and the <a href="reference/grouping-syntax.html">Grouping reference</a> for details.
+  The Vespa grouping language is a list processing language
+  which describes how the query hits should be grouped, aggregated and presented in result sets.
+  A grouping statement takes the list of all matches to a query as input and groups/aggregates
+  it, possibly in multiple nested and parallel ways to produce the output.
+  This is a logical specification, and does not indicate how it is executed,
+  as instantiating the list of all matches to the query somewhere would be too expensive,
+  and execution is distributed instead.
 </p>
 <p>
-  Fields used in grouping needs to be defined as <a href="attributes.html">attribute</a> in the document schema.
-</p>
-<p>
-The Vespa grouping language is a list processing language
-which describes how the query hits should be grouped, aggregated and presented in results.
-A grouping statement takes the list of all matches to a query as input and groups/aggregates
-it, possibly in multiple nested and parallel ways to produce the desired output. Of course,
-this is a logical specification, and does not indicate how it is executed, as instantiating the
-list of all matches to the query somewhere would be too expensive, and execution is distributed instead.
+  Refer to the <a href="reference/query-api-reference.html#select">Query API reference</a>
+  for how to set the <em>select</em> parameter,
+  and the <a href="reference/grouping-syntax.html">Grouping reference</a> for details.
+  Fields used in grouping must be defined as <a href="attributes.html">attribute</a> in the document schema.
+  Grouping supports continuation objects for <a href="#pagination">pagination</a>.
 </p>
 
 
@@ -31,10 +30,11 @@ list of all matches to the query somewhere would be too expensive, and execution
   The operations defining the structure of a grouping are:
 </p>
 <ul>
-  <li><code>all(statement)</code>: Perform the nested statement once on the input list as a whole.
-  <li><code>each(statement)</code>: Perform the nested statement on each element of the input list.
-  <li><code>group(specification)</code>: Turn the input list into a list of list according to the grouping specification.
-  <li><code>output</code>: Output some value(s) at the current location in the structure.
+  <li><code>all(statement)</code>: Execute the nested statement once on the input list as a whole.</li>
+  <li><code>each(statement)</code>: Execute the nested statement on each element of the input list.</li>
+  <li><code>group(specification)</code>:
+    Turn the input list into a list of list according to the grouping specification.</li>
+  <li><code>output</code>: Output some value(s) at the current location in the structure.</li>
 </ul>
 <p>
   The parallel and nested collection of these operations defines both the structure of the computation
@@ -43,13 +43,12 @@ list of all matches to the query somewhere would be too expensive, and execution
   will take all matches, group them by customer id, and for each group output the count of hits in the group.
 </p>
 <p>
-Vespa distributes and executes the grouping program on content nodes, and merges results on container nodes -
-in multiple phases, as needed.
-As realizing such programs over a distributed data set requires more network round-trips than a regular search query,
-these queries may be more expensive than regular queries.
-</p>
-<p>
-Grouping supports continuation objects for <a href="#pagination">pagination</a>.
+  Vespa distributes and executes the grouping program on content nodes, and merges results on container nodes -
+  in multiple phases, as needed.
+  As realizing such programs over a distributed data set requires more network round-trips than a regular search query,
+  these queries may be more expensive than regular queries -
+  see <a href="reference/query-api-reference.html#grouping.defaultMaxGroups">defaultMaxGroups</a> and the likes
+  for how to control resource usage.
 </p>
 
 
@@ -245,7 +244,7 @@ Example: <em>Return the total sum of purchases per customer</em> - steps:
 </p>
 <pre>
 /search/?yql=select * from sources * where true limit 0 |
-  all( group(customer) each(output(sum(price))) );
+  all( group(customer) each(output(sum(price))) )
 </pre>
 <p>
   Here, limit is set to zero to get the grouping output only.
@@ -1348,7 +1347,7 @@ select (&hellip;) | all(group(predefined(customer, bucket&lt;-inf,"Jones"&gt;, b
   returned in the grouping result.
   For example, given the result:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
     "root": {
         "children": [
@@ -1388,7 +1387,7 @@ select (&hellip;) | all(group(predefined(customer, bucket&lt;-inf,"Jones"&gt;, b
         "relevance": 1.0
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
 reproduce the same result by passing the <em>this</em> continuation along the original select:
 </p>
@@ -1561,12 +1560,12 @@ API documentation</a> for the complete reference.
 <p>
 Simple grouping, count the number of documents in each group:
 </p>
-<pre>all( group(a) each(output(count())) );</pre>
+<pre>all( group(a) each(output(count())) )</pre>
 <p>Two parallel groupings:</p>
 <pre>all( all(group(a) each(output(count())))
-     all(group(b) each(output(count()))) );</pre>
+     all(group(b) each(output(count()))) )</pre>
 <p>Only the 1000 best hits will be grouped at each content node. Lower accuracy, but higher speed:</p>
-<pre>all( max(1000) all(group(a) each(output(count()))) );</pre>
+<pre>all( max(1000) all(group(a) each(output(count()))) )</pre>
 
 
 <h3 id="selecting-groups">Selecting groups</h3>
@@ -1658,15 +1657,15 @@ Simple grouping to count number of documents in each group and return the best h
 
 <h3 id="time-and-date">Time and date</h3>
 <p>Group by year:</p>
-<pre>all( group(time.year(a)) each(output(count())) );</pre>
+<pre>all( group(time.year(a)) each(output(count())) )</pre>
 <p>Group by year, then by month:</p>
 <pre>all( group(time.year(a)) each(output(count())
-     all(group(time.month(a)) each(output(count())))) );</pre>
+     all(group(time.month(a)) each(output(count())))) )</pre>
 <p>Group by year, then by month, then day, then by hour:</p>
 <pre>all( group(time.year(a)) each(output(count())
      all(group(time.monthofyear(a)) each(output(count())
          all(group(time.dayofmonth(a)) each(output(count())
-             all(group(time.hourofday(a)) each(output(count())))))))) );</pre>
+             all(group(time.hourofday(a)) each(output(count())))))))) )</pre>
 <p>
   Groups <em>today</em>, <em>yesterday</em>, <em>lastweek</em>, and <em>lastmonth</em>
   using <code>predefined</code> aggregator, and groups each day within each of these separately:
@@ -1676,7 +1675,7 @@ Simple grouping to count number of documents in each group and return the best h
            each(output(count())
            all(max(2) each(output(summary())))
                all(group((now() - a) / (60 * 60 * 24)) each(output(count())
-                   all(max(2) each(output(summary())))))) );</pre>
+                   all(max(2) each(output(summary())))))) )</pre>
 
 
 <h3 id="counting-unique-groups">Counting unique groups</h3>
