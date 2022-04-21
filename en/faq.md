@@ -301,6 +301,10 @@ and a [DocProc](document-processing.html) if we want to handle them in some spec
 #### Does vespa provide support for text extraction?
 You can write a document processor for text extraction, Vespa does not provide it out of the box.
 
+#### How to do Text Search in an imported field?
+[Imported fields](parent-child.html) from parent documents are defined as [attributes](attributes.html),
+and have limited text match modes (i.e. `indexing: index` cannot be used).
+[Details](https://stackoverflow.com/questions/71936330/parent-child-mode-cannot-be-searched-by-parent-column).
 
 
 {:.faq-section}
