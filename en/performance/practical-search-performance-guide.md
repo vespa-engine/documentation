@@ -2072,7 +2072,8 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </div>
 
 With that feed job completed, it is possible to select the five tracks with the highest popularity by 
-using the [range()](../reference/query-language-reference.html) query operator with `hitLimit`:
+using the [range()](../reference/query-language-reference.html) query operator with
+[hitLimit](../reference/query-language-reference.html#hitlimit):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

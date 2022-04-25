@@ -31,7 +31,7 @@ These are the prerequisites for reproducing the steps in this performance guide:
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
 * Architecture: x86_64
 * Minimum **6 GB** memory dedicated to Docker (the default is 2 GB on Macs).
-Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
   for details and troubleshooting
 * [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
@@ -994,15 +994,14 @@ In the following example, since the `title` field does not have `rank: filter` o
 flag that the term should not be used by any ranking expression by 
 using the [`ranked` query annotation](reference/query-language-reference.html#ranked). 
 
-The following disables term based ranking and 
-the matching against the `title` field can use the most efficient 
-posting list representation.
+The following disables [term based ranking](reference/query-language-reference.html#ranked) and
+the matching against the `title` field can use the most efficient posting list representation.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Heart Of My Heart">
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains ({"ranked":false}"heart")' \
+    'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains ({ranked:false}"heart")' \
     'hits=2' \
     'ranking=closeness-t4' \
     "ranking.features.query(q)=$Q"
