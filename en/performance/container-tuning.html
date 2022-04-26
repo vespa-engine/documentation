@@ -18,28 +18,49 @@ generic config overrides</a>.
 
 <h2 id="container-worker-threads">Container worker threads</h2>
 <p>
-    Most handlers use the jdisc default threadpool, which is controlled by a central Executor provider.
-    Some built-in handlers have separate threadpools, e.g. search handler and http-client-api handler.
-    Do note that e.g. federation will spawn off extra worker threads separate from the search handler threadpool.
-    The default threadpool configuration can be overridden using the <em>config</em> element for <i>container.handler.threadpool</i> in services.xml
-    Handlers with dedicated threadpools have separate syntax in services.xml (see example below).
+    The container uses multiple thread pools for its operations.
+    Most components including request handlers use the container's <em>default thread pool</em>,
+    which is controlled by a shared executor instance.
+    Any component can utilize the default pool by injecting <code>java.util.concurrent.Executor</code> instance.
+    Some built-in components have dedicated thread pools - such as the Jetty server, the search handler and the feed handler.
+    These thread pools are injected through special wiring in the config model and
+    are not easily accessible from other components.
 </p>
 <p>
-    The jdisc threadpools will pre-start the worker threads (<em>min-threads</em>), so even an idle container will report running several hundred threads.
+    The thread pool are by default scaled on the system resources as reported by the JVM
+    (<code>Runtime.getRuntime().availableProcessors()</code>).
+    It's paramount that the <code>-XX:ActiveProcessorCount</code>/<code>jvm_availableProcessors</code>
+    configuration is correct for the container to work optimally.
+    The default thread pool configuration can be overridden through services.xml.
+    We recommend you keep the default configuration as it's tuned to work across a variety of workloads.
+    Note that the default configuration and pool usage may change between minor versions.
+</p>
+<p>
+    The container will pre-start the minimum number of worker threads,
+    so even an idle container may report running several hundred threads.
+    For thread pools with fixed size (<em>min == max</em>), all threads are pre-started.
     Note that tuning the capacity upwards increases the risk of high GC pressure
     as concurrency becomes higher with more in-flight requests.
-    The GC pressure is a function of number of in-flight requests,
-    the time it takes to complete the request
+    The GC pressure is a function of number of in-flight requests, the time it takes to complete the request
     and the amount of garbage produced per request.
     Increasing the queue size will allow the application to handle shorter traffic bursts without rejecting requests,
     although increasing the average latency for those requests that are queued up.
     Large queues will also increase heap consumption in overload situations.
-    Extra threads will be created once the queue is full (if <em>max-threads &gt; min-threads</em>), and are destroyed after an idle timeout.
+    Extra threads will be created once the queue is full (if <em>max &gt; min</em>), and are destroyed after an idle timeout.
+    If all threads are occupied, requests are rejected with a 503 response.
+</p>
 <p>
+    The effective thread pool configuration and utilization statistics can be observed through the
+    <a href="../reference/metrics.html#container-metrics">Container Metrics</a>.
+    See <a href="../reference/metrics.html#thread-pool-metrics">Thread Pool Metrics</a> for a list of metrics exported.
+</p>
+
+<h3 id="container-worker-threads-example">Example configuration override</h3>
 <pre>
 &lt;container id="container" version="1.0"&gt;
   ...
   &lt;search&gt;
+    &lt;!-- Search handler thread pool --&gt;
     &lt;threadpool&gt;
       &lt;max-threads&gt;500&lt;/max-threads&gt;
       &lt;min-threads&gt;500&lt;/min-threads&gt;
@@ -48,6 +69,7 @@ generic config overrides</a>.
   &lt;/search&gt;
   ...
   &lt;document-api&gt;
+    &lt;!-- Feed handler thread pool --&gt;
     &lt;http-client-api&gt;
       &lt;threadpool&gt;
         &lt;max-threads&gt;50&lt;/max-threads&gt;
@@ -57,20 +79,13 @@ generic config overrides</a>.
     &lt;/http-client-api&gt;
   &lt;/document-api&gt;
   ...
+  &lt;!-- Default thread pool --&gt;
   &lt;config name="container.handler.threadpool"&gt;
     &lt;maxthreads&gt;200&lt;/maxthreads&gt;
   &lt;/config&gt;
   ...
 &lt;/container&gt;
 </pre>
-<p>
-Handlers which are injected with an Executor in their constructor
-will share threads from the same threadpool.
-Number of threads is active is available as
-<a href="../reference/metrics.html#http-server-metrics">serverActiveThreads</a> metric.
-If all threads are occupied, requests are denied with 503.
-</p>
-
 
 
 <h2 id="jvm-heap-size">JVM heap size</h2>
