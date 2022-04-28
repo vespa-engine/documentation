@@ -7,13 +7,14 @@ redirect_from:
 ---
 
 <p>
-The Config System can be set up with one or more configuration servers (config servers).
-A config server uses <a href="https://zookeeper.apache.org/">ZooKeeper</a>
-as a distributed data storage for the configuration system.
-In addition, each node runs a config proxy to cache configuration data -
-find an overview at <a href="../config-sentinel.html">services start</a>.
-</p><p>
-Tools to access config:
+  The Config System can be set up with one or more configuration servers (config servers).
+  A config server uses <a href="https://zookeeper.apache.org/">ZooKeeper</a>
+  as a distributed data storage for the configuration system.
+  In addition, each node runs a config proxy to cache configuration data -
+  find an overview at <a href="../config-sentinel.html">services start</a>.
+</p>
+<p>
+  Tools to access config:
 </p>
 <ul>
   <li>
@@ -29,35 +30,37 @@ Tools to access config:
 
 <h2 id="redundancy">Redundancy</h2>
 <p>
-The config servers are defined in <a href="../reference/services.html">services.xml</a>,
-<a href="../reference/hosts.html">hosts.xml</a>
-and <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>:
+  The config servers are defined in <a href="../reference/services.html">services.xml</a>,
+  <a href="../reference/hosts.html">hosts.xml</a>
+  and <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>:
 </p>
+<pre>{% highlight xml %}
+<services>
+    <admin version="2.0">
+        <configservers>
+            <configserver hostalias="admin0" />
+            <configserver hostalias="admin1" />
+            <configserver hostalias="admin2" />
+        </configservers>
+    </admin>
+</services>
+{% endhighlight %}</pre>
+
+<pre>{% highlight xml %}
+<hosts>
+    <host name="myserver0.mydomain.com">
+        <alias>admin0</alias>
+    </host>
+    <host name="myserver1.mydomain.com">
+        <alias>admin1</alias>
+    </host>
+    <host name="myserver2.mydomain.com">
+        <alias>admin2</alias>
+    </host>
+</hosts>
+{% endhighlight %}</pre>
 <pre>
-# services.xml
-&lt;admin version="2.0"&gt;
-  &lt;configservers&gt;
-    &lt;configserver hostalias="admin0" /&gt;
-    &lt;configserver hostalias="admin1" /&gt;
-    &lt;configserver hostalias="admin2" /&gt;
-  &lt;/configservers&gt;
-&lt;/admin&gt;
-
-# hosts.xml
-&lt;hosts&gt;
-  &lt;host name="myserver0.mydomain.com"&gt;
-    &lt;alias>admin0&lt;/alias&gt;
-  &lt;/host&gt;
-  &lt;host name="myserver1.mydomain.com"&gt;
-    &lt;alias>admin1&lt;/alias&gt;
-  &lt;/host&gt;
-  &lt;host name="myserver2.mydomain.com"&gt;
-    &lt;alias>admin2&lt;/alias&gt;
-  &lt;/host&gt;
-&lt;/hosts&gt;
-
-# VESPA_CONFIGSERVERS - must be set on all nodes in the application
-VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.mydomain.com
+$ VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.mydomain.com
 </pre>
 <p>
   Refer to the <a href="../reference/services-admin.html#configservers">admin model</a> reference.
@@ -65,29 +68,39 @@ VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.mydo
   must be set on all nodes.
   This is a comma or whitespace-separated list with the hostname of all configservers,
   like <em>myhost1.mydomain.com,myhost2.mydomain.com,myhost3.mydomain.com</em>.
-</p><p>
-When there are multiple config servers, the <a href="config-proxy.html">config proxy</a>
-will pick a config server randomly (to achieve load balancing between config servers).
-The config proxy is fault-tolerant and will switch to another config server if the one it is using becomes unavailable
-or there is an error in the configuration it receives.
-With only one config server configured, it will continue using that in case of errors.
-</p><p>
-For the system to tolerate <em>n</em> failures,
-<a href="#zookeeper">ZooKeeper</a> by design requires using <em>(2*n)+1</em> nodes.
-Consequently, only an odd numbers of nodes is useful, so you need minimum 3 nodes to have a fault tolerant config system.
-</p><p>
-Even when using just one config server the the application will still work if the server goes down
-(but deploy application changes will not work, of course).
-Since the  <em>config proxy</em> runs on every node and caches configs,
-it will continue to serve config to the services on that node.
-However, restarting a node when config servers are unavailable
-will lead to a failure of that node, since restarting a node means restarting the config proxy.
+</p>
+<p>
+  When there are multiple config servers, the <a href="config-proxy.html">config proxy</a>
+  will pick a config server randomly (to achieve load balancing between config servers).
+  The config proxy is fault-tolerant and will switch to another config server if the one it is using becomes unavailable
+  or there is an error in the configuration it receives.
+  With only one config server configured, it will continue using that in case of errors.
+</p>
+<p>
+  For the system to tolerate <em>n</em> failures,
+  <a href="#zookeeper">ZooKeeper</a> by design requires using <em>(2*n)+1</em> nodes.
+  Consequently, only an odd numbers of nodes is useful, so you need minimum 3 nodes to have a fault tolerant config system.
+</p>
+<p>
+  Even when using just one config server the the application will still work if the server goes down
+  (but deploy application changes will not work, of course).
+  Since the  <em>config proxy</em> runs on every node and caches configs,
+  it will continue to serve config to the services on that node.
+  However, restarting a node when config servers are unavailable
+  will lead to a failure of that node, since restarting a node means restarting the config proxy.
+</p>
+<p>
+  Refer to the sample applications
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode">multinode</a> and
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a>
+  for practical examples of multi-configserver configuration.
 </p>
 
 
-<h3 id="scaling-up">Scaling Up</h3>
+
+<h2 id="scaling-up">Scaling Up</h2>
 <p>
-Add config server nodes for increased fault tolerance. Procedure:
+  Add config server nodes for increased fault tolerance. Procedure:
 </p>
 <ol>
   <li>
@@ -109,12 +122,12 @@ Add config server nodes for increased fault tolerance. Procedure:
 Note: ZooKeeper will automatically redistribute the application data.
 </p>
 
-<h4 id="scaling-up-by-majority">Scaling up by Majority</h4>
+<h3 id="scaling-up-by-majority">Scaling up by Majority</h3>
 <p>
-When increasing from 1 to 3 nodes or 3 to 7, the blank nodes constitutes a majority in the cluster.
-After restarting the config servers, they will not contain the old application data,
-because the blank nodes might win the ZooKeeper master election - depending on restart timing.
-To avoid any issues with this, scale up by minor sets of the nodes - example:
+  When increasing from 1 to 3 nodes or 3 to 7, the blank nodes constitutes a majority in the cluster.
+  After restarting the config servers, they will not contain the old application data,
+  because the blank nodes might win the ZooKeeper master election - depending on restart timing.
+  To avoid any issues with this, scale up by minor sets of the nodes - example:
 </p>
 <ol>
   <li>Scale from 1 to 2</li>
@@ -123,9 +136,9 @@ To avoid any issues with this, scale up by minor sets of the nodes - example:
 
 
 
-<h3 id="scaling-down">Scaling down</h3>
+<h2 id="scaling-down">Scaling down</h2>
 <p>
-Remove config servers from a cluster:
+  Remove config servers from a cluster:
 </p>
 <ol>
   <li>
@@ -150,47 +163,50 @@ Remove config servers from a cluster:
 
 <h2 id="zookeeper">ZooKeeper</h2>
 <p>
-<a href="https://zookeeper.apache.org/">ZooKeeper</a>
-handles data consistency across multiple config servers.
-The config server Java application runs a ZooKeeper server,
-embedded with an RPC frontend that the other nodes use.
-ZooKeeper stores data internally in <em>nodes</em> that can have <em>sub-nodes</em>,
-similar to a file system.
-</p><p>
-When starting or restarting the config server, the configuration file for ZooKeeper,
-<em>$VESPA_HOME/conf/zookeeper/zookeeper.cfg</em>, is generated based on the contents of
-<a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>.
-Hence, config server(s) must all be restarted if that changes on a config server node.
-</p><p>
-At <a href="../cloudconfig/application-packages.html#deploy">vespa-deploy prepare</a>, the application's files,
-along with global configurations, are stored in ZooKeeper.
-The application data is stored under <em>/config/v2/tenants/default/sessions/[sessionid]/userapp</em>.
-At <a href="../cloudconfig/application-packages.html#deploy">vespa-deploy activate</a>,
-the newest application is set <em>live</em>
-by updating the pointer in <em>/config/v2/tenants/default/FIXME</em><!-- ToDo fix this -->
-to refer to the active app's timestamp.
-It is at that point the other nodes get configured.
-</p><p>
-Use <em>vespa-zkcli</em> to inspect state, replace with actual session id:
+  <a href="https://zookeeper.apache.org/">ZooKeeper</a>
+  handles data consistency across multiple config servers.
+  The config server Java application runs a ZooKeeper server,
+  embedded with an RPC frontend that the other nodes use.
+  ZooKeeper stores data internally in <em>nodes</em> that can have <em>sub-nodes</em>,
+  similar to a file system.
+</p>
+<p>
+  When starting or restarting the config server, the configuration file for ZooKeeper,
+  <em>$VESPA_HOME/conf/zookeeper/zookeeper.cfg</em>, is generated based on the contents of
+  <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>.
+  Hence, config server(s) must all be restarted if that changes on a config server node.
+</p>
+<p>
+  At <a href="../cloudconfig/application-packages.html#deploy">vespa-deploy prepare</a>, the application's files,
+  along with global configurations, are stored in ZooKeeper.
+  The application data is stored under <em>/config/v2/tenants/default/sessions/[sessionid]/userapp</em>.
+  At <a href="../cloudconfig/application-packages.html#deploy">vespa-deploy activate</a>,
+  the newest application is set <em>live</em>
+  by updating the pointer in <em>/config/v2/tenants/default/FIXME</em><!-- ToDo fix this -->
+  to refer to the active app's timestamp.
+  It is at that point the other nodes get configured.
+</p>
+<p>
+  Use <em>vespa-zkcli</em> to inspect state, replace with actual session id:
 </p>
 <pre>
 $ vespa-zkcli ls  /config/v2/tenants/default/sessions/[sessionid]/userapp
 $ vespa-zkcli get /config/v2/tenants/default/sessions/[sessionid]/userapp/services.xml
 </pre>
 <p>
-The ZooKeeper server logs to <em>$VESPA_HOME/logs/vespa/zookeeper.configserver.0.log (files are rotated with sequence number)</em>
+  The ZooKeeper server logs to <em>$VESPA_HOME/logs/vespa/zookeeper.configserver.0.log (files are rotated with sequence number)</em>
 </p>
 
 
 <h3 id="zookeeper-recovery">ZooKeeper Recovery</h3>
 <p>
-If the config server(s) should experience data corruption,
-for instance a hardware failure, use the following recovery procedure.
-One example of such a scenario is if <em>$VESPA_HOME/logs/vespa/zookeeper.configserver.0.log</em>
-says <em>java.io.IOException: Negative seek offset at java.io.RandomAccessFile.seek(Native Method)</em>,
-which indicates ZooKeeper has not been able to recover after a full disk.
-There is no need to restart Vespa on other nodes during the procedure.
-Refer to <a href="../reference/vespa-cmdline-tools.html">tools</a> for details:
+  If the config server(s) should experience data corruption,
+  for instance a hardware failure, use the following recovery procedure.
+  One example of such a scenario is if <em>$VESPA_HOME/logs/vespa/zookeeper.configserver.0.log</em>
+  says <em>java.io.IOException: Negative seek offset at java.io.RandomAccessFile.seek(Native Method)</em>,
+  which indicates ZooKeeper has not been able to recover after a full disk.
+  There is no need to restart Vespa on other nodes during the procedure.
+  Refer to <a href="../reference/vespa-cmdline-tools.html">tools</a> for details:
 </p>
 <ol>
   <li>stop cloudconfig_server</li>
@@ -200,14 +216,15 @@ Refer to <a href="../reference/vespa-cmdline-tools.html">tools</a> for details:
   <li>vespa-deploy activate</li>
 </ol>
 <p>
-This procedure completely cleans out ZooKeeper's internal data snapshots and deploys from scratch.
-</p><p>
-Note that by default the <a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
-that maintains the state of the content cluster will use the shared same ZooKeeper instance,
-so the content cluster state is also reset when removing state.
-Manually set state will be lost (e.g. a node with user state <em>down</em>).
-It is possible to run cluster-controllers in standalone zookeeper mode -
-see <a href="../reference/services-admin.html#cluster-controllers"> standalone-zookeeper</a>.
+  This procedure completely cleans out ZooKeeper's internal data snapshots and deploys from scratch.
+</p>
+<p>
+  Note that by default the <a href="../content/content-nodes.html#cluster-controller">cluster controller</a>
+  that maintains the state of the content cluster will use the shared same ZooKeeper instance,
+  so the content cluster state is also reset when removing state.
+  Manually set state will be lost (e.g. a node with user state <em>down</em>).
+  It is possible to run cluster-controllers in standalone zookeeper mode -
+  see <a href="../reference/services-admin.html#cluster-controllers"> standalone-zookeeper</a>.
 </p>
 
 
@@ -224,28 +241,29 @@ see <a href="../reference/services-admin.html#cluster-controllers"> standalone-z
 
 <h2 id="configuration">Configuration</h2>
 <p>
-To access config from a node not running the config system
-(e.g. doing feeding via the Document API),
-use the environment variable VESPA_CONFIG_SOURCES:
+  To access config from a node not running the config system
+  (e.g. doing feeding via the Document API),
+  use the environment variable VESPA_CONFIG_SOURCES:
 </p>
 <pre>
 $ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:12345,myadmin1.mydomain.com:12345"
 </pre>
 <p>
-Alternatively, for Java programs, use the system property <em>configsources</em>
-and set it programmatically or on the command line with the <em>-D</em> option to Java.
-The syntax for the value is the same as for VESPA_CONFIG_SOURCES.
+  Alternatively, for Java programs, use the system property <em>configsources</em>
+  and set it programmatically or on the command line with the <em>-D</em> option to Java.
+  The syntax for the value is the same as for VESPA_CONFIG_SOURCES.
 </p>
 
 
 <h3 id="system-requirements">System requirements</h3>
 <p>
-The minimum heap size for the JVM it runs under is 128 Mb and max heap size is 2Gb
-(which can be changed with a <a href="../performance/container-tuning.html#config-server-and-config-proxy">setting</a>).
-It writes a transaction log that is regularly purged of old items, so little disk space is required.
-Note that running on a server that has a lot of disk I/O
-will adversely affect performance and is not recommended.
+  The minimum heap size for the JVM it runs under is 128 Mb and max heap size is 2Gb
+  (which can be changed with a <a href="../performance/container-tuning.html#config-server-and-config-proxy">setting</a>).
+  It writes a transaction log that is regularly purged of old items, so little disk space is required.
+  Note that running on a server that has a lot of disk I/O
+  will adversely affect performance and is not recommended.
 </p>
+
 
 <h3 id="ports">Ports</h3>
 <p>
@@ -255,13 +273,13 @@ will adversely affect performance and is not recommended.
   Changing HTTP port requires changing the port in
   <em>$VESPA_HOME/conf/configserver-app/services.xml</em>:
 </p>
-<pre>
-&lt;http&gt;
-  &lt;server port="12345" id="configserver" /&gt;
-&lt;/http&gt;
-</pre>
+<pre>{% highlight xml %}
+<http>
+    <server port="12345" id="configserver" />
+</http>
+{% endhighlight %}</pre>
 <p>
-When deploying, use the <em>-p</em> option, if port is changed from the default.
+  When deploying, use the <em>-p</em> option, if port is changed from the default.
 </p>
 
 
