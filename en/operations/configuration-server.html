@@ -7,24 +7,25 @@ redirect_from:
 ---
 
 <p>
+  Vespa Configuration Servers host the endpoint where application packages are deployed -
+  and serves generated configuration to all services -
+  see the <a href="../overview.html">overview</a>.
+  I.e. one cannot configure Vespa without config servers, and services cannot run without it.
+</p>
+<p>
+  It is useful to understand the <a href="../config-sentinel.html">Vespa start sequence</a>.
+  Refer to the sample applications
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode">multinode</a> and
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a>
+  for practical examples of multi-configserver configuration.
+</p>
+<p>
   The Config System can be set up with one or more configuration servers (config servers).
   A config server uses <a href="https://zookeeper.apache.org/">ZooKeeper</a>
   as a distributed data storage for the configuration system.
   In addition, each node runs a config proxy to cache configuration data -
   find an overview at <a href="../config-sentinel.html">services start</a>.
 </p>
-<p>
-  Tools to access config:
-</p>
-<ul>
-  <li>
-    <a href="../reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a>
-  </li><li>
-    <a href="../reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a>
-  </li><li>
-    <a href="../reference/config-rest-api-v2.html">Config API</a>
-  </li>
-</ul>
 
 
 
@@ -82,18 +83,118 @@ $ VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.my
   Consequently, only an odd numbers of nodes is useful, so you need minimum 3 nodes to have a fault tolerant config system.
 </p>
 <p>
-  Even when using just one config server the the application will still work if the server goes down
-  (but deploy application changes will not work, of course).
+  Even when using just one config server, the application will still work if the server goes down
+  (but deploy application changes will not work).
   Since the  <em>config proxy</em> runs on every node and caches configs,
   it will continue to serve config to the services on that node.
   However, restarting a node when config servers are unavailable
   will lead to a failure of that node, since restarting a node means restarting the config proxy.
 </p>
+
+
+
+<h2 id="start-sequence">Start sequence</h2>
 <p>
-  Refer to the sample applications
-  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode">multinode</a> and
+  To bootstrap a Vespa application instance, the high-level steps are:
+</p>
+<ul>
+  <li>Start config servers</li>
+  <li>Deploy config</li>
+  <li>Start Vespa nodes</li>
+</ul>
+<p>
   <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a>
-  for practical examples of multi-configserver configuration.
+  is a great guide on how to start a multinode Vespa application instance - try this first.
+  Detailed steps for config server startup:
+</p>
+<ol>
+  <li>
+    Set <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>
+    on all nodes, using fully qualified hostnames and the same value on all nodes, including the config servers.
+  </li>
+  <li>
+    Start the config server on the nodes configured in <em>services/hosts.xml</em>.
+    Make sure the startup is successful by inspecting
+    <a href="../reference/metrics.html#state-v1-health">state/v1/health</a>, default on port 19071:
+<pre>
+$ curl http://localhost:19071/state/v1/health
+</pre>
+<pre>{% highlight json %}
+{
+    "time" : 1651147368066,
+    "status" : {
+        "code" : "up"
+    },
+    "metrics" : {
+        "snapshot" : {
+            "from" : 1.651147308063E9,
+            "to" : 1.651147367996E9
+        }
+    }
+}
+{% endhighlight %}</pre>
+      If there is no response on the health API, two things can have happened:
+    <ul>
+      <li>The config server process did not start - inspect logs using <code>vespa-logfmt</code></li>
+      <li>The config server process started, and is waiting for <a href="#zookeeper">Zookeeper quorum</a>:</li>
+    </ul>
+<pre>
+$ vespa-logfmt -S configserver
+</pre>
+<pre>
+<span class="pre-hilite">configserver     Container.com.yahoo.vespa.zookeeper.ZooKeeperRunner	Starting ZooKeeper server with /opt/vespa/conf/zookeeper/zookeeper.cfg. Trying to establish ZooKeeper quorum (members: [node0.vespanet, node1.vespanet, node2.vespanet], attempt 1)</span>
+configserver     Container.com.yahoo.container.handler.threadpool.ContainerThreadpoolImpl	Threadpool 'default-pool': min=12, max=600, queue=0
+configserver     Container.com.yahoo.vespa.config.server.tenant.TenantRepository	Adding tenant 'default', created 2022-04-28T13:02:24.182Z. Bootstrapping in PT0.175576S
+configserver     Container.com.yahoo.vespa.config.server.rpc.RpcServer	Rpc server will listen on port 19070
+configserver     Container.com.yahoo.container.jdisc.state.StateMonitor	Changing health status code from 'initializing' to 'up'
+configserver     Container.com.yahoo.jdisc.http.server.jetty.Janitor	Creating janitor executor with 2 threads
+configserver     Container.com.yahoo.jdisc.http.server.jetty.JettyHttpServer	Threadpool size: min=22, max=22
+configserver     Container.org.eclipse.jetty.server.Server	jetty-9.4.46.v20220331; built: 2022-03-31T16:38:08.030Z; git: bc17a0369a11ecf40bb92c839b9ef0a8ac50ea18; jvm 11.0.14.1+1-
+configserver     Container.org.eclipse.jetty.server.handler.ContextHandler	Started o.e.j.s.ServletContextHandler@341c0dfc{19071,/,null,AVAILABLE}
+configserver     Container.org.eclipse.jetty.server.AbstractConnector	Started configserver@3cd6d147{HTTP/1.1, (http/1.1, h2c)}{0.0.0.0:19071}
+configserver     Container.org.eclipse.jetty.server.Server	Started @21955ms
+configserver     Container.com.yahoo.container.jdisc.ConfiguredApplication	Switching to the latest deployed set of configurations and components. <span class="pre-hilite">Application config generation: 0</span>
+</pre>
+      It will hang until quorum is reached, and the second highlighted log line is emitted.
+      Root causes for missing quorum can be:
+    <ul>
+      <li>
+        No connectivity between the config servers.
+        Zookeeper logs the members like <code>(members: [node0.vespanet, node1.vespanet, node2.vespanet], attempt 1)</code>.
+        Verify that the nodes running config server can reach each other on port 2181.
+      </li>
+      <li>
+        No connectivity can be wrong network config.
+        <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a>
+        uses a docker network, make sure there are no underscores in the hostnames.
+      </li>
+    </ul>
+  </li>
+  <li>
+    Once all config servers return <code>up</code> on <em>state/v1/health</em>,
+    an application package can be deployed.
+    This means, if deploy fails, it is always a good idea to verify the config server health first -
+    if config servers are up, and deploy fails, it is most likely an issue with the application package -
+    if so, refer to <a href="../cloudconfig/application-packages.html">application packages</a>.
+  </li>
+  <li>
+    A successful deployment logs the following, for the <em>prepare</em> and <em>activate</em> steps:
+<pre>
+Container.com.yahoo.vespa.config.server.ApplicationRepository	Session 2 prepared successfully.
+Container.com.yahoo.vespa.config.server.deploy.Deployment	Session 2 activated successfully using no host provisioner. Config generation 2. File references: [file '9cfc8dc57f415c72']
+Container.com.yahoo.vespa.config.server.session.SessionRepository	Session activated: 2
+</pre>
+  </li>
+  <li>
+    Start the Vespa nodes.
+    Technically, they can be started at any time.
+    When troubleshooting, it is easier to make sure the config servers are started successfully,
+    and deployment was successful - before starting any other nodes.
+    Refer to the <a href="../config-sentinel.html">Vespa start sequence</a>.
+  </li>
+</ol>
+<p>
+  Make sure to look for logs on all config servers when debugging.
 </p>
 
 
@@ -158,6 +259,18 @@ Note: ZooKeeper will automatically redistribute the application data.
     Pull removed hosts from production
   </li>
 </ol>
+
+
+
+<h2 id="tools">Tools</h2>
+<p>
+  Tools to access config:
+</p>
+<ul>
+  <li><a href="../reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a></li>
+  <li><a href="../reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a></li>
+  <li><a href="../reference/config-rest-api-v2.html">Config API</a></li>
+</ul>
 
 
 
@@ -270,6 +383,8 @@ $ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:12345,myadmin1.mydomain.com
   The config server RPC port can be changed by setting
   <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVER_RPC_PORT</a>
   on all nodes in the system.
+</p>
+<p>
   Changing HTTP port requires changing the port in
   <em>$VESPA_HOME/conf/configserver-app/services.xml</em>:
 </p>
@@ -286,23 +401,28 @@ $ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:12345,myadmin1.mydomain.com
 <h2 id="troubleshooting">Troubleshooting</h2>
 <table class="table">
   <thead>
-    <th>Problem</th>
-    <th>Description</th>
+    <tr><th>Problem</th><th>Description</th></tr>
   </thead>
   <tbody>
     <tr>
       <th>Health checks</th>
       <td>
         <p id="health-checks">
-          Verify that a config server is up and running using the <a href="../reference/metrics.html">Health and Metric APIs</a>, like
-          <a href="http://myserver0.mydomain.com:12345/state/v1/" data-proofer-ignore>http://myserver0.mydomain.com:12345/state/v1/health</a>.
-          You should see a status code <b>up</b> if the server is up and has finished bootstrapping. Alternatively you can use
-          <a href="http://myserver0.mydomain.com:12345/status.html" data-proofer-ignore>http://myserver0.mydomain.com:12345/status.html</a>
+          Verify that a config server is up and running using
+          <a href="../reference/metrics.html#state-v1-health">state/v1/health</a>,
+          see <a href="#start-sequence">start sequence</a>.
+          Status code is <code>up</code> if the server is up and has finished bootstrapping.
+        </p>
+        <p>
+          Alternatively, use
+          <a href="http://localhost:19071/status.html" data-proofer-ignore>http://localhost:19071/status.html</a>
           which will return response code 200 if server is up and has finished bootstrapping.
+        </p>
+        <p>
           Metrics are found at
-          <a href="http://myserver0.mydomain.com:12345/state/v1/metrics" data-proofer-ignore>http://myserver0.mydomain.com:12345/state/v1/metrics</a>.
+          <a href="../reference/metrics.html#state-v1-metrics">state/v1/metrics</a>.
           Use <a href="../reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a>
-          to find host and port number
+          to find host and port number, port is 19071 by default.
         </p>
       </td>
     <tr>
@@ -310,12 +430,18 @@ $ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:12345,myadmin1.mydomain.com
       <td>
         <p id="consistency">
           When having more than one config server, consistency between the servers is crucial.
-          <a href="http://myserver0.mydomain.com:12345/status" data-proofer-ignore>http://myserver0.mydomain.com:12345/status</a>
+          <a href="http://localhost:19071/status" data-proofer-ignore>http://localhost:19071/status</a>
           can be used to check that settings for config servers are the same for all servers.
-          <a href="../reference/vespa-cmdline-tools.html#vespa-config-status">vespa-config-status</a> can be used to check config on nodes.
-          <a href="http://myserver0.mydomain.com:12345/application/v2/tenant/default/application/default"
-             data-proofer-ignore>http://myserver0.mydomain.com:12345/application/v2/tenant/default/application/default</a>
-          displays active config generation and should be the same on all server and the same as in response from running
+        </p>
+        <p>
+          <a href="../reference/vespa-cmdline-tools.html#vespa-config-status">vespa-config-status</a>
+          can be used to check config on nodes.
+        </p>
+        <p>
+          <a href="http://localhost:19071/application/v2/tenant/default/application/default" data-proofer-ignore>
+            http://localhost:19071/application/v2/tenant/default/application/default</a>
+          displays active config generation and should be the same on all servers,
+          and the same as in response from running
           <a href="../reference/vespa-cmdline-tools.html#vespa-config-status">vespa-deploy</a>
         </p>
       </td>
@@ -327,10 +453,15 @@ $ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:12345,myadmin1.mydomain.com
           the cluster will still work and serve config as usual
           (clients will switch to use one of the good servers).
           It is not necessary to remove a bad server from the configuration.
-          Deploying applications will take a long time,
-          since vespa-deploy will not be able to complete a deployment on all servers when one of them is down.
+        </p>
+        <p>
+          Deploying applications will take longer,
+          as <a href="../reference/vespa-cmdline-tools.html#vespa-deploy">vespa-deploy</a>
+          will not be able to complete a deployment on all servers when one of them is down.
           If this is troublesome, lower the <a href="#zookeeper-barrier-timeout">barrier timeout</a> -
           (default value is 120 seconds).
+        </p>
+        <p>
           Note also that if you have not configured
           <a href="../reference/services-admin.html#cluster-controller">cluster controllers</a> explicitly,
           these will run on the config server nodes and the operation of these might be affected.
