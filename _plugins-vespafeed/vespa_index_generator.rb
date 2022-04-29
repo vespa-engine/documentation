@@ -59,7 +59,8 @@ module Jekyll
 
         def extract_links(page)
             doc = Nokogiri::HTML(page.content)
-            links = doc.css('a').map { |link| link['href']}
+            links = doc.css('a').map { |link| link['href'] || ""}
+            links.map!(&:strip).reject!{|s| s.empty?}
         end
 
     end
