@@ -18,18 +18,33 @@ module Jekyll
                         page.url.start_with?("/redirects.json") == false &&
                         !is_empty(page)
                     text = extract_text(page)
-                    operations.push({
-                        :put => "id:"+namespace+":doc::"+namespace+page.url,
-                        :fields => {
-                            :path => page.url,
-                            :namespace => namespace,
-                            :title => page.data["title"],
-                            :content => text,
-                            :term_count => text.split.length(),
-                            :last_updated => Time.now.to_i,
-                            :outlinks => extract_links(page)
-                        }
-                    })
+                    outlinks = extract_links(page)
+                    if outlinks && !outlinks.empty?
+                        operations.push({
+                            :put => "id:"+namespace+":doc::"+namespace+page.url,
+                            :fields => {
+                                :path => page.url,
+                                :namespace => namespace,
+                                :title => page.data["title"],
+                                :content => text,
+                                :term_count => text.split.length(),
+                                :last_updated => Time.now.to_i,
+                                :outlinks => extract_links(page)
+                            }
+                        })
+                    else
+                        operations.push({
+                            :put => "id:"+namespace+":doc::"+namespace+page.url,
+                            :fields => {
+                                :path => page.url,
+                                :namespace => namespace,
+                                :title => page.data["title"],
+                                :content => text,
+                                :term_count => text.split.length(),
+                                :last_updated => Time.now.to_i
+                            }
+                        })
+                    end
                 end
             end
 
@@ -38,19 +53,21 @@ module Jekyll
         end
 
         def is_empty(page)
-            # The generate client-side redirects should not be indexed -
+            # The generated client-side redirects should not be indexed -
             # they have no title and node content
             return page.content == "" && !page.data["title"]
         end
 
-        def extract_text(page)
-            ext = page.name[page.name.rindex('.')+1..-1]
-            if ext == "md"
-                input = Kramdown::Document.new(page.content).to_html
+        def get_doc(page)
+            if page.name[page.name.rindex('.')+1..-1] == "md"
+                doc = Nokogiri::HTML(Kramdown::Document.new(page.content).to_html)
             else
-                input = page.content
+                doc = Nokogiri::HTML(page.content)
             end
-            doc = Nokogiri::HTML(input)
+        end
+
+        def extract_text(page)
+            doc = get_doc(page)
             doc.search('th,td').each{ |e| e.after "\n" }
             doc.search('style').each{ |e| e.remove }
             content = doc.xpath("//text()").to_s
@@ -58,9 +75,9 @@ module Jekyll
         end
 
         def extract_links(page)
-            doc = Nokogiri::HTML(page.content)
+            doc = get_doc(page)
             links = doc.css('a').map { |link| link['href'] || ""}
-            links.map!(&:strip).reject!{|s| s.empty?}
+            links.reject{ |l| l.empty? }.map{ |l| l }
         end
 
     end
