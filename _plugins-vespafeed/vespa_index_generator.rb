@@ -14,7 +14,9 @@ module Jekyll
             operations = []
             site.pages.each do |page|
                 next if page.path.start_with?("css/")
-                if page.data["index"] == true && page.url.start_with?("/redirects.json") == false
+                if page.data["index"] == true &&
+                        page.url.start_with?("/redirects.json") == false &&
+                        !is_empty(page)
                     text = extract_text(page)
                     operations.push({
                         :put => "id:"+namespace+":doc::"+namespace+page.url,
@@ -33,6 +35,12 @@ module Jekyll
 
             json = JSON.pretty_generate(operations)
             File.open(namespace + "_index.json", "w") { |f| f.write(json) }
+        end
+
+        def is_empty(page)
+            # The generate client-side redirects should not be indexed -
+            # they have no title and node content
+            return page.content == "" && !page.data["title"]
         end
 
         def extract_text(page)
