@@ -120,7 +120,7 @@ so that we have a fair chance of retrieving it when sending sample queries to ou
 
 ## Create a Vespa Application Package
 
-A [Vespa application package[](../cloudconfig/application-packages.html) is the set of configuration files and Java plugins
+A [Vespa application package[](../application-packages.html) is the set of configuration files and Java plugins
 that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done
 and how data will be processed during feeding and indexing.

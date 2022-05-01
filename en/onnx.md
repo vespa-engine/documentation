@@ -27,7 +27,7 @@ this:
 An application package can have multiple models.
 
 To download models during deployment,
-see [deploying remote models](cloudconfig/application-packages.html#deploying-remote-models).
+see [deploying remote models](application-packages.html#deploying-remote-models).
 
 ## Ranking with ONNX models
 
