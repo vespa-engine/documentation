@@ -246,7 +246,7 @@ Connect to a Vespa service, e.g a configserver on port 19071 or a container on p
 successfully completes the TLS handshake.
 
 ```sh
-$ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-certs.pem -key /absolute/path/to/private-key.pem -cert /absolute/path/to/private-key.pem
+$ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-certs.pem -key /absolute/path/to/private-key.pem -cert /absolute/path/to/host-cert.pem
 ```
 
 Further, you should verify that servers require clients to authenticate by omitting `-key`/`-cert` from above command.
