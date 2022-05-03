@@ -21,6 +21,7 @@ This guide covers the following:
 - [Strict filters and distant neighbors - distanceThresholding](#strict-filters-and-distant-neighbors)
 - [Hybrid sparse and dense retrieval methods with Vespa](#hybrid-sparse-and-dense-retrieval-methods-with-vespa)
 - [Using multiple nearest neighbor search operators in the same query](#multiple-nearest-neighbor-search-operators-in-the-same-query)
+- [Controlling filter behavior](#controlling-filter-behavior)
 
 The guide includes step-by-step instructions on how to reproduce the experiments. 
 
@@ -206,7 +207,7 @@ Create directories for the configuration files:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/types
+$ mkdir -p app/schemas
 </pre>
 </div>
 
@@ -283,6 +284,10 @@ schema track {
     }
 
     rank-profile closeness {
+        input {
+            query(q) tensor&lt;float&gt;(x[384])
+            query(qa) tensor&lt;float&gt;(x[384])
+        }
         num-threads-per-search: 1
         match-features: distance(field, embedding)
         first-phase {
@@ -298,7 +303,7 @@ schema track {
         match-features: closeness(label, q) closeness(label, qa)
     }
 
-    rank-profile hybrid {
+    rank-profile hybrid inherits closeness {
         num-threads-per-search: 1
         rank-properties {
             query(wTags):1
@@ -326,7 +331,9 @@ schema track {
 </pre>
 
 This schema is explained in the [practical search performance guide](performance/practical-search-performance-guide.html),
-the addition is the `embedding` field:
+the addition is the `embedding` field and the various `closeness` rank profiles. Note
+that the `closeness` schema defines the query tensor inputs which needs to be declared to be
+used with Vespa's nearestNeighbor query operator. 
 
 <pre>
 field embedding type tensor&lt;float&gt;(x[384]) {
@@ -342,8 +349,8 @@ field embedding type tensor&lt;float&gt;(x[384]) {
     }
  }
 </pre>
-See 
-[Approximate Nearest Neighbor Search using HNSW Index](approximate-nn-hnsw.html)
+
+See [Approximate Nearest Neighbor Search using HNSW Index](approximate-nn-hnsw.html)
 for an introduction to `HNSW` and the `HNSW` tuning parameters.
 
 ### Services Specification
@@ -384,28 +391,14 @@ Write the following to `app/services.xml`:
 &lt;/services&gt;
 </pre>
 
-To query with the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
-query operator, the input query tensor type must be defined:
+The default query profile can be used to override
+default query api settings for all queries.
 
-<pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
-&lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;   
-    &lt;field name=&quot;ranking.features.query(q)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(x[384])&quot; /&gt;
-    &lt;field name=&quot;ranking.features.query(qa)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(x[384])&quot; /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-
-Note that the query tensor's dimensionality (*384*) and dimension name (*x*) 
-must match the document tensor. 
-
-<pre>
-field embedding type tensor&lt;float&gt;(x[384]) 
-</pre>
-
-The tensor type must be referenced in the the `default` [queryProfile](query-profiles.html),
-it also enables [timing](reference/query-api-reference.html#presentation.timing).
+The following enables [presentation.timing](reference/query-api-reference.html#presentation.timing) and
+renders weightedset fields as a JSON map. 
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
-&lt;query-profile id=&quot;default&quot; type=&quot;root&quot;&gt;
+&lt;query-profile id=&quot;default&quot;&gt;
     &lt;field name=&quot;presentation.timing&quot;&gt;true&lt;/field&gt;
     &lt;field name=&quot;renderer.json.jsonWsets&quot;&gt;true&lt;/field&gt;
 &lt;/query-profile&gt;
@@ -1897,12 +1890,116 @@ field embedding type tensor&lt;float&gt;(x[384]) {
  }
 </pre>
 
+## Controlling filter behavior
+Vespa allows developers to control how filters are combined with nearestNeighbor query operator, please 
+[https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/] for a detailed description
+of *pre-filtering* and *post-filtering*. 
+
+The following runs with the default setting for *ranking.matching.postFilterThreshold* which is 1, which means, 
+do not perform post-filtering, but pre-filter before searching the HNSW graph. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 10'>
+$ vespa query \
+  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
+  'hits=2' \
+  'ranking=closeness' \
+  'ranking.matching.postFilterThreshold=1.0' \
+  'ranking.matching.approximateThreshold=0.05' \
+  "ranking.features.query(q)=$Q"
+</pre>
+</div>
+The query exposes *targetHits* to ranking as seen from the `totalCount`. Now, repeating the query, but using
+*pre-filtering* instead by setting *ranking.matching.postFilterThreshold=0.0*:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 2'>
+$ vespa query \
+  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
+  'hits=2' \
+  'ranking=closeness' \
+  'ranking.matching.postFilterThreshold=0.0' \
+  'ranking.matching.approximateThreshold=0.05' \
+  "ranking.features.query(q)=$Q"
+</pre>
+</div>
+In this case, Vespa first finds the `targethits` closest hits by searching the HNSW graph, and then performs post filtering, 
+which for this query exposes only two documents to ranking (`totalCount=2`) which is less than the wanted `targetHits`. 
+It is possible to increase `targetHits` to try to combat this, the following query increases the `targethits` by 10x to 100:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 12'>
+$ vespa query \
+  'yql=select title, artist, tags from track where {targetHits:100}nearestNeighbor(embedding,q) and tags contains "rock"' \
+  'hits=2' \
+  'ranking=closeness' \
+  'ranking.matching.postFilterThreshold=0.0' \
+  'ranking.matching.approximateThreshold=0.05' \
+  "ranking.features.query(q)=$Q"
+</pre>
+</div>
+Which exposes 12 documents to ranking as can be seen from `totalCount`. There is  `8420` documents in the collection
+which is tagged with the `rock` tag, so roughly 8%. Changing to a tag which is less frequent, for example, `90s`, which
+matches 1695 documents or roughly 1.7%, only exposes one document to ranking.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
+$ vespa query \
+  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "90s"' \
+  'hits=2' \
+  'ranking=closeness' \
+  'ranking.matching.postFilterThreshold=0.0' \
+  'ranking.matching.approximateThreshold=0.00' \
+  "ranking.features.query(q)=$Q"
+</pre>
+</div>
+
+Increasing targetHits to 100 finds another valid document
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 2'>
+$ vespa query \
+  'yql=select title, artist, tags from track where {targetHits:100}nearestNeighbor(embedding,q) and tags contains "90s"' \
+  'hits=2' \
+  'ranking=closeness' \
+  'ranking.matching.postFilterThreshold=0.0' \
+  'ranking.matching.approximateThreshold=0.00' \
+  "ranking.features.query(q)=$Q"
+</pre>
+</div>
+
+The above query examples cheated a bit, as *ranking.matching.approximateThreshold* was set to 0, which caused Vespa to not fall back
+to exact nearest neighbor search for very restrictive filters. 
+Changing back to *ranking.matching.approximateThreshold=5.00* and the restrictive filter 
+causes Vespa to fallback to exact search because the filter is estimated
+to match less than the threshold. (2% &lt; 5%):
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 364'>
+$ vespa query \
+  'yql=select title, artist, tags from track where {targetHits:100}nearestNeighbor(embedding,q) and tags contains "90s"' \
+  'hits=2' \
+  'ranking=closeness' \
+  'ranking.matching.postFilterThreshold=0.0' \
+  'ranking.matching.approximateThreshold=0.05' \
+  "ranking.features.query(q)=$Q"
+</pre>
+</div>
+
+The exact search exposes more documents to ranking and the query returns `364` hits. 
+
 
 ## Tear down the container
 This concludes this tutorial. 
 The following removes the container and the data:
 <pre data-test="after">
-$ docker rm -f vespa
+$ # docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
