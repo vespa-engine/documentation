@@ -1999,7 +1999,7 @@ The exact search exposes more documents to ranking and the query returns `364` h
 This concludes this tutorial. 
 The following removes the container and the data:
 <pre data-test="after">
-$ # docker rm -f vespa
+$ docker rm -f vespa
 </pre>
 
 <script src="/js/process_pre.js"></script>
