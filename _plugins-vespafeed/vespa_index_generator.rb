@@ -13,17 +13,19 @@ module Jekyll
             namespace = site.config["search"]["namespace"]
             operations = []
             site.pages.each do |page|
-                next if page.path.start_with?("css/")
-                if page.data["index"] == true &&
-                        page.url.start_with?("/redirects.json") == false &&
-                        !is_empty(page)
+                next if page.path.start_with?("css/") ||
+                        page.url.start_with?("/redirects.json") ||
+                        is_empty(page)
+                if page.data["index"]
                     text = extract_text(page)
                     outlinks = extract_links(page)
+                    url = page.url
+                    url += 'index.html' if url[-1, 1] == '/'
                     if outlinks && !outlinks.empty?
                         operations.push({
-                            :put => "id:"+namespace+":doc::"+namespace+page.url,
+                            :put => "id:"+namespace+":doc::"+namespace+url,
                             :fields => {
-                                :path => page.url,
+                                :path => url,
                                 :namespace => namespace,
                                 :title => page.data["title"],
                                 :content => text,
@@ -34,9 +36,9 @@ module Jekyll
                         })
                     else
                         operations.push({
-                            :put => "id:"+namespace+":doc::"+namespace+page.url,
+                            :put => "id:"+namespace+":doc::"+namespace+url,
                             :fields => {
-                                :path => page.url,
+                                :path => url,
                                 :namespace => namespace,
                                 :title => page.data["title"],
                                 :content => text,
