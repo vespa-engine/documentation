@@ -284,9 +284,9 @@ schema track {
     }
 
     rank-profile closeness {
-        input {
-            query(q) tensor&lt;float&gt;(x[384])
-            query(qa) tensor&lt;float&gt;(x[384])
+        inputs {
+           query(q) tensor&lt;float&gt;(x[384])
+           query(qa) tensor&lt;float&gt;(x[384])
         }
         num-threads-per-search: 1
         match-features: distance(field, embedding)
@@ -1896,7 +1896,7 @@ Vespa allows developers to control how filters are combined with nearestNeighbor
 of *pre-filtering* and *post-filtering*. 
 
 The following runs with the default setting for *ranking.matching.postFilterThreshold* which is 1, which means, 
-do not perform post-filtering, but pre-filter before searching the HNSW graph. 
+do not perform post-filtering, use *pre-filtering*:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1911,7 +1911,7 @@ $ vespa query \
 </pre>
 </div>
 The query exposes *targetHits* to ranking as seen from the `totalCount`. Now, repeating the query, but using
-*pre-filtering* instead by setting *ranking.matching.postFilterThreshold=0.0*:
+*post-filtering* instead by setting *ranking.matching.postFilterThreshold=0.0*:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1925,6 +1925,7 @@ $ vespa query \
   "ranking.features.query(q)=$Q"
 </pre>
 </div>
+
 In this case, Vespa first finds the `targethits` closest hits by searching the HNSW graph, and then performs post filtering, 
 which for this query exposes only two documents to ranking (`totalCount=2`) which is less than the wanted `targetHits`. 
 It is possible to increase `targetHits` to try to combat this, the following query increases the `targethits` by 10x to 100:
@@ -1941,7 +1942,8 @@ $ vespa query \
   "ranking.features.query(q)=$Q"
 </pre>
 </div>
-Which exposes 12 documents to ranking as can be seen from `totalCount`. There is  `8420` documents in the collection
+
+The query exposes 12 documents to ranking as can be seen from `totalCount`. There is `8420` documents in the collection
 which is tagged with the `rock` tag, so roughly 8%. Changing to a tag which is less frequent, for example, `90s`, which
 matches 1695 documents or roughly 1.7%, only exposes one document to ranking.
 
@@ -1993,7 +1995,6 @@ $ vespa query \
 </div>
 
 The exact search exposes more documents to ranking and the query returns `364` hits. 
-
 
 ## Tear down the container
 This concludes this tutorial. 
