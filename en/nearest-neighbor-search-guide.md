@@ -1960,7 +1960,7 @@ $ vespa query \
 </pre>
 </div>
 
-Increasing targetHits to 100 finds another valid document
+Increasing `targetHits` to 100 finds another track matching the tags constraint:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1975,15 +1975,16 @@ $ vespa query \
 </pre>
 </div>
 
-The above query examples cheated a bit, as *ranking.matching.approximateThreshold* was set to 0, which caused Vespa to not fall back
-to exact nearest neighbor search for very restrictive filters. 
+The above query examples cheated a bit, as *ranking.matching.approximateThreshold* was set to 0, 
+which caused Vespa to not fall back to exact nearest neighbor search for restrictive filters. 
+
 Changing back to *ranking.matching.approximateThreshold=5.00* and the restrictive filter 
 causes Vespa to fallback to exact search because the filter is estimated
-to match less than the threshold. (2% &lt; 5%):
+to match less than the threshold. (tags contains "90s" matches about 2% which is &lt; 5%):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"totalCount": 364'>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 36'>
 $ vespa query \
   'yql=select title, artist, tags from track where {targetHits:100}nearestNeighbor(embedding,q) and tags contains "90s"' \
   'hits=2' \
@@ -1994,7 +1995,9 @@ $ vespa query \
 </pre>
 </div>
 
-The exact search exposes more documents to ranking and the query returns `364` hits. 
+The exact search exposes more documents to ranking and the query returns about `360` hits. The
+*ranking.matching.approximateThreshold* parameter can be used to balance between performance and the chance
+of finding enough hits to expose to *first-phase* ranking. 
 
 ## Tear down the container
 This concludes this tutorial. 
