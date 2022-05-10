@@ -99,9 +99,12 @@ Content and distributor nodes have state:
   </tbody>
 </table>
 <p>
-Distributor nodes start / transfer buckets quickly
-and are hence not in <em>maintenance</em> or <em>retired</em>.
-<!-- ToDo: it should not be possible to set a distributor in this mode, check -->
+  Distributor nodes start / transfer buckets quickly
+  and are hence not in <em>maintenance</em> or <em>retired</em>.
+  <!-- ToDo: it should not be possible to set a distributor in this mode, check -->
+</p>
+<p>
+  Refer to <a href="#state-api-examples">examples</a> of manipulating states.
 </p>
 
 
@@ -125,12 +128,13 @@ There are three kinds of state:
         The cluster controller fetches states from all nodes, called <em>unit states</em>.
         States reported from the nodes are either <em>initializing</em>, <em>up</em> or <em>stopping</em>.
         If the node can not be reached, a <em>down</em> state is assumed.
-      </p><p>
-      This means, the cluster controller detects failed nodes.
-      The subsequent <em>generated states</em> will hence have nodes in <em>down</em>,
-      and the <a href="idealstate.html">ideal state algorithm</a> will redistribute
-      <a href="buckets.html">buckets</a> of documents.
-    </p>
+      </p>
+      <p>
+        This means, the cluster controller detects failed nodes.
+        The subsequent <em>generated states</em> will hence have nodes in <em>down</em>,
+        and the <a href="idealstate.html">ideal state algorithm</a> will redistribute
+        <a href="buckets.html">buckets</a> of documents.
+      </p>
     </td>
   </tr><tr>
     <th>User state</th>
@@ -163,19 +167,20 @@ There are three kinds of state:
   </tbody>
 </table>
 <p>
-For new cluster states, the cluster state version is upped,
-and the new cluster state is broadcast to all nodes.
-There is a minimum time between each cluster state change.
-<!-- ToDo ref to config here -->
-</p><p>
-It is possible to set a minimum capacity for the cluster state to be <em>up</em>.
-<!-- ToDo ref to config here -->
-If a cluster has so many nodes unavailable that it is considered down,
-the state of each node is irrelevant,
-and thus new cluster states will not be created and broadcast
-before enough nodes are back for the cluster to come back up.
-A cluster state indicating the entire cluster is down,
-may thus have outdated data on the node level.
+  For new cluster states, the cluster state version is upped,
+  and the new cluster state is broadcast to all nodes.
+  There is a minimum time between each cluster state change.
+  <!-- ToDo ref to config here -->
+</p>
+<p>
+  It is possible to set a minimum capacity for the cluster state to be <em>up</em>.
+  <!-- ToDo ref to config here -->
+  If a cluster has so many nodes unavailable that it is considered down,
+  the state of each node is irrelevant,
+  and thus new cluster states will not be created and broadcast
+  before enough nodes are back for the cluster to come back up.
+  A cluster state indicating the entire cluster is down,
+  may thus have outdated data on the node level.
 </p>
 <!-- ToDo: An example cluster state string is useful here -->
 
@@ -183,12 +188,12 @@ may thus have outdated data on the node level.
 
 <h2 id="cluster-controller">Cluster controller</h2>
 <p>
-The main task of the cluster controller is to maintain the <a href="#cluster-state">cluster state</a>.
-This is done by <em>polling</em> nodes for state,
-<em>generating</em> a cluster state,
-which is then <em>broadcast</em> to all the content nodes in the cluster.
-Note that clients do not interface with the cluster controller -
-they get the cluster state from the distributors - <a href="#distributor">details</a>.
+  The main task of the cluster controller is to maintain the <a href="#cluster-state">cluster state</a>.
+  This is done by <em>polling</em> nodes for state,
+  <em>generating</em> a cluster state,
+  which is then <em>broadcast</em> to all the content nodes in the cluster.
+  Note that clients do not interface with the cluster controller -
+  they get the cluster state from the distributors - <a href="#distributor">details</a>.
 </p>
 <table class="table">
   <thead>
@@ -210,13 +215,14 @@ they get the cluster state from the distributors - <a href="#distributor">detail
         even with one pending.
         This triggers a reply to the lingering request and makes the new one linger instead.
         Hence, nodes have a pending state request.
-      </p><p>
-      During a controlled node shutdown, it starts the shutdown process
-      by responding to the pending state request that it is now stopping.
-      <strong>Note: </strong> As controlled restarts or shutdowns are implemented as TERM signals
-      from the <a href="../config-sentinel.html">config-sentinel</a>,
-      the cluster controller is not able to differ between controlled and other shutdowns.
-    </p>
+      </p>
+      <p>
+        During a controlled node shutdown, it starts the shutdown process
+        by responding to the pending state request that it is now stopping.
+        <strong>Note: </strong> As controlled restarts or shutdowns are implemented as TERM signals
+        from the <a href="../config-sentinel.html">config-sentinel</a>,
+        the cluster controller is not able to differ between controlled and other shutdowns.
+      </p>
     </td>
   </tr><tr>
     <th>Cluster state generation</th>
@@ -234,13 +240,15 @@ they get the cluster state from the distributors - <a href="#distributor">detail
         New cluster states are distributed with a minimum interval between. <!-- ToDo link to config here -->
         A grace period per unit state too -
         e.g, distributors and content nodes that are on the same node often stop at the same time.
-      </p><p>
-      The version number is upped, and the new cluster state is broadcast.
-    </p><p>
-      If cluster state version is <a href="../operations/admin-procedures.html#cluster-state">reset</a>,
-      clients to distributors can temporarily fail operations in the transition,
-      but will eventually converge on the new (lower) cluster state version.
-    </p>
+      </p>
+      <p>
+        The version number is upped, and the new cluster state is broadcast.
+      </p>
+      <p>
+        If cluster state version is <a href="../operations/admin-procedures.html#cluster-state">reset</a>,
+        clients to distributors can temporarily fail operations in the transition,
+        but will eventually converge on the new (lower) cluster state version.
+      </p>
     </td>
   </tr>
   </tbody>
@@ -369,6 +377,111 @@ e.g. to remap requests to other buckets after bucket splitting and joining.
 </p>
 
 
+<h3 id="distributor-restart">Restart</h3>
+<p>
+  When a distributor stops, it will try to respond to any pending cluster state request first.
+  New incoming requests after shutdown is commenced will fail immediately,
+  as the socket is no longer accepting requests.
+  Cluster controllers will thus detect processes stopping almost immediately.
+</p>
+<p>
+  The cluster state will be updated with the new state internally in the cluster controller.
+  Then the cluster controller will wait for maximum
+  <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
+    min_time_between_new_systemstates</a>
+  before publishing the new cluster state - this to reduce short-term state fluctuations.
+</p>
+<p>
+  The cluster controller has the option of setting states to make other
+  distributors take over ownership of buckets, or mask the change, making the
+  buckets owned by the distributor restarting unavailable for the time being.
+  Distributors restart fast, so the restarting distributor may transition
+  directly from up to initializing.
+  If it doesn't, current default behavior is to set it down immediately.
+</p>
+<p>
+  If transitioning directly from up to initializing, requests going through
+  the remaining distributors will be unaffected.
+  The requests going through the restarting distributor will immediately fail when it shuts down,
+  being resent automatically by the client.
+  The distributor typically restart within seconds,
+  and syncs up with the service layer nodes to get metadata on buckets it owns,
+  in which case it is ready to serve requests again.
+</p>
+<p>
+  If the distributor transitions from up to down, and then later to initializing,
+  other distributors will request metadata from the service layer node to take
+  over ownership of buckets previously owned by the restarting distributor.
+  Until the distributors have gathered this new metadata from all the service
+  layer nodes, requests for these buckets can not be served, and will fail back to client.
+  When the restarting node comes back up and is marked initializing or up in the cluster state again,
+  the additional nodes will dump knowledge of the extra buckets they previously acquired.
+</p>
+<p>
+  For requests with timeouts of several seconds,
+  the transition should be invisible due to automatic client resending.
+  Requests with a lower timeout might fail,
+  and it is up to the application whether to resend or handle failed requests.
+</p>
+<p>
+  Requests to buckets not owned by the restarting distributor will not be affected.
+  The other distributors will start to do some work though, affecting latency,
+  and distributors will re-fetch metadata for all buckets they own,
+  not just the additional buckets, which may cause some disturbance.
+</p>
+
+
+
+<h2 id="content-node">Content node</h2>
+<p>
+  The content node runs <em>proton</em>, which is the query backend.
+</p>
+
+
+
+<h3 id="content-node-restart">Restart</h3>
+<p>
+  When a content node restarts in a controlled fashion,
+  it marks itself in the stopping state and rejects new requests.
+  It will process its pending request queue before shutting down.
+  Consequently, client requests are typically unaffected by content node restarts.
+  The currently pending requests will typically be completed.
+  New copies of buckets will be created on other nodes, to store new requests in appropriate redundancy.
+  This happens whether node transitions through down or maintenance state.
+  The difference being that if transitioning through maintenance state,
+  the distributor will not start any effort of synchronizing new copies with existing copies.
+  They will just store the new requests until the maintenance node comes back up.
+</p>
+<p>
+  When coming back up, content nodes will start with gathering information
+  on what buckets it has data stored for.
+  While this is happening, the service layer will expose that it is initializing,
+  but not done with the bucket list stage.
+  During this time, the cluster controller will not mark it initializing in cluster state yet.
+  Once the service layer node knows what buckets it has,
+  it reports that it is calculating metadata for the buckets,
+  at which time the node may become visible as initializing in cluster state.
+  At this time it may start process requests,
+  but as bucket checksums have not been calculated for all buckets yet,
+  there will exist buckets where the distributor doesn't know if they are in sync with other copies or not.
+</p>
+<p>
+  The background load to calculate bucket checksums has low priority,
+  but load received will automatically create metadata for used buckets.
+  With an overloaded cluster, the initializing step may not finish before all buckets
+  have been initialized by requests.
+  With a cluster close to max capacity, initializing may take quite some time.
+</p>
+<p>
+  The cluster is mostly unaffected during restart.
+  During the initializing stage, bucket metadata is unknown.
+  Distributors will assume other copies are more appropriate for serving read requests.
+  If all copies of a bucket are in an initializing state at the same time,
+  read requests may be sent to a bucket copy that does not have the most updated state to process it.
+</p>
+
+
+
 <h2 id="metrics">Metrics</h2>
 <table class="table">
   <thead>
@@ -428,92 +541,92 @@ e.g. to remap requests to other buckets after bucket splitting and joining.
 
 
 
-<h2 id="distributor-node-restart">Distributor node restart</h2>
+<h2 id="state-api-examples">State API examples</h2>
 <p>
-  When a distributor stops, it will try to respond to any pending cluster state request first.
-  New incoming requests after shutdown is commenced will fail immediately,
-  as the socket is no longer accepting requests.
-  Cluster controllers will thus detect processes stopping almost immediately.
-</p><p>
-  The cluster state will be updated with the new state internally in the cluster controller.
-  Then the cluster controller will wait for maximum
-  <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def">
-    min_time_between_new_systemstates</a>
-  before publishing the new cluster state - this to reduce short-term state fluctuations.
-</p><p>
-  The cluster controller has the option of setting states to make other
-  distributors take over ownership of buckets, or mask the change, making the
-  buckets owned by the distributor restarting unavailable for the time being.
-  Distributors restart fast, so the restarting distributor may transition
-  directly from up to initializing.
-  If it doesn't, current default behavior is to set it down immediately.
-</p><p>
-  If transitioning directly from up to initializing, requests going through
-  the remaining distributors will be unaffected.
-  The requests going through the restarting distributor will immediately fail when it shuts down,
-  being resent automatically by the client.
-  The distributor typically restart within seconds,
-  and syncs up with the service layer nodes to get metadata on buckets it owns,
-  in which case it is ready to serve requests again.
-</p><p>
-  If the distributor transitions from up to down, and then later to initializing,
-  other distributors will request metadata from the service layer node to take
-  over ownership of buckets previously owned by the restarting distributor.
-  Until the distributors have gathered this new metadata from all the service
-  layer nodes, requests for these buckets can not be served, and will fail back to client.
-  When the restarting node comes back up and is marked initializing or up in the cluster state again,
-  the additional nodes will dump knowledge of the extra buckets they previously acquired.
-</p><p>
-  For requests with timeouts of several seconds,
-  the transition should be invisible due to automatic client resending.
-  Requests with a lower timeout might fail,
-  and it is up to the application whether to resend or handle failed requests.
-</p><p>
-  Requests to buckets not owned by the restarting distributor will not be affected.
-  The other distributors will start to do some work though, affecting latency,
-  and distributors will re-fetch metadata for all buckets they own,
-  not just the additional buckets, which may cause some disturbance.
+  Examples of state manipulation using the <a href="api-state-rest-api.html">State API</a>.
 </p>
-
-
-
-<h2 id="content-node-restart">Content node restart</h2>
 <p>
-  When a content node restarts in a controlled fashion,
-  it marks itself in the stopping state and rejects new requests.
-  It will process its pending request queue before shutting down.
-  Consequently, client requests are typically unaffected by content node restarts.
-  The currently pending requests will typically be completed.
-  New copies of buckets will be created on other nodes, to store new requests in appropriate redundancy.
-  This happens whether node transitions through down or maintenance state.
-  The difference being that if transitioning through maintenance state,
-  the distributor will not start any effort of synchronizing new copies with existing copies.
-  They will just store the new requests until the maintenance node comes back up.
-</p><p>
-  When coming back up, content nodes will start with gathering information
-  on what buckets it has data stored for.
-  While this is happening, the service layer will expose that it is initializing,
-  but not done with the bucket list stage.
-  During this time, the cluster controller will not mark it initializing in cluster state yet.
-  Once the service layer node knows what buckets it has,
-  it reports that it is calculating metadata for the buckets,
-  at which time the node may become visible as initializing in cluster state.
-  At this time it may start process requests,
-  but as bucket checksums have not been calculated for all buckets yet,
-  there will exist buckets where the distributor doesn't know if they are in sync with other copies or not.
-</p><p>
-  The background load to calculate bucket checksums has low priority,
-  but load received will automatically create metadata for used buckets.
-  With an overloaded cluster, the initializing step may not finish before all buckets
-  have been initialized by requests.
-  With a cluster close to max capacity, initializing may take quite some time.
-</p><p>
-  The cluster is mostly unaffected during restart.
-  During the initializing stage, bucket metadata is unknown.
-  Distributors will assume other copies are more appropriate for serving read requests.
-  If all copies of a bucket are in an initializing state at the same time,
-  read requests may be sent to a bucket copy that does not have the most updated state to process it.
+  Get node state:
 </p>
+<pre>
+$ curl http://localhost:19050/cluster/v2/music/storage/0
+</pre>
+<pre>{% highlight json %}
+{
+  "attributes": {
+    "hierarchical-group": "group0"
+  },
+  "state": {
+    "generated": {
+      "state": "up",
+      "reason": ""
+    },
+    "unit": {
+      "state": "up",
+      "reason": ""
+    },
+    "user": {
+      "state": "up",
+      "reason": ""
+    }
+  },
+  "metrics": {
+    "bucket-count": 0,
+    "unique-document-count": 0,
+    "unique-document-total-size": 0
+  }
+}
+{% endhighlight %}</pre>
+<p>
+  Get all nodes, including topology information (see <em>hierarchical-group</em>):
+</p>
+<pre>
+$ curl http://localhost:19050/cluster/v2/music/?recursive=true
+</pre>
+<pre>{% highlight json %}
+{
+  "state": {
+    "generated": {
+      "state": "up",
+      "reason": ""
+    }
+  },
+  "service": {
+    "storage": {
+      "node": {
+        "0": {
+          "attributes": {
+            "hierarchical-group": "group0"
+          },
+          "state": {
+            "generated": {
+              "state": "up",
+              "reason": ""
+            },
+            "unit": {
+              "state": "up",
+              "reason": ""
+            },
+            "user": {
+              "state": "up",
+              "reason": ""
+            }
+          },
+          "metrics": {
+            "bucket-count": 0,
+            "unique-document-count": 0,
+            "unique-document-total-size": 0
+          }
+        },
+{% endhighlight %}</pre>
+<p>
+  Set node state:
+</p>
+<pre>
+$ curl -X PUT \
+  --data '{"state":{"user":{"state": "down", "reason": "Down a broken node"}}}' \
+  http://localhost:19050/cluster/v2/music/storage/0
+</pre>
 
 
 
