@@ -307,10 +307,10 @@ schema track {
         num-threads-per-search: 1
         inputs {
             query(q) tensor&lt;float&gt;(x[384])
-            query(wTags) 1
-            query(wPopularity) 1
-            query(wTitle) 1
-            query(wVector)  1
+            query(wTags) : 1.0
+            query(wPopularity) :  1.0
+            query(wTitle) : 1.0
+            query(wVector) : 1.0
         }
         first-phase {
             expression {
@@ -1222,10 +1222,10 @@ rank-profile hybrid inherits closeness {
         num-threads-per-search: 1
         inputs {
             query(q) tensor&lt;float&gt;(x[384])
-            query(wTags) 1
-            query(wPopularity) 1
-            query(wTitle) 1
-            query(wVector) 1
+            query(wTags) : 1
+            query(wPopularity) : 1
+            query(wTitle) : 1
+            query(wVector) : 1
         }
         first-phase {
             expression {
