@@ -176,6 +176,9 @@ sample application for the _clustercontroller_ status page - this shows buckets 
 Finally, use the `.idealstate.merge_bucket.pending` metric to track progress -
 when 0, there are no more data syncing operations - see
 [monitor distance to ideal state](operations/admin-procedures.html#monitor-distance-to-ideal-state).
+Nodes will work as normal during data sync, and query coverage will be the same.
+Nodes will be busier, though.
+
 
 
 {:.faq-section}
