@@ -78,7 +78,7 @@ the [weightedset](reference/schema-reference.html#type:weightedset)
 
 - Document side tags like in the above example
 - [Document expansion by query prediction](https://github.com/castorini/docTTTTTquery)  
-- Editoral ranking overrides, for example sponsored search listings.
+- Editorial ranking overrides, for example sponsored search listings.
 
 How should we design our Vespa schema, and how should we match and search this data model for 
 end-user free text queries? 
@@ -128,7 +128,7 @@ schema photo {
 </pre>
 
 In the schema we disable [stemming](reference/schema-reference.html#stemming) and
-also enable [bm25](reference/bm25.html) text ranking fature for all string fields. 
+also enable [bm25](reference/bm25.html) text ranking feature for all string fields.
 
 Since all string fields shares the same [match](reference/schema-reference.html#match)
 settings we can use a [fieldset](reference/schema-reference.html#fieldset) 
@@ -206,8 +206,8 @@ $ vespa document -v doc.json
 </div>
 
 ### Query our data
-Assuming a free text query *sunset photos featuring dogs*, we translate the user query into
-a Vespa query reques using YQL:
+Assuming a free text query *sunset photos featuring dogs*,
+we translate the user query into a Vespa query request using YQL:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
@@ -240,7 +240,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 Changing the type to `any`, recalls our sample document as we no longer require that all query terms must match.
-With `type` it also possible to require that indivudual query terms match by using `+`:
+With `type` it also possible to require that individual query terms match by using `+`:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
@@ -300,8 +300,9 @@ this score was in our previous examples calculated using the `default` ranking p
 used [nativeRank](nativerank.html). 
 We can start by analyzing other [rank features](reference/rank-features.html) by asking Vespa to produce
 them for us. We use [match-features](reference/schema-reference.html#match-features) to return 
-rank features with the retrieved documents. We explicit mention which ranking features we want to have calculated
-and returned. Notice that we don't change the actual scoring, we still use `nativeRank` as the scoring function.
+rank features with the retrieved documents.
+We explicitly mention which ranking features we want to have calculated and returned.
+Notice that we don't change the actual scoring, we still use `nativeRank` as the scoring function.
 <pre data-test="file" data-path="my-app/schemas/photo.sd"> 
 schema photo {
 
@@ -376,7 +377,8 @@ $ vespa query 'yql=select * from photos where userQuery()' \
  'query=clear sky' 'type=any'
 </pre>
 
-The output includes `matchfeatures` where we can see the various scores for the features:
+The output includes [matchfeatures](reference/default-result-format.html#matchfeatures)
+where we can see the various scores for the features:
 
 Especially look at the `elementCompleteness` and `elementSimilarity` rank features which
 are example of [features for indexed multivalued string 
@@ -476,14 +478,16 @@ $ vespa query 'yql=select * from photos where userQuery()' \
  'query=clear sky' 'type=any'
 </pre>
 
-Each hit returned contains a `matchfeatures` fields where we can see the various scores for the features:
+Each hit returned contains a [matchfeatures](reference/default-result-format.html#matchfeatures) field
+where we can see the various scores for the features:
 
 Now, we can include these features in a ranking expression used in `first-phase` to actually change the ranking. 
-The actual <em>best</em> scoring function is data dependend obviously. A trained function using machine learning is by far the
-easiest way. The bag of words [bm25](reference/bm25.html) ranking feature is not normalized so combining
-it in a linear function is challenging as the score range of the feature is unbound. 
-To overcome this and allow easy exploration without changing the rank profile we can make the 
-parameters in our function overridable on a per query basis by 
+The actual _best_ scoring function is data dependent.
+A trained function using machine learning is by far the easiest way.
+The bag of words [bm25](reference/bm25.html) ranking feature is not normalized,
+so combining it in a linear function is challenging, as the score range of the feature is unbound. 
+To overcome this, and allow easy exploration without changing the rank profile,
+make the parameters in the function overridable on a per-query basis by:
 
 <pre>
   first-phase {
@@ -609,7 +613,7 @@ first-phase {
 }
 </pre>
 
-That concludes our matching and ranking experiments. To shutdown the container run:
+That concludes our matching and ranking experiments. To shut down the container run:
 
 <pre data-test="after">
 $ docker rm -f vespa
