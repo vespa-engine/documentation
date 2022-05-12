@@ -237,7 +237,7 @@ Create directories for the configuration files:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/types
+$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/
 </pre>
 </div>
 
@@ -314,21 +314,10 @@ the Vespa application — which services to run and how many nodes per service.
 &lt;/services&gt;
 </pre>
 
-The following file is required as this guide will use query tensors 
-in the [Ranking with tensor computations](#tensor-computations) section.
-
-<pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
-&lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;
-    &lt;field name=&quot;ranking.features.query(user_liked)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(trackid{})&quot; /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-
-The defined tensor type defined in the `query-profile-type` is referenced
-in the `default` [queryProfile](../query-profiles.html). In addition,
-[presentation.timing](../reference/query-api-reference.html#presentation.timing) is set to true.
+Add [presentation.timing](../reference/query-api-reference.html#presentation.timing)
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
-&lt;query-profile id=&quot;default&quot; type=&quot;root&quot;&gt;
+&lt;query-profile id=&quot;default&quot;&gt;
     &lt;field name=&quot;presentation.timing&quot;&gt;true&lt;/field&gt;
     &lt;field name=&quot;renderer.json.jsonWsets&quot;&gt;true&lt;/field&gt;
 &lt;/query-profile&gt;
@@ -1316,17 +1305,8 @@ to the following tracks:
 Could be represented as a query tensor `query(user_liked)` and passed with the query request like this:
 
 <pre>{% raw %}
-ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
+input.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
 {% endraw %}
-</pre>
-
-The tensor type of this query tensor was introduced in 
-the [create a Vespa application package](#create-a-vespa-application-package) section.
-
-<pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
-&lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;
-    &lt;field name=&quot;ranking.features.query(user_liked)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(trackid{})&quot; /&gt;
-&lt;/query-profile-type&gt;
 </pre>
 
 Both the document tensor and the query tensor are defined with `trackid{}` as the *named* *mapped* dimension. The 
@@ -1334,6 +1314,9 @@ sparse tensor dot product can then be expression in a `rank-profile`:
 
 <pre>
 rank-profile similar {
+    inputs {
+        query(user_liked) tensor&lt;float&gt;(trackid{})
+    }
     first-phase {
         expression: sum(attribute(similar) * query(user_liked))
     }
@@ -1390,6 +1373,9 @@ schema track {
     }
 
     rank-profile similar {
+        inputs {
+            query(user_liked) tensor&lt;float&gt;(trackid{})
+        }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
         }
@@ -1414,7 +1400,7 @@ The track list of recently played tracks (or liked):
 
 Is represented as the `query(user_liked)` query tensor
 <pre>{% raw %}
-ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
+input.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
 {% endraw %}</pre>
 
 The first query example runs the tensor computation over all tracks using `where true`, notice also 
@@ -1426,7 +1412,7 @@ The first query example runs the tensor computation over all tracks using `where
 {% raw %}
 $ vespa query \
     'yql=select title, artist, track_id from track where true' \
-    'ranking.features.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'input.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5'
  {% endraw %}
@@ -1454,7 +1440,7 @@ Run query with the `not` filter:
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title, artist, track_id from track where !weightedSet(track_id, @userLiked)' \
-    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
@@ -1552,7 +1538,7 @@ query as fewer documents gets ranked by the tensor ranking expression:
 <pre data-test="exec" data-test-assert-contains="Ronan Keating">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where tags contains "popular" and !weightedSet(track_id,@userLiked)' \
-    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
@@ -1616,6 +1602,9 @@ schema track {
     }
 
     rank-profile similar {
+        inputs {
+            query(user_liked) tensor&lt;float&gt;(trackid{})
+        }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
         }
@@ -1661,7 +1650,7 @@ Re-run the tensor ranking query:
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
@@ -1679,6 +1668,7 @@ single threaded execution. To enable multi-threaded execution, a setting needs t
 added to `services.xml`. 
 Multi-threaded search and ranking can improve query latency significantly and make better
 use of multi-cpu core architectures. 
+
 The following adds a `tuning` element to `services.xml` overriding 
 [requestthreads:persearch](../reference/services-content.html#requestthreads-persearch).
 The default number of threads used `persearch` is one. 
@@ -1724,7 +1714,7 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-Changing the global threads per search requires a restart of the searchnode process:
+Changing the global threads per search requires a restart of the `searchnode` process:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1733,7 +1723,7 @@ $ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnod
 </pre>
 </div>
 
-Wait for the searchnode to start:
+Wait for the `searchnode` to start:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
@@ -1752,7 +1742,7 @@ Then repeat the tensor ranking query:
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
@@ -1769,7 +1759,8 @@ Note that the per rank-profile setting can only be used to tune the number of th
 to a lower number than the global default. 
 
 This adds a new `rank-profile` `similar-t2` using `num-threads-per-search: 2` instead
-of the global 4 setting. 
+of the global 4 setting. It's also possible to set the number of threads in the query request
+using [ranking.matching.numThreadsPerSearch](reference/query-api-reference.html#ranking.matching). 
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1819,6 +1810,9 @@ schema track {
     }
 
     rank-profile similar {
+        inputs {
+            query(user_liked) tensor&lt;float&gt;(trackid{})
+        }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
         }
@@ -1847,7 +1841,7 @@ now using the `similar-t2` profile:
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
-    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar-t2' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
@@ -2034,6 +2028,9 @@ schema track {
     }
 
     rank-profile similar {
+        inputs {
+            query(user_liked) tensor&lt;float&gt;(trackid{})
+        }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
         }
@@ -2099,7 +2096,7 @@ over the most popular tracks:
 <pre data-test="exec" data-test-assert-contains="1349">{% raw %}
 $ vespa query \
     'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !weightedSet(track_id, @userLiked)' \
-    'ranking.features.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
     'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'

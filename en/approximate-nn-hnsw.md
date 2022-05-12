@@ -107,7 +107,7 @@ that are explored during the graph search. This parameter is used to tune accura
 
 * **targetHits**
 The `targetHits` specifies how many hits one wants to expose to [ranking](ranking.html) *per node*.
-Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](phrased-ranking.html)
+Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](phased-ranking.html)
 pipeline. See [performance sizing](performance/sizing-search.html). 
 
 * **Pagination**

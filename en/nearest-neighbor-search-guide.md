@@ -207,7 +207,7 @@ Create directories for the configuration files:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir -p app/schemas
+$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/
 </pre>
 </div>
 
@@ -726,7 +726,7 @@ $ vespa query \
     'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -797,7 +797,7 @@ $ vespa query \
     'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness-t4' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -831,7 +831,7 @@ $ vespa query \
     'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -906,7 +906,7 @@ $ vespa query \
     'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains "heart"' \
     'hits=2' \
     'ranking=closeness-t4' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -997,7 +997,7 @@ $ vespa query \
     'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains ({ranked:false}"heart")' \
     'hits=2' \
     'ranking=closeness-t4' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1013,7 +1013,7 @@ $ vespa query \
     'yql=select title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 20 and artist contains "Bonnie Tyler"' \
     'hits=2' \
     'ranking=closeness-t4' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1054,7 +1054,7 @@ $ vespa query \
     'yql=select matchfeatures, title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
     'hits=2' \
     'ranking=closeness-t4' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1123,7 +1123,7 @@ $ vespa query \
     'yql=select matchfeatures, title, popularity, artist from track where {distanceThreshold:0.7,targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
     'hits=2' \
     'ranking=closeness-t4' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1198,7 +1198,7 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "ranking.features.query(q)=$Q"
+    "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1310,8 +1310,8 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "ranking.features.query(q)=$Q" \
-    'ranking.features.query(wVector)=40'
+    "input.query(q)=$Q" \
+    'input.query(wVector)=40'
 </pre>
 </div>
 
@@ -1391,8 +1391,8 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "ranking.features.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' \
+    "input.query(q)=$Q" \
+    'input.query(wVector)=340' \
     'userProfile={"love songs":1, "love":1,"80s":1}' 
 </pre>
 </div>
@@ -1500,8 +1500,8 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "ranking.features.query(q)=$Q" \
-    'ranking.features.query(wVector)=340'
+    "input.query(q)=$Q" \
+    'input.query(wVector)=340'
 </pre>
 </div>
 
@@ -1517,8 +1517,8 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "ranking.features.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' 
+    "input.query(q)=$Q" \
+    'input.query(wVector)=340' 
 </pre>
 </div>
 
@@ -1536,8 +1536,8 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "ranking.features.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' 
+    "input.query(q)=$Q" \
+    'input.query(wVector)=340' 
 </pre>
 </div>
 
@@ -1616,8 +1616,8 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "ranking.features.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' 
+    "input.query(q)=$Q" \
+    'input.query(wVector)=340' 
 </pre>
 </div>
 
@@ -1668,8 +1668,8 @@ $ vespa query \
     'yql=select title from track where ({targetHits:10}nearestNeighbor(embedding,q)) or ({targetHits:10}nearestNeighbor(embedding,qa))' \
     'hits=2' \
     'ranking=closeness-t4' \
-    "ranking.features.query(q)=$Q" \
-    "ranking.features.query(qa)=$QA" 
+    "input.query(q)=$Q" \
+    "input.query(qa)=$QA" 
 </pre>
 </div>
 
@@ -1727,8 +1727,8 @@ $ vespa query \
     'yql=select title, matchfeatures from track where ({ label:"q", targetHits:10}nearestNeighbor(embedding,q)) or ({label:"qa",targetHits:10}nearestNeighbor(embedding,qa))' \
     'hits=2' \
     'ranking=closeness-label' \
-    "ranking.features.query(q)=$Q" \
-    "ranking.features.query(qa)=$QA" 
+    "input.query(q)=$Q" \
+    "input.query(qa)=$QA" 
 </pre>
 </div>
 
@@ -1799,8 +1799,8 @@ $ vespa query \
     'yql=select title, matchfeatures from track where ({label:"q", targetHits:500}nearestNeighbor(embedding,q)) and ({label:"qa",targetHits:500}nearestNeighbor(embedding,qa))' \
     'hits=2' \
     'ranking=closeness-label' \
-    "ranking.features.query(q)=$Q" \
-    "ranking.features.query(qa)=$QA" 
+    "input.query(q)=$Q" \
+    "input.query(qa)=$QA" 
 </pre>
 </div>
 
@@ -1891,9 +1891,14 @@ field embedding type tensor&lt;float&gt;(x[384]) {
 </pre>
 
 ## Controlling filter behavior
-Vespa allows developers to control how filters are combined with nearestNeighbor query operator, please 
+Vespa allows developers to control how filters are combined with nearestNeighbor query operator, see
 [https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/] for a detailed description
-of *pre-filtering* and *post-filtering*. 
+of *pre-filtering* and *post-filtering*. The following query examples explores the two query-time parameters
+which can be used to control the filtering behavior. The parameters are:
+
+- *ranking.matching.postFilterThreshold* default 1.0 
+- *ranking.matching.approximateThreshold* default 0.05
+
 
 The following runs with the default setting for *ranking.matching.postFilterThreshold* which is 1, which means, 
 do not perform post-filtering, use *pre-filtering*:
@@ -1907,7 +1912,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=1.0' \
   'ranking.matching.approximateThreshold=0.05' \
-  "ranking.features.query(q)=$Q"
+  "input.query(q)=$Q"
 </pre>
 </div>
 The query exposes *targetHits* to ranking as seen from the `totalCount`. Now, repeating the query, but using
@@ -1922,7 +1927,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
   'ranking.matching.approximateThreshold=0.05' \
-  "ranking.features.query(q)=$Q"
+  "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1939,7 +1944,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
   'ranking.matching.approximateThreshold=0.05' \
-  "ranking.features.query(q)=$Q"
+  "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1956,7 +1961,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
   'ranking.matching.approximateThreshold=0.00' \
-  "ranking.features.query(q)=$Q"
+  "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1971,7 +1976,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
   'ranking.matching.approximateThreshold=0.00' \
-  "ranking.features.query(q)=$Q"
+  "input.query(q)=$Q"
 </pre>
 </div>
 
@@ -1991,7 +1996,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
   'ranking.matching.approximateThreshold=0.05' \
-  "ranking.features.query(q)=$Q"
+  "input.query(q)=$Q"
 </pre>
 </div>
 

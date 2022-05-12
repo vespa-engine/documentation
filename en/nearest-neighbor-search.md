@@ -143,7 +143,7 @@ must be of the same dimensionality as the document vector and the same dimension
 
 Skipping the query tensor definition will cause a query time error:</p>
 <pre>
-Expected a tensor value of 'query(query_vector_sift)' but has [...]
+Expected a tensor value of 'query(sift_embedding)' but has [...]
 </pre>
 
 The `closeness(field, image_sift_encoding)` is a [rank-feature](reference/rank-features.html) calculated
@@ -257,7 +257,7 @@ and the query tensor name is referenced in second argument of the query operator
 <pre>
 {
     "yql": "select title, price from sources products where ({targetHits: 10}nearestNeighbor(image_sift_encoding,query_vector_sift)) and in_stock = true",
-    "ranking.features.query(query_vector_sift)": [
+    "input.query(query_vector_sift)": [
         0.22507139604882176,
         0.11696498718517367,
         0.9418422036734729,
