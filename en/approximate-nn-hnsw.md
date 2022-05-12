@@ -16,12 +16,12 @@ The implementation in Vespa supports:
 * **Filtering** - The search for nearest neighbors can be constrained by query filters
 as the nearest neighbor search in Vespa is expressed as a query operator.
 The nearest neighbor query operator can be combined with other filters or query terms using the [Vespa query language](query-language.html).
-See many examples in the [practical guide](nearest-neighbor-search-guide.html#combining-approximate-nearest-neighbor-search-with-query-filters).
+See many query examples in the [practical guide](nearest-neighbor-search-guide.html#combining-approximate-nearest-neighbor-search-with-query-filters).
 
 * **Real Time Indexing** - Add, remove or update vectors in the index with low latency and high throughput.
 
 * **Mutable HNSW Graph**  No query overhead from searching multiple <em>HNSW</em> graphs. In Vespa, there is one graph per field. No
-segmented or partitioned graph. 
+segmented or partitioned graph where a query against a node need to scan multiple HNSW graphs.  
 
 * **Multi-threaded Indexing** - The costly part when doing changes to the *HNSW* graph is distance calculations while searching the graph layers
 to find which links to change. These distance calculations are performed by multiple indexing threads. 
@@ -33,10 +33,10 @@ as the distance needs to be calculated for every document which matches
 the query filters. 
 
 To enable fast approximate matching, the first-order dense tensor field definition 
-needs an `index` directive. The same document type can have multiple tensor fields with *HNSW* enabled.
+needs an `index` directive. A Vespa [document schema](schemas.html) can declare multiple tensor fields with `HNSW` enabled.
 
 <pre>
-field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
+field image_embedding type tensor&lt;float&gt;(x[512]) {
   indexing: summary | attribute | index
   attribute {
     distance-metric: euclidean 
@@ -49,7 +49,7 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
   }
 }
 
-field bert_embedding type tensor&lt;float&gt;(x[384]) {
+field text_embedding type tensor&lt;float&gt;(x[384]) {
   indexing: summary | attribute | index
   attribute {
     distance-metric: angular
@@ -63,10 +63,10 @@ field bert_embedding type tensor&lt;float&gt;(x[384]) {
 }
 </pre>
 
-In the schema snippet above, fast approximate search is enabled by building an *HNSW* index for the
-*image_sift_encoding* and the *bert_embedding* tensor fields.
+In the schema snippet above, fast approximate search is enabled by building an `HNSW` index for the
+`image_embedding` and the `text_embedding` tensor fields.
 
-The two fields uses different [distance-metric](reference/schema-reference.html#distance-metric)
+The two vector fields use different [distance-metric](reference/schema-reference.html#distance-metric)
 and `max-links-per-node` settings. 
 
 * `max-links-per-node` impacts memory usage of the graph, accuracy and search speed. 
@@ -84,23 +84,21 @@ or exact (brute-force) search by using the [approximate query annotation](refere
 
 <pre>
 {
-  "yql": "select * from doc where ({targetHits: 100, approximate:false}nearestNeighbor(image_sift_encoding,query_vector_sift)) and in_stock = true",
+  "yql": "select * from doc where {targetHits: 100, approximate:false}nearestNeighbor(image_embedding,query_image_embedding) and in_stock = true",
   "hits": 10
-  "ranking.features.query(query_vector_sift)": [0.21,0.12,....],
+  "input.query(query_image_embedding)": [0.21,0.12,....],
   "ranking.profile": "image_similarity" 
 }
 </pre>
-
-By default, `approximate` is true when searching a field with <em>HNSW</em> index enabled.
+By default, `approximate` is true when searching a field with `HNSW` index enabled.
 The `approximate` parameter allows quantifying the accuracy loss of using approximate search. 
-
 The loss can be calculated by performing an exact neighbor search using `approximate:false` and 
 compare the retrieved documents with `approximate:true` and calculate the overlap@k metric. 
 
 In addition to [targetHits](reference/query-language-reference.html#targethits), 
 there is a [hnsw.exploreAdditionalHits](reference/query-language-reference.html#hnsw-exploreadditionalhits) parameter
 which controls how many extra nodes in the graph (in addition to `targetHits`)
-that are explored during the graph search. This parameter is used to tune accuracy quality versus performance. 
+that are explored during the graph search. This parameter is used to tune accuracy quality versus query performance. 
 
 
 ## Nearest Neighbor Search Considerations
@@ -149,18 +147,20 @@ Vespa [tensor cell value types](tensor-user-guide.html#cell-value-types) include
 * `float` 4 bytes per value. Standard float. 
 * `double` 8 bytes per value. Standard double
 
+
 ### Search Latency and document volume
 
-The `HNSW` greedy search algorithm is sub-linear (close to log(N)). This has interesting properties when attempting to add more
+The `HNSW` greedy search algorithm is sub-linear (close to log(N) where N is the number of vectors in the graph). 
+This has interesting properties when attempting to add more
 nodes horizontally using [flat data distribution](performance/sizing-search.html#data-distribution)
-as even if the document volume per node is reduced by a factor of 10, the latency is only reduced by 50%.
+as even if the document volume per node is reduced by a factor of 10, the search latency is only reduced by 50%. Still,
+flat scaling helps scale document volume, and increasing indexing throughput. 
 
-Pure vector search applications (without filtering, or re-ranking) should attempt to scale up document volume by using a 
-larger instance type and try to maximize the number of vectors per node. 
+Pure vector search applications (without filtering, or re-ranking) should attempt to scale up document volume by using 
+larger instance type and maximize the number of vectors per node. To scale with query throughput,
+ use [grouped data distribution](performance/sizing-search.html#data-distribution) to replicate content. 
 
-To scale with query throughput, use [grouped data distribution](performance/sizing-search.html#data-distribution).
-
-Note that this is not necessarily true if the application
+Note that log(N) search is not necessarily true if the application
 uses nearest neighbor search for candidate retrieval in a <a href="phased-ranking.html">multi-phase ranking</a> pipeline, 
 or combines nearest neighbor search with filters. See <a href="performance/sizing-search.html">Sizing search</a>.
 

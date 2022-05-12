@@ -305,11 +305,12 @@ schema track {
 
     rank-profile hybrid inherits closeness {
         num-threads-per-search: 1
-        rank-properties {
-            query(wTags):1
-            query(wPopularity):1
-            query(wTitle):1
-            query(wVector): 1
+        inputs {
+            query(q) tensor&lt;float&gt;(x[384])
+            query(wTags) 1
+            query(wPopularity) 1
+            query(wTitle) 1
+            query(wVector)  1
         }
         first-phase {
             expression {
@@ -395,7 +396,7 @@ The default query profile can be used to override
 default query api settings for all queries.
 
 The following enables [presentation.timing](reference/query-api-reference.html#presentation.timing) and
-renders weightedset fields as a JSON map. 
+renders `weightedset` fields as a JSON maps. 
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
 &lt;query-profile id=&quot;default&quot;&gt;
@@ -732,7 +733,7 @@ $ vespa query \
 
 Query breakdown:
 
-- Search for 10 (`targetHits:10`) nearest neighbors of the `query(q)` query tensor over the `embedding`
+- Search for ten (`targetHits:10`) nearest neighbors of the `query(q)` query tensor over the `embedding`
 document tensor field. 
 - The annotation `approximate:false` tells Vespa to perform exact search.
 - The `hits` parameter controls how many results are returned in the response. Number of `hits`
@@ -740,6 +741,8 @@ requested does not impact `targetHits`. Notice that `targetHits` is per content 
 - `ranking=closeness` tells Vespa which [rank-profile](ranking.html) to score documents. One must 
 specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` rank expression
 in the `rank-profile`.
+- `input.query(q)` points to the input query vector. 
+
 Not specifying [ranking](reference/query-api-reference.html#ranking.profile) will cause
 Vespa to use [nativeRank](nativerank.html) which does not use the vector similarity, causing
 results to be randomly sorted. 
@@ -782,10 +785,15 @@ The above exact nearest neighbor search will return the following
     }
 }
 {% endhighlight %}</pre>
+
 The exact search takes approximately 51ms, performing 95,666 distance calculations. 
 A total of about 120 documents were exposed to the first-phase ranking during the search as can be seen from
-`totalCount`. Vespa's exact nearest neighbor search uses chunked vector distance calculations.
-Splitting the vectors into chunks reduces the computational complexity.
+`totalCount`. 
+
+The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
+were put on the top-k heap are exposed to first phase ranking. Splitting the vectors into chunks 
+reduces the computational complexity as one can rule out distance neighbors just by comparing a few 
+chunks with the lowest scoring vector on the heap. 
 
 It is possible to reduce search latency of the exact search by throwing more CPU resources at it. 
 Changing the rank-profile to `closeness-t4` makes Vespa use four threads per query:
@@ -883,8 +891,7 @@ A few key differences between `exact` and `approximate` neighbor search:
 
 - `totalCount` is different, when using the approximate version, Vespa exposes exactly `targethits` to the 
 configurable `first-phase` rank expression in the chosen `rank-profile`.
- The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
-were put on the top-k heap are exposed to first phase ranking.
+
 - The search is approximate and might not return the exact top 10 closest vectors as with exact search. This
 is a complex tradeoff between accuracy, query performance , and memory usage. 
 See [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
@@ -1211,13 +1218,14 @@ The ranking is performed using the following`hybrid` rank profile which serves a
 how to combine the different scoring techniques. 
 
 <pre>
-rank-profile hybrid {
+rank-profile hybrid inherits closeness {
         num-threads-per-search: 1
-        rank-properties {
-            query(wTags):1
-            query(wPopularity):1
-            query(wTitle):1
-            query(wVector): 1
+        inputs {
+            query(q) tensor&lt;float&gt;(x[384])
+            query(wTags) 1
+            query(wPopularity) 1
+            query(wTitle) 1
+            query(wVector) 1
         }
         first-phase {
             expression {
@@ -1461,6 +1469,7 @@ In the examples above, some of the hits had
 <pre>
 "closeness(field,embedding)": 0.0
 </pre>
+
 This means that the hit was not retrieved by the `nearestNeighbor` operator, similar `rawScore(tags)` might
 also be 0 if the hit was not retrieved by the `wand` query operator. 
 
@@ -1471,7 +1480,7 @@ For example to compute the `euclidean` distance one can add a
 [function](reference/schema-reference.html#function-rank) to the rank-profile:
 
 <pre>
-rank-profile compute-also-for-sparse {
+rank-profile compute-also-for-sparse inherits closeness {
     function euclidean() {
         expression: sqrt(sum(map(query(q) - attribute(embedding), f(x)(x * x))))
     }
@@ -1658,8 +1667,8 @@ The following Vespa query combines two `nearestNeighbor` query operators
 using logical disjunction (`OR`) and referencing two different
 query tensor inputs:
 
-- `ranking.features.query(q)` holding the *Total Eclipse Of The Heart* query vector.
-- `ranking.features.query(qa)` holding the *Summer of '69* query vector.
+- `input.query(q)` holding the *Total Eclipse Of The Heart* query vector.
+- `input.query(qa)` holding the *Summer of '69* query vector.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1892,15 +1901,14 @@ field embedding type tensor&lt;float&gt;(x[384]) {
 
 ## Controlling filter behavior
 Vespa allows developers to control how filters are combined with nearestNeighbor query operator, see
-[https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/] for a detailed description
-of *pre-filtering* and *post-filtering*. The following query examples explores the two query-time parameters
+[Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) 
+for a detailed description of *pre-filtering* and *post-filtering*. The following query examples explores the two query-time parameters
 which can be used to control the filtering behavior. The parameters are:
 
 - *ranking.matching.postFilterThreshold* default 1.0 
 - *ranking.matching.approximateThreshold* default 0.05
 
-
-The following runs with the default setting for *ranking.matching.postFilterThreshold* which is 1, which means, 
+The following query runs with the default setting for *ranking.matching.postFilterThreshold* which is 1, which means, 
 do not perform post-filtering, use *pre-filtering*:
 
 <div class="pre-parent">
@@ -1915,8 +1923,8 @@ $ vespa query \
   "input.query(q)=$Q"
 </pre>
 </div>
-The query exposes *targetHits* to ranking as seen from the `totalCount`. Now, repeating the query, but using
-*post-filtering* instead by setting *ranking.matching.postFilterThreshold=0.0*:
+The query exposes `targetHits` to ranking as seen from the `totalCount`. Now, repeating the query, but using
+forcing *post-filtering* instead by setting *ranking.matching.postFilterThreshold=0.0*:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1931,9 +1939,8 @@ $ vespa query \
 </pre>
 </div>
 
-In this case, Vespa first finds the `targethits` closest hits by searching the HNSW graph, and then performs post filtering, 
-which for this query exposes only two documents to ranking (`totalCount=2`) which is less than the wanted `targetHits`. 
-It is possible to increase `targetHits` to try to combat this, the following query increases the `targethits` by 10x to 100:
+In this case, Vespa will estimate how many documents the filter matches and auto-adjust `targethits` to a
+higher number, attempting to expose the real `targetHits` to ranking:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1950,42 +1957,8 @@ $ vespa query \
 
 The query exposes 12 documents to ranking as can be seen from `totalCount`. There is `8420` documents in the collection
 which is tagged with the `rock` tag, so roughly 8%. Changing to a tag which is less frequent, for example, `90s`, which
-matches 1695 documents or roughly 1.7%, only exposes one document to ranking.
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
-$ vespa query \
-  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "90s"' \
-  'hits=2' \
-  'ranking=closeness' \
-  'ranking.matching.postFilterThreshold=0.0' \
-  'ranking.matching.approximateThreshold=0.00' \
-  "input.query(q)=$Q"
-</pre>
-</div>
-
-Increasing `targetHits` to 100 finds another track matching the tags constraint:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"totalCount": 2'>
-$ vespa query \
-  'yql=select title, artist, tags from track where {targetHits:100}nearestNeighbor(embedding,q) and tags contains "90s"' \
-  'hits=2' \
-  'ranking=closeness' \
-  'ranking.matching.postFilterThreshold=0.0' \
-  'ranking.matching.approximateThreshold=0.00' \
-  "input.query(q)=$Q"
-</pre>
-</div>
-
-The above query examples cheated a bit, as *ranking.matching.approximateThreshold* was set to 0, 
-which caused Vespa to not fall back to exact nearest neighbor search for restrictive filters. 
-
-Changing back to *ranking.matching.approximateThreshold=5.00* and the restrictive filter 
-causes Vespa to fallback to exact search because the filter is estimated
-to match less than the threshold. (tags contains "90s" matches about 2% which is &lt; 5%):
+matches 1,695 documents or roughly 1.7% will cause Vespa to fall back to exact search.
+(`tags contains "90s"` matches about 2% which is &lt; 5%):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2001,8 +1974,9 @@ $ vespa query \
 </div>
 
 The exact search exposes more documents to ranking and the query returns about `360` hits. The
-*ranking.matching.approximateThreshold* parameter can be used to balance between performance and the chance
-of finding enough hits to expose to *first-phase* ranking. 
+*ranking.matching.approximateThreshold* could be used to tune search performance. 
+Read more in the [Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) 
+blog post.
 
 ## Tear down the container
 This concludes this tutorial. 
