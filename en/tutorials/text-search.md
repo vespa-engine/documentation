@@ -406,7 +406,7 @@ $ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=wh
   'ranking=bm25' 'type=weakAnd'
 </pre>
 </div>
-Note that the relevance score which is normalized in the range [0,1] for the default ranking profile
+Note that the relevance score which is normalized in the range [0,1] for the default rank profile
 using _nativeRank_ changed to an unormalized range when using the _bm25_ ranking feature. 
 
 

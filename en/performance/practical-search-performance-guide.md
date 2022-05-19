@@ -1854,7 +1854,7 @@ $ vespa query \
 {% endraw %}</pre>
 </div>
 
-By using multiple ranking profiles like above, developers can find the sweet-spot 
+By using multiple rank profiles like above, developers can find the sweet-spot 
 where latency does not improve much by using more threads. Using more threads per search 
 limits query concurrency as more threads will be occupied
 per query. Read more in [Vespa sizing guide:reduce latency with 

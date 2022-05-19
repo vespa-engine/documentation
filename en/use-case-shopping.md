@@ -108,12 +108,12 @@ not cause unexpected results.
     Rank profiles are profiles containing instructions on how to score
     documents for a given query. The most important part of rank profiles are
     the ranking expressions. The schemas for the item and review
-    document types contain different ranking profiles to sort or score the
+    document types contain different rank profiles to sort or score the
     data.
 
 * [Ranking functions](reference/schema-reference.html#function-rank)
 
-    Ranking functions are contained in ranking profiles and can be referenced
+    Ranking functions are contained in rank profiles and can be referenced
     as part of any ranking expression from either first phase, second phase or
     other functions.
 

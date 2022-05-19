@@ -609,7 +609,7 @@ $ vespa query \
     'ranking=tags'
 </pre>
 </div>
-The query asks for 2 hits to be returned, and uses the `tags` ranking profile. 
+The query asks for 2 hits to be returned, and uses the `tags` rank profile. 
 The [result](reference/default-result-format.html) 
 for the above query will look something like this:
 
