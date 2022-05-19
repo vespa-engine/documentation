@@ -44,14 +44,14 @@ schema my_schema {
         }
     }
 
-    onnx-model my_onnx_model {
-        file: files/my_model.onnx
-        input "model_input_0": attribute(my_field)
-        input "model_input_1": my_function
-        output "model_output_0": output_name
-    }
-
     rank-profile my_rank_profile {
+
+        onnx-model my_onnx_model {
+            file: files/my_model.onnx
+            input "model_input_0": attribute(my_field)
+            input "model_input_1": my_function
+            output "model_output_0": output_name
+        }
 
         function my_function() {
             expression: tensor<float>(d0[1],d1[10])(d1)
