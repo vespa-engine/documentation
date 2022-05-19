@@ -192,32 +192,6 @@ and query embeddings and use the embeddings in ranking functions.
 
 
 
-### Query profile type
-
-Following is the [query profile type](../query-profiles.html#query-profile-types) that is located in
-`src/main/application/search/query-profiles/types/root.xml`.
-It defines a query feature named `tensor_bert`.
-It is a [tensor](../tensor-user-guide.html) of type float with an indexed dimension of size 768:
-
-```
-<query-profile-type id="root">
-  <field name="ranking.features.query(tensor_bert)" type="tensor&lt;float&gt;(x[768])" />
-</query-profile-type>
-```
-
-Once the query profile type is in place,
-we can send the query embeddings via the `inputs.query(tensor_bert)` parameter:  
-
-```
-{
-  "yql": ...,
-  "ranking.features.query(tensor_bert)": "[0.013267785266013195, -0.021684982513878254, ..., -0.007751454443551412]",
-  ...
-}
-```
-
-
-
 ### Schema
 
 The document embeddings can be defined by adding the following fields in
@@ -246,6 +220,9 @@ This can be accomplished by defining a `rank-profile`:
 
 ```
 rank-profile bert_title_body_all inherits default {
+    inputs {
+        query(tensor_bert) tensor&lt;float&gt;(x[768])
+    }    
     function dot_product_title() {
         expression: sum(query(tensor_bert)*attribute(title_bert))
     }
@@ -263,6 +240,19 @@ matched documents according to the sum of the dot-products between query and tit
 Different rank-profiles can be defined for experimentation.
 
 
+### Query
+
+We can send the query embeddings via the `inputs.query(tensor_bert)` parameter:
+
+```
+{
+  "yql": ...,
+  "ranking.features.query(tensor_bert)": "[0.013267785266013195, -0.021684982513878254, ..., -0.007751454443551412]",
+  ...
+}
+```
+
+
 
 ### ANN operator
 
@@ -278,7 +268,7 @@ together with the appropriate rank-profile:
 		"profile":"bert_title_body_all"
 		"listFeatures":"true"
 	}
-	"ranking.features.query(tensor_bert)":"[0.05121087115032622, -0.0035218095295999675, ..., 0.05303904445092506]"
+	"input.query(tensor_bert)":"[0.05121087115032622, -0.0035218095295999675, ..., 0.05303904445092506]"
 	...
 } 
 ```
