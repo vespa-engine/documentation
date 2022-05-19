@@ -130,38 +130,15 @@ using <em>int8</em> tensor precision where the hamming distance is implemented u
 See <a href="reference/schema-reference.html#distance-metric">distance-metric reference documentation</a> for details.
 </p>
 <p>
-  A user also need to define the query tensors in the application package, see
-  <a href="ranking-expressions-features.html#query-feature-types">query feature types</a> for details on query tensor feature types.
-</p>
-<p>
-  The <code>search/query-profiles/types/root.xml</code>
-  file defines the query tensor inputs used by the nearest neighbor search operator.
-</p>
-<pre>
-&lt;query-profile-type id="root"&gt;
-    &lt;field name="ranking.features.query(query_vector_sift)" type="tensor&lt;float&gt;(x[128])" /&gt;
-    &lt;field name="ranking.features.query(query_vector_bert)" type="tensor&lt;float&gt;(x[384])" /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-<p>
-Naturally, these uses the same number of dimensions as the document side field types.
-To make use of these tensor definitions, a type reference is needed in 
-<code>search/query-profiles/default.xml</code>.
-</p>
-<pre>
-&lt;query-profile id="default" type="root"&gt;
-&lt;/query-profile&gt;
-</pre>
-<p>Skipping these steps will cause a query time error:</p>
-<pre>
-Expected a tensor value of 'query(query_vector_sift)' but has [...]
-</pre>
-<p>
-  Lastly, one need to configure how to <a href="ranking.html">rank</a> our products which is
-  configured in a ranking profile in the schema.
+You need to configure the input tensor types, and how to <a href="ranking.html">rank</a> our products
+in a <a href="reference/schema-reference.html">rank profile</a> in the schema:
 </p>
 <pre>
 rank-profile image-similarity inherits default {
+    inputs {
+        query(query_vector_sift) tensor&lt;float&gt;(x[128])
+        query(query_vector_bert) tensor&lt;float&gt;(x[384])
+    }
     first-phase {
         expression: closeness(field, image_sift_encoding)
     }
@@ -282,7 +259,7 @@ rank-profile image-similarity inherits default {
 <pre>
 {
     "yql": "select title, price from sources products where ({targetHits: 10}nearestNeighbor(image_sift_encoding,query_vector_sift)) and in_stock = true",
-    "ranking.features.query(query_vector_sift)": [
+    "input.query(query_vector_sift)": [
         0.22507139604882176,
         0.11696498718517367,
         0.9418422036734729,
@@ -374,19 +351,19 @@ rank-profile hybrid-similarity {
     "yql": "select title, price from sources products where (({targetHits: 10}nearestNeighbor(title_bert_embedding,query_vector_bert))
     or ({targetHits: 10}nearestNeighbor(image_sift_encoding,query_vector_sift))) and in_stock = true",
     "hits": 10,
-    "ranking.features.query(query_vector_sift)": [
+    "input.query(query_vector_sift)": [
         0.5158057404746615,
         0.6441591144976925,
         0.24075880767944935,
         ...
     ],
-    "ranking.features.query(query_vector_bert)": [
+    "input.query(query_vector_bert)": [
         0.708719978302217,
         0.4800850502044147,
         0.03310770782193717,
         ...
     ],
-    "ranking.features.query(bert_weight)": 0.1,
+    "input.query(bert_weight)": 0.1,
     "ranking.profile": "hybrid-similarity"
 }
 </pre>
