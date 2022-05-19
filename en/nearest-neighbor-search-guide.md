@@ -285,6 +285,12 @@ schema track {
     rank-profile closeness {
         num-threads-per-search: 1
         match-features: distance(field, embedding)
+
+        inputs {
+            query(q)  tensor&lt;float&gt;(x[384])
+            query(qa) tensor&lt;float&gt;(x[384])
+        } 
+
         first-phase {
             expression: closeness(field, embedding)
         }
@@ -298,9 +304,8 @@ schema track {
         match-features: closeness(label, q) closeness(label, qa)
     }
 
-    rank-profile hybrid {
-        num-threads-per-search: 1
-        rank-properties {
+    rank-profile hybrid inherits closeness {
+        inputs {
             query(wTags):1
             query(wPopularity):1
             query(wTitle):1
@@ -382,33 +387,6 @@ Write the following to `app/services.xml`:
         &lt;/nodes&gt;
     &lt;/content&gt;
 &lt;/services&gt;
-</pre>
-
-To query with the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
-query operator, the input query tensor type must be defined:
-
-<pre data-test="file" data-path="app/search/query-profiles/types/root.xml">
-&lt;query-profile-type id=&quot;root&quot; inherits=&quot;native&quot;&gt;   
-    &lt;field name=&quot;ranking.features.query(q)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(x[384])&quot; /&gt;
-    &lt;field name=&quot;ranking.features.query(qa)&quot; type=&quot;tensor&amp;lt;float&amp;gt;(x[384])&quot; /&gt;
-&lt;/query-profile-type&gt;
-</pre>
-
-Note that the query tensor's dimensionality (*384*) and dimension name (*x*) 
-must match the document tensor. 
-
-<pre>
-field embedding type tensor&lt;float&gt;(x[384]) 
-</pre>
-
-The tensor type must be referenced in the the `default` [queryProfile](query-profiles.html),
-it also enables [timing](reference/query-api-reference.html#presentation.timing).
-
-<pre data-test="file" data-path="app/search/query-profiles/default.xml">
-&lt;query-profile id=&quot;default&quot; type=&quot;root&quot;&gt;
-    &lt;field name=&quot;presentation.timing&quot;&gt;true&lt;/field&gt;
-    &lt;field name=&quot;renderer.json.jsonWsets&quot;&gt;true&lt;/field&gt;
-&lt;/query-profile&gt;
 </pre>
 
 ## Deploy the application package
