@@ -16,7 +16,7 @@ For example, typical e-commerce search interfaces allow users to navigate and fi
 
 ## Using Vespa's nearest neighbor search
 
-The following sections demonstrates how to use the [Vespa nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
+The following sections demonstrates how to use the Vespa [nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
 query operator. See also the [practical nearest neighbor search guide](nearest-neighbor-search-guide.html)
 for many query examples. These examples use exact nearest neighbor search with perfect accuracy,
 but which is computationally expensive for large document volumes since 
@@ -142,7 +142,7 @@ rank-profile image_similarity {
 }
 </pre>
 
-The `rank-profile` specifies the query input tensor names. The query input tensors
+The `rank-profile` specifies the query input tensor names and types. The query input tensors
 must be of the same dimensionality as the document vector and have the same dimension name. 
 
 Skipping the query tensor definition will cause a query time error:</p>
@@ -255,8 +255,8 @@ ranking per node involved in the query. `targetHits` is a required parameter and
 The `targetHits` is a lower bound per node, and with exact search more hits than `targetHits` are exposed to `first-phase` ranking.
 
 The query tensor is sent as a query tensor input 
-and the query tensor name is referenced in second argument of the nearest neighbor search operator.
-In the following example, the `nearestNeighbor` query operator
+and the query tensor name is referenced in the second argument of the `nearestNeighbor` operator.
+In the following example, the `nearestNeighbor` operator
 is used to recommend similar products based on image similarity.
 For a given image (e.g. a product image shown in the product search result page) one can find
 products which have a similar product image.
@@ -282,7 +282,7 @@ using the [Query API](query-api.html#http):
 </pre>
 
 The YQL query uses logical conjunction `and` to filter the nearest neighbors 
-by a constraint on the `in-stock` field. 
+by a constraint on the `in_stock` field. 
 
 The [targetHits](reference/query-language-reference.html#targethits) specifies
 the number of hits one want to expose to [ranking](ranking.html). The query request 
@@ -363,7 +363,7 @@ rank-profile hamming-nn {
 }
 </pre>
 
-Hamming distance search over binary vectors is implemented with xor and pop count cpu instructions, 
+Hamming distance search over binary vectors is implemented with xor and pop count cpu instructions.
 The rank-profile specifies 
 [num-threads-per-search](reference/schema-reference.html#num-threads-per-search) to 
 reduce serving latency (but not cost).

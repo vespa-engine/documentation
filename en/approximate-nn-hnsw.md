@@ -15,7 +15,7 @@ The implementation in Vespa supports:
 
 * **Filtering** - The search for nearest neighbors can be constrained by query filters
 as the nearest neighbor search in Vespa is expressed as a query operator.
-The nearest neighbor query operator can be combined with other filters or query terms using the [Vespa query language](query-language.html).
+The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator can be combined with other filters or query terms using the [Vespa query language](query-language.html).
 See many query examples in the [practical guide](nearest-neighbor-search-guide.html#combining-approximate-nearest-neighbor-search-with-query-filters).
 
 * **Real Time Indexing** - CRUD (Create,Add, Update, Remove) vectors in the index with low latency and high throughput. 
@@ -74,7 +74,7 @@ and `max-links-per-node` settings.
 
 Choosing the value of these parameters affects both accuracy, search performance, memory usage and indexing performance.
 See [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
-for an detailed description of these tradeoffs. See [HNSW index reference](reference/schema-reference.html#index-hnsw) 
+for a detailed description of these tradeoffs. See [HNSW index reference](reference/schema-reference.html#index-hnsw) 
 for details on the index parameters. 
 
 ### Indexing throughput 
@@ -93,7 +93,7 @@ Higher value of `max-links-per-node` impacts memory usage, higher values means h
 ![Accuracy](https://blog.vespa.ai/assets/2022-01-27-billion-scale-knn-part-two/ann.png)
 
 Higher `max-links-per-node` and `neighbors-to-explore-at-insert` improves the quality of the graph and
-recall accuracy. The lower combination reaches about 70 % recall@10, while the higher combination reaches
+recall accuracy. The lower combination reaches about 70% recall@10, while the higher combination reaches
 about 92% recall@10. The improvement in accuracy needs to be weighted against the impact on indexing performance and
 memory usage. 
 
@@ -166,7 +166,7 @@ instead of `float` saves close to 50% memory usage without significant accuracy 
 
 Vespa [tensor cell value types](tensor-user-guide.html#cell-value-types) include: 
 
-* `int8` 1 byte per value. Used to represent binary vectors, for example 64 bits can be represented using an 8 `int8` values.
+* `int8` 1 byte per value. Used to represent binary vectors, for example 64 bits can be represented using 8 `int8` values.
 * `bfloat16` 2 bytes per value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).
 * `float` 4 bytes per value. Standard float. 
 * `double` 8 bytes per value. Standard double
@@ -176,8 +176,8 @@ Vespa [tensor cell value types](tensor-user-guide.html#cell-value-types) include
 
 The `HNSW` greedy search algorithm is sub-linear (close to log(N) where N is the number of vectors in the graph). 
 This has interesting properties when attempting to add more
-nodes horizontally using [flat data distribution](performance/sizing-search.html#data-distribution)
-as even if the document volume per node is reduced by a factor of 10, the search latency is only reduced by 50%. 
+nodes horizontally using [flat data distribution](performance/sizing-search.html#data-distribution).
+Even if the document volume per node is reduced by a factor of 10, the search latency is only reduced by 50%. 
 Still,flat scaling helps scale document volume, and increasing indexing throughput as vectors are partitioned
 randomly over a set of nodes. 
 
