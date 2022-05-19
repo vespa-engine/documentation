@@ -213,7 +213,7 @@ Vespa allows creating any number of [rank](../ranking.html) profiles which are
 named collections of ranking and relevance calculations that one can choose from at query time.
 
 A number of built-in [rank features](../reference/rank-features.html) are available to 
-create highly specialized rank expressions.
+create highly specialized ranking expressions.
 In this tutorial we define our default _rank-profile_ to be based on `nativeRank`,
 which is a linear combination of the normalized scores computed by the several term-matching features
 described in the [nativeRank documentation](../reference/nativerank.html).In addition, 

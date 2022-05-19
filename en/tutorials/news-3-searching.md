@@ -379,7 +379,7 @@ of the field.
 
 [Ranking](../ranking.html) and relevance were briefly mentioned above; what is
 really the relevance of a hit? How can one change the relevance
-calculations? It is time to introduce _rank profiles_ and _rank expressions_ —
+calculations? It is time to introduce _rank profiles_ and _ranking expressions_ —
 simple, yet powerful methods for tuning the relevance.
 
 Relevance is a measure of how well a given document matches a query.  The
@@ -405,7 +405,7 @@ Some use cases for tweaking the relevance calculations:
 Vespa allows creating any number of _rank profiles_: named collections of
 ranking and relevance calculations that one can choose from at query time.  
 A number of built-in functions and expressions are available to create highly
-specialized rank expressions and users can define their own functions in the schema.
+specialized ranking expressions and users can define their own functions in the schema.
 
 ### News article popularity signal
 

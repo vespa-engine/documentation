@@ -115,7 +115,7 @@ In the query results, here we observe a document with 27 in-links, 9703 seconds 
     "rankingExpression(rank_score)": 20.325190122213748,
 }
 ```
-Using `summary-features` makes it easy to validate and develop the rank expression.
+Using `summary-features` makes it easy to validate and develop the ranking expression.
 
 <!-- ToDo: also use https://docs.vespa.ai/en/reference/schema-reference.html#match-features -->
 

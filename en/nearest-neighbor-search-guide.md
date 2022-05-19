@@ -723,7 +723,7 @@ document tensor field.
 - The `hits` parameter controls how many results are returned in the response. Number of `hits`
 requested does not impact `targetHits`. Notice that `targetHits` is per content node involved in the query. 
 - `ranking=closeness` tells Vespa which [rank-profile](ranking.html) to score documents. One must 
-specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` rank expression
+specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` ranking expression
 in the `rank-profile`.
 Not specifying [ranking](reference/query-api-reference.html#ranking.profile) will cause
 Vespa to use [nativeRank](nativerank.html) which does not use the vector similarity, causing
@@ -867,7 +867,7 @@ no accuracy loss for the top-1 position.
 A few key differences between `exact` and `approximate` neighbor search:
 
 - `totalCount` is different, when using the approximate version, Vespa exposes exactly `targethits` to the 
-configurable `first-phase` rank expression in the chosen `rank-profile`.
+configurable `first-phase` ranking expression in the chosen `rank-profile`.
  The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
 were put on the top-k heap are exposed to first phase ranking.
 - The search is approximate and might not return the exact top 10 closest vectors as with exact search. This
