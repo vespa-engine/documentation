@@ -23,16 +23,13 @@ with <em>.model</em> suffix:
 <pre>
 model [name] {
 
-    ([input-argument-name]: [<a href="tensor.html#tensor-type-spec">input-argument-type</a>])*
-
-    constants {
-        ([constant-name]: [scalar or <a href="tensor.html#tensor-literal-form">tensor in literal form</a>])*
+    inputs {
+        ([input-name] [<a href="tensor.html#tensor-type-spec">input-type</a>])*
     }
 
-    (constant [name] {
-        type: [<a href="tensor.html#tensor-type-spec">tensor-type-spec</a>]]
-        file: [file path relative to this .model file]
-    })*
+    constants {
+        <a href="#constant">constant</a>*
+    }
 
     (function [name]([argument-name]*) {
         expression: [<a href="ranking-expressions.html">ranking expression</a>]
@@ -44,30 +41,70 @@ model [name] {
 The elements can appear in any order (and number).
 </p>
 
+<h3 id="constant">Constant element</h3>
+
+<pre>[constant-name] [type]?: [scalar, <a href="tensor.html#tensor-literal-form">tensor on literal form</a>, or <code>file:</code> followed by a file reference]</pre>
+
+<table class="table">
+    <tr>
+        <th>Name</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td>name</td>
+        <td>The name of the constant, written either the full feature name <code>constant(myName)</code>, or just as <code>name</code>.
+    </tr>
+    <tr>
+        <td>type</td>
+        <td>The type of the constant, either <code>double</code> or a <a href="tensor.html#tensor-type-spec">tensor type</a>.
+            If omitted, the type is double.
+    </tr>
+    <tr>
+        <td>value</td>
+        <td>A number, a <a href="tensor.html#tensor-literal-form">tensor on literal form</a>,
+            or <code>file:</code> followed by a path relative to the model file to a
+            file containing the constant.
+            The file must be stored on the <a href="document-json-format.html#tensor">tensor JSON Format</a>
+            and end with <code>.json</code>. The file may be lz4 compressed, in which case the ending must be
+            <code>.json.lz4</code>.
+        </td>
+    </tr>
+</table>
+
+<p>Constant examples:</p>
+
+<pre>
+constants {
+    myDouble: 0.5
+    constant(myOtherDouble) double: 0.6
+    constant(myArray) tensor(x[3]):[1, 2, 3]
+    constant(myMap) tensor(key{}]):{key1: 1.0, key2: 2.0}
+    constant(myLargeTensor) tensor(x[10000]): file:constants/myTensor.json.lz4
+}
+</pre>
 
 
-<h2 id="model-example">.model example</h2>
+
+
+<h2 id="model-example">Model example</h2>
 <p>
 This file must be saved as <code>example.model</code> somewhere in the
 <a href="application-packages-reference.html">models</a> directory tree,
-and the same directory must also contain <code>constant1asLarge.json</code> with a tensor.
+and the same directory must also contain <code>myLargeConstant.json.lz4</code> with a tensor as compressed json.
 </p>
 <pre>{% raw %}
 model example {
 
     # All inputs that are not scalar (aka 0-dimensional tensor) must be declared
-    input1: tensor(name{}, x[3])
-    input2: tensor(x[3])
-
-    constants {
-        constant1: tensor(x[3]):{{x:0}:0.5, {x:1}:1.5, {x:2}:2.5}
-        constant2: 3.0
+    inputs {
+        input1 tensor(name{},x[3])
+        input2 tensor(x[3])
     }
 
-    # Constant in a separate file
-    constant constant1asLarge {
-        type: tensor(x[3])
-        file: constant1asLarge.json
+    constants {
+        constant(constant1) tensor(x[3]):{{x:0}:0.5, {x:1}:1.5, {x:2}:2.5}
+        constant(constant2): 3.0
+        constant(myLargeConstant) tensor(x[10000]): file:myLargeConstant.json.lz4
     }
 
     function foo1() {
