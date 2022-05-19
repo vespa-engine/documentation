@@ -206,7 +206,7 @@ It is a [tensor](../tensor-user-guide.html) of type float with an indexed dimens
 ```
 
 Once the query profile type is in place,
-we can send the query embeddings via the `ranking.features.query(tensor_bert)` parameter:  
+we can send the query embeddings via the `inputs.query(tensor_bert)` parameter:  
 
 ```
 {
