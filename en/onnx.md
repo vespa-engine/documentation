@@ -111,7 +111,7 @@ The types of document tensors are specified in the schema as shown above.
 If you specify the types of query tensors in the
 [query profile types](query-profiles.html#query-profile-types),
 you can pass tensors in HTTP requests by using the HTTP parameter
-"ranking.features.query(myTensor)"
+"input.query(myTensor)"
 (assuming the ranking expression contains "query(myTensor)").
 To do this, specify a [query profile](query-profiles.html) of a type containing
 

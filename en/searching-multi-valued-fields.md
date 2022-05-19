@@ -591,7 +591,7 @@ Change the <code>query(tagWeight)</code> with the query request and observe that
 <pre data-test="exec" data-test-assert-contains='"relevance": 6.0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
  'query=clear sky' 'type=any' 'ranking=tunable' \
- 'ranking.features.query(tagWeight)=3' 
+ 'input.query(tagWeight)=3' 
 </pre>
 
 Similar, we could also include a document-only signal to our ranking function by
