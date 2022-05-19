@@ -2120,7 +2120,7 @@ using a `long` to represent a timestamp (e.g., using Unix epoch).
 find the smallest or largest values quickly by using range search with `hitLimit`.
 
 Do note that any other query or filter terms in the query are applied after having found the 
-top-k documents, hence, an aggressive filter removing many documents might end up recalling 0 documents. 
+top-k documents, so an aggressive filter removing many documents might end up recalling 0 documents. 
 
 This behavior is illustrated with this query:
 

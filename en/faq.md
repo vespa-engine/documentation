@@ -150,7 +150,7 @@ as an acceptable (and to some extent configurable) trade-off.
 #### Does vespa support wildcard fields? 
 Wildcard fields are not supported in vespa.
 Workaround would be to use maps to store the wildcard fields.
-Map needs to be defined with indexing attribute and hence will be stored in memory.
+Map needs to be defined with <code>indexing: attribute</code> and hence will be stored in memory.
 Refer to [map](reference/schema-reference.html#type:map).
 
 #### Is there any size limitation in multivalued fields?

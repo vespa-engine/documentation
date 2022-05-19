@@ -661,7 +661,7 @@ for the above query will look something like this:
 
 {% endhighlight %}</pre>
 The `wand` query operator exposed a total of about 60 documents to the `first-phase` ranking which 
-uses the `rawScore(tag)` rank-feature directly, hence the `relevancy` is the 
+uses the `rawScore(tag)` rank-feature directly, so the `relevancy` is the 
 result of the sparse dot product between the sparse user profile and the document tags. 
 
 The `wand` query operator is safe, meaning, it returns the same top-k results as 

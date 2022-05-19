@@ -239,7 +239,8 @@ Inspect relevance and summary-features:
 }
 ```
 
-Here, the tensors have one dimension and are hence vectors - the sum of the tensor product is hence the doc product.
+Here, the tensors have one dimension, so they are vectors - 
+the sum of the tensor product is hence the doc product.
 As all values are 1, all products are 1 and the sum is 2:
 
 <table class="table" style="width: auto">
