@@ -21,11 +21,17 @@ query operator. See also the [practical nearest neighbor search guide](nearest-n
 for many query examples. These examples use exact nearest neighbor search with perfect accuracy,
 but which is computationally expensive for large document volumes since 
 the distance metric must be calculated for every document that matches
-the boolean query filters.Exact nearest neighbor search scales close to linearly 
-with number of threads used per query.  Using multiple threads per search, can be used to make 
+the boolean query filters.
+
+Exact nearest neighbor search scales close to linearly 
+with [number of threads used per query](performance/practical-search-performance-guide#multi-threaded-search-and-ranking). 
+Using multiple threads per search, can be used to make 
 exact nearest neighbor search run with acceptable serving latency. 
-Using more threads per search to reduce latency is still costly, as the number of distance calculations
-involved does not change by changing the threads doing the search. 
+Using more threads per search to reduce latency is still costly for larger vector volumes 
+or high query throughput applications, as the number of distance calculations
+involved in the query does not change by changing number of threads performing the search. 
+
+A cost efficient approach is to instead of exact search, using **approximate** search. 
 See how to use **approximate** nearest neighbor search with `HNSW` in
 the [Approximate Nearest Neighbor Search](approximate-nn-hnsw.html) document.
 
@@ -85,9 +91,16 @@ schema product {
 The `product` document schema has 4 fields. Fields like `popularity` are self-explanatory but the
 fields of [tensor](tensor-user-guide.html) type needs more explanation. 
 
-The tensor definitions specify two first-order dense tensor types (vectors):
-`image_embedding` and `text_embedding`. The &lt;float&gt; defines the 
+The schema defines two first-order dense tensor types (vectors):
+`image_embedding` and `text_embedding`. `&lt;float&gt;` specifies the 
 [tensor value type](tensor-user-guide.html#cell-value-types) and `d0` denotes the name of the dimension.
+
+Vespa [tensor cell value types](tensor-user-guide.html#cell-value-types) include: 
+
+* `int8` 1 byte per tensor value. Typically used to represent binary vectors, for example 64 bits can be represented using 8 `int8` values.
+* `bfloat16` 2 bytes per tensor value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).
+* `float` 4 bytes per tensor value. Standard float. 
+* `double` 8 bytes per tensor value. Standard double
 
 The `image_embedding` field is used to store a dense vectorized embedding representation 
 of the product image and which use [angular](reference/schema-reference.html#distance-metric) 
@@ -167,9 +180,9 @@ rank-profile image_similarity_with_reranking {
 }
 </pre>
 In this case, hits retrieved by the nearest neighbor search operator are re-scored also using
-the `attribute(popularity)` is another rank-feature which reads the `popularity` field.
-The [ranking expression](ranking-expressions-features.html) combines the popularity
-with the `closeness(field, image_embedding)` rank-feature using multiplication.  
+the product's popularity as a signal. The value of the `popularity` field can be read by the
+ `attribute(popularity)` rank-feature. The `second-phase` [ranking expression](ranking-expressions-features.html)
+combines the popularity with the `closeness(field, image_embedding)` rank-feature using multiplication.  
 
 ## Indexing product data
 After deploying the application package with the document schema, one
@@ -177,7 +190,7 @@ can [index](reads-and-writes.html) the product data using the
 [Vespa JSON feed format](reference/document-json-format.html).
 
 In the example below there are two documents, 
-the tensor fields are using [indexed tensor short form](reference/tensor.html#indexed-short-form).
+the vector fields are using [indexed tensor short form](reference/tensor.html#indexed-short-form).
 <pre>
 [
   {
@@ -232,20 +245,18 @@ the tensor fields are using [indexed tensor short form](reference/tensor.html#in
 The above JSON formatted data can be fed to Vespa using any of the
 [Vespa feeding apis](reads-and-writes.html#api-and-utilities).
 
-## Querying product data
+## Querying using nearestNeighbor query operator
 To query the product dataset one uses the
 [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator.
 The operator expects two arguments; the document tensor field which is searched and the input query tensor name.
 
 The `targetHits` query annotation specifies the the number of results that one wants to expose to `first-phase`
-ranking. `targetHits` is a required parameter and the query will fail if not specified.
-The `targetHits` is a lower bound per node, and with exact search more hits are exposed to `first-phase` ranking.
+ranking per node involved in the query. `targetHits` is a required parameter and the query will fail if not specified.
+The `targetHits` is a lower bound per node, and with exact search more hits than `targetHits` are exposed to `first-phase` ranking.
 
 The query tensor is sent as a query tensor input 
 and the query tensor name is referenced in second argument of the nearest neighbor search operator.
-
-### Related Products using Image Similarity
-In this example, the `nearestNeighbor` query operator
+In the following example, the `nearestNeighbor` query operator
 is used to recommend similar products based on image similarity.
 For a given image (e.g. a product image shown in the product search result page) one can find
 products which have a similar product image.
@@ -280,10 +291,9 @@ many hits are returned to the client using the [JSON result format](reference/de
 
 The total number of hits which is ranked by the ranking profile
 depends on the query filters and how fast the nearest neighbor search algorithm converges (for exact search).
-The exact search operator might expose more than `targetHits` to the `first-phase` ranking expression.
 
 The [ranking.profile](reference/query-api-reference.html#ranking.profile) parameter 
-controls which profile is used. In this case, simply ranks documents based on how close they are in the CLIP embedding space.
+controls which profile is used. In this case, it simply ranks documents based on how close they are in the CLIP embedding space.
 
 
 ## Using Nearest Neighbor from a Searcher Component
@@ -331,7 +341,7 @@ public class FeedbackSearcher extends Searcher {
 {% endhighlight %}</pre>
 
 It is also possible to embed the `vectorization` components in Vespa using 
-[model evalation](https://blog.vespa.ai/stateless-model-evaluation/). 
+stateless [ML model evaluation](https://blog.vespa.ai/stateless-model-evaluation/). 
 
 ## Using binary embeddings with hamming distance
 The following packs a 128 bit embedding representation into a 16 dimensional dense tensor 
@@ -354,9 +364,9 @@ rank-profile hamming-nn {
 </pre>
 
 Hamming distance search over binary vectors is implemented with xor and pop count cpu instructions, 
-so it is highly efficient. The rank-profile specifies 
-[num-threads-per-search](reference/schema-reference.html#num-threads-per-search) to reduce serving latency
-(but not cost).
+The rank-profile specifies 
+[num-threads-per-search](reference/schema-reference.html#num-threads-per-search) to 
+reduce serving latency (but not cost).
 
 See the [Billion Scale Vector Search with Vespa](https://blog.vespa.ai/billion-scale-knn-part-two/)
 blog post for an detailed introduction to using binary vectors with hamming distance.   
