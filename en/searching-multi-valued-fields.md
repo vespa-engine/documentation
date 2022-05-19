@@ -537,11 +537,13 @@ schema photo {
   }
 
   rank-profile tunable inherits default {
-    rank-properties {
+    inputs {
       query(titleWeight): 2
       query(descriptionWeight): 1
       query(tagWeight): 2
+    }
 
+    rank-properties {
       elementSimilarity(tags).output.sumWeight: "sum(f*w)"
       elementSimilarity(tags).output.maxWeight: "max(f*w)"
     }
@@ -597,11 +599,13 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 Similar, we could also include a document-only signal to our ranking function by
 
 <pre>
-rank-properties {
+inputs {
   query(titleWeight): 2
   query(descriptionWeight): 1
   query(tagWeight): 2
   query(staticWeight): 1
+}
+rank-properties {
   elementSimilarity(tags).output.sumWeight: "sum(f*w)"
   elementSimilarity(tags).output.maxWeight: "max(f*w)"
 }

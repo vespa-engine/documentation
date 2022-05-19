@@ -403,9 +403,9 @@ to optimize the number of candidates for the later rank phases.
 The default rank-profile is used:
 ```
 rank-profile documentation inherits default {
-    rank-properties {
-        $titleWeight: 2.0
-        $contentsWeight: 1.0
+    inputs {
+        query(titleWeight): 2.0
+        query(contentsWeight): 1.0
     }
     first-phase {
         expression: query(titleWeight) * bm25(title) + query(contentsWeight) * bm25(content)

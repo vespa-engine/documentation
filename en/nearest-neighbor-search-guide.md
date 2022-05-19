@@ -1198,7 +1198,7 @@ how to combine the different scoring techniques.
 <pre>
 rank-profile hybrid {
         num-threads-per-search: 1
-        rank-properties {
+        inputs {
             query(wTags):1
             query(wPopularity):1
             query(wTitle):1
