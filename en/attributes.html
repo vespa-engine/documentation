@@ -146,7 +146,7 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
 </ul>
 <p>
   In the following illustration a row represents a document, while a named column represents an attribute.
-</p>  
+</p>
 <img src="/assets/img/attributes.svg" width="668px" height="auto"
      alt="Attribute in-memory stores"/>
 <p>
@@ -263,6 +263,10 @@ Notes:
   <li>If a value occurs in many documents, the <em>occurrence</em> b-tree grows large.
     For such values, a boolean-occurrence list (i.e. bitvector) is generated in addition to the b-tree.</li>
   <li>Setting <code>fast-search</code> is not observable in the files on disk, other than size.</li>
+  <li><code>fast-search</code> causes a memory increase even for empty fields,
+    due to the extra index structures created.
+    E.g. single value fields will have the "undefined value" when empty,
+    and there is a posting list for this value.</li>
   <li>The <em>value</em> b-tree enables fast range-searches in numerical attributes.
     This is also available for <code>hash</code>-based dictionaries, but slower as a full scan is needed.</li>
 </ul>
@@ -524,22 +528,22 @@ schema foo {
 <p>
 Paged attribute is only supported for dense <a href="tensor-user-guide.html">tensor</a> type fields.
 
-Normal attribute fields are guaranteed to be in-memory while the paged attribute setting 
-allows paging the data out of memory to disk.  
+Normal attribute fields are guaranteed to be in-memory while the paged attribute setting
+allows paging the data out of memory to disk.
 
-Using the <em>paged</em> setting for dense tensor attributes is an alternative when there are memory resource constraints 
-and the tensor attribute data is only accessed by a limited number of hits per query during ranking. 
+Using the <em>paged</em> setting for dense tensor attributes is an alternative when there are memory resource constraints
+and the tensor attribute data is only accessed by a limited number of hits per query during ranking.
 
 For example a dense document tensor data which is only used during a <a href="phased-ranking.html">re-ranking phase</a>
  where the number of attribute accesses are limited by the re-ranking phase count.</p>
 
-For example using a second phase <em>rerank-count</em> 100 will 
+For example using a second phase <em>rerank-count</em> 100 will
 limit the maximum number of page-ins/disk access per query to 100. Running at 100 QPS
 would then need up to 10K disk accesses per query.
 
 This is the worst case, if none of the accessed attribute data were already paged into memory
-which depends on access pattern and memory pressure (size of the attribute versus how much memory 
-on the node which is available). 
+which depends on access pattern and memory pressure (size of the attribute versus how much memory
+on the node which is available).
 
 In this
 example we have a dense tensor 1024 <a href="reference/tensor.html#tensor-type-spec">int8</a> tensor which is
@@ -552,20 +556,20 @@ schema foo {
       indexing: attribute
       attribute:paged
     }
-  } 
+  }
   rank-profile foo {
     first-phase {}
-    second-phase { 
+    second-phase {
      rerank-count:100
-      expression: sum(attribute(tensordata)) 
+      expression: sum(attribute(tensordata))
     }
   }
 }
 </pre>
 <p>
-For some use cases where serving latency SLA is not strict 
+For some use cases where serving latency SLA is not strict
 and query throughput is low paged tensor attributes might be a good tuning option
-as it allows storing more tensor data per node.  
+as it allows storing more tensor data per node.
 </p>
 
 
@@ -579,21 +583,21 @@ It is only implemented for dense tensor field types, not regular field types lik
 tensors combining both dense and sparse dimensions.
 </li>
 <li>
-Unpredictable query latency as tensor attribute access might touch disk. Limited queries per second throughput  
+Unpredictable query latency as tensor attribute access might touch disk. Limited queries per second throughput
 per node (Depends on locality of document re-ranking requests).
 </li>
 <li>
-Paged attributes are implemented by file backed memory mappings. The performance depends on 
+Paged attributes are implemented by file backed memory mappings. The performance depends on
 the <a href="https://tldp.org/LDP/tlk/mm/memory.html">Linux virtual memory management</a> ability to page
 data in and out. Using many threads per search/high throughput might cause high system (kernel) cpu and unresponsiveness .
 </li>
 <li>
 The content nodes total memory utilization will be close to 100% when using large paged attributes.
 It's up to the Linux kernel to determine what part of the attribute data is loaded into memory based on access patterns.
-A good understanding of how the Linux virtual memory management system works is recommended before enabling paged attributes. 
+A good understanding of how the Linux virtual memory management system works is recommended before enabling paged attributes.
 </li>
 <li>
-Using paged tensor attribute doubles the disk usage of attribute data. 
+Using paged tensor attribute doubles the disk usage of attribute data.
 For example if the original attribute size is 92 GB (100M documents of the above 1024 int8 per document schema),
 using the attribute paged option will double the attribute disk usage to 200 GB. No free lunch.
 </li>

@@ -165,6 +165,20 @@ The criterion selects documents <span style="text-decoration: underline">to keep
 I.e. to purge documents "older than two weeks", the expression should be "newer than two weeks".
 Read more about [document expiry](documents.html#document-expiry).
 
+#### How to increase redundancy and track data migration progress?
+Changing redundancy is a live and safe change
+(assuming there is headroom on disk / memory - e.g. from 2 to 3 is 50% more).
+The time to migrate will be quite similar to what it took to feed initially -
+a bit hard to say generally, and depends on IO and index settings, like if building an index for ANN.
+To monitor progress, take a look at the
+[multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode)
+sample application for the _clustercontroller_ status page - this shows buckets pending, live.
+Finally, use the `.idealstate.merge_bucket.pending` metric to track progress -
+when 0, there are no more data syncing operations - see
+[monitor distance to ideal state](operations/admin-procedures.html#monitor-distance-to-ideal-state).
+Nodes will work as normal during data sync, and query coverage will be the same.
+Nodes will be busier, though.
+
 
 
 {:.faq-section}

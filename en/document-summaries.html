@@ -6,87 +6,65 @@ redirect_from:
 ---
 
 <p>
-Use document summaries to configure which fields to include in results.
-The <em>default</em> summary contains <em>all</em> fields that
-are possible to include in summaries; all other summaries will contain
-a subset of the fields included in the <em>default</em> summary.
-</p><p>
-Vespa keeps <a href="attributes.html">attribute</a>
-type fields in memory and fetches those fields from
-memory when requested as part of document summaries.
-This means summaries are memory-only operations if all fields are attributes.
-The other document fields are stored as blobs/records in the
-<a href="proton.html#document-store">document store</a>.
-This record is used when processing summary requests
-that include fields in this record, and as needed during visiting or
-re-distribution of content to handle elasticity.
-</p><p>
-The default summary class will always access the document store because it
-includes the <a href="documents.html#document-ids">document ID</a> which is stored here.
-To include the <a href="documents.html#document-ids">document ID</a> in a custom summary
-class, add a field for the id and include it in the summary class.
-</p><p>
-When using additional summary classes to increase performance,
-only the network data size is changed - the data read from storage is unchanged.
-Having "debug" fields with summary enabled will hence also affect the
-amount of information that needs to be read from disk.
-</p><p>
-Use <a href="reference/schema-reference.html#summary">dynamic</a>
-to generate dynamic abstracts of fields, based on search keywords.
+  Use document summaries to configure which fields to include in results.
+  The <em>default</em> summary contains <em>all</em> fields that
+  are possible to include in summaries; all other summaries will contain
+  a subset of the fields included in the <em>default</em> summary.
+</p>
+<p>
+  The default summary class will always access the document store because it
+  includes the <a href="documents.html#document-ids">document ID</a> which is stored here.
+  To include the <em>document ID</em> in a custom summary
+  class, add a field for the id and include it in the summary class.
+</p>
+<p>
+  Use <a href="reference/schema-reference.html#summary">dynamic</a>
+  to generate dynamic abstracts of fields, based on search keywords.
 </p>
 
 
 
 <h2 id="defining-summary-sets-in-the-schema">Defining summary sets in the schema</h2>
 <p>
-Define additional summary sets as described in
-the <a href="reference/schema-reference.html#summary">schema reference</a>.
+  Define additional summary sets as described in
+  the <a href="reference/schema-reference.html#summary">schema reference</a>.
 <p>
-Example: the <em>title</em> and <em>year</em> fields are
-included in a the <em>titleyear</em> summary.
+  Example: the <em>title</em> and <em>year</em> fields are included in a the <em>titleyear</em> summary.
 </p>
-<pre class="brush: sd">
-# A basic schema - called music, should be saved to music.sd
+<pre>
 schema music {
 
-  # It contains one document type only - called music as well
-  document music {
-
-    field title type string {
-      indexing: summary | index   
+    document music {
+        field title type string {
+            indexing: summary | index
+        }
+        field artist type string {
+            indexing: summary | attribute | index
+        }
+        field year type int {
+            indexing: summary | attribute
+        }
+        field popularity type int {
+            indexing: summary | attribute
+        }
+        field url type uri {
+            indexing: summary | index
+        }
     }
 
-    field artist type string {
-      indexing: summary | attribute | index
+    document-summary titleyear {
+        summary title type string {
+            source: title
+        }
+        summary year type int {
+            source: year
+        }
     }
-
-    field year type int {
-      indexing: summary | attribute
-    }
-
-    field popularity type int {
-      indexing: summary | attribute
-    }
-
-    field url type uri {
-      indexing: summary | index
-    }
-
-   }
-   document-summary titleyear {
-    summary title type string {
-      source: title
-    }
-
-    summary year type int {
-      source: year
-    }
-  }
 }
 </pre>
 <p>
-For more details on summary properties,
-see the <a href="reference/schema-reference.html#summary">schema reference</a>.
+  For more details on summary properties,
+  see the <a href="reference/schema-reference.html#summary">schema reference</a>.
 </p>
 
 
@@ -100,6 +78,7 @@ see the <a href="reference/schema-reference.html#summary">schema reference</a>.
 <pre>
 /search/?yql=select+*+from+sources+*+where+default+contains+"best"&amp;presentation.summary=titleyear
 </pre>
+<!-- ToDo: replace with a live query without the urlencoding -->
 <p>
   The <em>select</em> statement in YQL lists a set of fields to return.
   Vespa in general makes a best-effort to return those fields, and only those fields,
@@ -116,4 +95,41 @@ see the <a href="reference/schema-reference.html#summary">schema reference</a>.
   returned. If the select statement lists one or more fields (and summary is
   <em>titleyear</em>), the summary class <em>titleyear</em> is fetched, and the fields
   <em>not</em> listed in the select statement will be stripped away.
+</p>
+
+
+
+<h2 id="performance">Performance</h2>
+<p>
+  When using additional summary classes to increase performance,
+  only the network data size is changed - the data read from storage is unchanged.
+  Having "debug" fields with summary enabled will hence also affect the
+  amount of information that needs to be read from disk.
+</p>
+<p>
+  Vespa keeps <a href="attributes.html">attribute</a>
+  type fields in memory and fetches those fields from
+  memory when requested as part of document summaries.
+  This means summaries are memory-only operations if all fields are attributes.
+  The other document fields are stored as blobs/records in the
+  <a href="proton.html#document-store">document store</a>.
+  This record is used when processing summary requests
+  that include fields in this record, and as needed during visiting or
+  re-distribution of content to handle elasticity.
+</p>
+<p>
+  See <a href="query-api.html#query-execution">query execution</a> -
+  breakdown of the summary (a.k.a. result processing, rendering) phase:
+</p>
+<ul>
+  <li>The document summary latency on the content node,
+    tracked by <a href="reference/metrics.html">content_proton_search_protocol_docsum_latency_average</a>.</li>
+  <li>Getting data across from content nodes to containers.</li>
+  <li>Deserialization from internal binary formats (potentially) to Java objects
+    if touched in a <a href="searcher-development.html">Searcher</a>,
+    and finally serialization to JSON (default rendering) + rendering and network.</li>
+</ul>
+<p>
+  The work and hence latency hence increases with more <a href="reference/query-api-reference.html#hits">hits</a>.
+  Use <a href="query-api.html#query-tracing">query tracing</a> to analyze performance.
 </p>

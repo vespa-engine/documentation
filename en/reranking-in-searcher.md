@@ -22,7 +22,7 @@ can have access to aggregated features which is calculated across the top-rankin
 *fill query protocol phase*
 - Fill summary data for the global top ranking hits after all ranking phases. If one needs access to the document fields, 
 the searcher would need to call `execution.fill` before the re-ranking logic, this would then cost more resources
-then just using `match-features` which is delivered in the first protocol matching phase. If one needs 
+than just using `match-features` which is delivered in the first protocol matching phase. If one needs
 access to a subset of fields during stateless re-ranking, consider configuring a dedicated [document summary](document-summaries.html).
 
 See also [Life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
@@ -129,8 +129,7 @@ public class ReRankingSearcher extends Searcher {
 }
 </pre>
 
-<pre>
-{% highlight java%}
+```java
 package ai.vespa.example.searcher;
 
 import com.yahoo.search.Query;
@@ -179,8 +178,7 @@ public class ReRankingSearcher extends Searcher {
         return result;
     }
 }
-{% endhighlight %}
-</pre>
+```
 
 We also need a [services.xml](reference/services.html) file
 to make up a Vespa [application package](reference/application-packages-reference.html). 
@@ -189,27 +187,27 @@ Here we include our custom searcher in the `default` Vespa search chain:
 <pre data-test="file" data-path="my-app/src/main/application/services.xml">
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
 &lt;services version=&quot;1.0&quot; xmlns:deploy=&quot;vespa&quot; xmlns:preprocess=&quot;properties&quot;&gt;
-  &lt;container id=&quot;default&quot; version=&quot;1.0&quot;&gt;
-    &lt;document-api/&gt;
-    &lt;search&gt;
-      &lt;chain id=&quot;default&quot; inherits=&quot;vespa&quot;&gt;
-        &lt;searcher id=&quot;ai.vespa.example.searcher.ReRankingSearcher&quot; bundle=&quot;ranking&quot;/&gt;
-      &lt;/chain&gt;
-    &lt;/search&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias=&quot;node1&quot; /&gt;
-    &lt;/nodes&gt;
-  &lt;/container&gt;
+    &lt;container id=&quot;default&quot; version=&quot;1.0&quot;&gt;
+        &lt;document-api/&gt;
+        &lt;search&gt;
+            &lt;chain id=&quot;default&quot; inherits=&quot;vespa&quot;&gt;
+                &lt;searcher id=&quot;ai.vespa.example.searcher.ReRankingSearcher&quot; bundle=&quot;ranking&quot;/&gt;
+            &lt;/chain&gt;
+        &lt;/search&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias=&quot;node1&quot; /&gt;
+        &lt;/nodes&gt;
+    &lt;/container&gt;
 
-  &lt;content id=&quot;docs&quot; version=&quot;1.0&quot;&gt;
-    &lt;redundancy&gt;2&lt;/redundancy&gt;
-    &lt;documents&gt;
-      &lt;document type=&quot;doc&quot; mode=&quot;index&quot; /&gt;
-    &lt;/documents&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias=&quot;node1&quot; distribution-key=&quot;0&quot; /&gt;
-    &lt;/nodes&gt;
-  &lt;/content&gt;
+    &lt;content id=&quot;docs&quot; version=&quot;1.0&quot;&gt;
+        &lt;redundancy&gt;2&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type=&quot;doc&quot; mode=&quot;index&quot; /&gt;
+        &lt;/documents&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias=&quot;node1&quot; distribution-key=&quot;0&quot; /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
 &lt;/services&gt;
 </pre>
 
@@ -242,7 +240,7 @@ The `pom.xml` file is defined as:
 </pre>
 
 ### Starting Vespa
-Now, we have our files and we can start Vespa:
+Now, we have the files and can start Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -281,21 +279,21 @@ Create a few sample docs:
 
 <pre data-test="file" data-path="doc-1.json">
 {
-  "put": "id:docs:doc::0",
-  "fields": {
-    "name": "A sample document",
-    "downloads": 100
-  }
+    "put": "id:docs:doc::0",
+    "fields": {
+        "name": "A sample document",
+        "downloads": 100
+    }
 }
 </pre>
 
 <pre data-test="file" data-path="doc-2.json">
 {
-  "put": "id:docs:doc::1",
-  "fields": {
-    "name": "Another sample document",
-    "downloads": 10
-  }
+    "put": "id:docs:doc::1",
+    "fields": {
+        "name": "Another sample document",
+        "downloads": 10
+    }
 }
 </pre>
 
@@ -308,15 +306,15 @@ $ vespa document doc-1.json && vespa document doc-2.json
 </pre>
 </div>
 
-### Query our data
+### Query the data
 Run a query - this will invoke the reranking searcher since it was included in a the `default` search chain:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 2'>
 $ vespa query 'yql=select * from doc where userQuery()' \
  'query=sample' 
 </pre>
-The above will output the following response:
-<pre>
+
+```json
 {
     "root": {
         "id": "toplevel",
@@ -368,14 +366,16 @@ The above will output the following response:
         ]
     }
 }
-</pre>
+```
+
 
 <pre style="display:none" data-test="exec" data-test-assert-contains='"rerank-score": 1.18'>
 $ vespa query 'yql=select * from doc where userQuery()' \
  'query=sample' 
 </pre>
 
-### Tear down
+
+### Teardown
 Remove app and data:
 <pre data-test="after">
 $ docker rm -f vespa

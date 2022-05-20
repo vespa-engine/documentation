@@ -84,6 +84,7 @@ get methods as Java objects from the Query to Searcher components.
     <li><a href="#ranking.freshness">ranking.freshness</a></li>
     <li><a href="#ranking.queryCache">ranking.queryCache</a></li>
     <li><a href="#ranking.rerankCount">ranking.rerankCount</a></li>
+    <li><a href="#ranking.matching">ranking.matching</a></li>
     <li><a href="#ranking.matchPhase">ranking.matchPhase</a></li>
   </ul>
 </dd>
@@ -375,6 +376,7 @@ To return hits at timeout, refer to <a href="#ranking.softtimeout">ranking.softt
 Set to a positive number to collect trace information for debugging when running a query.
 Higher numbers give progressively more detail on query transformations,
 searcher execution and search backend execution.
+See <a href="../query-api.html#query-tracing">query tracing</a> for details and examples.
 </p>
 
 <h3 id="explainlevel">explainlevel</h3>
@@ -739,90 +741,109 @@ Sets the time which will be used as <em>now</em> during execution.
   Overrides the <a href="schema-reference.html#rerank-count">rerank-count set in the rank profile</a>.</p>
 
 
+<h3 id="ranking.matching">ranking.matching</h3>
+<p>Settings which control Vespa's behavior during matching of query evaluation.
+If these are set in the query, they will override any equivalent settings in the
+<a href="schema-reference.html#rank-profile">rank profile</a>.
+Detailed descriptions are found in the rank profile documentation.
+</p>
+
+<table class="table">
+<thead>
+<tr><th>Parameter</th><th>Value</th><th>Description</th><th>Rank profile equivalent</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>ranking.matching.numThreadsPerSearch</td>
+<td>integer</td>
+<td>Overrides the global <a href="services-content.html#requestthreads-persearch">persearch</a> threads to a <strong>lower</strong> value.</td>
+<td><a href="schema-reference.html#num-threads-per-search">num-threads-per-search</a></td>
+</tr>
+<tr>
+<td>ranking.matching.minHitsPerThread</td>
+<td>integer</td>
+<td>After estimating the number of hits for a query,
+    this number is used to decide how many search threads to use.</td>
+<td><a href="schema-reference.html#min-hits-per-thread">min-hits-per-thread</a></td>
+</tr>
+<tr>
+<td>ranking.matching.numSearchPartitions</td>
+<td>integer</td>
+<td>Number of logical partitions the corpus on a content node is divided in. A partition is the smallest unit a search thread will handle.</td>
+<td><a href="schema-reference.html#num-search-partitions">num-search-partitions</a></td>
+</tr>
+<tr>
+<td>ranking.matching.termwiseLimit</td>
+<td>double [0.0, 1.0]</td>
+<td>If estimated number of hits > corpus * termwise-limit,
+    document candidates are pruned with a
+    <a href="../performance/feature-tuning.html#hybrid-taat-daat">TAAT</a> evaluation for query terms not needed for ranking.</td>
+<td><a href="schema-reference.html#termwise-limit">termwise-limit</a></td>
+</tr>
+<tr>
+<td>ranking.matching.postFilterThreshold</td>
+<td>double [0.0, 1.0]</td>
+<td>Threshold value deciding if a query with an approximate
+    <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
+    operator combined with filters is evaluated using post-filtering.
+<td><a href="schema-reference.html#post-filter-threshold">post-filter-threshold</a></td>
+</tr>
+<tr>
+<td>ranking.matching.approximateThreshold</td>
+<td>double [0.0, 1.0]</td>
+<td>Threshold value deciding if a query with an approximate
+    <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
+    operator combined with filters is evaluated by searching for approximate or exact nearest neighbors.
+<td><a href="schema-reference.html#approximate-threshold">approximate-threshold</a></td>
+</tr>
+</tbody>
+</table>
+
+
 <h3 id="ranking.matchPhase">ranking.matchPhase</h3>
-<p>Settings which control Vespa's behavior during the match phase.
-If these are set in the query,
-they will override any match-phase setting in the rank profile.</p>
-<dt></dt>
-<dd>
-  <ul>
-    <li><a href="#ranking.matchPhase.maxHits">ranking.matchPhase.maxHits</a> the max number of hits that should be generated during the match phase</li>
-    <li><a href="#ranking.matchPhase.attribute">ranking.matchPhase.attribute</a> the attribute to limit matches by if more than maxHits hits will be generated</li>
-    <li><a href="#ranking.matchPhase.ascending">ranking.matchPhase.ascending</a> whether to keep the documents having the highest (default) or lowest values of the attribute</li>
-    <li><a href="#ranking.matchPhase.diversity.attribute">ranking.matchPhase.diversity.attribute</a> the attribute to use to guarantee diversity.</li>
-    <li><a href="#ranking.matchPhase.diversity.minGroups">ranking.matchPhase.diversity.minGroups</a> the minimum number of groups grouped by the diversity attribute.</li>
-  </ul>
-</dd>
-
-
-<h3 id="ranking.matchPhase.maxHits">ranking.matchPhase.maxHits</h3>
-<table class="table table-striped">
-<tr><td>Alias</td><td></td></tr>
-<tr><td>Values</td><td>long</td></tr>
-<tr><td>Default</td><td>If sorting and not ranking: max(10000, maxhits+maxoffset).
-  Otherwise: <em>none</em>.</td></tr>
-</table>
-<p>
-The max hits the engine should attempt to produce in the match phase on each partition.
-If it is determined during matching that many more hits than this will be generated,
-the matching will fall back to take the best (highest or lowest) values of the attribute
-given by ranking.matchPhase.attribute.
-</p><p>
-By default, this will be turned on only when sorting is used and grouping is not.
-If sorting is used, the primary sort attribute will be used as the match phase attribute
-if it has <a href="../attributes.html#fast-search">fast-search</a> set.
-In that case the default can be overridden by setting this value explicitly.
+<p>Settings which control Vespa's behavior during the match phase of query evaluation.
+If these are set in the query, they will override any
+<a href="schema-reference.html#match-phase">match-phase</a> settings in the rank profile.
+Detailed descriptions are found in the rank profile documentation.
 </p>
 
-
-<h3 id="ranking.matchPhase.attribute">ranking.matchPhase.attribute</h3>
-<table class="table table-striped">
-<tr><td>Alias</td><td></td></tr>
-<tr><td>Values</td><td>An attribute name</td></tr>
-<tr><td>Default</td><td><em>none</em></td></tr>
+<table class="table">
+<thead>
+<tr><th>Parameter</th><th>Value</th><th>Description</th><th>Rank profile equivalent</th></tr>
+</thead>
+<tbody>
+<tr>
+<td id="ranking.matchPhase.attribute">ranking.matchPhase.attribute</td>
+<td>string</td>
+<td>The attribute used to limit matches by if more than maxHits hits will be produced.</td>
+<td><a href="schema-reference.html#match-phase-attribute">match-phase: attribute</a></td>
+</tr>
+<tr>
+<td id="ranking.matchPhase.maxHits">ranking.matchPhase.maxHits</td>
+<td>long</td>
+<td>The max number of hits that should be generated on each content node during the match phase.</td>
+<td><a href="schema-reference.html#match-phase-max-hits">match-phase: max-hits</a></td>
+</tr>
+<tr>
+<td>ranking.matchPhase.ascending</td>
+<td>boolean</td>
+<td>Whether to keep the documents having the highest (false) or lowest (true) values of the match phase attribute.</td>
+<td><a href="schema-reference.html#match-phase-order">match-phase: order</a></td>
+</tr>
+<tr>
+<td>ranking.matchPhase.diversity.attribute</td>
+<td>string</td>
+<td>The attribute to use when deciding diversity.</td>
+<td><a href="schema-reference.html#diversity-attribute">diversity: attribute</a></td>
+</tr>
+<tr>
+<td>ranking.matchPhase.diversity.minGroups</td>
+<td>long</td>
+<td>The minimum number of groups that should be returned from the match phase grouped by the diversity attribute.</td>
+<td><a href="schema-reference.html#diversity-min-groups">diversity: min-groups</a></td>
+</tr>
+</tbody>
 </table>
-<p>
-The attribute to decide which documents are a match if the match phase
-estimates that there will be more than maxHits matches.
-This attribute should have <a href="../attributes.html#fast-search">fast-search</a> set
-and should correlate with the order which would be produced by a full evaluation.
-</p>
-
-
-<h3 id="ranking.matchPhase.ascending">ranking.matchPhase.ascending</h3>
-<table class="table table-striped">
-<tr><td>Alias</td><td></td></tr>
-<tr><td>Values</td><td>boolean</td></tr>
-<tr><td>Default</td><td>false</td></tr>
-</table>
-<p>
-Whether the attribute should be sorted in ascending or descending (default) order,
-to select documents to keep as matches.
-</p>
-
-
-<h3 id="ranking.matchPhase.diversity.attribute">ranking.matchPhase.diversity.attribute</h3>
-<table class="table table-striped">
-<tr><td>Alias</td><td></td></tr>
-<tr><td>Values</td><td>An attribute name</td></tr>
-<tr><td>Default</td><td>none.</td></tr>
-</table>
-<p>
-The attribute to be used for producing the desired
-<a href="schema-reference.html#diversity-attribute">diversity</a>.
-</p>
-
-
-<h3 id="ranking.matchPhase.diversity.minGroups">ranking.matchPhase.diversity.minGroups</h3>
-<table class="table table-striped">
-<tr><td>Alias</td><td></td></tr>
-<tr><td>Values</td><td>long</td></tr>
-<tr><td>Default</td><td>none</td></tr>
-</table>
-<p>
-The minimum number of groups that should be returned from the match phase grouped by the diversity attribute.
-Also see <a href="schema-reference.html#diversity-min-groups">min-groups</a>.
-</p>
 
 
 

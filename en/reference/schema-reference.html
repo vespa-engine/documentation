@@ -116,6 +116,8 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
         <a href="#num-search-partitions">num-search-partitions</a>
         <a href="#min-hits-per-thread">min-hits-per-thread</a>
         <a href="#termwise-limit">termwise-limit</a>
+        <a href="#post-filter-threshold">post-filter-threshold</a>
+        <a href="#approximate-threshold">approximate-threshold</a>
         <a href="#rank">rank</a>
         <a href="#rank-type">rank-type</a>
     <a href="#constant">constant</a>
@@ -552,26 +554,30 @@ struct-field [name] {
 <p>
   Fieldsets provide a way to group fields with the same <code>match</code> settings together for searching.
   To search multiple fields - example:
-  </p>
+</p>
 <pre>
 fieldset myfieldset {
     fields: a,b,c
 }
 </pre>
-  <p>
-Using the query <code>yql=select from sources * where myfieldset contains "foo"</code>
-will return all the documents for which one or more of the fields a, b or c contain "foo".
-By naming the field set <em>default</em>, those fields are searched without
-specifying the field set in unstructured queries:
-<code>query=foo</code>.
-</p><p>
-
-The fields making up the fieldset should be as similar as possible in terms of indexing clause and match mode.
-If they are not, test the application thoroughly. Having different match modes for the fields in the
-fieldset will generate an warning during application deployment.
-</p><p>
-If specific match settings for the field set is needed, such as exact, specify it using a
-<a href="#match">match</a> clause:
+<p>
+  Using the query <code>yql=select from sources * where myfieldset contains "foo"</code>
+  will return all the documents for which one or more of the fields a, b or c contain "foo".
+  By naming the field set <em>default</em>, those fields are searched without
+  specifying the field set in unstructured queries: <code>query=foo</code>.
+</p>
+<p>
+  The fields making up the fieldset should be as similar as possible in terms of indexing clause and match mode.
+  If they are not, test the application thoroughly.
+  Having different match modes for the fields in the fieldset will generate a warning during application deployment.
+</p>
+<p>
+  Adding a fieldset will not create extra index structures in memory / on disk, it is just a mapping.
+</p>
+<p>
+  If specific match settings for the field set is needed, such as exact, specify it using a
+  <a href="#match">match</a> clause:
+</p>
 <pre>
 fieldset myfieldset {
     fields: a,b,c
@@ -580,8 +586,9 @@ fieldset myfieldset {
     }
 }
 </pre>
-Use <code><a href="#query-command">query-commands</a></code> in the field set to set search settings.
-Example:
+<p>
+  Use <code><a href="#query-command">query-commands</a></code> in the field set to set search settings. Example:
+</p>
 <pre>
 fieldset myfieldset {
     fields: a,b,c
@@ -725,6 +732,23 @@ Inheriting multiple profiles which define the same elements leads to a deploy er
 </td>
 <td>Zero or one</td>
 </tr>
+<tr><td>num-search-partitions</td>
+<td>
+  <p id="num-search-partitions">
+    Number of logical partitions the corpus on a searchnode is divided in.
+    By default, this is the same as <a href="#num-threads-per-search">num-threads-per-search</a>.
+    A partition is the smallest unit a search thread will handle.
+    If you have a locality in time when searching and feeding documents,
+    you might want to split it into more, smaller partitions.
+    That way you avoid that one costly partition leaves some threads idle while others are working hard.
+  </p>
+  <p>
+    If you have 8 threads per search,
+    you might have 10x as many partitions at 80 reducing max skew with a similar factor.
+    Note that a value of zero turns on adaptive partitioning which tries to solve this optimally.
+  </p>
+<td>Zero or one</td>
+</tr>
 <tr><td>termwise-limit</td>
 <td>
   <p id="termwise-limit">
@@ -742,21 +766,43 @@ Inheriting multiple profiles which define the same elements leads to a deploy er
 </td>
 <td>Zero or one</td>
 </tr>
-<tr><td>num-search-partitions</td>
+<tr><td>post-filter-threshold</td>
 <td>
-  <p id="num-search-partitions">
-    Number of logical partitions the corpus on a searchnode is divided in.
-    By default, this is the same as <a href="#num-threads-per-search">num-threads-per-search</a>.
-    A partition is the smallest unit a search thread will handle.
-    If you have a locality in time when searching and feeding documents,
-    you might want to split it into more, smaller partitions.
-    That way you avoid that one costly partition leaves some threads idle while others are working hard.
+  <p id="post-filter-threshold">
+    Threshold value (in the range [0.0, 1.0]) deciding if a query with an approximate
+    <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
+    operator combined with filters is evaluated using post-filtering instead of the default pre-filtering.
+    Post-filtering is choosen when the estimated filter hit ratio of the query is <em>larger</em> than this threshold.
+    The default value is 1.0, which disables post-filtering.
+    <!-- TODO: Add link to blog post.
+    See
+    <a href="todo">Controlling the filtering behavior with approximate nearest neighbor search</a>
+    for more details.
+    -->
   </p>
-  <p>
-    If you have 8 threads per search,
-    you might have 10x as many partitions at 80 reducing max skew with a similar factor.
-    Note that a value of zero turns on adaptive partitioning which tries to solve this optimally.
+</td>
+<td>Zero or one</td>
+</tr>
+<tr><td>approximate-threshold</td>
+<td>
+  <p id="approximate-threshold">
+    Threshold value (in the range [0.0, 1.0]) deciding if a query with an approximate
+    <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
+    operator combined with filters is evaluated by searching the
+    <a href="schema-reference.html#index-hnsw">HNSW</a>
+    graph for approximate neighbors with pre-filtering,
+    or performing an
+    <a href="../nearest-neighbor-search.html">exact nearest neighbor search</a> with pre-filtering.
+    The fallback to exact search is choosen when the estimated filter hit ratio of the query is <em>less</em>
+    than this threshold.
+    The default value is 0.05.
+    <!-- TODO: Add link to blog post.
+    See
+    <a href="todo">Controlling the filtering behavior with approximate nearest neighbor search</a>
+    for more details.
+    -->
   </p>
+</td>
 <td>Zero or one</td>
 </tr>
 <tr><td><a href="#constants">constants</a></td>
@@ -787,7 +833,7 @@ Inheriting multiple profiles which define the same elements leads to a deploy er
 <h2 id="match-phase">match-phase</h2>
 <p>
 Contained in <code><a href="#rank-profile">rank-profile</a></code>.
-The config specifying ranking to be used during matching.
+The settings which control the behavior during the match phase of query evaluation.
 This is used to limit the result set in order to cut latency.
 It is particularly useful if the first-phase ranking is expensive.
 It can be used for sorting on numeric values to limit the evaluated result set.
@@ -810,23 +856,27 @@ match-phase {
   <tr><td>attribute</td>
   <td>
     <p id="match-phase-attribute">
-      Which attribute to use as the quality signal.
-      The attribute referenced must be a single valued numeric attribute
-      with <a href="#attribute">fast-search</a> enabled. No default.
+      The quality attribute that decides which documents are a match if the match phase
+      estimates that there will be more than <a href="#match-phase-max-hits">max-hits</a> hits.
+      The attribute must be single-value numeric with <a href="#attribute">fast-search</a> enabled.
+      It should correlate with the order which would be produced by a full query evaluation.
+      No default.
     </p>
   </td></tr>
   <tr><td>order</td>
   <td>
     <p id="match-phase-order">
-      Whether the attribute should be used in <code>descending</code> order (prefer documents with a high score)
-      or <code>ascending</code> order (prefer documents with a low value in the attribute).
+      Whether the attribute should be used in <code>descending</code> order (prefer documents with a high value)
+      or <code>ascending</code> order (prefer documents with a low value).
       Usually it is not necessary to specify this,
       as the default value <code>descending</code> is by far the most common.
     </p>
   </td></tr>
   <tr><td style="white-space: nowrap">max-hits</td>
     <td>
-      <p id="match-phase-max-hits">Requested hits per search node. Usually a number like 10000 works well here.</p>
+      <p id="match-phase-max-hits">
+        The max hits each content node should attempt to produce in the match phase.
+        Usually a number like 10000 works well here.</p>
     </td></tr>
   <tr><td>diversity</td>
     <td><p id="match-phase-diversity">Guarantee a minimum result set <a href="#diversity">diversity</a>.</p></td></tr>
@@ -841,7 +891,7 @@ match-phase {
 Contained in <code><a href="#match-phase">match-phase</a></code>.
 Diversity is used to specify diversity in different phases -
 supported in <code><a href="#match-phase">match-phase</a></code>.
-It is used to guarantee a minimum result set  diversity. Note that this feature is only relevant
+It is used to guarantee a minimum result set diversity. Note that this feature is only relevant
 in the context of match-phase degradation.
 </p><p>
 Specify the name of an attribute that will be used to provide diversity.
@@ -1130,19 +1180,25 @@ The body of a secondphase-ranking statement consists of:
 <h2 id="summary-features">summary-features</h2>
 <p>
   Contained in <code><a href="#rank-profile">rank-profile</a></code>.
-  List of <a href="../reference/rank-features.html">rank features</a> to be included with each hit
-  (in a field with the name <code>summaryfeatures</code> - see also
-  <a href="../ranking-expressions-features.html#accessing-feature-function-values-in-results">feature
-  values in results</a> documentation).
-  If not specified, the summary features are as specified in the parent profile (if any).
-  To inherit the summary features from the parent profile <em>and</em> specify additional features,
-  specify explicitly that the summary features should be inherited from the parent as shown below.
-  Refer to <a href="../schemas.html#schema-inheritance">schema inheritance</a> for examples.
-  The rank features specified here are computed in the <em>fill</em> phase
-  (see <a href="../searcher-development.html#multiphase-searching">multiphase searching</a>).
-  Note that rank-features references in summary-features are re-calculated during the fill protocol phase for the hits which made
-  it into the global top ranking hits (from all nodes).
+  List of <a href="rank-features.html">rank features</a> to be included with each result hit,
+  in the <a href="default-result-format.html#summaryfeatures">summaryfeatures</a> field.
+  Also see <a href="../ranking-expressions-features.html#accessing-feature-function-values-in-results">
+  feature values in results</a>.
 </p>
+<p>
+  If not specified, the features are as specified in the parent profile (if any).
+  To inherit the features from the parent profile <em>and</em> specify additional features,
+  specify explicitly that the features should be inherited from the parent as shown below.
+  Refer to <a href="../schemas.html#schema-inheritance">schema inheritance</a> for examples.
+</p>
+<p>
+  The rank features specified here are computed in the
+  <a href="../searcher-development.html#multiphase-searching">fill phase</a> of multi-phased queries.
+</p>
+{% include note.html content="Rank-features references in <em>summary-features</em>
+are <strong>re-calculated</strong> during the <em>fill phase</em>
+for the hits which made it into the global top ranking hits (from all nodes).
+See <a href='#match-features'>match-features</a> for an alternative." %}
 <pre>
 summary-features: [feature] [feature]&hellip;
 </pre>
@@ -1154,24 +1210,33 @@ summary-features [inherits parent-profile]? {
 }
 </pre>
 <p>
-Any number of ranking features separated by space can be listed on each line.
+  Any number of rank features separated by space can be listed on each line.
 </p>
+
+
 
 <h2 id="match-features">match-features</h2>
 <p>
   Contained in <code><a href="#rank-profile">rank-profile</a></code>.
-  List of <a href="../reference/rank-features.html">rank features</a> to be included with each hit
-  in a field with the name <code>matchfeatures</code>, calculated and returned in the the <em>match</em> phase.
+  List of <a href="rank-features.html">rank features</a> to be included with each result hit,
+  in the <a href="default-result-format.html#matchfeatures">matchfeatures</a> field.
+  Also see <a href="../ranking-expressions-features.html#accessing-feature-function-values-in-results">
+  feature values in results</a>.
+</p>
+<p>
   If not specified, the features are as specified in the parent profile (if any).
-  To inherit the match features from the parent profile <em>and</em> specify additional features,
-  specify explicitly that the match features should be inherited from the parent as shown below.
-  This is similar to the <a href="#summary-features">summary-features</a> keyword, but
-  the rank features specified here are computed in the first phase of
+  To inherit the features from the parent profile <em>and</em> specify additional features,
+  specify explicitly that the features should be inherited from the parent as shown below,
+  also see <a href="../schemas.html#schema-inheritance">schema inheritance</a>.
+</p>
+<p>
+  <em>match-features</em> is similar to <a href="#summary-features">summary-features</a>,
+  but the rank features specified here are computed in the <em>first phase</em> of
   <a href="../searcher-development.html#multiphase-searching">multiphase searching</a>,
-  which gives a different performance trade-off;
-  for details see
-  <a href="../ranking-expressions-features.html#accessing-feature-function-values-in-results">feature
-  values in results</a> documentation.
+  also called the <em>match</em> phase.
+  This gives a different performance trade-off, for details see
+  <a href="../ranking-expressions-features.html#accessing-feature-function-values-in-results">
+    feature values in results</a>.
 </p>
 <pre>
 match-features: [feature] [feature]&hellip;
@@ -1587,49 +1652,53 @@ sorting {
 
 <h2 id="distance-metric">distance-metric</h2>
 <p>
-Contained in <code><a href="#attribute">attribute</a></code>.
-Specifies the distance metric to use with the <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
-query operator to calculate the distance between document positions and the query position.
-Only relevant for tensor attribute fields.
-
-Distance metrics used with <a href="../approximate-nn-hnsw.html">HNSW</a>
-must obey all the defining properties of a <a href="https://en.wikipedia.org/wiki/Metric_space">metric space</a>:</p>
-
+  Contained in <code><a href="#attribute">attribute</a></code>.
+  Specifies the distance metric to use with the <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
+  query operator to calculate the distance between document positions and the query position.
+  Only relevant for tensor attribute fields.
+</p>
+<p>
+  Distance metrics used with <a href="../approximate-nn-hnsw.html">HNSW</a>
+  must obey all the defining properties of a <a href="https://en.wikipedia.org/wiki/Metric_space">metric space</a>:
+</p>
 <ul>
   <li>Distance is symmetric: <code>distance(q,d) = distance(d,q)</code></li>
   <li>Distance is larger than 0 and the distance from any point to itself is zero. <code>distance(q,q) = 0</code></li>
   <li>Distance obeys the <a href="https://en.wikipedia.org/wiki/Triangle_inequality">triangle inequality</a>:
- <code>distance(q,d) &lt;= distance(q,r) + distance(r,d)</code>
+    <code>distance(q,d) &lt;= distance(q,r) + distance(r,d)</code></li>
 </ul>
-<p>The distance metric used must match the distance metric used during metric representation learning (model).
-If you are using an "off-the-shelf" model to vectorize your data, please ensure that the distance metric matches
-the distance metric suggested used with the model. Different type
-of vectorization models use different type of distance metrics.</p>
-
+<p>
+  The distance metric used must match the distance metric used during metric representation learning (model).
+  If you are using an "off-the-shelf" model to vectorize your data, please ensure that the distance metric matches
+  the distance metric suggested used with the model.
+  Different type of vectorization models use different type of distance metrics.
+</p>
 {% include note.html content="
 Some vectorization models, including matrix factorization, use \"maximum inner product\" (MIP),
 with vectors that aren't normalized to unit vectors. These models use both direction and magnitude.
 <strong>MIP</strong> cannot directly be represented using nearest neighbor search distance metrics
 as it does not obey the metric space properties (triangle inequality).
 Post processing vectors from a MIP similarity model to
-unit length vectors will cause information loss which will impact the accuracy.
-"%}
+unit length vectors will cause information loss which will impact the accuracy."%}
 <p>
-It's possible to do an order preserving transformation of a maximum inner product space
-to metric space by knowing the maximum vector length (max norm).
-See <a href="https://towardsdatascience.com/maximum-inner-product-search-using-nearest-neighbor-search-algorithms-c125d24777ef">
-this high level guide</a> based on
-<a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf">
-section 3.1 Order Preserving Transformations in this paper</a>.
-The downside of this transformation is that maximum length or magnitude
-needs to be known prior to indexing the vectors in Vespa, making it only practical for batch oriented vector indexing.</p>
-<p>
-The <a href="https://github.com/vespa-engine/sample-apps/tree/master/dense-passage-retrieval-with-ann">Dense passage retrieval sample app</a>
-uses the mentioned transformation as the original text to vector model was trained using MIP.
-The <a href="https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking">MS Marco ranking sample app</a> uses
-a text to vector model which used cosine similarity during training so no transformation was required.
+  It's possible to do an order preserving transformation of a maximum inner product space
+  to metric space by knowing the maximum vector length (max norm).
+  See <a href="https://towardsdatascience.com/maximum-inner-product-search-using-nearest-neighbor-search-algorithms-c125d24777ef">
+  this high level guide</a> based on
+  <a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf">
+    section 3.1 Order Preserving Transformations in this paper</a>.
+  The downside of this transformation is that maximum length or magnitude
+  needs to be known prior to indexing the vectors in Vespa, making it only practical for batch oriented vector indexing.
 </p>
-
+{% include important.html content="When changing the <code>distance-metric</code>,
+the content nodes must be restarted to rebuild the HNSW index -
+see <a href='#changes-that-require-restart-but-not-re-feed'>changes that require restart but not re-feed</a>"%}
+<p>
+  The <a href="https://github.com/vespa-engine/sample-apps/tree/master/dense-passage-retrieval-with-ann">Dense passage retrieval sample app</a>
+  uses the mentioned transformation as the original text to vector model was trained using MIP.
+  The <a href="https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking">MS Marco ranking sample app</a>
+  uses a text to vector model which used cosine similarity during training so no transformation was required.
+</p>
 <pre>
 distance-metric: [metric]
 </pre>
@@ -2934,7 +3003,7 @@ while "surl.hostname" or "site" will search the hostname.
 <tr><th>array&lt;type&gt;</th>
 <td>
 <p id="type:array">
-For single-value (primitive) types, use array&lt;type&gt; to create an array field of the element type:
+  For single-value (primitive) types, use array&lt;type&gt; to create an array field of the element type:
 </p>
 <table class="table">
   <thead></thead><tbody>
@@ -2950,10 +3019,10 @@ For single-value (primitive) types, use array&lt;type&gt; to create an array fie
     </tr>
   </tbody>
 </table>
-  <p>
-    Also use to create an array field of the given <a href="#struct">struct type</a>.
-    The struct type must be defined separately. Example:
-  </p>
+<p>
+  Also use to create an array field of the given <a href="#struct">struct type</a>.
+  The struct type must be defined separately. Example:
+</p>
 <pre>
 struct person {
     field first_name type string {}
@@ -2969,22 +3038,27 @@ field people type array&lt;person&gt; {
 }
 </pre>
 <p>
-The entire <em>people</em> field is part of document summary, and the <a href="#struct-field">struct fields</a>
-<em>first_name</em> and <em>last_name</em> is defined as attribute for searching, the
-example also builds a b+ tree structure for fast-search.
-See <a href="../performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">
-when to use fast-search</a>.
-
-Note that you can define only a subset of the struct fields as attributes.
-Use the <a href="query-language-reference.html#sameelement">sameElement</a>
-operator to ensure matches in same struct field instance.
-Use <a href="#matched-elements-only">matched-elements-only</a>
-to reduce the amount of data that is returned in document summary.
-</p><p>
-Restrictions:
+  The <em>people</em> field is part of document summary.
+  The <a href="#struct-field">struct field</a> <em>first_name</em> is defined as an <em>attribute</em> for searching,
+  with <a href="../attributes.html#fast-search">fast-search</a>.
+  A subset, or all, of the struct fields can be defined as attributes.
+</p>
+<p>
+  Use the <a href="query-language-reference.html#sameelement">sameElement</a>
+  operator to ensure matches in same struct field instance.
+</p>
+<p>
+  Use <a href="#matched-elements-only">matched-elements-only</a>
+  to reduce the amount of data that is returned in document summary.
+</p>
+  {% include important.html content="
+  <code>key</code> and <code>value</code> are reserved words in an array&lt;struct&gt;,
+  as these are used to implement <a href='#type:map'>map</a>.
+  Do not use these as struct-field names."%}
+<p>Restrictions:</p>
 <ul>
-  <li>Array of struct types does not support <a href="../ranking.html">ranking features</a> and can only be used for matching
-  and filtering.</li>
+  <li>Array of struct types does not support <a href="../ranking.html">ranking features</a>
+    and can only be used for matching and filtering.</li>
   <li>All struct arrays can be fed, retrieved and used in document summaries in indexed search</li>
   <li>Some parts of struct arrays can be searched in indexed search:
     <table class="table">
