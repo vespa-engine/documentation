@@ -314,7 +314,11 @@ the Vespa application — which services to run and how many nodes per service.
 &lt;/services&gt;
 </pre>
 
-Add [presentation.timing](../reference/query-api-reference.html#presentation.timing)
+The default [query profile](query-profiles.html) can be used to override
+default query api settings for all queries.
+
+The following enables [presentation.timing](reference/query-api-reference.html#presentation.timing) and
+renders `weightedset` fields as a JSON maps.
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
 &lt;query-profile id=&quot;default&quot;&gt;

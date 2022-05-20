@@ -1904,7 +1904,7 @@ field embedding type tensor&lt;float&gt;(x[384]) {
 Vespa allows developers to control how filters are combined with nearestNeighbor query operator, see
 [Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) 
 for a detailed description of *pre-filtering* and *post-filtering* strategies. 
-The following query examples explores the two query-time parameters
+The following query examples explore the two query-time parameters
 which can be used to control the filtering behavior. The parameters are
 
 - [ranking.matching.postFilterThreshold](reference/query-api-reference.html#ranking.matching) default 1.0 
@@ -1968,7 +1968,7 @@ $ vespa query \
 </pre>
 </div>
 
-The exact search exposes more documents to ranking. Read more  about combining filters with nearest neighbor search in the 
+The exact search exposes more documents to ranking. Read more about combining filters with nearest neighbor search in the 
 [Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) 
 blog post. 
 
