@@ -12,14 +12,16 @@ but that might not be possible for different reasons:
 <ul>
 	<li>The system might be overloaded due to capacity constraints,
         and queries do not complete within the timeout,
-        as they are sitting in the queue (Little's Law)</li>
-	<li>A complex query might take longer time to execute than the specified timeout,
+        as they are sitting in a queue waiting for a resource.</li>
+
+        <li>A complex query might take longer time to execute than the specified timeout,
         or the timeout is too low given the complexity of the query and available capacity</li>
 </ul>
 <p>
 This document describes how Vespa could gracefully degrade the result set
-if the query cannot be completed within the timeout specified. Definitions:
-</p>
+if the query cannot be completed within the timeout specified. </p>
+
+<p>Definitions:</p>
 <ul>
     <li> <strong>Coverage</strong>: The percentage of documents indexed which were evaluated by the query.
         Ideally coverage is 100%</li>
@@ -100,28 +102,28 @@ Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enabl
 </pre>
 <p>
 The result was delivered in 200 ms but the query was degraded as coverage is less than 100
-(not all available documents searched and ranked within the specified timeout of 200ms).
-In this case, 167006201 out of x documents where queried, and 16469732 documents where matched and ranked,
+In this case, 167,006,201 out of x documents where queried, and 16,469,732 documents where matched and ranked,
 using the first-phase ranking expression in the default ranking profile.
 </p><p>
 The <em>degraded</em> field contains the following fields which explains why the result had coverage less than 100:
 </p>
 <ul>
-  <li><em>adaptive-timeout</em> is true if <a href="reference/services-content.html#coverage">Adaptive coverage</a>
+  <li><em>adaptive-timeout</em> is true if <a href="#adaptive-node-timeout">adaptive node timeout</a>
       has been enabled and one or more nodes fail to produce a result at all within the timeout.
-      This could be caused by nodes with degraded hardware making them slower than others in the cluster</li>
+      This could be caused by nodes with degraded hardware making them slower than peers in the cluster.</li>
   <li><em>match-phase</em> is true if the ranking profile has defined
       <a href="reference/schema-reference.html#match-phase">match phase ranking degradation</a>.
-      Match-phase can be used to control which documents are ranked within the timeout</li>
+      Match-phase can be used to control which documents are ranked within the timeout.</li>
   <li><em>non-ideal-state</em> is true in cases where the system is not in
-    <a href="content/idealstate.html">ideal state</a></li>
+    <a href="content/idealstate.html">ideal state</a>.</li>
   <li><em>timeout</em> is true if softtimeout was enabled and not all documents could be matched and ranked
-      with the first phase ranking function within the timeout</li>
+      with the first phase ranking function within the timeout.</li>
 </ul>
 <p>
 Note that the degraded reasons are not mutually exclusive.
 In the example, the softtimeout was triggered
 and only 99% of the documents where queried before the time budget was used.
+
 One could imagine scenarios where 10 out of 11 nodes involved in the query execution were healthy
 and triggered soft timeout and delivered a result,
 while the last node was in a bad state (e.g. hw issues) and could not produce a result at all,
@@ -142,11 +144,45 @@ get the coverage information programmatically:
     }
 </pre>
 
-
+<h2 id="adaptive-node-timeout">Adaptive node timeout</h2>
+<p>For a content cluster with <a href="performance/sizing-search.html#data-distribution-in-vespa-flat-versus-grouped">flat</a>
+    data distribution, query performance is no better than the weakest node. The worst case scenario happens
+    when a node in the cluster is experiencing underlaying HW issues causing. In such a state,
+    a node might answer health checks and pings, but still not be able to serve queries within the timeout. 
+    
+    Using <a href="reference/services-content.html#coverage">adaptive coverage</a> allows ignoring slow node(s). 
+    The following example demonstrates how to use adaptive timeout. The example
+    uses a flat content cluster with 10 nodes:</p>
+<pre>
+    &lt;content id='content' version='1.0'&gt;
+        &lt;nodes count='10'/&gt;  
+            &lt;search&gt;  
+                &lt;coverage&gt;
+                    &lt;minimum&gt;0.9&lt;/mininum&gt;
+                    &lt;min-wait-after-coverage-factor&gt;0.2&lt;/min-wait-after-coverage-factor&gt;
+                    &lt;max-wait-after-coverage-factor&gt;0.3&lt;/max-wait-after-coverage-factor&gt;
+                &lt;/coverage&gt;
+            &lt;/search&gt;  
+    &lt;/content&gt;
+</pre>
+<p>
+    Assuming using the default vespa timeout of 500ms, the stateless container dispatches the query
+    to all 10 nodes in parallel and waits until 9 out of 10 have replied (minimum coverage 0.9). 
+    Assuming 9 could respond in 100ms, there is 400ms left. The dispatcher than waits minimum 80 ms (0.2*400ms) for the last 
+    node to respond, and at maximum 120 (0.2*400ms) before giving up waiting for the slowest node and return the result. 
+    The min wait setting is used to allow some per node response time variance. 
+    Using min wait 0 will cause the query to return immidiately when min coverage has been reached (9 out of 10 nodes replied). 
+    A higher than 0 value for min allows a node to be slightly slower than the 
+    peers and overall still reach 100% coverage. 
+</p>
 
 <h2 id="match-phase-degradation">Match phase degradation</h2>
 <p>
 Refer to the <a href="reference/schema-reference.html#match-phase">match-phase reference</a>.
+Concrete examples of using match phase is found in <a href="performance/practical-search-performance-guide#match-phase-limit---early-termination">
+    practical performance guide 
+</a>. 
+
 Match-phase works by specifying an <code>attribute</code> that measures document
 quality in some way (popularity, click-through rate, pagerank, bid value, price, text quality).
 In addition, a <code>max-hits</code> value is specified
@@ -186,9 +222,9 @@ to measure the percentage.
 <p>
 
 
-<h3>Tradeoffs</h3>
+<h3 id="match-phase-tradeoffs">Match Phase Tradeoffs</h3>
 <p>
-There are some important things to consider before using match-phase.
+There are some important things to consider before using <em>match-phase</em>.
 In a normal query scenario, latency is directly proportional to the number of hits the query matches:
 a query that matches few documents will have low latency
 and a query that matches many documents will have high latency.
