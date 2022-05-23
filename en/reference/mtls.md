@@ -13,7 +13,7 @@ on how to secure Vespa with mutually authenticated TLS."
 
 
 <table class="table table-striped">
-    <tr><th scope="col" class="col-xs-3">Name</th><th scope="col" class="col-xs-9">Description</th></tr>
+    <tr><th>Name</th><th>Description</th></tr>
     <tr>
         <td>VESPA_TLS_CONFIG_FILE</td>
         <td>Absolute path JSON configuration file with TLS configuration.</td>
@@ -28,7 +28,7 @@ on how to secure Vespa with mutually authenticated TLS."
 Possible TLS mixed mode settings for `VESPA_TLS_INSECURE_MIXED_MODE`:
 
 <table class="table table-striped">
-    <tr><th scope="col" class="col-xs-3">Name</th><th scope="col" class="col-xs-9">Description</th></tr>
+    <tr><th>Name</th><th>Description</th></tr>
     <tr>
         <td>plaintext_client_mixed_server</td>
         <td>Clients do not use TLS, servers accept both TLS and plaintext clients.</td>
@@ -48,7 +48,7 @@ The TLS configuration file contains a single top-level JSON object.
 
 #### Top-level elements
 <table class="table table-striped">
-    <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
+    <tr><th>Name</th><th>Required</th><th>Description</th></tr>
     <tr>
         <td markdown="span">[files](#the-files-element)</td>
         <td>Yes</td>
@@ -88,7 +88,7 @@ The TLS configuration file contains a single top-level JSON object.
 
 #### The *files* element
 <table class="table table-striped">
-    <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
+    <tr><th>Name</th><th>Required</th><th>Description</th></tr>
     <tr>
         <td>private-key</td>
         <td>Yes</td>
@@ -114,7 +114,7 @@ The TLS configuration file contains a single top-level JSON object.
 
 #### The *authorized-peer* element
 <table class="table table-striped">
-    <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
+    <tr><th>Name</th><th>Required</th><th>Description</th></tr>
     <tr>
         <td>required-credentials</td>
         <td>Yes</td>
@@ -134,7 +134,7 @@ The TLS configuration file contains a single top-level JSON object.
 
 #### The *required-credential* element
 <table class="table table-striped">
-    <tr><th scope="col" class="col-xs-2">Name</th><th scope="col" class="col-xs-1">Required</th><th scope="col" class="col-xs-9">Description</th></tr>
+    <tr><th>Name</th><th>Required</th><th>Description</th></tr>
     <tr>
         <td>field</td>
         <td>Yes</td>
