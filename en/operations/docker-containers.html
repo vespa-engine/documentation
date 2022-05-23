@@ -56,6 +56,35 @@ $ docker run --detach --name vespa --hostname vespa-container --volume $VESPA_VA
 </p>
 
 
+<h2 id="transparent-huge-pages">Transparent Huge Pages</h2>
+<p>Vespa performance improves significantly by enabling
+  <a href="https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html">Transparent Huge Pages (THP)</a>, 
+  especially for memory intensive applications with large dense tensors with concurrent query and write workloads.
+</p>
+<p>  
+  One application improved query 99p latency from 950 ms to 150ms during concurrent query and write by enabling THP. 
+  Using THP is even more important when running in virtualised environments like AWS and GCP due to nested page tables.
+</p>
+<p>
+  When running Vespa using the container image, <em>THP</em> settings needs to be set on the base host OS (Linux).
+  The recommended settings are: </p>
+  <pre>
+    echo 1 >      /sys/kernel/mm/transparent_hugepage/khugepaged/defrag
+    echo always > /sys/kernel/mm/transparent_hugepage/enabled
+    echo never >  /sys/kernel/mm/transparent_hugepage/defrag
+  </pre>
+
+  <p>
+    To verify that the setting is active one should see that <em>AnonHugePages</em> is non-zero, in this case 75GB 
+    has been allocated using AnonHugePages. 
+    <pre>
+      cat /proc/meminfo |grep AnonHuge
+      AnonHugePages:  75986944 kB
+    </pre>
+  </p>
+  Note that the Vespa container needs to be restarted after modifying the base host OS settings to make the changes effective. 
+  Vespa uses <em>MADV_HUGEPAGE</em> for memory allocations done by the <a href="../proton.html">content node process (proton)</a>.
+</p>
 
 <h2 id="controlling-which-services-to-start">Controlling which services to start</h2>
 <p>
