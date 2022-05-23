@@ -314,7 +314,7 @@ the Vespa application — which services to run and how many nodes per service.
 &lt;/services&gt;
 </pre>
 
-The default [query profile](query-profiles.html) can be used to override
+The default [query profile](../query-profiles.html) can be used to override
 default query api settings for all queries.
 
 The following enables [presentation.timing](reference/query-api-reference.html#presentation.timing) and
