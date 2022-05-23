@@ -5,11 +5,11 @@ redirect_from:
 - /documentation/securing-your-vespa-installation.html
 ---
 
-It is critical that you understand the security requirements and limitations
+It is critical to understand the security requirements and limitations
 of any networked system. Vespa is no exception. This document gives the most
 important information related to security at the network and physical host levels.
  
-To keep your self-hosted Vespa installation safe, follow the guidelines outlined below:
+To keep the self-hosted Vespa installation safe, follow the guidelines outlined below:
 
 1. Isolate the Vespa hosts
 2. Secure the application container with access control filters and TLS
@@ -20,7 +20,7 @@ To keep your self-hosted Vespa installation safe, follow the guidelines outlined
 
 ## Isolating the Vespa hosts
 
-**When running your own Vespa instances, hosts running Vespa MUST NOT be directly exposed 
+**When running self-hosted Vespa instances, hosts running Vespa MUST NOT be directly exposed 
 to the public internet or to untrusted networks. Failure to ensure this may lead to data 
 exfiltration/infiltration or host compromise.**
  
@@ -84,4 +84,6 @@ Vespa does not have support for encryption of on-disk document stores or indexes
 ## Securing Vespa with mutually authenticated TLS (mTLS)
 
 Protect all internal endpoints and protocols in Vespa with mutually authenticated Transport Layer Security (mTLS).
-See the [dedicated documentation](mtls.html) on how to get started.
+See the [dedicated documentation](mtls.html) on how to get started,
+and try the [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
+example.

@@ -5,9 +5,7 @@ redirect_from:
 - /documentation/mtls.html
 ---
 
-{% include note.html content="This document is only relevant if **self-hosting Vespa**.
-If using Vespa Cloud, all services are automatically set up securely by default with full mTLS,
-with all key/certificate management handled." %}
+{% include note.html content="This document is only relevant if **self-hosting Vespa**." %}
 
 [Transport Layer Security (TLS)](https://datatracker.ietf.org/doc/html/rfc5246) is a protocol that uses cryptography
 to enable secure, tamper-proof communication over the network.
@@ -40,6 +38,8 @@ Be especially aware of this if you have custom solutions in place for collecting
 and aggregating low level metrics or status pages from the Vespa backends.
 Though the terms *TLS* and *mTLS* may be used interchangeably in this document, *TLS* implies *mTLS* for all Vespa-internal traffic.
 
+Refer to the [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
+example application for a working example.
 
 
 ## Prerequisites
@@ -234,8 +234,7 @@ TLS rollout happens in 3 phases:
 {% include warning.html content="The insecure mixed mode environment variable MUST be removed from all nodes
 (and all services subsequently restarted) before a cluster can be considered secure.
 Even a single service left with insecure mixed mode enabled could be used by a determined attacker as a jumpgate into
-other (believed secure) services.
-" %}
+other (believed secure) services." %}
 
 
 
@@ -246,13 +245,17 @@ Connect to a Vespa service, e.g a configserver on port 19071 or a container on p
 successfully completes the TLS handshake.
 
 ```sh
-$ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-certs.pem -key /absolute/path/to/private-key.pem -cert /absolute/path/to/host-cert.pem
+$ openssl s_client -connect <hostname>:<port> \
+  -CAfile /absolute/path/to/ca-certs.pem \
+  -key /absolute/path/to/private-key.pem \
+  -cert /absolute/path/to/host-cert.pem
 ```
 
 Further, you should verify that servers require clients to authenticate by omitting `-key`/`-cert` from above command.
 The `s_client` tool should print an error during handshake and exit immediately.
 ```sh
-$ openssl s_client -connect <hostname>:<port>  -CAfile /absolute/path/to/ca-certs.pem
+$ openssl s_client -connect <hostname>:<port> \
+  -CAfile /absolute/path/to/ca-certs.pem
 ```
 
 
