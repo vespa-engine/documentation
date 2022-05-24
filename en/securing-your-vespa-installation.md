@@ -55,7 +55,7 @@ Inter-node communication inside a Vespa installation is not encrypted.
 By default, the container allows unauthenticated writes to, and reads from, the Vespa installation.
 For a production deployment, this must be locked down.
  
-Connections to the HTTP containers may be [protected with TLS](jdisc/http-server-and-filters.html#ssl).
+Connections to the HTTP containers may be [protected with TLS](jdisc/http-server-and-filters.html#tls).
 Mutual TLS is supported and should be configured.
  
 Access to the container API endpoints can be controlled using
