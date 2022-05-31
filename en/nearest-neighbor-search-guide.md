@@ -899,7 +899,6 @@ configurable `first-phase` rank expression in the chosen `rank-profile`.
  The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
 were put on the top-k heap are exposed to first phase ranking.
 
->>>>>>> master
 - The search is approximate and might not return the exact top 10 closest vectors as with exact search. This
 is a complex tradeoff between accuracy, query performance , and memory usage. 
 See [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
