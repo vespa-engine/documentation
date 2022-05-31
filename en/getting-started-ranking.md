@@ -115,7 +115,7 @@ In the query results, here we observe a document with 27 in-links, 9703 seconds 
     "rankingExpression(rank_score)": 20.325190122213748,
 }
 ```
-Using `summary-features` makes it easy to validate and develop the rank expression.
+Using `summary-features` makes it easy to validate and develop the ranking expression.
 
 <!-- ToDo: also use https://docs.vespa.ai/en/reference/schema-reference.html#match-features -->
 
@@ -239,7 +239,8 @@ Inspect relevance and summary-features:
 }
 ```
 
-Here, the tensors have one dimension and are hence vectors - the sum of the tensor product is hence the doc product.
+Here, the tensors have one dimension, so they are vectors - 
+the sum of the tensor product is hence the doc product.
 As all values are 1, all products are 1 and the sum is 2:
 
 <table class="table" style="width: auto">
@@ -403,9 +404,9 @@ to optimize the number of candidates for the later rank phases.
 The default rank-profile is used:
 ```
 rank-profile documentation inherits default {
-    rank-properties {
-        $titleWeight: 2.0
-        $contentsWeight: 1.0
+    inputs {
+        query(titleWeight): 2.0
+        query(contentsWeight): 1.0
     }
     first-phase {
         expression: query(titleWeight) * bm25(title) + query(contentsWeight) * bm25(content)

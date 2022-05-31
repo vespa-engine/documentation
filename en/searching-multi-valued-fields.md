@@ -134,7 +134,7 @@ Since all string fields shares the same [match](reference/schema-reference.html#
 settings we can use a [fieldset](reference/schema-reference.html#fieldset) 
 so that queries does not need to mention all three fields.
 
-We also include a default ranking profile (this is the implicit default ranking profile)
+We also include a default rank profile (this is the implicit default rank profile)
 using the Vespa [nativeRank](nativerank.html) text matching rank feature. 
 
 Along with the schema, we also need a [services.xml](reference/services.html) file
@@ -296,7 +296,7 @@ exact matches are ranked higher than partial matches.
 
 We have now explored querying and matching, now it's time to focus on how to rank the documents matched. 
 You might not have noticed, but in the above examples, each of the queries produced a `relevance` score per hit, 
-this score was in our previous examples calculated using the `default` ranking profile which in our case
+this score was in our previous examples calculated using the `default` rank profile which in our case
 used [nativeRank](nativerank.html). 
 We can start by analyzing other [rank features](reference/rank-features.html) by asking Vespa to produce
 them for us. We use [match-features](reference/schema-reference.html#match-features) to return 
@@ -362,7 +362,7 @@ schema photo {
 }
 </pre>
 
-Re-deploy with the changed ranking profile:
+Re-deploy with the changed rank profile:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -463,7 +463,7 @@ schema photo {
 }
 </pre>
 
-Re-deploy with the changed ranking profile:
+Re-deploy with the changed rank profile:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -537,11 +537,13 @@ schema photo {
   }
 
   rank-profile tunable inherits default {
-    rank-properties {
+    inputs {
       query(titleWeight): 2
       query(descriptionWeight): 1
       query(tagWeight): 2
+    }
 
+    rank-properties {
       elementSimilarity(tags).output.sumWeight: "sum(f*w)"
       elementSimilarity(tags).output.maxWeight: "max(f*w)"
     }
@@ -573,7 +575,7 @@ $ vespa deploy --wait 300 my-app
 </pre>
 </div>
 
-Run a query with the new ranking profile
+Run a query with the new rank profile
 
 <pre data-test="exec" data-test-assert-contains='"relevance": 4.0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
@@ -591,17 +593,19 @@ Change the <code>query(tagWeight)</code> with the query request and observe that
 <pre data-test="exec" data-test-assert-contains='"relevance": 6.0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
  'query=clear sky' 'type=any' 'ranking=tunable' \
- 'ranking.features.query(tagWeight)=3' 
+ 'input.query(tagWeight)=3' 
 </pre>
 
 Similar, we could also include a document-only signal to our ranking function by
 
 <pre>
-rank-properties {
+inputs {
   query(titleWeight): 2
   query(descriptionWeight): 1
   query(tagWeight): 2
   query(staticWeight): 1
+}
+rank-properties {
   elementSimilarity(tags).output.sumWeight: "sum(f*w)"
   elementSimilarity(tags).output.maxWeight: "max(f*w)"
 }

@@ -102,6 +102,10 @@ schema tf {
         }
     }
     rank-profile default inherits default {
+        inputs {
+            query(myTensor) tensor(d0[1],d1[784])
+        }
+
         function input_tensor() {
             expression: attribute(document_tensor)
         }
@@ -154,14 +158,9 @@ starting with `"d0"` for the first dimension, and increasing for each dimension
 (i.e. `"d1"`, `"d2"`, etc.). The result of the evaluation will likewise be
 a tensor with names `"d0"`, `"d1"`, etc.
 
-The types of document tensors are specified in the schema as shown above.
-If you specify the types of query tensors in the
-[query profile types](query-profiles.html#query-profile-types),
-you can pass tensors in HTTP requests by using the HTTP parameter
-"ranking.features.query(myTensor)" (assuming the ranking expression contains "query(myTensor)").
-To do this, specify a [query profile](query-profiles.html) of a type containing
-
-    <field name="ranking.features.query(myTensor)" type="tensor<float>(d0[1],d1[784])" />
+The types of document and input tensors are specified in the schema as shown above.
+You can then pass tensors in HTTP requests by using the HTTP parameter
+"input.query(myTensor)" (assuming the ranking expression contains "query(myTensor)").
 
 A tensor example can be found in the
 [sample application](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation).

@@ -213,7 +213,7 @@ Vespa allows creating any number of [rank](../ranking.html) profiles which are
 named collections of ranking and relevance calculations that one can choose from at query time.
 
 A number of built-in [rank features](../reference/rank-features.html) are available to 
-create highly specialized rank expressions.
+create highly specialized ranking expressions.
 In this tutorial we define our default _rank-profile_ to be based on `nativeRank`,
 which is a linear combination of the normalized scores computed by the several term-matching features
 described in the [nativeRank documentation](../reference/nativerank.html).In addition, 
@@ -406,7 +406,7 @@ $ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=wh
   'ranking=bm25' 'type=weakAnd'
 </pre>
 </div>
-Note that the relevance score which is normalized in the range [0,1] for the default ranking profile
+Note that the relevance score which is normalized in the range [0,1] for the default rank profile
 using _nativeRank_ changed to an unormalized range when using the _bm25_ ranking feature. 
 
 

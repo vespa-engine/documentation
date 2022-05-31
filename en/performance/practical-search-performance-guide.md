@@ -1852,7 +1852,7 @@ $ vespa query \
 {% endraw %}</pre>
 </div>
 
-By using multiple ranking profiles like above, developers can find the sweet-spot 
+By using multiple rank profiles like above, developers can find the sweet-spot 
 where latency does not improve much by using more threads. Using more threads per search 
 limits query concurrency as more threads will be occupied
 per query. Read more in [Vespa sizing guide:reduce latency with 
@@ -2121,7 +2121,7 @@ using a `long` to represent a timestamp (e.g., using Unix epoch).
 find the smallest or largest values quickly by using range search with `hitLimit`.
 
 Do note that any other query or filter terms in the query are applied after having found the 
-top-k documents, hence, an aggressive filter removing many documents might end up recalling 0 documents. 
+top-k documents, so an aggressive filter removing many documents might end up recalling 0 documents. 
 
 This behavior is illustrated with this query:
 

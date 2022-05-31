@@ -113,7 +113,7 @@ rank-profile drop-low-score {
 </pre>
 
 #### Does Vespa support early termination of matching and ranking?
-Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the ranking profile,  or by adding a range query item using *hitLimit* to the query tree, 
+Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the rank profile,  or by adding a range query item using *hitLimit* to the query tree, 
 see [capped numeric range search](reference/query-language-reference.html#numeric).  
 Both methods require an *attribute* field with *fast-search*. The capped range query is faster but beware that if there are other restrictive filters in the query one might end up with 0 hits. 
 The additional filters are applied as a post filtering 
@@ -150,7 +150,7 @@ as an acceptable (and to some extent configurable) trade-off.
 #### Does vespa support wildcard fields? 
 Wildcard fields are not supported in vespa.
 Workaround would be to use maps to store the wildcard fields.
-Map needs to be defined with indexing attribute and hence will be stored in memory.
+Map needs to be defined with <code>indexing: attribute</code> and hence will be stored in memory.
 Refer to [map](reference/schema-reference.html#type:map).
 
 #### Is there any size limitation in multivalued fields?

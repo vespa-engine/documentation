@@ -103,13 +103,16 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
             <a href="#keep-rank-count">keep-rank-count</a>
             <a href="#rank-score-drop-limit">rank-score-drop-limit</a>
             <a href="#expression">expression</a>
-        <a href="#constants">constants</a>
-        <a href="#rank-properties">rank-properties</a>
         <a href="#secondphase-rank">second-phase</a>
             <a href="#expression">expression</a>
             <a href="#rerank-count">rerank-count</a>
-        <a href="#summary-features">summary-features</a>
+        <a href="#function-rank">function [name] </a>
+        <a href="#inputs">inputs</a>
+        <a href="#constants">constants</a>
+        <a href="#onnx-model">onnx-model</a>
+        <a href="#rank-properties">rank-properties</a>
         <a href="#match-features">match-features</a>
+        <a href="#summary-features">summary-features</a>
         <a href="#rank-features">rank-features</a>
         <a href="#ignore-default-rank-features">ignore-default-rank-features</a>
         <a href="#num-threads-per-search">num-threads-per-search</a>
@@ -643,7 +646,7 @@ The body of a compression specification is optional and may contain:
 
 <p>Contained in <code><a href="#schema">schema</a></code> or equivalently in separate files in the
 <a href="application-packages-reference.html">application package</a>, named
-<code>schemas/[schema-name]/[profile-name].profile</code>.
+<code>[profile-name].profile</code> in any directory below <code>schemas/[schema-name]/</code>.
 A <a href="../ranking.html#rank-profiles">rank profile</a> is a named set of ranking expression functions and
 settings which can be
 <a href="../reference/query-api-reference.html#ranking.profile">selected in the query</a>).</p>
@@ -680,12 +683,33 @@ Inheriting multiple profiles which define the same elements leads to a deploy er
 <td>The ranking config to be used for second-phase ranking.</td>
 <td>Zero or one</td>
 </tr>
-<tr><td><a href="#summary-features">summary-features</a></td>
-<td>The <a href="../reference/rank-features.html">rank features</a> to be returned with each hit, computed in the <em>fill</em> phase.</td>
+<tr><td><a href="#function-rank">function [name] </a></td>
+<td>Defines a named function that can be referenced during ranking phase(s) and (if without arguments)
+as part of match-and summary-features.</td>
 <td>Zero or more</td>
+</tr>
+<tr><td><a href="#inputs">inputs</a></td>
+<td>List of query features used in ranking expressions.</td>
+<td>Zero or many</td>
+</tr>
+<tr><td><a href="#constants">constants</a></td>
+<td>List of constant features available in ranking expressions.</td>
+<td>Zero or many</td>
+</tr>
+<tr><td><a href="#onnx-model">onnx-model</a></td>
+<td>An onnx model to make available in this profile.</td>
+<td>Zero or many</td>
+</tr>
+<tr><td><a href="#rank-properties">rank-properties</a></td>
+<td>List of any rank property key-values to be used by rank features.</td>
+<td>Zero or one</td>
 </tr>
 <tr><td><a href="#match-features">match-features</a></td>
 <td>The <a href="../reference/rank-features.html">rank features</a> to be returned with each hit, computed in the <em>match</em> phase.</td>
+<td>Zero or more</td>
+</tr>
+<tr><td><a href="#summary-features">summary-features</a></td>
+<td>The <a href="../reference/rank-features.html">rank features</a> to be returned with each hit, computed in the <em>fill</em> phase.</td>
 <td>Zero or more</td>
 </tr>
 <tr><td><a href="#rank-features">rank-features</a></td>
@@ -802,18 +826,6 @@ Inheriting multiple profiles which define the same elements leads to a deploy er
   </p>
 </td>
 <td>Zero or one</td>
-</tr>
-<tr><td><a href="#constants">constants</a></td>
-<td>List of constant key/value pairs available in ranking expressions.</td>
-<td>Zero or one</td>
-</tr>
-<tr><td><a href="#rank-properties">rank-properties</a></td>
-<td>List of any rank property key-values to be used by rank features.</td>
-<td>Zero or one</td>
-</tr>
-<tr><td><a href="#function-rank">function [name] </a></td>
-<td>Define named functions that can be referenced during ranking phase(s) and (if without arguments) as part of the summary-features.</td>
-<td>Zero or more</td>
 </tr>
 <tr><td><a href="#rank">rank</a></td>
 <td>Specify if the field is used for ranking.</td>
@@ -1037,27 +1049,110 @@ Any number of ranking features can be listed on each line, separated by space.
 
 
 
-<h2 id="constants">constants</h2>
-<p>
-Contained in <code><a href="#rank-profile">rank-profile</a></code>.
-List of constants available in ranking expressions, resolved and optimized at configuration time.
+<h2 id="inputs">inputs</h2>
+
+<p>Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+List of inputs: Query features consumed by ranking expressions in this profile.</p>
+
+<p>Query features are set either as a <a href="query-api-reference.html#ranking.features">request property</a>,
+or equivalently from a <a href="../searcher-development.html">Searcher</a>, by calling
+<code>query.getRanking().getFeatures().put("query(myInput)", myValue)</code>.</p>
+
+<p>Query feature types can also be declared in
+<a href="../query-profiles.html#query-profile-types">query profile types</a>,
+but declaring inputs in the profile needing them is usually preferable.</p>
+
+<p>Inputs are inherited from inherited profiles.</p>
+
 <pre>
-constants {
-    key: value
+inputs {
+    name [type]? (: value)?
 }
 </pre>
 <table class="table">
-<thead>
-<tr><th>Name</th><th>Description</th></tr>
-</thead><tbody>
-<tr><td>key</td>
-<td>Name of the constants.
+<tr>
+  <th>Name</th>
+  <th>Description</th>
 </tr>
-<tr><td>value</td>
-<td>A number or any string. Must be quoted if it contains spacing.</td>
+<tr>
+  <td>name</td>
+  <td>The name of the inputs, written either the full feature name <code>query(myName)</code>, or just as <code>name</code>.
 </tr>
-</tbody>
+<tr>
+  <td>type</td>
+  <td>The type of the constant, either <code>double</code> or a <a href="tensor.html#tensor-type-spec">tensor type</a>.
+      If omitted, the type is double.
+</tr>
+<tr>
+  <td>value</td>
+  <td>An optional default module, used if this input is not set in the query.
+  A number, or a <a href="tensor.html#tensor-literal-form">tensor on literal form</a>.
+  </td>
+</tr>
 </table>
+
+<p>Input examples:</p>
+
+<pre>
+inputs {
+    myDouble: 0.5
+    query(myOtherDouble) double
+    query(myArray) tensor(x[3])
+    query(myMap) tensor(key{}]):{key1: 1.0, key2: 2.0}
+}
+</pre>
+
+
+
+<h2 id="constants">constants</h2>
+
+<p>Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+List of constants available in ranking expressions, resolved and optimized at configuration time.</p>
+
+<p>Constants are inherited from inherited profiles, and from the schema itself.</p>
+
+<pre>
+constants {
+    name [type]?: value|file:[path]
+}
+</pre>
+<table class="table">
+<tr>
+<th>Name</th>
+<th>Description</th>
+</tr>
+<tr>
+<td>name</td>
+<td>The name of the constant, written either the full feature name <code>constant(myName)</code>, or just as <code>name</code>.
+</tr>
+<tr>
+<td>type</td>
+<td>The type of the constant, either <code>double</code> or a <a href="tensor.html#tensor-type-spec">tensor type</a>.
+If omitted, the type is double.
+</tr>
+<tr>
+<td>value</td>
+<td>A number, a <a href="tensor.html#tensor-literal-form">tensor on literal form</a>,
+or <code>file:</code> followed by a path from the application package root to a
+file containing the constant.
+The file must be stored on the <a href="document-json-format.html#tensor">tensor JSON Format</a>
+and end with <code>.json</code>. The file may be lz4 compressed, in which case the ending must be
+<code>.json.lz4</code>.
+</td>
+</tr>
+</table>
+
+<p>Constant examples:</p>
+
+<pre>
+constants {
+    myDouble: 0.5
+    constant(myOtherDouble) double: 0.6
+    constant(myArray) tensor(x[3]):[1, 2, 3]
+    constant(myMap) tensor(key{}]):{key1: 1.0, key2: 2.0}
+    constant(myLargeTensor) tensor(x[10000]): file:constants/myTensor.json.lz4
+}
+</pre>
 
 
 
@@ -1252,8 +1347,13 @@ Any number of ranking features separated by space can be listed on each line.
 
 
 <h2 id="constant">constant</h2>
-<p>
-Contained in <code><a href="#schema">schema</a></code>.
+
+<p><i>Prefer to define constants in the rank profiles that need them,
+with rank profile inheritance to avoid repetition.
+See <a href="#constants">constants</a>.</i>
+</p>
+
+<p>Contained in <code><a href="#schema">schema</a></code>.
 This defines a named constant tensor located in a file with a given type
 that can be used in ranking expressions using the rank feature
 <a href="rank-features.html#constant(name)">constant(name)</a>:
@@ -1269,12 +1369,10 @@ The body of a constant must contain:
 </thead><tbody>
 <tr><td>file</td>
 <td>
-  Path to the location of the file containing the constant tensor.
-  The path is relative to the root of the application package containing this sd-file.
-  The format of the file is JSON and is the same as when specifying a tensor field in a document put or update.
-  Refer to the <a href="../reference/document-json-format.html">Document JSON Format</a> for reference.
-  Compression is supported - if the filename ends with ".json.lz4",
-  Vespa assumes the tensor is LZ4 compressed.
+  Path to the file containing this constant, relative from the applcation package root.
+  The file must be stored on the <a href="document-json-format.html#tensor">tensor JSON Format</a>
+  and end with <code>.json</code>. The file may be lz4 compressed, in which case the ending must be
+  <code>.json.lz4</code>.
 </td>
 <td>One</td>
 </tr>
@@ -1321,10 +1419,13 @@ This will become default on Vespa 8.
 </p>
 
 <h2 id="onnx-model">onnx-model</h2>
-<p>
-Contained in <code><a href="#schema">schema</a></code>.
+
+<p>Contained in <code><a href="#rank-profile">rank-profile</a></code> or <code><a href="#schema">schema</a></code>.
 This defines a named ONNX model located in a file
-that can be used in ranking expressions using the "onnx" rank feature:
+that can be used in ranking expressions using the "onnx" rank feature.</p>
+
+<p>Prefer to define onnx models in the rank profiles using them.
+Onnx models are inherited from parent profiles, and from the schema.</p>
 
 <pre>
 onnx-model [name] {
@@ -1589,7 +1690,7 @@ Note that <a href="#normalizing">normalizing</a> and
 <a href="../linguistics.html#tokenization">tokenization</a>
 is not supported for attribute fields.
 
-Queries in attribute fields are hence not normalized, nor stemmed.
+Queries in attribute fields are not normalized, nor stemmed.
 Use <a href="#index">index</a> on fields to enable.
 Both <em>index</em> and <em>attribute</em> can be set on a field.
 </p>

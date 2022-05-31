@@ -225,7 +225,7 @@ effectively work as a lookup.
 {% include note.html content="Much more complex operations are available,
 please refer to [the tensor user guide](../tensor-user-guide.html#ranking-with-tensors) for more information." %}
 
-Let's add a new ranking profile to perform this calculation:
+Let's add a new rank profile to perform this calculation:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -331,7 +331,7 @@ $ vespa query 'user_id=U33527' 'ranking.profile=recommendation_with_global_categ
 </pre>
 </div>
 
-Note that we specify the ranking profile to use. The first result of this query is something like
+Note that we specify the rank profile to use. The first result of this query is something like
 the following:
 
 ```

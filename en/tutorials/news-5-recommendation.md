@@ -365,7 +365,7 @@ so Vespa knows what to expect here.
 
 When Vespa receives this query, it will scan linearly through all documents
 in the system (28603 if you are using the MIND DEMO dataset), and score them
-using the `recommendation` ranking profile we set up above. Recall that we
+using the `recommendation` rank profile we set up above. Recall that we
 converted the problem from maximum inner product to euclidean distance.
 
 However, Vespa sorts the final results by decreasing rank score. With a

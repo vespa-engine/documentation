@@ -296,7 +296,7 @@ $ vespa query -v 'yql=select * from news where userQuery() limit 0' \
 </div>
 
 This request searches for drinks, groups by category and for each unique category output the 
-2 top ranking hits (according to the ranking profile used).
+2 top ranking hits (according to the rank profile used).
 Groups are sorted by default by maxium relevance in the group. Notice that we also set an upper limit
 on the number of unique groups my the outermost max. This is important in cases with many unique values. See also
 [Result diversification using Vespa result grouping](https://blog.vespa.ai/result-diversification-with-vespa/). 
@@ -379,7 +379,7 @@ of the field.
 
 [Ranking](../ranking.html) and relevance were briefly mentioned above; what is
 really the relevance of a hit? How can one change the relevance
-calculations? It is time to introduce _rank profiles_ and _rank expressions_ —
+calculations? It is time to introduce _rank profiles_ and _ranking expressions_ —
 simple, yet powerful methods for tuning the relevance.
 
 Relevance is a measure of how well a given document matches a query.  The
@@ -405,7 +405,7 @@ Some use cases for tweaking the relevance calculations:
 Vespa allows creating any number of _rank profiles_: named collections of
 ranking and relevance calculations that one can choose from at query time.  
 A number of built-in functions and expressions are available to create highly
-specialized rank expressions and users can define their own functions in the schema.
+specialized ranking expressions and users can define their own functions in the schema.
 
 ### News article popularity signal
 
@@ -417,7 +417,7 @@ ranking. Since both clicks and impressions are attribute fields, these fields ca
 [updated](https://docs.vespa.ai/en/partial-updates.html) at scale with very high throughput.  
 
 We can use this signal in our ranking, by including a `popularity` rank profile, as defined below at the bottom of
-`schemas/news.sd`. Note that ranking profiles are defined outside of the `document` block:
+`schemas/news.sd`. Note that rank profiles are defined outside of the `document` block:
 
 <pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
@@ -529,7 +529,7 @@ $ vespa query -v 'yql=select * from news where default contains "music"' 'rankin
 </div>
 
 and find documents with high `popularity` values at the top. Note that
-we must specify the ranking profile to use with the run time `ranking` parameter.
+we must specify the rank profile to use with the run time `ranking` parameter.
 
 ## Conclusion
 

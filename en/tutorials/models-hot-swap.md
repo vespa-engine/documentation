@@ -53,7 +53,7 @@ Moving from a demo app to a real-world one introduces additional requirements:
    the model-agnostic fields may come from some database.
    Decoupling operations relying on each data source can eliminate coordination issues.
 4. **Cleanup**: News articles might be deleted and users might opt out of the system.
-   Our system should not rely on or recommend stale data, hence obsolete entities should be removed.
+   Our system should not rely on or recommend stale data, obsolete entities should be removed.
    Assuming news articles and users aren't deleted from Vespa in real time,
    we need a way to remove the obsolete users and articles from the application.
 
@@ -91,7 +91,8 @@ But this would create an abundance of obsolete versions for each document.
 By using a single set bit in the document ID,
 we ensure that no more than two versions of a document are stored at any given time.
 Using the internal version,
-we can filter out old versions that were not overwritten and hence still exist with a set bit that again became current.
+we can filter out old versions that were not overwritten and 
+still exist with a set bit that again became current.
 
 Versioning can be stored in a database or a configuration file,
 but the simplest place is probably the Vespa app itself, using a dedicated type:
@@ -155,18 +156,19 @@ schema news {
 ```
 
 Each model is generated using a different dataset,
-hence it makes sense to separate the feeding procedures of each model.
-Consequently, each model should also have a separate configuration holding (possibly) different inner versions and sets.
+so it makes sense to separate the feeding procedures of each model.
+Consequently, each model should also have a separate configuration holding 
+(possibly) different inner versions and sets.
 
 
 
 ## Managing model-agnostic data using parent documents
 
 In our example with three models, each document has 6 instances at any given moment - 3 different models * 2 sets.
-Most of the news article data is model agnostic, hence a single instance of that data can be used by all models.
+Most of the news article data is model agnostic, so a single instance of that data can be used by all models.
 Further, the events used to create the prediction models
 (tuples like `<user ID, news ID, date, fully_read>`) come from a different source than the news article data,
-hence processing and feeding them separately is advantageous.
+so processing and feeding them separately is advantageous.
 
 In order to have all document instances share the model-agnostic data,
 we use Vespa's parent-child relations,
@@ -218,7 +220,7 @@ version 2 goes to set 0, version 3 goes to set 1, and so on.
 Now, consider a news article that has been deleted by its author before version 3 was created.
 After feeding version 3, set 1 will include up-to-date articles with version 3,
 but will also still include the deleted article with version 1.
-While our queries filter by version hence ignore the deleted article,
+While our queries filter by version and so ignore the deleted article,
 we still need to remove it from the app, otherwise we'll gather a lot of obsolete data over time.
 
 Vespa provides a built-in [garbage collection](../reference/services-content.html#documents) mechanism,
@@ -275,7 +277,7 @@ defined in `services.xml` under the `<content>` tag:
 but also checks whether the latest version is `null`.
 This is required as the filter is also applied during feeding.
 At that point, the reference to the configuration document isn't active yet,
-hence all imported fields contain `null` values.
+so all imported fields contain `null` values.
 Without the `null` check, all our documents would be filtered out during feeding." %}
 
 
@@ -288,7 +290,7 @@ then feeds the vespa app, but then some failure happens before the hot swap is c
 Since the configuration wasn't updated, no query will consider the documents that were just fed.
 No harm done, right? Well, the next day, the feeding workflow starts again, with the next day's model.
 During the day that passed, some users and articles were removed from the system,
-hence aren't included in the new model.
+and so aren't included in the new model.
 The feeding completes successfully this time, including the hot swap.
 The current model now has today's model, along with the articles and users that were removed yesterday,
 all sharing the same version and all accessible to queries.
@@ -305,7 +307,7 @@ at the beginning of every feed, the _write_ version is incremented,
 and the result is stored back in the configuration and used in all the model documents.
 Once feeding completes successfully, the configuration is updated again,
 setting the read version to the _write_ version.
-This way, any leftovers from unsuccessful feedings will have smaller versions, hence will be ignored by queries.
+This way, any leftovers from unsuccessful feedings will have smaller versions and will be ignored by queries.
 Importantly, the active set should only be modified after a successful feed,
 otherwise we'll break the hot swap by overwriting the currently active set.
 
