@@ -284,10 +284,6 @@ schema track {
     }
 
     rank-profile closeness {
-        inputs {
-           query(q) tensor&lt;float&gt;(x[384])
-           query(qa) tensor&lt;float&gt;(x[384])
-        }
         num-threads-per-search: 1
         match-features: distance(field, embedding)
 
