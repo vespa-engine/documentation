@@ -2,6 +2,10 @@
 function copyPreContent(button) {
     // Assume a pre after the copy button
     let elem = button;
+    button.classList.add("d-tooltip-top");
+    button.setAttribute("data-tooltip", "copied!");
+    setTimeout(() => button.classList.remove("d-tooltip-top"), 800);
+    setTimeout(() => button.removeAttribute("data-tooltip"), 800);
     while (elem = elem.nextSibling) {
         if ( elem.nodeType !== Node.TEXT_NODE) {
             if (elem.nodeName === "PRE") {
