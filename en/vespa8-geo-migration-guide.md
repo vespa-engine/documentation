@@ -7,6 +7,10 @@ Refer to [Vespa 8 release notes](vespa8-release-notes.html) -
 this is a guide on how to migrate from Vespa 7 to Vespa 8 when using position fields.
 The guide is relevant for applications having a `position` field in a schema.
 
+For the rest of this document, we assume a schema containing:
+```
+field myfield type position {...}
+```
 
 
 ## Step 1: Upgrade to Vespa 8 in geo legacy mode
@@ -31,7 +35,7 @@ In Vespa 7, a position filed could be rendered as:
     "latlong": "N63.453700;E10.460800"
 }
 ```
-or:
+and optionally:
 ```json
 "myfield": {
     "y": 63453700,
@@ -71,7 +75,7 @@ where geoLocation(myfieldname, 63.5, 10.5, "5 km")
 ```
 
 
-## Step 4: Feeding format
+## Step 4: Feeding format and /document/v1/ API
 
 The Vespa 7 feeding format can be used on Vespa 8,
 it is however recommended changing to:
@@ -82,3 +86,18 @@ it is however recommended changing to:
 }
 ```
 This is the same format as in query results.
+
+The result format when using GET / VISIT in [document/v1/](reference/document-v1-api-reference.html) is changed from:
+```json
+"myfield": {
+    "y": 63453700,
+    "x": 10460800
+}
+```
+to:
+```json
+"myfield": {
+    "lat": 63.4537,
+    "lng": 10.4608
+}
+```
