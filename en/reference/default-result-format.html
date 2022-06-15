@@ -538,3 +538,161 @@ redirect_from:
     }
 }
 {% endhighlight %}</pre>
+
+
+<h2 id="appendix-legacy-vespa-7-json-rendering">Appendix: Legacy Vespa 7 JSON rendering</h2>
+<p>
+  There were some inconsistencies between search results and document rendering in Vespa 7, which are fixed in Vespa 8.
+  This appendix describes the old behavior, what the changes are,
+  and how to configure to select a specific rendering.
+</p>
+
+
+<h3 id="inconsistent-weightedset-rendering">Inconsistent weightedset rendering</h3>
+<p>
+  Fields with various weightedset types has a JSON input representation (for feeding) as a JSON object;
+  for example <code>{"one":1, "two":2,"three":3}</code> for
+  the value of a a <code>weightedset&lt;string&gt;</code> field.
+  The same format is used when rendering a document (for example when visiting).
+</p>
+<p>
+  In search results however, there are intermediate processing steps during which the
+  field value is represented as an array of item/weight pairs,
+  so in a search result the field value would render as
+  <code>[ {"item":"one", "weight":1},
+    {"item":"two", "weight":2},
+    {"item":"three", "weight":3} ]</code>
+</p>
+<p>
+  In Vespa 8, the default JSON renderer for search results will output the same
+  as document rendering.  If you have code that depends on the old format you can
+  (for a limited time) turn off this by setting <code>renderer.json.jsonWsets=false</code>
+  in the query (usually via a <a href="../query-profiles.html">query profile</a>).
+</p>
+
+
+<h3 id="inconsistent-map-rendering">Inconsistent map rendering</h3>
+<p>
+  Fields with various map types has a JSON input representation (for feeding) as a JSON object;
+  for example <code>{"1001":1.0, "1002":2.0, "1003":3.0}</code> for
+  the value of a a <code>map&lt;int,float&gt;</code> field.
+  The same format is used when rendering a document (for example when visiting).
+</p>
+<p>
+  In search results however, there are intermediate processing steps and the field value
+  is represented as an array of key/value pairs,
+  so in a search results the field value would (in some cases) render as
+  <code>[ {"key":1001, "value":1.0},
+    {"key":1002, "value":2.0},
+    {"key":1003, "value":3.0} ]</code>
+</p>
+<p>
+  In Vespa 8, the default JSON renderer for search results will output the same as document rendering.
+  For code that depends on the old format one can
+  (for a limited time) turn off this by setting <code>renderer.json.jsonMaps=false</code>
+  in the query (usually via a <a href="../query-profiles.html">query profile</a>).
+</p>
+
+
+<h3 id="geo-position-rendering">Geo position rendering</h3>
+<p>
+  Fields with the type <code>position</code> would in Vespa 7 be rendered using the internal fields "x" and "y".
+  These are integers representing microdegrees,
+  aka geographical degrees times 1 million, of longitude (for x) and latitude (for y).
+  Also, any field <em>foo</em> of type <code>position</code> would trigger addition of
+  two extra synthetic summary fields <em>foo.position</em> and <em>foo.distance</em> (see below for details).
+</p>
+<p>
+  In Vespa 8, positions will be rendered with two JSON fields "lat" and "lng",
+  both having a floating-point value.
+  The "lat" field is latitude (going from -90.0 at the South Pole to +90.0 at the North Pole).
+  The "lng" field is longitude (going from -180.0 at the dateline seen as extreme west,
+  via 0.0 at the Greenwich meridian, to +180.0 at the dateline again, now as extreme east).
+  The field names are chosen so the format is the same as used in the Google "places" API.
+</p>
+<p>
+  It's possible to switch back to the legacy (Vespa 7) rendering for geo positions.
+  Set the flag to true by adding the following below the root <code>services</code> element in services.xml:
+</p>
+<pre>
+&lt;legacy&gt;
+    &lt;v7-geo-positions&gt;true&lt;/v7-geo-positions&gt;
+&lt;/legacy&gt;
+</pre>
+<p>
+  Note that this flag affects rendering both in documents fetched/visited,
+  and in search results; but both the new and old formats are accepted as feed input.
+</p>
+<p>
+  A closely related change is the removal of two synthetic summary fields
+  which would be returned in search results.  For example with this in schema:
+</p>
+<pre>
+field mainloc type position {
+    indexing: attribute | summary
+}
+</pre>
+<p>
+  Vespa 7 would include the <em>mainloc</em> summary field,
+  but also <em>mainloc.position</em> and <em>mainloc.distance</em>;
+  the latter only when the query actually had a position to take the distance from.
+</p>
+<p>
+  The first of these (<em>mainloc.position</em> in this case) was
+  mainly useful for producing XML output in older Vespa versions,
+  and now contains just the same information as the <em>mainloc</em> summary field.
+  The second (<em>mainloc.distance</em> in this case) would return a distance in internal units,
+  and can be replaced by a summary feature -
+  here <code>distance(mainloc)</code> would give the same number,
+  while <code>distance(mainloc).km</code> would be the recommended replacement with suitable code changes.
+<p>
+
+
+<h3 id="summary-features-wrapped-in-rankingexpression">Summary-features wrapped in "rankingExpression"</h3>
+<p>
+  In Vespa 7, if a rank profile wanted a function
+  <code>foobar</code> returned in summary-features (or match-features),
+  it would be rendered as <code>rankingExpression(foobar)</code> in the output.
+</p>
+<p>
+  For programmatic use, the <code>FeatureData</code> class has extra checking to allow lookup with
+  <code>getDouble("foobar")</code> or
+  <code>getTensor("foobar")</code>,
+  but now it's present and rendered with just the original name as specified.
+</p>
+<p>
+  If applications needs the JSON rendering to look exactly as in Vespa 7, one can specify that in the rank profile.
+  For example, with this in the schema:
+</p>
+<pre>
+rank-profile whatever {
+    function lengthScore() { expression: matchCount(title)/fieldLength(title) }
+    summary-features {
+        matchCount(title)
+        lengthScore
+        ...
+</pre>
+<p>could, in Vespa 7, yield JSON output containing:</p>
+<pre>
+    summaryfeatures: {
+        matchCount(title): 1,
+        rankingExpression(lengthScore): 0.25,
+        ...
+</pre>
+<p>in Vespa 8, you would instead get the expected:</p>
+<pre>
+    summaryfeatures: {
+        matchCount(title): 1,
+        lengthScore: 0.25,
+        ...
+</pre>
+<p>But to get the old behavior one can specify:</p>
+<pre>
+rank-profile whatever {
+    function lengthScore() { expression: matchCount(title)/fieldLength(title) }
+    summary-features {
+        matchCount(title)
+			  rankingExpression(lengthScore)
+        ...
+</pre>
+<p>which gives you the same output as before.</p>
