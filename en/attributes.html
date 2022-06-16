@@ -528,7 +528,7 @@ schema foo {
 <p>
 Paged attribute is only supported for dense <a href="tensor-user-guide.html">tensor</a> type fields.
 
-Normal attribute fields are guaranteed to be in-memory while the paged attribute setting
+Normal attribute fields are guaranteed to be in-memory while the <em>paged</em> attribute setting
 allows paging the data out of memory to disk.
 
 Using the <em>paged</em> setting for dense tensor attributes is an alternative when there are memory resource constraints
@@ -542,12 +542,11 @@ limit the maximum number of page-ins/disk access per query to 100. Running at 10
 would then need up to 10K disk accesses per query.
 
 This is the worst case, if none of the accessed attribute data were already paged into memory
-which depends on access pattern and memory pressure (size of the attribute versus how much memory
-on the node which is available).
+which depends on access locality and memory pressure (size of the attribute tensor data versus available memory).
 
-In this
-example we have a dense tensor 1024 <a href="reference/tensor.html#tensor-type-spec">int8</a> tensor which is
-only accessed during re-ranking (second-phase ranking expression). For this tensor we can enable the <em>paged</em> attribute option.
+In this example we have a dense tensor with 
+1024 <a href="reference/tensor.html#tensor-type-spec">int8</a> values. The tensor field is
+only accessed during re-ranking (second-phase ranking expression). 
 
 <pre>
 schema foo {
@@ -566,21 +565,23 @@ schema foo {
   }
 }
 </pre>
+
 <p>
-For some use cases where serving latency SLA is not strict
-and query throughput is low paged tensor attributes might be a good tuning option
+For some use cases where serving latency SLA is not strict, 
+and query throughput is low, the paged tensor attributes might be an tuning alternative, 
 as it allows storing more tensor data per node.
 </p>
 
 
-<h3>Paged attribute tensor disadvantages</h3>
+<h3 id="paged-attributes-disadvantages">Paged attributes disadvantages</h3>
 <p>
   The disadvantages of using <em>paged</em> tensor field attributes are many:
 </p>
 <ul>
 <li>
-It is only implemented for dense tensor field types, not regular field types like string, int, double etc. Not mapped (sparse) tensors and not mixed
-tensors combining both dense and sparse dimensions.
+It is only implemented for dense tensor field types, 
+not regular field types like string, int, double etc. It is also not supported for mapped (sparse) tensors 
+and mixed tensors combining both dense and sparse dimensions.
 </li>
 <li>
 Unpredictable query latency as tensor attribute access might touch disk. Limited queries per second throughput
@@ -589,11 +590,12 @@ per node (Depends on locality of document re-ranking requests).
 <li>
 Paged attributes are implemented by file backed memory mappings. The performance depends on
 the <a href="https://tldp.org/LDP/tlk/mm/memory.html">Linux virtual memory management</a> ability to page
-data in and out. Using many threads per search/high throughput might cause high system (kernel) cpu and unresponsiveness .
+data in and out. Using many threads per search/high query throughput might cause high system (kernel) cpu and 
+system unresponsiveness. 
 </li>
 <li>
 The content nodes total memory utilization will be close to 100% when using large paged attributes.
-It's up to the Linux kernel to determine what part of the attribute data is loaded into memory based on access patterns.
+It's up to the Linux kernel to determine what part of the attribute data is paged into memory based on access patterns.
 A good understanding of how the Linux virtual memory management system works is recommended before enabling paged attributes.
 </li>
 <li>
@@ -605,9 +607,14 @@ using the attribute paged option will double the attribute disk usage to 200 GB.
 Changing the <em>paged</em> setting (e.g. removing the option) on a running system might cause hard out of memory situations as
 without paged the content nodes will attempt loading the attribute into memory without the option for page outs.
 </li>
+<li>
+Using <em>paged</em> in combination with <a href="approximate-nn-hnsw.html">HNSW indexing</a> is <em>strongly</em> discouraged. 
+<em>HNSW</em> indexing
+also searches and read tensors during indexing, causing random access during feeding. Once the system memory reaches 100% utilization, 
+the Linux kernel will start paging pages in and out of memory. This cause high system (kernel) CPU and slows down indexing
+throughput significantly.
+</li>
 </ul>
-
-
 
 <h2 id="document-meta-store">Document meta store</h2>
 <p>
