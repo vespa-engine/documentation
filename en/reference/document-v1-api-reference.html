@@ -30,290 +30,270 @@ redirect_from:
 
 <h2 id="http-requests">HTTP requests</h2>
 <table class="table">
-<tr>
-  <th>GET</th>
-  <td>
-    <p id="get">
-    <em>Get</em> a document by ID or <em>Visit</em> a set of documents by selection.
-    </p>
-    <table class="table">
-      <tr>
-        <th>Get</th>
-        <td>
-          Get a document:
+  <tr>
+    <th>GET</th>
+    <td colspan="2">
+      <p id="get">
+        <em>Get</em> a document by ID or <em>Visit</em> a set of documents by selection.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Get</th>
+    <td>
+      Get a document:
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;numeric-group-id&gt;/&lt;document-id&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;text-group-id&gt;/&lt;document-id&gt;
 </pre>
-          Optional parameters:
-          <ul>
-            <li><a href="#cluster">cluster</a></li>
-            <li><a href="#fieldset">fieldSet</a></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-          </ul>
-        </td>
-      </tr>
-      <tr>
-        <th>Visit</th>
-        <td>
-          <p id="visit">
-          Iterate over and get all documents, or a <a href="#selection">selection</a> of documents,
-          in chunks, using <a href="#continuation">continuation</a> tokens to track progress.
-          Visits using <a href="#selection">selection</a> is implemented as a linear scan over the documents in the cluster.
-          </p>
-          Mandatory parameters:
-          <ul>
-            <li><a href="#cluster">cluster</a> -
-              Visits can only retrieve data from <em>one</em> content cluster,
-              so <code>cluster</code> <strong>must</strong> be specified
-              for requests at the root <code>/document/v1/</code> level, or when there is ambiguity.
-              This is required even if the application has only one content cluster.</li>
-          </ul>
-          Optional parameters:
-          <ul>
-            <li><a href="#bucketspace">bucketSpace</a> -
-              Parent documents are <a href="services-content.html#document">global</a>
-              and in the <code>global</code> <a href="#bucketspace">bucket space</a>.
-              By default, visit will visit non-global documents
-              in the <code>default</code> bucket space, unless document type is indicated,
-              and is a global document type.
-              Example: Visit documents across all global document types and namespaces:
-<pre>
-/document/v1/?cluster=&lt;clustername&gt;&amp;bucketSpace=global
-</pre>
-            </li>
-            <li><a href="#concurrency">concurrency</a></li>
-            <li><a href="#continuation">continuation</a></li>
-            <li><a href="#fieldset">fieldSet</a></li>
-            <li><a href="#selection">selection</a> -
-              Visit documents restricted by <code>selection</code> in namespace and document type:
-<pre>
-/document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid?selection=&lt;selection&gt;
-</pre></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-            <li><a href="#wanteddocumentcount">wantedDocumentCount</a></li>
-          </ul>
-          <p>Examples:</p>
-          <ul>
-            <li>
-              Visit all documents across all document types and namespaces stored in the given content cluster:
-<pre>
-/document/v1/?cluster=&lt;clustername&gt;
-</pre>
-            </li>
-            <li>
-              Visit all documents with given namespace and document type:
+      Optional parameters:
+      <ul>
+        <li><a href="#cluster">cluster</a></li>
+        <li><a href="#fieldset">fieldSet</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Visit</th>
+    <td>
+      <p id="visit">
+        Iterate over and get all documents, or a <a href="#selection">selection</a> of documents,
+        in chunks, using <a href="#continuation">continuation</a> tokens to track progress.
+        Visits is implemented as a linear scan over the documents in the cluster.
+      </p>
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid
 </pre>
-            </li>
-            <li>
-              Note that visit via selection is evaluated over all the stored documents in the cluster.
-              To split visiting of the document corpus across more than one HTTP
-              request—thus allowing the concurrent use of more HTTP containers—use the
-              <a href="#slices">slices</a> and <a href="#sliceId">sliceId</a> parameters.
-            </li>
-            <li>
-              It's also recommended enabling streamed HTTP responses,
-              with the <a href="#stream">stream</a> parameter,
-              as this reduces memory consumption and reduces HTTP overhead.
-              Finally, use the <a href="#concurrency">concurrency</a> parameter
-              to increase backend parallelism for each visit HTTP request.
-            </li>
-          </ul>
-          <p>
-            Documents can be grouped to limit accesses to a subset.
-            A group is defined by a numeric ID or string — see <a href="../documents.html#id-scheme">id scheme</a>.
-          </p>
-          <ul>
-            <li>
-              Visit all documents in a group:
+      <p>
+        Documents can be grouped to limit accesses to a subset.
+        A group is defined by a numeric ID or string — see <a href="../documents.html#id-scheme">id scheme</a>.
+      </p>
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
 </pre>
-            </li>
-          </ul>
-        </td>
-      </tr>
-    </table>
-  </td>
-</tr><tr>
-  <th>POST</th>
-  <td>
-    <p id="post">
-      <em>Put</em> a given document, by ID,
-      or <em>Copy</em> a set of documents by selection from one content cluster to another.
-    </p>
-    <table class="table">
-      <tr>
-        <th>Put</th>
-        <td>
-          Write the document contained in the request body in JSON format.
+      Mandatory parameters:
+      <ul>
+        <li><a href="#cluster">cluster</a> -
+          Visits can only retrieve data from <em>one</em> content cluster,
+          so <code>cluster</code> <strong>must</strong> be specified
+          for requests at the root <code>/document/v1/</code> level, or when there is ambiguity.
+          This is required even if the application has only one content cluster.</li>
+      </ul>
+      Optional parameters:
+      <ul>
+        <li><a href="#bucketspace">bucketSpace</a> -
+          Parent documents are <a href="services-content.html#document">global</a>
+          and in the <code>global</code> <a href="#bucketspace">bucket space</a>.
+          By default, visit will visit non-global documents
+          in the <code>default</code> bucket space, unless document type is indicated,
+          and is a global document type.
+        </li>
+        <li><a href="#concurrency">concurrency</a></li>
+        <li><a href="#continuation">continuation</a></li>
+        <li><a href="#fieldset">fieldSet</a></li>
+        <li><a href="#selection">selection</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+        <li><a href="#wanteddocumentcount">wantedDocumentCount</a></li>
+      </ul>
+      <p>Examples:</p>
+      <ul>
+        <li>
+          Note that visit via selection is evaluated over all the stored documents in the cluster.
+          To split visiting of the document corpus across more than one HTTP
+          request—thus allowing the concurrent use of more HTTP containers—use the
+          <a href="#slices">slices</a> and <a href="#sliceId">sliceId</a> parameters.
+        </li>
+        <li>
+          It's also recommended enabling streamed HTTP responses,
+          with the <a href="#stream">stream</a> parameter,
+          as this reduces memory consumption and reduces HTTP overhead.
+          Finally, use the <a href="#concurrency">concurrency</a> parameter
+          to increase backend parallelism for each visit HTTP request.
+        </li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <th>POST</th>
+    <td colspan="2">
+      <p id="post">
+        <em>Put</em> a given document, by ID,
+        or <em>Copy</em> a set of documents by selection from one content cluster to another.
+      </p>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Put</th>
+    <td>
+      Write the document contained in the request body in JSON format.
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
 </pre>
-          Optional parameters:
-          <ul>
-            <li><a href="#condition">condition</a> -
-              Use for conditional writes.</li>
-            <li><a href="#route">route</a></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-          </ul>
-        </td>
-      </tr>
-      <tr>
-        <th>Copy</th>
-        <td>
-          <p id="copy">
-            Write documents visited in source <a href="#cluster">cluster</a> to the
-            <a href="#destinationcluster">destinationCluster</a> in the same application.
-            A <a href="#selection">selection</a> is mandatory — typically the document type.
-            Supported paths (see <a href="#visit">visit</a> above for semantics):
-          </p>
+      Optional parameters:
+      <ul>
+        <li><a href="#condition">condition</a> -
+          Use for conditional writes.</li>
+        <li><a href="#route">route</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Copy</th>
+    <td>
+      <p id="copy">
+        Write documents visited in source <a href="#cluster">cluster</a> to the
+        <a href="#destinationcluster">destinationCluster</a> in the same application.
+        A <a href="#selection">selection</a> is mandatory — typically the document type.
+        Supported paths (see <a href="#visit">visit</a> above for semantics):
+      </p>
 <pre>
 /document/v1/
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
 </pre>
-          Mandatory parameters:
-          <ul>
-            <li><a href="#cluster">cluster</a></li>
-            <li><a href="#destinationcluster">destinationCluster</a></li>
-            <li><a href="#selection">selection</a></li>
-          </ul>
-          Optional parameters:
-          <ul>
-            <li><a href="#bucketspace">bucketSpace</a></li>
-            <li><a href="#continuation">continuation</a></li>
-            <li><a href="#timechunk">timeChunk</a></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-          </ul>
-        </td>
-      </tr>
-    </table>
-  </td>
-</tr><tr>
+      Mandatory parameters:
+      <ul>
+        <li><a href="#cluster">cluster</a></li>
+        <li><a href="#destinationcluster">destinationCluster</a></li>
+        <li><a href="#selection">selection</a></li>
+      </ul>
+      Optional parameters:
+      <ul>
+        <li><a href="#bucketspace">bucketSpace</a></li>
+        <li><a href="#continuation">continuation</a></li>
+        <li><a href="#timechunk">timeChunk</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
   <th>PUT</th>
-  <td>
+  <td colspan="2">
     <p id="put">
       <em>Update</em> a document with the given partial update, by ID,
       or <em>Update where</em> the given selection is true.
     </p>
-    <table class="table">
-      <tr>
-        <th>Update</th>
-        <td>
-          Update a document with the partial update contained in the request body in the
-          <a href="document-json-format.html">document JSON format</a>.
+  </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Update</th>
+    <td>
+      Update a document with the partial update contained in the request body in the
+      <a href="document-json-format.html">document JSON format</a>.
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 </pre>
-          Optional parameters:
-          <ul>
-            <li><a href="#condition">condition</a> -
-              use for conditional writes</li>
-            <li><a href="#create">create</a> -
-              use to create empty documents when updating non-existent ones.</li>
-            <li><a href="#route">route</a></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-          </ul>
-        </td>
-      </tr>
-      <tr>
-        <th>Update where</th>
-        <td>
-          <p id="update-where">
-            Update visited documents in <a href="#cluster">cluster</a> with the partial update
-            contained in the request body in the
-            <a href="document-json-format.html">document JSON format</a>.
-            Supported paths (see <a href="#visit">visit</a> above for semantics):
-          </p>
+      Optional parameters:
+      <ul>
+        <li><a href="#condition">condition</a> -
+          use for conditional writes</li>
+        <li><a href="#create">create</a> -
+          use to create empty documents when updating non-existent ones.</li>
+        <li><a href="#route">route</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Update where</th>
+    <td>
+      <p id="update-where">
+        Update visited documents in <a href="#cluster">cluster</a> with the partial update
+        contained in the request body in the
+        <a href="document-json-format.html">document JSON format</a>.
+        Supported paths (see <a href="#visit">visit</a> above for semantics):
+      </p>
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
 </pre>
-          Mandatory parameters:
-          <ul>
-            <li><a href="#cluster">cluster</a></li>
-            <li><a href="#selection">selection</a></li>
-          </ul>
-          Optional parameters:
-          <ul>
-            <li><a href="#bucketspace">bucketSpace</a></li>
-            <li><a href="#continuation">continuation</a></li>
-            <li><a href="#timechunk">timeChunk</a></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-          </ul>
-        </td>
-      </tr>
-    </table>
-  </td>
-</tr><tr>
+      Mandatory parameters:
+      <ul>
+        <li><a href="#cluster">cluster</a></li>
+        <li><a href="#selection">selection</a></li>
+      </ul>
+      Optional parameters:
+      <ul>
+        <li><a href="#bucketspace">bucketSpace</a></li>
+        <li><a href="#continuation">continuation</a></li>
+        <li><a href="#timechunk">timeChunk</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
   <th>DELETE</th>
-  <td>
+  <td colspan="2">
     <p id="delete">
       <em>Remove</em> a document, by ID, or <em>Remove where</em> the given selection is true.
     </p>
-    <table class="table">
-      <tr>
-        <th>Remove</th>
-        <td>
-          Remove a document.
+  </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Remove</th>
+    <td>
+      Remove a document.
 <pre>
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/&lt;document-id&gt;
 </pre>
-          Optional parameters:
-          <ul>
-            <li><a href="#condition">condition</a></li>
-            <li><a href="#route">route</a></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-          </ul>
-        </td>
-      </tr>
-      <tr>
-        <th>Delete where</th>
-        <td>
-          <p id="delete-where">
-          Delete visited documents from <a href="#cluster">cluster</a>.
-          Supported paths (see <a href="#visit">visit</a> above for semantics):
-          </p>
+      Optional parameters:
+      <ul>
+        <li><a href="#condition">condition</a></li>
+        <li><a href="#route">route</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Delete where</th>
+    <td>
+      <p id="delete-where">
+        Delete visited documents from <a href="#cluster">cluster</a>.
+        Supported paths (see <a href="#visit">visit</a> above for semantics):
+      </p>
 <pre>
 /document/v1/
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/docid/
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/group/&lt;group&gt;
 /document/v1/&lt;namespace&gt;/&lt;document-type&gt;/number/&lt;number&gt;
 </pre>
-          Mandatory parameters:
-          <ul>
-            <li><a href="#cluster">cluster</a></li>
-            <li><a href="#selection">selection</a></li>
-          </ul>
-          Optional parameters:
-          <ul>
-            <li><a href="#bucketspace">bucketSpace</a></li>
-            <li><a href="#continuation">continuation</a></li>
-            <li><a href="#timechunk">timeChunk</a></li>
-            <li><a href="#timeout">timeout</a></li>
-            <li><a href="#tracelevel">tracelevel</a></li>
-          </ul>
-        </td>
-      </tr>
-    </table>
-  </td>
-</tr>
+      Mandatory parameters:
+      <ul>
+        <li><a href="#cluster">cluster</a></li>
+        <li><a href="#selection">selection</a></li>
+      </ul>
+      Optional parameters:
+      <ul>
+        <li><a href="#bucketspace">bucketSpace</a></li>
+        <li><a href="#continuation">continuation</a></li>
+        <li><a href="#timechunk">timeChunk</a></li>
+        <li><a href="#timeout">timeout</a></li>
+        <li><a href="#tracelevel">tracelevel</a></li>
+      </ul>
+    </td>
+  </tr>
 </table>
 
 
