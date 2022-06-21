@@ -1,12 +1,12 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: Vespa application system tests
+title: Vespa testing
 ---
 
 <p>
   System tests are an invaluable tool both when developing and maintaing a complex Vespa application.
   These are functional tests which are run against a deployment of the application package to verify,
-  and use its HTTP APIs to execute feed and query operations which are compared to expected outcomes. 
+  and use its HTTP APIs to execute feed and query operations which are compared to expected outcomes.
   Vespa provides two formalizations of this:
 </p>
 <ul>
@@ -23,8 +23,12 @@ title: Vespa application system tests
   designated test deployment, separating the tests from the deployment and configuration of the test clusters.
 </p>
 <p>
-  The rest of this document describes how each of these test categories can be run as part of an imagined
-  CI/CD system for safely deploying changes to a Vespa application in a continuous manner. 
+  This document describes how each of these test categories can be run as part of an imagined
+  CI/CD system for safely deploying changes to a Vespa application in a continuous manner.
+</p>
+<p>
+  Finally, find a section on <a href="#feature-switches-and-bucket-tests">A/B-testing / bucket tests</a>
+  using feature switches.
 </p>
 
 
@@ -77,10 +81,10 @@ title: Vespa application system tests
   and querying for the document after the upgrade could give different results
   from what the system test would expect.
 </p>
-<p>Many such changes, which require additional action post-deployment, are also guarded by 
+<p>Many such changes, which require additional action post-deployment, are also guarded by
   <a href="reference/validation-overrides.html">validation overrides</a>,
   but the staging test is then a great way of figuring out what the exact consequences of the change are,
-  and how to deal with it. 
+  and how to deal with it.
 </p>
 <p>
   As opposed to system tests, staging tests are not self-contained, as the state change during upgrade is
@@ -93,7 +97,7 @@ title: Vespa application system tests
   and this dictates the workflow when deploying a breaking change:
 </p>
 <ol>
-  <li><p>First, the application code and system and and staging tests are updated, so tests pass; 
+  <li><p>First, the application code and system and and staging tests are updated, so tests pass;
     and clients are updated to reflect the updated test code.<p></li>
   <li><p>Next, the application is upgraded.</p></li>
   <li><p>Finally, the <em>staging setup</em> code is updated to match the new application code.</p></li>
@@ -113,5 +117,47 @@ title: Vespa application system tests
 </p>
 <p>
   These tests will be completely domain-dependent, and typically not run against the Vespa application
-  itself. The test framework therefore has less tooling here, and really only specifies this is a separate category. 
+  itself. The test framework therefore has less tooling here, and really only specifies this is a separate category.
+</p>
+
+
+
+<h2 id="feature-switches-and-bucket-tests">Feature switches and bucket tests</h2>
+<p>
+  With continuous deployment, it is not practical to hold off releasing a feature until it is done,
+  test it manually until convinced it works and then release it to production.
+  What to do instead?
+  The answer is <em>feature switches</em>: release new features to production as they are developed,
+  but include logic which keeps them deactivated until they are ready,
+  or until they have been verified in production with a subset of users.
+</p>
+<p>
+  <em>Bucket tests</em> is the practice of systematically testing new features or behavior for a controlled subset of users.
+  This is common practice when releasing new science models,
+  as they are difficult to verify in test, but can also be used for other features.
+</p>
+<p>
+  To test new behavior in Vespa, use a combination of
+  <a href="chained-components.html">search chains</a> and
+  <a href="reference/schema-reference.html#rank-profile">rank profiles</a>,
+  controlled by <a href="query-profiles.html">query profiles</a>,
+  where one query profile corresponds to one bucket.
+  These features support inheritance to make it easy to express variation without repetition.
+</p>
+<p>
+  Sometimes a new feature requires
+  <a href="reference/schema-reference.html#modifying-schemas">incompatible changes to a data field</a>.
+  To be able to CD such changes, it is necessary to create a new field containing the new version of the data.
+  This costs extra resources but less than the alternative: standing up a new system copy with the new data.
+  New fields can be added and populated while the system is live.
+</p>
+<p>
+  One way to reduce the need for incompatible changes can be decreased
+  by making the semantics of the fields more precise.
+  E.g., if a field is defined as the "quality" of a document, where a higher number means higher quality,
+  a new algorithm which produces a different range and distribution will typically be an incompatible change.
+  However, if the field is defined more precisely as the average time spent on the document once it is clicked,
+  then a new algorithm which produces better estimates of this value will not be an incompatible change.
+  Using precise semantics also have the advantage of making it easier to understand
+  if the use of the data and its statistical properties are reasonable.
 </p>
