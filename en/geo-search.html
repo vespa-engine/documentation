@@ -6,17 +6,161 @@ redirect_from:
 ---
 
 <p>
-To model position(s) in documents, use field(s) of type
-<a href="reference/schema-reference.html#type:position">position</a>.
-Use this to limit hits to within an area, or use the distance from a position in rank functions.
-Sample schema:
+  To model a geographical position in documents, use a field where the type is
+  <a href="reference/schema-reference.html#type:position">position</a> for
+  a single, required position.  To allow any number of positions
+  (including none at all) use <code>array&lt;position&gt;</code> instead.
+  This can be used to limit hits (only those documents with a position
+  inside a circular area will be hits), the distance from a point can
+  be used as input to ranking functions, or both.
+</p>
+<p>
+  A geographical point in Vespa is specified using the geographical
+  <a href="https://en.wikipedia.org/wiki/Latitude">latitude</a>
+  and
+  <a href="https://en.wikipedia.org/wiki/Longitude">longitude</a>.
+  As an example, a location in
+  <a href="https://www.google.com/maps/place/721+1st+Ave,+Sunnyvale,+CA+94089/@37.4181488,-122.0256157,12z">
+    Sunnyvale, California</a>
+  could be latitude 37.4181488 degrees North, longitude 122.0256157 degrees West.
+  This would be represented as
+  <code>{ "lat": 37.4181488, "lng": -122.0256157 }</code>
+  in JSON.
+</p>
+<p>
+  As seen above, positive numbers are used for north (latitudes) and
+  east (longitudes); negative numbers are used for south and west.
+  This is the usual convention.
+</p>
+<p>
+  NOTE: Old formats for position (those used in Vespa 5, 6, and 7)
+  are still accepted as feed input; enabling legacy output is
+  temporarily possible also.  See
+  <a href="reference/default-result-format.html#geo-position-rendering">legacy flag v7-geo-positions</a>.
+</p>
+
+
+
+<h2 id="sample-schema-and-document">Sample schema and document</h2>
+<p>
+  A sample schema could be a business directory, where every
+  business has a position (for its main office or contact point):
+</p>
 <pre>
-schema local {
-    document local {
+schema biz {
+    document biz {
         field title type string {
             indexing: index
         }
-        field location type <span class="pre-hilite">position</span> {
+        field mainloc type <span class="pre-hilite">position</span> {
+            indexing: attribute | summary
+        }
+    }
+    fieldset default {
+        fields: title
+    }
+}
+</pre>
+<p>
+  Using this schema is one possible business entry with its location:
+</p>
+<pre>{% highlight json %}
+{
+    "put": "id:mynamespace:biz::business-1",
+    "fields": {
+        "title":      "Yahoo Inc (main office)",
+        "mainloc":    { "lat": 37.4181488, "lng": -122.0256157 }
+    }
+}
+{% endhighlight %}</pre>
+
+
+
+<h2 id="restrict">Restrict</h2>
+<p>
+  The API for adding a geographical restriction is to use a
+  <a href="reference/query-language-reference.html#geolocation">geoLocation</a> clause in the YQL statement,
+  specifying a point and a maximum distance from that point:
+<pre>
+$ curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where title contains \"office\" and geoLocation(mainloc, 37.416383, -122.024683, \"20 miles\")"}' \
+  http://localhost:8080/search/
+</pre>
+<p>
+  One can also build or modify the query programmatically by adding a
+  <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/GeoLocationItem.html">
+    GeoLocationItem</a> anywhere in the query tree.
+</p>
+<p>
+  To use a position for ranking only (without <em>any</em> requirement for a matching position),
+  specify it as a ranking-only term.
+  Use the <a href="reference/query-language-reference.html#rank">rank()</a> operation in YQL for this, or a
+  <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/RankItem.html">RankItem</a>
+  when building the query programmatically.
+</p>
+<p>
+  At the <em>same time</em>, specify a negative radius (for example <code>-1 m</code>).
+  This matches any position, and computes distance etc. for the closest position in the document. Example:
+</p>
+<pre>
+$ curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where rank(title contains \"office\", geoLocation(mainloc, 37.416383, -122.024683, \"-1 m\"))"}' \
+  http://localhost:8080/search/
+</pre>
+
+
+
+<h2 id="ranking-from-a-position-match">Ranking from a position match</h2>
+<p>
+  The main rank feature to use for the example above would be
+  <a href="reference/rank-features.html#distance(name).km">distance(mainloc).km</a>
+  and doing further calculation on it, giving better rank to documents
+  that are closer to the wanted (query) position.  Here one needs to
+  take into consideration what sort of distances are practical;
+  traveling on foot, by car, or by plane should have quite different
+  ranking scales - using different rank profiles would be one natural
+  way to support that.  If the query specifies a maximum distance, that
+  could be sent as an input to ranking as well, and used for scaling.
+</p>
+<p>
+  There is also a <a href="reference/rank-features.html#closeness(name)">closeness(mainloc)</a>
+  which goes from 1.0 at the exact location to 0.0 at a tunable maximum distance,
+  which is enough for many needs.
+</p>
+
+
+<h3 id="useful-summary-features">Useful summary-features</h3>
+<p>
+  To do further processing, it may be useful to get the computed distance back.
+  The preferred way to do this is to use the associated rank features as
+  <a href="reference/schema-reference.html#summary-features">summary-features</a>.
+  In particular,
+  <a href="reference/rank-features.html#distance(name).km">distance(<em>fieldname</em>).km</a>
+  gives the geographical distance in kilometers, while
+  <a href="reference/rank-features.html#distance(name).latitude">distance(<em>fieldname</em>).latitude</a> and
+  <a href="reference/rank-features.html#distance(name).longitude">distance(<em>fieldname</em>).longitude</a>
+  gives the geographical coordinates for the best location directly, in degrees.
+  These are easy to use programmatically from a searcher, accessing
+  <a href="ranking-expressions-features.html#accessing-feature-function-values-in-results">feature values in results</a>
+  for further processing.
+</p>
+
+
+
+<h2 id="using-multiple-position-fields">Using multiple position fields</h2>
+<p>
+  For some applications, it can be useful to have several position attributes that may be searched.
+  For example, we could expand the above examples with the locations of subsidiary offices:
+<pre>
+schema biz {
+    document biz {
+        field title type string {
+            indexing: index
+        }
+        field mainloc type <span class="pre-hilite">position</span> {
+            indexing: attribute | summary
+        }
+        field otherlocs type <span class="pre-hilite">array&lt;position&gt;</span> {
             indexing: attribute
         }
     }
@@ -24,246 +168,137 @@ schema local {
         fields: title
     }
 }
-</pre><pre>
-[
-    {
-        "put": "id:localnamespace:local::business-1",
-        "fields": {
-            "title" :    "Random pizza place",
-            "location" : "N37.401;W121.996"
-        }
-    }
-]
 </pre>
-
-
-<h2 id="restrict">Restrict</h2>
-<p>
-The preferred API for adding a geographical restriction is to use a
-<a href="reference/query-language-reference.html#geolocation">geoLocation</a> clause in the YQL statement, example:
-<pre>
-$ curl -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where title contains \"pizza\" and geoLocation(location, 37.416383, -122.024683, \"20 miles\")"}' \
-  http://localhost:8080/search/
-</pre>
-<p>
-You can also build or modify the query programmatically by adding a
-<a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/GeoLocationItem.html">GeoLocationItem</a>
-anywhere in the query tree.
-</p>
-<p>
-To allow the query location to match any position, specify a negative
-radius (e.g. "-1 m").  But to use a position for ranking only
-(without any requirement for a matching position)
-you should also specify it as a ranking-only term.  Use the
-<a href="reference/query-language-reference.html#rank">rank()</a>
-operation in YQL, or a
-<a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/RankItem.html">RankItem</a>
-when building the query programmatically.
-</p>
-<p>
-There is also a set of <em>legacy</em> parameters in the query API that may be used to
-<a href="reference/query-api-reference.html#geographical-searches">restrict query results</a>,
-defining the allowed area using a position + radius or a bounding box.
-</p>
-<ul>
-<li>
-Restrict search results using <a href="reference/query-api-reference.html#geographical-searches">pos.ll</a> and default radius (50km):
-<pre>
-$ curl -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where title contains \"pizza\""}' \
-  http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683
-</pre>
-</li>
-<li>
-Set a different <a href="reference/query-api-reference.html#pos.radius">pos.radius</a>:
-<pre>
-$ curl -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where title contains \"pizza\""}' \
-  http://localhost:8080/search/?pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5km
-</pre>
-</li>
-</ul>
-
-
-
-<h2 id="rank">Rank</h2>
-<p>
-The corresponding rank features for this example are
-<a href="reference/rank-features.html#distance(name)">distance(latlong)</a> or
-<a href="reference/rank-features.html#closeness(name)">closeness(latlong)</a> or
-<a href="reference/rank-features.html#closeness(name).logscale">closeness(latlong).logscale</a> -
-the last is probably the most useful when combining distance ranking with textual relevance ranking.
-</p>
-
-
-
-<h2 id="summary-fields">Summary fields</h2>
-<p>
-See the <a href="reference/document-json-format.html#position">reference</a>
-for rendering options.
-</p><p>
-If the request specifies a <em>position</em>,
-the distance to this position is calculated and rendered in <em>fieldname.distance</em>.
-For documents with multiple positions in the attribute, the distance to the nearest position is returned.
-</p>
-
-
-<h3 id="x-y">X/Y</h3>
-<p>
-"x" and "y" are integers - these are in millionths of a degree - about 10 cm.
-Also note which is which of "x" and "y":
-</p><img src="/assets/img/geo/Mercator_projection.jpg" height="407" width="480" alt="world map"><p>
-It's just putting a normal coordinate system on top of the world map,
-so "x" is the longitude (east-west) and "y" the latitude (north-south).
-</p><p>
-The third summary field is the distance, also as an integer, and also in millionths of degrees.
-When converting to internal units (millionths of degrees), the Earth polar radius is used,
-so <code>degrees = 180.0 * meters / (Math.PI * 6356752.0);</code> is the basic conversion formula.
-</p>
-
-
-<h3 id="summary-features">summary-features</h3>
-<p>
-Instead of sending the position and the computed distance in a summary field,
-it may be more practical to add some of the associated rank features as
-<a href="reference/schema-reference.html#summary-features">summary-features</a>.
-In particular,
-<a href="reference/rank-features.html#distance(name).latitude">distance(<em>fieldname</em>).latitude</a>
-and
-<a href="reference/rank-features.html#distance(name).longitude">distance(<em>fieldname</em>).longitude</a>
-gives the geographical coordinates directly, in degrees.
-This is especially useful to use these programmatically from a searcher, accessing
-<a href="ranking-expressions-features.html#accessing-feature-function-values-in-results">feature values in results</a>
-for further processing.
-</p>
-
-
-
-<h2>Using multiple position fields</h2>
-<p>
-For some applications, it can be useful to have several position attributes that may be searched.
-For example an address book application could use positions for home address and work address.
-This is possible to declare without any special considerations in the schema file,
-but needs some extra handling on the query side.
-A single query item can only search in one of the position attributes,
-and with the legacy API must specify which attribute with a
-<a href="reference/query-api-reference.html#pos.attribute">pos.attribute</a> query parameter.
-If you want to have a search that spans several fields,
-use YQL to combine several <code>geoLocation</code> items inside an <code>or</code> clause,
-or combine several fields into a combined array field:
-<pre>
-schema address {
-    document address {
-        field homeaddress type string {
-            indexing: summary | index
-        }
-        field homelatlong type position {
-            indexing: attribute
-        }
-        field workaddress type string {
-            indexing: summary | index
-        }
-        field worklatlong type position {
-            indexing: attribute
-        }
-        field bothlatlong type array&lt;position&gt; {
-            indexing: attribute
-        }
-    }
-    field bothaddress type string {
-        indexing: input homeaddress . " " . input workaddress | index
+<p>Expanding the example business with an office in Australia and one in Norway could look like:</p>
+<pre>{% highlight json %}
+{
+    "put": "id:mynamespace:biz::business-1",
+    "fields": {
+        "title":       "Yahoo Inc (some offices)",
+        "mainloc":     { "lat": 37.4, "lng": -122.0 },
+        "otherlocs": [ { "lat": -33.9, "lng": 151.2 },
+                       { "lat": 63.4, "lng": 10.4 } ]
     }
 }
-</pre>
-Here we assume that the home fields will contain the address and position of your house,
-the work fields the address and position of your workplace,
-while the <em>bothlatlong</em> field is assumed to be filled with
-the positions of both house and workplace (before feeding data into Vespa, or in a
-document processor during feeding).
-In a query it's then possible to say
-<pre>
-search/?query=homeaddress:sunnyvale&amp;pos.attribute=homelatlong&amp;pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5km
-</pre>
-which is unlikely to give many hits, since it's mostly a business district around Yahoo! headquarters, while
-<pre>
-search/?query=workaddress:sunnyvale&amp;pos.attribute=worklatlong&amp;pos.ll=N37.416383%3BW122.024683&amp;pos.radius=5km
-</pre>
+{% endhighlight %}</pre>
 <p>
-would show lots of people working in Sunnyvale;
-use <em>pos.attribute=bothlatlong</em> for cases where it's uncertain if home
-address or work address position was wanted.
+  A single query item can only search in one of the position attributes.
+  For a search that spans several fields,
+  use YQL to combine several <code>geoLocation</code> items inside an <code>or</code> clause,
+  or combine several fields into a combined array field
+  (so in the above example, one could duplicate the "mainloc" position into the "otherlocs" array as well,
+  possibly changing the name from "otherlocs" to "all_locs").
 </p>
+
+
+<h2 id="example-with-airport-positions">Example with airport positions</h2>
+To give some more example positions, here is a list of some airports with their locations in JSON format:
+<!-- All data in this table from gcmap.com
+ à
+ œ ȧ á ® þ \ ä ơ ø , “ ‘ «
+ ā ß ð ƒ © ḏ ő å ƶ … æ
+ ả ạ ç ǎ ă ã ą ≤ ≥ ÷
+-->
+<table class="table">
+  <thead>
+  <tr><th>Airport code</th><th>City</th><th>Location</th></tr>
+  </thead>
+  <tbody>
+  <tr><td>SFO</td><td>San Francisco, USA</td>      <td>{ "lat":  37.618806, "lng": -122.375416 }</td></tr>
+  <tr><td>LAX</td><td>Los Angeles, USA</td>        <td>{ "lat":  33.942496, "lng": -118.408048 }</td></tr>
+  <tr><td>JFK</td><td>New York, USA</td>           <td>{ "lat":  40.639928, "lng":  -73.778692 }</td></tr>
+  <tr><td>LHR</td><td>London, UK</td>              <td>{ "lat":  51.477500, "lng":   -0.461388 }</td></tr>
+  <tr><td>SYD</td><td>Sydney, Australia</td>       <td>{ "lat": -33.946110, "lng":  151.177222 }</td></tr>
+  <tr><td>TRD</td><td>Trondheim, Norway</td>       <td>{ "lat":  63.457556, "lng":   10.924250 }</td></tr>
+  <tr><td>OSL</td><td>Oslo, Norway</td>            <td>{ "lat":  60.193917, "lng":   11.100361 }</td></tr>
+  <tr><td>GRU</td><td>São Paulo, Brazil</td>       <td>{ "lat": -23.435555, "lng":  -46.473055 }</td></tr>
+  <tr><td>GIG</td><td>Rio de Janeiro, Brazil</td>  <td>{ "lat": -22.809999, "lng":  -43.250555 }</td></tr>
+  <tr><td>BLR</td><td>Bangalore, India</td>        <td>{ "lat":  13.198867, "lng":   77.705472 }</td></tr>
+  <tr><td>FCO</td><td>Rome, Italy</td>             <td>{ "lat":  41.804475, "lng":   12.250797 }</td></tr>
+  <tr><td>NRT</td><td>Tokyo, Japan</td>            <td>{ "lat":  35.765278, "lng":  140.385556 }</td></tr>
+  <tr><td>PEK</td><td>Beijing, China</td>          <td>{ "lat":  40.073,    "lng":  116.598    }</td></tr>
+  <tr><td>CPT</td><td>Cape Town, South Africa</td> <td>{ "lat": -33.971368, "lng":   18.604292 }</td></tr>
+  <tr><td>ACC</td><td>Accra, Ghana</td>            <td>{ "lat":   5.605186, "lng":   -0.166785 }</td></tr>
+  <tr><td>TBU</td><td>Nuku'alofa, Tonga</td>       <td>{ "lat": -21.237999, "lng": -175.137166 }</td></tr>
+  </tbody>
+</table>
 
 
 
 <h2 id="distance-to-path">Distance to path</h2>
 <p>
-This example provides an overview of the
-<a href="reference/rank-features.html#distanceToPath(name).distance">DistanceToPath</a>
-rank feature. This feature matches <em>document locations</em> to a path given in the query.
-Not only does this feature return the closest distance for each document to the path,
-it also includes the length traveled <em>along</em> the path before reaching the closest point,
-or <em>intersection</em>. This feature has been nick named the
-<em>gas</em> feature because of its obvious use case of finding
-gas stations along a planned trip.
-</p><p>
-In this example we have been traveling from the US to Bangalore, and we
-are now planning our trip back. We have decided to rent a car in
-Bangalore that we are to return upon arrival at the airport in
-Chennai. We are already quite hungry and wish to stop for a meal once
-we are outside of town. To avoid having to pay an additional fueling
-premium, we also wish to refuel just before reaching the airport. We
-need to figure out what roads to take, what restaurants are available
-outside of Bangalore, and what fuel stations are available once we get
-close to Chennai.
-In <em>figure 1</em> we have plotted our trip from
-Bangalore to the airport:
-</p><img src="/assets/img/geo/path1.png" alt="Trip from Bangalore to the airport"/><p>
-If we search for restaurants along the path,
-we only see a small subset of all restaurants present in the window of
-our quite large map. In <em>figure 2</em> you see how the most
-relevant results are actually all in Bangalore or Chennai:
-</p><img src="/assets/img/geo/path2.png" alt="Most relevant results"/><p>
-To find the best results, move the map
-window to just about where we expect to be eating, and redo the search:
-</p><img src="/assets/img/geo/path3.png" alt="redo search with adjusted map"/><p>
-This has to be done similarly for
-finding a gas station near the airport.
-This illustrates searching for restaurants in a smaller window along the
-planned trip without <em>DistanceToPath</em>.
-Next, we outline how <em>DistanceToPath</em>
- can be used to quickly and easily improve this type of
-planning to be more convenient for the user.
-</p><p>
-The nature of this feature requires that the search corpus contains documents with position data.
-A <a href="searcher-development.html">searcher component</a> needs to be
-written that is able to pass paths with the queries that lie in the
-same coordinate space as the searchable documents.
-Finally, a <a href="ranking.html">rank-profile</a> needs to defined that scores
-documents according to how they match some target distance traveled
-and at the same time lies close "enough" to the path.
+  This example provides an overview of the
+  <a href="reference/rank-features.html#distanceToPath(name).distance">DistanceToPath</a>
+  rank feature. This feature matches <em>document locations</em> to a path given in the query.
+  Not only does this feature return the closest distance for each document to the path,
+  it also includes the length traveled <em>along</em> the path before reaching the closest point,
+  or <em>intersection</em>.
+  This feature has been nick named the <em>gas</em> feature
+  because of its obvious use case of finding gas stations along a planned trip.
+</p>
+<p>
+  In this example we have been traveling from the US to Bangalore, and we
+  are now planning our trip back. We have decided to rent a car in
+  Bangalore that we are to return upon arrival at the airport in
+  Chennai. We are already quite hungry and wish to stop for a meal once
+  we are outside of town. To avoid having to pay an additional fueling
+  premium, we also wish to refuel just before reaching the airport. We
+  need to figure out what roads to take, what restaurants are available
+  outside of Bangalore, and what fuel stations are available once we get close to Chennai.
+  Here we have plotted our trip from Bangalore to the airport:
+</p>
+<img src="/assets/img/geo/path1.png" alt="Trip from Bangalore to the airport"/>
+<p>
+  If we search for restaurants along the path,
+  we only see a small subset of all restaurants present in the window of our quite large map.
+  Here you see how the most relevant results are actually all in Bangalore or Chennai:
+</p>
+<img src="/assets/img/geo/path2.png" alt="Most relevant results"/>
+<p>
+  To find the best results, move the map
+  window to just about where we expect to be eating, and redo the search:
+</p>
+<img src="/assets/img/geo/path3.png" alt="redo search with adjusted map"/>
+<p>
+  This has to be done similarly for finding a gas station near the airport.
+  This illustrates searching for restaurants in a smaller window along the
+  planned trip without <em>DistanceToPath</em>.
+  Next, we outline how <em>DistanceToPath</em>
+  can be used to quickly and easily improve this type of
+  planning to be more convenient for the user.
+</p>
+<p>
+  The nature of this feature requires that the search corpus contains documents with position data.
+  A <a href="searcher-development.html">searcher component</a> needs to be
+  written that is able to pass paths with the queries that lie in the
+  same coordinate space as the searchable documents.
+  Finally, a <a href="ranking.html">rank-profile</a> needs to defined that scores
+  documents according to how they match some target distance traveled
+  and at the same time lies close "enough" to the path.
 </p>
 
 
 <h3 id="query-syntax">Query Syntax</h3>
 <p>
-This document does not describe how to write a searcher plugin for the
-JDisc Container, refer to the <a href="searcher-development.html">container documentation</a>.
-However, let us review the syntax expected by <em>DistanceToPath</em>.
-As noted in the the <a href="reference/rank-features.html#distanceToPath(name).distance">
-rank features reference</a>,
-the path is supplied as a query parameter by name of the feature and the <code>path</code> keyword:
+  This document does not describe how to write a searcher plugin for the Container,
+  refer to the <a href="searcher-development.html">container documentation</a>.
+  However, let us review the syntax expected by <em>DistanceToPath</em>.
+  As noted in the the <a href="reference/rank-features.html#distanceToPath(name).distance">
+  rank features reference</a>,
+  the path is supplied as a query parameter by name of the feature and the <code>path</code> keyword:
+</p>
 <pre>
 yql=(&hellip;)&amp;rankproperty.distanceToPath(<em>name</em>).path=(x1,y1,x2,y2,&hellip;,xN,yN)
 </pre>
 <p>
-Here <code>name</code> has to match the name of the position attribute that holds the positions data.
-</p><p>
-The path itself is parsed as a list of <code>N</code> coordinate pairs
-that together form <code>N-1</code> line segments:
-</p><p><!-- depends on mathjax -->
-$$(x_1,y_1) \rightarrow (x_2,y_2), (x_2,y_2) \rightarrow (x_3,y_3), (&hellip;), (x_{N-1},y_{N-1}) \rightarrow (x_N,y_N)$$
+  Here <code>name</code> has to match the name of the position attribute that holds the positions data.
+</p>
+<p>
+  The path itself is parsed as a list of <code>N</code> coordinate pairs
+  that together form <code>N-1</code> line segments:
+</p>
+<p><!-- depends on mathjax -->
+  $$(x_1,y_1) \rightarrow (x_2,y_2), (x_2,y_2) \rightarrow (x_3,y_3), (&hellip;), (x_{N-1},y_{N-1}) \rightarrow (x_N,y_N)$$
 </p>
   {% include note.html content="The path is <em>not</em> in a readable (longitude, latitude) format,
   but is a pair of integers in the internal format (degrees multiplied by 1 million).
@@ -275,8 +310,8 @@ $$(x_1,y_1) \rightarrow (x_2,y_2), (x_2,y_2) \rightarrow (x_3,y_3), (&hellip;), 
 
 <h3 id="rank-profile">Rank profile</h3>
 <p>
-If we were to disregard our scenario for a few moments, we could
-suggest the following rank profile:
+  If we were to disregard our scenario for a few moments, we could suggest the following rank profile:
+</p>
 <pre>
 rank-profile default {
     first-phase {
@@ -288,16 +323,18 @@ rank-profile default {
 }
 </pre>
 <p>
-This profile will first rank all documents according to Vespa's
-<em>nativeRank</em> feature, and then do a second pass over the top 100
-results and order these based on their distance to our path. 
-If a document lies within 100 metres of our path it
-retains its relevancy, otherwise its relevancy is set to 0.  Such a
-rank profile would indeed solve the current problem,
-but Vespa's ranking model allows for us to take this a lot further.
-</p><p>
-The following is a rank profile that ranks documents
-according to a query-specified target distance to path and distance traveled:
+  This profile will first rank all documents according to Vespa's
+  <em>nativeRank</em> feature, and then do a second pass over the top 100
+  results and order these based on their distance to our path.
+  If a document lies within 100 metres of our path it
+  retains its relevancy, otherwise its relevancy is set to 0.  Such a
+  rank profile would indeed solve the current problem,
+  but Vespa's ranking model allows for us to take this a lot further.
+</p>
+<p>
+  The following is a rank profile that ranks documents
+  according to a query-specified target distance to path and distance traveled:
+</p>
 <pre>
 rank-profile default {
     first-phase {
@@ -309,15 +346,15 @@ rank-profile default {
 }
 </pre>
 <p>
-The expression is two-fold; a first component determines a rank based
-on the document's distance to the given path as compared to
-the <a href="reference/ranking-expressions.html">query parameter</a>
-<code>distance</code>. If the allowed distance is exceeded, this
-component's contribution is 0. The distance contribution is then
-multiplied by the difference of the actual distance traveled as
-compared to the query parameter <code>traveled</code>. In short, this
-profile will include all documents that lie close enough to the path,
-ranked according to their actual distance and traveled measure.
+  The expression is two-fold; a first component determines a rank based
+  on the document's distance to the given path as compared to
+  the <a href="reference/ranking-expressions.html">query parameter</a>
+  <code>distance</code>. If the allowed distance is exceeded, this
+  component's contribution is 0. The distance contribution is then
+  multiplied by the difference of the actual distance traveled as
+  compared to the query parameter <code>traveled</code>. In short, this
+  profile will include all documents that lie close enough to the path,
+  ranked according to their actual distance and traveled measure.
 </p>
 {% include note.html content="<em>DistanceToPath</em> is only compatible
 with <em>2D coordinates</em> because pathing in 1 dimension makes no sense."%}
@@ -325,22 +362,23 @@ with <em>2D coordinates</em> because pathing in 1 dimension makes no sense."%}
 
 <h3 id="results">Results</h3>
 <p>
-For the sake of this example, assume that we have implemented a
-custom path searcher that is able to pass the path found by the user's
-initial directions query to Vespa's <a href="#query-syntax">query syntax</a>.
-There are then two more parameters that must be supplied
-by the user; <code>distance</code> and <code>traveled</code>. Vespa
-expects these parameters to be supplied in a scale compatible with the
-feature's output, and should probably also be mapped by the container  
-plugin. The feature's <em>distance</em> output is given in
-Vespa's internal resolution, which is approximately 10 units per
-meter. The <em>traveled</em> output is a normalized number
-between 0 and 1, where 0 represents the beginning of the path, and 1
-is the end of the path.
-</p><p>
-This illustrates how these parameters can be used to return
-the most appropriate hits for our scenario. Note that the figures only
-show the top hit for each query:
+  For the sake of this example, assume that we have implemented a
+  custom path searcher that is able to pass the path found by the user's
+  initial directions query to Vespa's <a href="#query-syntax">query syntax</a>.
+  There are then two more parameters that must be supplied
+  by the user; <code>distance</code> and <code>traveled</code>. Vespa
+  expects these parameters to be supplied in a scale compatible with the
+  feature's output, and should probably also be mapped by the container
+  plugin. The feature's <em>distance</em> output is given in
+  Vespa's internal resolution, which is approximately 10 units per
+  meter. The <em>traveled</em> output is a normalized number
+  between 0 and 1, where 0 represents the beginning of the path, and 1
+  is the end of the path.
+</p>
+<p>
+  This illustrates how these parameters can be used to return
+  the most appropriate hits for our scenario. Note that the figures only
+  show the top hit for each query:
 </p>
 <img src="/assets/img/geo/path4.png" alt="Top tip 1"/>
 <img src="/assets/img/geo/path5.png" alt="Top tip 2"/>
