@@ -211,16 +211,16 @@ we translate the user query into a Vespa query request using YQL:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
- 'query=sunset photos featuring dogs' 
+ 'query=sunset photos featuring dogs' 'type=all'
 </pre>
 
-The above query returns 0 hits, since by default query will require that *all* query terms matches the document. 
+The above query returns 0 hits, since the query requires that *all* query terms matches the document.
 By adding [tracelevel](reference/query-api-reference.html#tracelevel) to the query request we can see
 how the query is parsed and executed against the content nodes:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
 $ vespa query 'yql=select * from photos where userQuery()' \
- 'query=sunset photos featuring dogs' 'tracelevel=3'
+ 'query=sunset photos featuring dogs' 'type=all' 'tracelevel=3'
 </pre>
 
 In the trace we can see the query which is dispatched to the content nodes:
@@ -230,16 +230,17 @@ query=[AND sunshot photos featuring dogs]
 </pre>
 Using tracing is very useful when debugging why documents match or does not match. 
 
-Since our sample document does not contain the term *featuring* or *photos*, the query fails to retrieve the example document. 
-We can relax the query matching to instead of requiring that **all** terms match, to use **any**. See
-[model.type](reference/query-api-reference.html#model.type) query api reference for supported query types.
+Since the sample document does not contain the term *featuring* or *photos*,
+the query fails to retrieve the example document.
+Relax the query matching to instead of requiring that **all** terms match, to use **any**.
+See [model.type](reference/query-api-reference.html#model.type) query api reference for supported query types:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
  'query=sunset photos featuring dogs' 'type=any'
 </pre>
 
-Changing the type to `any`, recalls our sample document as we no longer require that all query terms must match.
+Changing the type to `any`, recalls the sample document as we no longer require that all query terms must match.
 With `type` it also possible to require that individual query terms match by using `+`:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
@@ -258,7 +259,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 
 Now, let us explore how Vespa matches the multi-valued tags field of 
 type [weightedset](reference/schema-reference.html#weightedset). 
-Notice that we change back to default `type=all`. 
+Notice that we change back to `type=all`.
 In this example we also use the [default-index](reference/query-api-reference.html#model.defaultIndex) 
 query parameter to limit matching to the `tags` field.
 
@@ -285,7 +286,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
  'query=black sky' 'type=all' 'default-index=tags'
 </pre>
 
-Also matches our document. This is an example of cross-element matching. With weightedset
+Also matches the document. This is an example of cross-element matching. With weightedset
 using `indexing:index` with `match:text` multi term queries match across elements.
 
 This might be a good decision, as we increase recall, however
