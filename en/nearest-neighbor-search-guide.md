@@ -9,7 +9,7 @@ title: "Vespa nearest neighbor search - a practical guide"
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset for illustration. 
  Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.
- See also the the generic [Vespa performance - a practical guide](performance/practical-search-performance-guide.html).
+ See also the generic [Vespa performance - a practical guide](performance/practical-search-performance-guide.html).
 
 This guide covers the following:
 
@@ -59,7 +59,7 @@ Note that the dataset is released under the following terms:
 >Research only, strictly non-commercial. For details, or if you are unsure, please contact Last.fm. 
 >Also, Last.fm has the right to advertise and refer to any work derived from the dataset.
 
-To download the dataset directly (About 120MB zip file):
+To download the dataset directly (About 120 MB zip file):
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -332,7 +332,7 @@ schema track {
 </pre>
 
 This document schema is explained in the [practical search performance guide](performance/practical-search-performance-guide.html),
-the addition is the `embedding` field and the various `closeness` rank profiles. Note
+the addition is the `embedding` field and the various `closeness` rank profiles. Note
 that the `closeness` schema defines the query tensor inputs which needs to be declared to be
 used with Vespa's nearestNeighbor query operator. 
 
@@ -456,7 +456,7 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-## Free text search using Vespa weakAnd 
+## Free-text search using Vespa weakAnd 
 The following sections uses the Vespa [query api](reference/query-api-reference.html) and 
 formulate queries using Vespa [query language](query-language.html). The examples uses the
 [vespa-cli](vespa-cli.html) command which supports running queries.
@@ -468,9 +468,8 @@ Use `vespa query -v` to see the curl equivalent:
 $ vespa query -v 'yql=select ..'
 </pre>
 
-The first example is searching and ranking using the `bm25` rank profile defined in the
-schema. It uses the [bm25](reference/bm25.html) rank feature as the `first-phase` relevance
-score:
+The first example is searching and ranking using the `bm25` rank profile defined in the schema.
+It uses the [bm25](reference/bm25.html) rank feature as the `first-phase` relevance score:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -479,13 +478,14 @@ $ vespa query \
     'yql=select artist, title, track_id from track where userQuery()' \
     'query=total eclipse of the heart' \
     'hits=1' \
+    'type=all' \
     'ranking=bm25'
 </pre>
 </div>
 
 This query combines YQL [userQuery()](reference/query-language-reference.html#userquery) 
 with Vespa's [simple query language](reference/simple-query-language-reference.html).
-The default [query type](reference/query-api-reference.html#model.type) is
+The [query type](reference/query-api-reference.html#model.type) is
 using `all`, requiring that all the terms match. 
 
 The above query example searches for *total AND eclipse AND of AND the AND heart* 
@@ -547,7 +547,7 @@ $ vespa query \
 </pre>
 </div>
 
-Now, the query matches 24,053 documents and is considerably slower than than the previous query. 
+Now, the query matches 24,053 documents and is considerably slower than the previous query. 
 Comparing `querytime` of these two query examples, the one which matches the most documents have highest `querytime`. 
 In worst case, the search query matches all documents.
 
@@ -614,7 +614,7 @@ rank-profile tags {
 </pre>
 
 This query searches the track document type using a learned sparse *userProfile* representation, 
-performing a maxium inner product search over the `tags` weightedset field. 
+performing a maximum inner product search over the `tags` weightedset field. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1035,7 +1035,7 @@ Vespa will instead of searching the HNSW graph, constrained by the filter, fall 
 falling back to exact search users will observe that `totalCount` increases and is higher than `targetHits`.
 As seen from previous examples, more hits are exposed to the `first-phase` ranking expression when using 
 exact search. When using exact search with filters, the search can also use multiple threads to evaluate the query, which
-helps reducing the latency impact. 
+helps reduce the latency impact. 
 
 With strict filters that removes many hits, the hits (nearest neighbors) might not be *near* in the embedding space, but *far*,
 or *distant* neighbors. Technically, all document vectors are a neighbor of the query, 
@@ -1047,7 +1047,7 @@ query annotation parameter of the `nearestNeighbor` query operator.
 The value of the `distance` depends on the [distance-metric](reference/schema-reference.html#distance-metric) used. 
 By adding the [distance(field,embedding)](reference/rank-features.html#distance(dimension,name)) rank-feature to
 the `match-features` of the `closeness` rank-profiles, it is possible to analyze what distance 
-could be consider too far. 
+could be considered too far. 
 See [match-features reference](reference/schema-reference.html#match-features).
 
 
@@ -1183,7 +1183,7 @@ and possibly also the feature distributions of the returned top-k hits.
 Having the `distance` rank feature returned as `match-features`, 
 enables post-processing of the result using a custom 
 [re-ranking/filtering searcher](reranking-in-searcher.html). 
-The post processing searcher can analyze the score distributions of the returned top-k hits
+The post-processing searcher can analyze the score distributions of the returned top-k hits
 (using the features returned with `match-features`), 
 remove low scoring hits before presenting the result to the end user, 
 or not return any results at all. 
@@ -1213,7 +1213,7 @@ $ vespa query \
 </div>
 
 The query combines the sparse `weakAnd` and the dense `nearestNeighbor` query operators 
-using logical disjunction. Both query operator retrieves the target number of hits (or more), ranked by it's inner 
+using logical disjunction. Both query operator retrieves the target number of hits (or more), ranked by its inner 
 raw score/distance function. 
 The hits exposed to the configurable `first-phase` ranking expression is a combination
 of the best hits from the two different retrieval strategies. 
