@@ -837,7 +837,7 @@ field has `index`:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec"  data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q)' \
+    'yql=select title, artist from track where {targetHits:10,hnsw.exploreAdditionalHits:20}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness' \
     "input.query(q)=$Q"
@@ -903,7 +903,8 @@ for a deep-dive into these trade-offs.
 With the support for setting `approximate:false|true` a developer can quantify accuracy loss by comparing the 
 results of exact nearest neighbor search with the results of the approximate search. 
 By doing so, developers can quantify the recall@k or overlap@k, 
-and find the right balance between search performance and accuracy. 
+and find the right balance between search performance and accuracy. Increasing `hnsw.exploreAdditionalHits`
+improves accuracy (recall@k) at the cost of a slower query. 
 
 ## Combining approximate nearest neighbor search with query filters
 Vespa allows combining the search for nearest neighbors to be constrained by regular query filters. 
