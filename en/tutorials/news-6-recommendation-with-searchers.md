@@ -44,7 +44,7 @@ types of nodes are the stateless `container` nodes and the stateful `content` no
 All requests pass through the `container` cluster before passing along to
 `content` cluster where the actual retrieval and ranking occurs. The queries
 actually pass through a chain of searchers; each one possibly doing a small
-amount of processing. This can be seen by adding a `&tracelevel=5` to a
+amount of processing. This can be seen by adding a `&trace.level=5` to a
 query:
 
 ```
@@ -68,14 +68,14 @@ query:
 ...
 ```
 
-This shows a small sample of the additional output when using `tracelevel`. Note the
+This shows a small sample of the additional output when using `trace.level`. Note the
 invocations of the searchers. Each searcher gets invoked along a chain, and the last 
 searcher in the chain sends the post-processed query to the search backend. When the
 results come back, the processing passes back up the chain. The searchers can then
 process the results before passing them to the previous searcher, and ultimately back as 
 a response to the query.
 
-{% include note.html content="Adding a [tracelevel](../reference/query-api-reference.html#tracelevel)
+{% include note.html content="Adding a [trace.level](../reference/query-api-reference.html#trace.level)
 is  generally helpful when debugging vespa queries." %}
 
 So, [searchers](../searcher-development.html) are Java components that perform
@@ -296,12 +296,12 @@ $ vespa query -v 'user_id=U33527' 'searchChain=user'
 </div>
 
 This should now return the top 10 recommended news articles for this user. Indeed,
-if we now add a with a `tracelevel=5`, we see the searcher being invoked:
+if we now add a with a `trace.level=5`, we see the searcher being invoked:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"documents": 28603'>
-$ vespa query -v 'user_id=U33527' 'searchChain=user' 'tracelevel=5'
+$ vespa query -v 'user_id=U33527' 'searchChain=user' 'trace.level=5'
 </pre>
 </div>
 
