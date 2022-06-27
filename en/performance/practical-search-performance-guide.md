@@ -2297,8 +2297,8 @@ early termination kicks in.
 This section introduces query tracing. Tracing helps understand where time (and cost) is spent, and how
 to best optimize the query or schema settings. Query tracing can be enabled using the following parameters:
 
-- [tracelevel](../reference/query-api-reference.html#tracelevel)
-- [explainLevel](../reference/query-api-reference.html#explainlevel)
+- [trace.level](../reference/query-api-reference.html#trace.level)
+- [trace.explainLevel](../reference/query-api-reference.html#trace.explainLevel)
 - [trace.timestamps](../reference/query-api-reference.html#trace.timestamps)
 
 A simple example query with tracing enabled:
@@ -2307,7 +2307,7 @@ A simple example query with tracing enabled:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="track_id">
 $ vespa query 'yql=select track_id from track where tags contains "rock"' \
-  'tracelevel=3' 'trace.timestamps=true' 'explainLevel=1' 'hits=1'
+  'trace.level=3' 'trace.timestamps=true' 'trace.explainLevel=1' 'hits=1'
 </pre>
 </div>
 

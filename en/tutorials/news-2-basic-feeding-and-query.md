@@ -393,7 +393,7 @@ Looking at the output, please note:
 - When multiple hits have the same relevance score, their internal ordering is
   undefined. However, their internal ordering will not change unless the
   documents are re-indexed.
-- You can add `&tracelevel=3` to dump query parsing details and execution plan.
+- You can add `&trace.level=3` to dump query parsing details and execution plan.
 - The `totalCount` field at the top level contains the number of documents
   that *matched* the query.
 - Also note the `coverage` element, this tells us how many documents and nodes we searched over.
