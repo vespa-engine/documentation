@@ -297,37 +297,30 @@ This returns the document containing the user's embedding:
 
 ```
 {
-  "root": {
-    ...
-    "children": [
-      {
-        "id": "id:user:user::U33527",
-        "fields": {
-          "sddocname": "user",
-          "user_id": "U33527",
-          "embedding": {
-            "cells": [
-              { "address": { "d0": "0" }, "value": 0.0 },
-              { "address": { "d0": "1" }, "value": 1.0250849723815918 },
-              ...
-            ]
-          }
-        }
-      }
-    ]
-  }
+    "root": {
+        ...
+        "children": [
+            {
+                "id": "index:mind/0/ce7cc40b398f32626fcff97a",
+                "relevance": 0.0017429193899782135,
+                "source": "mind",
+                "fields": {
+                    "user_id": "U33527",
+                    "embedding": {
+                        "type": "tensor<float>(d0[51])",
+                        "values": [
+                            0.0,
+                            0.06090399995446205,
+                            0.15839800238609314,
+                            ...
+                        ]
+                    }
+                }
+            }
+        ]
+    }
 }
 ```
-It's also possible to emit the tensor field using short format: 
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='U33527'>
-$ vespa query -v 'yql=select user_id, embedding from user where user_id contains "U33527"' \
- 'hits=1' 'format.tensors=short'
-</pre>
-</div>
-
 
 Now we can use this vector to query the news articles. You can either write this
 query by hand, but we've added a convenience script which queries Vespa:
