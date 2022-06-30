@@ -268,6 +268,14 @@ Pass [ranking.profile=unranked](reference/query-api-reference.html#ranking.profi
 to make the query less expensive to run.
 If an _estimate_ is good enough, use [hitcountestimate=true](reference/query-api-reference.html#hitcountestimate).
 
+#### Must all fields in a fieldset have the same type?
+Yes - a deployment warning with _This may lead to recall and ranking issues_ can be emitted if not.
+This warning comes whenever fields with different kinds of tokenization are put in the same
+[fieldset](reference/schema-reference.html#fieldset).
+This is because a given piece of text searching one fieldset is tokenized just once,
+so there's no right choice of tokenization in this case.
+More details on [stack overflow](https://stackoverflow.com/q/72784136).
+
 
 
 {:.faq-section}
