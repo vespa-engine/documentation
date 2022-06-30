@@ -10,22 +10,24 @@ specification in the document [schema(s)](schemas.html).
 
 The reranking searcher uses [multiphase searching](searcher-development.html#multiphase-searching):
 
-*matching query protocol phase* 
-- The matching protocol phase which asks each content node involved in the query to return the locally
-best ranking hits (ranked by the configurable ranking expressions defined in the schema). This matching query protocol
-phase might include several ranking phases which are executed per content node. 
+**Matching query protocol phase:** The matching protocol phase which asks each content node involved in the query
+to return the locally best ranking hits (ranked by the configurable ranking expressions defined in the schema).
+This matching query protocol phase can include several ranking phases which are executed per content node. 
 In the query protocol phase the content nodes can also return [match-features](reference/schema-reference.html#match-features) which
 a re-ranking searcher can use to re-rank results (or feature logging). 
 In the custom searcher one is working on the global best ranking hits from the content nodes, and
 can have access to aggregated features which is calculated across the top-ranking documents (the global best documents).
 
-*fill query protocol phase*
-- Fill summary data for the global top ranking hits after all ranking phases. If one needs access to the document fields, 
-the searcher would need to call `execution.fill` before the re-ranking logic, this would then cost more resources
-than just using `match-features` which is delivered in the first protocol matching phase. If one needs
-access to a subset of fields during stateless re-ranking, consider configuring a dedicated [document summary](document-summaries.html).
+**Fill query protocol phase:** Fill summary data for the global top ranking hits after all ranking phases.
+If one needs access to the document fields,
+the searcher would need to call `execution.fill` before the re-ranking logic,
+this would then cost more resources
+than just using `match-features` which is delivered in the first protocol matching phase.
+If one needs access to a subset of fields during stateless re-ranking,
+consider configuring a dedicated [document summary](document-summaries.html).
 
-See also [Life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
+See also [life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
+
 
 ### Guide prerequisites
 - [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
@@ -34,46 +36,51 @@ See also [Life of a query in Vespa](performance/sizing-search.html#life-of-a-que
 - Architecture: x86_64
 - [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download 
  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
-- [Java 11](https://openjdk.java.net/projects/jdk/11/) installed. 
-- [Apache Maven](https://maven.apache.org/install.html) Maven is used
-to build the application. 
+- [Java 17](https://openjdk.java.net/projects/jdk/17/) 
+- [Apache Maven](https://maven.apache.org/install.html) is used to build the application. 
+
 
 ### A minimal Vespa application
 
-To define the Vespa app package using our custom reranking searcher we need four files:
+To define the Vespa app package using our custom reranking searcher, four files is needed:
 
-- The schema.
-- The deployment specification `services.xml`.
-- The custom reranking searcher.
-- A [Maven pom.xml](https://maven.apache.org/guides/introduction/introduction-to-the-pom.html) file.
+- The schema
+- The deployment specification `services.xml`
+- The custom reranking searcher
+- [pom.xml](https://maven.apache.org/guides/introduction/introduction-to-the-pom.html)
 
-We start with defining a simple schema with two fields, we also define a rank profile
-with two [rank features](reference/rank-features.html) we want to use in the searcher for re-ranking:
+Start by defining a simple schema with two fields.
+We also define a rank profile with two [rank features](reference/rank-features.html)
+to be used in the searcher for re-ranking:
 
 <pre data-test="file" data-path="my-app/src/main/application/schemas/doc.sd"> 
 schema doc {
 
-  document doc {
+    document doc {
+        field name type string {
+            indexing: summary | index
+            match: text 
+            index: enable-bm25
+        }
 
-    field name type string {
-      indexing: summary | index
-      match:text 
-      index: enable-bm25
+        field downloads type int {
+            indexing: summary | attribute
+        }
     }
 
-    field downloads type int {
-      indexing: summary | attribute
+    fieldset default {
+        fields: name 
     }
-  }
-  fieldset default {
-    fields: name 
-  }
-  rank-profile rank-profile-with-match {
-    first-phase {
-      expression: bm25(name) 
+
+    rank-profile rank-profile-with-match {
+        first-phase {
+            expression: bm25(name) 
+        }
+        match-features {
+            bm25(name)
+            attribute(downloads)
+        }
     }
-    match-features: bm25(name) attribute(downloads)
-  }
 }
 </pre>
 
@@ -180,9 +187,9 @@ public class ReRankingSearcher extends Searcher {
 }
 ```
 
-We also need a [services.xml](reference/services.html) file
+[services.xml](reference/services.html) is needed 
 to make up a Vespa [application package](reference/application-packages-reference.html). 
-Here we include our custom searcher in the `default` Vespa search chain:
+Here we include the custom searcher in the `default` [search chain](chained-components.html):
 
 <pre data-test="file" data-path="my-app/src/main/application/services.xml">
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
@@ -211,9 +218,7 @@ Here we include our custom searcher in the `default` Vespa search chain:
 &lt;/services&gt;
 </pre>
 
-Notice the `bundle` name of the searcher, this needs to be in synch with the `artifactId` defined in the `pom.xml`. 
-
-The `pom.xml` file is defined as:
+Notice the `bundle` name of the searcher, this needs to be in synch with the `artifactId` defined in `pom.xml`: 
 
 <pre data-test="file" data-path="my-app/pom.xml">
 &lt;?xml version=&quot;1.0&quot;?&gt;
@@ -239,6 +244,7 @@ The `pom.xml` file is defined as:
 &lt;/project&gt;
 </pre>
 
+
 ### Starting Vespa
 Now, we have the files and can start Vespa:
 
@@ -252,19 +258,25 @@ $ docker run --detach --name vespa --hostname vespa-container \
 </pre>
 </div>
 
-Install [Vespa-cli](vespa-cli.html) using Homebrew:
+Install [vespa-cli](vespa-cli.html) using Homebrew:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ brew install vespa-cli
 </pre>
+</div>
 
 Build the Maven project, this step creates the application package including the custom searcher:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ (cd my-app && mvn package)
 </pre>
+</div>
 
-Now we can deploy the application to Vespa using vespa-cli:
+Deploy the application to Vespa using vespa-cli:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -273,7 +285,8 @@ $ vespa deploy --wait 300 my-app
 </pre>
 </div>
 
-### Feeding to Vespa
+
+### Feed data
 
 Create a few sample docs:
 
@@ -297,7 +310,7 @@ Create a few sample docs:
 }
 </pre>
 
-Feed them to Vespa using the CLI:
+Feed them using the CLI:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
