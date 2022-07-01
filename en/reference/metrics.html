@@ -35,8 +35,15 @@ These apps also include examples for how to find ports used by using
 <a href='vespa-cmdline-tools.html#vespa-model-inspect'>vespa-model-inspect</a>."%}
 
 
+<h2 id="aggregated-metrics">Aggregated metrics</h2>
+<p>
+    For most cases, metrics should be collected aggregated on an application-level through the
+    <em><a href="#metrics-v2-values">/metrics/v2/values</a></em> API or at node-level through either the
+    <em><a href="#metrics-v1-values">/metrics/v1/values</a></em> or
+    <em><a href="#prometheus-v1-values">/prometheus/v1/values</a></em> API.
+</p>
 
-<h2 id="metrics-v2-values">/metrics/v2/values</h2>
+<h3 id="metrics-v2-values">/metrics/v2/values</h3>
 <p>
   The API is found on all nodes running a Container node at <em>http://host:port/metrics/v2/values</em>
 </p>
@@ -107,7 +114,7 @@ $ curl http://localhost:8080/metrics/v2/values
 
 
 
-<h2 id="prometheus-v1-values">/prometheus/v1/values</h2>
+<h3 id="prometheus-v1-values">/prometheus/v1/values</h3>
 <p>
   Vespa provides a <em>node metrics API</em> on each <em>node</em> at <em>http://host:port/prometheus/v1/values</em>
 </p>
@@ -124,7 +131,7 @@ $ curl http://localhost:8080/metrics/v2/values
 
 
 
-<h2 id="metrics-v1-values">/metrics/v1/values</h2>
+<h3 id="metrics-v1-values">/metrics/v1/values</h3>
 <p>
   Vespa provides a <em>node metrics API</em> on each <em>node</em> at
   <em>http://host:19092/metrics/v1/values</em>
@@ -172,9 +179,72 @@ $ curl http://localhost:8080/metrics/v2/values
   but does not report any metrics.
 </p>
 
+<h3 id="customizing-metric-sets">Customizing Metric Sets</h3>
+<p>
+    The aggregation metrics APIs will all return metrics from the
+    <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">default</a> metric set.
+    While this should cover the most basic operational Vespa metrics, the set of metrics returned
+    can be customized through the <em><a href="services-admin.html#metrics">metrics</a></em> section in
+    <em><a href="services.html">services.xml</a></em>. You can control the metric set by either including a pre-defined
+    <em><a href="services-admin.html#metric-set">metric-set</a></em> or configure a specific
+    <em><a href="services-admin.html#metric">metric</a></em>. The latter way is also how you include any
+    <a href="#metrics-from-custom-components">metrics from custom components</a>.
+</p>
 
+<p>
+    Vespa comes with two pre-defined metric sets:
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <td>Metric set ID</td>
+            <td>Description</td>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>default</td>
+            <td>
+                The default <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">set of metrics</a>
+            </td>
+        </tr>
+        <tr>
+            <td>vespa</td>
+            <td>
+                A <a href="https://github.com/vespa-engine/vespa/blob/master/config-model/src/main/java/com/yahoo/vespa/model/admin/monitoring/VespaMetricSet.java">comprehensive list of metrics</a>
+                used to inspect low-level behavior of Vespa.<br/>
+                <b>NOTE:</b>The set of metrics here are not guaranteed to stay stable within a minor version of Vespa.
+            </td>
+        </tr>
+    </tbody>
+</table>
 
-<h2 id="state-v1-metrics">/state/v1/metrics</h2>
+<p>
+    Since increasing the number of metrics returned by Vespa will increase both network data to transfer, computing
+    resources required to process, and metrics storage cost, it is recommended to keep the set of metrics to what
+    you need to monitor your application. Also note that when configuring your own metric set, you need to pass
+    the ID of your <em><a href="services-admin.html#consumer">consumer</a></em> as GET parameter
+    <em>?consumer=my-consumer</em> to the APIs above (e.g. <em>/metrics/v2/values?consumer=my-consumer</em>).
+</p>
+
+<p>
+    Example:
+</p>
+<pre>&lt;metrics&gt;
+    &lt;consumer id=&quot;my-consumer&quot;&gt;
+        &lt;metric-set id=&quot;default&quot; /&gt;
+        &lt;metric id=&quot;vds.idealstate.garbage_collection.documents_removed.count&quot; /&gt;
+    &lt;/consumer&gt;
+&lt;/metrics&gt;</pre>
+
+<h2 id="per-process-metrics">Per-process metrics</h2>
+<p>
+    Internally, Vespa aggregates metrics in the APIs above from the <em>per-process</em> metrics and health APIs.
+    While most users would use the aggregated APIs, the per-process metric APIs could be used for specific cases
+    if needed.
+</p>
+
+<h3 id="state-v1-metrics">/state/v1/metrics</h3>
 <p>
   <em>Per-process</em> metrics are found at <em>http://host:port/state/v1/metrics</em>
 </p>
@@ -279,6 +349,53 @@ $ curl http://localhost:8080/metrics/v2/values
 </tbody>
 </table>
 
+<h3 id="state-v1-health">/state/v1/health</h3>
+<p>
+    <em>Per-process</em> health status is found at <em>http://host:port/state/v1/health</em>
+</p>
+<img src="/assets/img/health-api.svg" width="480px" height="auto" alt="Health API" />
+<p>
+    The Health API is most commonly used for heartbeating. Example:
+</p>
+<pre>{% highlight json %}
+{
+    "status" : {
+        "code" : "up",
+        "message" : "Everything ok here"
+    }
+}
+{% endhighlight %}</pre>
+<p>
+    The status code is one of
+    (see <a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/java/com/yahoo/container/jdisc/state/StateMonitor.java">
+    StateMonitor</a>):
+</p>
+<ul>
+    <li><code>initializing</code></li>
+    <li><code>up</code></li>
+    <li><code>down</code></li>
+</ul>
+<p>
+    Assume status down if the page cannot be downloaded.
+</p>
+<p>
+    Containers with the <a href="../query-api.html">query API</a> enabled return <code>initializing</code>
+    while waiting for content nodes to start (see <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">
+    example</a>).
+    <code>up</code> means that the service is fully up.
+</p>
+<p>
+    The message part is optional - it is normally empty if the service is up,
+    while it is set to a textual reason for why it is unavailable, if that is the case.
+</p>
+
+<h2 id="jdisc-metrics-details">jdisc Metrics Details</h2>
+<p>
+    Many of the metrics relevant to monitor for your application are emitted from the
+    <a href="https://docs.vespa.ai/en/jdisc/index.html">jDisc container</a> since this is both the outward
+    facing component and where any custom business logic is run. The sections below covers some of the specifics
+    related to these metrics.
+</p>
 
 <h3 id="metrics-from-custom-components">Metrics from custom components</h3>
 <ol>
@@ -504,44 +621,3 @@ public class HitCountSearcher extends Searcher {
         </tr>
     </tbody>
 </table>
-
-
-<h2 id="state-v1-health">/state/v1/health</h2>
-<p>
-<em>Per-process</em> health status is found at <em>http://host:port/state/v1/health</em>
-</p>
-<img src="/assets/img/health-api.svg" width="480px" height="auto" alt="Health API" />
-<p>
-  The Health API is most commonly used for heartbeating. Example:
-</p>
-<pre>{% highlight json %}
-{
-    "status" : {
-        "code" : "up",
-        "message" : "Everything ok here"
-    }
-}
-{% endhighlight %}</pre>
-<p>
-  The status code is one of
-  (see <a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/java/com/yahoo/container/jdisc/state/StateMonitor.java">
-  StateMonitor</a>):
-</p>
-<ul>
-  <li><code>initializing</code></li>
-  <li><code>up</code></li>
-  <li><code>down</code></li>
-</ul>
-<p>
-  Assume status down if the page cannot be downloaded.
-</p>
-<p>
-  Containers with the <a href="../query-api.html">query API</a> enabled return <code>initializing</code>
-  while waiting for content nodes to start (see <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">
-  example</a>).
-  <code>up</code> means that the service is fully up.
-</p>
-<p>
-  The message part is optional - it is normally empty if the service is up,
-  while it is set to a textual reason for why it is unavailable, if that is the case.
-</p>
