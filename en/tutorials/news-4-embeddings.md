@@ -254,8 +254,8 @@ are also categorical, after all.
 However, there are other content features as well such as the `title` and
 `abstract`. To create embeddings from these, we'll employ a [BERT-based
 sentence
-classifier](https://huggingface.co/transformers/model_doc/bert.html#bertforsequenceclassification)
-from the [HuggingFace transformers](https://huggingface.co/transformers/)
+classifier](https://huggingface.co/docs/transformers/model_doc/bert.html#bertforsequenceclassification)
+from the [HuggingFace transformers](http://huggingface.co/docs/transformers/)
 library:
 
 ```

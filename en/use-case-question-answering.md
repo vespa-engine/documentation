@@ -51,7 +51,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
 * [ONNX model evaluation](onnx.html)
 
     The Transformer models are exported from [HuggingFace's Transformers
-    library](https://huggingface.co/transformers/index.html) to ONNX models.
+    library](https://huggingface.co/docs/transformers/index.html) to ONNX models.
     The [Open Neural Network Exchange](https://onnx.ai/) (ONNX) is an open
     standard for distributing machine-learned models between different systems.
     Vespa imports ONNX models and evaluates them using ONNX Runtime, ensuring
