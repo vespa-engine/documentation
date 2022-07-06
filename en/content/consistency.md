@@ -33,7 +33,7 @@ the network may be partitioned. Vespa is dependent on a centralized (but fault t
 checker and coordinator. A network partition may take place between the coordinator and a subset of nodes.
 Operations to nodes in this subset aren't guaranteed to succeed until the partition heals.
 As a consequence, Vespa is not _guaranteed_ to be strongly available,
-so we treat this as a "limited subset" of AP.
+so we treat this as a "limited subset" of AP (though this is not technically part of the CAP definition).
 
 In _practice_, the best-effort semantics of Vespa have proven to be both robust and
 highly available in common datacenter networks.
@@ -42,7 +42,11 @@ highly available in common datacenter networks.
 
 When a client receives a successful [write](../reads-and-writes.html) response,
 the operation has been written and synced to disk. The replication level is configurable.
-Operations are by default written on _all_ replicas before sending a response.
+Operations are by default written on _all_ available replica nodes before sending a response.
+"Available" here means being Up in the [cluster state](content-nodes.html#cluster-state),
+which is determined by the fault-tolerant, centralized Cluster Controller service.
+If a cluster has a total of 3 nodes, 2 of these are available and the replication factor
+is 3, writes will be ACKed to the client if both the available nodes ACK the operation.
 
 On each replica node, operations are persisted to a write-ahead log before
 being applied. The system will automatically recover after a crash by replaying
@@ -62,6 +66,10 @@ operation orderings.
 
 Vespa has support for conditional writes for individual documents through
 test-and-set operations. Multi-document transactions are not supported.
+
+If possible, prefer using conditional updates with `create: true` instead
+of conditional puts. This is because the write repair logic for conditional
+updates is capable of handling data consistency edge cases.
 
 After a successful response, changes to the search indexes are immediately
 visible by default.
@@ -85,9 +93,18 @@ If replicas diverge during a Get, Vespa performs a read-repair. This fetches the
 requested document from all divergent replicas. The client then receives the
 version with the newest timestamp.
 
-If replicas diverge during a Visit, the operation will by default wait until the
-replicas are back in sync. You can configure the operation to immediately use the
-replica with the most documents.
+If replicas diverge during a Visit, the behavior is slightly different between
+the Document V1 API and `vespa-visit`:
+
+  * Document V1 will prefer immediately visiting the replica that contains the
+    most documents. This means it's possible for a subset of documents in a bucket
+    to not be returned.
+  * `vespa-visit` will by default retry visiting the bucket until it is in sync.
+    This may take a long time if large parts of the system are out of sync.
+
+The rationale for this difference in behavior is that Document V1 is usually
+called in a real-time request context, whereas `vespa-visit` is usually called
+in a background/batch processing context.
 
 Visitor operations return the current state of the document set. They do not have snapshot isolation.
 
