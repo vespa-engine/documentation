@@ -44,7 +44,7 @@ field image_embedding type tensor&lt;float&gt;(x[512]) {
   index {
     hnsw {
       max-links-per-node: 16
-      neighbors-to-explore-at-insert: 500
+      neighbors-to-explore-at-insert: 200
     }
   }
 }
@@ -57,7 +57,7 @@ field text_embedding type tensor&lt;float&gt;(x[384]) {
   index {
     hnsw {
       max-links-per-node: 24
-      neighbors-to-explore-at-insert: 500
+      neighbors-to-explore-at-insert: 200
     }
   }
 }
