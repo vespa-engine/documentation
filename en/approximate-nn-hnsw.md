@@ -10,7 +10,7 @@ for practical usage of Vespa's nearest neighbor search, see [nearest neighbor se
 This document describes how to speed up searches for nearest neighbors by adding a
 [HNSW index](reference/schema-reference.html#index-hnsw) to the first-order dense tensor field.
 
-Vespa implements a modified version of the Hierarchical Navigable Small World (HNSW) graph algorithm [paper](https://arxiv.org/abs/1603.09320) 
+Vespa implements a modified version of the Hierarchical Navigable Small World (HNSW) graph algorithm [paper](https://arxiv.org/abs/1603.09320).
 The implementation in Vespa supports:
 
 * **Filtering** - The search for nearest neighbors can be constrained by query filters
@@ -18,10 +18,10 @@ as the nearest neighbor search in Vespa is expressed as a query operator.
 The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator can be combined with other filters or query terms using the [Vespa query language](query-language.html).
 See many query examples in the [practical guide](nearest-neighbor-search-guide.html#combining-approximate-nearest-neighbor-search-with-query-filters).
 
-* **Real Time Indexing** - CRUD (Create,Add, Update, Remove) vectors in the index with low latency and high throughput. 
+* **Real Time Indexing** - CRUD (Create, Add, Update, Remove) vectors in the index with low latency and high throughput.
 
-* **Mutable HNSW Graph**  No query or indexing overhead from searching multiple <em>HNSW</em> graphs. In Vespa, there is one graph per field. No
-segmented or partitioned graph where a query against a node need to scan multiple HNSW graphs.  
+* **Mutable HNSW Graph** - No query or indexing overhead from searching multiple <em>HNSW</em> graphs. In Vespa, there is one graph per field. No
+segmented or partitioned graph where a query against a content node need to scan multiple HNSW graphs.
 
 * **Multi-threaded Indexing** - The costly part when performing real time changes to the *HNSW* graph is distance calculations while searching the graph layers
 to find which links to change. These distance calculations are performed by multiple indexing threads. 
@@ -124,6 +124,23 @@ which controls how many extra nodes in the graph (in addition to `targetHits`)
 that are explored during the graph search. This parameter is used to tune accuracy quality versus query performance. 
 
 ## Combining approximate nearest neighbor search with filters 
+The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator can be combined with other
+query filters using the [Vespa query language](reference/query-language-reference.html) and its query operators.
+There are two high-level strategies for combining query filters with the approximate nearest neighbor search:
+[post-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#post-filtering-strategy) and
+[pre-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#pre-filtering-strategy) (which is the default).
+These strategies can be configured in a rank profile using
+[post-filter-threshold](reference/schema-reference.html#post-filter-threshold) and
+[approximate-threshold](reference/schema-reference.html#approximate-threshold).
+See
+[Controlling the filtering behavior with approximate nearest neighbor search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#controlling-the-filtering-behavior-with-approximate-nearest-neighbor-search)
+for more details.
+
+Note that when using `pre-filtering` the following query operators are not included when evaluating the filter part of the query:
+[geoLocation](reference/query-language-reference.html#geolocation) and
+[predicate](reference/query-language-reference.html#predicate).
+These are instead evaluated after the approximate nearest neighbors are retrieved, more like a `post-filter`.
+This might cause the search to expose fewer hits to ranking than the wanted `targetHits`.
 
 ## Nearest Neighbor Search Considerations
 
