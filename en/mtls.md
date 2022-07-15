@@ -298,7 +298,7 @@ This requires the following steps, which we'll go through below:
 
 1. [Creating a root Certificate Authority](#creating-a-root-certificate-authority-ca).
    This is only done once, regardless of how many Vespa hosts you want to secure.
-1. [Creating a private key and Certificate Signing_request for each Vespa host](#creating-a-private-key-and-certificate-for-a-vespa-host).
+1. [Creating a private key and Certificate Signing Request (CSR) for each Vespa host](#creating-a-private-key-and-certificate-for-a-vespa-host).
 1. [Signing the CSR using the CA, creating a certificate for each Vespa host](#sign-host-certificate).
 
 We'll be using the [OpenSSL command-line tool](https://www.openssl.org/docs/man1.1.1/man1/) to
