@@ -259,10 +259,12 @@ field uuid type string {
 
 <h2 id="parent-child-and-search-performance">Parent child and search performance</h2>
 <p>
-  When searching imported attribute fields from parent document types
-  there is an additional cost penalty which can be reduced significantly
+  When searching imported attribute fields (with <code>fast-search</code>) from parent document types
+  there is an additional inderection that can be reduced significantly
   if the imported field is defined with <code>rank:filter</code>
   and <a href="../reference/services-content.html#visibility-delay">visibility-delay</a> is configured to &gt; 0.
+  The <a href="../reference/schema-reference.html#rank">rank:filter</a> setting impacts posting list graunularity
+  and <code>visibility-delay</code> enables a cache for the indirection between the child and parent document. 
 </p>
 
 
@@ -274,8 +276,7 @@ field uuid type string {
   Read more on <a href="../phased-ranking.html">phased ranking</a>.
   Using phased ranking enables spending more resources during a second phase ranking step than in the first-phase.
   The first-phase should be focused on getting decent recall (retrieve relevant documents in the top k),
-  while second phase is used to tune precision at k,
-  bringing the relevant documents to the top of the result set.
+  while second phase is used to tune precision. 
 </p><p>
   For <a href="../text-matching-ranking.html">text ranking</a> applications,
   consider using the <a href="../using-wand-with-vespa.html">WAND</a> query operator -
@@ -283,10 +284,9 @@ field uuid type string {
 </p>
 
 
-
 <h2 id="multi-lookup-set-filtering">Multi Lookup - Set filtering</h2>
 <p>
-  Several real world search use cases are built around limiting or filtering based on a set filter.
+  Several real-world search use cases are built around limiting or filtering based on a set filter.
   If the contents of a field in the document matches any of the values in the query set, it should be retrieved.
   E.g. searching data for a set of users:
 </p>
@@ -302,8 +302,8 @@ select * from sources * where user_id = 1 or user_id = 2 or user_id = 3 or user_
 select * from sources * where weightedSet(user_id, {"1":1, "2":1, "3":1})
 </pre>
 <p>
-  Attribute fields used like the above without other stronger search criteria
-  should be created with <code>fast-search</code>.
+  Attribute fields used like the above without other stronger query terms, 
+  should have <code>fast-search</code> and <code>rank:filter</code>.
   If there is a large number of unique values in the field,
   it is faster to use <code>hash</code> dictionary instead of <code>btree</code>,
   which is the default data structure for dictionaries for attribute fields with <code>fast-search</code>:
@@ -321,7 +321,7 @@ field user_id type long {
   <em>btree</em> dictionary would be 1000 lookup times log(10M),
   while <em>hash</em> based would be 1000 lookups times 1.
 
-  The <code>weightedSet</code> query set filtering also work brilliantly in combination with <em>TAAT</em>,
+  The <code>weightedSet</code> query set filtering approach works great in combination with <em>TAAT</em>,
   see <a href="#hybrid-taat-daat">hybrid TAAT/DAAT</a> section.
 </p>
 <p>
@@ -330,16 +330,17 @@ field user_id type long {
 
 <h2 id="document-summaries-hits">Document summaries - hits</h2>
 <p>
-  If queries request many hits from a cluster with few content nodes,
-  increasing the <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
+  If queries request many (thousands) of hits from a content cluster with few content nodes,
+  increasing the <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost. 
 </p><p>
   Using <a href="../document-summaries.html">explicit document summaries</a>,
-  Vespa can support memory-only summary/hit fetching if fields referenced in document summary are
-  <strong>all</strong> defined as <em>attribute</em>.
-</p>
-<p>
+  Vespa can support memory-only summary fetching, if all fields referenced in the document summary are
+  <strong>all</strong> defined with <code>attribute</code>. Dedicated in-memory summaries avoid (potential) 
+  disk read and summary chunk decompression. 
+  Vespa document summaries are stored using compressed 
+  <a href="../reference/services-content.html#summary-store-logstore-chunk">chunks</a>.
   See also the <a href="practical-search-performance-guide.html#hits-and-summaries">practical 
-    search performance guide</a>.
+    search performance guide on hits fetching</a>.
 </p>
 
 
