@@ -9,7 +9,7 @@ redirect_from:
 Benchmarking a Vespa application is essential to get an idea of
 how well the test configuration performs.
 Thus, benchmarking is an essential part of sizing a search cluster itself.
-Benchmarking a cluster can answer the following questions:
+Benchmarking a cluster can answer the following questions:</p>
 <ul>
   <li>What throughput and latency to expect from a search node?</li>
   <li>Which resource is the bottleneck in the system?</li>
@@ -30,18 +30,18 @@ Before benchmarking, consider:
     What is the expected query mix?
     Having a representative query mix to test with is essential in order to get valid results.
     Splitting up in different types of queries
-    is also a useful way to get an idea of which query is the heaviest.
+    is also a useful way to get an idea of which query classes are resource intensive. 
   </li><li>
-    What is the expected SLA, both in terms of latency and throughput?
+    What is the expected SLA, both in terms of latency and query throughput?
   </li><li>
     How important is real-time behavior? What is the rate of incoming documents, if any?
   </li>
 </ul>
+
 <p>
 If benchmarking using Vespa Cloud, see <a href="https://cloud.vespa.ai/en/benchmarking">
 Vespa Cloud Benchmarking</a>.
 </p>
-
 
 
 <h2 id="vespa-fbench">vespa-fbench</h2>
@@ -53,21 +53,16 @@ It allows running any number of <em>clients</em>
 (i.e. the more clients, the higher load), for any length of time,
 and adjust the client response time before issuing the next query.
 It outputs the throughput, max, min, and average latency,
-as well as the 25, 50, 75, 90, 95 and 99 percentiles.
+as well as the 25, 50, 75, 90, 95, 99 and 99.9 latency percentiles.
 This provides quite accurate information of how well the system manages the workload.
-</p><p>
-Note: It is possible to list several hostnames and ports.
-The different hostnames will be distributed to the clients in a round-robin manner,
-such that, with two hosts, client 0, 2, &hellip;, 38 makes requests to the first host,
-while client 1, 3, &hellip;, 39 makes requests to the second host.
 </p><p>
 <strong>Disclaimer:</strong> <em>vespa-fbench</em> is a tool to drive load for benchmarking and tuning.
 It is <span style="text-decoration: underline">not</span> a tool for finding the maximum load
 or latencies in a production setting.
 This is due to the way it is implemented: It is run with <code>-n</code> number of clients per run.
 It is good for testing, as proton can be observed at different levels of concurrency.
-In the real world, the number of active clients will follow a different distribution,
-and impact 95p / 99p percentiles.
+In the real world, the number of clients and query arrival will follow a different distribution,
+and impact 95p / 99p latency percentiles.
 </p>
 
 
@@ -76,43 +71,27 @@ and impact 95p / 99p percentiles.
 vespa-fbench uses <em>query files</em> for GET and POST queries -
 see the <a href="../reference/vespa-cmdline-tools.html#vespa-fbench">reference</a> - examples:
 <!-- ToDo: make more complex examples than the reference -->
+<em>HTTP GET</em> requests:
 <pre>
 /search/?yql=select%20%2A%20from%20sources%20%2A%20where%20true
 </pre>
+<em>HTTP POST</em> requests format:
 <pre>
 /search/
 {"yql" : "select * from sources * where true"}
 </pre>
-<p>
-A common way to make query files is to use the queries from production installations,
-or generate the queries from the document feed or expected queries.
-</p><p>
-<em>vespa-fbench</em> runs each client in a separate thread.
-Split the query files into one file per client:
-<pre>
-$ gunzip -c queries.gz | grep '/search/' | <a href="../reference/vespa-cmdline-tools.html#vespa-fbench-split-file">vespa-fbench-split-file</a> 512
-</pre>
-<p>
-Make sure to generate as many files as concurrent clients (<code>-n</code> parameters) -
-use <code>-r</code> to reuse query files.
-Each client would use a query and output file given by the given pattern and it's client number,
-i.e. client 1 will use query file query001.txt and output file output001.txt.
-</p>
-
 
 <h3 id="run-queries">Run queries</h3>
 <p>
 A typical vespa-fbench command looks like:
 <pre>
-$ vespa-fbench -n 8 -q query%03d.txt -s 300 -c 0 myhost.mydomain.com 8080
+$ vespa-fbench -n 8 -q queries.txt -s 300 -c 0 myhost.mydomain.com 8080
 </pre>
 <p>
-This starts 8 clients, each using queries from a query file prefixed with <code>query</code>,
-followed by the client number.
-This way, client 1 will use <code>query000.txt</code> etc.
+This starts 8 clients, using requests read from <code>queries.txt</code>. 
+
 The <code>-s</code> parameter indicates that the benchmark will run for 300 seconds.
-The <code>-c</code> parameter, states that each
-client should wait for 0 milliseconds between each query.
+The <code>-c</code> parameter, states that each client thread should wait for 0 milliseconds between each query.
 The last two parameters are container hostname and port.
 Multiple hosts and ports can be provided,
 and the clients will be uniformly distributed to query the containers round-robin.
@@ -124,10 +103,21 @@ $ docker run -v /Users/myself/tmp:/testfiles \
       -w /testfiles --entrypoint '' vespaengine/vespa \
       /opt/vespa/bin/vespa-fbench \
           -C data-plane-public-cert.pem -K data-plane-private-key.pem -T /etc/ssl/certs/ca-bundle.crt \
-          -n 10 -q query%03d.txt -o output%03d.txt -xy -s 300 -c 0 \
+          -n 10 -q queries.txt -o result.txt -s 300 -c 0 \
           myapp.mytenant.aws-us-east-1c.z.vespa-app.cloud 443
 </pre>
+When using a query file with HTTP POST requests (<code>-P</code> option) one also need
+to pass the <em>Content-Type</em> header using the <code>-H</code> header option. 
 
+<pre>
+  $ docker run -v /Users/myself/tmp:/testfiles \
+        -w /testfiles --entrypoint '' vespaengine/vespa \
+        /opt/vespa/bin/vespa-fbench \
+            -C data-plane-public-cert.pem -K data-plane-private-key.pem -T /etc/ssl/certs/ca-bundle.crt \
+            -n 10 -P -H "Content-Type: application/json" -q queries_post.txt -o output.txt -s 300 -c 0 \
+            myapp.mytenant.aws-us-east-1c.z.vespa-app.cloud 443
+  
+          </pre>
 
 
 <h3 id="post-processing">Post Processing</h3>
@@ -159,16 +149,6 @@ utilization:               99.93 %
 Take note of the number of <em>failed requests</em>,
 as a high number here can indicate that the system is overloaded,
 or that the queries are invalid.
-</p><p>
-The <code>-xy</code> options outputs benchmarking data to output files, one per client.
-Note that saving all responses to disk might impact the performance of the benchmarking itself.
-If only the summary is needed, it is recommended to not use output files.
-</p><p>
-Use <a href="../reference/vespa-cmdline-tools.html#vespa-fbench-result-filter.pl">
-vespa-fbench-result-filter.pl</a> to format the above output into a space-separated format -
-this simplifies import to spreadsheets of plotting.
-</p><p>
-Notes: <!-- ToDo: clean this up -->
 </p>
 <ul>
   <li>
@@ -178,17 +158,10 @@ Notes: <!-- ToDo: clean this up -->
     means that vespa-fbench is stress testing the system 50% of the time,
     and is doing nothing the remaining 50% of the time
   </li><li>
-    Do not run vespa-fbench on the same machine as the search node,
-    as it can impact the performance of vespa system.
-    If running on the container node, track CPU usage to make sure impact is minimal.
-  </li><li>
-    vespa-fbench latency results include network latency.
+    vespa-fbench latency results include network latency between the client and the Vespa instance.
     Measure and subtract network latency to obtain the true vespa query latency.
-  </li><li>
-    If many of the queries return zero results, the average latency will be low</li>
+  </li>
 </ul>
-
-
 
 <h2 id="benchmark">Benchmark</h2>
 <p>
@@ -223,29 +196,9 @@ $ vespa-stop-services && vespa-start-services && sleep 60 && vespa-proton-cmd --
     </li><li>
         <p>
         use #threads sweet spot, then increase number of clients, observe latency and CPU.
-        Rule of thumb: not exceed 70% CPU
         </p>
     </li>
 </ol>
-Notes:
-<ul>
-    <li>
-        Allow a 1-2 minute warmup after proton restart.
-        Alternatively, let each test run use 5-10 minutes, and use stable latency values
-    </li><li>
-        Normally, looking at CPU metrics for the node running <em>proton</em> suffice -
-        but make sure the node running the <em>container</em> is not saturated
-    </li><li>
-        Test validity: When scaling down from full data set to single-node,
-        make sure to extract data that are representative.
-        I.e. the number of ranked hits per node should be the same as for in full data set.
-        Look at <em>zero hit queries</em> in fbench output to evaluate
-    </li><li>
-        <!-- ToDo: this is not well formulated -->
-        Grouping is multi-phase, so behavior in a larger system will be different, based on data set
-    </li>
-</ul>
-
 
 <h3 id="metrics">Metrics</h3>
 <p>
@@ -262,25 +215,3 @@ Output CPU util:
 $ curl http://localhost:8080/metrics/v2/values | \
   jq '.nodes[] | select(.role=="content/mysearchcluster/0/0") | .node.metrics[].values."cpu.util"'
 </pre>
-
-
-<h3 id="">Elastic Block Store</h3>
-<p>
-If benchmarking Vespa using EBS or similar quota-based file system,
-pay attention to the IO operations.
-EBS generally has high performance as long as there are free IO credits.
-Use <em>Cloudwatch</em>, navigate to <em>Elastic Block Store</em>
-and track <em>Burst Balance Average</em> - make sure the units never drop to 0.
-</p><p>
-Note that even though tests are successful for normal write and read load,
-there are operational use cases that will radically increase IO load.
-Worst case is adding more nodes to a system,
-where current nodes will de-index documents are they are written to new nodes,
-which will also have a high write load.
-The more documents, the more IO credits are spent.
-</p><p>
-Summary: if using EBS or similar storage,
-make sure all operational use cases are tested.
-Vespa Team normally recommends using instances with local SSDs
-for applications with much data / high IO.
-</p>
