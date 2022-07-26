@@ -317,7 +317,7 @@ the Vespa application — which services to run and how many nodes per service.
 The default [query profile](../query-profiles.html) can be used to override
 default query api settings for all queries.
 
-The following enables [presentation.timing](reference/query-api-reference.html#presentation.timing) and
+The following enables [presentation.timing](../reference/query-api-reference.html#presentation.timing) and
 renders `weightedset` fields as a JSON maps.
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
@@ -1764,7 +1764,7 @@ to a lower number than the global default.
 
 This adds a new `rank-profile` `similar-t2` using `num-threads-per-search: 2` instead
 of the global 4 setting. It's also possible to set the number of threads in the query request
-using [ranking.matching.numThreadsPerSearch](reference/query-api-reference.html#ranking.matching). 
+using [ranking.matching.numThreadsPerSearch](../reference/query-api-reference.html#ranking.matching).
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
