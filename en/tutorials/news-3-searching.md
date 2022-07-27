@@ -414,7 +414,7 @@ number of times a news article was shown (impressions) and how many
 clicks it received. A high number of clicks relative to impressions indicates
 that the news article was generally popular. We can use this signal in our
 ranking. Since both clicks and impressions are attribute fields, these fields can be 
-[updated](https://docs.vespa.ai/en/partial-updates.html) at scale with very high throughput.  
+[updated](../partial-updates.html) at scale with very high throughput.
 
 We can use this signal in our ranking, by including a `popularity` rank profile, as defined below at the bottom of
 `schemas/news.sd`. Note that rank profiles are defined outside of the `document` block:

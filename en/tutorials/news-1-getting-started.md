@@ -34,12 +34,12 @@ In the next part of the tutorial, we'll start developing our application.
 ## Prerequisites
 
 * [Docker](https://www.docker.com/) Desktop installed and running. 10GB available memory for Docker is recommended.
-  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+  Refer to [Docker memory](../operations/docker-containers.html#memory)
   for details and troubleshooting
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
 * Architecture: x86_64
 * Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
-* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
+* [Homebrew](https://brew.sh/) to install [Vespa CLI](../vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 * python 3 
 
@@ -49,7 +49,7 @@ and train machine learning models for use in ranking.
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+This tutorial uses [Vespa-CLI](../vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
 
@@ -156,8 +156,7 @@ we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
 document. 
 
-The first example uses the [vespa-feed-client](https://docs.vespa.ai/en/vespa-feed-client.html)
-to index a document:
+The first example uses the [vespa-feed-client](../vespa-feed-client.html) to index a document:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -168,8 +167,8 @@ $ unzip vespa-feed-client-cli.zip
 </pre>
 </div>
 
-We can also feed using [Vespa document api](https://docs.vespa.ai/en/document-v1-api-guide.html) directly,
- or using vespa cli which also uses the http document api. 
+We can also feed using [Vespa document api](../document-v1-api-guide.html) directly,
+or using vespa cli which also uses the http document api.
 
 This runs the `vespa-feed-client` Java client with the file `doc.json` file.
 <div class="pre-parent">

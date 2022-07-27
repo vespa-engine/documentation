@@ -19,18 +19,18 @@ In addition, we will showcase how easy it is to switch and experiment with diffe
 ## Prerequisites
 
 * [Docker](https://www.docker.com/) Desktop installed and running. 10GB available memory for Docker is recommended.
-  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+  Refer to [Docker memory](../operations/docker-containers.html#memory)
   for details and troubleshooting
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
 * Architecture: x86_64
 * Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
-* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
+* [Homebrew](https://brew.sh/) to install [Vespa CLI](../vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 * python 3 
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+This tutorial uses [Vespa-CLI](../vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
 

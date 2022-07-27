@@ -47,7 +47,7 @@ In the following sections we explore matching and ranking over multi-valued stri
   or Docker on Linux
 - Operating system: macOS or Linux
 - Architecture: x86_64
-- [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download 
+- [Homebrew](https://brew.sh/) to install [Vespa CLI](vespa-cli.html), or download
  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 
 ### A minimal Vespa application
