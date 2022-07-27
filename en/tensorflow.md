@@ -275,7 +275,7 @@ Whenever the TensorFlow model is retrained to produce new variable values,
 write them to Vespa as follows:
 
 1. Convert the Variable value to the Vespa document format:
-Obtain <a href="https://mvnrepository.com/artifact/com.yahoo.vespa/model-integration">model-integration.jar</a>
+Obtain <a href="https://mvnrepository.com/artifact/com.yahoo.vespa/model-integration" data-proofer-ignore>model-integration.jar</a>
 (with dependencies), and run
 ```
 java -cp model-integration-jar-with-dependencies.jar ai.vespa.rankingexpression.importer.tensorflow.VariableConverter \
