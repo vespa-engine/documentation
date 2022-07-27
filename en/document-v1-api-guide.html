@@ -10,10 +10,11 @@ redirect_from:
   Refer to the <a href="reference/document-v1-api-reference.html">document/v1 API reference</a>.
 </p>
 <p>
-  Many of the examples uses <em>number</em> and <em>group</em> <a href="documents.html#document-ids">document id</a> 
-  modifiers. Do note that these are special cases that only work as expected for document types
-  with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>. Do 
-  not use group or number modifiers with regular indexed mode document types. 
+  Many of the examples uses <em>number</em> and <em>group</em>
+  <a href="documents.html#document-ids">document id</a> modifiers.
+  Do note that these are special cases that only work as expected for document types
+  with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>.
+  Do not use group or number modifiers with regular indexed mode document types.
 </p>
 
 
@@ -81,16 +82,15 @@ $ curl http://hostname:8080/document/v1/?cluster=mycluster&amp;bucketSpace=globa
   <td>
     <p id="post">Post data in the <a href="reference/document-json-format.html">document JSON format</a>.</p>
 <pre>
-$ curl -X POST -H "Content-Type:application/json" --data-binary @document-1.json http://hostname:8080/document/v1/namespace/music/docid/1
-</pre>
-<pre>
-{
-    "fields": {
-        "songs": "Knockin on Heaven's Door; Mr. Tambourine Man",
-        "title": "Best of Bob Dylan",
-        "url": "https://music.yahoo.com/bobdylan/BestOf"
-    }
-}
+$ curl -X POST -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": "Coldplay",
+          "album": "A Head Full of Dreams",
+          "year": 2015
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/1
 </pre>
   </td>
 </tr>
@@ -100,16 +100,15 @@ $ curl -X POST -H "Content-Type:application/json" --data-binary @document-1.json
   <td>
     <p id="put"></p>
 <pre>
-$ curl -X PUT -H "Content-Type:application/json" --data-binary @update.json http://hostname:8080/document/v1/namespace/music/docid/1
-</pre>
-<pre>
-{
-    "fields": {
-        "title": {
-            "assign": "New title"
-        }
-    }
-}
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": {
+              "assign": "Warmplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/1
 </pre>
   </td>
 </tr><tr>
@@ -117,12 +116,18 @@ $ curl -X PUT -H "Content-Type:application/json" --data-binary @update.json http
   <td>
     <p id="delete">Delete document with ID 1:</p>
 <pre>
-$ curl -X DELETE http://hostname:8080/document/v1/namespace/music/docid/1
+$ curl -X DELETE http://localhost:8080/document/v1/mynamespace/music/docid/1
 </pre>
-    Delete <em>all</em> documents in <em>my_doctype</em> schema:
+    Delete <em>all</em> documents in <em>music</em> schema:
 <pre>
-$ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
-  "$ENDPOINT/document/v1/my_namespace/my_doctype/docid?selection=true&amp;cluster=my_cluster"
+$ curl -X DELETE \
+  "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&amp;cluster=my_cluster"
+</pre>
+    Delete <em>all</em> documents in <em>music</em> schema, with security credentials:
+<pre>
+$ curl -X DELETE \
+  --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&amp;cluster=my_cluster"
 </pre>
   </td>
 </tr>
@@ -136,15 +141,15 @@ $ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.
     Uniform distribution: <em>id:mynamespace:music::mydocid-123</em>
   </li><li>
     Data access is grouped, e.g. personal data (each user has a numeric user id):
-    <em>id:mynamespace:music:n=12345:mydocid-123</em>. This is only useful for document types declared 
-    with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>. Do 
-    not use group modifiers with regular indexed mode document type.
+    <em>id:mynamespace:music:n=12345:mydocid-123</em>. This is only useful for document types declared
+    with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>.
+    Do not use group modifiers with regular indexed mode document type.
   </li><li>
     Using a string identifier to group data:
     <em>id:mynamespace:music:g=mymusicsite.com:mydocid-123</em>
-    This is only useful for document types declared 
-    with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>. Do 
-    not use group modifiers with regular indexed mode document type.
+    This is only useful for document types declared
+    with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>.
+    Do not use group modifiers with regular indexed mode document type.
   </li>
 </ul>
 
@@ -156,15 +161,16 @@ $ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.
   can be added to Put, Remove and Update operations. Example:
 </p>
 <pre>
-{
-    "update": "id:mynamespace:music::a-head-full-of-dreams",
-    "condition": "music.artist==\"Elvis\"",
-    "fields": {
-        "artist": {
-            "assign": "Coldplay"
-        }
-    }
-}
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "condition": "music.artist==\"Warmplay\"",
+      "fields": {
+          "artist": {
+              "assign": "Coldplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/1
 </pre>
 {% include important.html content="Use <em>documenttype.fieldname</em> (e.g. music.artist) in the condition,
 not only <em>fieldname</em>." %}
@@ -172,16 +178,10 @@ not only <em>fieldname</em>." %}
   If the condition is not met, a <em>412 Precondition Failed</em> is returned:
 </p>
 <pre>
-$ curl -X PUT -H "Content-Type:application/json" \
-  --data-binary @src/test/resources/A-Head-Full-of-Dreams-update.json \
-  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
-
 {
-    "pathId": "/document/v1/mynamespace/music/docid/a-head-full-of-dreams",
-    "id": "id:mynamespace:music::a-head-full-of-dreams",
-    "message": "[UNKNOWN(251013) @ tcp/vespa-container:19112/default]:
-      ReturnCode(TEST_AND_SET_CONDITION_FAILED,
-      Condition did not match document nodeIndex=0 bucket=20000000000000de)"
+    "pathId": "/document/v1/mynamespace/music/docid/1",
+    "id": "id:mynamespace:music::1",
+    "message": "[UNKNOWN(251013) @ tcp/vespa-container:19112/default]: ReturnCode(TEST_AND_SET_CONDITION_FAILED, Condition did not match document nodeIndex=0 bucket=20000000000000c4 ) "
 }
 </pre>
 <p>
@@ -198,14 +198,15 @@ $ curl -X PUT -H "Content-Type:application/json" \
   This simplifies client code in the case of multiple writers. Example:
 </p>
 <pre>
-$ cat src/test/resources/A-Head-Full-of-Dreams-update.json
-{
-    "fields": { "artist": { "assign": "Coldplay" } }
-}
-
-$ curl -X PUT -H "Content-Type:application/json" \
-  --data-binary @src/test/resources/A-Head-Full-of-Dreams-update.json \
-  'http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-things?&amp;create=true'
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": {
+              "assign": "Coldplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/2?create=true
 </pre>
 <p>
   <em>create</em> can be used in combination with a <a href="#conditional-writes">condition</a>.
@@ -219,7 +220,7 @@ $ curl -X PUT -H "Content-Type:application/json" \
            Is it likely to happen, so we need to care about this?
            Where can I read more? -->
 {% include warning.html content="If all existing replicas of a document are missing
-  when an update with <em>\"create\": true</em> is executed, a new document will always be created.
+  when an update with <code>\"create\": true</code> is executed, a new document will always be created.
   This happens even if a condition has been given.
   If the existing replicas become available later,
   their version of the document will be overwritten by the newest update since it has a higher timestamp." %}
@@ -272,7 +273,7 @@ $ curl -X PUT -H "Content-Type:application/json" \
 <p>
   To iterate over documents, use <a href="content/visiting.html">visiting</a> — sample output:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
     "pathId": "/document/v1/namespace/doc/docid",
     "documents": [
@@ -280,14 +281,12 @@ $ curl -X PUT -H "Content-Type:application/json" \
             "id": "id:namespace:doc::id-1",
             "fields": {
                 "title": "Document title 1",
-                ...
             }
-        },
-        ...
+        }
     ],
     "continuation": "AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA"
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   Note the <em>continuation</em> token — use this in the next request for more data.
   Below is a sample script dumping all data using <a href="https://stedolan.github.io/jq/">jq</a> for JSON parsing.
@@ -344,19 +343,3 @@ do
 done
 wait
 {% endhighlight %}</pre>
-
-
-<h2 id="using-fieldsets">Using fieldsets</h2>
-<!-- ToDo: rewrite this.
- To avoid this, limit visiting to just one document type
- by visiting at the /document/v1/namespace/document-type/docid level, or <what you wrote>.
- -->
-<p>
-  When visiting across all document types,
-  some internal document fields (e.g. Geo fields) set by Vespa may be returned as part of the results.
-  To avoid this, limit visiting to just one document type using <em>selection</em>
-  and explicitly filter these internal fields away using <em>fieldSet</em>:
-</p>
-<pre>
-$ curl http://hostname:8080/document/v1/?cluster=mycluster&amp;selection=mydoctype&amp;fieldSet=mydoctype:%5Bdocument%5D
-</pre>
