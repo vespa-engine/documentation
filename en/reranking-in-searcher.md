@@ -34,7 +34,7 @@ See also [life of a query in Vespa](performance/sizing-search.html#life-of-a-que
   or Docker on Linux
 - Operating system: macOS or Linux
 - Architecture: x86_64
-- [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download 
+- [Homebrew](https://brew.sh/) to install [Vespa CLI](vespa-cli.html), or download 
  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 - [Java 17](https://openjdk.java.net/projects/jdk/17/) 
 - [Apache Maven](https://maven.apache.org/install.html) is used to build the application. 

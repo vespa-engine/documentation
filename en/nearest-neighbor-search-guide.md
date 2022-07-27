@@ -32,16 +32,16 @@ These are the prerequisites for reproducing the steps in this performance guide:
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
 * Architecture: x86_64 (For arm64, use image from [Vespa arm64 preview](https://blog.vespa.ai/preview-of-vespa-on-arm64/))
 * Minimum **6 GB** memory dedicated to Docker (the default is 2 GB on Macs).
-  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+  Refer to [Docker memory](operations/docker-containers.html#memory)
   for details and troubleshooting
-* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
+* [Homebrew](https://brew.sh/) to install [Vespa CLI](vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 * Python3 for converting the dataset to Vespa json. 
 * `curl` to download the dataset and `zstd` to decompress published embedding data. 
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+This tutorial uses [Vespa-CLI](vespa-cli.html),
 the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows:
 

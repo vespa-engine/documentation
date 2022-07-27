@@ -102,8 +102,7 @@ The `embedding` field is a tensor field. Tensors in Vespa are flexible
 multi-dimensional data structures, and, as first-class citizens, can be used
 in queries, document fields, and constants in ranking. Tensors can be either
 dense or sparse or both, and can contain any number of dimensions. Please see
-[the tensor user guide](https://docs.vespa.ai/en/tensor-user-guide.html) for
-more information.
+[the tensor user guide](../tensor-user-guide.html) for more information.
 
 Here we have defined a dense tensor with a single dimension (`d0` - dimension
 0), which represents a vector. The distance metric is euclidean as we would
@@ -111,7 +110,7 @@ like to use this field for nearest-neighbor search.
 
 This is seen in the `recommendation` rank profile. Here, we've added a
 ranking expression using the
-[closeness](https://docs.vespa.ai/en/reference/rank-features.html#closeness(dimension,name))
+[closeness](../reference/rank-features.html#closeness(dimension,name))
 ranking feature, which calculates the euclidean distance and uses that to rank
 the news articles. This depends on using the `nearestNeighbor` search operator,
 which we'll get back to below when searching. But for now, this expects 
@@ -139,8 +138,7 @@ So, assuming you already have a system up and running from the previous search t
 you don't need to feed the entire corpus.
 With a partial update, you only need to update the necessary fields.
 So, after training another set of embeddings you can partially feed them again.
-Please refer to [Vespa reads and writes](https://docs.vespa.ai/en/reads-and-writes.html)
-for more information on feeding formats.
+Please refer to [Vespa reads and writes](../reads-and-writes.html) for more information on feeding formats.
 
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:
@@ -334,11 +332,10 @@ $ ./src/python/user_search.py U33527 10
 
 This script first retrieves the user embedding using an HTTP `GET` query to
 Vespa. It then parses the tensor containing the embedding vector. Finally, it
-issues a `nearestNeighbor` search using a `POST` (however a `GET` would work
-just as well). Please see [the documentation for nearest-neighbor
-operator](https://docs.vespa.ai/en/reference/query-language-reference.html#nearestneighbor)
-for more on the syntax for nearest-neighbor searches. The `nearestNeighbor`
-search looks like this:
+issues a `nearestNeighbor` search using a `POST` (however a `GET` would work just as well).
+Please see the [nearest-neighbor operator](../reference/query-language-reference.html#nearestneighbor)
+for more on the syntax for nearest-neighbor searches.
+The `nearestNeighbor` search looks like this:
 
 ```
 {
