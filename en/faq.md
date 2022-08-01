@@ -344,6 +344,12 @@ Vespa does not have a language like
 it is more flexible to write application logic in a JVM-supported language, using
 [Searchers](searcher-development.html) and [Document Processors](document-processing.html).
 
+#### How can I batch-get documents by ids in a Searcher
+A [Searcher](searcher-development.html) intercepts a query and/or result.
+To get a number of documents by id in a Searcher or other component like a [Document processor](document-processing.html),
+you can have an instance of [com.yahoo.documentapi.DocumentAccess](reference/component-reference.html#injectable-components)
+injected and use that to get documents by id instead of the HTTP API.
+
 <!-- How to add custom code to a Vespa application? -->
 
 <!--p id="programming-vespa-3" style="margin-bottom: 0px;"><strong>Is there a way to check if this component is alive or not?
