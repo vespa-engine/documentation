@@ -24,7 +24,6 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
   }
 </style>
 
-<!-- ToDo: script FAQ TOC once final design is settled -->
 <div class="row">
   <div class="col-6-12">
     <div id="toc-0" class="box m-10 p-10">
@@ -289,6 +288,11 @@ see [indexing](indexing.html) and [feed troubleshooting](operations/admin-proced
 This is often a problem if using [document expiry](documents.html#document-expiry),
 as documents already expired will not be persisted, they are silently dropped.
 Feeding stale test data with old timestamps can cause this.
+
+#### How to feed many files, avoiding 429 error?
+Using too many clients can generate a 429 response code.
+The Vespa sample apps use the [vespa-feed-client](vespa-feed-client.html) which uses HTTP/2 for high throughput -
+it is better to stream the feed files through this client.
 
 
 
