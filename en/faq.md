@@ -427,7 +427,8 @@ Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
 WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
 and no specific platform was requested
 ```
-Refer to [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
+Refer to [preview-of-vespa-on-arm64](https://blog.vespa.ai/preview-of-vespa-on-arm64/) and
+[sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 #### How fast can nodes be added and removed from a running cluster?
 [Elasticity](elasticity.html) is a core Vespa strength -
@@ -492,6 +493,18 @@ ensures that data can be queried from all groups.
 
 #### How to set up for disaster recovery / backup?
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
+
+#### How to check Vespa version for a running instance?
+Use the ApplicationStatus endpoint for the config server (19071) or container (8080) to find Vespa version:
+```
+$ curl -s http://localhost:8080/ApplicationStatus | head
+Handling connection for 8080
+{
+  "application" : {
+    "vespa" : {
+      "version" : "8.27.12"
+    },
+```
 
 
 <script type="application/javascript">
