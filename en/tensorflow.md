@@ -16,10 +16,8 @@ Key steps covered in the tutorial above:
 1. Define and train a `tf_model`.
 2. Save the model to disk: `tf_model.save("tf_model_file")`
 3. Convert the model to ONNX with the `tf2onnx` library:
-```python
-from tf2onnx import convert
-
-!python3 -m tf2onnx.convert --saved-model tf_model_file --output tf_model.onnx
+```bash
+python3 -m tf2onnx.convert --saved-model tf_model_file --output tf_model.onnx
 ```
 4. Inspect expected input/output format with the `onnx` library:
 ```python
