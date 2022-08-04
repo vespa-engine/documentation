@@ -72,7 +72,7 @@ schema my_schema {
 ```
 
 This defines the model called `my_onnx_model`. It is evaluated using the
-`onnx` [ranking feature](http://docs.vespa.ai/documentation/reference/rank-features.html).
+`onnx` [ranking feature](reference/rank-features.html).
 This rank feature specifies which model to evaluate in the ranking expression
 and, optionally, which output to use from the model.
 

@@ -24,7 +24,6 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
   }
 </style>
 
-<!-- ToDo: script FAQ TOC once final design is settled -->
 <div class="row">
   <div class="col-6-12">
     <div id="toc-0" class="box m-10 p-10">
@@ -253,7 +252,7 @@ public class ConfigCacheRefresher extends AbstractComponent {
 
 #### Is it possible to query Vespa using a list of document ids?
 The best article on the subject is
-[multi-lookup set filtering](https://docs.vespa.ai/en/performance/feature-tuning.html#multi-lookup-set-filtering).
+[multi-lookup set filtering](performance/feature-tuning.html#multi-lookup-set-filtering).
 Refer to the [weightedset-example](multivalue-query-operators.html#weightedset-example) -
 also see [weightedset](reference/query-language-reference.html#weightedset)
 for writing a YQL query to select multiple IDs.
@@ -276,6 +275,21 @@ This is because a given piece of text searching one fieldset is tokenized just o
 so there's no right choice of tokenization in this case.
 More details on [stack overflow](https://stackoverflow.com/q/72784136).
 
+#### Searchers and timeout questions
+During multi-phase searching, is the query timeout set for each individual searcher
+or is the query timeout set for the entire search chain?
+Also, if we asynchronously execute several search chains,
+can we set different query timeouts for each of these chains
+plus a separate overall timeout for the searcher that performs the asynchronous executions?
+
+The timeout is for the entire query
+(and most Searchers don’t check timeout -
+use [getTimeLeft](https://javadoc.io/static/com.yahoo.vespa/container-search/8.26.15/com/yahoo/search/Query.html#getTimeLeft())).
+E.g. if a search chain has 3 searchers,
+it is OK for 1 searcher to take 497 ms and 2 searchers to each take 1 ms for a query timeout of 500 ms.
+You can set a different timeout in each cloned query you send to any of those chains,
+and you can specify the timeout when waiting for responses from them.
+
 
 
 {:.faq-section}
@@ -289,6 +303,11 @@ see [indexing](indexing.html) and [feed troubleshooting](operations/admin-proced
 This is often a problem if using [document expiry](documents.html#document-expiry),
 as documents already expired will not be persisted, they are silently dropped.
 Feeding stale test data with old timestamps can cause this.
+
+#### How to feed many files, avoiding 429 error?
+Using too many clients can generate a 429 response code.
+The Vespa sample apps use the [vespa-feed-client](vespa-feed-client.html) which uses HTTP/2 for high throughput -
+it is better to stream the feed files through this client.
 
 
 
@@ -339,6 +358,12 @@ Vespa does not have a language like
 [painless](https://www.elastic.co/guide/en/elasticsearch/reference/master/modules-scripting-painless.html) -
 it is more flexible to write application logic in a JVM-supported language, using
 [Searchers](searcher-development.html) and [Document Processors](document-processing.html).
+
+#### How can I batch-get documents by ids in a Searcher
+A [Searcher](searcher-development.html) intercepts a query and/or result.
+To get a number of documents by id in a Searcher or other component like a [Document processor](document-processing.html),
+you can have an instance of [com.yahoo.documentapi.DocumentAccess](reference/component-reference.html#injectable-components)
+injected and use that to get documents by id instead of the HTTP API.
 
 <!-- How to add custom code to a Vespa application? -->
 
@@ -417,7 +442,8 @@ Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
 WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
 and no specific platform was requested
 ```
-Refer to [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
+Refer to [preview-of-vespa-on-arm64](https://blog.vespa.ai/preview-of-vespa-on-arm64/) and
+[sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 #### How fast can nodes be added and removed from a running cluster?
 [Elasticity](elasticity.html) is a core Vespa strength -
@@ -482,6 +508,18 @@ ensures that data can be queried from all groups.
 
 #### How to set up for disaster recovery / backup?
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
+
+#### How to check Vespa version for a running instance?
+Use the ApplicationStatus endpoint for the config server (19071) or container (8080) to find Vespa version:
+```
+$ curl -s http://localhost:8080/ApplicationStatus | head
+Handling connection for 8080
+{
+  "application" : {
+    "vespa" : {
+      "version" : "8.27.12"
+    },
+```
 
 
 <script type="application/javascript">

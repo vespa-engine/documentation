@@ -29,16 +29,16 @@ These are the prerequisites for reproducing the steps in this performance guide:
 * Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
 * Architecture: x86_64
 * Minimum **6 GB** memory dedicated to Docker (the default is 2 GB on Macs).
-Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
+Refer to [Docker memory](../operations/docker-containers.html#memory)
   for details and troubleshooting
-* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
+* [Homebrew](https://brew.sh/) to install [Vespa CLI](../vespa-cli.html), or download
   a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
 * Python3 for converting the dataset to Vespa json. 
 * curl to download the dataset. 
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+This tutorial uses [Vespa-CLI](../vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
 
@@ -317,7 +317,7 @@ the Vespa application — which services to run and how many nodes per service.
 The default [query profile](../query-profiles.html) can be used to override
 default query api settings for all queries.
 
-The following enables [presentation.timing](reference/query-api-reference.html#presentation.timing) and
+The following enables [presentation.timing](../reference/query-api-reference.html#presentation.timing) and
 renders `weightedset` fields as a JSON maps.
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
@@ -1764,7 +1764,7 @@ to a lower number than the global default.
 
 This adds a new `rank-profile` `similar-t2` using `num-threads-per-search: 2` instead
 of the global 4 setting. It's also possible to set the number of threads in the query request
-using [ranking.matching.numThreadsPerSearch](reference/query-api-reference.html#ranking.matching). 
+using [ranking.matching.numThreadsPerSearch](../reference/query-api-reference.html#ranking.matching).
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {

@@ -214,7 +214,9 @@ the Vespa TLS stack has some additional constraints that are always present:
   (i.e. cipher suites using ECDHE as part of their key exchange).
 * Only modern, symmetric ciphers with
   [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption#Authenticated_encryption_with_associated_data)
-  properties are supported. In practice this means AES-GCM. Supported cipher suites are listed [here](#cipher-suites).
+  properties are supported. In practice this means [AES-GCM](https://en.wikipedia.org/wiki/AES-GCM) or
+  [ChaCha20-Poly1305](https://en.wikipedia.org/wiki/ChaCha20-Poly1305).
+  Supported cipher suites are listed [here](#cipher-suites).
 * TLS compression is explicitly disabled to mitigate [CRIME](https://en.wikipedia.org/wiki/CRIME)/BREACH-style
   compression oracle attacks.
 * TLS renegotiation is explicitly disabled.

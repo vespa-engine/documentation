@@ -258,11 +258,11 @@ indexing pipeline is separated by the pipe character '|':
   summary](../document-summaries.html) in the result set.
 
 Here, we also use the
-[index](https://docs.vespa.ai/en/reference/schema-reference.html#index)
+[index](../reference/schema-reference.html#index)
 property, which sets up parameters for how Vespa should index the field. For
 the `title`, `abstract`, and `body` fields, we instruct Vespa to set up an
 index compatible with [bm25
-ranking](https://docs.vespa.ai/en/reference/rank-features.html#bm25) for text
+ranking](../reference/rank-features.html#bm25) for text
 search.
 
 

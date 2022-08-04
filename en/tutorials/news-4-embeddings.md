@@ -451,8 +451,7 @@ Euclidean nearest neighbor search problem. We use the technique discussed in
 [Speeding Up the Xbox Recommender System Using a Euclidean Transformation for Inner-Product
 Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf).
 
-See [Nearest Neighbor
-Search](https://docs.vespa.ai/en/nearest-neighbor-search.html) for more
+See [Nearest Neighbor Search](../nearest-neighbor-search.html) for more
 information on nearest neighbor search and supported distance metrics in Vespa.
 
 We've included a script to map the embeddings to euclidean space and create
