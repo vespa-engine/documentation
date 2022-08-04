@@ -21,8 +21,7 @@ python3 -m tf2onnx.convert --saved-model tf_model_file --output tf_model.onnx
 ```
 4. Inspect expected input/output format with the `onnx` library:
 ```python
-import onnx                  
-
+import onnx
 m = onnx.load("simpler_keras_model.onnx")
 m.graph.input # check input format
 m.graph.output # check output format
@@ -65,5 +64,3 @@ m.graph.output # check output format
         }
     }
 ```
-
-
