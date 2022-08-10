@@ -178,6 +178,11 @@ when 0, there are no more data syncing operations - see
 Nodes will work as normal during data sync, and query coverage will be the same.
 Nodes will be busier, though.
 
+#### How does namespace relate to schema?
+It does not,
+_namespace_ is a mechanism to split the document space into parts that can be used for document selection -
+see [documentation](documents.html#namespace).
+
 
 
 {:.faq-section}
