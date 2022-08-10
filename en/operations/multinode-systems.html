@@ -95,7 +95,8 @@ and implement security mechanisms of choice." %}
     Provision nodes:
     <ul>
       <li>Find AMI at <a href="https://centos.org/download/aws-images/">CentOS AWS AMI Cloud Images</a> -
-        this procedure is tested with <em>CentOS Stream 8	us-east-1	x86_64 ami-0ee70e88eed976a1b</em>.</li>
+        this procedure is tested with <em>CentOS Stream 8	us-east-1	x86_64 ami-0ee70e88eed976a1b</em>
+        and vespa-8.30.50.</li>
       <li>Use minimum <em>t2.medium</em> instances.</li>
       <li>Let AWS create a security group for the nodes, or use an existing one.</li>
       <li>Make sure to check for SSH traffic, for host login.</li>
@@ -275,7 +276,7 @@ $ zip -r - . -x "img/*" "scripts/*" "pki/*" "tls/*" README.md .gitignore | \
   </li>
   <li>
     On each of the 7 new hosts, install Vespa and set up the environment - same as for the config server hosts:
-    <pre>
+<pre>
 $ sudo dnf config-manager \
   --add-repo https://raw.githubusercontent.com/vespa-engine/vespa/master/dist/vespa-engine.repo
 $ sudo dnf config-manager --enable powertools
@@ -311,6 +312,64 @@ $ curl http://localhost:8080/state/v1/health
     Refer to the sample application ports:
     <img src="https://github.com/vespa-engine/sample-apps/raw/master/examples/operations/multinode-HA/img/multinode-HA.svg"
     alt="Sample application ports"/>
+  </li>
+</ul>
+
+
+
+<h3 id="aws-singlenode">AWS singlenode</h3>
+<p>
+  This is a variant of the multinode install, using only one host,
+  running both a config server and the other Vespa services on the same node.
+</p>
+<ul>
+  <li>
+    Provision a node, minumim a <em>t2.large</em>. Get its hostname for use in <code>VESPA_CONFIGSERVERS</code>:
+<pre>
+$ hostname
+</pre>
+  </li>
+  <li>
+    Install Vespa:
+<pre>
+$ sudo dnf config-manager \
+  --add-repo https://raw.githubusercontent.com/vespa-engine/vespa/master/dist/vespa-engine.repo
+$ sudo dnf config-manager --enable powertools
+$ sudo dnf install -y epel-release
+$ sudo dnf install -y vespa
+$ export VESPA_HOME=/opt/vespa
+$ echo "override VESPA_CONFIGSERVERS ip-172-31-95-248.ec2.internal" | \
+  sudo tee -a $VESPA_HOME/conf/vespa/default-env.txt
+</pre>
+  </li>
+  <li>
+    Get a sample application:
+<pre>
+$ sudo dnf install -y git
+$ git clone https://github.com/vespa-engine/sample-apps.git && cd sample-apps/album-recommendation
+</pre>
+  </li>
+  <li>
+    Start the config server, check health port after a few seconds:
+<pre>
+$ sudo /opt/vespa/bin/vespa-start-configserver
+$ curl localhost:19071/state/v1/health | head -5
+</pre>
+  </li>
+  <li>
+    Deploy the sample application:
+<pre>
+$ zip -r - . -x "img/*" "scripts/*" "pki/*" "tls/*" README.md .gitignore | \
+  curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+</pre>
+  </li>
+  <li>
+    Start Vespa, check container node health after some seconds:
+<pre>
+$ sudo /opt/vespa/bin/vespa-start-services
+$ curl localhost:8080/state/v1/health | head -5
+</pre>
   </li>
 </ul>
 
