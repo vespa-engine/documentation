@@ -414,8 +414,35 @@ Example: if a bucket has 3 replicas A, B, C and A & B both have metadata state X
 a request will be sent to A and C
 (but not B since it has the same state as A and would therefore not return a potentially different document).
 
-<!--How to optimise feeding from a Grid? -->
+#### How to keep indexes in memory?
+[Attribute](attributes.html) (with or without `fast-search`) is always in memory,
+but does not support tokenized matching.
+It is for structured data.
+[Index](schemas.html#indexing) (where there’s no such thing as fast-search since it is always fast)
+is in memory to the extent there is available memory and supports tokenized matching.
+It is for unstructured text.
 
+It is possible to guarantee that fields that are defined with `index`
+have both the dictionary and the postings in memory by changing from `mmap` to `populate`,
+see [index > io > search](reference/services-content.html#index-io-search).
+Make sure that the content nodes run on nodes with plenty of memory available,
+during index switch the memory footprint will 2x.
+Familiarity with Linux tools like `pmap` can help diagnose what is mapped and if it’s resident or not.
+
+Fields that are defined with `attribute` are in-memory,
+fields that have both `index` and `attribute` have separate data structures,
+queries will use the default mapped on disk data structures that supports `text` matching,
+while grouping, summary and ranking can access the field from the `attribute` store.
+
+A Vespa query is executed in two phases as described in [sizing search](performance/sizing-search.html),
+and summary requests can touch disk (and also uses `mmap` by default).
+Due to their potential size there is no populate option here,
+but one can define [dedicated document summary](document-summaries.html#performance)
+containing only fields that are defined with `attribute`.
+
+The [practical performance guide](performance/practical-search-performance-guide.html)
+can be a good starting point as well to understand Vespa query execution,
+difference between `index` and `attribute` and summary fetching performance.
 
 
 {:.faq-section}
