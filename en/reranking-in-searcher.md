@@ -28,16 +28,9 @@ consider configuring a dedicated [document summary](document-summaries.html).
 
 See also [life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
 
-
-### Guide prerequisites
-- [Docker Desktop on Mac](https://docs.docker.com/docker-for-mac/install) 
-  or Docker on Linux
-- Operating system: macOS or Linux
-- Architecture: x86_64
-- [Homebrew](https://brew.sh/) to install [Vespa CLI](vespa-cli.html), or download 
- a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
-- [Java 17](https://openjdk.java.net/projects/jdk/17/) 
-- [Apache Maven](https://maven.apache.org/install.html) is used to build the application. 
+{% include pre-req.html memory="4 Gb" extra-reqs='
+<li><a href="https://openjdk.java.net/projects/jdk/17/">Java 17</a>.</li>
+<li><a href="https://maven.apache.org/install.html">Apache Maven</a> is used to build the application.</li>' %}
 
 
 ### A minimal Vespa application
@@ -321,11 +314,13 @@ $ vespa document doc-1.json && vespa document doc-2.json
 
 ### Query the data
 Run a query - this will invoke the reranking searcher since it was included in a the `default` search chain:
-
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 2'>
 $ vespa query 'yql=select * from doc where userQuery()' \
  'query=sample' 
 </pre>
+</div>
 
 ```json
 {
@@ -390,9 +385,11 @@ $ vespa query 'yql=select * from doc where userQuery()' \
 
 ### Teardown
 Remove app and data:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
 $ docker rm -f vespa
 </pre>
-
+</div>
 
 <script src="/js/process_pre.js"></script>
