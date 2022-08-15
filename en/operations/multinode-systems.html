@@ -51,30 +51,29 @@ redirect_from:
     </admin>
 {% endhighlight %}</pre>
   </li>
-  <li>Install the Vespa image or Docker image on all the nodes and start Vespa on the nodes.</li>
+  <li>Install the Vespa packages or the <em>vespaengine/vespa</em> Docker image on all the nodes.</li>
   <li>Run
 <pre>
 $ echo "override VESPA_CONFIGSERVERS [configserver-hostnames]" >> $VESPA_HOME/conf/vespa/default-env.txt
 </pre>
     where <code>[configserver-hostnames]</code> is replaced by the full hostname of the config server
 	  (or a comma-separated list if multiple).
-  <li>Add these nodes to the container and content clusters
-    by adding more <code>node</code> tags in <em>services.xml</em>
-    (to avoid traffic disruption on restarts or node failure at least two nodes are needed in each cluster).
-    One can add the same nodes to multiple clusters.
+  </li>
+  <li>
+    Add these nodes to the container and content clusters
+    by adding more <code>node</code> tags in <em>services.xml</em>.
   </li>
   <li>Add the same nodes to <em>hosts.xml</em>.</li>
+  <li>Start Vespa on the nodes</li>
 </ol>
 <p>
-  With this, the application is fully production ready!
-</p>
-<p>
+  See below for AWS examples.
   Refer to <a href="configuration-server.html">configuration server operations</a> for troubleshooting.
 </p>
 
 
 
-<h2 id="aws">AWS</h2>
+<h2 id="aws-ec2">AWS EC2</h2>
 <p>
   The following is a procedure to set up a multinode application on AWS EC2 instances.
   Please run the procedure in
@@ -89,7 +88,7 @@ Make sure to use AWS instance types suitable for the application load,
 and implement security mechanisms of choice." %}
 
 
-<h3 id="config-server-cluster-setup">Config server cluster setup</h3>
+<h3 id="node-setup">Node setup</h3>
 <ul>
   <li>
     Provision nodes:
@@ -100,8 +99,8 @@ and implement security mechanisms of choice." %}
       <li>Use minimum <em>t2.medium</em> instances.</li>
       <li>Let AWS create a security group for the nodes, or use an existing one.</li>
       <li>Make sure to check for SSH traffic, for host login.</li>
-      <li>Launch 3 instances.
-        Write down hostnames like <code>ip-172-31-23-128.ec2.internal</code>,
+      <li>Launch 10 instances - the 3 first will be Vespa config server nodes, the 7 last Vespa nodes.
+        Write down the 3 config server hostnames, like <code>ip-172-31-23-128.ec2.internal</code>,
         <code>ip-172-31-29-111.ec2.internal</code>, <code>ip-172-31-20-49.ec2.internal</code>.
         The hostnames must be the same as returned by the <code>hostname</code> command.
       </li>
@@ -118,24 +117,31 @@ and implement security mechanisms of choice." %}
     </ul>
   </li>
   <li>
-    On each host, install Vespa using the <a href="../build-install-vespa.html#rpms">install procedure</a>:
-<pre>
+    On each of the 10 hosts,
+    install Vespa using the <a href="../build-install-vespa.html#rpms">install procedure</a>:
+    <pre>
 $ sudo dnf config-manager \
   --add-repo https://raw.githubusercontent.com/vespa-engine/vespa/master/dist/vespa-engine.repo
 $ sudo dnf config-manager --enable powertools
 $ sudo dnf install -y epel-release
 $ sudo dnf install -y vespa
+$ export VESPA_HOME=/opt/vespa
 </pre>
   </li>
   <li>
-    On each host, set up the environment using the config server host list:
+    On all the 10 hosts, set up the environment using the config server host list:
 <pre>
-$ export VESPA_HOME=/opt/vespa
 $ echo "override VESPA_CONFIGSERVERS" \
   "ip-172-31-23-128.ec2.internal,ip-172-31-29-111.ec2.internal,ip-172-31-20-49.ec2.internal" \
   | sudo tee -a $VESPA_HOME/conf/vespa/default-env.txt
 </pre>
+    It is required that all nodes, both config server and Vespa nodes,
+    have the same setting for <code>VESPA_CONFIGSERVERS</code>.
   </li>
+</ul>
+
+<h3 id="config-server-cluster-setup">Config server cluster setup</h3>
+<ul>
   <li>
     Start the 3-node config server cluster:
 <pre>
@@ -143,10 +149,12 @@ $ sudo /opt/vespa/bin/vespa-start-configserver
 </pre>
   </li>
   <li>
-    Verify the config cluster is running:
+    Verify the config cluster is running - on one of the config server nodes:
     <pre>
 $ for configserver in \
-  ip-172-31-23-128.ec2.internal ip-172-31-29-111.ec2.internal ip-172-31-20-49.ec2.internal
+  ip-172-31-23-128.ec2.internal \
+  ip-172-31-29-111.ec2.internal \
+  ip-172-31-20-49.ec2.internal \
   do curl -s http://$configserver:19071/state/v1/health | head -5; done
 
 {
@@ -190,30 +198,21 @@ $ sudo /opt/vespa/bin/vespa-start-services
 </ul>
 
 
-<h3 id="vespa-nodes-setup">Vespa nodes setup</h3>
+<h3 id="configure-application">Configure application</h3>
 <ul>
-  <li>
-    Provision nodes:
-    <ul>
-      <li>Use same AMI, instance types and security group as for the config servers.</li>
-      <li>Launch 7 instances.</li>
-    </ul>
-  </li>
-  <li>
-    Configure the sample application - on one of the config server nodes:
-    <ul>
-      <li>
+  <li>Configure the sample application - on one of the config server nodes:
 <pre>
 $ sudo dnf install -y git
 $ git clone https://github.com/vespa-engine/sample-apps.git && \
   cd sample-apps/examples/operations/multinode-HA
 </pre>
-      </li>
-      <li>Edit <em>hosts.xml</em> - replace the <em>nodeX.vespanet</em> names.
-        Let the 3 first hosts be the config server hosts above, the 7 rest the recently provisioned hosts - example:
+  </li>
+  <li>Edit <em>hosts.xml</em> - replace the <em>nodeX.vespanet</em> names.
+    Let the 3 first hosts be the config server hosts above, the 7 rest the Vespa hosts - example:
 <pre>{% highlight xml %}
-<?xml version="1.0" encoding="utf-8" ?>
-<hosts>
+      <?xml version="1.0" encoding="utf-8" ?>
+      <hosts>
+    <!-- 3 config server nodes -->
     <host name="ip-172-31-23-128.ec2.internal">
         <alias>node0</alias>
     </host>
@@ -224,6 +223,8 @@ $ git clone https://github.com/vespa-engine/sample-apps.git && \
         <alias>node2</alias>
     </host>
 
+
+        <!-- 7 Vespa nodes -->
     <host name="ip-172-31-29-34.ec2.internal">
         <alias>node3</alias>
     </host>
@@ -250,15 +251,15 @@ $ git clone https://github.com/vespa-engine/sample-apps.git && \
     </host>
 </hosts>
 {% endhighlight %}</pre>
-      </li>
-      <li>Deploy the application:
+  </li>
+  <li>Deploy the application:
 <pre>
 $ zip -r - . -x "img/*" "scripts/*" "pki/*" "tls/*" README.md .gitignore | \
   curl --header Content-Type:application/zip --data-binary @- \
   localhost:19071/application/v2/tenant/default/prepareandactivate
 </pre>
-        Expected output:
-<pre>{% highlight json %}
+    Expected output:
+    <pre>{% highlight json %}
 {
     "log": [],
     "tenant": "default",
@@ -271,23 +272,14 @@ $ zip -r - . -x "img/*" "scripts/*" "pki/*" "tls/*" README.md .gitignore | \
     }
 }
 {% endhighlight %}</pre>
-      </li>
-    </ul>
   </li>
-  <li>
-    On each of the 7 new hosts, install Vespa and set up the environment - same as for the config server hosts:
-<pre>
-$ sudo dnf config-manager \
-  --add-repo https://raw.githubusercontent.com/vespa-engine/vespa/master/dist/vespa-engine.repo
-$ sudo dnf config-manager --enable powertools
-$ sudo dnf install -y epel-release
-$ sudo dnf install -y vespa
-$ export VESPA_HOME=/opt/vespa
-$ echo "override VESPA_CONFIGSERVERS" \
-  "ip-172-31-23-128.ec2.internal,ip-172-31-29-111.ec2.internal,ip-172-31-20-49.ec2.internal" \
-  | sudo tee -a $VESPA_HOME/conf/vespa/default-env.txt
-</pre>
-  </li>
+</ul>
+
+
+
+
+<h3 id="vespa-nodes-setup">Vespa nodes setup</h3>
+<ul>
   <li>
     Start Vespa on the 7 hosts:
 <pre>
@@ -295,7 +287,7 @@ $ sudo /opt/vespa/bin/vespa-start-services
 </pre>
   </li>
   <li>
-    Validate the install.
+    Validate the installation.
     Use the <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">
     multinode-HA</a> steps to check the health interfaces on all 10 nodes.
     Note that in this guide, the ports are not mapped through a Docker container,
@@ -317,14 +309,15 @@ $ curl http://localhost:8080/state/v1/health
 
 
 
-<h3 id="aws-singlenode">AWS singlenode</h3>
+<h3 id="aws-ec2-singlenode">AWS EC2 singlenode</h3>
 <p>
   This is a variant of the multinode install, using only one host,
   running both a config server and the other Vespa services on the same node.
 </p>
 <ul>
   <li>
-    Provision a node, minumim a <em>t2.large</em>. Get its hostname for use in <code>VESPA_CONFIGSERVERS</code>:
+    Provision a node, minimum a <em>t2.large</em>.
+    Get its hostname for use in <code>VESPA_CONFIGSERVERS</code>:
 <pre>
 $ hostname
 </pre>
@@ -370,6 +363,172 @@ $ zip -r - . -x "img/*" "scripts/*" "pki/*" "tls/*" README.md .gitignore | \
 $ sudo /opt/vespa/bin/vespa-start-services
 $ curl localhost:8080/state/v1/health | head -5
 </pre>
+  </li>
+</ul>
+
+
+
+<h2 id="aws-ecs">AWS ECS</h2>
+<p>
+  This section explains how to set up a multinode system by running the Vespa
+  Docker image on <a href="https://us-east-1.console.aws.amazon.com/ecs">AWS ECS</a>.
+  See <a href="../getting-started.html">Getting Started</a> for troubleshooting, next steps and other guides.
+</p>
+
+
+<h3 id="create-a-10-node-ecs-cluster">Create a 10-node ECS cluster</h3>
+    <ul>
+      <li>Log in to AWS and the EC2 Container Service.
+        Click <em>Cluster &gt; Create Cluster &gt; EC2 Linux + Networking</em>, using the defaults and:
+        <table class="table">
+          <thead></thead>
+          <tbody>
+          <tr><th>Cluster name</th><td>vespa</td></tr>
+          <tr><th>EC2 instance type</th><td>t2.medium</td></tr>
+          <tr><th>Number of instances</th><td>10</td></tr>
+          <tr><th>Key pair</th><td><i>Select or create your keypair</i></td></tr>
+          <tr><th>Security group inbound rules - port range</th><td>0 - 65535</td></tr>
+          </tbody>
+        </table>
+      </li>
+      <li>Click <em>Create</em> and wait for the tasks to succeed</li>
+      <li>Click <em>View Cluster</em></li>
+    </ul>
+
+
+<h3 id="configure-ecs-instances">Configure ECS instances</h3>
+<ul>
+  <li>Click the <em>ECS Instances tab</em> - this should list 10 container instances</li>
+  <li>Select the 3 first Container Instance checkboxes,
+    then <em>Actions -> View/Edit attributes</em></li>
+  <li>Click <em>Add attribute</em>.
+    Set <code>Name=type</code> and <code>Value=configserver</code>
+    and click the green checkbox on the right.
+    Then click <em>Close</em>.
+  </li><li>Select the next 7 Container instance checkboxes,
+  then <em>Actions -> View/Edit attributes</em></li>
+  <li>Click <em>Add attribute</em>.
+    Set <code>Name=type</code> and <code>Value=services</code>
+    and click the green checkbox on the right. Then click <em>Close</em></li>
+  <li>Click on the first <em>Container Instance</em> name</li>
+  <li>Take a note of the 3 config server Private DNS addresses,
+    e.g. <code>ip-10-0-0-128.ec2.internal,ip-10-0-1-142.ec2.internal,ip-10-0-1-171.ec2.internal</code>,
+    as these will be used next.</li>
+</ul>
+
+
+<h3 id="start-the-config-server-task">Start the config server task</h3>
+<ul>
+  <li>Click <em>Task Definitions &gt; Create new Task Definition &gt; EC2 &gt; Next step</em></li>
+  <li>Click <em>Configure via JSON</em> and replace the content with
+    (note the comma-separated hostnames of the config servers addresses):
+<pre>
+{
+    "networkMode": "host",
+    "containerDefinitions": [
+        {
+            "name": "configserver",
+            "environment": [
+                {
+                    "name": "VESPA_CONFIGSERVERS",
+                    "value": "<span class="pre-hilite">ip-10-0-0-128.ec2.internal,ip-10-0-1-142.ec2.internal,ip-10-0-1-171.ec2.internal</span>"
+                }
+            ],
+            "image": "vespaengine/vespa",
+            "command": [
+                "configserver"
+            ],
+            "privileged": true,
+            "memoryReservation": 1024
+        }
+    ],
+    "placementConstraints": [
+        {
+            "expression": "attribute:type == configserver",
+            "type": "memberOf"
+        }
+    ],
+    "family": "configserver"
+}
+</pre>
+  </li>
+  <li>Click <em>Save &gt; Create</em></li>
+  <li>Choose <em>Actions -> Run task</em> and configure:
+    <table class="table">
+      <thead></thead><tbody>
+    <tr><th>Launch type</th><td>EC2</td></tr>
+    <tr><th>Cluster</th><td>vespa</td></tr>
+    <tr><th>Number of tasks</th><td>3</td></tr>
+    <tr><th>Placement templates</th><td>One Task Per Host</td></tr>
+    </tbody>
+    </table>
+  </li>
+  <li>Click <em>Run Task</em></li>
+  <li>Validate that the config servers started successfully -
+    use the same procedure as for <a href="#config-server-cluster-setup">EC2 instances</a>,
+    checking <em>http://$configserver:19071/state/v1/health</em>.
+    Do not continue before successfully validating this.
+  </li>
+</ul>
+
+
+<h3 id="configure-application-ecs">Configure application - ECS</h3>
+<p>
+  This step is the same as for <a href="#configure-application">EC2 instances</a> -
+  modify <em>hosts.xml</em> and deploy the application.
+</p>
+
+
+<h3 id="start-the-services-tasks">Start the services tasks</h3>
+<ul>
+  <li>Click <em>Task Definitions &gt; Create new Task Definition &gt; EC2 &gt; Next step</em></li>
+  <li>Click <em>Configure via JSON</em> and replace the content with (using the same 3 config server addresses):
+<pre>
+{
+    "networkMode": "host",
+    "containerDefinitions": [
+        {
+            "name": "services",
+            "environment": [
+                {
+                    "name": "VESPA_CONFIGSERVERS",
+                    "value": "<span class="pre-hilite">ip-10-0-0-128.ec2.internal,ip-10-0-1-142.ec2.internal,ip-10-0-1-171.ec2.internal</span>"
+                }
+            ],
+            "image": "vespaengine/vespa",
+            "command": [
+                "services"
+            ],
+            "privileged": true,
+            "memoryReservation": 1024
+        }
+    ],
+    "placementConstraints": [
+        {
+            "expression": "attribute:type == services",
+            "type": "memberOf"
+        }
+    ],
+    "family": "services"
+}
+</pre>
+  </li>
+  <li>Click <em>Save &gt; Create</em></li>
+  <li>Choose <em>Actions -> Run task</em> and configure:
+    <table class="table">
+      <thead></thead><tbody>
+    <tr><th>Launch type</th><td>EC2</td></tr>
+    <tr><th>Cluster</th><td>vespa</td></tr>
+    <tr><th>Number of tasks</th><td>7</td></tr>
+    <tr><th>Placement templates</th><td>One Task Per Host</td></tr>
+    </tbody>
+    </table>
+  </li>
+  <li>Click <em>Run Task</em></li>
+  <li>
+    Validate startup.
+    This step is the same as for <a href="#vespa-nodes-setup">EC2 instances</a>.
+    ToDo: check port mappings / command.
   </li>
 </ul>
 
