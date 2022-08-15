@@ -189,7 +189,7 @@ public class ReRankingSearcher extends Searcher {
 
 [services.xml](reference/services.html) is needed 
 to make up a Vespa [application package](reference/application-packages-reference.html). 
-Here we include the custom searcher in the `default` [search chain](chained-components.html):
+Here we include the custom searcher in the `default` [search chain](components/chained-components.html):
 
 <pre data-test="file" data-path="my-app/src/main/application/services.xml">
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
