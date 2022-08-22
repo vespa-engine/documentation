@@ -83,8 +83,11 @@ $ echo "override VESPA_CONFIGSERVERS [configserver-hostnames]" >> $VESPA_HOME/co
   first, to get familiar with the different Vespa concepts before running the AWS procedure below.
   This procedure will use the name number of host, 10, and set up the same application.
 </p>
-{% include important.html content="Note the use of <code>sudo -u vespa</code> -
-Vespa must be run as the <em>vespa</em> user." %}
+{% include important.html content='Note the use of <code>sudo</code>.
+The Vespa start scripts will modify the environment (directories, system limits), requiring root access -
+refer to <a href="../reference/vespa-cmdline-tools.html#vespa-start-configserver">vespa-start-configserver</a> and
+and <a href="../reference/vespa-cmdline-tools.html#vespa-start-services">vespa-start-services</a>.
+After the environment setup, Vespa is run as the <code>vespa</code> user.' %}
 
 {% include note.html content="The procedure below is a bare minimum, for educational purposes.
 Make sure to use AWS instance types suitable for the application load,
@@ -150,7 +153,6 @@ $ sudo dnf install -y epel-release
 $ sudo dnf install -y vespa
 $ export VESPA_HOME=/opt/vespa
 </pre>
-    <!-- ToDo: VESPA_HOME for the vespa user? -->
   </li>
   <li>
     On all the 10 hosts, set up the environment using the config server host list:
@@ -162,14 +164,21 @@ $ echo "override VESPA_CONFIGSERVERS" \
     It is required that all nodes, both config server and Vespa nodes,
     have the same setting for <code>VESPA_CONFIGSERVERS</code>.
   </li>
+  <li>
+    Host login example, without ssh-agent:
+<pre>
+$ SSH_AUTH_SOCK=/dev/null ssh -i mykeypair.pem centos@ec2-3-231-33-190.compute-1.amazonaws.com
+</pre>
+  </li>
 </ul>
+
 
 <h3 id="config-server-cluster-setup">Config server cluster setup</h3>
 <ul>
   <li>
     Start the 3-node config server cluster:
 <pre>
-$ sudo -u vespa $VESPA_HOME/bin/vespa-start-configserver
+$ sudo $VESPA_HOME/bin/vespa-start-configserver
 </pre>
   </li>
   <li>
@@ -178,7 +187,7 @@ $ sudo -u vespa $VESPA_HOME/bin/vespa-start-configserver
 $ for configserver in \
   ip-10-0-1-234.ec2.internal \
   ip-10-0-1-154.ec2.internal \
-  ip-10-0-0-88.ec2.internal \
+  ip-10-0-0-88.ec2.internal; \
   do curl -s http://$configserver:19071/state/v1/health | head -5; done
 
 {
@@ -214,7 +223,7 @@ $ $VESPA_HOME/bin/vespa-logfmt | grep "Application config generation"
   <li>
     Start Vespa services on the 3 config server nodes - this starts basic Vespa services like log forwarding:
 <pre>
-$ sudo -u vespa $VESPA_HOME/bin/vespa-start-services
+$ sudo $VESPA_HOME/bin/vespa-start-services
 </pre>
     <em>$VESPA_HOME/logs/vespa/vespa.log/vespa.log</em> will now contain messages for
     <code>APPLICATION_NOT_LOADED</code>,
@@ -301,14 +310,12 @@ $ zip -r - . -x "img/*" "scripts/*" "pki/*" "tls/*" README.md .gitignore | \
 </ul>
 
 
-
-
 <h3 id="vespa-nodes-setup">Vespa nodes setup</h3>
 <ul>
   <li>
     Start Vespa on the 7 hosts:
 <pre>
-$ sudo -u vespa $VESPA_HOME/bin/vespa-start-services
+$ sudo $VESPA_HOME/bin/vespa-start-services
 </pre>
   </li>
   <li>
@@ -316,7 +323,7 @@ $ sudo -u vespa $VESPA_HOME/bin/vespa-start-services
     Use the <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">
     multinode-HA</a> steps to check the health interfaces on all 10 nodes.
     Note that in this guide, the ports are not mapped through a Docker container,
-    so the native Vespa ports should be used, like:
+    so the native Vespa ports should be used - e.g. for nodes 4 to 7 (see illustration below):
 <pre>
 $ curl http://localhost:8080/state/v1/health
 
@@ -373,7 +380,7 @@ $ git clone https://github.com/vespa-engine/sample-apps.git && cd sample-apps/al
   <li>
     Start the config server, check health port after a few seconds:
 <pre>
-$ sudo -u vespa $VESPA_HOME/bin/vespa-start-configserver
+$ sudo $VESPA_HOME/bin/vespa-start-configserver
 $ curl http://localhost:19071/state/v1/health | head -5
 </pre>
   </li>
@@ -645,16 +652,6 @@ $ ssh -i mykeypair.pem ec2-user@ec2-3-88-143-47.compute-1.amazonaws.com \
   such restarts must be done on one node at the time,
   waiting until the node is fully up before restarting the next one.
 </p>
-
-
-
-<h2 id="notes">Notes</h2>
-<ul>
-  <li>
-    Host login example, without ssh-agent:
-    <code>SSH_AUTH_SOCK=/dev/null ssh -i mykeypair.pem centos@ec2-100-24-25-186.compute-1.amazonaws.com</code>
-  </li>
-</ul>
 
 
 
