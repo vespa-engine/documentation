@@ -719,8 +719,8 @@ the behavior can be overridden in the
 [default queryProfile](../reference/query-api-reference.html#queryProfile).
 
 When requesting large amount of data with hits, it is recommended to use result compression. 
-Vespa will compress if the http client uses
-the `Accept-Encoding` [HTTP request header](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html):
+Vespa will compress if the HTTP client uses
+the [Accept-Encoding](https://www.rfc-editor.org/rfc/rfc9110.html#name-accept-encoding) HTTP request header:
 <pre>
 Accept-Encoding: gzip
 </pre>
