@@ -334,10 +334,13 @@ def run_with_arguments():
 
 def load_liquid_transforms():
     global liquid_transforms
-    site_config = "_config.yml"
+    global workdir
+    site_config_file = "_config.yml"
 
+    if not os.path.isfile(site_config_file):
+        site_config = os.path.join("../", site_config_file)
     if not os.path.isfile(site_config):
-        site_config = os.path.join("../", site_config)
+        site_config = os.path.join(workdir, site_config_file)
     if not os.path.isfile(site_config):
         raise RuntimeError("Could not find _config.yml")
 
