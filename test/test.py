@@ -326,6 +326,8 @@ def run_with_arguments():
             workdir = arg
             print("WD: " + workdir)
 
+    load_liquid_transforms()
+    
     if len(config_file):
         run_config(config_file)
     elif args:
@@ -366,7 +368,6 @@ def load_liquid_transforms():
 
 def main():
     create_work_dir()
-    load_liquid_transforms()
 
     try:
         run_with_arguments()
