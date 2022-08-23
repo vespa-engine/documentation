@@ -340,8 +340,8 @@ $ vespa query \
 </pre>
 </div>
 This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
-default query type is using `all` requiring that all the terms match the document. 
+with Vespa's [simple query language](../reference/simple-query-language-reference.html),
+the default query type is using `all`, requiring that all the terms match the document.
 
 Following is a partial output of the query above when using the small dataset sample:
 ```json
@@ -370,7 +370,7 @@ Following is a partial output of the query above when using the small dataset sa
 
 As we can see, there were 3 documents that matched the query out of 1000 available in the corpus.
 The number of matched documents will be much larger when using the full dataset.
-We can change retrieval mode from all to any:
+We can change retrieval mode from `all` to `any`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -383,8 +383,9 @@ $ vespa query \
 </div>
 
 Which will retrieve and rank all documents which matches _any_ of the query terms. As can be seen
-from the result, almost all our documents matched the query. 
-These type of queries can be performance optimized using the [Vespa WeakAnd query operator](../using-wand-with-vespa.html):
+from the result, almost all documents matched the query.
+These type of queries can be performance optimized using the
+[Vespa WeakAnd query operator](../using-wand-with-vespa.html):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -395,16 +396,18 @@ $ vespa query \
   'type=weakAnd'
 </pre>
 </div>
-In this case, a much lesser set of documents where fully ranked due to using _weakAnd_ instead of _any_.
+
+In this case, a much lesser set of documents where fully ranked due to using `weakAnd` instead of `any`.
 
 In any case, the retrieved documents are ranked by the relevance score,
 which in this case is delivered by the `nativeRank` rank feature
 that we defined as the default _ranking-profile_ in our schema definition file.
 
+
 ## Compare and evaluate different ranking functions
 
-Vespa allow us to easily experiment with different _ranking-profile_'s.
-For example, we could use the `bm25` _ranking-profile_ instead of the `default` _ranking-profile_
+Vespa allow us to easily experiment with different [rank-profiles](../reference/schema-reference.html#rank-profile).
+For example, we could use the `bm25` rank-profile instead of the `default` rank-profile
 by including the `ranking` parameter in the query:
 
 <div class="pre-parent">
@@ -417,16 +420,18 @@ $ vespa query \
   'type=weakAnd'
 </pre>
 </div>
-Note that the relevance score which is normalized in the range [0,1] for the default rank profile
-using _nativeRank_ changed to an un-normalized range when using the _bm25_ ranking feature.
 
+Note that the relevance score,
+which is normalized in the range [0,1] for the default rank profile using `nativeRank`,
+changed to an un-normalized range when using the `bm25` rank feature.
 
 In order to align with the guidelines of the [MS MARCO competition](http://www.msmarco.org/leaders.aspx),
-we have created an `evaluate.py` script to compute the
-[mean reciprocal rank (MRR)](https://en.wikipedia.org/wiki/Mean_reciprocal_rank)
+we have created
+[evaluate.py](https://github.com/vespa-engine/sample-apps/blob/master/text-search/src/python/evaluate.py)
+to compute the [mean reciprocal rank (MRR)](https://en.wikipedia.org/wiki/Mean_reciprocal_rank)
 metric given a file containing test queries.
-The script will loop through the queries, send them to Vespa, parse the results
-and compute the reciprocal rank for each query and log it to an output file.
+The script loops through the queries, sends them to Vespa, parses the results
+and computes the reciprocal rank for each query, and logs it to an output file:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -445,7 +450,7 @@ $ ./src/python/evaluate.py default msmarco
 The commands above output the mean reciprocal rank score as well as generate two output files 
 `msmarco/test-output-default.tsv` and `msmarco/test-output-bm25.tsv`
 containing the reciprocal rank metric for each query sent.
-We can than aggregate those values to compute the mean reciprocal rank for each _ranking-profile_
+We can than aggregate those values to compute the mean reciprocal rank for each rank-profile
 or plot those values to get a richer comparison between the two ranking functions.
 For the small dataset in the sample data, the MRR is approximately equal.
 For the full MSMARCO dataset on the other hand, we see a different picture:
@@ -459,7 +464,9 @@ For the full MSMARCO dataset on the other hand, we see a different picture:
 Looking at the figure we can see that the faster BM25 feature
 has delivered superior results for this specific application.
 
-To stop and remove the container for this application (This deletes all data):
+
+## Cleanup
+Stop and remove the Docker container and data:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
