@@ -316,6 +316,7 @@ def run_with_arguments():
         sys.exit(2)
 
     for opt, arg in opts:
+        print("opt:" + opt + "arg: " + arg)
         if opt in "-v":
             verbose = True
         elif opt in "-c":
@@ -323,6 +324,7 @@ def run_with_arguments():
 
         elif opt in "-w":
             workdir = arg
+            print("WD: " + workdir)
 
     if len(config_file):
         run_config(config_file)
