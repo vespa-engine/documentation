@@ -27,7 +27,8 @@ application and feed some data. We'll round off with some basic querying
 before moving on to the next part of the tutorial: searching for content.
 
 For reference, the final state of this tutorial can be found in the
-`app-2-feed-and-query` sub-directory of the `news` sample application.
+[app-2-feed-and-query](https://github.com/vespa-engine/sample-apps/tree/master/news/app-2-feed-and-query)
+sub-directory of the `news` sample application.
 
 
 ## The Microsoft News Dataset
@@ -48,7 +49,7 @@ there are particularly two pieces of data that we will use:
 - News article content which contains data such as title, abstract, news
   category, and entities extracted from the title and abstract.
 - Impressions which contain a list of news articles that were shown to a user,
-  labeled with whether or not the user clicked on them.
+  labeled with whether the user clicked on them or not.
 
 We'll start with developing a search application, so we'll focus on the 
 news content at first. We'll use the impression data as we begin building 
@@ -93,7 +94,7 @@ contain your Vespa application:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir my-app
+$ mkdir -p my-app/schemas
 </pre>
 </div>
 
@@ -105,8 +106,8 @@ $ mkdir my-app
 A Vespa [application package](../application-packages.html) is the
 set of configuration files and Java plugins that together define the behavior
 of a Vespa system: what functionality to use, the available document types, how
-ranking will be done and how data will be processed during feeding and
-indexing.  The schema, e.g., `news.sd`, is a required part of an
+ranking will be done and how data will be processed during feeding and indexing.
+The schema, e.g., `news.sd`, is a required part of an
 application package — the other file needed is `services.xml`.
 
 For self-hosted multi-node deployments, a `hosts.xml` file is also needed. 
@@ -115,9 +116,9 @@ the [multinode high
 availability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
 sample application. 
 
-We mentioned these files in the previous part but didn't really 
-explain them at the time. We'll go through them here, starting with the
-services specification.
+We mentioned these files in the previous part but didn't really explain them at the time.
+We'll go through them here, starting with the services specification.
+
 
 ### Services Specification
 
@@ -130,17 +131,17 @@ service. Write the following to `news/my-app/services.xml`:
 &lt;services version="1.0"&gt;
 
     &lt;container id="default" version="1.0"&gt;
-        &lt;search&gt;&lt;/search&gt;
-        &lt;document-api&gt;&lt;/document-api&gt;
+        &lt;search /&gt;
+        &lt;document-api /&gt;
         &lt;nodes&gt;
-            &lt;node hostalias="node1"&gt;&lt;/node&gt;
+            &lt;node hostalias="node1" /&gt;
         &lt;/nodes&gt;
     &lt;/container&gt;
 
     &lt;content id="mind" version="1.0"&gt;
         &lt;redundancy&gt;1&lt;/redundancy&gt;
         &lt;documents&gt;
-            &lt;document type="news" mode="index"/&gt;
+            &lt;document type="news" mode="index" /&gt;
         &lt;/documents&gt;
         &lt;nodes&gt;
             &lt;node hostalias="node1" distribution-key="0" /&gt;
@@ -173,21 +174,19 @@ Quite a lot is set up here:
 
 ### Schema
 
-In terms of data, Vespa operates with the notion of
-[documents](../documents.html).  A document represents a single, searchable
-item in your system, e.g., a news article, a photo, or a user. Each document
-type must be defined in the Vespa configuration through a
-[schema](../schemas.html).  Think of the document type in a schema as 
-similar to a table definition in a relational database - it consists of a set
-of fields, each with a given name, a specific type, and some optional
-properties.The data fed into Vespa must match the structure of the schema, and the results
-returned when searching will be in this format as well. There is no dynamic 
-field creation support in Vespa, one can say Vespa document schemas are strongly typed. 
+In terms of data, Vespa operates with the notion of [documents](../documents.html).
+A document represents a single, searchable item in your system, e.g., a news article, a photo, or a user.
+Each document type must be defined in the Vespa configuration through a [schema](../schemas.html).
+Think of the document type in a schema as similar to a table definition in a relational database -
+it consists of a set of fields, each with a given name, a specific type, and some optional properties.
+The data fed into Vespa must match the structure of the schema,
+and the results returned when searching will be in this format as well.
+There is no dynamic field creation support in Vespa,
+one can say Vespa document schemas are strongly typed.
 
-The `news` document type mentioned in the `services.xml` file above is defined
-in a schema. Schemas are found under the `schemas` directory in the application 
-package, and **must** have the same name as the document type mentioned 
-in `services.xml`.
+The `news` document type mentioned in the `services.xml` file above is defined in a schema.
+Schemas are found under the `schemas` directory in the application package,
+and **must** have the same name as the document type mentioned in `services.xml`.
 
 Given the MIND dataset described above, we'll set up the schema as follows.
 Write the following to `news/my-app/schemas/news.sd`:
@@ -257,13 +256,10 @@ indexing pipeline is separated by the pipe character '|':
 - `summary:` Lets this field be part of the [document
   summary](../document-summaries.html) in the result set.
 
-Here, we also use the
-[index](../reference/schema-reference.html#index)
-property, which sets up parameters for how Vespa should index the field. For
-the `title`, `abstract`, and `body` fields, we instruct Vespa to set up an
-index compatible with [bm25
-ranking](../reference/rank-features.html#bm25) for text
-search.
+Here, we also use the [index](../reference/schema-reference.html#index) property,
+which sets up parameters for how Vespa should index the field.
+For the `title`, `abstract`, and `body` fields, we configure Vespa to set up an
+index compatible with [bm25 ranking](../reference/rank-features.html#bm25) for text search.
 
 
 ## Deploy the Application Package
@@ -284,12 +280,12 @@ $ vespa deploy --wait 300 my-app
 </pre>
 </div>
 
+
 ## Feeding data
 
-The data fed to Vespa must match the schema for the document type. The
-downloaded MIND data must be converted to a valid Vespa JSON [document
-format](../reference/document-json-format.html) before it can be fed to
-Vespa. Luckily, we have a script to help us with this:
+The data fed to Vespa must match the schema for the document type.
+The downloaded MIND data must be converted to a valid Vespa JSON [document
+format](../reference/document-json-format.html) before it can be fed to Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -340,25 +336,23 @@ Searching with Vespa is done using HTTP(S) GET or HTTP(S) POST requests, like:
 
     <host:port>/search?yql=select..&hits=1...
 
-or with a JSON POST Body: <br/>
+or with a JSON POST:
 
-    {
-    	"yql" : "select ..",
-    	"hits" : 2,
-    	...
-    }
+```json
+{
+    "yql" : "select ..",
+    "hits" : 2
+}
+```
 
 The only mandatory parameter is the query, using either `yql=<yql query>` or `query=<simple-query>`. 
-More details on the [Query API](../query-api.html).
+More details in the [Query API](../query-api.html).
 
-Consider the query:
+Consider the query: `select * from news where default contains "music"`
 
-	select * from news where default contains "music"
-
-Given the above schema, where the fields `title`, `abstract` and `body` are
-part of the `fieldset default`, any document containing the word "music" in one
-or more of these fields matches that query. Let's try that with either a 
-GET query:
+Given the above schema, where the fields `title`, `abstract` and `body` are part of the `fieldset default`,
+any document containing the word "music" in one or more of these fields matches that query.
+Let's try that with either a GET query:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -378,28 +372,29 @@ $ curl -s -H "Content-Type: application/json" \
 </pre>
 </div>
 
-{% include note.html content="You can use the built-in query builder found at 
-<a href='http://localhost:8080/querybuilder/' data-proofer-ignore>localhost:8080/querybuilder/</a>
-which can help you build queries with, for instance, auto-completion of YQL." %}
+{% include note.html content="You can use the
+<a href='https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder'>Query Builder</a>
+which can help you build queries." %}
 
 Looking at the output, please note:
 
 - The field `documentid` in the output and how it matches the value
   we assigned to each put operation when feeding data to Vespa.
 - Each hit has a property named relevance, which indicates how well the given
-  document matches our query, using a pre-defined default ranking function. You
-  have full control over ranking — more about ranking and ordering later. The
-  hits are sorted by this value (descending).
-- When multiple hits have the same relevance score, their internal ordering is
-  undefined. However, their internal ordering will not change unless the
-  documents are re-indexed.
-- You can add `&trace.level=3` to dump query parsing details and execution plan.
+  document matches our query, using a pre-defined default ranking function.
+  You have full control over ranking — more about ranking and ordering later.
+  The hits are sorted by this value (descending).
+- When multiple hits have the same relevance score, their internal ordering is undefined.
+  However, their internal ordering will not change unless the documents are re-indexed.
+- You can add `&trace.level=3` to dump query parsing details and execution plan,
+  see [query tracing](../query-api.html#query-tracing).
 - The `totalCount` field at the top level contains the number of documents
   that *matched* the query.
 - Also note the `coverage` element, this tells us how many documents and nodes we searched over.
 Coverage might be degraded, see [graceful degradation](../graceful-degradation.html).
 
-Prefer HTTP POST over GET in production due to limitations on URI length (64KB). 
+Prefer HTTP POST over GET in production due to limitations on URI length (64 Kb). 
+
 
 ### Query examples
 
@@ -410,10 +405,9 @@ $ vespa query -v 'yql=select title from news where title contains "music"'
 </pre>
 </div>
 
-Again, this is a search for the single term "music", but this time explicitly in the 
-`title` field. This means that we only want to match documents that contain the
-word "music" in the field `title`. As expected, you will see fewer hits for
-this query than for the previous one searching the `fieldset default`. 
+Again, this is a search for the single term "music", but this time explicitly in the `title` field.
+This means that we only want to match documents that contain the word "music" in the field `title`.
+As expected, you will see fewer hits for this query than for the previous one searching the `fieldset default`.
 Also note that we scope the select to only return the title.
 
 <div class="pre-parent">
@@ -423,57 +417,71 @@ $ vespa query -v 'yql=select title from news where default contains "music" and 
 </pre>
 </div>
 
-This is a query for the two terms "music" and "festival", combined with an
-`AND` operation; it finds documents that match both terms — but not just one of
-them. 
+This is a query for the two terms "music" and "festival", combined with an `AND` operation;
+it finds documents that match <span style="text-decoration: underline;">both</span> terms,
+not just one of them.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ vespa query -v 'yql=select title from news where userQuery()' 'query=music festival' 'type=all'
+$ vespa query -v \
+  'yql=select title from news where userQuery()' \
+  'query=music festival' \
+  'type=all'
 </pre>
 </div>
 
 This combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
-default query type is using `all`. In this case, documents needs to match both music and festival. 
+with Vespa's [simple query language](../reference/simple-query-language-reference.html).
+In this case, documents needs to match both "music" and "festival".
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ vespa query -v 'yql=select title from news where userQuery()' 'query=music festival -beer' 'type=any'
+$ vespa query -v \
+  'yql=select title from news where userQuery()' \
+  'query=music festival -beer' \
+  'type=any'
 </pre>
 </div>
 
-Above changes the query type from all to any, so that all documents that match either (or both)
-of the terms are returned, exluding documents with the term 'beer'. 
-Note that number of hits which are matched and ranked increases 
-the computional complexity of the query execution. See [using WAND with Vespa](..//using-wand-with-vespa.html) 
+Above changes the query type from all to any,
+so that all documents that match either (or both) of the terms are returned,
+excluding documents with the term "beer".
+Note that number of hits which are matched and ranked increases the computational complexity of the query execution.
+See [using WAND with Vespa](../using-wand-with-vespa.html)
 for a way to speed up evaluation of type any/or-like queries. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ vespa query -v 'yql=select title from news where userQuery()' \
-'query=music festival' 'type=phrase' 'default-index=title' 
+$ vespa query -v \
+  'yql=select title from news where userQuery()' \
+  'query=music festival' \
+  'type=phrase' \
+  'default-index=title'
 </pre>
 </div>
 
-Above searches using `type=phrase` which require the exact phrase "music festival" to match in the title.
+Above searches using `type=phrase` which requires the exact phrase "music festival" to match in the title.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ vespa query -v 'yql=select title from news where rank(userQuery(), title contains "festival")' 'query=music'
+$ vespa query -v \
+  'yql=select title from news where rank(userQuery(), title contains "festival")' \
+  'query=music'
 </pre>
 </div>
 
-Search for 'music' in the default fieldset, boost documents with festival in the title. 
+Search for "music" in the default fieldset, boost documents with festival in the title. 
 The [rank()](../reference/query-language-reference.html#rank) query operator allows 
-us to retrieve on the first operand, and have match ranking features
-calculated for the the second operand argument. The second and further operands does not impact recall 
-(which documents matches the query) but can be used to tune precision (ordering of the results). More
-on ranking in the next part of the tutorial. 
+us to retrieve on the first operand,
+and have match ranking features calculated for the second operand argument.
+The second and further operands does not impact recall (which documents match the query),
+but can be used to tune precision (ordering of the results).
+More on ranking in the next part of the tutorial.
+
 
 ## Conclusion
 
