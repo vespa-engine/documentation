@@ -24,6 +24,7 @@ verbose = False
 workdir = "."
 project_root = os.getcwd()
 work_dir = os.path.join(project_root, "_work")
+doc_variables = {}
 
 
 def print_cmd_header(cmd, extra="", print_header=True):
@@ -171,16 +172,26 @@ def parse_cmd(cmd, attrs):
     return {"$": cmd, "type": "default"}
 
 
+def process_liquid(command):
+    # Remove liquid macros, if present, e.g:
+    # {% highlight shell %}       {% endhighlight %}
+    # {% raw %}                   {% endraw %}
+    sanitized = re.sub(r"{%\s*.*highlight\s*.*%}", "", command)
+    sanitized = re.sub(r"{%\s*.*raw\s*%}", "", sanitized)
+
+    # Replace site variables like {{site.variables.vespa_version}}
+    for key, value in doc_variables.items():
+        sanitized = re.sub(r"{{\s*site.variables."+key+r"\s*}}", value, sanitized)
+
+    return sanitized
+
+
 def parse_cmds(pre, attrs):
     cmds = []
     line_continuation = ""
     line_continuation_delimiter = "\\"
 
-    # Remove liquid macros, if present, e.g:
-    # {% highlight shell %}       {% endhighlight %}
-    # {% raw %}                   {% endraw %}
-    sanitized     = re.sub(r"{%\s*.*highlight\s*.*%}", "", pre)
-    sanitized_pre = re.sub(r"{%\s*.*raw\s*%}", "", sanitized)
+    sanitized_pre = process_liquid(pre)
 
     for line in sanitized_pre.split("\n"):
         cmd = "{0} {1}".format(line_continuation, line.strip())
@@ -328,8 +339,24 @@ def run_with_arguments():
         run_config("_test_config.yml")
 
 
+def load_doc_variables():
+    global doc_variables
+    site_config = "_config.yml"
+
+    if not os.path.isfile(site_config):
+        site_config = os.path.join("../", site_config)
+    if not os.path.isfile(site_config):
+        raise RuntimeError("Could not find _config.yml")
+
+    with open(site_config, "r") as f:
+        config = yaml.safe_load(f)
+        if "variables" in config:
+            doc_variables = config["variables"]
+
+
 def main():
     create_work_dir()
+    load_doc_variables()
 
     try:
         run_with_arguments()
