@@ -316,7 +316,7 @@ as for example the [Java feeding API](../vespa-feed-client.html):
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o vespa-feed-client-cli.zip \
-    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/7.527.20/vespa-feed-client-cli-7.527.20-zip.zip
+    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip
 $ unzip vespa-feed-client-cli.zip
 $ ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --file msmarco/vespa.json --endpoint http://localhost:8080
