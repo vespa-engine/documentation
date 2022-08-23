@@ -10,12 +10,12 @@ Latency numbers mentioned in the guide are obtained from running this guide on a
 This guide covers the following query serving performance aspects:
 - [Basic text search query performance](#basic-text-search-query-performance)
 - [Hits and document summaries](#hits-and-summaries)
-- [Multi-valued query operators (dotProduct, weakAnd, wand, weightedSet)](#multi-valued-query-operators)
+- [Multivalued query operators (dotProduct, weakAnd, wand, weightedSet)](#multi-valued-query-operators)
 - [Searching attribute fields](#searching-attribute-fields)
 - [Searching attribute fields with fast-search](#searching-attribute-fields-using-fast-search)
 - [Ranking with tensor computations](#tensor-computations)
-- [Multi-threaded search and ranking](#multi-threaded-search-and-ranking)
-- [Range search with hit limits for early termination](#advanced-range-search-with-hitlimit)
+- [Multithreaded search and ranking](#multi-threaded-search-and-ranking)
+- [Range-search with hit limits for early termination](#advanced-range-search-with-hitlimit)
 - [Early termination using match phase limits](#match-phase-limit---early-termination)
 - [Advanced query tracing](#advanced-query-tracing)
 
@@ -958,7 +958,7 @@ by 75%.
 
 This section covers [multi-value query operators](../multivalue-query-operators.html) 
 and their query performance characteristics. Many real-world search and recommendation use cases 
-involve structured multi-valued queries. 
+involve structured multivalued queries.
 
 Assuming a process has learned a sparse user profile representation, which, for a given user, based
 on past interactions with a service, could produce a user profile with 
@@ -966,7 +966,7 @@ on past interactions with a service, could produce a user profile with
 
 Retrieving and ranking using sparse representations can be done using
 the dot product between the sparse user profile representation and document representation. In the
-track example, the tags field could be the document side sparse representation. Each document
+track example, the `tags` field could be the document side sparse representation. Each document
 is tagged with multiple `tags` using a weight, and similar the sparse user profile
 representation could use weights.
 
@@ -1113,7 +1113,7 @@ using `nativeRank`.  The above query returns the following response:
 }
 {% endhighlight %}</pre>
 
-Notice that the query above, will brute-force rank all tracks where the `tags` field matches *any* of the multi-valued 
+Notice that the query above, will brute-force rank all tracks where the `tags` field matches *any* of the multivalued
 userProfile features. Due to this, the query ranks 10,323 tracks as seen by `totalCount`. 
 Including for example *pop* in the userProfile list increases the number of hits to 13,638. 
 
@@ -1440,7 +1440,7 @@ $ vespa query \
 </div>
 
 Note that the tensor query input format is slightly different from the variable substitution supported for 
-the multi-valued query operators `wand`, `weightedSet` and `dotProduct`.
+the multivalued query operators `wand`, `weightedSet` and `dotProduct`.
 The above query produces the following result:
 
 <pre>{% highlight json%}
@@ -1654,11 +1654,11 @@ See also [performance considerations](../tensor-user-guide.html#performance-cons
 when using tensor expression. Vespa supports `int8`, `bfloat16`, `float` and
 `double` precision cell types. A tradeoff between speed, accuracy and memory usage.
 
-## Multi-threaded search and ranking 
+## Multithreaded search and ranking
 So far in this guide all search queries and ranking computations have been performed using 
-single threaded execution. To enable multi-threaded execution, a setting needs to be 
-added to `services.xml`. 
-Multi-threaded search and ranking can improve query latency significantly and make better
+single threaded execution.
+To enable multithreaded execution, a setting needs to be added to `services.xml`.
+Multithreaded search and ranking can improve query latency significantly and make better
 use of multi-cpu core architectures. 
 
 The following adds a `tuning` element to `services.xml` overriding 
@@ -1844,7 +1844,7 @@ By using multiple rank profiles like above, developers can find the sweet-spot
 where latency does not improve much by using more threads. Using more threads per search 
 limits query concurrency as more threads will be occupied
 per query. Read more in [Vespa sizing guide:reduce latency with 
-multi-threaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
+multithreaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
 
 ## Advanced range search with hitLimit  
 
@@ -1965,7 +1965,7 @@ $ python3 create-popularity-updates.py lastfm_test > updates.jsonl
 </div>
 
 Add the `popularity` field to the track schema, the field is defined with `fast-search`.
-Also a `popularity` `rank-profile` is added, this profile using one thread per search. 
+Also, a `popularity` `rank-profile` is added, this profile using one thread per search:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
