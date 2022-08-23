@@ -100,15 +100,15 @@ $ ./bin/convert-msmarco.sh
 To adjust the number of queries and documents to sample, edit this file to your liking.
 After running the script we end up with a file `msmarco/vespa.json` containing lines such as the one below:
 
-```
+```json
 {
-  "put": "id:msmarco:msmarco::D1555982",
-  "fields": {
-    "id": "D1555982",
-    "url": "https://answers.yahoo.com/question/index?qid=20071007114826AAwCFvR",
-    "title": "The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation  ",
-    "body": "Science   Mathematics Physics The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation ... "
-  }
+    "put": "id:msmarco:msmarco::D1555982",
+    "fields": {
+        "id": "D1555982",
+        "url": "https://answers.yahoo.com/question/index?qid=20071007114826AAwCFvR",
+        "title": "The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation  ",
+        "body": "Science   Mathematics Physics The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation ... "
+    }
 }
 ```
 
@@ -145,42 +145,42 @@ Write the following to `text-search/app/schemas/msmarco.sd`:
 
 <pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
-  document msmarco {
-    field id type string {
-      indexing: attribute | summary
+    document msmarco {
+        field id type string {
+            indexing: attribute | summary
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field body type string {
+            indexing: index
+            index: enable-bm25
+        }
     }
-    field title type string {
-      indexing: index | summary
-      index: enable-bm25
-    }
-    field url type string {
-      indexing: index | summary
-    }
-    field body type string {
-      indexing: index
-      index: enable-bm25
-    }
-  }
 
-  document-summary minimal {
-    summary id type string {  }
-  }
-
-  fieldset default {
-    fields: title, body, url
-  }
-
-  rank-profile default {
-    first-phase {
-      expression: nativeRank(title, body, url)
+    document-summary minimal {
+        summary id type string {  }
     }
-  }
 
-  rank-profile bm25 inherits default {
-    first-phase {
-      expression: bm25(title) + bm25(body) + bm25(url)
+    fieldset default {
+        fields: title, body, url
     }
-  }
+
+    rank-profile default {
+        first-phase {
+            expression: nativeRank(title, body, url)
+        }
+    }
+
+    rank-profile bm25 inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url)
+        }
+    }
 }
 </pre>
 
@@ -235,22 +235,22 @@ Write the following to `text-search/app/services.xml`:
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
 
-  &lt;container id="text_search" version="1.0"&gt;
-    &lt;search&gt;&lt;/search&gt;
-    &lt;document-processing&gt;&lt;/document-processing&gt;
-    &lt;document-api&gt;&lt;/document-api&gt;
-  &lt;/container&gt;
+    &lt;container id="text_search" version="1.0"&gt;
+        &lt;search /&gt;
+        &lt;document-processing /&gt;
+        &lt;document-api /&gt;
+    &lt;/container&gt;
 
-  &lt;content id="msmarco" version="1.0"&gt;
-    &lt;redundancy&gt;1&lt;/redundancy&gt;
-    &lt;documents&gt;
-      &lt;document type="msmarco" mode="index"&gt;&lt;/document&gt;
-      &lt;document-processing cluster="text_search"&gt;&lt;/document-processing&gt;
-    &lt;/documents&gt;
-    &lt;nodes&gt;
-      &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
-    &lt;/nodes&gt;
-  &lt;/content&gt;
+    &lt;content id="msmarco" version="1.0"&gt;
+        &lt;redundancy&gt;1&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="msmarco" mode="index" /&gt;
+            &lt;document-processing cluster="text_search" /&gt;
+        &lt;/documents&gt;
+        &lt;nodes&gt;
+            &lt;node distribution-key="0" hostalias="node1" /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
 &lt;/services&gt;
 </pre>
 
@@ -279,7 +279,7 @@ Start the Vespa container:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker run -m 12G --detach --name vespa-msmarco --hostname vespa-msmarco \
+$ docker run --detach --name vespa-msmarco --hostname vespa-msmarco \
   --publish 8080:8080 --publish 19071:19071 \
   vespaengine/vespa
 </pre>
@@ -316,7 +316,7 @@ as for example the [Java feeding API](../vespa-feed-client.html):
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o vespa-feed-client-cli.zip \
-    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip
+  https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip
 $ unzip vespa-feed-client-cli.zip
 $ ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --file msmarco/vespa.json --endpoint http://localhost:8080
@@ -332,7 +332,9 @@ Once the data has started feeding, we can already send queries to our search app
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
-$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' 
+$ vespa query \
+  'yql=select title,url,id from msmarco where userQuery()' \
+  'query=what is dad bod'
 </pre>
 </div>
 This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
@@ -340,38 +342,40 @@ with Vespa's [simple query language](../reference/simple-query-language-referenc
 default query type is using `all` requiring that all the terms match the document. 
 
 Following is a partial output of the query above when using the small dataset sample:
-```
+```json
 {
-  "root": {
-    "id": "toplevel",
-    "relevance": 1.0,
-    "fields": {
-    "totalCount": 3
-  },
-  "children": [
-    {
-      "id": "index:msmarco/0/59444ddd06537a24953b73e6",
-      "relevance": 0.2747543357589305,
-      "source": "msmarco",
-      "fields": {
-        "id": "D2977840",
-        "title": "What Is A  Dad Bod   An Insight Into The Latest Male Body Craze To Sweep The Internet",
-        "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html"
-      }
-    } ..
-  ]
-  }
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 3
+        },
+        "children": [
+            {
+                "id": "index:msmarco/0/59444ddd06537a24953b73e6",
+                "relevance": 0.2747543357589305,
+                "source": "msmarco",
+                "fields": {
+                    "id": "D2977840",
+                    "title": "What Is A  Dad Bod   An Insight Into The Latest Male Body Craze To Sweep The Internet",
+                    "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html"
+                }
+            }
+        ]
+    }
 }
 ```
 
-As we can see, there was 3 documents that matched the query out of 1000 available in the corpus.
-The number of matched documents will be much larger when using the full dataset. We can 
-change retriveal mode from all to any 
+As we can see, there were 3 documents that matched the query out of 1000 available in the corpus.
+The number of matched documents will be much larger when using the full dataset.
+We can change retrieval mode from all to any:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
-$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' \
+$ vespa query \
+  'yql=select title,url,id from msmarco where userQuery()' \
+  'query=what is dad bod' \
   'type=any'
 </pre>
 </div>
@@ -383,7 +387,9 @@ These type of queries can be performance optimized using the [Vespa WeakAnd quer
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
-$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' \
+$ vespa query \
+  'yql=select title,url,id from msmarco where userQuery()' \
+  'query=what is dad bod' \
   'type=weakAnd'
 </pre>
 </div>
@@ -402,8 +408,11 @@ by including the `ranking` parameter in the query:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
-$ vespa query 'yql=select title,url,id from msmarco where userQuery()' 'query=what is dad bod' \
-  'ranking=bm25' 'type=weakAnd'
+$ vespa query \
+  'yql=select title,url,id from msmarco where userQuery()' \
+  'query=what is dad bod' \
+  'ranking=bm25' \
+  'type=weakAnd'
 </pre>
 </div>
 Note that the relevance score which is normalized in the range [0,1] for the default rank profile
@@ -453,7 +462,7 @@ To stop and remove the container for this application (This deletes all data):
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
-$ # docker rm -f vespa-msmarco
+$ docker rm -f vespa-msmarco
 </pre>
 </div>
 
