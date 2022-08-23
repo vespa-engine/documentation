@@ -16,17 +16,14 @@ We will cover how to create, deploy and feed the Vespa application.
 We are going to go from raw data to a fully functional text search app.
 In addition, we will showcase how easy it is to switch and experiment with different ranking functions in Vespa.
 
-## Prerequisites
+{% include pre-req.html memory="4 Gb" extra-reqs='
+<li>Python3</li>
+<li><code>curl</code></li>
+<li><code>wget</code> Note: not needed unless downloading the full dataset</li>' %}
+<!-- ToDo: rewrite download-msmarco.sh to using curl for one less dependency -->
 
-* [Docker](https://www.docker.com/) Desktop installed and running. 10GB available memory for Docker is recommended.
-  Refer to [Docker memory](../operations/docker-containers.html#memory)
-  for details and troubleshooting
-* Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
-* Architecture: x86_64
-* Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
-* [Homebrew](https://brew.sh/) to install [Vespa CLI](../vespa-cli.html), or download
-  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
-* python 3 
+Note: Use 12 Gb Ram for Docker if running with the full dataset.
+
 
 ## Installing vespa-cli 
 
@@ -41,8 +38,8 @@ $ brew install vespa-cli
 </pre>
 </div>
 
-We start by acquiring the scripts and code required to follow this tutorial from
-[our sample apps repository](https://github.com/vespa-engine/sample-apps).
+We start by acquiring the scripts and code required to follow this tutorial from the
+[sampleapps repository](https://github.com/vespa-engine/sample-apps).
 
 The first step is then to clone the `sample-apps` repo from GitHub and move into the `text-search` directory.
 Start in an empty directory:
@@ -69,7 +66,7 @@ capable of returning relevant documents to a text query.
 For the purposes of this tutorial we have included a small sample of the dataset under the `msmarco/sample` directory
 which contains only around 1000 documents. This is sufficient for following along with this tutorial.
 
-However if you want to experiment with the entire dataset of more than 3 million documents,
+However, if you want to experiment with the entire dataset of more than 3 million documents,
 download the data. Make sure to accept the [terms and conditions](https://microsoft.github.io/msmarco/) 
 MS MARCO dataset is released under. The following will download the entire MS Marco Document Ranking collection:
 
@@ -120,7 +117,7 @@ so that we have a fair chance of retrieving it when sending sample queries to ou
 
 ## Create a Vespa Application Package
 
-A [Vespa application package[](../application-packages.html) is the set of configuration files and Java plugins
+A [Vespa application package](../application-packages.html) is the set of configuration files and Java plugins
 that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done
 and how data will be processed during feeding and indexing.
@@ -267,13 +264,14 @@ Some notes about the elements above:
   (See also the [reference](../reference/services-content.html) for more on content cluster setup.)
 - `<nodes>` defines the hosts for the content cluster.
 
+
 ## Deploy the application package
 
 Once we have finished writing our application package, we can deploy it in a Docker container.
 
-Note that indexing the full data set requires 47GB disk space. These tutorials have been
-tested with a Docker container with 12GB RAM.  We used similar settings as
-described in the [vespa quick start guide](../vespa-quick-start.html).
+Note that indexing the full data set requires 47 Gb disk space.
+These tutorials have been tested with a Docker container with 12 Gb RAM.
+We used similar settings as described in the [vespa quick start guide](../vespa-quick-start.html).
 Start the Vespa container:
 
 <div class="pre-parent">
@@ -416,7 +414,7 @@ $ vespa query \
 </pre>
 </div>
 Note that the relevance score which is normalized in the range [0,1] for the default rank profile
-using _nativeRank_ changed to an unormalized range when using the _bm25_ ranking feature. 
+using _nativeRank_ changed to an un-normalized range when using the _bm25_ ranking feature.
 
 
 In order to align with the guidelines of the [MS MARCO competition](http://www.msmarco.org/leaders.aspx),
