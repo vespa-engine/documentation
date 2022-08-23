@@ -316,18 +316,15 @@ def run_with_arguments():
         sys.exit(2)
 
     for opt, arg in opts:
-        print("opt:" + opt + "arg: " + arg)
         if opt in "-v":
             verbose = True
         elif opt in "-c":
             config_file = arg
-
         elif opt in "-w":
             workdir = arg
-            print("WD: " + workdir)
 
     load_liquid_transforms()
-    
+
     if len(config_file):
         run_config(config_file)
     elif args:
@@ -345,10 +342,8 @@ def load_liquid_transforms():
 
     if not os.path.isfile(site_config_file):
         site_config = os.path.join("../", site_config_file)
-        print("1: " + site_config)
     if not os.path.isfile(site_config):
         site_config = os.path.join(workdir, site_config_file)
-        print("2: " + site_config)
     if not os.path.isfile(site_config):
         raise RuntimeError("Could not find _config.yml")
 
