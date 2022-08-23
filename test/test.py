@@ -337,10 +337,14 @@ def load_liquid_transforms():
     global workdir
     site_config_file = "_config.yml"
 
+    print("loading _config.yml, CWD: " + os.getcwd())
+
     if not os.path.isfile(site_config_file):
         site_config = os.path.join("../", site_config_file)
+        print("1: " + site_config)
     if not os.path.isfile(site_config):
         site_config = os.path.join(workdir, site_config_file)
+        print("2: " + site_config)
     if not os.path.isfile(site_config):
         raise RuntimeError("Could not find _config.yml")
 
