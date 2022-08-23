@@ -54,6 +54,7 @@ $ vespa clone text-search text-search && cd text-search
 The repository contains a fully-fledged Vespa application including a front-end search UI. 
 This tutorial however will start with the basics and develop the application over multiple parts.
 
+
 ## Dataset
 
 We use a dataset called [MS MARCO](https://microsoft.github.io/msmarco/) throughout this tutorial.
@@ -130,9 +131,10 @@ so we create a directory for this application:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir app
+$ mkdir -p app/schemas
 </pre>
 </div>
+
 
 ### Schema
 
@@ -222,6 +224,7 @@ will be computed for every document matching the query. Vespa ranking supports [
 Rank profiles are selected at run-time by using the [ranking](../reference/query-api-reference.html#ranking.profile)
 query api parameter.
 
+
 ### Services Specification
 
 The [services.xml](../reference/services.html) defines the services that make up
@@ -302,6 +305,7 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
+
 ## Feed the data
 
 The data fed to Vespa must match the document type in the schema.
@@ -322,17 +326,17 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </div>
 
 
-
 ## Run a test query
 
-Once the data has started feeding, we can already send queries to our search app even before it has finished:
+Once the data is fed, send a query to the search app:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
   'yql=select title,url,id from msmarco where userQuery()' \
-  'query=what is dad bod'
+  'query=what is dad bod' \
+  'type=all'
 </pre>
 </div>
 This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
