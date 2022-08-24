@@ -110,8 +110,14 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
         <a href="#inputs">inputs</a>
         <a href="#constants">constants</a>
         <a href="#onnx-model">onnx-model</a>
+        <a href="#onnx-model">onnx-model</a>
         <a href="#rank-properties">rank-properties</a>
         <a href="#match-features">match-features</a>
+        <a href="#mutate">mutate</a>
+            <a href="#on-match">on-match</a>
+            <a href="#on-first-phase">on-first-phase</a>
+            <a href="#on-second-phase">on-second-phase</a>
+            <a href="#on-summary">on-summary</a>
         <a href="#summary-features">summary-features</a>
         <a href="#rank-features">rank-features</a>
         <a href="#ignore-default-rank-features">ignore-default-rank-features</a>
@@ -708,6 +714,10 @@ as part of match-and summary-features.</td>
 </tr>
 <tr><td><a href="#constants">constants</a></td>
 <td>List of constant features available in ranking expressions.</td>
+<td>Zero or many</td>
+</tr>
+<tr><td><a href="#mutate">mutate</a></td>
+<td>Specification of mutations you can apply after different phases of a query.</td>
 <td>Zero or many</td>
 </tr>
 <tr><td><a href="#onnx-model">onnx-model</a></td>
@@ -1381,6 +1391,128 @@ match-features [inherits parent-profile]? {
 Any number of ranking features separated by space can be listed on each line.
 </p>
 
+<h2 id="mutate">mutate</h2>
+<p>
+Contained in <code><a href="#rank-profile">rank-profile</a></code>.
+Specifies mutating operations you can do to each of the documents that make it through the 4 query phases,
+<em>on-match</em>, <em>on-first-phase</em>, <em>on-second-phase</em> and <em>on-summary</em>
+</p>
+
+<pre>
+mutate {
+    [phase name] { [attribute name] [operation] [numeric_value] }
+}
+</pre>
+The phases are:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>on-match</td>
+  <td>
+    <p id="on-match">All documents that satisfies the query.</p>
+  </td>
+</tr>
+<tr><td>on-first-phase</td>
+  <td>
+    <p id="on-first-phase">All documents from <a href="#on-match">on-match</a>,
+       and is not dropped due the optional <a href="#rank-score-drop-limit">rank-score-drop-limit</a></p>
+  </td>
+</tr>
+<tr><td>on-second-phase</td>
+  <td>
+    <p id="on-second-phase">All documents from <a href="#on-first-phase">on-first-phase</a>
+    that makes it onto the <a href="#secondphase-rank">second-phase</a> heap.</p>
+  </td>
+</tr>
+<tr><td>on-summary</td>
+  <td>
+    <p id="on-summary">All documents where are a summary is requested.</p>
+  </td>
+</tr>
+</tbody>
+</table>
+
+<p>The attribute must be a single value numeric attribute, enabled as <a href="#mutable">mutable</a>.
+  It must also be defined outside of the <a href="#document">document</a> clause.</p>
+
+
+The legal operations are:
+<table class="table">
+<thead>
+<tr><th>Name</th><th>Description</th></tr>
+</thead><tbody>
+<tr>
+  <td>=</td>
+  <td><p>Set the value of the attribute to the given value.</p></td>
+</tr>
+<tr>
+  <td>+=</td>
+  <td><p>Add the given value to the attribute</p></td>
+</tr>
+<tr>
+  <td>-=</td>
+  <td><p>Subtract the given value from the attribute</p></td>
+</tr>
+</tbody>
+</table>
+
+<p>An example that uses 4 attributes that each track how many times a document
+  participates in any of the 4 phases.
+  This is tracked only if you use rank-profile <em>rank2</em>.</p>
+<pre>
+schema test {
+    document test {
+        field id type long {
+            indexing: summary | attribute
+        }
+        ...
+    }
+    field match_count type long {
+        indexing: 7 | to_long | attribute | summary   # Initialized to 7 for a new document. Default is 0.
+        attribute: mutable
+    }
+    field first_phase_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field second_phase_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field summary_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    rank-profile profile1 {
+        first-phase {
+            rank-score-drop-limit: 0.5
+            expression: attribute(id)
+        }
+        second-phase {
+            expression: attribute(id)
+            rerank-count: 1
+        }
+        summary-features: attribute(id)
+    }
+    rank-profile profile1-track inherits profile1 {
+        mutate {
+            on-match { match_count += 1 }
+            on-first-phase { first_phase_count += 1 }
+            on-second-phase { second_phase_count += 1 }
+            on-summary { summary_count += 1 }
+        }
+    }
+    document-summary all_fast {
+        summary id type long { source: id }
+        summary match_count type long { source: match_count }
+        summary first_phase_count type long { source: first_phase_count }
+        summary second_phase_count type long { source: second_phase_count }
+        summary summary_count type long { source: summary_count }
+    }
+}
+</pre>
+</p>
 
 <h2 id="constant">constant</h2>
 
@@ -1715,6 +1847,8 @@ for dense tensor fields. See <a href="../attributes.html#paged-attributes">paged
   Specifies the distance metric to use with the <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
   query operator. Only relevant for tensor attribute fields.
 </td></tr>
+<tr><td>mutable</td><td><p id="mutable">Marks the attribute as a special mutable attribute that can be updated by a
+  <a href="#mutate">mutate</a> operation during query evaluation.</p></td>
 </tbody>
 </table>
 <p>
