@@ -805,7 +805,7 @@ $ vespa query \
 </div>
 
 Now, the exact search latency is reduced by using more threads, 
-see [multi-threaded searching and ranking](performance/practical-search-performance-guide.html#multi-threaded-search-and-ranking)
+see [multi-threaded searching and ranking](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking)
 for more on this topic.
 <pre>{% highlight json%}
 {
