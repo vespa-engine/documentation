@@ -200,8 +200,7 @@ ordered by the number of documents they occur in and top 3 is shown:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ vespa query -v 'yql=select * from news where true limit 0 |
-  all(group(category) max(3) order(-count())each(output(count())))'
+$ vespa query -v 'yql=select * from news where true limit 0 | all(group(category) max(3) order(-count())each(output(count())))'
 </pre>
 </div>
 
