@@ -24,7 +24,7 @@ the distance metric must be calculated for every document that matches
 the boolean query filters.
 
 Exact nearest neighbor search scales close to linearly 
-with [number of threads used per query](performance/practical-search-performance-guide#multi-threaded-search-and-ranking). 
+with [number of threads used per query](performance/practical-search-performance-guide#multithreaded-search-and-ranking). 
 Using multiple threads per search, can be used to make 
 exact nearest neighbor search run with acceptable serving latency. 
 Using more threads per search to reduce latency is still costly for larger vector volumes 
