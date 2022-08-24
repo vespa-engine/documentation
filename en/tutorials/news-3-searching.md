@@ -200,7 +200,8 @@ ordered by the number of documents they occur in and top 3 is shown:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ vespa query -v 'yql=select * from news where true limit 0 | all(group(category) max(3) order(-count())each(output(count())))'
+$ vespa query -v 'yql=select * from news where true limit 0 |
+  all(group(category) max(3) order(-count())each(output(count())))'
 </pre>
 </div>
 
@@ -419,6 +420,7 @@ named collections of ranking and relevance calculations that one can choose from
 A number of built-in functions and expressions are available to create highly
 specialized ranking expressions and users can define their own functions in the schema.
 
+
 ### News article popularity signal
 
 During the conversion of the news dataset, the conversion script counted both the
@@ -545,6 +547,7 @@ $ vespa query -v \
 
 and find documents with high `popularity` values at the top.
 Note that we must specify the rank profile to use with the run time `ranking` parameter.
+
 
 ## Conclusion
 
