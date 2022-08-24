@@ -14,7 +14,7 @@ This guide covers the following query serving performance aspects:
 - [Searching attribute fields](#searching-attribute-fields)
 - [Searching attribute fields with fast-search](#searching-attribute-fields-using-fast-search)
 - [Ranking with tensor computations](#tensor-computations)
-- [Multithreaded search and ranking](#multi-threaded-search-and-ranking)
+- [Multithreaded search and ranking](#multithreaded-search-and-ranking)
 - [Range-search with hit limits for early termination](#advanced-range-search-with-hitlimit)
 - [Early termination using match phase limits](#match-phase-limit---early-termination)
 - [Advanced query tracing](#advanced-query-tracing)
