@@ -513,14 +513,14 @@ schema news {
   article with a low number of impressions can score high on such a value,
   even though uncertainty is high.
 
-- `expression: nativeRank + 100 * popularity`
+- `expression: nativeRank + 10 * popularity`
 
   This expression is used to rank documents.
   Here, the default ranking expression — the `nativeRank` of the `default` fieldset —
   is included to make the query relevant,
   while the second term calls the `popularity` function.
   The weighted sum of these two terms is the final relevance for each document.
-  Note that the weight here, `100`, is set by observation.
+  Note that the weight here, `10`, is set by observation.
   A better approach would be to learn such values using machine learning.
 
 More information can be found in the [schema reference](../reference/schema-reference.html#rank-profile).
