@@ -24,7 +24,8 @@ So, we'll start by modifying our application,
 so we can feed the embeddings and start using them for searching.
 
 For reference, the final state of this tutorial can be found in the
-`app-5-recommendation` sub-directory of the `news` sample application.
+[app-5-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/news/app-5-recommendation)
+sub-directory of the `news` sample application.
 
 
 ## Indexing embeddings
@@ -98,29 +99,27 @@ schema news {
 }
 </pre>
 
-The `embedding` field is a tensor field. Tensors in Vespa are flexible
-multi-dimensional data structures, and, as first-class citizens, can be used
-in queries, document fields, and constants in ranking. Tensors can be either
-dense or sparse or both, and can contain any number of dimensions. Please see
-[the tensor user guide](../tensor-user-guide.html) for more information.
+The `embedding` field is a tensor field.
+Tensors in Vespa are flexible multi-dimensional data structures, and, as first-class citizens,
+can be used in queries, document fields, and constants in ranking.
+Tensors can be either dense or sparse or both, and can contain any number of dimensions.
+See [the tensor user guide](../tensor-user-guide.html) for more information.
 
-Here we have defined a dense tensor with a single dimension (`d0` - dimension
-0), which represents a vector. The distance metric is euclidean as we would
-like to use this field for nearest-neighbor search.
+Here we have defined a dense tensor with a single dimension (`d0` - dimension 0), which represents a vector.
+The distance metric is euclidean as we would like to use this field for nearest-neighbor search.
 
-This is seen in the `recommendation` rank profile. Here, we've added a
-ranking expression using the
-[closeness](../reference/rank-features.html#closeness(dimension,name))
-ranking feature, which calculates the euclidean distance and uses that to rank
-the news articles. This depends on using the `nearestNeighbor` search operator,
-which we'll get back to below when searching. But for now, this expects 
-a tensor in the query to be used as the initial search point.
+This is seen in the `recommendation` rank profile.
+Here, we've added a ranking expression using the
+[closeness](../reference/rank-features.html#closeness(dimension,name)) ranking feature,
+which calculates the euclidean distance and uses that to rank the news articles.
+This depends on using the `nearestNeighbor` search operator,
+which we'll get back to below when searching.
+But for now, this expects a tensor in the query to be used as the initial search point.
 
 If you take a look at the file generated for the news embeddings,
-`mind/vespa_news_embeddings.json`, you'll see several lines with
-something like this:
+`mind/vespa_news_embeddings.json`, you'll see several lines with something like this:
 
-```
+```json
 {
     "update": "id:news:news::N13390", 
     "fields": {
@@ -157,8 +156,7 @@ schema user {
 }
 </pre>
 
-This schema is set up so that we can search for a `user_id` and 
-retrieve the user's embedding vector. 
+This schema is set up so that we can search for a `user_id` and retrieve the user's embedding vector.
 
 We also need to let Vespa know we want to use this document type,
 so we modify `services.xml` and add it under `documents` in the `content` section:
@@ -168,18 +166,18 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
 &lt;services version="1.0"&gt;
 
     &lt;container id="default" version="1.0"&gt;
-        &lt;search&gt;&lt;/search&gt;
-        &lt;document-api&gt;&lt;/document-api&gt;
+        &lt;search /&gt;
+        &lt;document-api /&gt;
         &lt;nodes&gt;
-            &lt;node hostalias="node1"&gt;&lt;/node&gt;
+            &lt;node hostalias="node1" /&gt;
         &lt;/nodes&gt;
     &lt;/container&gt;
 
     &lt;content id="mind" version="1.0"&gt;
         &lt;redundancy&gt;1&lt;/redundancy&gt;
         &lt;documents&gt;
-            &lt;document type="news" mode="index"/&gt;
-            &lt;document type="user" mode="index"/&gt;
+            &lt;document type="news" mode="index" /&gt;
+            &lt;document type="user" mode="index" /&gt;
         &lt;/documents&gt;
         &lt;nodes&gt;
             &lt;node hostalias="node1" distribution-key="0" /&gt;
@@ -201,7 +199,7 @@ $ vespa deploy --wait 300 my-app
 $ sleep 20
 </pre>
 
-After redeploying with the updates schemas and `services.xml`,
+After redeploying with the updated schemas and `services.xml`,
 feed `mind/vespa_user_embeddings.json` and `mind/vespa_news_embeddings.json`: 
 
 <div class="pre-parent">
@@ -214,8 +212,8 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 </pre>
 </div>
 
-Once the feeding jobs finishes our index is ready to be used, we can verify that we have 
-28,603 news documents and 5000 user documents:
+Once the feeding jobs finishes, the index is ready to be used,
+we can verify that we have 28,603 news documents and 5000 user documents:
 
 <!-- Sometimes a query timeout, increase stability of auto testing -->
 <pre data-test="exec" style="display:none">
@@ -225,28 +223,33 @@ $ sleep 20
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='28603'>
-$ vespa query -v 'yql=select * from news where true' 'hits=0'
+$ vespa query -v \
+  'yql=select * from news where true' \
+  'hits=0'
 </pre>
 </div>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='5000'>
-$ vespa query -v 'yql=select * from user where true' 'hits=0'
+$ vespa query -v \
+  'yql=select * from user where true' \
+  'hits=0'
 </pre>
 </div>
 
-## Query profiles and query profile types
 
-Before we can test the application, we need to add a query profile type. The
-`recommendation` rank profile above requires a tensor to be sent along with
-the query. For Vespa to bind the correct types, it needs to know 
-the expected type of this query parameter. That is called a query profile type.
+## Query profiles and query profile types
+<!-- ToDo: rewrite to using inputs -->
+Before we can test the application, we need to add a query profile type.
+The `recommendation` rank profile above requires a tensor to be sent along with the query.
+For Vespa to bind the correct types, it needs to know the expected type of this query parameter.
+That is called a query profile type.
 
 [Query profiles](../query-profiles.html) are named sets of search request parameters
 that can be set as default, so you don't have to pass them along with the query.
-We don't use this in this sample application. Still we need to set up a default 
-query profile to set up the types of query parameters we expect to pass. 
+We don't use this in this sample application.
+Still we need to set up a default query profile to set up the types of query parameters we expect to pass.
 
 So, write the following to `news/my-app/search/query-profiles/default.xml`:
 
@@ -279,6 +282,7 @@ $ vespa deploy --wait 300 my-app
 </pre>
 </div>
 
+
 ## Testing the application
 
 We can now query Vespa using embeddings.
@@ -287,13 +291,15 @@ First, let's find the user `U33527`:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='U33527'>
-$ vespa query -v 'yql=select user_id, embedding from user where user_id contains "U33527"' 'hits=1'
+$ vespa query -v \
+  'yql=select user_id, embedding from user where user_id contains "U33527"' \
+  'hits=1'
 </pre>
 </div>
 
 This returns the document containing the user's embedding:
 
-```
+```json
 {
     "root": {
         ...
@@ -320,8 +326,11 @@ This returns the document containing the user's embedding:
 }
 ```
 
-Now we can use this vector to query the news articles. You can either write this
-query by hand, but we've added a convenience script which queries Vespa:
+Now we can use this vector to query the news articles.
+You can either write this query by hand,
+but we've added a convenience script
+[user_search.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/user_search.py)
+which queries Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -335,36 +344,34 @@ Vespa. It then parses the tensor containing the embedding vector. Finally, it
 issues a `nearestNeighbor` search using a `POST` (however a `GET` would work just as well).
 Please see the [nearest-neighbor operator](../reference/query-language-reference.html#nearestneighbor)
 for more on the syntax for nearest-neighbor searches.
-The `nearestNeighbor` search looks like this:
+The `nearestNeighbor` search looks like:
 
-```
+```json
 {
     "hits": 10,
-    "yql": "select * from sources news where (nearestNeighbor(embedding, user_embedding))',
+    "yql": "select * from sources news where (nearestNeighbor(embedding, user_embedding))",
     "ranking.features.query(user_embedding)": "{ ... }" ,
     "ranking.profile": "recommendation"
 }
 ```
 
 Here, you can see the `nearestNeighbor` search operator being set up 
-so that the query parameter `user_embedding` will be searched against 
-the `embedding` document field. The tensor for the `user_embedding` is 
-in the `ranking.features.query(user_embedding)` parameter. Recall from 
-above that we set a query profile type for this exact query parameter 
-so Vespa knows what to expect here.
+so that the query parameter `user_embedding` will be searched against the `embedding` document field.
+The tensor for the `user_embedding` is in the `ranking.features.query(user_embedding)` parameter.
+Recall from above that we set a query profile type for this exact query parameter,
+so Vespa knows what to expect here. <!-- ToDo: use inputs instead -->
 
-When Vespa receives this query, it will scan linearly through all documents
-in the system (28603 if you are using the MIND DEMO dataset), and score them
-using the `recommendation` rank profile we set up above. Recall that we
-converted the problem from maximum inner product to euclidean distance.
+When Vespa receives this query, it scans linearly through all documents
+(28603 if you are using the MIND DEMO dataset),
+and scores them using the `recommendation` rank profile we set up above.
+Recall that we converted the problem from maximum inner product to euclidean distance.
 
-However, Vespa sorts the final results by decreasing rank score. With a
-euclidean distance search, we want to find the smallest distances. To invert
-the rank order, Vespa provides the `closeness` feature which is calculated as
-`1 / (1 + distance)`.
+However, Vespa sorts the final results by decreasing rank score.
+With a euclidean distance search, we want to find the smallest distances.
+To invert the rank order, Vespa provides the `closeness` feature which is calculated as `1 / (1 + distance)`.
 
-Let's test that this works as intended. The sample app provides the 
-following script:
+Let's test that this works as intended, using
+[evaluate.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/evaluate.py):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -373,40 +380,40 @@ $ ./src/python/evaluate.py mind 1000
 </pre>
 </div>
 
-This reads both the training and validation set impressions, queries Vespa
-for 1000 randomly drawn impressions, and calculates the same metrics we saw
-during training. The result is something like:
+This reads both the training and validation set impressions,
+queries Vespa for 1000 randomly drawn impressions,
+and calculates the same metrics we saw during training.
+The result is something like:
 
 ```
 Train: {'auc': 0.8774, 'mrr': 0.5115, 'ndcg@5': 0.5842, 'ndcg@10': 0.6345}
 Valid: {'auc': 0.6308, 'mrr': 0.2935, 'ndcg@5': 0.3203, 'ndcg@10': 0.3789}
 ```
 
-This is in line with the results from the training. So, the conversion 
-from inner product space to euclidean space works as intended. The
-resulting rank scores are different, but the transformation evidently 
-retains the same ordering.
+This is in line with the results from the training.
+So, the conversion from inner product space to euclidean space works as intended.
+The resulting rank scores are different, but the transformation evidently retains the same ordering.
 
 
 ## Approximate Nearest Neighbor Search 
 
-So far, we've been using exact nearest-neighbor search. This is a linear scan 
-through all documents. For the MIND demo dataset we've been using,
-this isn't a problem as it only contains roughly 28000 documents, and 
-Vespa only uses a few milliseconds to scan through these. However, as 
-the index grows, the time (and computional cost) becomes significant. 
+So far, we've been using exact nearest-neighbor search.
+This is a linear scan through all documents.
+For the MIND demo dataset we've been using,
+this isn't a problem as it only contains roughly 28000 documents,
+and Vespa only uses a few milliseconds to scan through these.
+However, as the index grows, the time (and computational cost) becomes significant.
 
-Unfortunately, there are no exact methods for finding the nearest-neighbors
-efficiently. So we trade accuracy for efficiency in what is called
-approximate nearest-neighbors (ANN). Vespa provides a unique implementation 
-of ANNs that uses the HNSW (hierarchical navigable small world) algorithm, 
+There are no exact methods for finding the nearest-neighbors efficiently.
+So we trade accuracy for efficiency in what is called approximate nearest-neighbors (ANN).
+Vespa provides a unique implementation of ANNs that uses the HNSW (hierarchical navigable small world) algorithm,
 while still being compatible with other facets of the search such as filtering.
 We'll get back to this in the next section.
 
 If you recall, Vespa returned something like the following when searching 
 for single users above (with `targetHits` equals to 10):
 
-```
+```json
   "root": {
     "id": "toplevel",
     "relevance": 1.0,
@@ -420,13 +427,12 @@ for single users above (with `targetHits` equals to 10):
       "nodes": 1,
       "results": 1,
       "resultsFull": 1
-    },
-    ...
+    }
 ```
 
-Here, `coverage` shows that Vespa did scan through all 28603 documents. The 
-interesting piece here is the `totalCount`. This number is the number of 
-times a document has been put in the top 10 results during this linear scan.
+Here, `coverage` shows that Vespa did scan through all 28603 documents.
+The interesting piece here is the `totalCount`.
+This number is the number of times a document has been put in the top 10 results during this linear scan.
 
 Let's switch to using approximate nearest-neighbors by adding `index` to the embedding field in `news.sd`:
 
@@ -532,7 +538,7 @@ $ ./src/python/user_search.py U33527 10
 </pre>
 </div>
 
-```
+```json
 {
   "root": {
     "id": "toplevel",
@@ -547,61 +553,58 @@ $ ./src/python/user_search.py U33527 10
       "nodes": 1,
       "results": 1,
       "resultsFull": 1
-    },
+    }
 ```
 
-Here, `coverage` is still 100%, but the `totalCount` has been reduced to 
-10 - the same number of hits we requested. By adding the index to this 
-field, Vespa built a HNSW graph structure for the values in this field.
-When used in an approximate nearest-neighbor search, this graph 
-is queried and only the closest points as determined by this graph is 
-added to the list. 
+Here, `coverage` is still 100%, but the `totalCount` has been reduced to 10 -
+the same number of hits we requested.
+By adding the index to this field, Vespa built a HNSW graph structure for the values in this field.
+When used in an approximate nearest-neighbor search,
+this graph is queried and only the closest points as determined by this graph is added to the list.
 
-The particularly observant might have noticed that the result set 
-has changed. Indeed, the third result when using exact nearest 
-neighbor search was news article `N438`. This was omitted from 
-the approximate search. As mentioned, we trade accuracy for efficiency 
-when using approximate nearest-neighbor search.
+The particularly observant might have noticed that the result set has changed.
+Indeed, the third result when using exact nearest neighbor search was news article `N438`.
+This was omitted from the approximate search.
+As mentioned, we trade accuracy for efficiency when using approximate nearest-neighbor search.
 
-It should also be mentioned that searching through this graph comes with a
-cost. In our case, since we only have a relatively small amount of documents,
-there isn't that much gain in efficiency. However, as the number of documents
-grow, this starts to pay off. See [Approximate nearest neighbor search in
-Vespa](https://blog.vespa.ai/approximate-nearest-neighbor-search-in-vespa-part-1/)
+It should also be mentioned that searching through this graph comes with a cost.
+In our case, since we only have a relatively small amount of documents,
+there isn't that much gain in efficiency.
+However, as the number of documents grows, this starts to pay off.
+See [Approximate nearest neighbor search in Vespa](https://blog.vespa.ai/approximate-nearest-neighbor-search-in-vespa-part-1/)
 for more of a discussion around this. 
 See also [Billion-scale vector search with Vespa - part one](https://blog.vespa.ai/billion-scale-knn/)
 and [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
-which covers the many trade-offs related to approximate nearest neighbor search.
+which cover the many trade-offs related to approximate nearest neighbor search.
 
 The implementation of ANN using HNSW in Vespa has some nice features.
-Notice that we did not have to re-feed the corpus to enable ANN. Many 
-other approaches for ANNs require building an index offline in a batch job.
-HNSW allows for incrementally building this index, which is fully exploited 
-in Vespa.
+Notice that we did not have to re-feed the corpus to enable ANN.
+Many other approaches for ANNs require building an index offline in a batch job.
+HNSW allows for incrementally building this index, which is fully exploited in Vespa.
 
-A unique feature of Vespa is that the implementation allows for filtering
-during graph traversal, which we'll look at next.
+A unique feature of Vespa is that the implementation allows for filtering during graph traversal,
+which we'll look at next.
 
 
 ## Filtering
 
-A common case when using approximate nearest-neighbors is to combine 
-with some additional query filters. For instance, for retail search, one
-can imagine finding relevant products for a user. In this case, we should 
-not recommend products that are out of stock. So an additional query 
-filter would be to ensure that `in_stock` is true. 
+A common case when using approximate nearest-neighbors is to combine with some additional query filters.
+For instance, for retail search, one can imagine finding relevant products for a user.
+In this case, we should not recommend products that are out of stock.
+So an additional query filter would be to ensure that `in_stock` is true.
 
-Now, most implementations of ANNs come in the form of a library, so they are
-not integrated with the search at large. The natural approach is to first
-perform the ANN, the *post-filter* the results. Unfortunately, this often
-leads to sub-optimal results as relevant documents might not have been
-recalled. See [Using approximate nearest-neighbor search in real world
-applications](https://blog.vespa.ai/using-approximate-nearest-neighbor-search-in-real-world-applications/)
-for more of a discussion around this.
+Now, most implementations of ANNs come in the form of a library,
+so they are not integrated with the search at large.
+The natural approach is to first perform the ANN, the *post-filter* the results.
+Unfortunately, this often leads to sub-optimal results as relevant documents might not have been recalled.
+See [Using approximate nearest-neighbor search in real world applications](https://blog.vespa.ai/using-approximate-nearest-neighbor-search-in-real-world-applications/)
+for more of a discussion around this,
+and [Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/)
+for a better understanding of pre- and post-filtering tradeoffs.
 
-In our case, let's assume we want to retrieve 10 `sports` articles for a 
-user. It turns out we need to retrieve at least 278 news articles from the 
-search to get to 10 `sports` articles for this user:
+In our case, let's assume we want to retrieve 10 `sports` articles for a user.
+It turns out we need to retrieve at least 278 news articles from the search to get to 10 `sports` articles for this user:
+<!-- ToDo: check this - using 37 hits gave 10 sports results in my tests ... -->
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -617,29 +620,30 @@ On the other hand, if we add a filter specifically:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
 $ ./src/python/user_search.py U63195 10 "AND category contains 'sports'" | \
-    grep "category\": \"sports" | wc -l
+  grep "category\": \"sports" | wc -l
 </pre>
 </div>
 
-Here, we only specify 10 hits and exactly 10 hits of `sports` category are 
-returned. Vespa still searches through the graph starting from the query 
-point, however the search does not stop when we have 10 hits. In effect, 
-the graph search widens until 10 results fulfilling the filters are found.
+Here, we only specify 10 hits and exactly 10 hits of `sports` category are returned.
+Vespa still searches through the graph starting from the query point,
+however the search does not stop when we have 10 hits.
+In effect, the graph search widens until 10 results fulfilling the filters are found.
 
-As a note, strict filters that filter away a large part of the 
-corpus would entail that many candidates in the graph are skipped 
-while searching for the results that fulfill the filters. This can take 
-an exponential amount of time. For this case, Vespa falls back to 
-a linear, brute-force search over the few documents which matches the filter for efficiency.
+As a note, strict filters that filter away a large part of the corpus
+would entail that many candidates in the graph are skipped while searching for the results that fulfill the filters.
+This can take an exponential amount of time.
+For this case, Vespa falls back to a linear, brute-force search over the few documents
+which matches the filter for efficiency.
 
 
 ## Conclusion
 
-We now have a basic recommendation system up and running. We can query 
-for a user, retrieve the embedding vector and use that for querying
-the news articles. Right now, this means two calls to Vespa. In 
-the [next part of the tutorial](news-6-recommendation-with-searchers.html), we will introduce `searchers` which 
-allows for custom logic during query processing inside the Vespa cluster, so we only 
-need one client - vespa endpoint pass.
+We now have a basic recommendation system up and running.
+We can query for a user, retrieve the embedding vector and use that for querying the news articles.
+Right now, this means two calls to Vespa.
+In the [next part of the tutorial](news-6-recommendation-with-searchers.html),
+we will introduce `searchers`,
+which allows for custom logic during query processing inside the Vespa cluster,
+requiring only one pass from the client to Vespa.
 
 <script src="/js/process_pre.js"></script>
