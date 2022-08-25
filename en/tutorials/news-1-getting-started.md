@@ -31,11 +31,14 @@ In this part we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.
 In the next part of the tutorial, we'll start developing our application.
 
-{% include pre-req.html memory="10 Gb" extra-reqs='
+{% include pre-req.html memory="4 Gb" extra-reqs='
 <li>Python3 for converting the dataset to Vespa JSON.</li>
 <li><code>curl</code> to download the dataset and run the Vespa health-checks.</li>
 <li><a href="https://openjdk.java.net/projects/jdk/17/">Java 17</a> in part 6.</li>
 <li><a href="https://maven.apache.org/install.html">Apache Maven</a> in part 6.</li>' %}
+
+{% include note.html content='4 Gb Docker memory is sufficient for the demo dataset in part 2.
+The <span style="text-decoration: underline;">full</span> MIND dataset requires more, use 10 Gb.' %}
 
 In upcoming parts of this series, we will have some additional python dependencies -
 we use [PyTorch](https://pytorch.org/) to train vector representations for news and users
@@ -159,7 +162,7 @@ The first example uses the [vespa-feed-client](../vespa-feed-client.html) to ind
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o vespa-feed-client-cli.zip \
-    "https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip"
+  "https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip"
 $ unzip vespa-feed-client-cli.zip
 </pre>
 </div>
@@ -275,7 +278,7 @@ To wipe the index and restart:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ docker exec vespa bash -c ' \
+$ docker exec vespa sh -c ' \
   /opt/vespa/bin/vespa-stop-services && \
   /opt/vespa/bin/vespa-remove-index -force && \
   /opt/vespa/bin/vespa-start-services'
