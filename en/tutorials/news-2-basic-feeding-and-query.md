@@ -372,9 +372,9 @@ $ curl -s -H "Content-Type: application/json" \
 </pre>
 </div>
 
-{% include note.html content="You can use the
+{% include note.html content="Try the
 <a href='https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder'>Query Builder</a>
-which can help you build queries." %}
+application!" %}
 
 Looking at the output, please note:
 
