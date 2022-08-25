@@ -162,7 +162,7 @@ The first example uses the [vespa-feed-client](../vespa-feed-client.html) to ind
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o vespa-feed-client-cli.zip \
-    "https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip"
+  "https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip"
 $ unzip vespa-feed-client-cli.zip
 </pre>
 </div>
@@ -278,7 +278,7 @@ To wipe the index and restart:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ docker exec vespa bash -c ' \
+$ docker exec vespa sh -c ' \
   /opt/vespa/bin/vespa-stop-services && \
   /opt/vespa/bin/vespa-remove-index -force && \
   /opt/vespa/bin/vespa-start-services'

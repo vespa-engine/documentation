@@ -205,7 +205,7 @@ Total loss after epoch 2: 551.6585083007812 (3.363771438598633 avg)
 We can see the loss reduces over the number of epochs.
 The two final lines here are ranking metrics run on the training set and validation set.
 Here, the `AUC` metric - Area Under the (ROC) Curve -
-is at `0.974` for the training set and `0.51` for the validation set.
+is at `0.974` for the training set and `0.51` for the validation set. <!-- ToDo: where are these numbers? -->
 In this case, this metric measures the probability of ranking relevant news higher than non-relevant news.
 A score of around `0.5` means that it is totally random.
 Thus, we haven't learned anything of use for the validation set.
