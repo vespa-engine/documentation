@@ -16,13 +16,13 @@ We will cover how to create, deploy and feed the Vespa application.
 We are going to go from raw data to a fully functional text search app.
 In addition, we will showcase how easy it is to switch and experiment with different ranking functions in Vespa.
 
-{% include pre-req.html memory="4 Gb" extra-reqs='
+{% include pre-req.html memory="4 GB" extra-reqs='
 <li>Python3</li>
 <li><code>curl</code></li>
 <li><code>wget</code> Note: not needed unless downloading the full dataset</li>' %}
 <!-- ToDo: rewrite download-msmarco.sh to using curl for one less dependency -->
 
-Note: Use 12 Gb Ram for Docker if running with the full dataset.
+Note: Use 12 GB Ram for Docker if running with the full dataset.
 
 
 ## Installing vespa-cli 
@@ -272,8 +272,8 @@ Some notes about the elements above:
 
 Once we have finished writing our application package, we can deploy it in a Docker container.
 
-Note that indexing the full data set requires 47 Gb disk space.
-These tutorials have been tested with a Docker container with 12 Gb RAM.
+Note that indexing the full data set requires 47 GB disk space.
+These tutorials have been tested with a Docker container with 12 GB RAM.
 We used similar settings as described in the [vespa quick start guide](../vespa-quick-start.html).
 Start the Vespa container:
 

@@ -25,7 +25,7 @@ This guide covers the following:
 
 The guide includes step-by-step instructions on how to reproduce the experiments. 
 
-{% include pre-req.html memory="4 Gb" extra-reqs="
+{% include pre-req.html memory="4 GB" extra-reqs="
 <li>Python3 for converting the dataset to Vespa json.</li>
 <li><code>curl</code> to download the dataset and <code>zstd</code> to decompress published embedding data.</li>"%}
 

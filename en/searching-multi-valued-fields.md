@@ -42,7 +42,7 @@ flexibility of the Vespa [ranking](ranking.html) framework.
 
 In the following sections we explore matching and ranking over multi-valued string fields.  
 
-{% include pre-req.html memory="4 Gb" %}
+{% include pre-req.html memory="4 GB" %}
 
 
 ### A minimal Vespa application
