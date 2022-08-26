@@ -525,52 +525,54 @@ schema foo {
   </tbody>
 </table>
 
+
+
 <h2 id="paged-attributes">Paged attributes</h2>
 <p>
-Paged attribute is only supported for dense <a href="tensor-user-guide.html">tensor</a> type fields.
-
-Normal attribute fields are guaranteed to be in-memory while the <em>paged</em> attribute setting
-allows paging the data out of memory to disk.
-
-Using the <em>paged</em> setting for dense tensor attributes is an alternative when there are memory resource constraints
-and the tensor attribute data is only accessed by a limited number of hits per query during ranking.
-
-For example a dense document tensor data which is only used during a <a href="phased-ranking.html">re-ranking phase</a>
- where the number of attribute accesses are limited by the re-ranking phase count.</p>
-
-For example using a second phase <em>rerank-count</em> 100 will
-limit the maximum number of page-ins/disk access per query to 100. Running at 100 QPS
-would then need up to 10K disk accesses per query.
-
-This is the worst case, if none of the accessed attribute data were already paged into memory
-which depends on access locality and memory pressure (size of the attribute tensor data versus available memory).
-
-In this example we have a dense tensor with 
-1024 <a href="reference/tensor.html#tensor-type-spec">int8</a> values. The tensor field is
-only accessed during re-ranking (second-phase ranking expression). 
-
+  Paged attribute is only supported for dense <a href="tensor-user-guide.html">tensor</a> type fields.
+  Regular attribute fields are guaranteed to be in-memory,
+  while the <code>paged</code> attribute setting allows paging the data out of memory to disk.
+</p>
+<p>
+  Using the <code>paged</code> setting for dense tensor attributes
+  is an alternative when there are memory resource constraints
+  and the tensor attribute data is only accessed by a limited number of hits per query during ranking.
+  E.g. a dense document tensor data which is only used during a <a href="phased-ranking.html">re-ranking phase</a>,
+  where the number of attribute accesses are limited by the re-ranking phase count.
+</p>
+<p>
+  For example using a second phase <a href="reference/schema-reference.html#rerank-count">rerank-count</a> 100
+  will limit the maximum number of page-ins/disk access per query to 100.
+  Running at 100 QPS would then need up to 10K disk accesses per query.
+  This is the worst case, if none of the accessed attribute data were already paged into memory
+  which depends on access locality and memory pressure (size of the attribute tensor data versus available memory).
+</p>
+<p>
+  In this example we have a dense tensor with
+  1024 <a href="reference/tensor.html#tensor-type-spec">int8</a> values.
+  The tensor field is only accessed during re-ranking (second-phase ranking expression):
+</p>
 <pre>
 schema foo {
-  document foo {
-    field tensordata type tensor&lt;int8&gt;(x[1024]) {
-      indexing: attribute
-      attribute:paged
+    document foo {
+        field tensordata type tensor&lt;int8&gt;(x[1024]) {
+            indexing: attribute
+            attribute:paged
+        }
     }
-  }
-  rank-profile foo {
-    first-phase {}
-    second-phase {
-     rerank-count:100
-      expression: sum(attribute(tensordata))
+    rank-profile foo {
+        first-phase {}
+        second-phase {
+            rerank-count:100
+            expression: sum(attribute(tensordata))
+        }
     }
-  }
 }
 </pre>
-
 <p>
-For some use cases where serving latency SLA is not strict, 
-and query throughput is low, the paged tensor attributes might be a tuning alternative, 
-as it allows storing more tensor data per node.
+  For some use cases where serving latency SLA is not strict and query throughput is low,
+  the paged tensor attributes might be a tuning alternative,
+  as it allows storing more tensor data per node.
 </p>
 
 
@@ -580,8 +582,8 @@ as it allows storing more tensor data per node.
 </p>
 <ul>
 <li>
-It is only implemented for dense tensor field types, 
-not regular field types like string, int, double etc. It is also not supported for mapped (sparse) tensors 
+It is only implemented for dense tensor field types,
+not regular field types like string, int, double etc. It is also not supported for mapped (sparse) tensors
 and mixed tensors combining both dense and sparse dimensions.
 </li>
 <li>
@@ -591,8 +593,8 @@ per node (Depends on locality of document re-ranking requests).
 <li>
 Paged attributes are implemented by file backed memory mappings. The performance depends on
 the <a href="https://tldp.org/LDP/tlk/mm/memory.html">Linux virtual memory management</a> ability to page
-data in and out. Using many threads per search/high query throughput might cause high system (kernel) cpu and 
-system unresponsiveness. 
+data in and out. Using many threads per search/high query throughput might cause high system (kernel) cpu and
+system unresponsiveness.
 </li>
 <li>
 The content nodes total memory utilization will be close to 100% when using large paged attributes.
@@ -609,13 +611,27 @@ Changing the <em>paged</em> setting (e.g. removing the option) on a running syst
 without paged the content nodes will attempt loading the attribute into memory without the option for page outs.
 </li>
 <li>
-Using <em>paged</em> in combination with <a href="approximate-nn-hnsw.html">HNSW indexing</a> is <em>strongly</em> discouraged. 
+Using <em>paged</em> in combination with <a href="approximate-nn-hnsw.html">HNSW indexing</a> is <em>strongly</em> discouraged.
 <em>HNSW</em> indexing
-also searches and read tensors during indexing, causing random access during feeding. Once the total system memory usage reaches 100%, 
+also searches and read tensors during indexing, causing random access during feeding. Once the total system memory usage reaches 100%,
 the Linux kernel will start paging pages in and out of memory. This can cause high system (kernel) CPU and slows down HNSW indexing
 throughput significantly.
 </li>
 </ul>
+
+
+
+<h2 id="mutable-attributes">Mutable attributes</h2>
+<p>
+  <a href="reference/schema-reference.html#mutate">Mutable attributes</a> is document metadata
+  for matching and ranking performance per document.
+</p>
+<p>
+  The attribute values are mutated as part of query execution, as defined in rank profiles -
+  see <a href="phased-ranking.html#rank-phase-statistics">rank phase statistics</a> for details.
+</p>
+
+
 
 <h2 id="document-meta-store">Document meta store</h2>
 <p>
@@ -634,20 +650,20 @@ throughput significantly.
 </p>
 <pre>
 {
-  "name": "content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes",
-  "description": "The number of allocated bytes",
-  "values": {
-    "average": 4.69736008E8,
-    "count": 12,
-    "rate": 0.2,
-    "min": 469736008,
-    "max": 469736008,
-    <span class="pre-hilite">"last": 469736008</span>
-  },
-  "dimensions": {
-    "documenttype": "doctype",
-    <span class="pre-hilite">"field": "[documentmetastore]"</span>
-  }
+    "name": "content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes",
+    "description": "The number of allocated bytes",
+    "values": {
+        "average": 4.69736008E8,
+        "count": 12,
+        "rate": 0.2,
+        "min": 469736008,
+        "max": 469736008,
+        <span class="pre-hilite">"last": 469736008</span>
+    },
+    "dimensions": {
+        "documenttype": "doctype",
+        <span class="pre-hilite">"field": "[documentmetastore]"</span>
+    }
 },
 </pre>
 <p>
