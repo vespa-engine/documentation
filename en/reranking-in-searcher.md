@@ -28,7 +28,7 @@ consider configuring a dedicated [document summary](document-summaries.html).
 
 See also [life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
 
-{% include pre-req.html memory="4 Gb" extra-reqs='
+{% include pre-req.html memory="4 GB" extra-reqs='
 <li><a href="https://openjdk.java.net/projects/jdk/17/">Java 17</a>.</li>
 <li><a href="https://maven.apache.org/install.html">Apache Maven</a> is used to build the application.</li>' %}
 
