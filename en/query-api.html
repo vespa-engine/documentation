@@ -9,10 +9,9 @@ redirect_from:
   Use the Vespa Query API to query, rank and organize data. Example:
 </p>
 <pre>{% raw %}
-$ENDPOINT/search/?
-  ranking=rank_albums
-  ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}
-  yql=select * from sources * where year > 2018
+$ vespa query "select * from music where year > 2001" \
+  "ranking=rank_albums" \
+  "input.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
 {% endraw %}</pre>
 <p>
   Simplified, a query has the following components:
@@ -33,18 +32,17 @@ $ENDPOINT/search/?
 
 <h2 id="input">Input</h2>
 <p>
-  Input data is both structured data and unstructured data (the latter called "user input").
-  Example (URL-decoded for readability):
+  Input data is both structured data and unstructured data:
+</p>
 <pre>{% raw %}
-yql=select * from sources * where artist contains "Coldplay" and userInput(@inp)&amp;
-inp=paradise&amp;
-ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}
+$ vespa query "select * from music where artist contains \"coldplay\" and userInput(@q)" \
+  "q=head"
 {% endraw %}</pre>
 <p>
   The first line is the <a href="query-language.html">YQL</a> query string,
-  that has both structured input (artist=Coldplay)
+  that has both structured input (artist=coldplay)
   and a reference to unstructured user input.
-  The user input is then given in the second line in the <em>inp</em> parameter.
+  The user input is then given in the second line in the <em>q</em> parameter.
 </p><p>
   Separating the structured data from the unstructured reliefs the application code from
   interpreting and sanitizing the input data - it is essentially a blob.
@@ -54,61 +52,77 @@ ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.
   the <a href="reference/query-language-reference.html#userquery">userQuery</a> operator.
 </p><p>
   Finally, input data can also be ranking query features -
-  here the query feature is called <em>user_profile</em>.
-  Query features are data, normally valid for this particular instance,
-  that are used in the subsequent document ranking -
-  this enables online decision-making based on realtime data.
-</p><p>
+  here the query feature is called <em>user_profile</em>:
+</p>
+<pre>{% raw %}
+$ vespa query "select * from music where artist contains \"coldplay\" and userInput(@q)" \
+  "q=head" \
+  "ranking=rank_albums" \
+  "input.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+{% endraw %}</pre>
+<p>
   See <a href="#query-execution">query execution</a> below.
-  Use <a href="reference/query-api-reference.html#searchChain">search chains</a>
-  to implement custom query processing.
-  This is the integration point to plug in code to enrich a query - example:
-  Look up user profile data from a user ID in the request.
-  Set <em>&amp;trace.level=2</em> to inspect the search chain components.
 </p>
 
 
-<h3 id="input-and-yql-example">Input and YQL - example</h3>
-<pre class="urlunencode" oncopy="">
-yql=select%20%2A%20from%20sources%20%2A%20where%20userInput%28%40animal%29&amp;animal=panda
+<h3 id="input-examples">Input examples</h3>
+<pre>
+$ vespa query "select * from sources * where userInput(@animal)" \
+  "animal=panda"
 </pre>
 <p>
   The userInput() function will access the query property "animal",
-  and parse the property value as an <a href="reference/query-language-reference.html#grammar">"all"</a> query,
+  and parse the property value as a <a href="reference/query-language-reference.html#grammar">weakAnd</a> query,
   resulting in:
 </p>
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20weakAnd%28default%20contains%20%22panda%22%29
-</pre>
+<p>
+<code>
+select * from sources * where weakAnd(default contains "panda")
+</code>
+</p>
+<hr/>
 <p>Changing the value of "animal" without changing the rest of the expression:</p>
-<pre class="urlunencode" oncopy="">
-yql=select%20%2A%20from%20sources%20%2A%20where%20userInput%28%40animal%29&amp;animal=panda%20smokey
+<pre>
+$ vespa query "select * from sources * where userInput(@animal)" \
+  "animal=panda smokey"
 </pre>
 <p>The result is:</p>
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20weakAnd%28default%20contains%20%22panda%22%2C%20default%20contains%20%22smokey%22%29
-</pre>
+<p>
+<code>
+select * from sources * where weakAnd(default contains "panda", default contains "smokey")
+</code>
+</p>
+<hr/>
 <p>Combining multiple query properties, and having a more complex expression:</p>
-<pre class="urlunencode" oncopy="">
-yql=select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28userInput%28%40animal%29%20or%20userInput%28%40teddy%29%29&amp;animal=panda&amp;teddy=bear%20roosevelt
+<pre>
+$ vespa query "select * from sources * where range(year, 1963, 2014) and (userInput(@animal) or userInput(@teddy))" \
+  "animal=panda" \
+  "teddy=bear roosevelt"
 </pre>
 <p>The resulting YQL expression is:</p>
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28weakAnd%28default%20contains%20%22panda%22%29%20or%20weakAnd%28default%20contains%20%22bear%22%2C%20default%20contains%20%22roosevelt%22%29%29
-</pre>
+<p>
+<code>
+select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or weakAnd(default contains "bear", default contains "roosevelt"))
+</code>
+</p>
+<hr/>
 <p>
   Now, consider we do not want the "teddy" field to be treated as its own query segment,
   it should only be segmented with the linguistic libraries to get recall.
-  Do this by adding a <a href="reference/query-language-reference.html#grammar">"grammar"</a>
-  annotation to the userInput() call:
+  Do this by adding a <a href="reference/query-language-reference.html#grammar">grammar</a>-annotation
+  to the userInput() call:
 </p>
-<pre class="urlunencode" oncopy="">
-yql=select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28userInput%28%40animal%29%20or%20%28%7Bgrammar%3A%20%22segment%22%7DuserInput%28%40teddy%29%29%29&amp;animal=panda&amp;teddy=bear%20roosevelt
+<pre>
+$ vespa query "select * from sources * where range(year, 1963, 2014) and (userInput(@animal) or ({grammar: "segment"}userInput(@teddy)))" \
+  "animal=panda" \
+  "teddy=bear roosevelt"
 </pre>
 <p>Then, the linguistic library will split on space, and the resulting expression is:</p>
-<pre class="urlunencode" oncopy="">
-select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%29%20and%20%28weakAnd%28default%20contains%20%22panda%22%29%20or%20default%20contains%20phrase%28%22bear%22%2C%20%22roosevelt%22%29%29
-</pre>
+<p>
+<code>
+select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or default contains phrase("bear", "roosevelt"))
+</code>
+</p>
 
 
 <h3 id="query-profiles">Query Profiles</h3>
@@ -124,15 +138,15 @@ select%20%2A%20from%20sources%20%2A%20where%20range%28year%2C%201963%2C%202014%2
 <h3 id="geo-filter-and-ranking">Geo Filter and Ranking</h3>
 <p>
   Filter by position using latitude and longitude to implement <a href="geo-search.html">geo search</a>.
-  User a square bounding box, or a position and radius.
   <a href="reference/rank-features.html#distanceToPath(name).distance">DistanceToPath</a> is a
   <a href="ranking.html">rank function</a> based on closeness.
-  Using <em>ranking</em> can often improve results instead of geo <em>filtering</em>.
+  Using <span style="text-decoration: underline">ranking</span> can often improve results instead of geo
+  <span style="text-decoration: underline">filtering</span>.
 </p>
 
 
 
-<h2 id="ranking-and-grouping">Ranking and Grouping</h2>
+<h2 id="ranking">Ranking</h2>
 <p>
   <a href="ranking.html">Ranking</a> specifies the computation of the query and data.
   It assigns scores to documents, and returns documents ordered by score.
@@ -152,25 +166,31 @@ rank-profile rank_albums inherits default {
 </pre>
 <p>
   Results can be ordered using <a href="reference/sorting.html">sorting</a> instead of ranking.
-</p><p>
-  <a href="grouping.html">Grouping</a> is a way to group documents in the result set after ranking.
-  Example, return max 3 albums per artist,  grouped on artist:
 </p>
-<pre>
-| all(group(artist) each(max(3) each(output(summary())) ) );
-</pre>
 <p>
-  Fields used in grouping (here: artist) must be attributes.
-  The grouping expression is part of the QYL query string, appended at the end.
-</p><p>
-  Applications can group <em>all</em> documents (select all documents in YQL).
-  Using hits=0 will return grouping results only.
-</p><p>
   The above rank profile does not do text ranking -
   there are however such profiles built-in.
   Text search and ranking is described in more detail in
   <a href="text-matching-ranking.html">Text Matching and Ranking</a> -
   find information about normalizing, prefix search and linguistics there.
+</p>
+
+
+
+<h2 id="grouping">Grouping</h2>
+<p>
+  <a href="grouping.html">Grouping</a> is a way to group documents in the result set after ranking.
+  Example, return max 3 albums per artist, grouped on year:
+</p>
+<pre>
+$ vespa query "select * from music where true limit 0 | all(group(year) each(max(3) each(output(summary())) ) )"
+</pre>
+<p>
+  Fields used in grouping must be <a href="attributes.html">attributes</a>.
+  The grouping expression is part of the QYL query string, appended at the end.
+</p><p>
+  Applications can group <em>all</em> documents (select all documents in YQL).
+  Using <code>limit 0</code> returns grouping results only.
 </p>
 
 
@@ -221,17 +241,28 @@ use this to write code to manipulate results.
     using the <em>Query API</em> or in any custom request format handled by a
     custom <a href="jdisc/developing-request-handlers.html">request handler</a>,
     which translates the custom request format to native Vespa APIs.
-  </li><li>
-    Query pre-processing, like <a href="linguistics.html">linguistic processing</a>
-    and <a href="query-rewriting.html">query rewriting</a>,
-    is done in built-in and custom <a href="chained-components.html">chains</a> -
-    see <a href="searcher-development.html">searcher development</a>.
-    The default search chain is <em>vespa</em> -
-    find installed components in this chain by inspecting <code>ApplicationStatus</code>
-    like in the <a href="vespa-quick-start.html">quick-start</a>.
-    Adding <code>&amp;trace.level=4</code> (or higher) to the query will
-    emit the components invoked in the query, and is useful to analyze ordering.
-  </li><li>
+  </li>
+  <li>
+    <p>
+      Query pre-processing, like <a href="linguistics.html">linguistic processing</a>
+      and <a href="query-rewriting.html">query rewriting</a>,
+      is done in built-in and custom <a href="components/chained-components.html">search chains</a> -
+      see <a href="searcher-development.html">searcher development</a>.
+    </p>
+    <p>
+      The default search chain is <em>vespa</em> -
+      find installed components in this chain by inspecting <code>ApplicationStatus</code>
+      like in the <a href="vespa-quick-start.html">quick-start</a>.
+      Adding <code>&amp;trace.level=4</code> (or higher) to the query will
+      emit the components invoked in the query, and is useful to analyze ordering.
+    </p>
+    <p>
+      This is the integration point to plug in code to enrich a query - example:
+      Look up user profile data from a user ID in the request.
+      Set <em>&amp;trace.level=2</em> to inspect the search chain components.
+    </p>
+  </li>
+  <li>
   <p>
     The query is sent from the container to
     the <a href="schemas.html#content-cluster-mapping">content cluster</a>  -
@@ -319,51 +350,35 @@ $ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+defau
 
 <h3 id="using-post">Using POST</h3>
 <p>
-The general form of POST data is:
+  The format is based on the <a href="reference/query-api-reference.html">Query API reference</a>,
+  and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
+  The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>, e.g.:
 </p>
 <pre>
-{
-    param1 : value1,
-    param2 : value2,
-    ...
-}
+$ curl -X POST -H "Content-Type: application/json" --data '
+  {
+      "yql": "select * from sources * where true",
+      "offset": 5,
+      "ranking": {
+          "matchPhase": {
+              "ascending": true,
+              "maxHits": 15
+          }
+      },
+      "presentation" : {
+          "bolding": false,
+          "format": "json"
+      }
+  }' \
+  http://localhost:8080/search/
 </pre>
-<p>
-The format is based on the <a href="reference/query-api-reference.html">Query API reference</a>,
-and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
-</p>
-<ul>
-  <li>
-    The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>.
-  </li><li>
-    Also try the GUI for building queries at
-    <a href="http://localhost:8080/querybuilder/" data-proofer-ignore>localhost:8080/querybuilder/</a>
-    (with Vespa running).
-    This helps build queries, with e.g. autocompletion of YQL, pasting of already built queries and
-    conversion of JSON- to URL-queries.
-  </li>
-</ul>
-<p>Example:</p>
-<pre>
-{
-    "yql" : "select * from sources * where default contains \"coldplay\"",
-    "offset"  : 5,
-    "ranking" : {
-        "matchPhase" : {
-            "ascending" : true,
-            "maxHits"   : 15
-        },
-    },
-    "presentation" : {
-        "bolding" : false,
-        "format"  : "json"
-    }
-}
-</pre>
-<p>
-  Note: Security filters can block GET and POST requests differently.
-  This can block POSTed queries.
-</p>
+
+{% include note.html content="Try the
+<a href='https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder'>Query Builder</a>
+application!" %}
+
+{% include important.html content="Security filters can block GET and POST requests differently.
+This can block POSTed queries." %}
 
 
 <h3 id="jetty">Jetty</h3>
@@ -372,17 +387,17 @@ and has been converted from the <em>flat</em> dot notation to a <em>nested</em> 
   Configure the <a href="reference/services-http.html#server">http server</a> -
   e.g. set <em>requestHeaderSize</em> to configure URL length (including headers):
 </p>
-<pre>
-&lt;container version="1.0"&gt;
-    &lt;http&gt;
-        &lt;server port="8080" id="myserver"&gt;
-            &lt;config name="jdisc.http.connector"&gt;
-                &lt;requestHeaderSize&gt;32768&lt;/requestHeaderSize&gt;
-            &lt;/config&gt;
-        &lt;/server&gt;
-    &lt;/http&gt;
-&lt;/container&gt;
-</pre>
+<pre>{% highlight xml %}
+<container version="1.0">
+    <http>
+        <server port="8080" id="myserver">
+            <config name="jdisc.http.connector">
+                <requestHeaderSize>32768</requestHeaderSize>
+            </config>
+        </server>
+    </http>
+</container>
+{% endhighlight %}</pre>
 <p>
   HTTP keepalive is supported.
 </p><p>
@@ -826,5 +841,3 @@ and has been converted from the <em>flat</em> dot notation to a <em>nested</em> 
     }
 }
 {% endhighlight %}</pre>
-
-<script src="/js/copy_urlencoded.js"></script>

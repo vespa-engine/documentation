@@ -20,33 +20,30 @@ application for personalized news recommendations. The parts are:
 9. Advanced news recommendation - ML models
 
 In this part, we'll start transforming our application from news search to
-recommendation. We won't be using Vespa at all in this part. Our
-focus is to generate news and user embeddings. We'll start using these
-embeddings in the next part. You can skip this part if you wish.
+recommendation. We won't be using Vespa at all in this part.
+Our focus is to generate news and user embeddings.
+We'll start using these embeddings in the next part - you can skip this part if you wish.
 
-The primary function of a recommendation system is to provide items of interest
-to any given user. The more we know about the user, the better
-recommendations we can provide. We can view recommendation as search where
-the query is the user profile. So, in this tutorial we will build upon
-the previous news search tutorial by creating user profiles and use
-them to search for relevant news articles.
+The primary function of a recommendation system is to provide items of interest to any given user.
+The more we know about the user, the better recommendations we can provide.
+We can view recommendation as search where the query is the user profile.
+So, in this tutorial we will build upon the previous news search tutorial by creating user profiles
+and use them to search for relevant news articles.
 
 We start by generating embeddings using a collaborative filtering method.
-We'll then improve upon that using a content-based approach, which generates
-embedding based on BERT models. Since we'll use this in a nearest neighbors
-algorithm, we'll touch upon how to convert a maximum inner product search to
-euclidean distance search before moving along to the next tutorial.
+We'll then improve upon that using a content-based approach, which generates embedding based on BERT models.
+Since we'll use this in a nearest neighbors algorithm,
+we'll touch upon how to convert a maximum inner product search to euclidean distance search
+before moving along to the next tutorial.
 
-Let's start with taking a look again at what data the MIND dataset provides
-for us.
+Let's start with taking a look again at what data the MIND dataset provides for us.
 
 
 ### Requirements
 
-We start using some machine learning tools in this tutorial. Specifically,
-we need Numpy, Scikit-learn, PyTorch, and the HuggingFace Transformers
-library. Make sure you have all the necessary dependencies by running the
-following in the sample application directory:
+We start using some machine learning tools in this tutorial.
+Specifically, we need Numpy, Scikit-learn, PyTorch, and the HuggingFace Transformers library.
+Make sure you have all the necessary dependencies by running the following in the sample application directory:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -58,99 +55,95 @@ $ python3 -m pip install -r requirements.txt
 
 ## The MIND dataset
 
-The MIND dataset, for our purposes in this series of tutorials, consists
-of two main files: `news.tsv` and `behaviors.tsv`. We used the former
-in the previous tutorial, as that contains all news article content.
+The MIND dataset, for our purposes in this series of tutorials,
+consists of two main files: `news.tsv` and `behaviors.tsv`.
+We used the former in the previous tutorial, as that contains all news article content.
 
-The `behaviors.tsv` file contains a set of impressions. An impression is an
-ordered list of news articles that was generated for a user. It includes
-which of those articles the user clicked, and conversely, which ones were
-not. We designate articles not clicked as "skips". Also included in the
-impression is a list of articles the user has previously clicked. An example
-is:
+The `behaviors.tsv` file contains a set of impressions.
+An impression is an ordered list of news articles that was generated for a user.
+It includes which of those articles the user clicked, and conversely, which ones were not.
+We designate articles not clicked as "skips".
+Also included in the impression is a list of articles the user has previously clicked.
+An example is:
 
 ```
 3       U11552  11/11/2019 1:03:52 PM   N2139   N18390-0 N10537-0 N23967-1
 ```
 
-Here, user `U11552` was shown three articles: `N18390`, `N10537`, and
-`N23967`, of which the user skipped two and clicked the last one. At that
-time, the user had previously clicked on article `N2139`. We can
-cross-reference with the `news.tsv` and extract the content of these
-articles.
+Here, user `U11552` was shown three articles: `N18390`, `N10537`, and `N23967`,
+of which the user skipped two and clicked the last one.
+At that time, the user had previously clicked on article `N2139`.
+We can cross-reference with the `news.tsv` and extract the content of these articles.
 
-We interpret a click as a positive signal for interest and a skip as
-possibly a negative signal for interest. This is called implicit feedback, as
-the users haven't explicitly expressed their interests. However, using clicks
-and skips, we can still start to infer the users' interests.
+We interpret a click as a positive signal for interest and a skip as possibly a negative signal for interest.
+This is called implicit feedback, as the users haven't explicitly expressed their interests.
+However, using clicks and skips, we can still start to infer the users' interests.
 
 
 ## Collaborative filtering in recommendation systems
 
-A simple approach to provide recommendations to the above would be to extract
-the categories, subcategories, and/or entities the users have implicitly
-interacted with, and store these for each user. We can call this a sparse
-user profile because we store the exact terms of entities or categories. We
-could then use traditional information retrieval techniques to search for
-more articles with similar content.
+A simple approach to provide recommendations to the above would be to extract the categories, subcategories,
+and/or entities the users have implicitly interacted with, and store these for each user.
+We can call this a sparse user profile because we store the exact terms of entities or categories.
+We could then use traditional information retrieval techniques to search for more articles with similar content.
 
-However, by doing this we miss out on a lot of information. For instance,
-some categories or entities are similar, which could be of interest for the
-user. Also, users with similar interests tend to click on similar articles.
-If some type of content was interesting to one user, it would likely be
-interesting to similar users.
+However, by doing this we miss out on a lot of information.
+For instance, some categories or entities are similar, which could be of interest to the user.
+Also, users with similar interests tend to click on similar articles.
+If some type of content was interesting to one user,
+it would likely be interesting to similar users.
 
-Exploiting this information is called collaborative filtering, and the
-classical approach to this is matrix factorization. In this approach, we
-create a large matrix with users along one axis and news articles along the
-other. We'll call this the interaction matrix. Then we factorize this matrix
-into two smaller matrices, where the product of these two smaller
-approximates the original.
+Exploiting this information is called collaborative filtering
+and the classical approach to this is matrix factorization.
+In this approach, we create a large matrix with users along one axis and news articles along the other.
+We'll call this the interaction matrix.
+Then we factorize this matrix into two smaller matrices,
+where the product of these two smaller approximates the original.
 
 ![Matrix factorization](/assets/img/tutorials/mf.png)
+<!-- ToDo: rewrite to look like the other illustrations -->
 
-In the image above, you can see a user matrix with as many rows as there are
-users and a news matrix with as many columns as there are news articles.
-Each user row, or news column, has the same length, signified by the `k`
-dimension. The intuition is that the dot product of the `k` length vector for
-a user and news pair approximates the user's interest in the news
-article. Since the information is compressed into the `k` length vector, this works
-across users as well. Thus, the "collaborative" filtering.
+In the image above, you can see a user matrix with as many rows as there are users
+and a news matrix with as many columns as there are news articles.
+Each user row, or news column, has the same length, signified by the `k` dimension.
+The intuition is that the dot product of the `k` length vector for a user and news pair
+approximates the user's interest in the news article.
+Since the information is compressed into the `k` length vector,
+this works across users as well.
+Thus, the "collaborative" filtering.
 
-These `k` length vectors can be extracted from the matrices and associated
-with the user or news article. So, when we want to recommend news articles to
-a user, we simply find the user's vector and find the articles with the
-highest dot products. In the following, we will use this approach to generate
-such embeddings for users and news articles.
+These `k` length vectors can be extracted from the matrices and associated with the user or news article.
+So, when we want to recommend news articles to a user,
+we simply find the user's vector and find the articles with the highest dot products.
+In the following, we will use this approach to generate such embeddings for users and news articles.
 
-Please note, however, this approach would not work well in practice for
-news recommendation. The reason is that a large part of news recommendation
-is to recommend **new** news articles, which might not have received any
-implicit feedback yet. This is called the "cold start" problem. For such
-problems, we need to use additional content (often called "side information")
-of news articles to provide recommendations. We'll tackle this "cold start" a
-bit later.
+Please note, however, this approach would not work well in practice for news recommendation.
+The reason is that a large part of news recommendation is to recommend **new** news articles,
+which might not have received any implicit feedback yet.
+This is called the "cold start" problem.
+For such problems, we need to use additional content (often called "side information")
+of news articles to provide recommendations.
+We'll tackle this "cold start" a bit later.
 
 
 ## Generating embeddings
 
-A standard method for factorizing the interaction matrix is to use
-Alternating Least Squares. The idea is to randomly fill the user and news
-matrices and freeze one of the matrices' parameters while solving for the
-other. By alternating between which matrix is fixed, this can be solved with
-a traditional least-squares problem. We can iterate the process until
-convergence.
+A standard method for factorizing the interaction matrix is to use Alternating Least Squares.
+The idea is to randomly fill the user and news matrices
+and freeze one of the matrices' parameters while solving for the other.
+By alternating between which matrix is fixed, this can be solved with a traditional least-squares problem.
+We can iterate the process until convergence.
 
 This tutorial aims to generate embeddings so that the dot product
-between a user and news vector signifies the probability of a click. Using
-this signal we can rank news articles by click probability. To train the
-embedding vectors, we will use a stochastic gradient descent approach
-to modify the embeddings so that their dot product followed by the logistic
-function predicts a user click. We use a binary cross-entropy as loss function.
+between a user and news vector signifies the probability of a click.
+Using this signal we can rank news articles by click probability.
+To train the embedding vectors, we will use a stochastic gradient descent approach to modify the embeddings
+so that their dot product followed by the logistic function predicts a user click.
+We use a binary cross-entropy as loss function.
 
 We'll use PyTorch for this. The main PyTorch model class is as follows:
 
-```
+```python
 class MF(torch.nn.Module):
     def __init__(self, num_users, num_items, embedding_size):
         super(MF, self).__init__()
@@ -167,13 +160,12 @@ class MF(torch.nn.Module):
 ```
 
 We use the PyTorch's `Embedding` class to hold the user and news embeddings.
-The forward function is the forward pass of the gradient descent. First, the
-users and items selected for a mini-batch update are extracted from their
-embedding tables. Then we take the dot-product with a logistic function and
-return the value. This prediction for user and news pairs is then evaluated
-against the click or skip labels:
+The forward function is the forward pass of the gradient descent.
+First, the users and items selected for a mini-batch update are extracted from their embedding tables.
+Then we take the dot-product with a logistic function and return the value.
+This prediction for user and news pairs is then evaluated against the click or skip labels:
 
-```
+```python
     # forward + backward + optimize
     user_ids, news_ids, labels = batch
     prediction = model(user_ids, news_ids)
@@ -182,15 +174,16 @@ against the click or skip labels:
     optimizer.step()
 ```
 
-This is done across several of epochs. The `batch` here contains a batch of
-`user_id`s, `news_id`s, and `label`s used for training a mini-batch. For
-instance, from the example impression above, a training example would be
-`U11552, N23967, 1`. The code responsible for generating the training data
+This is done across several of epochs.
+The `batch` here contains a batch of`user_id`s, `news_id`s, and `label`s used for training a mini-batch.
+For instance, from the example impression above, a training example would be `U11552, N23967, 1`.
+The code responsible for generating the training data
 samples 4 negative examples (skips) for each positive example (click).
 
-The full code can be seen in the sample application, in `src/python/train.py`.
+The full code can be seen in the sample application,
+in [train_mf.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/train_mf.py).
+Let's go ahead and generate the embeddings:
 
-Let's go ahead and generate the embeddings. Run the following:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -209,56 +202,51 @@ Total loss after epoch 2: 551.6585083007812 (3.363771438598633 avg)
 {'auc': 0.4988, 'mrr': 0.2154, 'ndcg@5': 0.2182, 'ndcg@10': 0.2824}
 ```
 
-We can see the loss reduces over the number of epochs. The two final lines
-here are ranking metrics run on the training set and validation set. Here,
-the `AUC` metric - Area Under the (ROC) Curve - is at `0.974` for the
-training set and `0.51` for the validation set. In this case,
-this metric measures the probability of ranking relevant news higher than
-non-relevant news. A score of around `0.5` means that it is totally random.
+We can see the loss reduces over the number of epochs.
+The two final lines here are ranking metrics run on the training set and validation set.
+Here, the `AUC` metric - Area Under the (ROC) Curve -
+is at `0.974` for the training set and `0.51` for the validation set. <!-- ToDo: where are these numbers? -->
+In this case, this metric measures the probability of ranking relevant news higher than non-relevant news.
+A score of around `0.5` means that it is totally random.
 Thus, we haven't learned anything of use for the validation set.
 
-This is not overfitting but rather an instance of the problem mentioned
-earlier. The validation set contains news articles shown to users a time period
-after the data in the training set. Thus, most news articles are new,
-and their embedding vectors are effectively random.
+This is not overfitting but rather an instance of the problem mentioned earlier.
+The validation set contains news articles shown to users a time period after the data in the training set.
+Thus, most news articles are new, and their embedding vectors are effectively random.
 
 We'll address this next.
 
 
 ## Addressing the cold start problem
 
-The approach above based itself on news articles that users interacted with
-in the training set period. Only the user ids and news article ids were
-used. To overcome the problem that new articles haven't been seen in the
-training set, we need to use the article's content features. So, the
-predictions will be based on the similarity of content a user has previously
-interacted, rather than the actual news article id.
+The approach above based itself on news articles that users interacted with in the training set period.
+Only the user ids and news article ids were used.
+To overcome the problem that new articles haven't been seen in the training set,
+we need to use the article's content features.
+So, the predictions will be based on the similarity of content a user has previously interacted,
+rather than the actual news article id.
 
 This is, naturally enough, called content-based recommendation.
 
-The general approach we'll take here is to still rely on a dot product
-between a user embedding and news embedding, however the news embedding
-will be constructed from various content features.
+The general approach we'll take here is to still rely on a dot product between a user embedding and news embedding,
+however the news embedding will be constructed from various content features.
 
-The MIND dataset has a few such features we can use. Each news article
-has a `category`, a `subcategory` and zero or more `entities`
-extracted from the text. These features are categorical, meaning
-that they have a finite set of values they can take. To handle these,
-we'll generate an embedding for each possible value, similar to how we
-generated embeddings for the user id's and news id's above. These ids
-are also categorical, after all.
+The MIND dataset has a few such features we can use.
+Each news article has a `category`, a `subcategory` and zero or more `entities` extracted from the text.
+These features are categorical, meaning that they have a finite set of values they can take.
+To handle these, we'll generate an embedding for each possible value,
+similar to how we generated embeddings for the user id's and news id's above.
+These ids are also categorical, after all.
 
 
 ### Creating BERT embeddings
 
-However, there are other content features as well such as the `title` and
-`abstract`. To create embeddings from these, we'll employ a [BERT-based
-sentence
-classifier](https://huggingface.co/docs/transformers/model_doc/bert.html#bertforsequenceclassification)
-from the [HuggingFace transformers](https://huggingface.co/docs/transformers/index)
-library:
+However, there are other content features as well such as the `title` and `abstract`.
+To create embeddings from these, we'll employ a
+[BERT-based sentence classifier](https://huggingface.co/docs/transformers/model_doc/bert.html#bertforsequenceclassification)
+from the [HuggingFace transformers](https://huggingface.co/docs/transformers/index) library:
 
-```
+```python
 from transformers import BertTokenizer, BertModel
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertModel.from_pretrained('google/bert_uncased_L-8_H-512_A-8')
@@ -267,14 +255,12 @@ outputs = model(**tokens)
 embedding = outputs[0][0][0]
 ```
 
-Here, we use a medium-sized BERT model with 8 layers and a hidden dimension
-size of 512. This means that the embedding will be a vector of
-size 512. We use the vector from the first `CLS` token to represent
-the combined title and abstract.
+Here, we use a medium-sized BERT model with 8 layers and a hidden dimension size of 512.
+This means that the embedding will be a vector of size 512.
+We use the vector from the first `CLS` token to represent the combined title and abstract.
 
 To generate these embeddings for all news content, run the following.
-This might take a while, around an hour for all news articles in
-the `train` and `dev` demo dataset. 
+This might take a while, around an hour for all news articles in the `train` and `dev` demo dataset.
 Alternatively, skip this step and download pre-processed embeddings, see step below.
 
 <div class="pre-parent">
@@ -283,6 +269,12 @@ Alternatively, skip this step and download pre-processed embeddings, see step be
 $ python3 src/python/create_bert_embeddings.py mind
 </pre>
 </div>
+
+<!-- ToDo: create_bert_embeddings emit a lot of:
+Be aware, overflowing tokens are not returned for the setting you have chosen,
+i.e. sequence pairs with the 'longest_first' truncation strategy.
+So the returned list will always be empty even if some tokens have been removed.
+-->
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -296,8 +288,8 @@ $ curl -L -o mind/dev/news_embeddings.tsv \
 </pre>
 </div>
 
-This creates a `news_embeddings.tsv` file under the `mind/train` and
-`mind/dev` subdirectories.
+This creates a `news_embeddings.tsv` file under the `mind/train` and `mind/dev` subdirectories.
+
 
 ## Training the model
 
@@ -306,18 +298,20 @@ we can train the model to use them. The following figure illustrates
 the model we are training:
 
 <img src="/assets/img/tutorials/embeddings.png" width="768px" alt="Model training example" />
+<!-- ToDo: new illustration -->
 
 So, we'll pass the 512-dimensional embeddings from the BERT model
 through a typical neural network layer to reduce dimensions to 50.
 We then concatenate this representation with the 50 dimensional
-embeddings for `category`, `subcategory` and `entity`. We only use
-one entity for now. This representation is then sent through another
-neural network layer to form the final representation for a news
-article. Finally, the dot product is taken with the user embedding.
+embeddings for `category`, `subcategory` and `entity`.
+We only use one entity for now.
+This representation is then sent through another neural network layer
+to form the final representation for a news article.
+Finally, the dot product is taken with the user embedding.
 
 In PyTorch code, this looks like:
 
-```
+```python
 class ContentBasedModel(torch.nn.Module):
     def __init__(self,
                  num_users,
@@ -374,9 +368,10 @@ class ContentBasedModel(torch.nn.Module):
 
 ```
 
-The forward pass function is pretty much the same as before. You can
-see the entire training script in `src/python/train_cold_start.py` in
-the sample app. Running this results in:
+The forward pass function is pretty much the same as before.
+You can see the entire training script in
+[train_cold_start.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/train_cold_start.py).
+Running this results in:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -439,24 +434,21 @@ The training script writes these embeddings to the files
 
 ## Mapping from inner-product search to euclidean search
 
-There is one more step we need to do before feeding these vectors
-to Vespa. The vectors have been trained to maximize the inner product.
-Finding the best news articles given a user vector is called Maximum
-Inner Product Search - or MIPS. Unfortunately, this form isn't
-really suitable for efficient retrieval. We'll get back to this
-later when discussing approximate nearest neighbors.
+There is one more step we need to do before feeding these vectors to Vespa.
+The vectors have been trained to maximize the inner product.
+Finding the best news articles given a user vector is called Maximum Inner Product Search - or MIPS.
+Unfortunately, this form isn't really suitable for efficient retrieval.
+We'll get back to this later when discussing approximate nearest neighbors.
 
-To facilitate efficient retrieval, we need to map the MIPS problem to a
-Euclidean nearest neighbor search problem. We use the technique discussed in
+To facilitate efficient retrieval, we need to map the MIPS problem to a Euclidean nearest neighbor search problem.
+We use the technique discussed in
 [Speeding Up the Xbox Recommender System Using a Euclidean Transformation for Inner-Product
 Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf).
 
-See [Nearest Neighbor
-Search](https://docs.vespa.ai/en/nearest-neighbor-search.html) for more
+See [Nearest Neighbor Search](../nearest-neighbor-search.html) for more
 information on nearest neighbor search and supported distance metrics in Vespa.
 
-We've included a script to map the embeddings to euclidean space and create
-a feed suitable for Vespa:
+We've included a script to map the embeddings to euclidean space and create a feed suitable for Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -469,8 +461,8 @@ We are now ready to feed these embedding vectors to Vespa.
 
 ## Conclusion
 
-Now that we've generated user and document embeddings, we can start using
-these to recommend news items to users. We'll start feeding these in
-the [next part of the tutorial](news-5-recommendation.html).
+Now that we've generated user and document embeddings,
+we can start using these to recommend news items to users.
+We'll start feeding these in the [next part of the tutorial](news-5-recommendation.html).
 
 <script src="/js/process_pre.js"></script>

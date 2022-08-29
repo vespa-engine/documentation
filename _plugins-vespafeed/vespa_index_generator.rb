@@ -76,7 +76,7 @@ module Jekyll
             doc.search('th,td').each{ |e| e.after "\n" }
             doc.search('style').each{ |e| e.remove }
             content = doc.xpath("//text()").to_s
-            page_text = content.gsub("\r"," ").gsub("\n"," ")
+            return strip_liquid(content.gsub("\r"," ").gsub("\n"," "))
         end
 
         def extract_links(page)
@@ -89,6 +89,14 @@ module Jekyll
             doc = get_doc(page)
             headers = doc.css('h1,h2,h3,h4').map { |header| header.content.gsub("\r"," ").gsub("\n"," ") || ""}
             headers.reject{ |h| h.empty? }.map{ |h| h }
+        end
+
+        def strip_liquid(text)
+            return text.gsub(/\{%\s*include\s*(deprecated|important|note|query|warning).html\s*content=\s*(\"|\p{Pi}|\p{Pf}|')/, "")
+                       .gsub(/\{%\s*highlight\s*\w*/, "")
+                       .gsub(/\{%\s*endhighlight/, "")
+                       .gsub(/\{%\s*(raw|endraw)/, "")
+                       .gsub(/(\"|\p{Pi}|\p{Pf}|')*\s*%}/, "")
         end
 
     end

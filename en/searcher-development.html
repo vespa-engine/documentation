@@ -8,7 +8,8 @@ redirect_from:
 <p>
   The <em>Container</em> is the home for all global processing of
   user actions (represented as queries) and their results.
-  It provides a development and hosting environment for processing <em>components</em>,
+  It provides a development and hosting environment for processing
+  <a href="jdisc/container-components.html">components</a>,
   and a model for composing such components developed by multiple development teams into a functional whole.
 </p><p>
   This document describes how to develop and deploy Searcher components.
@@ -18,6 +19,8 @@ redirect_from:
   Container javadoc</a>,
   and the <a href="reference/services-processing.html#chain">services.xml reference</a>.
 </p>
+<img src="/assets/img/vespa-overview-searcher.svg" width="810px" height="auto"
+     alt="Searcher component in Vespa overview">
 
 
 
@@ -28,9 +31,9 @@ redirect_from:
   which extends the class <code>com.yahoo.search.Searcher</code>.
   All Searchers must implement a single method:
 </p>
-<pre>
+<pre>{% highlight java %}
 public Result search(Query query, Execution execution);
-</pre>
+{% endhighlight %}</pre>
 <p>
   When the container receives a request, it will create a Query representing it
   and execute a configured list of such Searcher components.
@@ -40,11 +43,11 @@ public Result search(Query query, Execution execution);
   which keeps track of where we are in the list of Searchers.
   Hence, this is a noop searcher implementation:
 </p>
-<pre>
+<pre>{% highlight java %}
 public Result search(Query query, Execution execution) {
     return execution.search(query);
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   Eventually the search call will reach the end of the list of searchers.
   The last searcher in the list may create a Result (somehow),
@@ -113,7 +116,7 @@ information needed to create a result to the request, including:
 <h2 id="search-chains">Search Chains</h2>
 <p>
   The lists of searchers mentioned above are called <em>search chains</em>.
-  Search chains are a special case of the <a href="chained-components.html"> general component chains</a>.
+  Search chains are a special case of the <a href="components/chained-components.html"> general component chains</a>.
   A search chain is nothing more than a list of searcher instances having an id.
   The search chains are typically not created for every query but are part of the configuration.
   Multiple ones may exist at the same time, the chain to execute may be specified in the request.
@@ -124,18 +127,18 @@ information needed to create a result to the request, including:
   Search chains may also be executed programmatically (typically from a Searcher),
   synchronously or asynchronously:
 </p>
-<pre>
+<pre>{% highlight java %}
 // Get a chain by id
 SearchChain myChain = execution.searchChainRegistry().getComponent("myChain");
 
 // Execute it in the same thread
 Result result = new Execution(myChain, execution.context()).search(query);
 
-// &hellip; or in another thread
+// ... or in another thread
 Execution settings = new Execution(myChain, execution.context());
 FutureResult futureResult = new AsyncExecution(settings).search(query);
 FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
-</pre>
+{% endhighlight %}</pre>
 <p>
   Asynchronous execution is useful in cases like <a href="federation.html">federation</a>,
   where a searcher forks a Query to multiple search chains in parallel,
@@ -144,7 +147,7 @@ FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery)
   multiple AsyncExecution instances, as the state is only copied from the constructor argument.
 </p><p>
   The execution order of the searchers in a chain are not ordered explicitly,
-  but by <a href="chained-components.html">ordering constraints</a>
+  but by <a href="components/chained-components.html">ordering constraints</a>
   declared in the searchers or their configuration.
   Also read the <a href="reference/services-search.html">search reference</a>.
 </p>
@@ -154,7 +157,7 @@ FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery)
 <p>
   Example of a complete searcher:
 </p>
-<pre>
+<pre>{% highlight java %}
 package com.yahoo.search.example;
 
 import com.yahoo.search.*;
@@ -175,7 +178,7 @@ public class SimpleSearcher extends Searcher {
     }
 
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   The container will create one or more instances of this class
   and place it in the desired search chain(s) to serve queries, as specified in
@@ -203,7 +206,7 @@ public class SimpleSearcher extends Searcher {
   and a searcher which produces mock results appropriate for the tests.
   Here is a simple example testing the Searcher above:
 </p>
-<pre>
+<pre>{% highlight java %}
 package com.yahoo.search.example.test;
 
 import com.yahoo.search.*;
@@ -214,7 +217,7 @@ public class SimpleSearcherTestCase extends junit.framework.TestCase {
 
     public void testBasics() {
         // Create chain
-        Chain&lt;Searcher&gt; searchChain = new Chain&lt;Searcher&gt;(new SimpleSearcher());
+        Chain<Searcher> searchChain = new Chain<Searcher>(new SimpleSearcher());
 
         // Create an empty context, in a running container this would be
         // populated with settings used by different searcher. Tests must
@@ -230,7 +233,7 @@ public class SimpleSearcherTestCase extends junit.framework.TestCase {
     }
 
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   In this case, no searcher producing mock results is needed
   because the searcher we are testing does not care what the Result contains.
@@ -252,25 +255,26 @@ public class SimpleSearcherTestCase extends junit.framework.TestCase {
   First <a href= "jdisc/container-components.html#building-the-plugin-jar">build the component jar</a>.
   To include the searcher in <em>services.xml</em>, define a search chain and add the searcher to it - example:
 </p>
-<pre>
-&lt;?xml version="1.0" encoding="utf-8" ?&gt;
-&lt;services version="1.0"&gt;
-    &lt;admin version="2.0"&gt;
-        &lt;adminserver hostalias="node1" /&gt;
-    &lt;/admin&gt;
+<pre>{% highlight xml %}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <admin version="2.0">
+        <adminserver hostalias="node1" />
+    </admin>
 
-    &lt;container version="1.0"&gt;
-        &lt;search&gt;
-            &lt;chain id="default" inherits="vespa"&gt;
-                &lt;searcher id="com.yahoo.search.example.SimpleSearcher" bundle="the name in &lt;artifactId&gt; in your pom.xml" /&gt;
-            &lt;/chain&gt;
-        &lt;/search&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" /&gt;
-        &lt;/nodes&gt;
-    &lt;/container&gt;
-&lt;/services&gt;
-</pre>
+    <container version="1.0">
+        <search>
+            <chain id="default" inherits="vespa">
+                <searcher id="com.yahoo.search.example.SimpleSearcher"
+                          bundle="the name in artifactId in pom.xml" />
+            </chain>
+        </search>
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
+</services>
+{% endhighlight %}</pre>
 <p>
   This defines the search chain <code>default</code>,
   which will be used in queries when no other chain is explicitly specified.
@@ -285,14 +289,14 @@ public class SimpleSearcherTestCase extends junit.framework.TestCase {
 <p>
   Example <em>hosts.xml</em>:
 </p>
-<pre>
-&lt;?xml version="1.0" encoding="utf-8" ?&gt;
-&lt;hosts&gt;
-  &lt;host name="localhost"&gt;
-    &lt;alias&gt;node1&lt;/alias&gt;
-  &lt;/host&gt;
-&lt;/hosts&gt;
-</pre>
+<pre>{% highlight xml %}
+<?xml version="1.0" encoding="utf-8" ?>
+<hosts>
+    <host name="localhost">
+        <alias>node1</alias>
+    </host>
+</hosts>
+{% endhighlight %}</pre>
 <p>
   By creating a directory containing this <em>services.xml</em>,
   <em>hosts.xml</em> and <em>components/Simplesearcher.jar</em>,
@@ -309,7 +313,7 @@ public class SimpleSearcherTestCase extends junit.framework.TestCase {
   A searcher can also be tested running inside a container.
   Create an instance from the <em>container</em> part of the <em>services.xml</em> file above:
 </p>
-<pre>
+<pre>{% highlight java %}
 import com.yahoo.component.ComponentSpecification;
 import com.yahoo.application.container.JDisc;
 import com.yahoo.application.Networking;
@@ -317,32 +321,34 @@ import com.yahoo.application.Networking;
 import com.yahoo.search.Query;
 import com.yahoo.search.Result;
 
-import org.junit.Test;
-import static org.junit.Assert.assertNotNull;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ContainerTest {
     @Test
     public void testSearch() {
         String servicesXml =
-                "&lt;container version=\"1.0\"&gt;" +
-                "  &lt;search&gt;" +
-                "    &lt;chain id=\"default\" inherits=\"vespa\"&gt;" +
-                "      &lt;searcher id=\"com.yahoo.search.example.SimpleSearcher\" /&gt;" +
-                "    &lt;/chain&gt;" +
-                "  &lt;/search&gt;" +
-                "&lt;/container&gt;";
+                "<container version=\"1.0\">" +
+                "  <search>" +
+                "    <chain id=\"default\" inherits=\"vespa\">" +
+                "      <searcher id=\"ai.vespa.examples.SimpleSearcher\" />" +
+                "    </chain>" +
+                "  </search>" +
+                "</container>";
         try (JDisc container = JDisc.fromServicesXml(servicesXml, Networking.disabled)) {
-            Result result = container.search().process(ComponentSpecification.fromString("default"), new Query("search/?query=test+query"));
+            Result result = container.search().process(ComponentSpecification.fromString("default"),
+                                                       new Query("search/?query=test+query"));
             assertNotNull(result.hits().get("test"));
         }
 
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>Examine which searchers are in a chain and their ordering:</p>
-<pre>
-ChainRegistry&lt;Searcher&gt; chains = container.searching().getChains();
-Chain&lt;Searcher&gt; defaultChain = chains.getComponent("default");
+<pre>{% highlight java %}
+ChainRegistry<Searcher> chains = container.searching().getChains();
+Chain<Searcher> defaultChain = chains.getComponent("default");
 
 boolean foundSimpleSearcher = false;
 for (Searcher searcher: defaultChain.components()) {
@@ -351,7 +357,7 @@ for (Searcher searcher: defaultChain.components()) {
 }
 
 assertTrue("No instance of SimpleSearcher found in the default chain", foundSimpleSearcher);
-</pre>
+{% endhighlight %}</pre>
 
 
 
@@ -363,7 +369,7 @@ assertTrue("No instance of SimpleSearcher found in the default chain", foundSimp
   but in addition searchers may add any objects they create.
   This is useful when some searcher component is producing information later consumed by some other. Example:
 </p>
-<pre>
+<pre>{% highlight java %}
 import com.yahoo.search.*;
 import com.yahoo.search.searchchain.*;
 
@@ -375,8 +381,8 @@ public class ProducerSearcher extends Searcher {
         return execution.search(query); // Pass to next in chain
     }
 }
-</pre>
-<pre>
+{% endhighlight %}</pre>
+<pre>{% highlight java %}
 import com.yahoo.search.*;
 import com.yahoo.search.searchchain.*;
 
@@ -385,12 +391,12 @@ public class ConsumerSearcher extends Searcher {
 
     public Result search(Query query, Execution execution) {
         SomeObject someObject = SomeObject.getFrom(query.properties());
-        &hellip;
+        ...
         return execution.search(query); // Pass to next in chain
     }
 }
-</pre>
-<pre>
+{% endhighlight %}</pre>
+<pre>{% highlight java %}
 import com.yahoo.search.query.Properties;
 
 public final class SomeObject {
@@ -405,7 +411,7 @@ public final class SomeObject {
         return (SomeObject) properties.get(NAME);
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>This code illustrates two idioms such searchers should follow when exchanging data:</p>
 <ul>
 <li>The key to an object should be exactly the same as the short name
@@ -455,10 +461,10 @@ are <strong>deep cloned</strong> to avoid bugs."%}
   but provides linear, not constant lookup time.
   To set and retrieve such properties, use:
 </p>
-<pre>
+<pre>{% highlight java %}
 {query|result}.getContext(true).setProperty(name, value)
 {query|result}.getContext(true).getProperty(name)
-</pre>
+{% endhighlight %}</pre>
 
 
 
@@ -468,9 +474,9 @@ are <strong>deep cloned</strong> to avoid bugs."%}
   any key-value looked up in the query properties in the searcher can be passed as is in the request,
   or in a query profile. Example:
 </p>
-<pre>
+<pre>{% highlight java %}
 String myParameter = query.properties().getString("my.parameter", "defaultValue");
-</pre>
+{% endhighlight %}</pre>
 <p>This value can be set by adding <code>&amp;my.parameter=myValue</code> to the request. Guidelines:</p>
 <ul>
 <li>Names should use camelCase with the first letter in small caps</li>
@@ -543,7 +549,7 @@ String myParameter = query.properties().getString("my.parameter", "defaultValue"
   This critical restriction is similar to those of e.g. the Servlet API.
   A quick example should drive the point home:
 </p>
-<pre>
+<pre>{% highlight java %}
 public class SafeSearcher extends Searcher {
 
     public Result search(Query query, Execution execution) {
@@ -558,11 +564,11 @@ public class UnsafeSearcher extends Searcher {
 
     public Result search(Query query, Execution execution) {
         count = (Long) query.properties().get("Count");
-        count++; // <strong>unsafe</strong>
+        count++; // unsafe
         return execution.search(query);
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   The second example uses an instance variable,
   which will be accessed concurrently by multiple threads.
@@ -625,6 +631,9 @@ public class UnsafeSearcher extends Searcher {
 <p>
   If your searcher encounters a problem and wants to signal an error,
   set an error hit in the result object by calling <code>result.hits().addError(errorMsg)</code>.
+</p>
+<p>
+  See the FAQ for <a href="faq.html#searchers-and-timeout-questions">timeouts</a>.
 </p>
 
 

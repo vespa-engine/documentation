@@ -31,25 +31,23 @@ In this part we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.
 In the next part of the tutorial, we'll start developing our application.
 
-## Prerequisites
+{% include pre-req.html memory="4 GB" extra-reqs='
+<li>Python3 for converting the dataset to Vespa JSON.</li>
+<li><code>curl</code> to download the dataset and run the Vespa health-checks.</li>
+<li><a href="https://openjdk.java.net/projects/jdk/17/">Java 17</a> in part 6.</li>
+<li><a href="https://maven.apache.org/install.html">Apache Maven</a> in part 6.</li>' %}
 
-* [Docker](https://www.docker.com/) Desktop installed and running. 10GB available memory for Docker is recommended.
-  Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
-  for details and troubleshooting
-* Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
-* Architecture: x86_64
-* Minimum **10 GB** memory dedicated to Docker (the default is 2 GB on Macs)
-* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
-  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
-* python 3 
+{% include note.html content='4 GB Docker memory is sufficient for the demo dataset in part 2.
+The <span style="text-decoration: underline;">full</span> MIND dataset requires more, use 10 GB.' %}
 
 In upcoming parts of this series, we will have some additional python dependencies -
 we use [PyTorch](https://pytorch.org/) to train vector representations for news and users
 and train machine learning models for use in ranking.
 
+
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+This tutorial uses [Vespa-CLI](../vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
 
@@ -60,12 +58,12 @@ $ brew install vespa-cli
 </pre>
 </div>
 
+
 ## A minimal Vespa application
 
-This tutorial has a [companion sample application](https://github.com/vespa-engine/sample-apps.git)
-found under the `news` directory. Throughout the tutorial we will be
-using support code from this application. Also, the final state of 
-each tutorial can be found in the various `app-...` sub-directories.
+This tutorial has a [companion sample application](https://github.com/vespa-engine/sample-apps/tree/master/news).
+Throughout the tutorial we will be using support code from this application.
+Also, the final state of each tutorial can be found in the various `app-...` sub-directories.
 
 Let's start by cloning the sample application:
 
@@ -76,7 +74,7 @@ $ vespa clone -f news news && cd news
 </pre>
 </div>
 
-The above download the `news` directory from the Vespa 
+The above downloads the `news` directory from the Vespa
 [sample apps repository](https://github.com/vespa-engine/sample-apps/) and
 places the contents in a folder called `news`. Use `--help` to see documentation 
 for the vespa-cli utility:
@@ -87,7 +85,7 @@ for the vespa-cli utility:
 $ vespa clone --help
 </pre>
 </div>
-In the `news` diretory there are several pre-configuration applications packages. 
+In the `news` directory there are several pre-configuration applications packages.
 The `app-1-getting-started` directory contains a minimal Vespa application.
 There are two files there:
 
@@ -96,16 +94,17 @@ There are two files there:
 
 We will get back to these files in the next part of the tutorial.
 
+
 ## Starting Vespa
 
-This application doesn't contain much at the moment, but let's start up the
-application anyway by starting a Docker container to run it:
+This application doesn't contain much at the moment,
+let's start up the application anyway by starting a Docker container to run it:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ docker pull vespaengine/vespa
-$ docker run -m 10G --detach --name vespa --hostname vespa-tutorial \
+$ docker run --detach --name vespa --hostname vespa-tutorial \
   --publish 8080:8080 --publish 19071:19071 --publish 19092:19092 \
   vespaengine/vespa
 </pre>
@@ -149,27 +148,27 @@ which services needs restart to make the change effective.
 In the upcoming parts of the tutorials, we'll frequently deploy the 
 application changes in this manner. 
 
+
 ## Feeding to Vespa
 
-We must index data before we can search for it. This is called 'feeding', and
+We must index data before we can search for it. This is called "feeding", and
 we'll get back to that in more detail in the next part of the tutorial. For
 now, to test that everything is up and running, we'll feed in a single test
 document. 
 
-The first example uses the [vespa-feed-client](https://docs.vespa.ai/en/vespa-feed-client.html)
-to index a document:
+The first example uses the [vespa-feed-client](../vespa-feed-client.html) to index a document:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o vespa-feed-client-cli.zip \
-    "https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/7.527.20/vespa-feed-client-cli-7.527.20-zip.zip"
+  "https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip"
 $ unzip vespa-feed-client-cli.zip
 </pre>
 </div>
 
-We can also feed using [Vespa document api](https://docs.vespa.ai/en/document-v1-api-guide.html) directly,
- or using vespa cli which also uses the http document api. 
+We can also feed using [Vespa document api](../document-v1-api-guide.html) directly,
+or use the [Vespa CLI](../vespa-cli.html), which also uses the http document api.
 
 This runs the `vespa-feed-client` Java client with the file `doc.json` file.
 <div class="pre-parent">
@@ -190,13 +189,14 @@ $ vespa document -v doc.json
 </pre>
 </div>
 
-Once the feed operation is acked by Vespa, the operation is visible in search. 
+Once the feed operation is ack'ed by Vespa, the operation is visible in search.
+
 
 ## Querying Vespa
 
-We can query the endpoint using the vespa-cli's suppport for performing queries. The vespa cli
-uses the [Vespa query api](../query-api.html) to query vespa, including `-v` 
-in the command we can see the exact endpoint and url request parameters used. 
+We can query the endpoint using the vespa-cli's support for performing queries.
+It uses the [Vespa query api](../query-api.html) to query vespa,
+including `-v` in the command we can see the exact endpoint and url request parameters used. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -211,26 +211,30 @@ search for all documents of type `news`. This query request will return `1` resu
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Hello world!'>
-$ vespa query 'yql=select * from news where userQuery()' 'query=hello world' 'default-index=title'
+$ vespa query \
+  'yql=select * from news where userQuery()' \
+  'query=hello world' \
+  'default-index=title'
 </pre>
 </div>
 
-Another query language example that searches for hello AND world in the title.
+Another query language example that searches for hello or world in the title.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Hello world!'>
-$ vespa query 'yql=select * from news where title contains phrase("hello","world")' 
+$ vespa query \
+  'yql=select * from news where title contains phrase("hello","world")'
 </pre>
 </div>
 
-Another query language example that searches for the phrase hello world in the title.
-In the [next part
-of the tutorial](news-2-basic-feeding-and-query.html) we'll demonstrate more query examples, and
-also ranking and grouping of results.
+Another query language example that searches for the phrase "hello world" in the title.
+In the [next part of the tutorial](news-2-basic-feeding-and-query.html) we'll demonstrate more query examples,
+and also ranking and grouping of results.
+
 
 ## Remove documents
-Run the following to remove the document from the index
+Run the following to remove the document from the index:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='id:news:news::1'>
@@ -250,8 +254,8 @@ To stop Vespa, we can run the following commands:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-stop-services'
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-stop-configserver'
+$ docker exec vespa /opt/vespa/bin/vespa-stop-services
+$ docker exec vespa /opt/vespa/bin/vespa-stop-configserver
 </pre>
 </div>
 
@@ -260,8 +264,8 @@ Likewise, to start the Vespa services:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-configserver'
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-start-services'
+$ docker exec vespa /opt/vespa/bin/vespa-start-configserver
+$ docker exec vespa /opt/vespa/bin/vespa-start-services
 </pre>
 </div>
 
@@ -274,7 +278,7 @@ To wipe the index and restart:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ docker exec vespa bash -c ' \
+$ docker exec vespa sh -c ' \
   /opt/vespa/bin/vespa-stop-services && \
   /opt/vespa/bin/vespa-remove-index -force && \
   /opt/vespa/bin/vespa-start-services'
@@ -292,6 +296,7 @@ $ docker rm -f vespa
 
 This will delete the Vespa application, including all data and configuration. See 
 [container tuning for production](../operations/docker-containers.html). 
+
 
 ## Conclusion
 

@@ -33,14 +33,18 @@ Those features are useful to understand the behavior of your app and to improve 
 To access the default set of ranking features,
 set the query parameter [`ranking.listFeatures`](../reference/query-api-reference.html#ranking.listFeatures)  to `true`.
 For example, below is the body of a post request that in a [query](../query-language.html),
-selects the `bm25` _ranking-profile_ developed in our previous tutorial
+selects the `bm25` rank-profile developed in the previous tutorial
 and returns the rank features associated with each of the results returned.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="rankfeatures">
-$ vespa query 'yql=select id,rankfeatures from msmarco where userQuery()' 'query=what is dad bod' \
-  'ranking=bm25' 'type=weakAnd' 'ranking.listFeatures=true'
+$ vespa query \
+  'yql=select id,rankfeatures from msmarco where userQuery()' \
+  'query=what is dad bod' \
+  'ranking=bm25' \
+  'type=weakAnd' \
+  'ranking.listFeatures=true'
 </pre>
 </div>
 
@@ -49,39 +53,39 @@ The list of rank features that are returned by default can change in the future 
 For the request specified by the body above we get the following (edited) json back.
 Each result will contain a field called `rankfeatures` containing the set of default ranking features:
 
-```
+```json
 {
-  "root": {
-    "children": [
-      ... 
-      {
-        "fields": {
-          "rankfeatures": {
+    "root": {
+        "children": [
             ...
-            "attributeMatch(id).totalWeight": 0.0,
-            "attributeMatch(id).weight": 0.0,
-            "elementCompleteness(body).completeness": 0.5051413881748072,
-            "elementCompleteness(body).elementWeight": 1.0,
-            "elementCompleteness(body).fieldCompleteness": 0.010282776349614395,
-            "elementCompleteness(body).queryCompleteness": 1.0,
-            "elementCompleteness(title).completeness": 0.75,
-            "elementCompleteness(title).elementWeight": 1.0,
-            "elementCompleteness(title).fieldCompleteness": 1.0,
-            "elementCompleteness(title).queryCompleteness": 0.5,
-            "elementCompleteness(url).completeness": 0.0,
-            "elementCompleteness(url).elementWeight": 0.0,
-            "elementCompleteness(url).fieldCompleteness": 0.0,
-            "elementCompleteness(url).queryCompleteness": 0.0,
-            "fieldMatch(body)": 0.7529285549778888,
-            "fieldMatch(body).absoluteOccurrence": 0.065,
-            ...
-         }
-        },
-        "id": "index:msmarco/0/811ccbaf9796f92bfa343045",
-        "relevance": 37.7705101001455,
-        "source": "msmarco"
-      },
-   ],
+            {
+                "fields": {
+                    "rankfeatures": {
+                        ...
+                        "attributeMatch(id).totalWeight": 0.0,
+                        "attributeMatch(id).weight": 0.0,
+                        "elementCompleteness(body).completeness": 0.5051413881748072,
+                        "elementCompleteness(body).elementWeight": 1.0,
+                        "elementCompleteness(body).fieldCompleteness": 0.010282776349614395,
+                        "elementCompleteness(body).queryCompleteness": 1.0,
+                        "elementCompleteness(title).completeness": 0.75,
+                        "elementCompleteness(title).elementWeight": 1.0,
+                        "elementCompleteness(title).fieldCompleteness": 1.0,
+                        "elementCompleteness(title).queryCompleteness": 0.5,
+                        "elementCompleteness(url).completeness": 0.0,
+                        "elementCompleteness(url).elementWeight": 0.0,
+                        "elementCompleteness(url).fieldCompleteness": 0.0,
+                        "elementCompleteness(url).queryCompleteness": 0.0,
+                        "fieldMatch(body)": 0.7529285549778888,
+                        "fieldMatch(body).absoluteOccurrence": 0.065,
+                        ...
+                    }
+                },
+                "id": "index:msmarco/0/811ccbaf9796f92bfa343045",
+                "relevance": 37.7705101001455,
+                "source": "msmarco"
+            },
+        ],
     ...
 }
 ```
@@ -90,79 +94,80 @@ Each result will contain a field called `rankfeatures` containing the set of def
 ### Chose and process specific rank features
 
 If instead of returning the complete set of rank features you want to select [specific ones](../reference/rank-features.html),
-you can add a new _ranking-profile_ (let's call it `collect_rank_features`) to our _msmarco.sd_ schema definition
-and disable the default ranking features by adding `ignore-default-rank-features` to the new _ranking-profile_.
+you can add a new rank-profile (let's call it `collect_rank_features`) to our _msmarco.sd_ schema definition
+and disable the default ranking features by adding `ignore-default-rank-features` to the new rank-profile.
 In addition, we can specify the desired features within the `rank-features` element.
 In the example below we explicitly configured Vespa to only return
 `bm25(title)`, `bm25(body)`, `nativeRank(title)` and `nativeRank(body)`.
 
-Note that using _all_ available ranking features comes with computional cost as Vespa needs
-to calculate all these features. Using many features is usually only advisable using
-second phase ranking, see [phased ranking with Vespa](../phased-ranking.html).
+Note that using _all_ available rank features comes with computational cost,
+as Vespa needs to calculate all these features.
+Using many features is usually only advisable using second phase ranking,
+see [phased ranking with Vespa](../phased-ranking.html).
 
 <pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
-  document msmarco {
-    field id type string {
-      indexing: attribute | summary
-    }
-    field title type string {
-      indexing: index | summary
-      index: enable-bm25
-    }
-    field url type string {
-      indexing: index | summary
-    }
-    field body type string {
-      indexing: index
-      index: enable-bm25
-    }
-  }
-
-  document-summary minimal {
-    summary id type string {  }
-  }
-
-  fieldset default {
-    fields: title, body, url
-  }
-
-  rank-profile default {
-    first-phase {
-      expression: nativeRank(title, body, url)
-    }
-  }
-
-  rank-profile bm25 inherits default {
-    first-phase {
-      expression: bm25(title) + bm25(body) + bm25(url)
-    }
-  }
-
-  rank-profile collect_rank_features inherits default {
-    first-phase {
-        expression: bm25(title) + bm25(body) + bm25(url)
-    }
-    second-phase {
-        expression: random
+    document msmarco {
+        field id type string {
+            indexing: attribute | summary
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field body type string {
+            indexing: index
+            index: enable-bm25
+        }
     }
 
-    match-features {
-        bm25(title)
-        bm25(body)
-        bm25(url)
-        nativeRank(title)
-        nativeRank(body)
-        nativeRank(url)
+    document-summary minimal {
+        summary id type string {  }
     }
-  }
+
+    fieldset default {
+        fields: title, body, url
+    }
+
+    rank-profile default {
+        first-phase {
+            expression: nativeRank(title, body, url)
+        }
+    }
+
+    rank-profile bm25 inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url)
+        }
+    }
+
+    rank-profile collect_rank_features inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url)
+        }
+        second-phase {
+            expression: random
+        }
+
+        match-features {
+            bm25(title)
+            bm25(body)
+            bm25(url)
+            nativeRank(title)
+            nativeRank(body)
+            nativeRank(url)
+        }
+    }
 }
 </pre>
 
-The `random` global feature is explained in the [Rank Feature Reference](../reference/rank-features.html) documentation
-and will be useful in the next section when we describe our data collection process.
+The [random](../reference/rank-features.html#random) global feature
+will be useful in the next section when we describe our data collection process.
 
-After adding the _rank-profile_ `collect_rank_features` to our _msmarco.sd_ file, redeploy the app:
+After adding the `collect_rank_features` rank-profile to _msmarco.sd_, redeploy the app:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -170,6 +175,7 @@ After adding the _rank-profile_ `collect_rank_features` to our _msmarco.sd_ file
 $ vespa deploy --wait 300 app
 </pre>
 </div>
+
 
 ## Create a training dataset
 
@@ -195,7 +201,7 @@ $ ./src/python/collect_training_data.py msmarco collect_rank_features 99
 
 The command above use data contained in the query (msmarco-doctrain-queries.tsv.gz)
 and in the relevance (msmarco-doctrain-qrels.tsv.gz) files that are part of the MSMARCO dataset,
-and send queries to Vespa using the `collect_rank_features` _ranking-profile_
+and send queries to Vespa using the `collect_rank_features` rank-profile
 defined in the previous section in order to request `99` randomly selected documents for each query
 in addition to the relevant document associated with the query.
 All the data from the request are then parsed and stored in the output folder,
@@ -252,7 +258,7 @@ body = {
 }
 ```
 where the `yql` and `userQuery` parameters instruct Vespa to return the _id_ of the documents
-along with the selected _rankfeatures_ defined in the _collect_rank_features_ rank-profile.
+along with the selected rank-features defined in the `collect_rank_features` rank-profile.
 The `hits` parameter is set to 1 because we know there are only one relevant id for each query,
 so we set Vespa to return only one document in the result set.
 The `recall` parameter allow us to specify the exact document _id_ we want to retrieve.
@@ -277,6 +283,7 @@ body = {
 }
 ```
 
+
 ### Get random hits
 
 The second Vespa request happens when we want to extend the dataset
@@ -300,13 +307,14 @@ and that we set the number of hits returned by Vespa to be equal to `number_rand
 Remember we had configured the second phase to use random scoring:
 ```
 second-phase {
-  expression: random
+    expression: random
 }
 ```
 
 Using `random` as our second-phase ranking function
 ensures that the top documents returned by Vespa are randomly selected
 from the set of documents that were matched by the query.
+
 
 ### Annotated data
 
@@ -400,7 +408,7 @@ first-phase {
     expression: random
 }
 ```
-in our `collect_rank_features` _rank-profile_ leading to a biased dataset
+in the `collect_rank_features` rank-profile leading to a biased dataset
 where the negative examples were actually quite relevant to the query.
 The trained model did well on the validation set,
 but failed miserably on the test set when deployed to Vespa.

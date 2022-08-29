@@ -3,42 +3,33 @@
 title: "Vespa query performance - a practical guide"
 ---
 
- This is a practical Vespa query performance guide. It uses the 
- [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset to illustrate Vespa query performance. 
- Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.  
+This is a practical Vespa query performance guide. It uses the
+[Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset to illustrate Vespa query performance.
+Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.
 
 This guide covers the following query serving performance aspects:
 - [Basic text search query performance](#basic-text-search-query-performance)
 - [Hits and document summaries](#hits-and-summaries)
-- [Multi-valued query operators (dotProduct, weakAnd, wand, weightedSet)](#multi-valued-query-operators)
+- [Multivalued query operators (dotProduct, weakAnd, wand, weightedSet)](#multi-valued-query-operators)
 - [Searching attribute fields](#searching-attribute-fields)
 - [Searching attribute fields with fast-search](#searching-attribute-fields-using-fast-search)
 - [Ranking with tensor computations](#tensor-computations)
-- [Multi-threaded search and ranking](#multi-threaded-search-and-ranking)
-- [Range search with hit limits for early termination](#advanced-range-search-with-hitlimit)
+- [Multithreaded search and ranking](#multithreaded-search-and-ranking)
+- [Range-search with hit limits for early termination](#advanced-range-search-with-hitlimit)
 - [Early termination using match phase limits](#match-phase-limit---early-termination)
 - [Advanced query tracing](#advanced-query-tracing)
 
 The guide includes step-by-step instructions on how to reproduce the experiments. 
 This guide is best read after having read the [Vespa Overview](../overview.html) documentation first.
 
-## Prerequisites
-These are the prerequisites for reproducing the steps in this performance guide:
+{% include pre-req.html memory="4 GB" extra-reqs='
+<li>Python3 for converting the dataset to Vespa JSON.</li>
+<li><code>curl</code> to download the dataset and run the Vespa health-checks.</li>' %}
 
-* [Docker](https://www.docker.com/) Desktop installed and running.
-* Operating system: Linux, macOS or Windows 10 Pro (Docker requirement)
-* Architecture: x86_64
-* Minimum **6 GB** memory dedicated to Docker (the default is 2 GB on Macs).
-Refer to [Docker memory](https://docs.vespa.ai/en/operations/docker-containers.html#memory)
-  for details and troubleshooting
-* [Homebrew](https://brew.sh/) to install [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html), or download
-  a vespa cli release from [Github releases](https://github.com/vespa-engine/vespa/releases).
-* Python3 for converting the dataset to Vespa json. 
-* curl to download the dataset. 
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](https://docs.vespa.ai/en/vespa-cli.html), 
+This tutorial uses [Vespa-CLI](../vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
 
@@ -317,7 +308,7 @@ the Vespa application — which services to run and how many nodes per service.
 The default [query profile](../query-profiles.html) can be used to override
 default query api settings for all queries.
 
-The following enables [presentation.timing](reference/query-api-reference.html#presentation.timing) and
+The following enables [presentation.timing](../reference/query-api-reference.html#presentation.timing) and
 renders `weightedset` fields as a JSON maps.
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
@@ -337,7 +328,7 @@ Start the Vespa container image using Docker:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker run -m 6G --detach --name vespa --hostname vespa-container \
+$ docker run --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 --publish 19110:19110 \
   vespaengine/vespa
 </pre>
@@ -372,7 +363,7 @@ feed the feed file generated in the previous section:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o vespa-feed-client-cli.zip \
-    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/7.527.20/vespa-feed-client-cli-7.527.20-zip.zip
+    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip
 $ unzip vespa-feed-client-cli.zip
 $ ./vespa-feed-client-cli/vespa-feed-client \
   --verbose --file feed.jsonl --endpoint http://localhost:8080
@@ -719,8 +710,8 @@ the behavior can be overridden in the
 [default queryProfile](../reference/query-api-reference.html#queryProfile).
 
 When requesting large amount of data with hits, it is recommended to use result compression. 
-Vespa will compress if the http client uses
-the `Accept-Encoding` [HTTP request header](https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html):
+Vespa will compress if the HTTP client uses
+the [Accept-Encoding](https://www.rfc-editor.org/rfc/rfc9110.html#name-accept-encoding) HTTP request header:
 <pre>
 Accept-Encoding: gzip
 </pre>
@@ -777,8 +768,8 @@ $ vespa query \
 </pre>
 </div>
 
-The query matches 8,160 documents, notice that for `match: word`, matching can also include
-white space, or generally punctuation characters which are removed and not searchable
+The query matches 8,160 documents, notice that for `match: word`, matching can also include whitespace,
+or generally punctuation characters which are removed and not searchable
 when using `match:text` with string fields that have `index`:
 
 <div class="pre-parent">
@@ -899,7 +890,7 @@ to restart the searchnode process:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnode"
+$ docker exec vespa /opt/vespa/bin/vespa-sentinel-cmd restart searchnode
 </pre>
 </div>
 
@@ -967,7 +958,7 @@ by 75%.
 
 This section covers [multi-value query operators](../multivalue-query-operators.html) 
 and their query performance characteristics. Many real-world search and recommendation use cases 
-involve structured multi-valued queries. 
+involve structured multivalued queries.
 
 Assuming a process has learned a sparse user profile representation, which, for a given user, based
 on past interactions with a service, could produce a user profile with 
@@ -975,7 +966,7 @@ on past interactions with a service, could produce a user profile with
 
 Retrieving and ranking using sparse representations can be done using
 the dot product between the sparse user profile representation and document representation. In the
-track example, the tags field could be the document side sparse representation. Each document
+track example, the `tags` field could be the document side sparse representation. Each document
 is tagged with multiple `tags` using a weight, and similar the sparse user profile
 representation could use weights.
 
@@ -1122,7 +1113,7 @@ using `nativeRank`.  The above query returns the following response:
 }
 {% endhighlight %}</pre>
 
-Notice that the query above, will brute-force rank all tracks where the `tags` field matches *any* of the multi-valued 
+Notice that the query above, will brute-force rank all tracks where the `tags` field matches *any* of the multivalued
 userProfile features. Due to this, the query ranks 10,323 tracks as seen by `totalCount`. 
 Including for example *pop* in the userProfile list increases the number of hits to 13,638. 
 
@@ -1310,8 +1301,7 @@ Could be represented as a query tensor `query(user_liked)` and passed with the q
 
 <pre>{% raw %}
 input.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
-{% endraw %}
-</pre>
+{% endraw %}</pre>
 
 Both the document tensor and the query tensor are defined with `trackid{}` as the *named* *mapped* dimension. The 
 sparse tensor dot product can then be expression in a `rank-profile`:
@@ -1412,15 +1402,13 @@ The first query example runs the tensor computation over all tracks using `where
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
-{% raw %}
+<pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
     'yql=select title, artist, track_id from track where true' \
     'input.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5'
- {% endraw %}
-</pre>
+{% endraw %}</pre>
 </div>
 
 This query also retrieved some of the previous *liked* tracks. These can be removed
@@ -1452,7 +1440,7 @@ $ vespa query \
 </div>
 
 Note that the tensor query input format is slightly different from the variable substitution supported for 
-the multi-valued query operators `wand`, `weightedSet` and `dotProduct`.
+the multivalued query operators `wand`, `weightedSet` and `dotProduct`.
 The above query produces the following result:
 
 <pre>{% highlight json%}
@@ -1630,7 +1618,7 @@ And again, adding `fast-search`, requires a re-start of the searchnode process:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnode"
+$ docker exec vespa /opt/vespa/bin/vespa-sentinel-cmd restart searchnode
 </pre>
 </div>
 
@@ -1666,11 +1654,11 @@ See also [performance considerations](../tensor-user-guide.html#performance-cons
 when using tensor expression. Vespa supports `int8`, `bfloat16`, `float` and
 `double` precision cell types. A tradeoff between speed, accuracy and memory usage.
 
-## Multi-threaded search and ranking 
+## Multithreaded search and ranking
 So far in this guide all search queries and ranking computations have been performed using 
-single threaded execution. To enable multi-threaded execution, a setting needs to be 
-added to `services.xml`. 
-Multi-threaded search and ranking can improve query latency significantly and make better
+single threaded execution.
+To enable multithreaded execution, a setting needs to be added to `services.xml`.
+Multithreaded search and ranking can improve query latency significantly and make better
 use of multi-cpu core architectures. 
 
 The following adds a `tuning` element to `services.xml` overriding 
@@ -1723,7 +1711,7 @@ Changing the global threads per search requires a restart of the `searchnode` pr
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker exec vespa bash -c "/opt/vespa/bin/vespa-sentinel-cmd restart searchnode"
+$ docker exec vespa /opt/vespa/bin/vespa-sentinel-cmd restart searchnode
 </pre>
 </div>
 
@@ -1764,7 +1752,7 @@ to a lower number than the global default.
 
 This adds a new `rank-profile` `similar-t2` using `num-threads-per-search: 2` instead
 of the global 4 setting. It's also possible to set the number of threads in the query request
-using [ranking.matching.numThreadsPerSearch](reference/query-api-reference.html#ranking.matching). 
+using [ranking.matching.numThreadsPerSearch](../reference/query-api-reference.html#ranking.matching).
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -1856,7 +1844,7 @@ By using multiple rank profiles like above, developers can find the sweet-spot
 where latency does not improve much by using more threads. Using more threads per search 
 limits query concurrency as more threads will be occupied
 per query. Read more in [Vespa sizing guide:reduce latency with 
-multi-threaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
+multithreaded search](sizing-search.html#reduce-latency-with-multi-threaded-per-search-execution).
 
 ## Advanced range search with hitLimit  
 
@@ -1977,7 +1965,7 @@ $ python3 create-popularity-updates.py lastfm_test > updates.jsonl
 </div>
 
 Add the `popularity` field to the track schema, the field is defined with `fast-search`.
-Also a `popularity` `rank-profile` is added, this profile using one thread per search. 
+Also, a `popularity` `rank-profile` is added, this profile using one thread per search:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -2333,7 +2321,7 @@ is emitted:
             }
         ]
     }
-}    
+}
 {% endhighlight %}</pre>
 
 The trace runs all the way to the query is dispatched to the content node(s) and the merged response
@@ -2400,6 +2388,9 @@ And finally an overall breakdown of the two phases:
     "message": "Summary fetch time query 'tags:rock': 2 ms"
 }
 {% endhighlight %}</pre>
+
+Also try the [Trace Visualizer](https://github.com/vespa-engine/vespa/tree/master/client/js/app#trace-visualizer)
+for a flame-graph of the query trace.
 
 
 ## Tear down the container
