@@ -41,131 +41,13 @@ redirect_from:
 </p>
 
 
-<h2 id="node-state">Node state</h2>
-<p>
-Content and distributor nodes have state:
-</p>
-<table class="table">
-  <thead>
-  <tr>
-    <th>State</th>
-    <th>Description</th>
-  </tr>
-  </thead>
-  <tbody>
-  <tr>
-    <th>Up</th>
-    <td>The node is up and available to keep buckets and serve requests.</td>
-  </tr><tr>
-    <th>Down</th>
-    <td>The node is not available, and can not be used.</td>
-  </tr><tr>
-    <th>Initializing</th>
-    <td>The node is starting up.
-      It knows what buckets it stores data for, and may serve requests,
-      but it does not know the metadata for all its buckets yet,
-      such as checksums and document counts.
-      The node is available for bucket placement.
-    </td>
-  </tr><tr>
-    <th>Stopping</th>
-    <td>This node is stopping and is expected to be down soon.
-      This state is typically only exposed to the cluster controller
-      to tell why the node stopped.
-      The cluster controller will expose the node as down
-      or in maintenance mode for the rest of the cluster.
-      This state is thus not seen by the distribution algorithm.
-    </td>
-  </tr><tr>
-    <th>Maintenance</th>
-    <td>This node is temporarily unavailable.
-      The node is available for bucket placement, so redundancy is lower. <!-- ToDo rewrite -->
-      Using this mode, new replicas of the documents stored on this node will not be created,
-      allowing the node to be down with less of a performance impact on the rest of the cluster.
-      This mode is typically used to mask a down state during controlled node restarts,
-      or by an administrator that need to do some short maintenance work,
-      like upgrading software or restart the node.
-    </td>
-  </tr><tr>
-    <th>Retired</th>
-    <td>A retired node is available and serves requests.
-      This state is used to remove nodes while keeping redundancy.
-      Buckets are moved to other nodes (with low priority), until empty.
-      Special considerations apply when using
-      <a href="../elasticity.html#grouped-distribution">grouped distribution</a>
-      as buckets are not necessarily removed.
-    </td>
-  </tr>
-  </tbody>
-</table>
-<p>
-  Distributor nodes start / transfer buckets quickly
-  and are hence not in <em>maintenance</em> or <em>retired</em>.
-  <!-- ToDo: it should not be possible to set a distributor in this mode, check -->
-</p>
-<p>
-  Refer to <a href="#state-api-examples">examples</a> of manipulating states.
-</p>
-
-
 
 <h2 id="cluster-state">Cluster state</h2>
 <p>
-There are three kinds of state:
+There are three kinds of state: <a href="../reference/cluster-v2.html#state-unit">unit state</a>,
+  <a href="../reference/cluster-v2.html#state-user">user state</a> and
+  <a href="../reference/cluster-v2.html#state-generated">generated state</a> (a.k.a. <em>cluster state</em>).
 </p>
-<table class="table">
-  <thead>
-  <tr>
-    <th>Cluster state</th>
-    <th>Description</th>
-  </tr>
-  </thead>
-  <tbody>
-  <tr>
-    <th>Unit state</th>
-    <td>
-      <p id="unit-state">
-        The cluster controller fetches states from all nodes, called <em>unit states</em>.
-        States reported from the nodes are either <em>initializing</em>, <em>up</em> or <em>stopping</em>.
-        If the node can not be reached, a <em>down</em> state is assumed.
-      </p>
-      <p>
-        This means, the cluster controller detects failed nodes.
-        The subsequent <em>generated states</em> will have nodes in <em>down</em>,
-        and the <a href="idealstate.html">ideal state algorithm</a> will redistribute
-        <a href="buckets.html">buckets</a> of documents.
-      </p>
-    </td>
-  </tr><tr>
-    <th>User state</th>
-    <td>
-      <p id="user-state">
-        <em>user state</em> must be one of
-        <em>up</em>, <em>down</em>, <em>maintenance</em> or <em>retired</em>:
-      </p>
-      <ul>
-        <li>Retire a node from a cluster -
-          use <em>retired</em> to move buckets to other nodes</li>
-        <li>Short-lived maintenance work -
-          use <em>maintenance</em> to avoid merging buckets to other nodes</li>
-        <li>Fail a bad node. The cluster controller or an operator can set a node <em>down</em></li>
-      </ul>
-      <p>
-        Use tools for <a href="../operations/admin-procedures.html#cluster-state">user state management</a>.
-      </p>
-    </td>
-  </tr><tr>
-    <th style="white-space: nowrap">Generated state</th>
-    <td>
-      <p id="generated-state">
-        The cluster controller <em>generates</em> the cluster state
-        from the <em>unit</em> and <em>user</em> states, over time.
-        The generated state is called the <em>cluster state</em>.
-      </p>
-    </td>
-  </tr>
-  </tbody>
-</table>
 <p>
   For new cluster states, the cluster state version is upped,
   and the new cluster state is broadcast to all nodes.
@@ -573,10 +455,64 @@ $ docker exec vespa curl -s http://localhost:19114/state/v1/metrics | jq . | \
 
 
 
-<h2 id="state-api-examples">State API examples</h2>
+<h2 id="cluster-v2-API-examples">/cluster/v2 API examples</h2>
 <p>
-  Examples of state manipulation using the <a href="api-state-rest-api.html">State API</a>.
+  Examples of state manipulation using the <a href="../reference/cluster-v2.html">/cluster/v2 API</a>.
 </p>
+<p>
+  List content clusters:
+</p>
+<pre>$ curl http://localhost:19050/cluster/v2/</pre>
+<pre>{% highlight json %}
+{
+    "cluster": {
+        "music": {
+            "link": "/cluster/v2/music"
+        },
+        "books": {
+            "link": "/cluster/v2/books"
+        }
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  Get cluster state and list service types within cluster:
+</p>
+<pre>$ curl http://localhost:19050/cluster/v2/music</pre>
+<pre>{% highlight json %}
+{
+    "state": {
+        "generated": {
+            "state": "state-generated",
+            "reason": "description"
+        }
+    }
+    "service": {
+        "distributor": {
+            "link": "/cluster/v2/music/distributor"
+        },
+        "storage": {
+            "link": "/cluster/v2/music/storage"
+        }
+    }
+ }
+{% endhighlight %}</pre>
+<p>
+  List nodes per service type for cluster:
+</p>
+<pre>$ curl http://localhost:19050/cluster/v2/music/storage</pre>
+<pre>{% highlight json %}
+{
+    "node": {
+        "0": {
+            "link": "/cluster/v2/music/storage/0"
+        },
+        "1": {
+            "link": "/cluster/v2/music/storage/1"
+        }
+    }
+}
+{% endhighlight %}</pre>
 <p>
   Get node state:
 </p>
@@ -585,80 +521,93 @@ $ curl http://localhost:19050/cluster/v2/music/storage/0
 </pre>
 <pre>{% highlight json %}
 {
-  "attributes": {
-    "hierarchical-group": "group0"
-  },
-  "state": {
-    "generated": {
-      "state": "up",
-      "reason": ""
+    "attributes": {
+        "hierarchical-group": "group0"
     },
-    "unit": {
-      "state": "up",
-      "reason": ""
+    "state": {
+        "generated": {
+            "state": "up",
+            "reason": ""
+        },
+        "unit": {
+            "state": "up",
+            "reason": ""
+        },
+        "user": {
+            "state": "up",
+            "reason": ""
+        }
     },
-    "user": {
-      "state": "up",
-      "reason": ""
+    "metrics": {
+        "bucket-count": 0,
+        "unique-document-count": 0,
+        "unique-document-total-size": 0
     }
-  },
-  "metrics": {
-    "bucket-count": 0,
-    "unique-document-count": 0,
-    "unique-document-total-size": 0
-  }
 }
 {% endhighlight %}</pre>
 <p>
-  Get all nodes, including topology information (see <em>hierarchical-group</em>):
+  Get all nodes, including topology information (see <code>hierarchical-group</code>):
 </p>
 <pre>
 $ curl http://localhost:19050/cluster/v2/music/?recursive=true
 </pre>
 <pre>{% highlight json %}
 {
-  "state": {
-    "generated": {
-      "state": "up",
-      "reason": ""
-    }
-  },
-  "service": {
-    "storage": {
-      "node": {
-        "0": {
-          "attributes": {
-            "hierarchical-group": "group0"
-          },
-          "state": {
-            "generated": {
-              "state": "up",
-              "reason": ""
-            },
-            "unit": {
-              "state": "up",
-              "reason": ""
-            },
-            "user": {
-              "state": "up",
-              "reason": ""
-            }
-          },
-          "metrics": {
-            "bucket-count": 0,
-            "unique-document-count": 0,
-            "unique-document-total-size": 0
-          }
-        },
+    "state": {
+        "generated": {
+            "state": "up",
+            "reason": ""
+        }
+    },
+    "service": {
+        "storage": {
+            "node": {
+                "0": {
+                    "attributes": {
+                        "hierarchical-group": "group0"
+                    },
+                    "state": {
+                        "generated": {
+                            "state": "up",
+                            "reason": ""
+                        },
+                        "unit": {
+                            "state": "up",
+                            "reason": ""
+                        },
+                        "user": {
+                            "state": "up",
+                            "reason": ""
+                        }
+                    },
+                    "metrics": {
+                        "bucket-count": 0,
+                        "unique-document-count": 0,
+                        "unique-document-total-size": 0
+                    }
 {% endhighlight %}</pre>
+
 <p>
-  Set node state:
+  Set node user state:
 </p>
 <pre>
-$ curl -X PUT \
-  --data '{"state":{"user":{"state": "down", "reason": "Down a broken node"}}}' \
+curl -X PUT -H "Content-Type: application/json" --data '
+  {
+      "state": {
+          "user": {
+              "state": "retired",
+              "reason": "This node will be removed soon"
+          }
+      }
+  }' \
   http://localhost:19050/cluster/v2/music/storage/0
 </pre>
+<pre>{% highlight json %}
+{
+    "wasModified": true,
+    "reason": "ok"
+}
+{% endhighlight %}</pre>
 
 
 

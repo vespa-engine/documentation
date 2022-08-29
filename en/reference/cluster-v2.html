@@ -1,0 +1,412 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "/cluster/v2 API reference"
+redirect_from:
+- /documentation/content/api-state-rest-api.html
+- /en/content/api-state-rest-api.html
+---
+
+<p>
+  The cluster controller has a /cluster/v2 API for viewing and modifying a content cluster state.
+  To find the URL to access this API, identify the <a href="../content/content-nodes.html#cluster-controller">
+  cluster controller services</a> in the application.
+  Only the master cluster controller will be able to respond.
+  The master cluster controller is the cluster controller alive that has the lowest index.
+  Thus, one will typically use cluster controller 0, but if contacting it fails, try number 1 and so on.
+  Using <a href="../reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a>:
+</p>
+<pre>
+$ vespa-model-inspect service -u container-clustercontroller
+
+container-clustercontroller @ hostname.domain.com : admin
+admin/cluster-controllers/0
+    http://hostname.domain.com:19050/ (STATE EXTERNAL QUERY HTTP)
+    http://hostname.domain.com:19117/ (EXTERNAL HTTP)
+    tcp/hostname.domain.com:19118 (MESSAGING RPC)
+    tcp/hostname.domain.com:19119 (ADMIN RPC)
+</pre>
+<p>
+  In this example, there is only one clustercontroller, and the State Rest API is
+  available on the port marked STATE and HTTP, 19050 in this example.
+  This information can also be retrieved through the model config in the config server.
+</p>
+<p>
+  Find examples of API usage in <a href="../content/content-nodes.html#cluster-v2-API-examples">content nodes</a>.
+</p>
+
+
+
+<h2 id="http-requests">HTTP requests</h2>
+<table class="table">
+  <thead>
+  <tr>
+    <th>HTTP request</th>
+    <th>cluster/v2 operation</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>GET</th>
+    <td colspan="2">
+      <p id="get">
+        List cluster and nodes.
+        Get cluster, node or disk states.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th id="list-content-clusters">List content clusters</th>
+    <td>
+       <pre>/cluster/v2/</pre>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th id="get-cluster-state-and-list-service-types-within-cluster">
+      Get cluster state and list service types within cluster</th>
+    <td>
+      <pre>/cluster/v2/&lt;cluster&gt;</pre>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th id="list-nodes-per-service-type-for-cluster">List nodes per service type for cluster</th>
+    <td>
+      <pre>/cluster/v2/&lt;cluster&gt;/&lt;service-type&gt;</pre>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th id="get-node-state">Get node state</th>
+    <td>
+      <pre>/cluster/v2/&lt;cluster&gt;/&lt;service-type&gt;/&lt;node&gt;</pre>
+    </td>
+  </tr>
+  <tr>
+    <th>PUT</th>
+    <td colspan="2">
+      <p id="put">
+        Set node state
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th id="set-node-user-state">Set node user state</th>
+    <td>
+      <pre>/cluster/v2/&lt;cluster&gt;/&lt;service-type&gt;/&lt;node&gt;</pre>
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+<h2 id="node-state">Node state</h2>
+<p>
+  Content and distributor nodes have state:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>State</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><p id="up"><code>Up</code></p></td>
+    <td>The node is up and available to keep buckets and serve requests.</td>
+  </tr><tr>
+    <td><p id="down"><code>Down</code></p></td>
+    <td>The node is not available, and can not be used.</td>
+  </tr><tr>
+    <td><p id="initializing"><code>Initializing</code></p></td>
+    <td>The node is starting, initializing index structures and reading logs.
+    </td>
+  </tr><tr>
+    <td><p id="stopping"><code>Stopping</code></p></td>
+    <td>
+      This node is stopping and is expected to be down soon.
+      This state is typically only exposed to the cluster controller
+      to tell why the node stopped.
+      The cluster controller will expose the node as down
+      or in maintenance mode for the rest of the cluster.
+      This state is thus not seen by the distribution algorithm.
+    </td>
+  </tr><tr>
+    <td><p id="maintenance"><code>Maintenance</code></p></td>
+    <td>
+      This node is temporarily unavailable.
+      The node is available for bucket placement, so redundancy is lower. <!-- ToDo rewrite -->
+      Using this mode, new replicas of the documents stored on this node will not be created,
+      allowing the node to be down with less of a performance impact on the rest of the cluster.
+      This mode is typically used to mask a down state during controlled node restarts,
+      or by an administrator that need to do some short maintenance work,
+      like upgrading software or restart the node.
+    </td>
+  </tr><tr>
+    <td><p id="retired"><code>Retired</code></p></td>
+    <td>
+      A retired node is available and serves requests.
+      This state is used to remove nodes while keeping redundancy.
+      Buckets are moved to other nodes (with low priority), until empty.
+      Special considerations apply when using
+      <a href="../elasticity.html#grouped-distribution">grouped distribution</a>
+      as buckets are not necessarily removed.
+    </td>
+  </tr>
+  </tbody>
+</table>
+<p>
+  Distributor nodes start / transfer buckets quickly
+  and are hence not in <code>maintenance</code> or <code>retired</code>.
+  <!-- ToDo: it should not be possible to set a distributor in this mode, check -->
+</p>
+<p>
+  Refer to <a href="../content/content-nodes.html#cluster-v2-API-examples">examples</a> of manipulating states.
+</p>
+
+
+
+<h2 id="types">Types</h2>
+<table class="table">
+<thead>
+<tr>
+  <th>Type</th>
+  <th>Spec</th>
+  <th>Description</th>
+</tr>
+</thead><tbody>
+<tr>
+  <td><p id="cluster">cluster</p></td>
+  <td><em>&lt;identifier&gt;</em></td>
+  <td>
+    The name given to a content cluster in a Vespa application.
+  </td>
+</tr>
+<tr>
+  <td><p id="description">description</p></td>
+  <td><em>.*</em></td>
+  <td>
+    Description can contain anything that is valid JSON. However, as the
+    information is presented in various interfaces, some which may present reasons
+    for all the states in a cluster or similar, keeping it short and to the
+    point makes it easier to fit the information neatly into a table and get a
+    better cluster overview.
+  </td>
+</tr>
+<tr>
+  <td><p id="group-spec">group-spec</p></td>
+  <td><em>&lt;identifier&gt;</em>(\.<em>&lt;identifier&gt;</em>)*</td>
+  <td>
+    The hierarchical group assignment of a given content node.
+    This is a dot separated list of identifiers given in the application services.xml configuration.
+  </td>
+</tr>
+<tr>
+  <td><p id="node">node</p></td>
+  <td>[0-9]+</td>
+  <td>
+    The index or distribution key identifying a given node within the
+    context of a content cluster and a service type.
+  </td>
+</tr>
+<tr>
+  <td><p id="service-type">service-type</p></td>
+  <td>(distributor|storage)</td>
+  <td>
+    The type of the service to look at state for, within the context of a given content cluster.
+  </td>
+</tr>
+<tr>
+  <td><p id="state-disk">state-disk</p></td>
+  <td>(up|down)</td>
+  <td>
+    One of the valid disk states.
+  </td> <!-- ToDo: Deprecate disk state? -->
+</tr>
+<tr>
+  <td><p id="state-unit">state-unit</p></td>
+  <td>
+    <a href="#initializing">initializing</a> | <a href="#up">up</a> |
+    <a href="#stopping">stopping</a> | <a href="#down">down</a>
+  </td>
+  <td>
+    <p>
+      The cluster controller fetches states from all nodes, called <em>unit states</em>.
+      States reported from the nodes are either <code>initializing</code>, <code>up</code> or <code>stopping</code>.
+      If the node can not be reached, a <code>down</code> state is assumed.
+    </p>
+    <p>
+      This means, the cluster controller detects failed nodes.
+      The subsequent <em>generated states</em> will have nodes in <code>down</code>,
+      and the <a href="../content/idealstate.html">ideal state algorithm</a> will redistribute
+      <a href="../content/buckets.html">buckets</a> of documents.
+    </p>
+  </td>
+</tr>
+<tr>
+  <td><p id="state-user">state-user</p></td>
+  <td>
+    <a href="#up">up</a> | <a href="#down">down</a> |
+    <a href="#maintenance">maintenance</a> | <a href="#retired">retired</a>
+  </td>
+  <td>
+    <p>
+      Use tools for <a href="../operations/admin-procedures.html#cluster-state">user state management</a>.
+    </p>
+    <ul>
+      <li>Retire a node from a cluster -
+        use <code>retired</code> to move buckets to other nodes</li>
+      <li>Short-lived maintenance work -
+        use <code>maintenance</code> to avoid merging buckets to other nodes</li>
+      <li>Fail a bad node. The cluster controller or an operator can set a node <code>down</code></li>
+    </ul>
+  </td>
+</tr>
+<tr>
+  <td><p id="state-generated">state-generated</p></td>
+  <td>
+    <a href="#initializing">initializing</a> | <a href="#up">up</a> | <a href="#down">down</a> |
+    <a href="#maintenance">maintenance</a> | <a href="#retired">retired</a>
+  </td>
+  <td>
+    <p>
+      The cluster controller generates the cluster state
+      from the <code>unit</code> and <code>user</code> states, over time.
+      The generated state is called the <em>cluster state</em>.
+    </p>
+  </td>
+</tr>
+</tbody>
+</table>
+
+
+
+<h2 id="request-parameters">Request parameters</h2>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Parameter</th>
+    <th>Type</th>
+    <th>Description</th>
+  </tr>
+  </thead><tbody>
+<tr>
+  <th>recursive</th>
+  <td>number</td>
+  <td>
+    <p id="recursive">
+    <p>
+      Number of levels, or <code>true</code> for all levels. Examples:
+    </p>
+    <ul>
+      <li>Use <code>recursive=1</code> for a node request to also see all data</li>
+      <li>use <code>recursive=2</code> to see all the node data within each service type</li>
+    </ul>
+    <p>
+      In recursive mode, you will see the same output as found in the spec below.
+      However, where there is a <code>{ "link" : "&lt;url-path&gt;" }</code> element,
+      this element will be replaced by the content of that request,
+      given a recursive value of one less than the request above.
+    </p>
+  </td>
+</tr>
+</tbody>
+</table>
+
+
+
+<h2 id="http-status-codes">HTTP status codes</h2>
+<p>
+  Non-exhaustive list of status codes:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Code</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>200</th>
+    <td>OK.</td>
+  </tr>
+  <tr>
+    <th>303</th>
+    <td>
+      <p>Cluster controller not master - master known.</p>
+      <p>
+        This error means communicating with the wrong cluster controller.
+        This returns a standard HTTP redirect,
+        so the HTTP client can automatically redo the request on the correct cluster controller.
+      </p>
+      <p>
+        As the cluster controller available with the lowest index will be the master,
+        the cluster controllers are normally queried in index order.
+        Hence, it is unlikely to ever get this error,
+        but rather fail to connect to the cluster controller if it is not the current master.
+      </p>
+<pre>
+HTTP/1.1 303 See Other
+Location: http://<span class="pre-hilite">&lt;master&gt;</span>/<span class="pre-hilite">&lt;current-request&gt;</span>
+Content-Type: application/json
+
+{
+    "message" : "Cluster controller <span class="pre-hilite">index</span> not master. Use master at index <span class="pre-hilite">index</span>.
+}
+</pre>
+    </td>
+  </tr>
+  <tr>
+    <th>503</th>
+    <td>
+      <p>Cluster controller not master - unknown or no master.</p>
+      <p>
+        This error is used if the cluster controller asked is not master,
+        and it doesn't know who the master is.
+        This can happen, e.g. in a network split,
+        where cluster controller 0 no longer can reach cluster controller 1 and 2,
+        in which case cluster controller 0 knows it is not master, as it can't see the majority,
+        and cluster controller 1 and 2 will vote 1 to master.
+      </p>
+<pre>
+HTTP/1.1 503 Service Unavailable
+Content-Type: application/json
+
+{
+    "message" : "No known master cluster controller currently exist."
+}
+</pre>
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="response-format">Response format</h2>
+<p>
+  Responses are in JSON format, with the following fields:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Field</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>message</th>
+    <td>An error message — included for failed requests.</td>
+  </tr>
+  <tr>
+    <th>ToDo</th>
+    <td>Add more fields here.</td>
+  </tr>
+  </tbody>
+</table>
