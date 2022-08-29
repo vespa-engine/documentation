@@ -126,3 +126,179 @@ which correlates sufficiently well with the second phase function -
 this to ensure that relevance is not hurt too much
 by not evaluating the real ranking function on all the hits.
 </p>
+
+
+
+<h2 id="rank-phase-statistics">Rank phase statistics</h2>
+<p>
+  Use <a href="reference/schema-reference.html#match-features">match-features</a>
+  and <a href="reference/schema-reference.html#summary-features">summary-features</a>
+  to export detailed match- and rank-information per query.
+  This requires post-processing and aggregation is an external system for analysis.
+</p>
+<p>
+  To evaluate how well the document corpus matches the queries,
+  use <a href="reference/schema-reference.html#mutate">mutable attributes</a>
+  to track how often each document survives each match- and ranking-phase.
+  This is aggregated per document and makes it easy to analyse using the query and grouping APIs in Vespa -
+  and no other processing/storage is required.
+</p>
+<p>
+  A mutable attribute is a number where an operation can be executed in 4 phases:
+</p>
+<ol>
+  <li>on-match</li>
+  <li>on-first-phase</li>
+  <li>on-second-phase</li>
+  <li>on-summary</li>
+</ol>
+<p>
+  The common use case is to increase the value by 1 for each execution.
+  With this, it is easy to evaluate the document's performance to the queries,
+  e.g. find the documents that appear in most queries, or the ones that never matched -
+  run a query and order by the mutable attribute.
+</p>
+{% include note.html content='The mutable attributes are just counters and memory-operations only -
+the values might or might not not survive content node restarts.
+The values cannot be compared across nodes.
+Use the values to assess relative document matching and ranking performance since Vespa start' %}
+<p>
+  This example is based on the <a href="vespa-quick-start.html">quickstart</a>.
+  It uses 4 attributes that each track how many times a document participates in any of the 4 phases.
+  This is tracked only if using rank-profile <code>rank_albums_track</code> in the query:
+</p>
+<pre>
+schema music {
+
+    document music {
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field album type string {
+            indexing: summary | index
+        }
+
+        field year type int {
+            indexing: summary | attribute
+        }
+
+        field category_scores type tensor&lt;float&gt;(cat{}) {
+            indexing: summary | attribute
+        }
+
+    }
+
+    field match_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field first_phase_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field second_phase_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field summary_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+
+    fieldset default {
+        fields: artist, album
+    }
+
+    rank-profile rank_albums inherits default {
+        first-phase {
+            expression: sum(query(user_profile) * attribute(category_scores))
+        }
+        second-phase {
+            expression: attribute(year)
+            rerank-count: 1
+        }
+    }
+
+    rank-profile rank_albums_track inherits rank_albums {
+        mutate {
+            on-match        { match_count        += 1 }
+            on-first-phase  { first_phase_count  += 1 }
+            on-second-phase { second_phase_count += 1 }
+            on-summary      { summary_count      += 1 }
+        }
+    }
+
+    rank-profile rank_albums_reset_on_match inherits rank_albums {
+        mutate {
+            on-match        { match_count         = 0 }
+        }
+    }
+}
+</pre>
+<pre>
+$ vespa query \
+  "select * from music where album contains 'head'" \
+  "ranking=rank_albums_track"
+</pre>
+
+
+<h3 id="usage">Usage</h3>
+<p>
+  The framework is flexible in use, the normal use case is:
+</p>
+<ol>
+  <li>
+    Reset the mutable attribute on all content nodes -
+    use <a href="reference/query-api-reference.html#model.searchPath">searchPath</a>
+    to make sure all nodes are reset by sending a query using a rank profile that resets the value. E.g.:
+<pre>
+$ for node in {0..5}; do vespa query \
+    "select * from music where true" \
+    "ranking=rank_albums_reset_on_match" \
+    "model.searchPath=$node/0"; \
+  done
+</pre>
+    Alternatively, run a query against a group
+    and verify that <a href="reference/default-result-format.html">coverage</a> is 100%.
+    <!-- ToDo: add note on what to do for the other mutable attributes -->
+  </li>
+  <li>
+    Run query load, using the tracking rank-profile, like <code>rank_albums_track</code> above
+  </li>
+  <li>
+    Run queries using <a href="reference/sorting.html">sorting</a> or <a href="grouping.html">grouping</a>
+    on the mutable attributes.
+  </li>
+</ol>
+
+{% include note.html content='Make sure that only the relevant query load uses the tracking rank profile.
+E.g. exclude monitoring queries / automation by using a separate ranking profile.' %}
+
+<p>
+  To initialize a mutable attribute with a different value than 0 when a document is PUT, use:
+</p>
+<pre>
+field match_count type long {
+    indexing: 7 | to_long | attribute | summary   # Initialized to 7 for a new document. Default is 0.
+    attribute: mutable
+}
+</pre>
+<p>
+  To dump values fast, from memory only (assuming the schema has an <code>id</code> field):
+</p>
+<pre>
+document-summary rank_phase_statistics {
+    summary id type int
+    summary match_count type long
+    summary first_phase_count type long
+    summary second_phase_count type long
+    summary summary_count type long
+}
+</pre>
+<pre>
+$ vespa query \
+  "select * from music where true" \
+  "presentation.summary=rank_phase_statistics"
+</pre>
