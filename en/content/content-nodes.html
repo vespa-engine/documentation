@@ -455,10 +455,64 @@ $ docker exec vespa curl -s http://localhost:19114/state/v1/metrics | jq . | \
 
 
 
-<h2 id="cluster-v2-API-examples">cluster/v2 API examples</h2>
+<h2 id="cluster-v2-API-examples">/cluster/v2 API examples</h2>
 <p>
-  Examples of state manipulation using the <a href="../reference/cluster-v2.html">cluster/v2 API</a>.
+  Examples of state manipulation using the <a href="../reference/cluster-v2.html">/cluster/v2 API</a>.
 </p>
+<p>
+  List content clusters:
+</p>
+<pre>$ curl http://localhost:19050/cluster/v2/</pre>
+<pre>{% highlight json %}
+{
+    "cluster": {
+        "music": {
+            "link": "/cluster/v2/music"
+        },
+        "books": {
+            "link": "/cluster/v2/books"
+        }
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  Get cluster state and list service types within cluster:
+</p>
+<pre>$ curl http://localhost:19050/cluster/v2/music</pre>
+<pre>{% highlight json %}
+{
+    "state": {
+        "generated": {
+            "state": "state-generated",
+            "reason": "description"
+        }
+    }
+    "service": {
+        "distributor": {
+            "link": "/cluster/v2/music/distributor"
+        },
+        "storage": {
+            "link": "/cluster/v2/music/storage"
+        }
+    }
+ }
+{% endhighlight %}</pre>
+<p>
+  List nodes per service type for cluster:
+</p>
+<pre>$ curl http://localhost:19050/cluster/v2/music/storage</pre>
+<pre>{% highlight json %}
+{
+    "node": {
+        "0": {
+            "link": "/cluster/v2/music/storage/0"
+        },
+        "1": {
+            "link": "/cluster/v2/music/storage/1"
+        }
+    }
+}
+{% endhighlight %}</pre>
 <p>
   Get node state:
 </p>
@@ -467,80 +521,115 @@ $ curl http://localhost:19050/cluster/v2/music/storage/0
 </pre>
 <pre>{% highlight json %}
 {
-  "attributes": {
-    "hierarchical-group": "group0"
-  },
-  "state": {
-    "generated": {
-      "state": "up",
-      "reason": ""
+    "attributes": {
+        "hierarchical-group": "group0"
     },
-    "unit": {
-      "state": "up",
-      "reason": ""
+    "state": {
+        "generated": {
+            "state": "up",
+            "reason": ""
+        },
+        "unit": {
+            "state": "up",
+            "reason": ""
+        },
+        "user": {
+            "state": "up",
+            "reason": ""
+        }
     },
-    "user": {
-      "state": "up",
-      "reason": ""
+    "metrics": {
+        "bucket-count": 0,
+        "unique-document-count": 0,
+        "unique-document-total-size": 0
     }
-  },
-  "metrics": {
-    "bucket-count": 0,
-    "unique-document-count": 0,
-    "unique-document-total-size": 0
-  }
 }
 {% endhighlight %}</pre>
 <p>
-  Get all nodes, including topology information (see <em>hierarchical-group</em>):
+  Set node user state:
+</p>
+<pre>
+$ curl -X POST http://localhost:19050/cluster/v2/music/storage/0
+</pre>
+<pre>{% highlight json %}
+{
+    "state": {
+        "user": {
+            "state": "retired",
+            "reason": "This colo will be removed soon"
+        }
+    }
+}
+{% endhighlight %}</pre>
+<pre>{% highlight json %}
+{
+    "wasModified": true,
+    "reason": "ok"
+}
+{% endhighlight %}</pre>
+<p>
+  Get all nodes, including topology information (see <code>hierarchical-group</code>):
 </p>
 <pre>
 $ curl http://localhost:19050/cluster/v2/music/?recursive=true
 </pre>
 <pre>{% highlight json %}
 {
-  "state": {
-    "generated": {
-      "state": "up",
-      "reason": ""
-    }
-  },
-  "service": {
-    "storage": {
-      "node": {
-        "0": {
-          "attributes": {
-            "hierarchical-group": "group0"
-          },
-          "state": {
-            "generated": {
-              "state": "up",
-              "reason": ""
-            },
-            "unit": {
-              "state": "up",
-              "reason": ""
-            },
-            "user": {
-              "state": "up",
-              "reason": ""
-            }
-          },
-          "metrics": {
-            "bucket-count": 0,
-            "unique-document-count": 0,
-            "unique-document-total-size": 0
-          }
-        },
+    "state": {
+        "generated": {
+            "state": "up",
+            "reason": ""
+        }
+    },
+    "service": {
+        "storage": {
+            "node": {
+                "0": {
+                    "attributes": {
+                        "hierarchical-group": "group0"
+                    },
+                    "state": {
+                        "generated": {
+                            "state": "up",
+                            "reason": ""
+                        },
+                        "unit": {
+                            "state": "up",
+                            "reason": ""
+                        },
+                        "user": {
+                            "state": "up",
+                            "reason": ""
+                        }
+                    },
+                    "metrics": {
+                        "bucket-count": 0,
+                        "unique-document-count": 0,
+                        "unique-document-total-size": 0
+                    }
 {% endhighlight %}</pre>
+
 <p>
   Set node state:
 </p>
 <pre>
-$ curl -X PUT \
-  --data '{"state":{"user":{"state": "down", "reason": "Down a broken node"}}}' \
+curl -X PUT -H "Content-Type: application/json" --data '
+  {
+      "state": {
+          "user": {
+              "state": "retired",
+              "reason": "This node will be removed soon"
+          }
+      }
+  }' \
   http://localhost:19050/cluster/v2/music/storage/0
 </pre>
+<pre>{% highlight json %}
+{
+    "wasModified": true,
+    "reason": "ok"
+}
+{% endhighlight %}</pre>
 
 
 
