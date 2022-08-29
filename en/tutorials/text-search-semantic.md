@@ -80,15 +80,14 @@ The match operator `AND` means that we are only matching documents that contain 
 either in the title or in the body of the document.
 A sample query looks like this:
 
-```
+```json
 {
-	"yql":"select * from sources * where (userInput(@userQuery))"
-	"userQuery":"what types of plate boundaries cause deep sea trenches"
-	"ranking":{
-		"profile":"bm25"
-		"listFeatures":"true"
-	}
-	...
+    "yql": "select * from sources * where (userInput(@userQuery))",
+    "userQuery": "what types of plate boundaries cause deep sea trenches",
+    "ranking": {
+        "profile": "bm25",
+        "listFeatures": true
+    }
 }
 ```
 
@@ -97,10 +96,9 @@ either in the title or in the body.
 The only difference is the inclusion of the `{grammar: "any"}` in the
 [YQL](../reference/query-language-reference.html#grammar) expression:
 
-```
+```json
 {
-	"yql":"select * from sources * where ({grammar: "any"}userInput(@userQuery))"
-	...
+    "yql": "select * from sources * where ({grammar: \"any\"}userInput(@userQuery))"
 }
 ```
 
@@ -142,7 +140,7 @@ Improving on text to embedding construction could be a nice topic to explore els
 For example, this is how it is presented at
 [the Universal Sentence Encoder page](https://tfhub.dev/google/universal-sentence-encoder/4) in TensorFlow Hub:
 
-```
+```python
 From tensorflow hub
 
 import tensorflow as tf
@@ -158,7 +156,7 @@ print embeddings
 The following comes from the
 [sentence-transformers library](https://github.com/UKPLab/sentence-transformers#getting-started):
 
-```
+```python
 From sentence-transformers library
 
 from sentence_transformers import SentenceTransformer
@@ -242,13 +240,12 @@ Different rank-profiles can be defined for experimentation.
 
 ### Query
 
-We can send the query embeddings via the `inputs.query(tensor_bert)` parameter:
+We can send the query embeddings via the `input.query(tensor_bert)` parameter:
 
-```
+```json
 {
-  "yql": ...,
-  "ranking.features.query(tensor_bert)": "[0.013267785266013195, -0.021684982513878254, ..., -0.007751454443551412]",
-  ...
+  "yql": "...",
+  "input.query(tensor_bert)": "[0.013267785266013195, -0.021684982513878254, ..., -0.007751454443551412]"
 }
 ```
 
@@ -260,17 +257,16 @@ Once that query and document tensors as well as rank-profiles that use them are 
 it is possible to use the embeddings to match and to rank the documents by using the `nearestNeighbor` operator
 together with the appropriate rank-profile:
 
-```
+```json
 {
-	"yql":"select * from sources * where ({targetHits: 1000, label: "nns"}nearestNeighbor(title_bert, tensor_bert))"
-	"userQuery":"what types of plate boundaries cause deep sea trenches"
-	"ranking":{
-		"profile":"bert_title_body_all"
-		"listFeatures":"true"
-	}
-	"input.query(tensor_bert)":"[0.05121087115032622, -0.0035218095295999675, ..., 0.05303904445092506]"
-	...
-} 
+    "yql": "select * from sources * where ({targetHits: 1000, label: \"nns\"}nearestNeighbor(title_bert, tensor_bert))",
+    "userQuery": "what types of plate boundaries cause deep sea trenches",
+    "ranking": {
+        "profile": "bert_title_body_all",
+        "listFeatures": true
+    },
+    "input.query(tensor_bert)": "[0.05121087115032622, -0.0035218095295999675, ..., 0.05303904445092506]"
+}
 ```
 
 The query above uses the `nearestNeighbor` operator to match documents based on the euclidean distance
@@ -328,15 +324,14 @@ which uses two core text rank features `term(n).significance` and `term(n).weigh
 Below is a query example that uses the `weakAND` operator
 with an annotation that sets the target number of documents to be 1.000:
 
-```
+```json
 {
-	"yql":"select * from sources * where ({targetHits: 1000}weakAnd(default contains "what", default contains "types", default contains "of", default contains "plate", default contains "boundaries", default contains "cause", default contains "deep", default contains "sea", default contains "trenches"))"
-	"userQuery":"what types of plate boundaries cause deep sea trenches"
-	"ranking":{
-		"profile":"bm25"
-		"listFeatures":"true"
-	}
-	...
+    "yql": "select * from sources * where ({targetHits: 1000}weakAnd(default contains \"what\", default contains \"types\", default contains \"of\", default contains \"plate\", default contains \"boundaries\", default contains \"cause\", default contains \"deep\", default contains \"sea\", default contains \"trenches\"))",
+    "userQuery": "what types of plate boundaries cause deep sea trenches",
+    "ranking": {
+        "profile": "bm25",
+        "listFeatures": true
+    }
 }
 ```
 
