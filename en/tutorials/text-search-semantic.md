@@ -70,15 +70,25 @@ Before we proceed to more elaborate experiments we need to establish some obviou
 Here are the results obtained by using query terms to match documents
 and [BM25](../reference/bm25.html) as 1st phase ranking:
 
-<div style="text-align:center">
-<img src="/assets/img/tutorials/semantic_baselines.png"
-     style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"
-     alt="Table" /> <!-- ToDo: make a proper table instead -->
-</div>
+<table class="table">
+<thead>
+<tr>
+  <th>Match operator</th><th>1st ranking</th><th>Matched docs</th><th>Recall @100</th><th>MRR @100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>AND</td><td>BM25</td><td>0.0012</td><td>0.4820</td><td>0.4001</td>
+</tr>
+<tr>
+  <td>OR</td><td>BM25</td><td>0.8482</td><td>0.9580</td><td>0.6944</td>
+</tr>
+</tbody>
+</table>
 
 The match operator `AND` means that we are only matching documents that contain all the query terms
 either in the title or in the body of the document.
-A sample query looks like this:
+A sample query looks like:
 
 ```json
 {
@@ -214,7 +224,7 @@ At this point, it is already possible to match documents
 based on the distance between the query and document tensors via the `nearestNeighbor` operator
 that will be discussed in the next section.
 However, it could be interesting to use those tensors to rank the documents as well.
-This can be accomplished by defining a `rank-profile`:
+This can be accomplished by defining a [rank-profile](../ranking.html):
 
 ```
 rank-profile bert_title_body_all inherits default {
@@ -293,11 +303,21 @@ On the other hand, the results obtained with the Word2Vec model were way worse t
 and were left out of this tutorial
 since they might require more pre-processing than the sentence models to give sensible results.
 
-<div style="text-align:center">
-<img src="/assets/img/tutorials/pure_ann.png" 
-     style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"
-     alt="Table" /> <!-- ToDo: make a proper table instead -->
-</div>
+<table class="table">
+<thead>
+<tr>
+  <th>Match operator</th><th>1st ranking</th><th>Matched docs</th><th>Recall @100</th><th>MRR @100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>ANN(title, bert)</td><td>dotProd(title, query, bert) + dotProd(body, query, bert)</td><td>0.0625</td><td>0.7460</td><td>0.4622</td>
+</tr>
+<tr>
+  <td>ANN(body, bert)</td><td>dotProd(title, query, bert) + dotProd(body, query, bert)</td><td>0.0563</td><td>0.7180</td><td>0.4471</td>
+</tr>
+</tbody>
+</table>
 
 In addition to matching documents based on the distance between document and query vectors,
 we also ranked the matched documents using the semantic vectors
@@ -319,7 +339,8 @@ But first, let's see some useful features related to term-matching that are avai
 ## weakAND operator and its effectiveness
 
 The [weakAnd](../using-wand-with-vespa.html) implementation scores documents by a simplified scoring function,
-which uses two core text rank features `term(n).significance` and `term(n).weight`.
+which uses two core text rank features [term(n).significance](../reference/rank-features.html#term(n).significance)
+and [term(n).weight](../reference/rank-features.html#term(n).weight).
 
 Below is a query example that uses the `weakAND` operator
 with an annotation that sets the target number of documents to be 1.000:
@@ -343,13 +364,20 @@ fieldset default {
 }
 ```
 
-It was surprising to see the effectiveness of the WAND operator in this case: 
+It was surprising to see the effectiveness of the WAND operator in this case:
 
-<div style="text-align:center">
-<img src="/assets/img/tutorials/wand_effectiveness.png"
-     style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"
-     alt="Table" /> <!-- ToDo: make a proper table instead -->
-</div>
+<table class="table">
+<thead>
+<tr>
+  <th>Match operator</th><th>1st ranking</th><th>Matched docs</th><th>Recall @100</th><th>MRR @100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>weakAND</td><td>BM25</td><td>0.1282</td><td>0.9460</td><td>0.6946</td>
+</tr>
+</tbody>
+</table>
 
 It matched much fewer documents than the `OR` operator (12.5% versus 85% respectively)
 while keeping a similar recall metric (92% versus 96% respectively). 
@@ -371,36 +399,72 @@ The table below shows that we are indeed matching documents that wouldn't be mat
 (16% matched documents by adding `ANN` vs. 12% by `weakAND` alone.).
 However, we see almost no improvement for Recall and MRR:
 
-<div style="text-align:center">
-<img src="/assets/img/tutorials/weakAND_ANN_BM25.png"
-     style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"
-     alt="Table" /> <!-- ToDo: make a proper table instead -->
-</div>
+<table class="table">
+<thead>
+<tr>
+  <th>Match operator</th><th>1st ranking</th><th>Matched docs</th><th>Recall @100</th><th>MRR @100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>weakAND</td><td>BM25</td><td>0.1282</td><td>0.9460</td><td>0.6946</td>
+</tr>
+<tr>
+  <td>weakAND + ANN(title, bert)</td><td>BM25</td><td>0.1645</td><td>0.9460</td><td>0.6943</td>
+</tr>
+<tr>
+  <td>weakAND + ANN(body, bert)</td><td>BM25</td><td>0.1594</td><td>0.9460</td><td>0.6943</td>
+</tr>
+<tr>
+  <td>weakAND + ANN(title, bert) + ANN(body, bert)</td><td>BM25</td><td>0.1837</td><td>0.9460</td><td>0.6941</td>
+</tr>
+</tbody>
+</table>
 
 It could be argued that the articles retrieved by `ANN` does not necessarily contain
 the query terms in the title nor the body of the document, leading to zero `BM25` scores.
 To address that we can add the (unscaled) dot-product in the 1st phase ranking.
 The results below show that we had a marginal reduction in Recall and a marginal increase in MRR:
 
-<div style="text-align:center">
-<img src="/assets/img/tutorials/weakAND_ANN_BM25_dotP.png"
-     style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"
-     alt="Table" /> <!-- ToDo: make a proper table instead -->
-</div>
+<table class="table">
+<thead>
+<tr>
+  <th>Match operator</th><th>1st ranking</th><th>Matched docs</th><th>Recall @100</th><th>MRR @100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>weakAND + ANN(title, bert)</td><td>BM25 +<br/>dotProd(title, query, bert) +<br/>dotProd(body, query, bert)</td><td>0.1645</td><td>0.9440</td><td>0.6990</td>
+</tr>
+<tr>
+  <td>weakAND + ANN(body, bert)</td><td>BM25 +<br/>dotProd(title, query, bert) +<br/>dotProd(body, query, bert)</td><td>0.1594</td><td>0.9440</td><td>0.6986</td>
+</tr>
+<tr>
+  <td>weakAND + ANN(title, bert) + ANN(body, bert)</td><td>BM25 +<br/>dotProd(title, query, bert) +<br/>dotProd(body, query, bert)</td><td>0.1837</td><td>0.9440</td><td>0.6992</td>
+</tr>
+</tbody>
+</table>
 
 Another issue that must be addressed is that we should scale the BM25 scores and the embedding dot-products
 so that we take into consideration that they might have completely different scales.
 In order to do that,
 we need to collect a training dataset that that takes into account the appropriate match phase
 and fit a model (linear in our case) according to a listwise loss function,
-as described in our [text search tutorial with ML](text-search-ml.html)
-and summarized in [this blog post](https://medium.com/vespa/learning-to-rank-with-vespa-9928bbda98bf). 
+as described in the [text search tutorial with ML](text-search-ml.html)
+and summarized in this [blog post](https://medium.com/vespa/learning-to-rank-with-vespa-9928bbda98bf).
 
-<div style="text-align:center">
-<img src="/assets/img/tutorials/weakAND_ANN_BM25_dotP_scaled.png"
-     style="width: 80%; margin-right: 1%; margin-bottom: 0.5em;"
-     alt="Table" /> <!-- ToDo: make a proper table instead -->
-</div>
+<table class="table">
+<thead>
+<tr>
+  <th>Match operator</th><th>1st ranking</th><th>Matched docs</th><th>Recall @100</th><th>MRR @100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>weakAND + ANN(title, bert) + ANN(body, bert)</td><td>0.90 * BM25(title) +<br/>2.20 * BM25(body) +<br/>0.13 * dotProd(title, query, bert) +<br/>0.58 * dotProd(body, query, bert)</td><td>0.1837</td><td>0.9420</td><td>0.7063</td>
+</tr>
+</tbody>
+</table>
 
 The table above shows that we obtained a slight improvement in MRR
 and that the model increased the relative weight associated with the BM25 scores,
