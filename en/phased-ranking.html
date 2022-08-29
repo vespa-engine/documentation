@@ -159,7 +159,8 @@ by not evaluating the real ranking function on all the hits.
   run a query and order by the mutable attribute.
 </p>
 {% include note.html content='The mutable attributes are just counters and memory-operations only -
-the values do not survive content node restarts. The values cannot be compared across nodes.
+the values might or might not not survive content node restarts.
+The values cannot be compared across nodes.
 Use the values to assess relative document matching and ranking performance since Vespa start' %}
 <p>
   This example is based on the <a href="vespa-quick-start.html">quickstart</a>.
@@ -229,12 +230,9 @@ schema music {
         }
     }
 
-    rank-profile rank_albums_reset inherits rank_albums {
+    rank-profile rank_albums_reset_on_match inherits rank_albums {
         mutate {
             on-match        { match_count         = 0 }
-            on-first-phase  { first_phase_count   = 0 }
-            on-second-phase { second_phase_count  = 0 }
-            on-summary      { summary_count       = 0 }
         }
     }
 }
@@ -252,18 +250,19 @@ $ vespa query \
 </p>
 <ol>
   <li>
-    Reset the mutable attributes on all content nodes -
+    Reset the mutable attribute on all content nodes -
     use <a href="reference/query-api-reference.html#model.searchPath">searchPath</a>
-    to make sure all nodes are reset by sending a query using a rank profile that resets the values. E.g.:
+    to make sure all nodes are reset by sending a query using a rank profile that resets the value. E.g.:
 <pre>
 $ for node in {0..5}; do vespa query \
     "select * from music where true" \
-    "ranking=rank_albums_reset" \
+    "ranking=rank_albums_reset_on_match" \
     "model.searchPath=$node/0"; \
   done
 </pre>
     Alternatively, run a query against a group
     and verify that <a href="reference/default-result-format.html">coverage</a> is 100%.
+    <!-- ToDo: add note on what to do for the other mutable attributes -->
   </li>
   <li>
     Run query load, using the tracking rank-profile, like <code>rank_albums_track</code> above
@@ -291,11 +290,11 @@ field match_count type long {
 </p>
 <pre>
 document-summary rank_phase_statistics {
-    summary id type int { source: id }
-    summary match_count type long        { source: match_count }
-    summary first_phase_count type long  { source: first_phase_count }
-    summary second_phase_count type long { source: second_phase_count }
-    summary summary_count type long      { source: summary_count }
+    summary id type int
+    summary match_count type long
+    summary first_phase_count type long
+    summary second_phase_count type long
+    summary summary_count type long
 }
 </pre>
 <pre>
