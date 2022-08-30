@@ -18,6 +18,135 @@ There are two main approaches to transfer metrics to an external system:
   <li>Make Vespa <em>push</em> metrics to the external system</li>
 </ul>
 
+<p>
+  Use the example overview of two nodes running Vespa for where the APIs are set up and how they interact:
+</p>
+<img src="/assets/img/metrics-api.svg"  alt="Metrics interfaces" />
+<ul>
+  <li><code><a href="../reference/metrics.html#metrics-v1-values">/metrics/v1/values</a></code> is the node metrics api,
+    and aggregates metrics for processes running on the node.
+    Each Vespa node has a <em>metrics-proxy</em> process running for this API, default port 19092.</li>
+  <li><code><a href="#state-v1-metrics">/state/v1/metrics</a></code> is the process metrics api,
+    and exposes all metrics from an individual service -
+    here each node runs a container and a content node.</li>
+  <li><code><a href="../reference/metrics.html#metrics-v2-values">/metrics/v2/values</a></code> is an aggregation of
+    <code><a href="../reference/metrics.html#metrics-v1-values">/metrics/v1/values</a></code>, for all nodes.
+    Served on the metrics-proxy port.</li>
+  <li><code><a href="../reference/metrics.html#prometheus-v1-values">/prometheus/v1/values</a></code> is the same as
+    <code><a href="../reference/metrics.html#metrics-v2-values">/metrics/v2/values</a></code>, in prometheus format.
+    Served on the metrics-proxy port.</li>
+  <li><code><a href="../reference/metrics.html#prometheus-v1-values">/prometheus/v1/values</a></code> and
+    <code><a href="../reference/metrics.html#metrics-v2-values">/metrics/v2/values</a></code>
+    are also replicated on the container port, default 8080.</li>
+</ul>
+{% include note.html content="
+refer to the <a href='https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode'>multinode</a>
+and <a href='https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA'>multinode-HA</a>
+sample applications for a practical example of using the APIs.
+These apps also include examples for how to find ports used by using
+<a href='../reference/vespa-cmdline-tools.html#vespa-model-inspect'>vespa-model-inspect</a>."%}
+
+
+<h2 id="state-v1-health">/state/v1/health</h2>
+<p>
+  <em>Per-process</em> health status is found at <em>http://host:port/state/v1/health</em>
+</p>
+<img src="/assets/img/health-api.svg" width="480px" height="auto" alt="Health API" />
+<p>
+  <code>/state/v1/health</code> is most commonly used for heartbeating,
+  see the <a href="../reference/state-v1.html#state-v1-health">reference</a> for details. Example:
+</p>
+<pre>{% highlight json %}
+{
+    "status": {
+        "code": "up",
+        "message": "Everything ok here"
+    }
+}
+{% endhighlight %}</pre>
+
+
+
+
+<h2 id="state-v1-metrics">/state/v1/metrics</h2>
+<p>
+  <em>Per-process</em> metrics are found at <em>http://host:port/state/v1/metrics</em>
+</p>
+<p>
+  Internally, Vespa aggregates metrics in the APIs above from the <em>per-process</em> metrics and health APIs.
+  While most users would use the aggregated APIs,
+  the per-process metric APIs could be used for specific cases. <!-- ToDo: rewrite -->
+</p>
+<p>
+  Metrics are reported in snapshots, where the snapshot specifies the
+  time window the metrics are gathered from.
+  Typically, the service will aggregate metrics as they are reported, and after each snapshot period,
+  a snapshot is taken of the current values, and they are reset.
+  Using this approach, min and max values are tracked,
+  and enables values like 95% percentile for each complete snapshot period.
+</p>
+<p>
+  Refer to the <a href="../reference/state-v1.html#state-v1-metrics">reference</a> for details.
+</p>
+<p>
+  Vespa supports <a href="../reference/metrics.html#metrics-from-custom-components">custom metrics</a>.
+</p>
+<p>
+  Example:
+</p>
+<pre>{% highlight json %}
+{
+    "status" : {
+        "code" : "up",
+        "message" : "Everything ok here"
+    },
+    "metrics" : {
+        "snapshot" : {
+            "from" : 1334134640.089,
+            "to" : 1334134700.088,
+        },
+        "values" : [
+            {
+                "name" : "queries",
+                "description" : "Number of queries executed during snapshot interval",
+                "values" : {
+                    "count" : 28,
+                    "rate" : 0.4667
+                },
+                "dimensions" : {
+                    "searcherid" : "x"
+                }
+            },
+            {
+                "name" : "query_hits",
+                "description" : "Number of documents matched per query during snapshot interval",
+                "values" : {
+                    "count" : 28,
+                    "rate" : 0.4667,
+                    "average" : 128.3,
+                    "min" : 0,
+                    "max" : 10000,
+                    "sum" : 3584,
+                    "median" : 124.0,
+                    "std_deviation": 5.43
+                },
+                "dimensions" : {
+                    "searcherid" : "x"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  A flat list of metrics is returned.
+  Each metric value reported by a component should be a separate metric.
+  For related metrics, prefix metric names with common parts and dot separate the names -
+  e.g. <code>memory.free</code> and <code>memory.virtual</code>.
+</p>
+
+
+
 <h2 id="pulling-metrics-from-vespa">Pulling metrics from Vespa</h2>
 <p>
 All pull-based solutions use Vespa's <a href="../reference/metrics.html#metrics-v2-values">metrics API</a>,

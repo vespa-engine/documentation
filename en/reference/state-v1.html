@@ -1,0 +1,398 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "/state/v1 API reference"
+redirect_from:
+- /en/reference/state-config-inspect.html
+---
+
+<p>
+  Every service exposes the <code>/state/v1</code> API - use <a href="vespa-cmdline-tools.html#vespa-model-inspect">
+  vespa-model-inspect</a> to find ports,
+  see the <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a>
+  sample application for practical examples.
+</p>
+
+<h2 id="http-requests">HTTP requests</h2>
+<table class="table">
+  <thead>
+  <tr>
+    <th>HTTP request</th>
+    <th>state/v1 operation</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>GET</th>
+    <td colspan="2">
+      <p id="get">
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Service config generation</th>
+    <td>
+      <p id="state-v1-config"></p>
+      <pre>/state/v1/config</pre>
+      <p>
+        In the response, <a href="#config">config</a> has a mandatory <a href="#generation">generation</a>
+        and one or more &lt;service&gt; elements:
+      </p>
+      <ul>
+        <li>sentinel</li>
+        <li>container</li>
+        <li>distributor</li>
+        <li>logd</li>
+        <li>slobroks</li>
+        <li>servicelayer</li>
+        <li>proton</li>
+      </ul>
+      <p>
+        Note: Other configuration elements can also be added as a service.
+        <!-- Decided not to document this, irrelevant, ToDo: remove in future releases?
+        {
+            "config": {
+                "generation": 11,
+                "proton": {
+                    "generation": 11
+                },
+                "proton.documentdb.music": {
+                    "generation": 11
+                }
+             }
+         }
+         -->
+        A &lt;service&gt; has a mandatory <a href="#generation">generation</a>.
+        An optional <a href="#message">message</a> can be returned. Example:
+      </p>
+<pre>{% highlight json %}
+{
+    "config": {
+        "generation": 11,
+        "slobroks": {
+            "generation": 11,
+            "message": "ok"
+        }
+    }
+}
+{% endhighlight %}</pre>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Service version</th>
+    <td>
+      <p id="state-v1-version"></p>
+      <pre>/state/v1/version</pre>
+      <p>
+        Returns a mandatory service <a href="#version">version</a>. Example:
+      </p>
+<pre>{% highlight json %}
+{
+    "version" : "8.43.64"
+}
+{% endhighlight %}</pre>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Service health</th>
+    <td>
+      <p id="state-v1-health"></p>
+      <pre>/state/v1/health</pre>
+      <p>
+        Returns the service status,
+        with mandatory <a href="#time">time</a>, <a href="#status">status</a> and <a href="#metrics">metrics</a>.
+        Metrics is a smaller set of metrics than returned by <code>/state/v1/metrics</code>. <!-- ToDo: add more -->
+      </p>
+      <p>
+        Example:
+      </p>
+<pre>{% highlight json %}
+{
+    "time": 1661863544346,
+    "status": {
+        "code": "up"
+    },
+    "metrics": {
+        "snapshot": {
+            "from": 1661863483.422,
+            "to": 1661863543.38
+        },
+        "values": [
+            {
+                "name": "requestsPerSecond",
+                "values": {
+                    "count": 0,
+                    "rate": 0
+                }
+            },
+            {
+                "name": "latencySeconds",
+                "values": {
+                    "average": 0.001,
+                    "sum": 0,
+                    "count": 0,
+                    "last": 0.001,
+                    "max": 0.001,
+                    "min": 0.001,
+                    "rate": 0
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <th>Service metrics</th>
+    <td>
+      <p id="state-v1-metrics"></p>
+      <pre>/state/v1/metrics</pre>
+      <p>
+        Same as <code>/state/v1/health</code>, but with a full metrics set.
+        <!-- ToDo: link to metrics doc ++ -->
+      </p>
+      <p>
+        A metric can have a set of <a href="#dimensions">dimensions</a>:
+      </p>
+<pre>{% highlight json %}
+{
+    "name": "http.status.2xx",
+    "values": {
+        "count": 1,
+        "rate": 0.01667834150572067
+    },
+    "dimensions": {
+        "protocol": "http1",
+        "httpMethod": "GET",
+        "requestType": "monitoring",
+        "scheme": "http",
+        "statusCode": "200"
+    }
+}
+{% endhighlight %}</pre>
+    </td>
+  </tr>
+
+  </tbody>
+</table>
+
+
+
+
+
+
+
+<h2 id="http-status-codes">HTTP status codes</h2>
+<p>
+  Non-exhaustive list of status codes:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Code</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>200</th>
+    <td>OK.</td>
+  </tr> <!-- ToDo: more codes -->
+  </tbody>
+</table>
+
+
+
+<h2 id="response-format">Response format</h2>
+<p>
+  Responses are in JSON format, with the following fields:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Element</th>
+    <th>Parent</th>
+    <th>Type</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><p id="config">config</p></td>
+    <td></td>
+    <td>Object</td>
+    <td>Root element for /state/v1/config.</td>
+  </tr>
+  <tr>
+    <td><p id="generation">generation</p></td>
+    <td>config</td>
+    <td>Number</td>
+    <td>
+      The generation number is the number for the config that is active in the application.
+    </td>
+    <!-- ToDo: link to more info on config generation, it is a key concept -->
+  </tr>
+  <tr>
+    <td><p id="message">message</p></td>
+    <td>config</td>
+    <td>String</td>
+    <td>An info or error message.</td>
+  </tr>
+  <tr>
+    <td><p id="version">version</p></td>
+    <td></td>
+    <td>String</td>
+    <td>Vespa version.</td>
+  </tr>
+  <tr>
+    <td><p id="time">time</p></td>
+    <td></td>
+    <td>Number</td>
+    <td>Epoch in microseconds.</td>
+  </tr>
+  <tr>
+    <td><p id="status">status</p></td>
+    <td></td>
+    <td>Object</td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><p id="code">code</p></td>
+    <td>status</td>
+    <td>String</td>
+    <td>
+      Service status code - one of:
+      <ul>
+        <li>up</li>
+        <li>down</li>
+        <li>initializing</li>
+      </ul>
+      <p>
+        Containers with the <a href="../query-api.html">query API</a> enabled return <code>initializing</code>
+        while waiting for content nodes to start,
+        see <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">
+        example</a>.
+        <code>up</code> means that the service is fully up.
+        Assume status <code>down</code> if no response.
+        Refer to <a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/java/com/yahoo/container/jdisc/state/StateMonitor.java">
+        StateMonitor</a> for implementation.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td><p id="message-status">message</p></td>
+    <td>status</td>
+    <td>String</td>
+    <td>
+      Message is optional - it is normally empty if the service is up,
+      while it is set to a textual reason for why it is unavailable, if so.
+    </td>
+  </tr>
+  <tr>
+    <td><p id="metrics">metrics</p></td>
+    <td></td>
+    <td>Object</td>
+    <td>Snapshot of metric values.</td>
+  </tr>
+  <tr>
+    <td><p id="snapshot">snapshot</p></td>
+    <td>metrics</td>
+    <td>Object</td>
+    <td>Time period for metrics snapshot.</td>
+  </tr>
+  <tr>
+    <td><p id="from">from</p></td>
+    <td>snapshot</td>
+    <td>Number</td>
+    <td>Epoch in seconds, with microseconds fraction.</td>
+    <!-- ToDo: Why seconds here when microseconds in "time" element ? -->
+  </tr>
+  <tr>
+    <td><p id="to">to</p></td>
+    <td>snapshot</td>
+    <td>Number</td>
+    <td>Epoch in seconds, with microseconds fraction.</td>
+  </tr>
+  <tr>
+    <td><p id="values">values</p></td>
+    <td>metrics</td>
+    <td>Array</td>
+    <td>Array of metric objects.</td>
+  </tr>
+  <tr>
+    <td><p id="name">name</p></td>
+    <td>values</td>
+    <td>String</td>
+    <td>Metric name.</td>
+  </tr>
+  <tr>
+    <td><p id="dimensions">dimensions</p></td>
+    <td>values</td>
+    <td>Object</td>
+    <td>Set of dimension name/value pairs.</td>
+  </tr>
+  <tr>
+    <td><p id="values-metric">values</p></td>
+    <td>values</td>
+    <td>Object</td>
+    <td>Set of metric values.</td>
+  </tr>
+  <tr>
+    <td><p id="average">average</p></td>
+    <td>values</td>
+    <td>Number</td>
+    <td>Average metric value, typically sum divided by count.</td>
+  </tr>
+  <tr>
+    <td><p id="sum">sum</p></td>
+    <td>values</td>
+    <td>Number</td>
+    <td>Sum of metric values in snapshot.</td> <!-- ToDo: is this useful? -->
+  </tr>
+  <tr>
+    <td><p id="count">count</p></td>
+    <td>values</td>
+    <td>Number</td>
+    <td>
+      Number of times metric has been set.
+      For instance in a count metric counting number of operations done,
+      it will annotate the number of operations added for that snapshot period.
+      For a value metric, for instance setting latency of operations,
+      the count will set how many times latencies have been added to the metric.
+    </td>
+  </tr>
+  <tr>
+    <td><p id="last">last</p></td>
+    <td>values</td>
+    <td>Number</td>
+    <td>Last metric value.</td>
+  </tr>
+  <tr>
+    <td><p id="max">max</p></td>
+    <td>values</td>
+    <td>Number</td>
+    <td>Max metric value in snapsho.</td>
+  </tr>
+  <tr>
+    <td><p id="min">min</p></td>
+    <td>values</td>
+    <td>Number</td>
+    <td>Min metric value in snapshot.</td>
+  </tr>
+  <tr>
+    <td><p id="rate">rate</p></td>
+    <td>values</td>
+    <td>Number</td>
+    <td>Metric rate: Count/sec.</td>
+  </tr>
+  <!-- ToDo: still valid?
+    "median" : 124.0,
+    "std_deviation": 5.43
+  -->
+  </tbody>
+</table>

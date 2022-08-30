@@ -542,16 +542,7 @@ ensures that data can be queried from all groups.
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
 
 #### How to check Vespa version for a running instance?
-Use the ApplicationStatus endpoint for the config server (19071) or container (8080) to find Vespa version:
-```
-$ curl -s http://localhost:8080/ApplicationStatus | head
-Handling connection for 8080
-{
-  "application" : {
-    "vespa" : {
-      "version" : "8.27.12"
-    },
-```
+Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa version.
 
 
 <script type="application/javascript">
