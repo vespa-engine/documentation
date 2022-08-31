@@ -205,8 +205,11 @@ Total loss after epoch 2: 551.6585083007812 (3.363771438598633 avg)
 We can see the loss reduces over the number of epochs.
 The two final lines here are ranking metrics run on the training set and validation set.
 Here, the `AUC` metric - Area Under the (ROC) Curve -
-is at `0.974` for the training set and `0.51` for the validation set. <!-- ToDo: where are these numbers? -->
-In this case, this metric measures the probability of ranking relevant news higher than non-relevant news.
+is at `0.5776` for the training set and `0.4988` for the validation set.
+If you run for a greater number of epochs, you would see the `AUC` for the training set become much larger
+than the validation set, around `0.974` and `0.51` respectively if run for 100 epochs.
+
+In this case, the `AUC` metric measures the probability of ranking relevant news higher than non-relevant news.
 A score of around `0.5` means that it is totally random.
 Thus, we haven't learned anything of use for the validation set.
 
@@ -282,9 +285,9 @@ So the returned list will always be empty even if some tokens have been removed.
 $ mkdir -p news/mind/train
 $ mkdir -p news/mind/dev
 $ curl -L -o mind/train/news_embeddings.tsv \
-  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding.tsv 
+  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding.tsv
 $ curl -L -o mind/dev/news_embeddings.tsv \
-  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding_dev.tsv 
+  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding_dev.tsv
 </pre>
 </div>
 
