@@ -207,7 +207,7 @@ The two final lines here are ranking metrics run on the training set and validat
 Here, the `AUC` metric - Area Under the (ROC) Curve -
 is at `0.5776` for the training set and `0.4988` for the validation set.
 If you run for a greater number of epochs, you would see the `AUC` for the training set become much larger
-than the validation set, around `0.974` and `0.51` respectively.
+than the validation set, around `0.974` and `0.51` respectively if run for 100 epochs.
 
 In this case, the `AUC` metric measures the probability of ranking relevant news higher than non-relevant news.
 A score of around `0.5` means that it is totally random.
