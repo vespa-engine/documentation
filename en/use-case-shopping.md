@@ -22,12 +22,11 @@ non-magical as possible. All the queries against Vespa are sent as HTTP
 requests, and the JSON results from Vespa are parsed and rendered.
 
 This sample application is built around the Amazon product data set found at
-[http://jmcauley.ucsd.edu/data/amazon/links.html](http://jmcauley.ucsd.edu/data/amazon/links.html).
+[https://cseweb.ucsd.edu/~jmcauley/datasets.html](https://cseweb.ucsd.edu/~jmcauley/datasets.html).
 A small sample of this data is included in the sample application, and full
 data sets are available from the above site. This sample application contains
 scripts to convert from the data set format to Vespa format. These are the
-`convert_meta.py` and `convert_reviews.py`. See the README file for example of
-use.
+`convert_meta.py` and `convert_reviews.py`. See the README file for example of use.
 
 When feeding reviews, there is a custom [document processor](document-processing.html)
 that intercepts document writes and updates the parent item with the review
