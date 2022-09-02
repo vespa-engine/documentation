@@ -894,7 +894,7 @@ $ docker exec vespa /opt/vespa/bin/vespa-sentinel-cmd restart searchnode
 </pre>
 </div>
 
-This step requires waiting for the searchnode, use the [health state api](../reference/metrics.html):
+This step requires waiting for the searchnode, use the [health state api](../operations/metrics.html):
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
@@ -1161,7 +1161,7 @@ Tensor computations can be used to calculate dense dot products, sparse
 dot products, matrix multiplication, neural networks and more. Tensor computations can be performed 
 on documents that are retrieved by the query matching operators. The only exception to this is
 dense single order tensors (vectors) where Vespa also supports "matching" using [(approximate) nearest
-neighbor search](..//approximate-nn-hnsw.html). 
+neighbor search](../approximate-nn-hnsw.html). 
 
 
 The `track` schema was defined with a `similar` tensor field with one named *mapped* dimension. 
