@@ -17,79 +17,101 @@ redirect_from:
 
 
 
-<h2 id="customizing-metric-sets">Customizing Metric Sets</h2>
+<h2 id="metric-sets">Metric-sets</h2>
 <p>
-  The aggregation metrics APIs will all return metrics from the
-  <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">default</a> metric set.
-  While this should cover the most basic operational Vespa metrics, the set of metrics returned
-  can be customized through the <em><a href="../reference/services-admin.html#metrics">metrics</a></em> section in
-  <em><a href="../reference/services.html">services.xml</a></em>. You can control the metric set by either including a pre-defined
-  <em><a href="../reference/services-admin.html#metric-set">metric-set</a></em> or configure a specific
-  <em><a href="../reference/services-admin.html#metric">metric</a></em>. The latter way is also how you include any
-  <a href="#metrics-from-custom-components">metrics from custom components</a>.
+  Node metrics in <em>/metrics/v1/values</em> are listed per service,
+  with a set of system metrics - example:
+</p>
+<pre>{% highlight json %}
+{
+    "services": [
+        {
+            "name": "vespa.container",
+            "timestamp": 1662120754,
+            "status": {
+                "code": "up",
+                "description": "Data collected successfully"
+            },
+            "metrics": [
+                {
+                    "values": {
+                        "memory_virt": 3683172352,
+                        "memory_rss": 1425416192,
+                        "cpu": 2.0234722784298,
+                        "cpu_util": 0.202347227843
+                    },
+                    "dimensions": {
+                        "metrictype": "system",
+                        "instance": "container",
+                        "clustername": "default",
+                        "vespaVersion": "8.46.19"
+                    }
+                },
+                {
+                    "values": {},
+                    "dimensions": {
+                        "clustername": "default",
+                        "instance": "container",
+                        "vespaVersion": "8.46.19"
+                    }
+                }
+            ]
+        },
+{% endhighlight %}</pre>
+<p>
+  The <code>default</code> metric-set is added to the system metric-set,
+  unless a <a href="../reference/metrics-v1.html#consumer">consumer</a> request parameter
+  specifies a different built-in or custom metric set -
+  see <a href="https://github.com/vespa-engine/vespa/blob/master/config-model/src/main/java/com/yahoo/vespa/model/admin/monitoring/DefaultMetrics.java">
+  metric list</a>.
 </p>
 <p>
-  Vespa comes with two pre-defined metric sets:
-</p>
-<table class="table">
-  <thead>
-  <tr>
-    <td>Metric set ID</td>
-    <td>Description</td>
-  </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>default</td>
-      <td>
-        The default <a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv">set of metrics</a>
-      </td>
-    </tr>
-    <tr>
-      <td>vespa</td>
-      <td>
-        A <a href="https://github.com/vespa-engine/vespa/blob/master/config-model/src/main/java/com/yahoo/vespa/model/admin/monitoring/VespaMetricSet.java">comprehensive list of metrics</a>
-        used to inspect low-level behavior of Vespa.
-        {% include note.html content='This is a comprehensive set with a lot of metrics. See paragraph on cost below.' %}
-      </td>
-    </tr>
-  </tbody>
-</table>
-<p>
-  Since increasing the number of metrics returned by Vespa will increase both network data to transfer, computing
-  resources required to process, and metrics storage cost, it is recommended to keep the set of metrics to what
-  you need to monitor your application. Also note that when configuring your own metric set, you need to pass
-  the ID of your <em><a href="../reference/services-admin.html#consumer">consumer</a></em> as GET parameter
-  <em>?consumer=my-consumer</em> to the APIs above (e.g. <em>/metrics/v2/values?consumer=my-consumer</em>).
+  The <code>Vespa</code> metric-set has a richer set of metrics, see
+  <a href="https://github.com/vespa-engine/vespa/blob/master/config-model/src/main/java/com/yahoo/vespa/model/admin/monitoring/VespaMetricSet.java">
+    metric list</a>.
 </p>
 <p>
-  Example:
+  The <em>consumer</em> request parameter can also be used in
+  <a href="../reference/metrics-v2.html">/metrics/v2/values</a> and
+  <a href="../reference/prometheus-v1.html">/prometheus/v1/values</a>.
 </p>
-<pre>
-&lt;metrics&gt;
-    &lt;consumer id=&quot;my-consumer&quot;&gt;
-        &lt;metric-set id=&quot;default&quot; /&gt;
-        &lt;metric id=&quot;vds.idealstate.garbage_collection.documents_removed.count&quot; /&gt;
-    &lt;/consumer&gt;
-&lt;/metrics&gt;
-</pre>
+<p>
+  Example minimal metric-set; system metric-set + a specific metric:
+</p>
+<pre>{% highlight xml%}
+<admin version="2.0">
+    <adminserver hostalias="node1" />
+    <metrics>
+        <consumer id="my-metric-set">
+            <metric id="vds.idealstate.garbage_collection.documents_removed.count" />
+        </consumer>
+    </metrics>
+</admin>
+{% endhighlight %}</pre>
+<p>
+  Example default metric-set and more; system metric-set + default metric-set + a built-in metric:
+</p>
+<pre>{% highlight xml%}
+<admin version="2.0">
+    <adminserver hostalias="node1" />
+    <metrics>
+        <consumer id="my-metric-set">
+            <metric-set id="default" />
+            <metric id="vds.idealstate.garbage_collection.documents_removed.count" />
+        </consumer>
+    </metrics>
+</admin>
+{% endhighlight %}</pre>
 
 
 
-<h2 id="jdisc-metrics-details">jdisc Metrics Details</h2>
-<p>
-    Many of the metrics relevant to monitor for your application are emitted from the
-    <a href="../jdisc/index.html">jDisc container</a> since this is both the outward
-    facing component and where any custom business logic is run. The sections below covers some of the specifics
-    related to these metrics.
-</p>
-
-<h3 id="metrics-from-custom-components">Metrics from custom components</h3>
+<h2 id="metrics-from-custom-components">Metrics from custom components</h2>
 <ol>
   <li>
     Add a <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/MetricReceiver.html">
     com.yahoo.metrics.simple.MetricReceiver</a>
-    instance to the constructor of the component - it is injected by the container.
+    instance to the constructor of the component -
+    it is <a href="../jdisc/injecting-components.html">injected</a> by the container.
   </li>
   <li>
     Declare the <em>gauges</em> and <em>counters</em> using the <em>declare</em> methods on the metric receiver.
@@ -98,16 +120,76 @@ redirect_from:
   <li>
     Each time there is some data to measure,
     invoke the <em>sample</em> method on gauges or the <em>add</em> method on counters.
+    The gauges and counters declared are inherently thread-safe.
     When sampling data, any dimensions can optionally be set.
   </li>
 </ol>
 <p>
-  The gauges and counters declared are inherently thread-safe. Example:
+   Example:
 </p>
 <pre>{% highlight java %}
-package com.yahoo.example;
+package ai.vespa.example.album;
 
 import java.util.Optional;
+
+import com.yahoo.metrics.simple.Gauge;
+import com.yahoo.metrics.simple.MetricSettings;
+import com.yahoo.metrics.simple.MetricReceiver;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.Searcher;
+import com.yahoo.search.searchchain.Execution;
+
+public class HitCountSearcher extends Searcher {
+    private static final String LANGUAGE_DIMENSION_NAME = "query_language";
+    private static final String EXAMPLE_METRIC_NAME = "example_hitcounts";
+    private final Gauge hitCountMetric;
+
+    public HitCountSearcher(MetricReceiver receiver) {
+        this.hitCountMetric = receiver.declareGauge(EXAMPLE_METRIC_NAME, Optional.empty(),
+                new MetricSettings.Builder().build());
+    }
+
+    @Override
+    public Result search(Query query, Execution execution) {
+        Result result = execution.search(query);
+        hitCountMetric.sample(result.getTotalHitCount());
+        return result;
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  Add to <em>services.xml</em>:
+</p>
+<pre>{% highlight xml %}
+<admin version="2.0">
+    <adminserver hostalias="nodeX" />
+    <metrics>
+        <consumer id="my-metric-set">
+            <metric id="example_hitcounts.max" />
+        </consumer>
+    </metrics>
+</admin>
+{% endhighlight %}</pre>
+{% include note.html content="Metrics with no value do now show -
+in the example above, make at least one query to set the metric value." %}
+
+
+
+<h2 id="histograms">Histograms</h2>
+<!-- ToDo: rewrite this later, work in progress -->
+<p>
+  The histograms for the last five minutes of logged data are available as CSV per
+  dimension at <em>/state/v1/metrics/histograms</em>.
+  See the <a href="../reference/state-v1.html#state-v1-metrics-histograms">histograms reference</a>.
+  The underlying implementation of the histograms is <a href="http://hdrhistogram.org/">HdrHistogram</a>,
+  and the CSV is simply what that library generates itself.
+</p>
+<pre>{% highlight java %}
+package ai.vespa.example.album;
+
+import java.util.Optional;
+
 import com.yahoo.metrics.simple.Gauge;
 import com.yahoo.metrics.simple.MetricSettings;
 import com.yahoo.metrics.simple.MetricReceiver;
@@ -138,14 +220,7 @@ public class HitCountSearcher extends Searcher {
     }
 }
 {% endhighlight %}</pre>
-<p>
-  Then look at the metrics where the new event <em>example_hitcounts</em> is available in the list of metrics.
-  The histograms for the last five minutes of logged data are available as CSV per
-  dimension at <em>http://host:port/state/v1/metrics/histograms</em>.
-  In the example, that would include the estimated total hit counts for queries, grouped by language.
-  The underlying implementation of the histograms is <a href="http://hdrhistogram.org/">HdrHistogram</a>,
-  and the CSV is simply what that library generates itself.
-</p>
+
 
 
 <h3 id="container-metrics">Container Metrics</h3>
