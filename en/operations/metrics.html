@@ -106,121 +106,91 @@ redirect_from:
 
 
 <h2 id="metrics-from-custom-components">Metrics from custom components</h2>
+<p>
+  Add custom metrics from components like <a href="../searcher-development.html">Searchers</a> and
+  <a href="../document-processing.html">Document processors</a>:
+</p>
 <ol>
   <li>
     Add a <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/MetricReceiver.html">
-    com.yahoo.metrics.simple.MetricReceiver</a>
-    instance to the constructor of the component -
-    it is <a href="../jdisc/injecting-components.html">injected</a> by the container.
+    MetricReceiver</a> instance to the constructor of the component -
+    it is <a href="../jdisc/injecting-components.html">injected</a> by the Container.
   </li>
   <li>
-    Declare the <em>gauges</em> and <em>counters</em> using the <em>declare</em> methods on the metric receiver.
+    Declare <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/Gauge.html">
+    Gauge</a>
+    and <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/Counter.html">
+    Counter</a> metrics using the <em>declare</em>-methods on the <em>MetricReceiver</em>.
     Optionally set arbitrary metric dimensions to default values at declaration time - refer to the javadoc for details.
   </li>
   <li>
-    Each time there is some data to measure,
-    invoke the <em>sample</em> method on gauges or the <em>add</em> method on counters.
+    Each time there is some data to measure, invoke the
+    <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/Gauge.html#sample(double)">
+    sample</a> method on gauges or the
+    <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/Counter.html#add()">
+    add</a> method on counters.
     The gauges and counters declared are inherently thread-safe.
     When sampling data, any dimensions can optionally be set.
   </li>
+  <li>
+    Add a <a href="../reference/services-admin.html#consumer">consumer</a> in <em>services.xml</em>
+    for the metrics to be emitted in the metric APIs, like in the previous section.
+  </li>
 </ol>
 <p>
-   Example:
+  Find a full example in the
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java">
+    album-recommendation-java</a> sample application.
 </p>
-<pre>{% highlight java %}
-package ai.vespa.example.album;
 
-import java.util.Optional;
 
-import com.yahoo.metrics.simple.Gauge;
-import com.yahoo.metrics.simple.MetricSettings;
-import com.yahoo.metrics.simple.MetricReceiver;
-import com.yahoo.search.Query;
-import com.yahoo.search.Result;
-import com.yahoo.search.Searcher;
-import com.yahoo.search.searchchain.Execution;
-
-public class HitCountSearcher extends Searcher {
-    private static final String LANGUAGE_DIMENSION_NAME = "query_language";
-    private static final String EXAMPLE_METRIC_NAME = "example_hitcounts";
-    private final Gauge hitCountMetric;
-
-    public HitCountSearcher(MetricReceiver receiver) {
-        this.hitCountMetric = receiver.declareGauge(EXAMPLE_METRIC_NAME, Optional.empty(),
-                new MetricSettings.Builder().build());
-    }
-
-    @Override
-    public Result search(Query query, Execution execution) {
-        Result result = execution.search(query);
-        hitCountMetric.sample(result.getTotalHitCount());
-        return result;
-    }
-}
-{% endhighlight %}</pre>
-<p>
-  Add to <em>services.xml</em>:
-</p>
-<pre>{% highlight xml %}
-<admin version="2.0">
-    <adminserver hostalias="nodeX" />
-    <metrics>
-        <consumer id="my-metric-set">
-            <metric id="example_hitcounts.max" />
-        </consumer>
-    </metrics>
-</admin>
-{% endhighlight %}</pre>
-{% include note.html content="Metrics with no value do now show -
+{% include note.html content="Metrics with no value do now show in the metric APIs -
 in the example above, make at least one query to set the metric value." %}
 
 
 
 <h2 id="histograms">Histograms</h2>
-<!-- ToDo: rewrite this later, work in progress -->
+<p>
+  Metric histograms is supported for
+  <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/Gauge.html">
+    Gauge</a> metrics.
+  Create the metric like in
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java">
+    album-recommendation-java</a>, adding the histogram:
+</p>
+<pre>
+public HitCountSearcher(MetricReceiver receiver) {
+    this.hitCountMetric = receiver.declareGauge(EXAMPLE_METRIC_NAME, Optional.empty(),
+        new MetricSettings.Builder()<span class="pre-hilite">.histogram(true)</span>.build());
+}
+</pre>
 <p>
   The histograms for the last five minutes of logged data are available as CSV per
-  dimension at <em>/state/v1/metrics/histograms</em>.
-  See the <a href="../reference/state-v1.html#state-v1-metrics-histograms">histograms reference</a>.
-  The underlying implementation of the histograms is <a href="http://hdrhistogram.org/">HdrHistogram</a>,
-  and the CSV is simply what that library generates itself.
+  dimension at <a href="../reference/state-v1.html#state-v1-metrics-histograms">/state/v1/metrics/histograms</a>.
+  Example output:
 </p>
-<pre>{% highlight java %}
-package ai.vespa.example.album;
-
-import java.util.Optional;
-
-import com.yahoo.metrics.simple.Gauge;
-import com.yahoo.metrics.simple.MetricSettings;
-import com.yahoo.metrics.simple.MetricReceiver;
-import com.yahoo.search.Query;
-import com.yahoo.search.Result;
-import com.yahoo.search.Searcher;
-import com.yahoo.search.searchchain.Execution;
-
-public class HitCountSearcher extends Searcher {
-    private static final String LANGUAGE_DIMENSION_NAME = "query_language";
-    private static final String EXAMPLE_METRIC_NAME = "example_hitcounts";
-    private final Gauge hitCountMetric;
-
-    public HitCountSearcher(MetricReceiver receiver) {
-        this.hitCountMetric = receiver.declareGauge(EXAMPLE_METRIC_NAME, Optional.empty(),
-                new MetricSettings.Builder().histogram(true).build());
-    }
-
-    @Override
-    public Result search(Query query, Execution execution) {
-        Result result = execution.search(query);
-        hitCountMetric
-            .sample(result.getTotalHitCount(),
-                    hitCountMetric.builder()
-                        .set(LANGUAGE_DIMENSION_NAME, query.getModel().getParsingLanguage().languageCode())
-                        .build());
-        return result;
-    }
-}
-{% endhighlight %}</pre>
-
+<pre>
+# start of metric hits_per_query, dimensions: { "chain": "metalchain" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+1.00,0.000000000000,1,1.00
+1.00,1.000000000000,1,Infinity
+# end of metric hits_per_query, dimensions: { "chain": "metalchain" }
+# start of metric example_hitcounts, dimensions: { "query_language": "en" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+1.00,0.000000000000,1,1.00
+1.00,1.000000000000,1,Infinity
+# end of metric example_hitcounts, dimensions: { "query_language": "en" }
+# start of metric query_latency, dimensions: { "chain": "metalchain" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+5.69,0.000000000000,1,1.00
+5.69,1.000000000000,1,Infinity
+# end of metric query_latency, dimensions: { "chain": "metalchain" }
+# start of metric totalhits_per_query, dimensions: { "chain": "metalchain" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+1.00,0.000000000000,1,1.00
+1.00,1.000000000000,1,Infinity
+# end of metric totalhits_per_query, dimensions: { "chain": "metalchain" }
+</pre>
 
 
 <h3 id="container-metrics">Container Metrics</h3>
