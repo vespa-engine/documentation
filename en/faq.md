@@ -278,7 +278,7 @@ This warning comes whenever fields with different kinds of tokenization are put 
 [fieldset](reference/schema-reference.html#fieldset).
 This is because a given piece of text searching one fieldset is tokenized just once,
 so there's no right choice of tokenization in this case.
-More details on [stack overflow](https://stackoverflow.com/q/72784136).
+More details on [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues).
 
 #### Searchers and timeout questions
 During multi-phase searching, is the query timeout set for each individual searcher

@@ -22,7 +22,7 @@ To start the application, please follow the instructions in the
 
 This sample application can be used in two different ways. The first is by
 using a [Python-based search
-app](https://github.com/vespa-engine/sample-apps/tree/master/text-image-search/src/python/README.md),
+app](https://github.com/vespa-engine/sample-apps/blob/master/text-image-search/src/python/README.md),
 which is suitable for exploration and analysis. The other is a [stand-alone
 Vespa
 application](https://github.com/vespa-engine/sample-apps/blob/master/text-image-search/README.md),

@@ -179,7 +179,7 @@ $ vespa deploy --wait 300 app
 
 ## Create a training dataset
 
-The [MS MARCO](http://msmarco.org) dataset described in [the previous tutorial](text-search.html)
+The [MS MARCO](https://microsoft.github.io/msmarco/) dataset described in [the previous tutorial](text-search.html)
 provides us with more than 300 000 training queries,
 each of which is associated with a specific document id that is relevant to the query.
 In this section we want to combine the information contained in the pairs `(query, relevant_id)`
