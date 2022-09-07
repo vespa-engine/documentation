@@ -27,7 +27,7 @@ http://localhost:8080/search/?query=what+is+the+boiling+point+of+ethanol%3F
 ```
 
 And Vespa will return the exact answer: `78.37 C`. This application uses the
-[Natural Questions dataset](https://www.mitpressjournals.org/doi/full/10.1162/tacl_a_00276).
+[Natural Questions dataset](https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00276/43518/Natural-Questions-A-Benchmark-for-Question).
 
 ### Highlighted features
 

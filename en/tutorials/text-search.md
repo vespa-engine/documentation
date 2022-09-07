@@ -425,7 +425,7 @@ Note that the relevance score,
 which is normalized in the range [0,1] for the default rank profile using `nativeRank`,
 changed to an un-normalized range when using the `bm25` rank feature.
 
-In order to align with the guidelines of the [MS MARCO competition](http://www.msmarco.org/leaders.aspx),
+In order to align with the guidelines of the [MS MARCO competition](https://microsoft.github.io/msmarco/),
 we have created
 [evaluate.py](https://github.com/vespa-engine/sample-apps/blob/master/text-search/src/python/evaluate.py)
 to compute the [mean reciprocal rank (MRR)](https://en.wikipedia.org/wiki/Mean_reciprocal_rank)
