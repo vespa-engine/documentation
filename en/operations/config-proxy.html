@@ -10,14 +10,14 @@ redirect_from:
   Read the <a href="../config-introduction.html">config introduction</a>
   for an overview of the cloud config system.
   The <em>config proxy</em> runs on every Vespa node.
-  It has a set of config sources, defined with the environment variable
+  It has a set of config sources, defined in
   <code><a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a></code>.
 </p><p>
   The config proxy will act as a proxy for config clients on the same machine,
   so that all clients can ask for config on <em>localhost:19090</em>.
-  The <em>config source</em> that the config proxy uses is set by the
-  environment variable <code><a href="../reference/files-processes-and-ports.html#environment-variables">
-    VESPA_CONFIGSERVERS</a></code> and may consist of one or more config sources
+  The <em>config source</em> that the config proxy uses is set in
+  <code><a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a></code>
+  and may consist of one or more config sources
   (usually <a href="configuration-server.html">config servers</a>,
   but may be other config proxies).
 </p><p>
@@ -71,7 +71,64 @@ the requests are held open until the data changes on the server, through a <em>v
 
 
 <h2 id="detaching-from-config-servers">Detaching from config servers</h2>
-
 <pre>
 $ vespa-configproxy-cmd -m setmode memorycache
 </pre>
+
+
+
+<h2 id="inspecting-config">Inspecting config</h2>
+<p>
+  To inspect the configuration for a service, in this example a searchnode (proton) instance, do:
+</p>
+<ol>
+  <li>
+    Find the active config generation used by the service,
+    using <a href="../reference/state-v1.html#state-v1-config">/state/v1/config</a> -
+    example for <em>http://localhost:19110/state/v1/config</em>, here the generation is 2:
+<pre>{% highlight json %}
+{
+    "config": {
+        "generation": 2,
+        "proton": {
+            "generation": 2
+        },
+        "proton.documentdb.music": {
+            "generation": 2
+        }
+    }
+}
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    Find the relevant <em>config definition name</em>, <em>config id</em> and <em>config generation</em> using
+    <a href="../reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a> - e.g.:
+<pre>
+$ vespa-configproxy-cmd | grep proton
+
+<span class="pre-hilite">vespa.config.search.core.proton</span>,<span class="pre-hilite">music/search/cluster.music/0</span>,<span class="pre-hilite">2</span>,MD5:40087d6195cedb1840721b55eb333735,XXHASH64:43829e79cea8e714
+</pre>
+    <code>vespa.config.search.core.proton</code> is the <em>config definition name</em> for this particular config,
+    <code>music/search/cluster.music/0</code> is the <em>config id</em>
+    used by the proton service instance on this node and <code>2</code> is the active config generation.
+    This means, the service is using the correct config generation as it is matching the /state/v1/config response
+    (a restart can be required for some config changes).
+  </li>
+  <li>
+    Get the generated config using
+    <a href="../reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a> - e.g.:
+<pre>
+$ vespa-get-config -n vespa.config.search.core.proton -i music/search/cluster.music/0
+
+basedir "/opt/vespa/var/db/vespa/search/cluster.music/n0"
+rpcport 19106
+httpport 19110
+...
+</pre>
+    {% include important.html content='Omitting <code>-i</code> will return the
+    <span style="text-decoration: underline">default</span> configuration,
+    meaning not generated for the active service instance.' %}
+  </li>
+</ol>
+
+
