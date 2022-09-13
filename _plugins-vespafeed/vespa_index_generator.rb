@@ -71,8 +71,19 @@ module Jekyll
             end
         end
 
+        def reset_xml_pre(doc)
+            # The highlighter works on un-quoted XML, so some docs have non-HTML elements like <services>
+            # Read and set such fields again for proper quoting and later text extraction (dirty hack ...)
+            doc.search('pre').each do |pre|
+                if pre.to_s =~ /\{% highlight xml %}/
+                    pre.content = pre.to_s.gsub("\n", " ")
+                        .gsub(/<pre>\s*\{% highlight xml %}(.+?)\{% endhighlight %}<\/pre>/, '\1')
+                end
+            end
+        end
+
         def extract_text(page)
-            doc = get_doc(page)
+            doc = reset_xml_pre(get_doc(page))
             doc.search('th,td').each{ |e| e.after "\n" }
             doc.search('style').each{ |e| e.remove }
             content = doc.xpath("//text()").to_s
