@@ -87,7 +87,12 @@ module Jekyll
             doc.search('th,td').each{ |e| e.after "\n" }
             doc.search('style').each{ |e| e.remove }
             content = doc.xpath("//text()").to_s
-            return strip_liquid(content.gsub("\r"," ").gsub("\n"," "))
+                .gsub("\r"," ")
+                .gsub("\n"," ")
+                .gsub(/&lt;/, '<')
+                .gsub(/&gt;/, '>')
+                .gsub(/&amp;/, '&')
+            return strip_liquid(content)
         end
 
         def extract_links(page)
