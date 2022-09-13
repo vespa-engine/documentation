@@ -102,14 +102,12 @@ module Jekyll
         # This is a poor man's solution to clean the data for search -
         # the alternative is building the site and _then_ extract data
         # That will however add jekyll build as a dependency for feeding, so keeping this simple for now
-            r = match.gsub(/^\s*highlight\s*\w*/, "")
+            return match.gsub(/^\s*highlight\s*\w*/, "")
                      .gsub(/^\s*(raw|endraw|endhighlight)/, "")
                      .gsub(/^\s*include\s*(deprecated|important|note|query|warning).html\s*content=\s*(\"|\p{Pi}|\p{Pf}|')/, "")
                      .gsub(/^\s*include\s*video-include.html\s.*video-title=\s*(\"|\p{Pi}|\p{Pf}|')/, "Find at vespa.ai/resources: ")
-                     .gsub(/^\s*include\s*pre-req.html\s*memory=(\"|\p{Pi}|\p{Pf}|')(.*)/)  { "#{ process_pre_req($2) }" }
+                     .gsub(/^\s*include\s*pre-req.html\s*memory=\s*(\"|\p{Pi}|\p{Pf}|')(.*)/)  { "#{ process_pre_req($2) }" }
                      .gsub(/(\"|\p{Pi}|\p{Pf}|')\s*$/, "")
-            puts r
-            return r
         end
 
         def process_pre_req(match)
@@ -119,7 +117,7 @@ module Jekyll
                 Architecture: x86_64 or arm64.
                 Minimum \1 GB RAM dedicated to Docker (the default is 2 GB on macOS). Memory recommendations.
                 Homebrew to install the Vespa CLI, or download Vespa CLI from Github releases.')
-                .gsub(/(\"|\p{Pi}|\p{Pf}|')\s*extra-reqs=(\"|\p{Pi}|\p{Pf}|')/, "")
+                .gsub(/(\"|\p{Pi}|\p{Pf}|')\s*extra-reqs=\s*(\"|\p{Pi}|\p{Pf}|')/, "")
         end
 
     end
