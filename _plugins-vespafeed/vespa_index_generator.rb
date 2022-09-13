@@ -92,11 +92,34 @@ module Jekyll
         end
 
         def strip_liquid(text)
-            return text.gsub(/\{%\s*include\s*(deprecated|important|note|query|warning).html\s*content=\s*(\"|\p{Pi}|\p{Pf}|')/, "")
-                       .gsub(/\{%\s*highlight\s*\w*/, "")
-                       .gsub(/\{%\s*endhighlight/, "")
-                       .gsub(/\{%\s*(raw|endraw)/, "")
-                       .gsub(/(\"|\p{Pi}|\p{Pf}|')*\s*%}/, "")
+            return text.gsub(/\{%(.+?)%}/) { "#{ process_liquid($1) }" } # .+? is a lazy match, match only once
+        end
+
+        def process_liquid(match)
+        # https://ruby-doc.org/core-3.1.2/Regexp.html for the quotes
+        # ToDo: define the quote pattern (\"|\p{Pi}|\p{Pf}|') once and build regex using this as a parameter
+        #
+        # This is a poor man's solution to clean the data for search -
+        # the alternative is building the site and _then_ extract data
+        # That will however add jekyll build as a dependency for feeding, so keeping this simple for now
+            r = match.gsub(/^\s*highlight\s*\w*/, "")
+                     .gsub(/^\s*(raw|endraw|endhighlight)/, "")
+                     .gsub(/^\s*include\s*(deprecated|important|note|query|warning).html\s*content=\s*(\"|\p{Pi}|\p{Pf}|')/, "")
+                     .gsub(/^\s*include\s*video-include.html\s.*video-title=\s*(\"|\p{Pi}|\p{Pf}|')/, "Find at vespa.ai/resources: ")
+                     .gsub(/^\s*include\s*pre-req.html\s*memory=(\"|\p{Pi}|\p{Pf}|')(.*)/)  { "#{ process_pre_req($2) }" }
+                     .gsub(/(\"|\p{Pi}|\p{Pf}|')\s*$/, "")
+            puts r
+            return r
+        end
+
+        def process_pre_req(match)
+            return match.gsub(/([0-9]*)\s*GB/, '
+                Docker: Docker Desktop for Mac/Windows, or Docker on Linux.
+                Operating system: Linux, macOS or Windows 10 Pro.
+                Architecture: x86_64 or arm64.
+                Minimum \1 GB RAM dedicated to Docker (the default is 2 GB on macOS). Memory recommendations.
+                Homebrew to install the Vespa CLI, or download Vespa CLI from Github releases.')
+                .gsub(/(\"|\p{Pi}|\p{Pf}|')\s*extra-reqs=(\"|\p{Pi}|\p{Pf}|')/, "")
         end
 
     end
