@@ -89,9 +89,6 @@ module Jekyll
             content = doc.xpath("//text()").to_s
                 .gsub("\r"," ")
                 .gsub("\n"," ")
-                .gsub(/&lt;/, '<')
-                .gsub(/&gt;/, '>')
-                .gsub(/&amp;/, '&')
             return strip_liquid(content)
         end
 
