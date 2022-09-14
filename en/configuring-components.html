@@ -143,15 +143,18 @@ public class MyComponentTest {
 
 
 <h2 id="adding-files-to-the-component-configuration">Adding files to the component configuration</h2>
+
 <p>
   This section describes what to do if the component needs larger configuration objects that are stored in files,
-  e.g. <a href="reference/vespa-cmdline-tools.html#vespa-makefsa">automata</a> or large tables.
+  e.g. machine-learned models, <a href="reference/vespa-cmdline-tools.html#vespa-makefsa">automata</a> or large tables.
   Before proceeding, take a look at how to create
   <a href="jdisc/injecting-components.html#special-components">provider components</a> -
   instead of integrating large objects into e.g. a searcher or processor, it might be better to
   split the resource-demanding part of the component's configuration into a separate provider component.
   The procedure described below can be applied to any component type.
-</p><p>
+</p>
+
+<p>
   Files can be transferred using either
   <a href="application-packages.html#file-distribution">file distribution</a>
   or URL download.
@@ -160,9 +163,13 @@ public class MyComponentTest {
   origin of file or update frequency, Vespa can download the file and make it available for the component.
   Both types are set up in the config def file.
   File distribution uses the <code>path</code> config type, and URL downloading the <code>url</code> type.
+  You can also use the <code>model</code> type for machine-learned models that can be referenced by both
+  model-id, used on Vespa Cloud, and url/path, used on self-hosted deployments.
   See <a href="reference/config-files.html">the config file reference</a> for details.
-</p><p>
-  In the following example we will show the usage of both types.
+</p>
+
+<p>
+  In the following example we will show the usage of all three types.
   Assume this config definition, named <code>my-component.def</code>:
 </p>
 <pre>
@@ -170,6 +177,7 @@ package=com.mydomain.mypackage
 
 myFile path
 myUrl url
+myModel model
 </pre>
 <p>
   The file must reside in the application package, and the path (relative to
@@ -181,6 +189,7 @@ myUrl url
         &lt;config name="com.mydomain.mypackage.my-component"&gt;
             &lt;myFile&gt;my-files/my-file.txt&lt;/myFile&gt;
             &lt;myUrl&gt;https://docs.vespa.ai/en/reference/query-api-reference.html&lt;/myUrl&gt;
+            &lt;myModel model-id="id-provided-by-Vespa-Cloud" url/path="as-above"/&gt;
         &lt;/config&gt;
     &lt;/component&gt;
 &lt;/container&gt;
@@ -195,15 +204,15 @@ public class MyComponent {
     private final File fileFromUrlDownload;
 
     public MyComponent(MyComponentConfig config) {
-        fileFromFileDistribution = config.myFile().toFile();
+        pathFromFileDistribution = config.myFile();
         fileFromUrlDownload      = config.myUrl();
+        modelFilePath            = config.myModel();
     }
 }
 </pre>
 <p>
-  The <code>myFile()</code> getter returns a <code>java.nio.Path</code> object,
+  The <code>myFile()</code> and <code>myModel()</code> getter returns a <code>java.nio.Path</code> object,
   while the <code>myUrl()</code> getter returns a <code>java.io.File</code> object.
-  The container framework guarantees that these files are fully transferred or
-  downloaded and present at the given location before the component constructor is invoked.
-  Hence, the component can access the file contents right away.
+  The container framework guarantees that these files are fully present at the given location before the component
+  constructor is invoked so they can always be accessed right away.
 </p>
