@@ -70,7 +70,7 @@ module Jekyll
                 doc = Nokogiri::HTML(page.content)
             end
         end
-
+        
         def reset_xml_pre(doc)
             # The highlighter works on un-quoted XML, so some docs have non-HTML elements like <services>
             # Read and set such fields again for proper quoting and later text extraction (dirty hack ...)
