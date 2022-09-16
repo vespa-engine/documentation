@@ -56,7 +56,7 @@ const handleLocationQuery = () => {
     result.innerHTML = `Searching for '${escapeHtml(query)}' ...`;
 
     const searchParams = new URLSearchParams({
-      yql: 'select * from doc where {grammar: \\"weakAnd\\"}userInput(@userinput)',
+      yql: 'select * from doc where {grammar: "weakAnd"}userInput(@userinput)',
       hits: 25,
       ranking: 'documentation',
       locale: 'en-US',
