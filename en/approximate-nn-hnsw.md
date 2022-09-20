@@ -1,6 +1,6 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. 
-title: "Approximate Nearest Neighbor Search using HNSW Index"
+title: "Approximate Nearest Neighbor Search (ANN) using HNSW Index"
 redirect_from:
 - /documentation/approximate-nn-hnsw.html
 ---
