@@ -352,6 +352,19 @@ You can write a document processor for text extraction, Vespa does not provide i
 and have limited text match modes (i.e. `indexing: index` cannot be used).
 [Details](https://stackoverflow.com/questions/71936330/parent-child-mode-cannot-be-searched-by-parent-column).
 
+{:.faq-section}
+### Semantic search
+
+#### Why is closeness 1 for all my vectors?
+
+If you have added vectors to your documents and queries, and see that the rank feature 
+closeness(field, yourEmbeddingField) produces 1.0 for all documents, you are likely using
+distance-metric: innerproduct, but your vectors are not normalized, and the solution is normally
+to switch to distance-metric: angular.
+
+With non-normalized vectors, you often get negative distances, and those are capped to 0,
+leading to closeness 1.0. Some models, such as models from sbert.net claims to be normnalized
+but are not.
 
 {:.faq-section}
 ### Programming Vespa
