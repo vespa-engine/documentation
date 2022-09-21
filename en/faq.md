@@ -68,6 +68,17 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
   </div>
 </div>
 
+<div class="row">
+  <div class="col-6-12">
+    <div id="toc-8" class="box m-10 p-10">
+    </div>
+  </div>
+  <div class="col-6-12">
+    <div id="toc-9" class="box m-10 p-10">
+    </div>
+  </div>
+</div>
+
 ---
 
 
@@ -351,6 +362,23 @@ You can write a document processor for text extraction, Vespa does not provide i
 [Imported fields](parent-child.html) from parent documents are defined as [attributes](attributes.html),
 and have limited text match modes (i.e. `indexing: index` cannot be used).
 [Details](https://stackoverflow.com/questions/71936330/parent-child-mode-cannot-be-searched-by-parent-column).
+
+
+
+{:.faq-section}
+### Semantic search
+
+#### Why is closeness 1 for all my vectors?
+
+If you have added vectors to your documents and queries, and see that the rank feature 
+closeness(field, yourEmbeddingField) produces 1.0 for all documents, you are likely using
+[distance-metric](reference/schema-reference.html#distance-metric): innerproduct,
+but your vectors are not normalized, and the solution is normally to switch to distance-metric: angular.
+
+With non-normalized vectors, you often get negative distances, and those are capped to 0,
+leading to closeness 1.0.
+Some models, such as models from sbert.net, claim to be normalized but are not.
+
 
 
 {:.faq-section}
