@@ -17,42 +17,27 @@ module Jekyll
                         page.url.start_with?("/redirects.json") ||
                         is_empty(page)
                 if page.data["index"]
+                    url = page.url
+                    url += 'index.html' if url[-1, 1] == '/'
                     text = extract_text(page)
                     outlinks = extract_links(page)
                     headers = extract_headers(page)
-                    url = page.url
-                    url += 'index.html' if url[-1, 1] == '/'
-                    if outlinks && !outlinks.empty?
-                        operations.push({
-                            :put => "id:"+namespace+":doc::"+namespace+url,
-                            :fields => {
-                                :path => url,
-                                :namespace => namespace,
-                                :title => page.data["title"],
-                                :content => text,
-                                :term_count => text.split.length(),
-                                :last_updated => Time.now.to_i,
-                                :outlinks => extract_links(page),
-                                :headers => headers
-                            }
-                        })
-                    else
-                        operations.push({
-                            :put => "id:"+namespace+":doc::"+namespace+url,
-                            :fields => {
-                                :path => url,
-                                :namespace => namespace,
-                                :title => page.data["title"],
-                                :content => text,
-                                :term_count => text.split.length(),
-                                :last_updated => Time.now.to_i,
-                                :headers => headers
-                            }
-                        })
-                    end
+                    keywords = get_keywords(page)
+                    fields = {
+                        :path => url,
+                        :namespace => namespace,
+                        :title => page.data["title"],
+                        :content => text,
+                        :term_count => text.split.length(),
+                        :last_updated => Time.now.to_i
+                    }
+                    fields[:outlinks] = outlinks if !outlinks.empty?
+                    fields[:headers]  = headers  if !headers.empty?
+                    fields[:keywords] = keywords if !keywords.empty?
+                    operations.push({:put => "id:" + namespace + ":doc::" + namespace + url,
+                                     :fields => fields})
                 end
             end
-
             json = JSON.pretty_generate(operations)
             File.open(namespace + "_index.json", "w") { |f| f.write(json) }
         end
@@ -70,7 +55,7 @@ module Jekyll
                 doc = Nokogiri::HTML(page.content)
             end
         end
-        
+
         def reset_xml_pre(doc)
             # The highlighter works on un-quoted XML, so some docs have non-HTML elements like <services>
             # Read and set such fields again for proper quoting and later text extraction (dirty hack ...)
@@ -102,6 +87,18 @@ module Jekyll
             doc = get_doc(page)
             headers = doc.css('h1,h2,h3,h4').map { |header| header.content.gsub("\r"," ").gsub("\n"," ") || ""}
             headers.reject{ |h| h.empty? }.map{ |h| h }
+        end
+
+        def get_keywords(page)
+            doc = get_doc(page)
+            keywords = []
+            if page.data["keywords"]
+                page.data["keywords"].split(/,/).each do |k|
+                    k = k.strip
+                    keywords.push(k) if ! k.empty?
+                end
+            end
+            return keywords
         end
 
         def strip_liquid(text)
