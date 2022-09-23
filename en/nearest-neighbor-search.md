@@ -17,8 +17,11 @@ For example, typical e-commerce search interfaces allow users to navigate and fi
 ## Using Vespa's nearest neighbor search
 
 The following sections demonstrates how to use the Vespa [nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
-query operator. See also the [practical nearest neighbor search guide](nearest-neighbor-search-guide.html)
-for many query examples. These examples use exact nearest neighbor search with perfect accuracy,
+query operator. To learn how Vespa can create the vectors for you, see [embedding](embedding.html).
+
+See also the [practical nearest neighbor search guide](nearest-neighbor-search-guide.html)
+for many query examples.
+These examples use exact nearest neighbor search with perfect accuracy,
 but which is computationally expensive for large document volumes since 
 the distance metric must be calculated for every document that matches
 the boolean query filters.
