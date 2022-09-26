@@ -502,8 +502,8 @@ Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
 WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
 and no specific platform was requested
 ```
-Refer to [preview-of-vespa-on-arm64](https://blog.vespa.ai/preview-of-vespa-on-arm64/) and
-[sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
+Make sure you are running a recent version of the Docker image, do `docker pull vespaengine/vespa`.
+<!-- ToDo: remove this soon -->
 
 #### How fast can nodes be added and removed from a running cluster?
 [Elasticity](elasticity.html) is a core Vespa strength -
