@@ -200,26 +200,49 @@ schema doc {
 
 <h3 id="querying-with-language">Querying with language</h3>
 <p>
-The content of an indexed string field is language-agnostic.
-One must therefore apply a symmetric tokenization on the query terms in order to match the content of that field.
-</p><p>
-The query parser subscribes to configuration that tells it what fields are indexed strings,
-and every query term that targets such a field are run through appropriate tokenization.
-The <code>language</code> query parameter is what controls the language state of these calls.
-</p><p>
-Because an index may simultaneously contain terms in any number of languages,
-one can have stemmed variants of one language match the stemmed variants of another.
-To work around this, store the language of a document in a separate attribute,
-and apply a filter against that attribute at query-time.
-</p><p>
-If no language parameter is given, the language detector is called to process the query string.
-The detector is likely to be confused by field names and query syntax,
-but it is a best-effort approach.
-This matches the language resolution of the index pipeline.
-</p><p>
-By default, there is no knowledge anywhere that captures what
-languages are used to generate the content of an index.
-The language parameter only affects the transformation of query terms that hit tokenized indexes.
+  The content of an indexed string field is language-agnostic.
+  One must therefore apply a symmetric tokenization on the query terms in order to match the content of that field.
+</p>
+<p>
+  The query parser subscribes to configuration that tells it what fields are indexed strings,
+  and every query term that targets such a field are run through appropriate tokenization.
+  The <a href="reference/query-api-reference.html#model.language">language</a> query parameter
+  controls the language state of these calls.
+</p>
+<p>
+  Because an index may simultaneously contain terms in any number of languages,
+  one can have stemmed variants of one language match the stemmed variants of another.
+  To work around this, store the language of a document in a separate attribute,
+  and apply a filter against that attribute at query-time.
+</p>
+<p>
+  By default, there is no knowledge anywhere that captures what
+  languages are used to generate the content of an index.
+  The language parameter only affects the transformation of query terms that hit tokenized indexes.
+</p>
+
+
+<h3 id="query-language-detection">Query language detection</h3>
+<p>
+  If no <a href="reference/query-api-reference.html#model.language">language</a> parameter is used,
+  or the query terms are <a href="reference/query-language-reference.html#annotations">annotated</a>,
+  the language detector is called to process the query string.
+</p>
+<p>
+  Queries are normally short, as a consequence, the detection confidence is low. Example:
+</p>
+<pre>
+$ vespa query "select * from music where userInput(@text)" \
+  tracelevel=3 text='Eine kleine Nachtmusik' | grep 'Stemming with language'
+    "message": "Stemming with language=ENGLISH"
+
+$ vespa query "select * from music where userInput(@text)" \
+  tracelevel=3 text='Eine kleine Nachtmusik schnell' | grep 'Stemming with language'
+    "message": "Stemming with language=GERMAN"
+</pre>
+<p>
+  See <a href="https://github.com/vespa-engine/vespa/issues/24265">#24265</a> for details -
+  in short, with the current 0.02 confidence cutoff, queries with 3 terms or less will default to English.
 </p>
 
 
