@@ -41,19 +41,20 @@ const handleResults = (data) => {
       }) => {
         const modifiedURL = baseURL[namespace] + path;
 
-        const modifiedContent = (
-          content
-        )
-          .replace(/<sep \/>/g, " ... ")
-          .replace(/<hi>/g, "<mark>")
-          .replace(/<\/hi>/g, "</mark>");
+        const modifiedContent =
+          typeof content == "undefined"
+            ? ""
+            : content
+              .replace(/<sep \/>/g, " ... ")
+              .replace(/<hi>/g, "<mark>")
+              .replace(/<\/hi>/g, "</mark>");
 
         const modifiedTitle =
           typeof title == "undefined"
             ? "No title"
             : title
-                .replace(/<hi>/g, "<mark>")
-                .replace(/<\/hi>/g, "</mark>");
+              .replace(/<hi>/g, "<mark>")
+              .replace(/<\/hi>/g, "</mark>");
 
         const listItem = document.createElement("li");
         listItem.className = "search-result-item";
