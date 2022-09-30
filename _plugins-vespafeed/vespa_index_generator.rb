@@ -65,6 +65,7 @@ module Jekyll
                         .gsub(/<pre>\s*\{% highlight xml %}(.+?)\{% endhighlight %}<\/pre>/, '\1')
                 end
             end
+            return doc
         end
 
         def extract_text(page)
@@ -81,12 +82,14 @@ module Jekyll
             doc = get_doc(page)
             links = doc.css('a').map { |link| link['href'] || ""}
             links.reject{ |l| l.empty? }.map{ |l| l }
+            return links
         end
 
         def extract_headers(page)
             doc = get_doc(page)
             headers = doc.css('h1,h2,h3,h4').map { |header| header.content.gsub("\r"," ").gsub("\n"," ") || ""}
             headers.reject{ |h| h.empty? }.map{ |h| h }
+            return headers
         end
 
         def get_keywords(page)
