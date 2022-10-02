@@ -6,25 +6,64 @@ redirect_from:
 ---
 
 <p>
-Vespa uses a <em>linguistics</em> module to process text in queries and documents during indexing and searching.
-The goal of linguistic processing is to increase <em>recall</em> (how many documents are matched)
-without hurting <em>precision</em> (the relevance of the documents matched) too much.
-It consists of such operations as:
+  Vespa uses a <em>linguistics</em> module to process text in queries and documents during indexing and searching.
+  The goal of linguistic processing is to increase <em>recall</em> (how many documents are matched)
+  without hurting <em>precision</em> (the relevance of the documents matched) too much.
+  It consists of such operations as:
 </p>
 <ul>
-  <li>tokenizing text into chunks of known types such as words and punctuation</li>
-  <li>normalizing accents</li>
-  <li>finding the base form of words (stemming or lemmatization)</li>
+  <li>tokenizing text into chunks of known types such as words and punctuation.</li>
+  <li>normalizing accents.</li>
+  <li>finding the base form of words (stemming or lemmatization).</li>
 </ul>
 <p>
-These operations can be turned on or off per field in the <a href="schemas.html">schema</a>.
+  Linguistic processing is run when writing documents, and when querying:
+</p>
+<img src="/assets/img/vespa-overview-linguistics.svg" alt="Overview: linguistic processing in Vespa"
+width="810px" height="auto" />
+<p>
+  The processing is run on <a href="reference/schema-reference.html#type:string">string</a> fields
+  with <code>index</code> indexing mode. Overview:
+</p>
+<ol>
+  <li>
+    When writing documents, string fields with <code>indexing: index</code> are by default processed.
+    A field's language will configure this processing.
+    A document/fields can have the language set explicitly,
+    if not, it is <a href="#field-language-detection">detected</a>.
+    <!-- ToDo: link to detector / info here -->
+  </li>
+  <li>
+    The field's content is tokenized, normalized and stemmed,
+    and the resulting terms are added to the index.
+    {% include note.html content='The language for the field is not persisted on the content node,
+    just the processed terms themselves' %}
+  </li>
+  <li>
+    A query is also processed the same way - this is symmetric with the schema.
+    The language of the strings is <a href="#query-language-detection">detected</a> unless specified using
+    <a href="reference/query-api-reference.html#model.locale">model.locale</a>
+    or <a href="reference/query-language-reference.html#annotations">annotations</a> like <code>language</code>.
+    {% include note.html content='This is a very common query problem -
+    it is hard to detect language precisely from short strings.' %}
+  </li>
+  <li>
+    The processed query is evaluated on the content nodes,
+    and will only work as expected if both documents and queries are processed using identical settings
+    (like same language).
+  </li>
+</ol>
+<p>
+  These operations can be turned on or off per field in the <a href="schemas.html">schema</a>.
   See <a href="reference/query-language-reference.html#implicittransforms">implicitTransforms</a>
   for how to enable/disable transforms per query term.
-</p><p>
-The default linguistics module is <a href="https://opennlp.apache.org/">OpenNlp</a>.
-</p><p>
-See <a href="text-matching-ranking.html">Text Matching and Ranking</a>
-for examples and how to experiment with data.
+</p>
+<p>
+  The default linguistics module is <a href="https://opennlp.apache.org/">OpenNlp</a>.
+</p>
+<p>
+  See <a href="text-matching-ranking.html">Text Matching and Ranking</a>
+  for examples and how to experiment with data.
 </p>
 
 
@@ -54,21 +93,21 @@ This example shows how to configure SimpleLinguistics for linguistics using the 
 <pre>
 &lt;services&gt;
 
-  &lt;container version="1.0" id="mycontainer"&gt;
-    <span class="pre-hilite">&lt;component id="com.yahoo.language.simple.SimpleLinguistics"/&gt;</span>
-    &lt;document-processing/&gt;
-    &lt;search/&gt;
-    &lt;nodes ...&gt;
-  &lt;/container&gt;
+    &lt;container version="1.0" id="mycontainer"&gt;
+        <span class="pre-hilite">&lt;component id="com.yahoo.language.simple.SimpleLinguistics"/&gt;</span>
+        &lt;document-processing/&gt;
+        &lt;search/&gt;
+        &lt;nodes ...&gt;
+    &lt;/container&gt;
 
-  &lt;content version="1.0"&gt;
-    &lt;redundancy&gt;1&lt;/redundancy&gt;
-    &lt;documents&gt;
-      &lt;document type="mydocument" mode="index"/&gt;
-      <span class="pre-hilite">&lt;document-processing cluster="mycontainer"/&gt;</span>
-    &lt;/documents&gt;
-    &lt;nodes ...&gt;
-  &lt;/content&gt;
+    &lt;content version="1.0"&gt;
+        &lt;redundancy&gt;1&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="mydocument" mode="index"/&gt;
+            <span class="pre-hilite">&lt;document-processing cluster="mycontainer"/&gt;</span>
+        &lt;/documents&gt;
+        &lt;nodes ...&gt;
+    &lt;/content&gt;
 
 &lt;/services&gt;
 </pre>
@@ -160,28 +199,63 @@ schema doc {
 </pre>
 
 
+<h3 id="field-language-detection">Field language detection</h3>
+<p>
+  When indexing a document, if a field has unknown language (i.e. not set using <code>set_language</code>),
+  language detection is run on the field's content.
+  This means, language detection is per field, not per document.
+</p>
+<p>
+  See <a href="#query-language-detection">query language detection</a> for detection confidence,
+  fields with little text will default to English.
+</p>
+
+
 <h3 id="querying-with-language">Querying with language</h3>
 <p>
-The content of an indexed string field is language-agnostic.
-One must therefore apply a symmetric tokenization on the query terms in order to match the content of that field.
-</p><p>
-The query parser subscribes to configuration that tells it what fields are indexed strings,
-and every query term that targets such a field are run through appropriate tokenization.
-The <code>language</code> query parameter is what controls the language state of these calls.
-</p><p>
-Because an index may simultaneously contain terms in any number of languages,
-one can have stemmed variants of one language match the stemmed variants of another.
-To work around this, store the language of a document in a separate attribute,
-and apply a filter against that attribute at query-time.
-</p><p>
-If no language parameter is given, the language detector is called to process the query string.
-The detector is likely to be confused by field names and query syntax,
-but it is a best-effort approach.
-This matches the language resolution of the index pipeline.
-</p><p>
-By default, there is no knowledge anywhere that captures what
-languages are used to generate the content of an index.
-The language parameter only affects the transformation of query terms that hit tokenized indexes.
+  The content of an indexed string field is language-agnostic.
+  One must therefore apply a symmetric tokenization on the query terms in order to match the content of that field.
+</p>
+<p>
+  The query parser subscribes to configuration that tells it what fields are indexed strings,
+  and every query term that targets such a field are run through appropriate tokenization.
+  The <a href="reference/query-api-reference.html#model.language">language</a> query parameter
+  controls the language state of these calls.
+</p>
+<p>
+  Because an index may simultaneously contain terms in any number of languages,
+  one can have stemmed variants of one language match the stemmed variants of another.
+  To work around this, store the language of a document in a separate attribute,
+  and apply a filter against that attribute at query-time.
+</p>
+<p>
+  By default, there is no knowledge anywhere that captures what
+  languages are used to generate the content of an index.
+  The language parameter only affects the transformation of query terms that hit tokenized indexes.
+</p>
+
+
+<h3 id="query-language-detection">Query language detection</h3>
+<p>
+  If no <a href="reference/query-api-reference.html#model.language">language</a> parameter is used,
+  or the query terms are <a href="reference/query-language-reference.html#annotations">annotated</a>,
+  the language detector is called to process the query string.
+</p>
+<p>
+  Queries are normally short, as a consequence, the detection confidence is low. Example:
+</p>
+<pre>
+$ vespa query "select * from music where userInput(@text)" \
+  tracelevel=3 text='Eine kleine Nachtmusik' | grep 'Stemming with language'
+    "message": "Stemming with language=ENGLISH"
+
+$ vespa query "select * from music where userInput(@text)" \
+  tracelevel=3 text='Eine kleine Nachtmusik schnell' | grep 'Stemming with language'
+    "message": "Stemming with language=GERMAN"
+</pre>
+<p>
+  See <a href="https://github.com/vespa-engine/vespa/issues/24265">#24265</a> for details -
+  in short, with the current 0.02 confidence cutoff, queries with 3 terms or less will default to English.
 </p>
 
 
