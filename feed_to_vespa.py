@@ -51,6 +51,7 @@ def vespa_get(endpoint, operation, options):
     print(url)
     return call([
         "curl",
+        "--verbose",
         "-gsS",
         "--cert", get_public_cert_path(),
         "--key", get_private_key_path(),
