@@ -88,6 +88,7 @@ def vespa_post(endpoint, doc, docid, namespace):
 def vespa_visit(endpoint, namespace, continuation = None):
     options = []
     options.append("wantedDocumentCount=500")
+    options.append("timeout=60s")
     if continuation is not None and len(continuation) > 0:
         options.append("&continuation={0}".format(continuation))
     response = vespa_get(endpoint, "document/v1/{0}/doc/docid".format(namespace), options)
