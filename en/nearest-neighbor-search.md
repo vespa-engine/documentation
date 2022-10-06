@@ -27,14 +27,14 @@ the distance metric must be calculated for every document that matches
 the boolean query filters.
 
 Exact nearest neighbor search scales close to linearly 
-with [number of threads used per query](performance/practical-search-performance-guide#multithreaded-search-and-ranking). 
+with [number of threads used per query](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking).
 Using multiple threads per search, can be used to make 
 exact nearest neighbor search run with acceptable serving latency. 
 Using more threads per search to reduce latency is still costly for larger vector volumes 
 or high query throughput applications, as the number of distance calculations
 involved in the query does not change by changing number of threads performing the search. 
 
-A cost efficient approach is to instead of exact search, using **approximate** search. 
+A cost-efficient approach is to instead of exact search, using **approximate** search.
 See how to use **approximate** nearest neighbor search with `HNSW` in
 the [Approximate Nearest Neighbor Search](approximate-nn-hnsw.html) document.
 
@@ -162,7 +162,7 @@ and one usually want the closest hits to be ranked highest.
 The `first-phase` is part of Vespa's [phased ranking](phased-ranking.html) support. In this example
 the `closeness` feature is re-used and documents are not re-ordered. 
 
-Phased ranking or multi-stage document ranking, enables re-ranking of the top-k best scoring hits as ranked or
+Phased ranking or multi-stage document ranking, enables re-ranking of the top-k best scoring hits as ranked
 or retrieved from the previous ranking phase. The computed ranking score is rendered as `relevance` in
 the default [Vespa JSON result format](reference/default-result-format.html). If the `relevance` field
 of the hit becomes 0.0 one usually have forgotten to specify the correct ranking profile. 
@@ -253,7 +253,7 @@ To query the product dataset one uses the
 [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator.
 The operator expects two arguments; the document tensor field which is searched and the input query tensor name.
 
-The `targetHits` query annotation specifies the the number of results that one wants to expose to `first-phase`
+The `targetHits` query annotation specifies the number of results that one wants to expose to `first-phase`
 ranking per node involved in the query. `targetHits` is a required parameter and the query will fail if not specified.
 The `targetHits` is a lower bound per node, and with exact search more hits than `targetHits` are exposed to `first-phase` ranking.
 
@@ -372,4 +372,4 @@ The rank-profile specifies
 reduce serving latency (but not cost).
 
 See the [Billion Scale Vector Search with Vespa](https://blog.vespa.ai/billion-scale-knn-part-two/)
-blog post for an detailed introduction to using binary vectors with hamming distance.   
+blog post for a detailed introduction to using binary vectors with hamming distance.
