@@ -213,7 +213,7 @@ the Vespa TLS stack has some additional constraints that are always present:
 * Only cipher suites supporting [forward secrecy](https://en.wikipedia.org/wiki/Forward_secrecy) can be negotiated
   (i.e. cipher suites using ECDHE as part of their key exchange).
 * Only modern, symmetric ciphers with
-  [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption#Authenticated_encryption_with_associated_data)
+  [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption#Authenticated_encryption_with_associated_data_(AEAD))
   properties are supported. In practice this means [AES-GCM](https://en.wikipedia.org/wiki/AES-GCM) or
   [ChaCha20-Poly1305](https://en.wikipedia.org/wiki/ChaCha20-Poly1305).
   Supported cipher suites are listed [here](#cipher-suites).
