@@ -6,16 +6,68 @@ redirect_from:
 ---
 
 <p>
-  This is the /document/v1 API guide.
-  Refer to the <a href="reference/document-v1-api-reference.html">document/v1 API reference</a>.
+  Refer to the <a href="reference/document-v1-api-reference.html">document/v1 API reference</a> for details.
+  Examples below refer to the <a href="vespa-quick-start.html">sample application</a> configuration.
 </p>
-<p>
-  Many of the examples uses <em>number</em> and <em>group</em>
-  <a href="documents.html#document-ids">document id</a> modifiers.
-  Do note that these are special cases that only work as expected for document types
-  with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>.
-  Do not use group or number modifiers with regular indexed mode document types.
-</p>
+{% include note.html content='see
+<a href="#troubleshooting">troubleshooting</a> for looking up documents by IDs from query results.' %}
+
+
+
+<h2 id="getting-started">Getting started</h2>
+<ol>
+  <li>
+    To get documents from a cluster,
+    look up the content cluster name from the configuration,
+    like in the <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/services.xml">
+    album-recommendation</a> example: <code>&lt;content id="music" version="1.0"&gt;</code>.
+  </li>
+  <li>
+    Use the cluster name to start dumping documents (skip <code>jq</code> for full json):
+<pre>
+$ curl -s 'http://localhost:8080/document/v1/?<span class="pre-hilite">cluster=music</span>&wantedDocumentCount=10&timeout=60s' | \
+  jq -r .documents[].id
+</pre>
+<pre>
+id:mynamespace:music::love-id-here-to-stay
+id:mynamespace:music::a-head-full-of-dreams
+id:mynamespace:music::hardwired-to-self-destruct
+</pre>
+    <code>wantedDocumentCount</code> is useful to let the operation run longer to find documents,
+    to avoid an empty result.
+    This operation is a scan through the corpus,
+    and it is normal to get empty result and the <a href="#data-dump">continuation token</a>.
+  </li>
+  <li>
+    Look up the document with id <code>id:mynamespace:music::love-id-here-to-stay</code>:
+<pre>
+$ curl -s 'http://localhost:8080/document/v1/mynamespace/music/docid/love-id-here-to-stay' | jq .
+</pre>
+<pre>{% highlight json %}
+{
+    "pathId": "/document/v1/mynamespace/music/docid/love-id-here-to-stay",
+    "id": "id:mynamespace:music::love-id-here-to-stay",
+    "fields": {
+        "artist": "Diana Krall",
+        "year": 2018,
+        "category_scores": {
+            "type": "tensor<float>(cat{})",
+            "cells": {
+                "pop": 0.4000000059604645,
+                "rock": 0,
+                "jazz": 0.800000011920929
+            }
+        },
+        "album": "Love Is Here To Stay"
+    }
+}
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    Read more about <a href="documents.html">document IDs</a>.
+  </li>
+</ol>
+
 
 
 <h2 id="request-examples">Request examples</h2>
@@ -29,14 +81,7 @@ redirect_from:
           <th>Get</th>
           <td>
 <pre>
-$ curl http://hostname:8080/document/v1/my_namespace/my_document-type/docid/1
-</pre>
-            Get a document in a group:
-<pre>
-$ curl http://hostname:8080/document/v1/namespace/music/number/23/some_key
-</pre>
-<pre>
-$ curl http://hostname:8080/document/v1/namespace/music/group/groupname/some_key
+$ curl http://localhost:8080/document/v1/my_namespace/music/docid/love-id-here-to-stay
 </pre>
           </td>
         </tr>
@@ -45,32 +90,25 @@ $ curl http://hostname:8080/document/v1/namespace/music/group/groupname/some_key
           <td>
             <a href="content/visiting.html">Visit</a> all documents with given namespace and document type:
 <pre>
-$ curl http://hostname:8080/document/v1/namespace/music/docid
+$ curl http://localhost:8080/document/v1/namespace/music/docid
 </pre>
             Visit all documents using continuation:
 <pre>
-$ curl http://hostname:8080/document/v1/namespace/music/docid?continuation=AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA
+$ curl http://localhost:8080/document/v1/namespace/music/docid?continuation=AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA
 </pre>
             Visit using a <em>selection</em>:
 <pre>
-$ curl http://hostname:8080/document/v1/namespace/music/docid?selection=music.genre=='blues'
-</pre>
-            Visit all documents for a group:
-<pre>
-$ curl http://hostname:8080/document/v1/namespace/music/number/23/
-</pre>
-<pre>
-$ curl http://hostname:8080/document/v1/namespace/music/group/groupname/
+$ curl http://localhost:8080/document/v1/namespace/music/docid?selection=music.genre=='blues'
 </pre>
             Visit documents across all <em>non-global</em> document types and namespaces stored
             in content cluster <code>mycluster</code>:
 <pre>
-$ curl http://hostname:8080/document/v1/?cluster=mycluster
+$ curl http://localhost:8080/document/v1/?cluster=mycluster
 </pre>
             Visit documents across all <em><a href="reference/services-content.html#document">global</a></em>
             document types and namespaces stored in content cluster <code>mycluster</code>:
 <pre>
-$ curl http://hostname:8080/document/v1/?cluster=mycluster&amp;bucketSpace=global
+$ curl http://localhost:8080/document/v1/?cluster=mycluster&amp;bucketSpace=global
 </pre>
             Read about <a href="#visiting-throughput">visiting throughput</a> below.
           </td>
@@ -90,7 +128,7 @@ $ curl -X POST -H "Content-Type:application/json" --data '
           "year": 2015
       }
   }' \
-  http://localhost:8080/document/v1/mynamespace/music/docid/1
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
 </pre>
   </td>
 </tr>
@@ -108,50 +146,24 @@ $ curl -X PUT -H "Content-Type:application/json" --data '
           }
       }
   }' \
-  http://localhost:8080/document/v1/mynamespace/music/docid/1
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
 </pre>
   </td>
 </tr><tr>
   <th>DELETE</th>
   <td>
-    <p id="delete">Delete document with ID 1:</p>
+    <p id="delete">Delete a document by ID:</p>
 <pre>
-$ curl -X DELETE http://localhost:8080/document/v1/mynamespace/music/docid/1
+$ curl -X DELETE http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
 </pre>
-    Delete <em>all</em> documents in <em>music</em> schema:
+    Delete all documents in the <code>music</code> schema:
 <pre>
 $ curl -X DELETE \
-  "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&amp;cluster=my_cluster"
-</pre>
-    Delete <em>all</em> documents in <em>music</em> schema, with security credentials:
-<pre>
-$ curl -X DELETE \
-  --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
   "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&amp;cluster=my_cluster"
 </pre>
   </td>
 </tr>
 </table>
-
-
-
-<h2 id="id-examples">ID examples</h2>
-<ul>
-  <li>
-    Uniform distribution: <em>id:mynamespace:music::mydocid-123</em>
-  </li><li>
-    Data access is grouped, e.g. personal data (each user has a numeric user id):
-    <em>id:mynamespace:music:n=12345:mydocid-123</em>. This is only useful for document types declared
-    with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>.
-    Do not use group modifiers with regular indexed mode document type.
-  </li><li>
-    Using a string identifier to group data:
-    <em>id:mynamespace:music:g=mymusicsite.com:mydocid-123</em>
-    This is only useful for document types declared
-    with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>.
-    Do not use group modifiers with regular indexed mode document type.
-  </li>
-</ul>
 
 
 
@@ -170,20 +182,20 @@ $ curl -X PUT -H "Content-Type:application/json" --data '
           }
       }
   }' \
-  http://localhost:8080/document/v1/mynamespace/music/docid/1
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
 </pre>
 {% include important.html content="Use <em>documenttype.fieldname</em> (e.g. music.artist) in the condition,
 not only <em>fieldname</em>." %}
 <p>
   If the condition is not met, a <em>412 Precondition Failed</em> is returned:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
-    "pathId": "/document/v1/mynamespace/music/docid/1",
-    "id": "id:mynamespace:music::1",
+    "pathId": "/document/v1/mynamespace/music/docid/a-head-full-of-dreams",
+    "id": "id:mynamespace:music::a-head-full-of-dreams",
     "message": "[UNKNOWN(251013) @ tcp/vespa-container:19112/default]: ReturnCode(TEST_AND_SET_CONDITION_FAILED, Condition did not match document nodeIndex=0 bucket=20000000000000c4 ) "
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   Also see the <a href="reference/document-json-format.html#test-and-set">condition reference</a>.
 </p>
@@ -206,7 +218,7 @@ $ curl -X PUT -H "Content-Type:application/json" --data '
           }
       }
   }' \
-  http://localhost:8080/document/v1/mynamespace/music/docid/2?create=true
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts?create=true
 </pre>
 <p>
   <em>create</em> can be used in combination with a <a href="#conditional-writes">condition</a>.
@@ -344,3 +356,70 @@ do
 done
 wait
 {% endhighlight %}</pre>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+  <li>
+    Query results can have results like:
+<pre>{% highlight json %}
+{
+    "id": "index:mydoctype/3/399f8030300282ca93929939",
+    "relevance": 0,
+    "source": "test",
+    "fields": {
+        "sddocname": "testdoc",
+        "myfield": 12
+    }
+}
+{% endhighlight %}</pre>
+    <a href="reference/default-result-format.html#id">Query result IDs</a> are not the same as Document IDs.
+    Use a separate field for the document ID, if needed.
+  </li><!-- ToDo: https://github.com/vespa-engine/vespa/issues/24371 Allow documentid to be turned into an attribute -->
+  <li>
+    Delete <em>all</em> documents in <em>music</em> schema, with security credentials:
+    <pre>
+$ curl -X DELETE \
+  --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&amp;cluster=my_cluster"
+</pre>
+  </li>
+
+</ul>
+
+
+<h2 id="using-number-and-group-id-modifiers">Using number and group id modifiers</h2>
+<p>
+  Do not use group or number modifiers with regular indexed mode document types.
+  These are special cases that only work as expected for document types
+  with <a href="reference/services-content.html#document">mode=streaming or mode=store-only</a>.
+  Examples:
+</p>
+<table class="table">
+  <tr>
+    <th>Get</th>
+    <td>
+      Get a document in a group:
+<pre>
+$ curl http://localhost:8080/document/v1/mynamespace/music/number/23/some_key
+</pre>
+<pre>
+$ curl http://localhost:8080/document/v1/mynamespace/music/group/mygroupname/some_key
+</pre>
+    </td>
+  </tr>
+  <tr>
+    <th>Visit</th>
+    <td>
+      Visit all documents for a group:
+<pre>
+$ curl http://localhost:8080/document/v1/namespace/music/number/23/
+</pre>
+<pre>
+$ curl http://localhost:8080/document/v1/namespace/music/group/mygroupname/
+</pre>
+    </td>
+  </tr>
+</table>
+
