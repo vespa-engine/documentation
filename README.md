@@ -1,4 +1,7 @@
 <!-- Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. -->
+
+[![#Vespa](https://vespa.ai/assets/vespa-logo-color.png)](https://vespa.ai)
+
 [![Vespa Documentation Search Feed](https://github.com/vespa-engine/documentation/actions/workflows/feed.yml/badge.svg)](https://github.com/vespa-engine/documentation/actions/workflows/feed.yml)
 [![/documentation link checker](https://cd.screwdriver.cd/pipelines/7021/link-checker-documentation/badge)](https://cd.screwdriver.cd/pipelines/7021/)
 
