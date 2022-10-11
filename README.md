@@ -116,7 +116,7 @@ If this algorithmic transformation is followed it is possible to link to this se
 
 ## Appendix: Vespa Documentation Search
 
-See [Vespa Documentation Search](https://github.com/vespa-engine/sample-apps/tree/master/vespa-cloud/vespa-documentation-search)
+See the [Vespa Documentation Search](https://github.com/vespa-cloud/vespa-documentation-search)
 sample application for architecture.
 
 Below is a description of the job for indexing this repository's documentation.
