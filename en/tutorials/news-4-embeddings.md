@@ -246,7 +246,7 @@ These ids are also categorical, after all.
 
 However, there are other content features as well such as the `title` and `abstract`.
 To create embeddings from these, we'll employ a
-[BERT-based sentence classifier](https://huggingface.co/docs/transformers/model_doc/bert.html#bertforsequenceclassification)
+[BERT-based sentence classifier](https://huggingface.co/docs/transformers/model_doc/bert#transformers.BertForSequenceClassification)
 from the [HuggingFace transformers](https://huggingface.co/docs/transformers/index) library:
 
 ```python
