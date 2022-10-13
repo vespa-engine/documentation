@@ -159,3 +159,49 @@ sample application uses two different ONNX models:
 - One for creating a dense vector representation of a query string for use in ANN retrieval
 - One for extracting an answer string from a relevant passage
 
+## Using vespa-analyze-onnx-model
+[vespa-analyze-onnx-model](reference/vespa-cmdline-tools.html#vespa-analyze-onnx-model)
+is useful to find model inputs and outputs -
+example run on a config server where an application package with a model is deployed to:
+```
+$ docker exec vespa /opt/vespa/bin/vespa-analyze-onnx-model \
+  /opt/vespa/var/db/vespa/config_server/serverdb/tenants/default/sessions/1/files/Network.onnx
+
+unspecified option[0](optimize model), fallback: true
+vm_size: 230228 kB, vm_rss: 44996 kB (before loading model)
+vm_size: 233792 kB, vm_rss: 54848 kB (after loading model)
+model meta-data:
+input[0]: 'input' float[input][4]
+output[0]: 'output' float[output][3]
+unspecified option[1](symbolic size 'input'), fallback: 1
+test setup:
+input[0]: tensor<float>(d0[1],d1[4]) -> float[1][4]
+output[0]: float[1][3] -> tensor<float>(d0[1],d1[3])
+unspecified option[2](max concurrent evaluations), fallback: 1
+vm_size: 233792 kB, vm_rss: 54848 kB (no evaluations yet)
+vm_size: 233792 kB, vm_rss: 54848 kB (concurrent evaluations: 1)
+estimated model evaluation time: 0.00227701 ms
+```
+The corresponding input/output tensors should be defined as:
+```
+document doc {
+    ...
+    field flowercategory type tensor<float>(d0[1],d1[3]) {
+        indexing: attribute | summary
+    }
+}
+
+rank-profile myRank {
+    inputs {
+        query(myTensor) tensor<float>(d0[1],d1[4])
+    }
+    onnx-model my_onnx_model {
+        file: files/Network.onnx
+        input  "input" : query(myTensor)
+        output "output": outputTensor
+    }
+    first-phase {
+        expression: sum( onnx(my_onnx_model).outputTensor * attribute(flowercategory) )
+    }
+}
+```
