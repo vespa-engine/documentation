@@ -112,7 +112,7 @@ JSON format</a>. You can
 <a href="reference/document-json-format.html#tensor-field">assign</a> a completely new tensor value.
 </p>
 
-<p>From inside containers (e.g in a Document Process), you can also create Tensor values using the
+<p>From inside containers (e.g. in a Document Process), you can also create Tensor values using the
 <a href="https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">tensor Java API</a>
 to set tensor values in documents.
 </p>
@@ -171,7 +171,7 @@ The full list of tensor functions are listed in the
 
 <h2 id="creating-tensors-from-document-fields">Creating tensors from document fields</h2>
 
-<p>If you need to make tensor comutations using single-valued attributes, arrays or weighted sets,
+<p>If you need to make tensor commutations using single-valued attributes, arrays or weighted sets,
 you can convert them in a ranking expression:</p>
 
 <ul>
@@ -244,6 +244,38 @@ would be undefined for such "tensors". However, you can still represent sets of 
 by using the strings as keys in a mapped tensor dimensions, using e.g 1.0 as values.
 This allows you to perform set operations on strings and similar without making those tensors
 incompatible with other tensors and with normal tensor operations.</p>
+
+
+
+<h2 id="using-a-tensor-as-a-lookup-structure">Using a tensor as a lookup structure</h2>
+<p>
+  Tensors with mapped dimensions look similar to maps, but are more general.
+  What if all needed is a simple map lookup?
+  Assume a tensor attribute <code>my_map</code> and this is the value for a specific document:
+</p>
+<pre>
+attribute(my_map) -&gt; tensor&lt;float&gt;(x{},y[3]):{a:[1,2,3],b:[4,5,6],c:[7,8,9]}
+</pre>
+<p>
+  To create a query to select which of the 3 named vectors (a,b,c) to use for some other calculation,
+  wrap the wanted label to look up inside a tensor:</p>
+<pre>
+query(my_key) -&gt; tensor&lt;float&gt;(x{}):{b:1.0}     // I want the b vector
+</pre>
+<p>Do the lookup:</p>
+<pre>
+reduce(query(my_key)*attribute(my_map),sum,x)   // -&gt; tensor of type tensor&lt;float&gt;(y[3])
+</pre>
+<p>
+  If the key does	not match anything, the result will be empty: <code>tensor&lt;float&gt;(y[3]):[0,0,0]</code>.
+  For something else, add a check up-front to check if the lookup	will be	successful
+  and run a fallback expression if it is not, like:
+</p>
+<pre>
+if(reduce(query(my_key)*attribute(my_map),count) == 3,
+  reduce(query(my_key)*attribute(my_map),sum,x),
+  tensor&lt;float&gt;(y[3]):[0.5,0.5,0.5])
+</pre>
 
 
 
