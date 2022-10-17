@@ -18,8 +18,10 @@ const handleResults = (data, query) => {
   result.innerHTML = "";
 
   let a = document.getElementById("stackoverflow-query")
+  const searchParams = new URLSearchParams();
+  searchParams.set('q', '[vespa] ' + unescapeHtml(query));
+  a.href = 'https://stackoverflow.com/search?' + searchParams.toString();
   a.innerHTML = "[vespa] " + query;
-  a.href = encodeURI("https://stackoverflow.com/search?q=[vespa] " + unescapeHtml(query));
 
   const hits = data;
   if (hits && hits.length > 0) {
