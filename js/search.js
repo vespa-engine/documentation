@@ -30,7 +30,7 @@ const debounce = (func, timeout = 200) => {
 const handleQuery = (query) => {
   if (query.length > 0) {
     const result = document.getElementById("result");
-    
+
     document.getElementById("hits").innerHTML = "";
     result.innerHTML = `Searching for '${escapeHtml(query)}' ...`;
     const searchParams = new URLSearchParams({term: query});
@@ -38,7 +38,7 @@ const handleQuery = (query) => {
         .then((res) => res.json())
         .then((res) => { const children = (res.root.children)? res.root.children : [];
           handleSuggestionResults(children.filter(child => child.fields.sddocname === "term"));
-          handleResults(children.filter(child => child.fields.sddocname === "doc"))})
+          handleResults(children.filter(child => child.fields.sddocname === "doc"), escapeHtml(query))})
         .catch(console.error);
   } else {
     document.getElementById("hits").innerHTML = "";
@@ -65,7 +65,7 @@ const handleLocationQuery = () => {
 
     fetch("https://doc-search.vespa.oath.cloud/search/?" + searchParams.toString())
         .then((res) => res.json())
-        .then((res) => handleResults(res.root.children))
+        .then((res) => handleResults(res.root.children, escapeHtml(query)))
   }
 };
 

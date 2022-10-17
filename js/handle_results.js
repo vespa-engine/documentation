@@ -1,6 +1,25 @@
-const handleResults = (data) => {
+
+const unescapeMap = Object.freeze({
+  '&amp;' : '&',
+  '&lt;'  : '<',
+  '&gt;'  : '>',
+  '&quot;': '"',
+  '&#39;' : "'",
+  '&#x2F;': '/',
+  '&#x60;': '`',
+  '&#x3D;': '='
+});
+const unescapeHtml = (string) => String(string)
+    .replace(/&amp;|&lt;|&gt;|&quot;|&#39;|&#x2F;|&#x60;|&#x3D;/g, (s) => unescapeMap[s]);
+
+
+const handleResults = (data, query) => {
   const result = document.getElementById("result");
   result.innerHTML = "";
+
+  let a = document.getElementById("stackoverflow-query")
+  a.innerHTML = "[vespa] " + query;
+  a.href = encodeURI("https://stackoverflow.com/search?q=[vespa] " + unescapeHtml(query));
 
   const hits = data;
   if (hits && hits.length > 0) {
