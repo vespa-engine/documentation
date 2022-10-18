@@ -322,17 +322,22 @@ Notes:
 
 <h2 id="proton-maintenance-jobs">Proton maintenance jobs</h2>
 <p>
-Tune the jobs in <a href="reference/services-content.html">Proton tuning</a>.
-<a href="performance/sizing-search.html">Sizing search</a> describes the <em>static</em> proton sizing -
-this article details the <em>temporary</em> resource usage for the proton jobs.
+The memory and disk data structures used in Proton are
+periodically optimized by a set of maintenance jobs.
+These jobs are automatically executed, and some can be tuned in
+<a href="reference/services-content.html#flushstrategy">flush strategy tuning</a>.
+All jobs are described in the table below.
 </p><p>
 There is only one instance of each job at a time - e.g. attributes are flushed in sequence.
 When a job is running, its metric is set to 1 - otherwise 0.
-Use this to correlate observed performance with job runs - see <em>Run metric</em>.
+Use this to correlate observed performance or resource usage with job runs - see <em>Run metric</em> below.
 </p><p>
-Refer to the implementation of
+The <em>temporary</em> resources used when jobs are executed are described in <em>CPU</em>, <em>Memory</em> and <em>Disk</em>.
+The memory and disk usage metrics of components that are optimized by the jobs
+are described in <em>Metrics</em> (with <em>Metric prefix</em>).
+For a list of all available Proton metrics refer to <em>getSearchNodeMetrics()</em> in the default
 <a href="https://github.com/vespa-engine/vespa/blob/master/config-model/src/main/java/com/yahoo/vespa/model/admin/monitoring/VespaMetricSet.java">
-  performance metrics</a>, see <em>getSearchNodeMetrics()</em>.
+Vespa Metric Set</a>.
 Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
 </p>
 <table class="table">
@@ -350,10 +355,10 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
       <p id="attribute-flush">
       Flush an <a href="attributes.html">attribute</a> vector from memory to disk,
       based on configuration in the
-      <a href="reference/services-content.html#flushstrategy">flushstrategy</a>.
-      This controls memory usage and query performance.
-      This also makes proton starts quicker - see
+      <a href="reference/services-content.html#flushstrategy">flush strategy</a>.
+      This ensures that Proton starts quicker - see
       <a href="reference/services-content.html#flush-on-shutdown">flush on shutdown</a>.
+      An attribute flush also releases memory after a <a href="#lid-space-compaction">LID-space compaction</a>.
       </p>
     </td>
     <td></td>
@@ -368,7 +373,7 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
   </tr>
   <tr>
     <th>Disk</th>
-    <td>A new file is written too, so 2x the size of an attribute on disk.</td>
+    <td>A new file is written too, so 2x the size of an attribute on disk until the old flush file is deleted.</td>
   </tr>
   <tr>
     <th>Run metric</th>
@@ -394,7 +399,6 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
       <p id="memory-index-flush">
       Flush a <em>memory index</em> to disk, then trigger <a href="#disk-index-fusion">disk index fusion</a>.
       The goal is to shrink memory usage by adding to the disk-backed indices.
-      Performance characteristics for this flush is similar to indexing.
       Note: A high feed rate can cause multiple smaller flushed indices, like
       <em>$VESPA_HOME/var/db/vespa/search/cluster.name/n1/documents/doc/0.ready/index/index.flush.102</em>
       - see the high index number.
@@ -406,7 +410,7 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
   </tr>
   <tr>
     <th>CPU</th>
-    <td>Little - one thread indexes to disk</td>
+    <td>Little - one thread flushes to disk</td>
   </tr><tr>
     <th>Memory</th>
     <td>Little</td>
@@ -425,10 +429,10 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
   </tr>
   <tr>
     <th>Metrics</th>
-    <td><em>allocated_bytes<br/>
-          used_bytes<br/>
-          dead_bytes<br/>
-          onhold_bytes<br/></em></td>
+    <td><em>allocated_bytes.average<br/>
+          used_bytes.average<br/>
+          dead_bytes.average<br/>
+          onhold_bytes.average<br/></em></td>
   </tr>
 
   <tr>
@@ -504,7 +508,7 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
   <tr>
     <th>Memory</th>
     <td>
-      Holds a document summary store file in memory plus memory for sorting the file.
+      Holds a document store file in memory plus memory for sorting the file.
       <strong>Note: This is important on hosts with little memory!</strong>
       Reduce <a href="reference/services-content.html#summary-store-logstore-maxfilesize">
       maxfilesize</a> to increase number of files and use less temporary memory for compaction.
@@ -541,18 +545,18 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
       content cluster elasticity</a> and
       <a href="reference/services-content.html#searchable-copies">searchable-copies</a>.
       It causes documents to be indexed or de-indexed, similar to feeding.
-      This moves documents in or out of ready/active sub-databases.
+      This moves documents between the <em>ready</em> and <em>not ready</em> sub-databases.
       </p>
     </td>
   </tr>
   <tr>
     <th>CPU</th>
     <td>CPU similar to feeding.
-        Consumes capacity from the index write thread, so has feeding impact</td>
+        Consumes capacity from the write threads, so has feeding impact</td>
   </tr>
   <tr>
     <th>Memory</th>
-    <td>As feeding - the memory index will grow</td>
+    <td>As feeding - e.g. the attribute memory usage and memory index in the <em>ready</em> sub-database will grow</td>
   </tr>
   <tr>
     <th>Disk</th>
@@ -567,18 +571,23 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
     <th rowspan="7">lid-space compaction</th>
     <td colspan="2">
       <p id="lid-space-compaction">
-      As <a href="#bucket-move">bucket move</a>, however moves documents <em>within</em> a sub-database.
-      This is often triggered when a <a href="elasticity.html">cluster grows</a> with more nodes,
-      documents are redistributed to new nodes and each node has fewer documents -
-      a LIDspace compaction is hence triggered. This in-place defragments the
-      <a href="attributes.html#document-meta-store">document meta store</a>.
+      Each sub-database has a
+      <a href="attributes.html#document-meta-store">document meta store</a>
+      that manages a local document id space (LID-space).
+      E.g when a <a href="elasticity.html">cluster grows</a> with more nodes,
+      documents are redistributed to new nodes and each node ends up with fewer documents.
+      The result is holes in the LID-space, and a compaction is triggered when the bloat is above 1%.
+      This in-place defragments the
+      <a href="attributes.html#document-meta-store">document meta store</a>
+      and <a href="attributes.html">attribute</a> vectors
+      by moving documents from high to low LIDs inside the sub-database.
       Resources are freed on a subsequent <a href="#attribute-flush">attribute flush</a>.
       </p>
     </td>
   </tr>
   <tr>
     <th>CPU</th>
-    <td>like feeding - add and delete doc</td>
+    <td>Like feeding - add and remove documents</td>
   </tr>
   <tr>
     <th>Memory</th>
@@ -598,7 +607,8 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
   </tr>
   <tr>
     <th>Metrics</th>
-    <td><em>lid_bloat_factor.average<br/>
+    <td><em>lid_limit.last<br/>
+          lid_bloat_factor.average<br/>
           lid_fragmentation_factor.average</em></td>
   </tr>
 
@@ -606,8 +616,9 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
     <th rowspan="5" style="white-space:nowrap;">removed documents pruning</th>
     <td colspan="2">
       <p id="removed-documents-pruning">
-      Prunes the <em>deleted documents</em> sub-database which keeps IDs for deleted documents.
-      Default runs once per hour.
+      Prunes the <em>removed</em> sub-database which keeps IDs for deleted documents.
+      See <a href="https://docs.vespa.ai/en/reference/services-content.html#removed-db">removed-db</a>
+      for details.
       </p>
     </td>
   </tr>
