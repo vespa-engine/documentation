@@ -211,3 +211,61 @@ class MyComponent(ComponentRegistry&lt;Embedder&gt; embedders) {
 <p>A complete example application using embedders can be found in
 in <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/embedding/app_two_embedders/">this system test</a>.
 </p>
+
+
+
+<h2 id="troubleshooting-model-signature">Troubleshooting model signature</h2>
+<p>
+  When loading models for the embedder, the model must have correct inputs and output signatures.
+  Here, <em>minilm-l6-v2.onnx</em> is in current working directory:
+</p>
+<pre>
+$ docker run -v `pwd`:/w \
+  --entrypoint /opt/vespa/bin/vespa-analyze-onnx-model \
+  vespaengine/vespa \
+  /w/minilm-l6-v2.onnx
+
+...
+model meta-data:
+  input[0]: 'input_ids' long[batch][sequence]
+  input[1]: 'attention_mask' long[batch][sequence]
+  input[2]: 'token_type_ids' long[batch][sequence]
+  output[0]: 'output_0' float[batch][sequence][384]
+  output[1]: 'output_1' float[batch][384]
+...
+test setup:
+  input[0]: tensor(d0[1],d1[1]) -> long[1][1]
+  input[1]: tensor(d0[1],d1[1]) -> long[1][1]
+  input[2]: tensor(d0[1],d1[1]) -> long[1][1]
+  output[0]: float[1][1][384] -> tensor&lt;float&gt;(d0[1],d1[1],d2[384])
+  output[1]: float[1][384] -> tensor&lt;float&gt;(d0[1],d1[384])
+</pre>
+<p>
+  If loading models with other signatures, the Vespa Container node will not start,
+  due to (check <em>vespa.log</em> in the container running Vespa):
+</p>
+<pre>
+[2022-10-18 18:18:31.761] WARNING container        Container.com.yahoo.container.di.Container
+  Failed to set up first component graph due to error when constructing one of the components
+  exception=com.yahoo.container.di.componentgraph.core.ComponentNode$ComponentConstructorException:
+  Error constructing 'bert' of type 'ai.vespa.embedding.BertBaseEmbedder': null
+  Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: input
+  at ai.vespa.embedding.BertBaseEmbedder.validateName(BertBaseEmbedder.java:79)
+  at ai.vespa.embedding.BertBaseEmbedder.validateModel(BertBaseEmbedder.java:68)
+</pre>
+<p>
+  When this happens, a deploy looks like:
+</p>
+<pre>
+$ vespa deploy --wait 300
+Uploading application package ... done
+
+Success: Deployed .
+
+Waiting up to 5m0s for query service to become available ...
+Error: service 'query' is unavailable: services have not converged
+</pre>
+<p>
+  Use <a href="onnx.html#vespa-analyze-onnx-model">vespa-analyze-onnx-model</a> like in the example above
+  to analyze the signature.
+</p>
