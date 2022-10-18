@@ -306,6 +306,19 @@ it is OK for 1 searcher to take 497 ms and 2 searchers to each take 1 ms for a q
 You can set a different timeout in each cloned query you send to any of those chains,
 and you can specify the timeout when waiting for responses from them.
 
+#### How does backslash escapes work?
+
+Backslash is used to escape special characters in YQL.
+For example, to query with a literal backslash, which is useful in regexpes, 
+you need to escape it with another backslash: \\.
+Unescaped backslashes in YQL will lead to "token recognition error at: '\'".
+
+In addition, Vespa CLI unescapes double backslashes to single 
+(while single backslashes are left alone), 
+so if you query with Vespa CLI you need to escape with another backslash: \\\\. 
+The same applies to strings in Java.
+
+Also note that both log messages and JSON results escape backslashes, so any \ becomes \\.
 
 
 {:.faq-section}
