@@ -9,6 +9,12 @@ Vespa has support for advanced ranking models through its tensor API. If you
 have your model in the [ONNX format](https://onnx.ai/), Vespa can import the
 models and use them directly.
 
+See [embedding](embedding.html) and the
+[simple-semantic-search](https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search)
+sample application for a minimal, practical example.
+
+
+
 ## Importing ONNX model files
 
 Add the file containing the ONNX models somewhere under the application
@@ -28,6 +34,15 @@ An application package can have multiple models.
 
 To download models during deployment,
 see [deploying remote models](application-packages.html#deploying-remote-models).
+
+See the [model-exporting](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/src/main/python/model-exporting.ipynb)
+notebook for examples of how to export models to ONNX.
+Use this when experimenting with different models.
+Also relevant is the [model-deployment](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-deployment)
+example, which is a minimal create-train-convert-deploy script.
+This also includes sample use of the _onnx/onnxruntime_ modules.
+
+
 
 ## Ranking with ONNX models
 
