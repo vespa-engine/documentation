@@ -603,6 +603,9 @@ Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa 
 {:.faq-section}
 ### Troubleshooting
 
+#### The endpoint does not come up after deployment
+
+
 #### Starting Vespa using Docker on M1 fails
 Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
 ```
