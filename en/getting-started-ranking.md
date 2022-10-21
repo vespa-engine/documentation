@@ -125,14 +125,15 @@ Using `summary-features` makes it easy to validate and develop the ranking expre
 Let's assume we want to find similar documents, and we define document similarity as having the same number of words.
 From most perspectives, this is a poor similarity function, better functions are described later.
 
-The documents have a `term_count` field - so let's add a `ranking.features.query` for term count as well:
+The documents have a `term_count` field -
+so let's add a [input.query()](reference/query-api-reference.html#ranking.features) for term count:
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="query(q_term_count)">
-curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000'
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=term_count_similarity&input.query(q_term_count)=1000'
 </pre>
 
 {% include query.html content=
-"[select * from doc where true;&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=term_count_similarity&ranking.features.query(q_term_count)=1000)"%}
+"[select * from doc where true;&ranking=term_count_similarity&input.query(q_term_count)=1000](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=term_count_similarity&input.query(q_term_count)=1000)"%}
 
 <p><!-- depends on mathjax -->
     $$ 1 - \frac{fabs(attribute(term\_count) - query(q\_term\_count))}{1 + attribute(term\_count) + query(q\_term\_count)} $$
@@ -162,7 +163,7 @@ This rank function will score documents [0-1>, closer to 1 is more similar:
     "query(q_term_count)": 1000.0,
 }
 ```
-The key learning here is how to transfer ranking features in the query.
+The key learning here is how to transfer ranking features in the query, using `input.query()`.
 Use different names for more query features.
 
 
@@ -181,24 +182,16 @@ where the document name is the address in the tensor, using a value of 1 for eac
 ```
 
 {% include important.html content="Vespa cannot know the query tensor type from looking at it -
-it must be configured using a [query profile type](ranking-expressions-features.html#query-feature-types).
-Below, we use `queryProfile=links` in the query.
-Explore the [configuration](https://github.com/vespa-cloud/vespa-documentation-search/tree/main/src/main/application/search/query-profiles):"%}
-
-```
-└── query-profiles
-    ├── links.xml
-    └── types
-        └── links.xml
-```
-The query profile `default` is assumed if not set in the query.
-If your application has only _one_ query profile, you can call it `default.xml` and it is always invoked.
+it must be configured using a [inputs](reference/schema-reference.html#inputs)."%}
 
 As the in-link data is represented in a weightedset,
 we use the [tensorFromWeightedSet](reference/rank-features.html#document-features)
 rank feature to transform it into a tensor named _links_:
 ```
-rank-profile inlink_similarity {
+rank-profile inlink_similarity  {
+    inputs {
+        query(links) tensor<float>(links{})
+    }
     first-phase {
         expression: sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
     }
@@ -210,11 +203,11 @@ rank-profile inlink_similarity {
 ```
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="tensor&lt;float&gt;(links{})">
-curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D'
+curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlink_similarity&input.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D'
 </pre>
 
 {% include query.html content=
-"[select * from doc where true&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)={{inlinks:/en/query-profiles.html}:1,{inlinks:/en/page-templates.html}:1,{inlinks:/en/overview.html}:1}](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&queryProfile=links&ranking=inlink_similarity&ranking.features.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D)"%}
+"[select * from doc where true&ranking=inlink_similarity&input.query(links)={{inlinks:/en/query-profiles.html}:1,{inlinks:/en/page-templates.html}:1,{inlinks:/en/overview.html}:1}](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlink_similarity&input.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D)"%}
 
 Inspect relevance and summary-features:
 
