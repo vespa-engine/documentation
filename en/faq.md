@@ -489,6 +489,28 @@ The [practical performance guide](performance/practical-search-performance-guide
 can be a good starting point as well to understand Vespa query execution,
 difference between `index` and `attribute` and summary fetching performance.
 
+#### Is memory freed when deleting documents?
+Deleting documents, by using the [document API](reads-and-writes.html)
+or [garbage collection](documents.html#document-expiry) will increase the capacity on the content nodes.
+However, this is not necessarily observable in system metrics -
+this depends on many factors, like what kind of memory that is released,
+when [flush](proton.html#proton-maintenance-jobs) jobs are run and document [schema](schemas.html).
+
+In short, Vespa is not designed to release memory once used.
+It is designed for sustained high throughput, low latency,
+keeping <span style="text-decoration: underline">maximum</span> memory used under control
+using features like [feed block](operations/feed-block.html).
+
+When deleting documents, one can observe a slight <span style="text-decoration: underline">increase</span> in memory.
+A deleted document is represented using a [tombstone](operations/admin-procedures.html#content-cluster-configuration),
+that will later be removed, see [removed-db-prune-age](reference/services-content.html#removed-db-prune-age).
+When running garbage collection,
+the summary store is scanned using mmap and both VIRT and page cache memory usage increases.
+
+Read up on [attributes](attributes.html) to understand more of how such fields are stored and managed.
+[Paged attributes](attributes.html#paged-attributes) trades off memory usage vs. query latency
+for a lower max memory usage.
+
 
 {:.faq-section}
 ### Administration
