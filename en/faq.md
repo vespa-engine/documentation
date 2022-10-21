@@ -22,6 +22,10 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
   [id^=toc-] {
     min-width: 400px;
   }
+
+  .subpage h3,h4 {
+    margin-top: 30px;
+  }
 </style>
 
 <div class="row">
@@ -497,27 +501,6 @@ However, this is only useful in cases where you want to avoid transferring data 
 When you resend everything, the config server will notice that you did not actually change e.g. the node configs
 and avoid unnecessary noop changes.
 
-#### Deployment fails / nothing is listening on 19071
-Make sure all [Config servers](operations/configuration-server.html#troubleshooting) are started,
-and are able to establish ZooKeeper quorum (if more than one) -
-see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) sample application.
-Validate that the container has [enough memory](operations/docker-containers.html).
-
-#### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
-The Config Server cluster with 3 nodes fails to start.
-The ZooKeeper cluster the Config Servers use waits for hosts on the network,
-the hosts wait for ZooKeeper in a catch 22 -
-see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
-
-#### Starting Vespa using Docker on M1 fails
-Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
-```
-WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
-and no specific platform was requested
-```
-Make sure you are running a recent version of the Docker image, do `docker pull vespaengine/vespa`.
-<!-- ToDo: remove this soon -->
-
 #### How fast can nodes be added and removed from a running cluster?
 [Elasticity](elasticity.html) is a core Vespa strength -
 easily add and remove nodes with minimal (if any) serving impact.
@@ -618,3 +601,63 @@ Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa 
 
   document.addEventListener("DOMContentLoaded", createTOC);
 </script>
+
+
+
+{:.faq-section}
+### Troubleshooting
+
+#### The endpoint does not come up after deployment
+When deploying an application package, with some kind of error, the endpoints might fail, like:
+```
+$ vespa deploy --wait 300
+
+Uploading application package ... done
+
+Success: Deployed target/application.zip
+
+Waiting up to 5m0s for query service to become available ...
+Error: service 'query' is unavailable: services have not converged
+```
+Another example:
+```
+[INFO]     [03:33:48]  Failed to get 100 consecutive OKs from endpoint ...
+```
+There are many ways this can fail, the first step is to check the Vespa Container:
+```
+$ docker exec vespa /opt/vespa/bin/vespa-logfmt -l error
+
+[2022-10-21 10:55:09.744] ERROR   container
+Container.com.yahoo.container.jdisc.ConfiguredApplication
+Reconfiguration failed, your application package must be fixed, unless this is a JNI reload issue:
+Could not create a component with id 'ai.vespa.example.album.MetalSearcher'.
+Tried to load class directly, since no bundle was found for spec: album-recommendation-java.
+If a bundle with the same name is installed,
+there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+...
+```
+[Bundle plugin troubleshooting](components/bundles.html#bundle-plugin-troubleshooting) is a good resource
+to analyze Vespa container startup / bundle load problems.
+
+
+
+#### Starting Vespa using Docker on M1 fails
+Using an M1 MacBook Pro / AArch64 makes the Docker run fail:
+```
+WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
+and no specific platform was requested
+```
+Make sure you are running a recent version of the Docker image, do `docker pull vespaengine/vespa`.
+<!-- ToDo: remove this soon -->
+
+#### Deployment fails / nothing is listening on 19071
+Make sure all [Config servers](operations/configuration-server.html#troubleshooting) are started,
+and are able to establish ZooKeeper quorum (if more than one) -
+see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) sample application.
+Validate that the container has [enough memory](operations/docker-containers.html).
+
+#### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
+The Config Server cluster with 3 nodes fails to start.
+The ZooKeeper cluster the Config Servers use waits for hosts on the network,
+the hosts wait for ZooKeeper in a catch 22 -
+see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
