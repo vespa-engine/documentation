@@ -654,6 +654,98 @@ $ ssh -i mykeypair.pem ec2-user@ec2-3-88-143-47.compute-1.amazonaws.com \
 
 
 
+<h2 id="content-nodes-and-schemas">Content nodes and schemas</h2>
+<p>
+  Schemas can be thought of as tables in a database.
+  Most applications start off with one schema, adding schemas as more content types are needed.
+  Queries can hit one, some, or all schemas,
+  using the <a href="../schemas.html#multiple-schemas">restrict</a> query parameter
+  or selecting in <a href="../query-language.html">YQL</a>.
+</p>
+<p>
+  Content nodes can hold multiple schemas:
+</p>
+<pre>{% highlight xml %}
+<content id="musiccluster" version="1.0">
+    <documents>
+        <document type="albums" mode="index" />
+        <document type="lyrics" mode="index" />
+        <document type="tracks" mode="index" />
+    </documents>
+{% endhighlight %}</pre>
+<p>
+  One or more schemas can be deployed in separate content clusters:
+</p>
+<pre>{% highlight xml %}
+<content id="musiccluster" version="1.0">
+    <documents>
+        <document type="albums" mode="index" />
+        <document type="tracks" mode="index" />
+    </documents>
+
+<content id="lyricscluster" version="1.0">
+    <documents>
+        <document type="lyrics" mode="index" />
+    </documents>
+{% endhighlight %}</pre>
+<p>
+  The evolution can be illustrated like:
+</p>
+<img src="/assets/img/schemas-and-content-clusters.svg" alt="Schemas deployed in multiple content clusters"
+width="570px" height="auto" />
+<p>
+  The optimal mapping from schema to content cluster is application dependent:
+</p>
+<ul>
+  <li>
+    If there are no performance or sizing problems with all schemas in one content cluster,
+    keep this - one cluster is easier to manage than multiple.
+  </li>
+  <li>
+    Data in one schema can dominate the others.
+    In these cases, consider a separate content cluster with a resource specification targeted for the write/query load.
+    The extreme case of this is one content cluster per schema.
+    This is a simple model, too, and enables resource optimization per schema.
+  </li>
+</ul>
+<p>
+  <a href="../performance/sizing-search.html">Sizing search</a> is a good read for how to optimize content clusters.
+</p>
+<p>
+  Finally, there is another way to distribute load over hosts,
+  by mapping multiple content clusters to the same hosts:
+</p>
+<pre>{% highlight xml %}
+<content id="musiccluster" version="1.0">
+    <documents>
+        <document type="albums" mode="index" />
+    </documents>
+    <nodes>
+        <node hostalias="node1" distribution-key="0" />
+    </nodes>
+
+<content id="lyricscluster" version="1.0">
+    <documents>
+        <document type="lyrics" mode="index" />
+    </documents>
+    <nodes>
+        <node hostalias="node1" distribution-key="0" />
+    </nodes>
+{% endhighlight %}</pre>
+<p>
+  Observe that both clusters use <code>node1</code>.
+  This is a non-recommended configuration, as it runs multiple <a href="../proton.html">proton</a> processes per node.
+  To reduce interference between the processes in this case, virtualize the host into more nodes.
+  One can use containers (e.g. Docker) or VMs to do this:
+</p>
+<img src="/assets/img/schemas-and-content-clusters-multiple-proton.svg" alt="Multiple proton processes per node"
+width="675px" height="auto" />
+{% include important.html content='Vespa\'s features for overload handling,
+like <a href="feed-block.html">feed-block</a>,
+requires that only <span style="text-decoration: underline">one</span> proton process is running on the node,
+to operate properly.' %}
+
+
 <h2 id="next-steps">Next steps</h2>
 <ul>
 <li>
