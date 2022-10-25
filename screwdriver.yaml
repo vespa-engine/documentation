@@ -75,3 +75,24 @@ jobs:
       - run-tests: |
           cd $SD_DIND_SHARE_PATH
           $SD_SOURCE_DIR/test/test.py -c $SD_SOURCE_DIR/test/_test_config-large.yml -w $SD_SOURCE_DIR
+
+  update-vespa-version:
+    requires: [~pr]
+    sourcePaths: ["screwdriver.yaml"]
+    image: ubuntu:latest
+    annotations:
+      screwdriver.cd/buildPeriodically: H H(0-5) * * 1 # some time between 12:00 AM UTC (midnight) to 5:59 AM UTC Mon
+    steps:
+      - update-to-latest: |
+          VESPA_VERSION=$(curl -s 'https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml' | \
+            grep '<latest>' | sed 's/<\/*latest>//g; s/ //g;')
+          cat _config.yml | sed "s/vespa_version: \"[0-9\.]*\"/vespa_version: \"${VESPA_VERSION}\"/" > _config.yml.new
+          mv _config.yml.new _config.yml
+          git status --porcelain | wc -l
+          changes=$(git status --porcelain | wc -l)
+          if (( changes > 0 )); then
+            echo "Updating Vespa-version to ${VESPA_VERSION}"
+            echo git commit -a -m "Update Vespa-version to ${VESPA_VERSION}"
+            echo git pull --rebase
+            echo git push
+          fi
