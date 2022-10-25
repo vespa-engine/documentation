@@ -46,4 +46,69 @@ $ curl -X DELETE --cert data-plane-public-cert.pem --key data-plane-private-key.
   "$ENDPOINT/document/v1/my_namespace/my_doctype/docid?selection=true&cluster=my_cluster"
 {% endhighlight %}</pre>
   </li>
+  <li>
+    <p id="drop-schema">
+      It is possible to drop a schema, with all its content, by removing the mapping to the content cluster.
+      To understand what is happening, here is the status before the procedure:
+    </p>
+<pre>
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 16:59 books
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+</pre>
+    <p>Remove the schema from configuration:</p>
+<pre>
+&lt;documents&gt;
+    &lt;document type="music" mode="index" /&gt;
+    <span class="pre-hilite">&lt;!--document type="books" mode="index" /--&gt;</span>
+&lt;/documents&gt;
+</pre>
+    <p>
+      It is not required to remove the schema file itself.
+      It is however required to add a <code>schema-removal</code> entry to
+      <a href="../reference/validation-overrides.html">validation-overrides.xml</a>:
+    </p>
+<pre>
+&lt;validation-overrides&gt;
+    &lt;allow until="2022-10-31"&gt;schema-removal&lt;/allow&gt;
+&lt;/validation-overrides&gt;
+</pre>
+    {% include note.html content='Before Vespa 8.73,
+    the validation override name was <code>content-type-removal</code>' %}
+    <p>
+      Deploy the application package.
+      This will reconfigure the content node processes,
+      and the directory with the schema data is removed:
+    </p>
+<pre>
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+</pre>
+    <p>
+      Add the mapping back and redeploy - the cluster now has a <code>books</code> schema with zero documents.
+    </p>
+<pre>
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 17:06 books
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+</pre>
+    <p>
+      The procedure, deploying with and without the schema, is an efficient way to drop all documents.
+      It is good practise to remove <em>validation-overrides.xml</em>
+      or the <code>content-type-removal</code> element inside, to avoid subsequent accidental data loss.
+      The directory listing is just for illustration.
+    </p>
+    <p>
+      Use <a href="../reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> to list documents:
+    </p>
+<pre>
+# vespa-visit -i
+
+id:mynamespace:books::a-head-full-of-dreams (Last modified at 0)
+id:mynamespace:music::a-head-full-of-dreams (Last modified at 0)
+</pre>
+  </li>
 </ol>
