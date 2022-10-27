@@ -19,7 +19,6 @@ shared:
 
 jobs:
   link-checker-documentation:
-    requires: [~pr, ~commit]
     image: ruby:2.6
     annotations:
       screwdriver.cd/buildPeriodically: H H(0-5) * * 1-5 # some time between 12:00 AM UTC (midnight) to 5:59 AM UTC Mon-Fri
@@ -78,9 +77,9 @@ jobs:
 
   update-vespa-version:
     requires: [~pr, ~commit]
-    image: docker.io/vespaengine/vespa-build-centos-stream8:latest
+    image: buildpack-deps
     annotations:
-      screwdriver.cd/buildPeriodically: H H(0-5) * * 4 # some time between 12:00 AM UTC (midnight) to 5:59 AM UTC Thu
+      screwdriver.cd/buildPeriodically: H H(0-5) * * 1 # some time between 12:00 AM UTC (midnight) to 5:59 AM UTC Mon
     secrets:
       - VESPA_DOC_DEPLOY_KEY
     environment:
@@ -93,19 +92,18 @@ jobs:
             set +x
             ssh-add <(echo $VESPA_DOC_DEPLOY_KEY | base64 -d)
             set -x
-            git commit -m "Update Vespa-version to ${VESPA_VERSION}" _config.yml
-            git pull --rebase
-            git push
+            git clone git@github.com:vespa-engine/documentation.git documentation && cd documentation
+            VESPA_VERSION=\$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
+              grep -oP '<latest>\K([0-9]+\.[0-9]+\.[0-9]+)')
+            echo "Latest Vespa version is: " \${VESPA_VERSION}
+            sed -i.orig "s/vespa_version: \"[0-9\.]*\"/vespa_version: \"\${VESPA_VERSION}\"/" _config.yml
+            git diff
+            changes=\$(git status --porcelain | wc -l)            
+            if (( changes > 0 )); then
+              echo "Updating Vespa version in documentation to \${VESPA_VERSION}"
+              git commit -m "Update Vespa-version to \${VESPA_VERSION} MERGEOK" _config.yml
+              git pull --rebase
+              git push
+            fi            
           EOF
-          chmod u+x pushtogit.sh
-          VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
-            grep -oP '<latest>\K([0-9]+\.[0-9]+\.[0-9]+)')
-          echo "Latest Vespa version is: " ${VESPA_VERSION}
-          cat _config.yml | sed "s/vespa_version: \"[0-9\.]*\"/vespa_version: \"${VESPA_VERSION}\"/" > _config.yml.new
-          mv -f _config.yml.new _config.yml
-          git diff
-          changes=$(git status --porcelain | wc -l)
-          if (( changes > 0 )); then
-            echo "Updating Vespa version in documentation to ${VESPA_VERSION}"
-            /usr/bin/ssh-agent /bin/bash pushtogit.sh
-          fi
+          /usr/bin/ssh-agent /bin/bash pushtogit.sh
