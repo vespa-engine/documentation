@@ -86,6 +86,17 @@ jobs:
        GIT_SSH_COMMAND: "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
     steps:
       - update-to-latest: |
+          cat << EOF > pushtogit.sh
+            #!/bin/bash
+            ssh-add -D
+            set +x
+            ssh-add <(echo $VESPA_DOC_DEPLOY_KEY | base64 -d)
+            set -x
+            git commit -m "Update Vespa-version to ${VESPA_VERSION}" _config.yml
+            git pull --rebase
+            git push
+          EOF
+          chmod u+x pushtogit.sh
           VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
             grep -oP '<latest>\K([0-9]+\.[0-9]+\.[0-9]+)')
           echo "Latest Vespa version is: " ${VESPA_VERSION}
@@ -94,13 +105,6 @@ jobs:
           git diff
           changes=$(git status --porcelain | wc -l)
           if (( changes > 0 )); then
-            ssh-agent
-            ssh-add -D
-            set +x
-            ssh-add <(echo $VESPA_DOC_DEPLOY_KEY | base64 -d)
-            set -x
             echo "Updating Vespa version in documentation to ${VESPA_VERSION}"
-            git commit -m "Update Vespa-version to ${VESPA_VERSION}" _config.yml
-            git pull --rebase
-            git push
+            ssh-agent pushtogit.sh
           fi
