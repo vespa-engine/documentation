@@ -94,13 +94,16 @@ jobs:
           git diff
           changes=$(git status --porcelain | wc -l)
           if (( changes > 0 )); then
-            ssh-agent
-            ssh-add -D
-            set +x
-            ssh-add <(echo $VESPA_DOC_DEPLOY_KEY | base64 -d)
-            set -x
             echo "Updating Vespa version in documentation to ${VESPA_VERSION}"
-            git commit -m "Update Vespa-version to ${VESPA_VERSION}" _config.yml
-            git pull --rebase
-            git push
+            cat << EOF > pushtogit.sh
+              ssh-add -D
+              set +x
+              ssh-add <(echo $VESPA_DOC_DEPLOY_KEY | base64 -d)
+              set -x
+              git commit -m "Update Vespa-version to ${VESPA_VERSION}" _config.yml
+              git pull --rebase
+              git push
+EOF
+            chmod u+x pushtogit.sh
+            ssh-agent pushtogit.sh
           fi
