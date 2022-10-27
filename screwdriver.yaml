@@ -87,26 +87,25 @@ jobs:
        GIT_SSH_COMMAND: "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
     steps:
       - update-to-latest: |
-          VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
-            grep -oP '<latest>\K([0-9]+\.[0-9]+\.[0-9]+)')
-          echo "Latest Vespa version is: " ${VESPA_VERSION}
-          git clone git@github.com:vespa-engine/documentation.git documentation && cd documentation
           cat << EOF > pushtogit.sh
             #!/bin/bash
             ssh-add -D
             set +x
             ssh-add <(echo $VESPA_DOC_DEPLOY_KEY | base64 -d)
             set -x
-            git branch --set-upstream-to=origin/master
-            git commit -m "Update Vespa-version to ${VESPA_VERSION}" _config.yml
-            git pull --rebase
-            git push
+            git clone git@github.com:vespa-engine/documentation.git documentation && cd documentation
+            VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
+              grep -oP '<latest>\K([0-9]+\.[0-9]+\.[0-9]+)')
+            echo "Latest Vespa version is: " ${VESPA_VERSION}
+            cat _config.yml | sed "s/vespa_version: \"[0-9\.]*\"/vespa_version: \"${VESPA_VERSION}\"/" > _config.yml.new
+            mv -f _config.yml.new _config.yml
+            git diff
+            changes=$(git status --porcelain | wc -l)            
+            if (( changes > 0 )); then
+              echo "Updating Vespa version in documentation to ${VESPA_VERSION}"
+              git commit -m "Update Vespa-version to ${VESPA_VERSION}" _config.yml
+              git pull --rebase
+              git push
+            fi            
           EOF
-          cat _config.yml | sed "s/vespa_version: \"[0-9\.]*\"/vespa_version: \"${VESPA_VERSION}\"/" > _config.yml.new
-          mv -f _config.yml.new _config.yml
-          git diff
-          changes=$(git status --porcelain | wc -l)
-          if (( changes > 0 )); then
-            echo "Updating Vespa version in documentation to ${VESPA_VERSION}"
-            /usr/bin/ssh-agent /bin/bash pushtogit.sh
-          fi
+          /usr/bin/ssh-agent /bin/bash pushtogit.sh
