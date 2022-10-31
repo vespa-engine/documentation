@@ -304,7 +304,7 @@ plus a separate overall timeout for the searcher that performs the asynchronous 
 
 The timeout is for the entire query
 (and most Searchers don’t check timeout -
-use [getTimeLeft](https://javadoc.io/static/com.yahoo.vespa/container-search/8.26.15/com/yahoo/search/Query.html#getTimeLeft())).
+use [getTimeLeft](https://javadoc.io/static/com.yahoo.vespa/container-search/{{site.variables.vespa_version}}/com/yahoo/search/Query.html#getTimeLeft())).
 E.g. if a search chain has 3 searchers,
 it is OK for 1 searcher to take 497 ms and 2 searchers to each take 1 ms for a query timeout of 500 ms.
 You can set a different timeout in each cloned query you send to any of those chains,
