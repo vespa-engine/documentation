@@ -707,7 +707,7 @@ For optimal performance for use cases asking for large number of hits to the cli
 recommended to use dedicated document summaries. 
 Note also that Vespa per default limits the max hits to 400 per default, 
 the behavior can be overridden in the 
-[default queryProfile](../reference/query-api-reference.html#queryProfile).
+[default queryProfile](../reference/query-api-reference.html#queryprofile).
 
 When requesting large amount of data with hits, it is recommended to use result compression. 
 Vespa will compress if the HTTP client uses

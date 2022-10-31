@@ -228,7 +228,7 @@ Trying to request more than 400 hits in a query, getting this error:
 `{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}`.
 
 * To increase max result set size,
-  configure `maxHits` in a [query profile](reference/query-api-reference.html#queryProfile),
+  configure `maxHits` in a [query profile](reference/query-api-reference.html#queryprofile),
   e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
   Query timeout can be increased, but it will still be costly and likely impact other queries -
   large limit more so than a large offset.
