@@ -273,7 +273,7 @@ This is a valid use case for many applications.
 However, ranking documents is generally CPU-expensive,
 optimizing by reducing the candidate set will increase performance.
 Example query using text matching,
-dumping [calculated rank features](reference/query-api-reference.html#ranking.listFeatures):
+dumping [calculated rank features](reference/query-api-reference.html#ranking.listfeatures):
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="attributeMatch(inlinks)">
 curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22&ranking.listFeatures'

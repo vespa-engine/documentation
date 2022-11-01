@@ -2286,7 +2286,7 @@ This section introduces query tracing. Tracing helps understand where time (and 
 to best optimize the query or schema settings. Query tracing can be enabled using the following parameters:
 
 - [trace.level](../reference/query-api-reference.html#trace.level)
-- [trace.explainLevel](../reference/query-api-reference.html#trace.explainLevel)
+- [trace.explainLevel](../reference/query-api-reference.html#trace.explainlevel)
 - [trace.timestamps](../reference/query-api-reference.html#trace.timestamps)
 
 A simple example query with tracing enabled:

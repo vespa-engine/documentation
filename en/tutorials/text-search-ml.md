@@ -31,7 +31,7 @@ Those features are useful to understand the behavior of your app and to improve 
 ### Default rank features
 
 To access the default set of ranking features,
-set the query parameter [`ranking.listFeatures`](../reference/query-api-reference.html#ranking.listFeatures)  to `true`.
+set the query parameter [`ranking.listFeatures`](../reference/query-api-reference.html#ranking.listfeatures)  to `true`.
 For example, below is the body of a post request that in a [query](../query-language.html),
 selects the `bm25` rank-profile developed in the previous tutorial
 and returns the rank features associated with each of the results returned.
