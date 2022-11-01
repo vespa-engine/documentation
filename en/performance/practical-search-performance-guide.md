@@ -707,7 +707,7 @@ For optimal performance for use cases asking for large number of hits to the cli
 recommended to use dedicated document summaries. 
 Note also that Vespa per default limits the max hits to 400 per default, 
 the behavior can be overridden in the 
-[default queryProfile](../reference/query-api-reference.html#queryProfile).
+[default queryProfile](../reference/query-api-reference.html#queryprofile).
 
 When requesting large amount of data with hits, it is recommended to use result compression. 
 Vespa will compress if the HTTP client uses
@@ -2286,7 +2286,7 @@ This section introduces query tracing. Tracing helps understand where time (and 
 to best optimize the query or schema settings. Query tracing can be enabled using the following parameters:
 
 - [trace.level](../reference/query-api-reference.html#trace.level)
-- [trace.explainLevel](../reference/query-api-reference.html#trace.explainLevel)
+- [trace.explainLevel](../reference/query-api-reference.html#trace.explainlevel)
 - [trace.timestamps](../reference/query-api-reference.html#trace.timestamps)
 
 A simple example query with tracing enabled:

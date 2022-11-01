@@ -255,7 +255,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 Now, let us explore how Vespa matches the multi-valued tags field of 
 type [weightedset](reference/schema-reference.html#weightedset). 
 Notice that we change back to `type=all`.
-In this example we also use the [default-index](reference/query-api-reference.html#model.defaultIndex) 
+In this example we also use the [default-index](reference/query-api-reference.html#model.defaultindex) 
 query parameter to limit matching to the `tags` field.
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
