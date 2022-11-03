@@ -1026,8 +1026,9 @@ In this case restricting the nearest neighbor search to tracks by `Bonnie Tyler`
 
 ### Strict filters and distant neighbors 
 When combining nearest neighbor search with strict filters which matches less than 5 percentage of the total number of documents, 
-Vespa will instead of searching the HNSW graph, constrained by the filter, fall back to using exact nearest neighbor search. When
-falling back to exact search users will observe that `totalCount` increases and is higher than `targetHits`.
+Vespa will instead of searching the HNSW graph, constrained by the filter, fall back to using exact nearest neighbor search.
+See [Controlling filter behavior](#controlling-filter-behavior) for how to adjust the threshold for which strategy that is used.
+When falling back to exact search users will observe that `totalCount` increases and is higher than `targetHits`.
 As seen from previous examples, more hits are exposed to the `first-phase` ranking expression when using 
 exact search. When using exact search with filters, the search can also use multiple threads to evaluate the query, which
 helps reduce the latency impact. 
