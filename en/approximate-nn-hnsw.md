@@ -140,6 +140,7 @@ for more details.
 Note that when using `pre-filtering` the following query operators are not included when evaluating the filter part of the query:
 * [geoLocation](reference/query-language-reference.html#geolocation)
 * [predicate](reference/query-language-reference.html#predicate)
+
 These are instead evaluated after the approximate nearest neighbors are retrieved, more like a `post-filter`.
 This might cause the search to expose fewer hits to ranking than the wanted `targetHits`.
 
