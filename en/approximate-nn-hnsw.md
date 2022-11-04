@@ -29,10 +29,9 @@ segmented or partitioned graph where a query against a content node need to scan
 to find which links to change. These distance calculations are performed by multiple indexing threads. 
 
 ## Using Vespa's approximate nearest neighbor search
-The query examples in [nearest neighbor search](nearest-neighbor-search.html) uses exact search, which has
-perfect accuracy but which is computationally expensive for large document volumes
-as the distance needs to be calculated for every document which matches
-the query filters. 
+The query examples in [nearest neighbor search](nearest-neighbor-search.html) uses exact search, which has perfect accuracy.
+However, this is computationally expensive for large document volumes
+as distances are calculated for every document which matches the query filters.
 
 To enable fast approximate matching, the first-order dense tensor field definition 
 needs an `index` directive. A Vespa [document schema](schemas.html) can declare multiple tensor fields with `HNSW` enabled.
@@ -69,10 +68,10 @@ In the schema snippet above, fast approximate search is enabled by building an `
 `image_embedding` and the `text_embedding` tensor fields.
 
 The two vector fields use different [distance-metric](reference/schema-reference.html#distance-metric)
-and `max-links-per-node` settings. 
+and `HNSW` index settings:
 
-* `max-links-per-node` impacts memory usage of the graph, accuracy, indexing and search cost. 
-* `neighbors-to-explore-at-insert` impacts graph accuracy and search speed. 
+* `max-links-per-node` - a higher value increases recall accuracy, but also memory usage, indexing and search cost.
+* `neighbors-to-explore-at-insert` - a higher value increases recall accuracy, but also indexing cost.
 
 Choosing the value of these parameters affects both accuracy, search performance, memory usage and indexing performance.
 See [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
@@ -116,7 +115,7 @@ By default, `approximate` is true when searching a tensor field with `HNSW` inde
 The `approximate` parameter allows quantifying the accuracy loss of using approximate search. 
 The loss can be calculated by performing an exact neighbor search using `approximate:false` and 
 compare the retrieved documents with `approximate:true` and calculate the overlap@k metric. Note
-that exact searches over large vector volume require adjustment of the 
+that exact searches over a large vector volume require adjustment of the
 [query timeout](reference/query-api-reference.html#timeout). Default Vespa query timeout is 500ms, which will
 be too low for an exact search over many vectors. 
 
@@ -139,10 +138,17 @@ See
 for more details.
 
 Note that when using `pre-filtering` the following query operators are not included when evaluating the filter part of the query:
-[geoLocation](reference/query-language-reference.html#geolocation) and
-[predicate](reference/query-language-reference.html#predicate).
+* [geoLocation](reference/query-language-reference.html#geolocation)
+* [predicate](reference/query-language-reference.html#predicate)
 These are instead evaluated after the approximate nearest neighbors are retrieved, more like a `post-filter`.
 This might cause the search to expose fewer hits to ranking than the wanted `targetHits`.
+
+Since Vespa 8.78.45 the `pre-filter` can be evaluated using
+[multiple threads per query](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking).
+This can be used to reduce query latency for larger vector datasets where the cost of evaluating the `pre-filter` is significant.
+Note that searching the `HNSW` index is always single-threaded per query.
+Multi-threaded evaluation when using `post-filtering` has always been supported,
+but this is less relevant as the `HNSW` index search first reduces the document candidate set based on `targetHits`.
 
 ## Nearest Neighbor Search Considerations
 
@@ -197,7 +203,7 @@ The `HNSW` greedy search algorithm is sub-linear (close to log(N) where N is the
 This has interesting properties when attempting to add more
 nodes horizontally using [flat data distribution](performance/sizing-search.html#data-distribution).
 Even if the document volume per node is reduced by a factor of 10, the search latency is only reduced by 50%. 
-Still,flat scaling helps scale document volume, and increasing indexing throughput as vectors are partitioned
+Still, flat scaling helps scale document volume, and increasing indexing throughput as vectors are partitioned
 randomly over a set of nodes. 
 
 Pure vector search applications (without filtering, or re-ranking) should attempt to scale up document volume by using 
