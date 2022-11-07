@@ -6,67 +6,41 @@ redirect_from:
 ---
 
 <p>
-Ideally one want to query all data indexed in a Vespa cluster within the specified timeout,
-but that might not be possible for different reasons:
+  Ideally one want to query all data indexed in a Vespa cluster within the specified timeout,
+  but that might not be possible for different reasons:
 </p>
 <ul>
 	<li>The system might be overloaded due to capacity constraints,
-        and queries do not complete within the timeout,
-        as they are sitting in a queue waiting for a resource.</li>
-
-        <li>A complex query might take longer time to execute than the specified timeout,
-        or the timeout is too low given the complexity of the query and available resource capacity.</li>
+    and queries do not complete within the timeout,
+    as they are sitting in a queue waiting for a resource.
+  </li>
+  <li>
+    A complex query might take longer time to execute than the specified timeout,
+    or the timeout is too low given the complexity of the query and available resource capacity.
+  </li>
 </ul>
 <p>
-This document describes how Vespa could gracefully degrade the result set
-if the query cannot be completed within the timeout specified. </p>
-
+  This document describes how Vespa could gracefully degrade the result set
+  if the query cannot be completed within the timeout specified.
+</p>
 <p>Definitions:</p>
 <ul>
-    <li> <strong>Coverage</strong>: The percentage of documents indexed which were evaluated by the query.
-        Ideally coverage is 100%.</li>
-    <li> <strong>Timeout</strong>: The total time a query is allowed to run for.
-        Vespa is a distributed system where multiple components are involved in the query execution.</li>
-    <li> <strong>Soft Timeout</strong>: Soft timeout is a Vespa configuration switch which allows coverage to be less than 100%,
-        but larger than 0% if the query is approaching timeout. Soft timeout might also be considered as an <em>early termination</em>
-        technique.
-    </li>
+  <li>
+    <strong>Coverage</strong>: The percentage of documents indexed which were evaluated by the query.
+    The ideal coverage is 100%.
+  </li>
+  <li>
+    <strong>Timeout</strong>: The total time a query is allowed to run for,
+    see <a href="reference/query-api-reference.html#timeout">timeout</a> (default 500 ms).
+    Vespa is a distributed system where multiple components are involved in the query execution.
+  </li>
+  <li>
+    <strong>Soft Timeout</strong>: Soft timeout allows coverage to be less than 100%,
+    but larger than 0% if the query is approaching timeout.
+    Soft timeout might also be considered as an <em>early termination</em> technique, and is enabled by default.
+    Refer to <a href="reference/query-api-reference.html#ranking.softtimeout.enable">ranking.softtimeout.enable</a>.
+  </li>
 </ul>
-
-
-
-<h2 id="timeouts">Timeouts</h2>
-<p>
-Vespa's default query timeout is 500 ms and soft timeout is enabled per default -
-reference documentation:
-</p>
-<ul>
-<li><a href="reference/query-api-reference.html#timeout">timeout</a></li>
-<li><a href="reference/query-api-reference.html#ranking.softtimeout.enable">ranking.softtimeout.enable</a></li>
-</ul>
-<p>
-The <em>timeout</em> specifies the overall timeout of the query execution
-and can be configured and also overridden by the <em>timeout</em> run time request parameter,
-or defined in a <a href="query-profiles.html">query profile</a>
-so that different classes of queries can have a different latency budget/timeout.
-</p><p>
-The <em>softtimeout</em> setting controls what the content nodes should do
-in the case where the latency budget has almost been used (timeout times a factor).
-Return the documents recalled and ranked with the
-<a href="phased-ranking.html">first phase function</a> within the time used,
-or simply don't produce a result:
-</p>
-<ul>
-  <li>With <em>softtimeout</em> disabled, the Vespa container will return a 504 timeout without any results.</li>
-  <li>When enabled, it will return the documents matched and ranked up until the timeout was reached,
-    with a 200 OK response along with the reason the result set was degraded.</li>
-</ul>
-<p>
-  The container might respond with a timeout error with HTTP response code 504 even with <em>softtimeout</em> enabled
-  if the timeout is set so low that the query does not make it to the content nodes,
-  or the container does not have any time left after input and query processing
-  to dispatch the query to the content nodes.
-</p>
 
 
 
@@ -79,7 +53,8 @@ Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enabl
 </p>
 <pre>
 /search/?searchChain=vespa&yql=select * from sources * where foo contains bar&presentation.format=json&timeout=200ms&ranking.softtimeout.enable=true
-
+</pre>
+<pre>{% highlight json %}
 {
     "root": {
         "coverage": {
@@ -101,7 +76,7 @@ Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enabl
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
 The result was delivered in 200 ms but the query was degraded as coverage is less than 100.
 In this case, 167,006,201 out of x documents where queried, and 16,469,732 documents where matched and ranked,
@@ -135,50 +110,62 @@ and that would cause both <em>timeout</em> and <em>adaptive-timeout</em> to be t
 When working on Results in a <a href="searcher-development.html">Searcher</a>,
 get the coverage information programmatically:
 </p>
-<pre>
+<pre>{% highlight java %}
     @Override
     public Result search(Query query, Execution execution) {
         Result result = execution.search(query);
         Coverage  coverage = result.getCoverage(false);
-        if (coverage != null &amp;&amp; coverage.isDegraded()) {
-            logger.warning("Got a degraded result for query " + query + " : " + coverage.getResultPercentage() + "% was searched");
+        if (coverage != null && coverage.isDegraded()) {
+            logger.warning("Got a degraded result for query " + query + " : " +
+                            coverage.getResultPercentage() + "% was searched");
         }
         return result;
     }
-</pre>
+{% endhighlight %}</pre>
+
+
 
 <h2 id="adaptive-node-timeout">Adaptive node timeout</h2>
-<p>For a content cluster with <a href="performance/sizing-search.html#data-distribution">flat</a>
-    data distribution, query performance is no better than the slowest node. The worst case scenario happens
-    when a node in the cluster is experiencing underlying HW issues. In such a state,
-    a node might answer health checks and pings, but still not be able to serve queries within the timeout.
+<p>
+  For a content cluster with <a href="performance/sizing-search.html#data-distribution">flat</a>
+  data distribution, query performance is no better than the slowest node. The worst case scenario happens
+  when a node in the cluster is experiencing underlying HW issues. In such a state,
+  a node might answer health checks and pings, but still not be able to serve queries within the timeout.
 </p>
 <p>
-    Using <a href="reference/services-content.html#coverage">adaptive coverage</a> allows ignoring slow node(s).
-    The following example demonstrates how to use adaptive timeout. The example
-    uses a flat content cluster with 10 nodes:</p>
-<pre>
-&lt;content id='content' version='1.0'&gt;
-    &lt;nodes count='10'/&gt;
-        &lt;search&gt;
-            &lt;coverage&gt;
-                &lt;minimum&gt;0.9&lt;/minimum&gt;
-                &lt;min-wait-after-coverage-factor&gt;0.2&lt;/min-wait-after-coverage-factor&gt;
-                &lt;max-wait-after-coverage-factor&gt;0.3&lt;/max-wait-after-coverage-factor&gt;
-            &lt;/coverage&gt;
-        &lt;/search&gt;
-&lt;/content&gt;
-</pre>
-<p>
+  Using <a href="reference/services-content.html#coverage">adaptive coverage</a> allows ignoring slow node(s).
+  The following example demonstrates how to use adaptive timeout.
+  The example uses a flat content cluster with 10 nodes:</p>
+<pre>{% highlight xml %}
+<content id="content" version="1.0">
+    <search>
+        <coverage>
+            <minimum>0.9</minimum>
+            <min-wait-after-coverage-factor>0.</min-wait-after-coverage-factor>
+            <max-wait-after-coverage-factor>0.3</max-wait-after-coverage-factor>
+        </coverage>
+    </search>
+</content>
+{% endhighlight %}</pre>
+<ul>
+  <li>
     Assuming using the default vespa timeout of 500ms, the stateless container dispatches the query
     to all 10 nodes in parallel and waits until 9 out of 10 have replied (minimum coverage 0.9).
-    Assuming 9 could respond in 100ms, there is 400ms left. The dispatcher than waits minimum 80 ms (0.2*400ms) for the last
+  </li>
+  <li>
+    Assuming 9 could respond in 100ms, there is 400ms left. The dispatcher then waits minimum 80 ms (0.2*400ms) for the last
     node to respond, and at maximum 120 (0.3*400ms) before giving up waiting for the slowest node and return the result.
+  </li>
+  <li>
     The min wait setting is used to allow some per node response time variance.
-    Using min wait 0 will cause the query to return immediately when min coverage has been reached (9 out of 10 nodes replied).
+    Using min wait 0 will cause the query to return immediately when min coverage has been reached
+    (9 out of 10 nodes replied).
     A higher than 0 value for min allows a node to be slightly slower than the
     peers and overall still reach 100% coverage.
-</p>
+  </li>
+</ul>
+
+
 
 <h2 id="match-phase-degradation">Match phase degradation</h2>
 <p>
@@ -243,7 +230,7 @@ For all queries you want the newest content surfaced, so you enable match-phase 
 So far, so good - you get a great latency and always get your top-k hits.
 The problem might come if you introduce a filter.
 If you have a filter saying you only want documents from the last day,
-then match-phase can become sub-optimal and in some cases much worse than running without match-phase.
+then match-phase can become suboptimal and in some cases much worse than running without match-phase.
 </p>
 <p>
 By design, Vespa will evaluate potential matches for a query by the order of their internal documentid.
