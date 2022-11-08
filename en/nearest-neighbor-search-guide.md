@@ -214,7 +214,6 @@ schema track {
 
         field track_id type string {
             indexing: summary | attribute
-            rank: filter
             match: word
         }
 
