@@ -91,6 +91,10 @@ After the environment setup, Vespa is run as the <code>vespa</code> user.' %}
 {% include note.html content="The procedure below is a bare minimum, for educational purposes.
 Make sure to use AWS instance types suitable for the application load,
 and implement security mechanisms of choice." %}
+<p>
+  Can <a href="https://aws.amazon.com/autoscaling/">AWS Auto Scaling</a> be used?
+  Read the <a href="#autoscaling">autoscaling Q/A</a>.
+</p>
 
 
 <h3 id="node-setup">Node setup</h3>
@@ -113,7 +117,9 @@ and implement security mechanisms of choice." %}
         Create a table like:
         <table class="table">
           <thead>
-          <th>type</th><th>Private IP DNS name (IPv4 only)</th><th>Public IPv4 DNS</th>
+          <tr>
+            <th>type</th><th>Private IP DNS name (IPv4 only)</th><th>Public IPv4 DNS</th>
+          </tr>
           </thead>
           <tbody>
           <tr><td>configserver</td><td>ip-10-0-1-234.ec2.internal</td><td>ec2-3-231-33-190.compute-1.amazonaws.com</td></tr>
@@ -448,7 +454,7 @@ $ curl http://localhost:8080/state/v1/health | head -5
   <li>Click <em>Add attribute</em>.
     Set <code>Name=type</code> and <code>Value=configserver</code>,
     click the green checkbox on the right, then <em>Close</em>.</li>
-  </li><li>Select the next 7 Container instance checkboxes,
+  <li>Select the next 7 Container instance checkboxes,
   then <em>Actions &gt; View/Edit attributes</em>.</li>
   <li>Click <em>Add attribute</em>.
     Set <code>Name=type</code> and <code>Value=services</code>,
@@ -744,6 +750,73 @@ width="675px" height="auto" />
 like <a href="feed-block.html">feed-block</a>,
 requires that only <span style="text-decoration: underline">one</span> proton process is running on the node,
 to operate properly.' %}
+
+
+
+<h2 id="autoscaling">Autoscaling</h2>
+<p>
+  A common question is, <em>"Can <a href="https://aws.amazon.com/autoscaling/">AWS Auto Scaling</a> be used?"</em>
+  That is a difficult question to answer, here is a transcript from the <a href="http://slack.vespa.ai">Vespa Slack</a>:
+</p>
+<blockquote>
+  I have a question about deployment.
+  I set up cluster on two AWS auto-scaling groups (config &amp; services) based on
+  <a href="#aws-ec2">multinode-systems.html#aws-ec2</a>.
+  But if one of instances was replaced by auto-scaling group,
+  I need manually update hosts.xml file, zip it and deploy new version of the app.
+  I'm thinking about automation of this process by Cloudwatch &amp; Lambda...
+  I wonder if there is some node-discovery mechanism which can e.g.
+  check instances tags and update hosts config based on it?
+</blockquote>
+<p>
+  First, you see in <a href="#aws-ec2">aws-ec2</a> that there are two types of hosts,
+  <code>configserver</code> and <code>services</code>.
+  configserver setup / operations is documented at
+  <a href="configuration-server.html">configuration server operations</a>.
+  This must be set up first.
+  This is backed by an <a href="https://zookeeper.apache.org/">Apache ZooKeeper</a> cluster,
+  so should be 1 or 3 nodes large.
+  In our own clusters in Yahoo, we do not autoscale configserver clusters, there is no need - we use 3.
+  If that is too many, use 1. So this question is easy - do not autoscale configservers.
+</p>
+<p>
+  For the services nodes, observe that there are two kinds of nodes -
+  stateless containers and stateful content nodes -
+  see the <a href="../overview.html">overview</a>.
+  In any way, you will want to manage these differently -
+  the stateless nodes are more easily replaced / increased / shrunk,
+  by changing <em>services.xml</em> and <em>hosts.xml</em>.
+  It is doable to build an autoscaling service for the stateless nodes,
+  but you need to make sure to use the right metrics for your autoscaling code,
+  and integrate the deploy-automation with the other deployments (say schema modifications).
+</p>
+<p>
+  A much harder problem is autoscaling the stateful nodes -
+  these are the nodes with the indexes and data. See <a href="../elasticity.html">elasticity</a> -
+  adding a node + data redistribution can take hours,
+  and the node's load will increase during redistribution.
+  Building autoscaling here is very difficult to do safely and efficient.
+</p>
+<p>
+  Nothing of this is impossible,
+  and it is actually implemented at <a href="https://cloud.vespa.ai/#autoscaling">cloud.vespa.ai/autoscaling</a> -
+  but it is a difficult feature to get right.
+</p>
+<p>
+  So, my recommendation is starting with a static set of hosts, like in
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a> -
+  and in parallel try out <a href="https://cloud.vespa.ai/en/free-trial">cloud.vespa.ai/en/free-trial</a>
+  with autoscaling experiments using your data and use cases.
+</p>
+<p>
+  Autoscaling can save money, but before going there,
+  it is wise to read <a href="../performance/">docs.vespa.ai/en/performance/</a>
+  and optimize resources using a static node set
+  (or use the sizing suggestions from the Vespa Cloud Console).
+  I.e., get the node resources right first,
+  then consider if autoscaling node count for your load patterns makes sense.
+</p>
+
 
 
 <h2 id="next-steps">Next steps</h2>
