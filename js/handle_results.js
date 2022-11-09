@@ -17,11 +17,17 @@ const handleResults = (data, query) => {
   const result = document.getElementById("result");
   result.innerHTML = "";
 
+  let searchParams = new URLSearchParams();
+
   let a = document.getElementById("stackoverflow-query")
-  const searchParams = new URLSearchParams();
   searchParams.set('q', '[vespa] ' + unescapeHtml(query));
   a.href = 'https://stackoverflow.com/search?' + searchParams.toString();
   a.innerHTML = "[vespa] " + query;
+
+  a = document.getElementById("gh-issues-query")
+  searchParams.set('q', 'is:issue ' + unescapeHtml(query));
+  a.href = 'https://github.com/vespa-engine/vespa/issues?' + searchParams.toString();
+  a.innerHTML = "is:issue " + query;
 
   const hits = data;
   if (hits && hits.length > 0) {
