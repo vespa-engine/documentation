@@ -141,15 +141,17 @@ this can occur.
 
 
 <h3 id="indexing-with-language">Indexing with language</h3>
-<p>
-The indexing process run by Vespa is a sequential execution
-of the indexing script of every field in the input document.
-At any point, the script may choose to set the language state of the processor
-using <a href="reference/advanced-indexing-language.html#set_language">set_language</a>. Example:
+
+<p>The indexing process run by Vespa is a sequential execution
+of the indexing scripts of each field in the schema, in the declared order.
+At any point, the script may set the language that will be used for indexing statements for subsequent fields,
+using <a href="reference/advanced-indexing-language.html#set_language">set_language</a>.
+
+Example:
 </p>
 <pre>
-schema book {
-    document book {
+schema doc {
+    document doc {
         field language type string {
             indexing: set_language
         }
@@ -159,34 +161,11 @@ schema book {
     }
 }
 </pre>
-<p>
-Indicating that every document in the input is expected to have its own language.
-</p><p>
-Because indexing scripts are executed in the order they are given in the schema,
-and because the language state is never reset during the processing of a single document,
-all indexed string fields following the <code>language</code> field
-will be processed under the rules of that language.
-</p><p>
-The only thing that changes due to language is the output from
-<code>normalize</code> and <code>tokenize</code>.
-Now, because <code> indexing: index</code> implies <code>tokenize</code> for string fields,
-the field <code>title</code> is affected.
-</p><p>
-If either <code>normalize</code> or <code>tokenize</code> is invoked prior to <code>set_language</code>,
-the language detector is run on the input string.
-</p><p>
-The net result of this is that by calling <code>set_language</code> inside a document,
-the terms that end up in a tokenized index are changed.
-This means that at query-time, one must apply the same language settings before tokenizing the query terms
-to be able to match what was stored in the index.
-This also means that a single index may simultaneously contain terms of multiple languages.
-</p><p>
-Even if a document contains a string field used as input for the <code>set_language</code> indexing expression,
-there is no automation in storing this language in an index.
-To filter by language at some point, save this field as an attribute.
-</p><p>
-If all documents have the same language, hardcode it this way:
-</p>
+
+<p>If a language has not been set when tokenization of a field is run, the language is determined by
+<a href="#field-language-detection">language detection</a>.</p>
+
+<p>If all documents have the same language, the language can be hardcoded it the schema in this way:</p>
 <pre>
 schema doc {
 
@@ -196,6 +175,48 @@ schema doc {
 
     document doc {
     ...
+</pre>
+
+<p>If the same document contains fields in multiple languages, set_language can be invoked multiple times, e.g</p>
+
+<pre>
+schema doc {
+    document doc {
+        field language_title1 type string {
+            indexing: set_language
+        }
+        field title1 type string {
+            indexing: index
+        }
+        field language_title2 type string {
+            indexing: set_language
+        }
+        field title2 type string {
+            indexing: index
+        }
+    }
+}
+</pre>
+
+<p>Or, if fixed per field, use multiple indexing statements in each field:</p>
+
+<pre>
+schema doc {
+    document doc {
+        field my_english_field type string {
+            indexing {
+                "en" | set_language;
+                index;
+            }
+        }
+        field my_spanish_field type string {
+            indexing {
+                "es" | set_language;
+                index;
+            }
+        }
+    }
+}
 </pre>
 
 
