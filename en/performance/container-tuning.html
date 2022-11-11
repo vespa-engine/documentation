@@ -162,28 +162,36 @@ take a long time to complete.
 This is typically due to some components performing lazy setup of data structures or connections.
 Lazy initialization should be avoided in favor of eager initialization in component constructor,
 but this is not always possible.
+</p>
+<p>
 A way to avoid problems with the first queries in such cases
 is to perform warmup queries at startup.
 This is done by issuing queries from the constructor of the Handler of regular queries.
-If you are using the default handler, com.yahoo.search.handler.SearchHandler,
-you need to subclass this and configure your subclass as the handler of query requests in services.xml.
+If using the default handler,
+<a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/handler/SearchHandler.java">
+com.yahoo.search.handler.SearchHandler</a>,
+subclass this and configure your subclass as the handler of query requests in <em>services.xml</em>.
 </p><p>
 Add a call to a warmupQueries() method as the last line of your handler constructor.
 The method can look something like this:
 </p>
-<pre>
+<pre>{% highlight java %}
 private void warmupQueries() {
     String[] requestUris = new String[] {"warmupRequestUri1", "warmupRequestUri2"};
     int warmupIterations = 50;
 
-    for (int i = 0; i &lt; warmupIterations; i++) {
+    for (int i = 0; i < warmupIterations; i++) {
         for (String requestUri : requestUris) {
             handle(HttpRequest.createTestRequest(requestUri, com.yahoo.jdisc.http.HttpRequest.Method.GET));
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
 Since these queries will be executed before the container starts accepting external queries,
 they will cause the first external queries to observe a warmed up container instance.
+</p>
+<p>
+  Use <a href="../reference/query-api-reference.html#metrics.ignore">metrics.ignore</a>
+  in the warmup queries to eliminate them from being reported in metrics.
 </p>
