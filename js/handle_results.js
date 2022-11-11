@@ -29,6 +29,15 @@ const handleResults = (data, query) => {
   a.href = 'https://github.com/vespa-engine/vespa/issues?' + searchParams.toString();
   a.innerHTML = "is:issue " + query;
 
+  // Dirty hack from https://stackoverflow.com/questions/51541986/a-way-to-open-up-slack-search-ui-in-a-browser-from-a-url
+  a = document.getElementById("slack-query")
+  const slackQuery = "in:#troubleshooting in:#general " + unescapeHtml(query);
+  const slackJSON = JSON.stringify({
+    d:encodeURIComponent(slackQuery),
+    r:encodeURIComponent(slackQuery)});
+  a.href = 'https://app.slack.com/client/T01RFPFNAHX/search/search-' + btoa(slackJSON);
+  a.innerHTML = slackQuery;
+
   const hits = data;
   if (hits && hits.length > 0) {
     const unorderedList = document.createElement("ul");
