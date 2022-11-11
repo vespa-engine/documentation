@@ -297,10 +297,16 @@ These parameters are defined in the <code>native</code> query profile type.
         Space between the number and the unit is optional.
       </p>
       <p>
-        The query timeout, returning 0 hits in the result set.
-        To return hits at timeout, refer to <a href="#ranking.softtimeout.enable">ranking.softtimeout.enable</a>
-        <!-- ToDo: check - I think it will return hits by default, now? -->
+        It specifies the overall timeout of the query execution
+        and can be defined in a <a href="query-profiles.html">query profile</a>.
+        Different classes of queries can then easily have a different latency budget/timeout using different profiles.
       </p>
+      <p>
+        At timeout, the hits generated thus far are returned,
+        refer to <a href="#ranking.softtimeout.enable">ranking.softtimeout.enable</a>
+        for details on HTTP status codes and response elements.
+      </p>
+
     </td>
   </tr>
   </tbody>
@@ -604,7 +610,9 @@ These parameters are defined in the <code>native</code> query profile type.
       <p id="ranking.softtimeout.enable">
         By default, the hits available are returned on <a href="#timeout">timeout</a>.
         To return no hits at timeout instead, set <code>ranking.softtimeout.enable=false</code>.
-        Softtimeout use <code>ranking.softtimeout.factor</code> of the <a href="#timeout">timeout</a>, default 70%.
+      </p>
+      <p>
+        Softtimeout uses <code>ranking.softtimeout.factor</code> of the <a href="#timeout">timeout</a>, default 70%.
         The rest of the time budget is spent on later ranking phases.
       </p>
       <p>
@@ -613,11 +621,37 @@ These parameters are defined in the <code>native</code> query profile type.
         unless overridden in the query using <code>ranking.softtimeout.factor</code>.
       </p>
       <p>
+        A <a href="default-result-format.html#timeout">timeout</a> element is returned in the query response at timeout.
+      </p>
+      <p>
         Example: query with 500ms timeout, use 300ms in first-phase ranking:
         <code>&amp;ranking.softtimeout.enable=true<br/>&amp;ranking.softtimeout.factor=0.6<br/>&amp;timeout=0.5</code>
-        Read more about softtimeout in  <a href="../graceful-degradation.html">Coverage degradation</a>.
       </p>
-      <!-- ToDo: the doc originally was ranking.softtimeout - maybe this is an alias to ranking.softtimeout.enable ? -->
+      <p>
+        The <code>ranking.softtimeout</code> settings controls what the content nodes should do
+        in the case where the latency budget has almost been used (timeout times a factor).
+        Return the documents recalled and ranked with the
+        <a href="../phased-ranking.html">first phase function</a> within the time used,
+        or simply don't produce a result:
+      </p>
+      <ul>
+        <li>
+          With soft timeout disabled, the Vespa container will return a 504 timeout without any results.
+        </li>
+        <li>
+          When enabled, it will return the documents matched and ranked up until the timeout was reached,
+          with a 200 OK response along with the reason the result set was degraded.
+        </li>
+      </ul>
+      <p>
+        The container might respond with a timeout error with HTTP response code 504 even with soft timeout enabled
+        if the timeout is set so low that the query does not make it to the content nodes,
+        or the container does not have any time left after input and query processing
+        to dispatch the query to the content nodes.
+      </p>
+      <p>
+        Read more about soft timeout in <a href="../graceful-degradation.html">coverage degradation</a>.
+      </p>
     </td>
   </tr>
   <tr>

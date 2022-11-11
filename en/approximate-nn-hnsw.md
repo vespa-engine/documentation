@@ -25,7 +25,7 @@ See many query examples in the [practical guide](nearest-neighbor-search-guide.h
 * **Mutable HNSW Graph** - No query or indexing overhead from searching multiple <em>HNSW</em> graphs. In Vespa, there is one graph per field. No
 segmented or partitioned graph where a query against a content node need to scan multiple HNSW graphs.
 
-* **Multi-threaded Indexing** - The costly part when performing real time changes to the *HNSW* graph is distance calculations while searching the graph layers
+* **Multithreaded Indexing** - The costly part when performing real time changes to the *HNSW* graph is distance calculations while searching the graph layers
 to find which links to change. These distance calculations are performed by multiple indexing threads. 
 
 ## Using Vespa's approximate nearest neighbor search
@@ -114,10 +114,12 @@ or exact (brute-force) search by using the [approximate query annotation](refere
 By default, `approximate` is true when searching a tensor field with `HNSW` index enabled.
 The `approximate` parameter allows quantifying the accuracy loss of using approximate search. 
 The loss can be calculated by performing an exact neighbor search using `approximate:false` and 
-compare the retrieved documents with `approximate:true` and calculate the overlap@k metric. Note
-that exact searches over a large vector volume require adjustment of the
-[query timeout](reference/query-api-reference.html#timeout). Default Vespa query timeout is 500ms, which will
-be too low for an exact search over many vectors. 
+compare the retrieved documents with `approximate:true` and calculate the overlap@k metric.
+
+Note that exact searches over a large vector volume require adjustment of the
+[query timeout](reference/query-api-reference.html#timeout).
+The default [query timeout](reference/query-api-reference.html#timeout) is 500ms,
+which will be too low for an exact search over many vectors.
 
 In addition to [targetHits](reference/query-language-reference.html#targethits), 
 there is a [hnsw.exploreAdditionalHits](reference/query-language-reference.html#hnsw-exploreadditionalhits) parameter
@@ -148,7 +150,7 @@ Since Vespa 8.78.45 the `pre-filter` can be evaluated using
 [multiple threads per query](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking).
 This can be used to reduce query latency for larger vector datasets where the cost of evaluating the `pre-filter` is significant.
 Note that searching the `HNSW` index is always single-threaded per query.
-Multi-threaded evaluation when using `post-filtering` has always been supported,
+Multithreaded evaluation when using `post-filtering` has always been supported,
 but this is less relevant as the `HNSW` index search first reduces the document candidate set based on `targetHits`.
 
 ## Nearest Neighbor Search Considerations
@@ -185,7 +187,7 @@ blog post on how grouping can be combined with nearest neighbor search.
 
 ### Memory 
 Vespa tensor fields are [in-memory](attributes.html) data structures and so is the `HNSW` graph data structure.
-For large vector datasets the primary memory resource usage relates to the the raw vector field memory usage.
+For large vector datasets the primary memory resource usage relates to the raw vector field memory usage.
 
 Using lower tensor cell type precision can reduce memory footprint significantly, for example using `bfloat16` 
 instead of `float` saves close to 50% memory usage without significant accuracy loss. 
@@ -200,7 +202,7 @@ Vespa [tensor cell value types](tensor-user-guide.html#cell-value-types) include
 
 ### Search latency and document volume
 
-The `HNSW` greedy search algorithm is sub-linear (close to log(N) where N is the number of vectors in the graph). 
+The `HNSW` greedy search algorithm is sublinear (close to log(N) where N is the number of vectors in the graph).
 This has interesting properties when attempting to add more
 nodes horizontally using [flat data distribution](performance/sizing-search.html#data-distribution).
 Even if the document volume per node is reduced by a factor of 10, the search latency is only reduced by 50%. 
@@ -211,7 +213,7 @@ Pure vector search applications (without filtering, or re-ranking) should attemp
 larger instance type and maximize the number of vectors per node. To scale with query throughput,
 use [grouped data distribution](performance/sizing-search.html#data-distribution) to replicate content. 
 
-Note that strongly sub-linear search is not necessarily true if the application
+Note that strongly sublinear search is not necessarily true if the application
 uses nearest neighbor search for candidate retrieval in a <a href="phased-ranking.html">multi-phase ranking</a> pipeline, 
 or combines nearest neighbor search with filters. 
 
