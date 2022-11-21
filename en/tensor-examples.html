@@ -227,4 +227,48 @@ sum(query(query_vector) * attribute(document_matrix),x)
 <p>This is a sparse tensor product over the shared dimension <code>x</code>,
 followed by a sum over the same dimension.</p>
 
-<p><a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMAXZgJwEsAjAV2YIAUAEywBjHgFsCtZgH0JLTgA8AlCTI1IRBJH60AzljYAeaABssLAHwCliAMwBdYgE9EAJkcq4iRAEZiAHZnB2I-PxCAVjCnR0gNCABfDUTSDGpyXAYiNM1KNAS6BgBHHgI2FwFS8pdZADcCUWYjNVyaQgY9QxNzS2YbOydvf2J7Yki4wuSMVI0MzCydHMKKfHnyeh11dogtBn1JKrKKo5r6xua2FTAAKjAWdm4+QRFxKRl5RQ5VYlV49umqEBjhAiSAA">Play around with this example in the playground</a>
+<p>
+  <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMAXZgJwEsAjAV2YIAUAEywBjHgFsCtZgH0JLTgA8AlCTI1IRBJH60AzljYAeaABssLAHwCliAMwBdYgE9EAJkcq4iRAEZiAHZnB2I-PxCAVjCnR0gNCABfDUTSDGpyXAYiNM1KNAS6BgBHHgI2FwFS8pdZADcCUWYjNVyaQgY9QxNzS2YbOydvf2J7Yki4wuSMVI0MzCydHMKKfHnyeh11dogtBn1JKrKKo5r6xua2FTAAKjAWdm4+QRFxKRl5RQ5VYlV49umqEBjhAiSAA">Play around with this example in the playground</a>
+</p>
+
+
+<h2 id="using-a-tensor-as-a-lookup-structure">Using a tensor as a lookup structure</h2>
+<p>
+  Tensors with mapped dimensions look similar to maps, but are more general.
+  What if all needed is a simple map lookup?
+  See <a href="performance/feature-tuning.html#mapped-lookups">tensor performance</a> for more details.
+</p>
+<p>
+  Assume a tensor attribute <code>my_map</code> and this is the value for a specific document:
+</p>
+<pre>
+tensor&lt;float&gt;(x{},y[3]):{a:[1,2,3],b:[4,5,6],c:[7,8,9]}
+</pre>
+<p>
+  To create a query to select which of the 3 named vectors (a,b,c) to use for some other calculation,
+  wrap the wanted label to look up inside a tensor.
+  Assume a query tensor <code>my_key</code> with type/value:
+</p>
+<pre>
+tensor&lt;float&gt;(x{}):{b:1.0}
+</pre>
+<p>Do the lookup, returning a tensor of type <code>tensor&lt;float&gt;(y[3])</code>:</p>
+<pre>
+sum(query(my_key)*attribute(my_map),x)
+</pre>
+<!-- same as reduce(query(my_key)*attribute(my_map),sum,x) -->
+<p>
+  If the key does not match anything, the result will be empty: <code>tensor&lt;float&gt;(y[3]):[0,0,0]</code>.
+  For something else, add a check up-front to check if the lookup will be successful
+  and run a fallback expression if it is not, like:
+</p>
+<pre>
+if(reduce(query(my_key)*attribute(my_map),count) == 3,
+  reduce(query(my_key)*attribute(my_map),sum,x),
+  tensor&lt;float&gt;(y[3]):[0.5,0.5,0.5])
+</pre>
+{% include note.html content='The above can be considered the same as creating a
+<a href="reference/ranking-expressions.html#slice">slice</a>, like <code>(y*x){x:b}</code>.
+The above syntax allows an optimized execution, find an example in the
+<a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gFssATAgGwGcSybIiEkAC4FanLACcAFIwD6ASxbAAvsQAeiAMwBdAJRxgjAIxxEAFgB0ABmJgArNdsA2a9tuMATKYDsjsAA4-AE5XZUheCGVeVV5qclwGIlIaKEo0CLoGZjZ2BRYeFIh+BhExSRk8lX1DLyNrMIyojBiMOMwEwSSMinw28npBRgBDHBwCFll2LCwAawBXPGTC4sFOOcYZVg5OACpsjjziOUVdcJSm1BbUPqgOwgK+NJuigahOdnkAYy7C+8FNnK7fa5E6GPJwTwNc7RFDaEDKIA">
+  Tensor Playground</a>.' %}
