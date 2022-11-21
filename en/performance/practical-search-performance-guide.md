@@ -1650,9 +1650,10 @@ $ vespa query \
 </div>
 
 The `querytime` dropped to 40 ms instead of 120 ms without the `fast-search` option. 
-See also [performance considerations](../tensor-user-guide.html#performance-considerations)
-when using tensor expression. Vespa supports `int8`, `bfloat16`, `float` and
-`double` precision cell types. A tradeoff between speed, accuracy and memory usage.
+See also [performance considerations](feature-tuning.html#tensor-ranking) when using tensor expression.
+Vespa supports `int8`, `bfloat16`, `float` and `double` precision cell types.
+A tradeoff between speed, accuracy and memory usage.
+
 
 ## Multithreaded search and ranking
 So far in this guide all search queries and ranking computations have been performed using 
