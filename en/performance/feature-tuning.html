@@ -324,10 +324,11 @@ field user_id type long {
 }
 </pre>
 <p>
-  E.g if having 10M unique user_ids in the dictionary, a search for 1000 users per query,
+  E.g. if having 10M unique user_ids in the dictionary, a search for 1000 users per query,
   <em>btree</em> dictionary would be 1000 lookup times log(10M),
   while <em>hash</em> based would be 1000 lookups times 1.
-
+</p>
+<p>
   The <code>weightedSet</code> query set filtering approach works great in combination with <em>TAAT</em>,
   see <a href="#hybrid-taat-daat">hybrid TAAT/DAAT</a> section.
 </p>
@@ -369,46 +370,36 @@ Refer to <a href="../attributes.html">attributes</a> for details.
 
 <h2 id="tensor-ranking">Tensor ranking</h2>
 <p>
-  Tensor expressions are fairly concise,
-  and since the expressions themselves are independent of the data size,
-  the actual workload during ranking can be significant for large tensors.
+  The ranking workload can be significant for large tensors -
+  it is important to have an understanding of both the potential memory and computational cost for each query.
+</p>
+
+
+<h3 id="memory">Memory</h3>
+<p>
+  Assume the dot product of two tensors with 1000 values of 8 bytes each as in
+  <code>tensor&lt;double&gt;(x[1000])</code>.
+  With one query tensor and one document tensor,
+  the dot product is <code>sum(query(tensor1) * attribute(tensor2))</code>.
+  Given a Haswell CPU architecture, where the theoretical upper memory bandwidth is 68 GB/sec,
+  this gives 68 GB/sec / 8 KB = 9M ranking evaluations/sec.
+  In other words, for a 1 M index, 9 queries per second before being memory bound.
 </p>
 <p>
-  When using tensors in ranking,
-  it is important to have an understanding of the potential computational cost for each query.
-  As an example, assume the dot product of two tensors with 1000 values each,
-  e.g. <code>tensor&lt;double&gt;(x[1000])</code>.
-  Assuming one query tensor and one document tensor, the operation is:
+  See below for using smaller <a href="#cell-value-types">cell value types</a>, and read more about
+  <a href="https://blog.vespa.ai/from-research-to-production-scaling-a-state-of-the-art-machine-learning-system/#model-quantization">
+  quantization</a>.
 </p>
-<pre>
-sum(query(tensor1) * attribute(tensor2))
-</pre>
-<p>
-  If 8 bytes is used to store each value (e.g. using a double), each tensor is approximately 8 KB.
-  With for instance Haswell architecture,
-  the theoretical upper memory bandwidth is 68 GB/s,
-  which is around 9 million document ranking evaluations per second.
-  With 1 million documents, this means the maximum throughput, in regard to pure memory bandwidth,
-  is 9 queries per second (per node).
-</p>
-<p>
-  Even though you would typically not do the above without reducing the search space first
-  (using matching and first phase),
-  it is important to consider the memory bandwidth and other hardware limitations
-  when developing ranking expressions with tensors.
-</p>
+<h3 id="compute">Compute</h3>
 <p>
   When using tensor types with at least one mapped dimension (sparse or mixed tensor),
   <a href="../reference/schema-reference.html#attribute">attribute: fast-rank</a>
   can be used to optimize the tensor attribute for ranking expression evaluation at the cost of using more memory.
-  This is a trade-off that can be worth taking
-  if benchmarking indicates significant latency improvements with <code>fast-rank</code>.
+  This is a good tradeoff if benchmarking indicates significant latency improvements with <code>fast-rank</code>.
 </p>
 <p>
   When optimizing ranking functions with tensors, try to avoid temporary objects.
-</p>
-<p>
-  Use the Tensor Playground to evaluate what the expressions map to,
+  Use the <a href="https://docs.vespa.ai/playground/">Tensor Playground</a> to evaluate what the expressions map to,
   using the execution details
   <svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg">
     <g fill="none" fill-rule="evenodd" stroke="currentColor"
@@ -420,11 +411,23 @@ sum(query(tensor1) * attribute(tensor2))
       <path d="m8.5 8.5v-3"/>
     </g>
   </svg>
-  to list the detailed steps.
+  to list the detailed steps - find examples below.
 </p>
 
 
-<h3 id="cell-value-types">Performance considerations for cell value types</h3>
+<h3 id="multiphase-ranking">Multiphase ranking</h3>
+<p>
+  To save both memory and compute resources, use <a href="../phased-ranking.html">multiphase ranking</a>.
+  In short, use less expensive ranking evaluations to find the most promising candidates,
+  then a high-precision evaluation for the top-k candidates.
+</p>
+<p>
+  The blog post series on <a href="https://blog.vespa.ai/building-billion-scale-vector-search/">
+  Building Billion-Scale Vector Search</a> is a good read on this.
+</p>
+
+
+<h3 id="cell-value-types">Cell value types</h3>
 <table class="table">
   <thead>
   <tr>
@@ -437,7 +440,7 @@ sum(query(tensor1) * attribute(tensor2))
     <th>double</th>
     <td>
       <p id="double">
-        The 64-bit floating-point "double" format is the default cell type.
+        The 64-bit floating-point <code>double</code> format is the default tensor cell type.
         It gives the best precision at the cost of high memory usage and somewhat slower calculations.
         Using a smaller value type increases performance, trading off precision,
         so consider changing to one of the cell types below before scaling the application.
@@ -448,10 +451,11 @@ sum(query(tensor1) * attribute(tensor2))
     <th>float</th>
     <td>
       <p id="float">
-        The 32-bit floating-point format "float" should usually be used for all tensors when scaling for production.
-        (Note that other frameworks, like tensorflow, will also prefer 32-bit floats)
+        The 32-bit floating-point format <code>float</code> should usually be used for all tensors
+        when scaling for production.
+        Note that some frameworks like tensorflow prefers 32-bit floats.
         A vector with 1000 dimensions,
-        <code>tensor&lt;float&gt;(x[1000])</code> would then use approximately 4K memory per tensor value.
+        <code>tensor&lt;float&gt;(x[1000])</code> uses approximately 4K memory per tensor value.
       </p>
     </td>
   </tr>
@@ -459,16 +463,15 @@ sum(query(tensor1) * attribute(tensor2))
     <th>bfloat16</th>
     <td>
       <p id="bfloat16">
-        If memory (or memory bandwidth) is still a concern,
-        it's possible to change the most space-consuming tensors to use the <code>bfloat16</code> cell type.
         This type has the range as a normal 32-bit float but only 8 bits of precision,
-        and can be thought of as "float with lossy compression".
-        See also <a href="https://en.wikipedia.org/wiki/Bfloat16_floating-point_format">
-        bfloat16 floating-point format</a> on Wikipedia.
+        and can be thought of as a "float with lossy compression" -
+        see <a href="https://en.wikipedia.org/wiki/Bfloat16_floating-point_format">Wikipedia</a>.
+        If memory (or memory bandwidth) is a concern,
+        change the most space-consuming tensors to use the <code>bfloat16</code> cell type.
         Some careful analysis of the data is required before using this type.
       </p>
       <p>
-        Note that when doing calculations <code>bfloat16</code> will act as if it was a 32-bit float,
+        When doing calculations, <code>bfloat16</code> will act as if it was a 32-bit float,
         but the smaller size comes with a potential computational overhead.
         In most cases, the <code>bfloat16</code> needs conversion to a 32-bit float
         before the actual calculation can take place, adding an extra conversion step.
@@ -476,9 +479,9 @@ sum(query(tensor1) * attribute(tensor2))
       <p>
         In some cases, having tensors with <code>bfloat16</code> cells might bypass some build-in optimizations
         (like matrix multiplication) that will be hardware accelerated only if the cells are the same type.
-        To avoid this last case,
+        To avoid this,
         use the <a href="../reference/ranking-expressions.html#cell_cast">cell_cast</a> tensor operation
-        to make sure the cells are of the appropriate type before doing the more expensive operations.
+        to make sure the cells are of the right type before doing the more expensive operations.
       </p>
     </td>
   </tr>
@@ -486,17 +489,20 @@ sum(query(tensor1) * attribute(tensor2))
     <th>int8</th>
     <td>
       <p id="int8">
-        If one uses machine-learning to generate a model with data quantization,
-        you can target the <code>int8</code> cell value type,
+        If using machine-learning to generate a model with data quantization,
+        one can target the <code>int8</code> cell value type,
         which is a signed integer with range from -128 to +127 only.
         This is also treated like a "float with limited range and lossy compression" by the Vespa tensor framework,
         and gives results as if it was a 32-bit float when any calculation is done.
         This type is also suitable when representing boolean values (0 or 1).
-        Note that if the input for an <code>int8</code> cell is not directly representable,
-        the resulting cell value is undefined,
-        so you should take care to only input numbers in the <code>[-128,127]</code> range.
+      </p>
+      {% include note.html content='If the input for an <code>int8</code> cell is not directly representable,
+      the resulting cell value is undefined,
+      so take care to only input numbers in the <code>[-128,127]</code> range.' %}
+      <p>
         It's also possible to use <code>int8</code> representing binary data for
         <a href="../reference/schema-reference.html#distance-metric">hamming distance</a> Nearest-Neighbor search.
+        Refer to <a href="https://blog.vespa.ai/billion-scale-knn/">billion-scale-knn</a> for example use.
       </p>
     </td>
   </tr>
