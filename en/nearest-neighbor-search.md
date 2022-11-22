@@ -96,9 +96,9 @@ fields of [tensor](tensor-user-guide.html) type needs more explanation.
 
 The schema defines two first-order dense tensor types (vectors):
 `image_embedding` and `text_embedding`. `&lt;float&gt;` specifies the 
-[tensor value type](tensor-user-guide.html#cell-value-types) and `d0` denotes the name of the dimension.
+[tensor value type](performance/feature-tuning.html#cell-value-types) and `d0` denotes the name of the dimension.
 
-Vespa [tensor cell value types](tensor-user-guide.html#cell-value-types) include: 
+Vespa [tensor cell value types](performance/feature-tuning.html#cell-value-types) include:
 
 * `int8` 1 byte per tensor value. Typically used to represent binary vectors, for example 64 bits can be represented using 8 `int8` values.
 * `bfloat16` 2 bytes per tensor value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).

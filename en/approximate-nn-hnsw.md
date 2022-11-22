@@ -192,7 +192,7 @@ For large vector datasets the primary memory resource usage relates to the raw v
 Using lower tensor cell type precision can reduce memory footprint significantly, for example using `bfloat16` 
 instead of `float` saves close to 50% memory usage without significant accuracy loss. 
 
-Vespa [tensor cell value types](tensor-user-guide.html#cell-value-types) include: 
+Vespa [tensor cell value types](performance/feature-tuning.html#cell-value-types) include:
 
 * `int8` 1 byte per value. Used to represent binary vectors, for example 64 bits can be represented using 8 `int8` values.
 * `bfloat16` 2 bytes per value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).
@@ -217,10 +217,10 @@ Note that strongly sublinear search is not necessarily true if the application
 uses nearest neighbor search for candidate retrieval in a <a href="phased-ranking.html">multi-phase ranking</a> pipeline, 
 or combines nearest neighbor search with filters. 
 
+
+
 ## HNSW Operations 
 Changing the [distance-metric](reference/schema-reference.html#distance-metric)
 for a tensor field with `hnsw` `index` requires [restarting](reference/schema-reference.html#changes-that-require-restart-but-not-re-feed), 
 but not re-indexing (re-feed vectors). Similar, changing the `max-links-per-node` and
 `neighbors-to-explore-at-insert` construction parameters requires re-starting. 
-
-
