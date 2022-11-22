@@ -1,0 +1,253 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Vector Search"
+---
+
+<p>
+  Vector Search is a method to search objects using a digital representation of both the query and the objects -
+  easier explained by example:
+</p>
+<p>
+  Consider a user searching for the flower "Dandelion".
+  A regular text search will match <a href="https://en.wikipedia.org/wiki/Taraxacum">this Wikipedia article</a>,
+  as the "dandelion" term is in the text:
+</p>
+<p>
+  <span style="font-style: italic; font-size: 1.8em; font-family: 'Linux Libertine','Georgia','Times',serif;">
+  Taraxacum</span>
+<p>
+<hr/>
+<p style="font-size: 92%; font-family: sans-serif;">
+  From Wikipedia, the free encyclopedia (Redirected from <span style="background-color: yellow;">Dandelion</span>)
+</p>
+<blockquote style="font-family: sans-serif;">
+  "<span style="background-color: yellow;">Dandelion</span>" redirects here.
+  It may refer to any species of the genus Taraxacum or specifically to Taraxacum officinale.
+  For similar plants, see False <span style="background-color: yellow;">dandelion</span>.
+  For other uses, see <span style="background-color: yellow;">Dandelion</span> (disambiguation)
+</blockquote>
+<p style="font-family: sans-serif;">
+  <strong><em>Taraxacum</em></strong> (/təˈræksəkʊm/) is a large genus of flowering plants in the family Asteraceae,
+  which consists of species commonly known as dandelions.
+</p>
+<p>
+  ...
+</p>
+<hr/>
+<p>
+  This document is about dandelions, for sure.
+  However, if the user searches for "blowball" (the mature spherical seed head of a dandelion),
+  the text above will not match, although the document is a good match for "blowball".
+  Example images of a dandelion:
+</p>
+<img src="https://upload.wikimedia.org/wikipedia/commons/4/4f/DandelionFlower.jpg"
+     alt="DandelionFlower.jpg" width="220" height="176" />
+<img src="https://upload.wikimedia.org/wikipedia/commons/5/54/TaraxacumOfficinaleSeed.JPG"
+     alt="DandelionFlower.jpg" width="220" height="165" />
+<p>
+  <em>Photos by Greg Hume</em>
+</p>
+<p>
+  This gets more complicated with more content types.
+  It is hard to use text search to match the images without any text.
+  The same goes for videos, podcasts, songs, TV shows, and so on - this is often called multi-modal search.
+  A workaround is to search the object’s textual metadata, like a song’s title, the podcast episode summary,
+  and the image’s <em>alt</em> text on the webpage.
+  Such metadata is only sometimes available and is often too short/imprecise - this does not solve the root problem.
+</p>
+<p>
+  The query can be an image itself or a song, where the users want <em>more like this</em>,
+  in the context of the current song or an image being viewed.
+  This is a problem found in recommender systems.
+</p>
+
+
+
+<h2 id="digital-representations">Digital representations</h2>
+<p>
+  A solution to the synonym or multi-modal problem is to change from matching in the textual to the digital domain.
+  This means transforming text, images, and songs into a set of numbers that indicate what it is <em>about</em>.
+</p>
+<p>
+  Examples of different objects, and their vector representation:
+</p>
+<style>
+  table {
+    border-collapse: separate;
+    border-spacing: 0 10px;
+    margin-left: 40px;
+  }
+  td {
+    vertical-align: top;
+  }
+</style>
+<table>
+  <tr>
+    <td><img src="https://upload.wikimedia.org/wikipedia/commons/4/4f/DandelionFlower.jpg"
+             alt="DandelionFlower.jpg" width="55" height="44"/></td>
+    <td><strong>[0.560, 0.001, 0.223, ...]</strong></td>
+  </tr>
+  <tr>
+    <td><img src="/assets/img/dandelion-song.png" alt="Dandelion bu Anna of the North"/></td>
+    <td><strong>[0.0, 0.011, 0.0, ...]</strong></td>
+  </tr>
+  <tr>
+    <td style="width: 30%;">
+    "Taraxacum is a large genus of flowering plants in the family Asteraceae,
+    which consists of species commonly known as dandelions."</td>
+    <td><strong>[0.002, 0.001, 0.411, ...]</strong></td>
+  </tr>
+  <tr>
+    <td>dandelions</td>
+    <td><strong>[0.002, 0.021, 0.355, ...]</strong></td>
+  </tr>
+</table>
+<p>
+  The digital representation of the object is hence a sequence of numbers,
+  called a <em>vector</em>, also called an <em>embedding</em>.
+</p>
+<p>
+  By converting all the objects searched for <em>and</em> the query to vectors (digital representations),
+  the search problem is changed into finding similar vectors - i.e., <em>vector search</em>.
+</p>
+
+
+
+<h2 id="how-vectors-are-created">How vectors are created</h2>
+<p>
+  Creating vectors from the objects can be done in multiple ways.
+  Machine learning is often used; there are many ready-made models to get you started.
+</p>
+<p>
+  The quality of the vectors will decide the quality of the search,
+  so this is where organizations will want to spend their effort improving search.
+</p>
+<p>
+  A vector has a <em>dimension</em> (length) and type (type of each cell).
+</p>
+<p>
+  The cost/quality tradeoff is essential -
+  given a vector, it can be represented with lower precision or shortened, keeping the most relevant dimensions.
+  This reduces search precision, but cuts costs into a fraction.
+  A 75% cost reduction might reduce precision, but acceptable for the use case.
+  Vespa supports <a href="reference/tensor.html">four types</a>, with an 8x difference in memory cost:
+</p>
+<table>
+  <tr><th>Int8</th><td>8 bits, 1 byte per dimension</td></tr>
+  <tr><th>bfloat16&nbsp;&nbsp;</th><td>16 bits, 2 bytes per dimension</td></tr>
+  <tr><th>float</th><td>32 bits, 4 bytes per dimension</td></tr>
+  <tr><th>double</th><td>64 bits, 8 bytes per dimension</td></tr>
+</table>
+<p>
+  Read more on selecting the optimal type:
+</p>
+<ul>
+  <li><a href="https://blog.vespa.ai/billion-scale-knn/">billion-scale-knn</a></li>
+</ul>
+<p>
+  Vectors are often some hundred numbers long, like 768 or 384.
+  A longer vector can hold more information, but some dimensions are more information-rich than others.
+  If most of the values in a dimension are equal or very close to each other,
+  the dimension has little value and can be eliminated:
+</p>
+<ul>
+  <li><a href="https://blog.vespa.ai/building-billion-scale-vector-search-part-two#dimension-reduction-using-principal-component-analysis-pca">
+    Dimension reduction using Principal Component Analysis (PCA)</a></li>
+</ul>
+<p>
+  A better approach is often to use an ML model with the optimal size from the start for the use case, once found.
+</p>
+
+
+
+<h2 id="doing-a-vector-search">Doing a vector search</h2>
+<p>
+  "dandelion" matches "dandelion", but "rose" does not.
+  Text search has a binary nature.
+  However, both are flowers and considered more similar to each other than "airplane".
+  Unlike text matching, a vector search will not match items exactly.
+  In the following example,
+  we are using a very short 3-dim vector for simplicity and using the dimensions as coordinates in a 3D space:
+</p>
+<img src="/assets/img/3Dplot.png" alt="Nearest neighbor scatter plot" />
+<p>
+  We see that <span style="color: #1071e5; font-weight: bold;">[0.000, 0.497, 0.110]</span>
+  is not equal to <span style="color: #e81313; font-weight: bold;">[0.101, 0.560, 0.093]</span>, but quite close -
+  closer than <span style="color: #2ca02c; font-weight: bold;">[0.611, 0.000, 0.217]</span>.
+</p>
+<p>
+  In other words, if the values for each dimension are close, the vectors are similar -
+  and this can be used in search to find the <em>nearest neighbor</em> or NN.
+  There are multiple ways to calculate vector similarity using a <em>distance metric</em>:
+</p>
+<ul>
+  <li><a href="reference/schema-reference.html#distance-metric">distance-metric</a></li>
+</ul>
+
+
+
+<h2 id="approximate-for-speed">Approximate for speed</h2>
+<p>
+  Calculating vector similarity can be thought of as multiplying the number of dimensions with the number of vectors.
+  If you are a Canadian, represented by a 768-dim vector,
+  this is 768 x 39,000,000 = 29,952,000,000, or 29 billion calculations to find the other Canadian most similar to you.
+</p>
+<p>
+  There are ways to approximate this by doing fewer calculations,
+  and still finding the closest vector with high probability -
+  this is called <em>Approximate Nearest Neighbor search</em>, or <em>ANN search</em>.
+  Vespa supports both exact nearest neighbor search and ANN search:
+</p>
+<ul>
+  <li><a href="approximate-nn-hnsw.html">approximate-nn-hnsw</a></li>
+</ul>
+<p>
+  Note that ANNs require some kind of indexing to speed up search,
+  so inserts (adding a new vector) are more expensive (uses more CPU) and takes more space (memory and disk).
+  When evaluating different kinds of ANN indexing,
+  consider if your use case requires updates, including deletes, to the vectors - Vespa supports all.
+</p>
+
+
+<!-- ToDo: drop this section for now, improve it
+<h2 id="optimizing-vector-search">Optimizing vector search</h2>
+
+
+<h3 id="centroids">Centroids</h3>
+<p>
+  Even after adding an index like <a href="https://arxiv.org/abs/1603.09320">HNSW</a>,
+  there are ways to optimize the search further.
+  Using the Canadian example, if we only consider location and you live in Ontario,
+  it is evident that your nearest neighbor lives in Ontario, Manitoba, or Quebec
+  (current and neighbor states - not the ones farther away).
+  The same goes with the full vectors -
+  if we assign vectors to a centroid (think of this as the midpoint or average vector in a cluster),
+  we can find the closest centroids and look at the vectors set to these centroids.
+  This is a way to eliminate the vectors with the longest distance from you quickly.
+</p>
+<p>
+  Another strategy is using multiphased ranking.
+  The centroid examples linked above also use multiphase ranking; this is general:
+  Run the query with increasingly intensive calculations to fine-tune the ranking of the candidate vectors.
+  In another way, use cheap calculations to discard long-distance vectors, spending most resources on the closest.
+</p>
+<p>
+  Read more un using centroids and multiphase ranking in
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/">
+    billion-scale-image-search</a>.
+</p>
+
+
+<h3 id="bitwise-operations">Bitwise operations</h3>
+<p>
+  As the Int8 type is an integer, it can be used to represent bits used in distance metrics like Hamming distance.
+  A 768-bit vector can be represented using 96 bytes.
+  This is then used in <a href="https://blog.vespa.ai/billion-scale-knn/#representing-hash-like-binary-codes-in-vespa">
+  hash-like binary-codes</a> to implement cost efficient first phase retrieval functions.
+</p>
+-->
+
+<!-- ToDo: A section on the shortcomings when using vector search alone using off-the-shelf models,
+           but that hybrid search helps on this. Link to the two talks on this from BB. -->
+
+<!-- Todo: A section on choosing vectorization model and how to use embeddings made easy, how to convert etc. -->
