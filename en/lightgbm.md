@@ -14,14 +14,13 @@ categorical features. If you have models that are trained with
 and use them directly.
 
 
-
 ## Exporting models from LightGBM
 
 Vespa supports importing LightGBM's
 [`dump_model`](https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.Booster.html#lightgbm.Booster.dump_model).
 This dumps the tree model and other useful data such as feature names,
-objective functions, and values of categorical features to a JSON file.  An
-example of training and saving a model suitable for use in Vespa is as follows.
+objective functions, and values of categorical features to a JSON file.  
+An example of training and saving a model suitable for use in Vespa is as follows.
 
 ```
 import json
@@ -53,7 +52,9 @@ with open("lightgbm_model.json", "w") as f:
 While this particular model isn't doing anything really useful, the output
 file `lightgbm_model.json` can be imported directly into Vespa.
 
-
+See also a complete example of how to train a ranking function, using learning to rank 
+with ranking losses, in this 
+[notebook](https://github.com/vespa-engine/sample-apps/blob/master/commerce-product-ranking/notebooks/Train-lightgbm.ipynb).
 
 ## Importing LightGBM models
 
@@ -78,7 +79,7 @@ both ranking and [stateless model evaluation](stateless-model-evaluation.html).
 
 ## Ranking with LightGBM models
 
-Vespa has a  [ranking feature](reference/rank-features.html)
+Vespa has a [ranking feature](reference/rank-features.html)
 called `lightgbm`. This ranking feature specifies the model to use in a ranking
 expression, relative under the `models` directory. Consider the following example:
 
@@ -158,11 +159,7 @@ from a query value passed along with the query.
 
 One can also use `attribute(doc_attrib)` directly as a feature name when
 training the LightGBM model. This allows dumping rank features from Vespa
-to train a model directly. For more information, see [learning to
-rank](learning-to-rank.html).  Even though that page contains an example of
-using XGBoost, it is valid for LightGBM as well.
-
-
+to train a model directly. 
 
 ## Objective functions
 
@@ -172,13 +169,16 @@ using a binary classifier. That should not be needed in LightGBM, as that
 information is passed along in the model dump as seen in the `objective` section
 in the JSON output above.
 
-Currently, Vespa supports regression, binary log loss and cross-entropy
-applications. Multi-class and ranking will soon be available.
+Currently, Vespa supports importing models trained with the following objectives: 
+
+- `binary` 
+- `regression`
+- `lambdarank`
+- `rank_xendcg`
+- `rank_xendcg`
 
 For more information on LightGBM and objective functions, see
 [`objective`](https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective).
-
-
 
 ## Using categorical features
 

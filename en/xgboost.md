@@ -5,9 +5,7 @@ redirect_from:
 - /documentation/xgboost.html
 ---
 
-If you have models that are trained in XGBoost, Vespa can import the models
-and use them directly. See [Learning to Rank](learning-to-rank.html) for examples of using XGBoost models for ranking.
-
+Vespa supports importing Gradient Boosting Decision Tree (GBDT) models trained with XGBoost. 
 
 ## Exporting models from XGBoost
 
@@ -67,6 +65,11 @@ Format of ```feature-map.txt: <featureid> <featurename> <q or i or int>\n ```:
   - "q" means this feature is a quantitative value, such as age, time, can be missing
   - "int" means this feature is integer value (when int is hinted, the decision boundary will be integer)
 
+When using `pandas` with `DataFrame` with columns names, one does not feature mappings.  
+
+See also a complete example of how to train a ranking function, using learning to rank 
+with ranking losses, in this 
+[notebook](https://github.com/vespa-engine/sample-apps/blob/master/commerce-product-ranking/notebooks/Train-xgboost.ipynb).
 
 ## Importing XGBoost models
 
@@ -114,15 +117,18 @@ Generally the run time complexity is determined by
 
 
 ## XGBoost models 
-There are two types of XGBoost models which can be deployed directly to Vespa: 
+There are three [objective](https://xgboost.readthedocs.io/en/stable/parameter.html#learning-task-parameters) 
+types that Vespa supports: 
 
 * Regression ```reg:squarederror``` / ```reg:logistic```
 * Classification ```binary:logistic```
+* Ranking ```rank:pairwise```, ```rank:ndcg``` and  ```rank:map```
 
 For `reg:logistic` and `binary:logistic` the raw margin tree sum (Sum of all trees)
 needs to be passed through the sigmoid function to represent the probability of class 1.
-For regular regression the model can be directly imported
-but the base_score should be set 0 as the base_score used during the training phase is not dumped with the model. 
+F
+or regular regression the model can be directly imported
+but the `base_score` should be set 0 as the `base_score` used during the training phase is not dumped with the model. 
 
 An example model using the sklearn toy datasets is given below:
 
@@ -148,7 +154,6 @@ schema xgboost {
     }
 }
 ```
-
 
 ## Known issues 
 * When dumping XGBoost models to a JSON representation some of the model information is lost
