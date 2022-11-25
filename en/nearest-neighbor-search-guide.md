@@ -1299,7 +1299,7 @@ The query returns the following result:
 {% endhighlight %}</pre>
 
 The result hits also include [match-features](reference/schema-reference.html#match-features) which 
-can be used for feature logging for [learning to rank](learning-to-rank.html), or to simply
+can be used for feature logging for learning to rank, or to simply
 debug the components in the final score. 
 
 In the below query, the `weight` of the embedding similarity (closeness) is increased by overriding

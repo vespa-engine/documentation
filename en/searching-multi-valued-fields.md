@@ -621,10 +621,7 @@ $ docker rm -f vespa
 
 ## Conclusion
 In this guide we have looked at how one can build a query retrieval strategy and how to change ranking 
-when searching multi-valued fields using the weightedset field type. A natural continuation is to look
-at how to use the many rank features by learning a ranking function. See for example
-[learning to rank](learning-to-rank.html) and [improving text search through ML](tutorials/text-search-ml.html). 
-
+when searching multi-valued fields using the weightedset field type. 
 
 
 <script src="/js/process_pre.js"></script>
