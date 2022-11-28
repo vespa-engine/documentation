@@ -10,7 +10,7 @@ Vespa supports importing Gradient Boosting Decision Tree (GBDT) models trained w
 ## Exporting models from XGBoost
 
 Vespa supports importing XGBoost's JSON model dump, e.g. Python API
-([xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model).
+[xgboost.Booster.dump_model](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model).
 When dumping the trained model, XGBoost allows users to set the `dump_format` to `json`,
 and users can specify the feature names to be used in `fmap`. 
 
