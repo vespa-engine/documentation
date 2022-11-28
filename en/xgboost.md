@@ -28,7 +28,7 @@ Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 
   ]}
 ]
 ```
-Notice the 'split' attribute which represents the feature name. The above model was produced using the XGBoost python api:
+Notice the `split` attribute which represents the feature name. The above model was produced using the XGBoost python api:
 
 ```python
 #!/usr/local/bin/python3
