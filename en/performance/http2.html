@@ -4,92 +4,113 @@ title: "HTTP/2"
 redirect_from:
 - /documentation/performance/http2.html
 ---
+
 <p>
-    This document contains HTTP/2 performance considerations on the container—see
-    <a href="container-tuning.html">Container tuning</a> for general tuning of container clusters.
+  This document contains HTTP/2 performance considerations on the container—see
+  <a href="container-tuning.html">Container tuning</a> for general tuning of container clusters.
 </p>
 
-<h2>Enabling HTTP/2 on container</h2>
+
+
+<h2 id="enabling-http-2-on-container">Enabling HTTP/2 on container</h2>
 <p>
-    HTTP/2 is enabled on a container for all connectors with TLS/HTTPS configured (requires Vespa 7.418.23 or newer).
-    From Vespa 7.462.20 HTTP/2 is available and enabled by default for connectors without TLS as well.
-    We do recommended HTTP/2 with TLS, both for added security, but also for a more robust connection upgrade mechanism.
-    Web browsers will typically only allow HTTP/2 over TLS.
+  HTTP/2 is enabled on a container for all connectors with TLS/HTTPS configured (requires Vespa 7.418.23 or newer).
+  From Vespa 7.462.20 HTTP/2 is available and enabled by default for connectors without TLS as well.
+  We do recommended HTTP/2 with TLS, both for added security, but also for a more robust connection upgrade mechanism.
+  Web browsers will typically only allow HTTP/2 over TLS.
 </p>
 
-<h3>HTTP/2 with TLS</h3>
+
+<h3 id="http-2-with-tls">HTTP/2 with TLS</h3>
 <p>
-    Both HTTP/1.1 and HTTP/2 will be served over the same connector using the <a href="https://datatracker.ietf.org/doc/html/rfc7301">TLS ALPN Extension</a>.
-    The Application-Layer Protocol Negotiation (ALPN) extension allows the client to send a list of supported protocols during TLS handshake.
-    The container selects a supported protocol from that list.
+  Both HTTP/1.1 and HTTP/2 will be served over the same connector using the
+  <a href="https://datatracker.ietf.org/doc/html/rfc7301">TLS ALPN Extension</a>.
+  The Application-Layer Protocol Negotiation (ALPN) extension allows the client to send a list of supported protocols
+  during TLS handshake.
+  The container selects a supported protocol from that list.
 </p>
 <p>
-    The <a href="https://datatracker.ietf.org/doc/html/rfc7540">HTTP/2 specification</a> dictates multiple requirements for the TLS connection.
-    Vespa may enforce some or all of these restrictions. See the HTTP/2 specification for the full list. The most significant are listed below:
+  The <a href="https://datatracker.ietf.org/doc/html/rfc7540">HTTP/2 specification</a>
+  dictates multiple requirements for the TLS connection.
+  Vespa may enforce some or all of these restrictions.
+  See the HTTP/2 specification for the full list. The most significant are listed below:
 </p>
 <ul>
-    <li>Client must use at least TLSv1.2.</li>
-    <li>Client must provide target domain with the TLS Server Name Indication (SNI) Extension.</li>
-    <li>Client must not use any of the banned <a href="https://datatracker.ietf.org/doc/html/rfc7540#appendix-A">TLSv1.2 ciphers</a>.</li>
+  <li>Client must use at least TLSv1.2.</li>
+  <li>Client must provide target domain with the TLS Server Name Indication (SNI) Extension.</li>
+  <li>Client must not use any of the banned
+    <a href="https://datatracker.ietf.org/doc/html/rfc7540#appendix-A">TLSv1.2 ciphers</a>.</li>
 </ul>
 
-<h3>HTTP/2 without TLS</h3>
+
+<h3 id="http-2-without-tls">HTTP/2 without TLS</h3>
 <p>The jdisc container supports both mechanism for HTTP/2 without TLS:</p>
 <ol>
-    <li>Upgrading to HTTP/2 from HTTP/1</li>
-    <li>HTTP/2 with prior knowledge</li>
+  <li>Upgrading to HTTP/2 from HTTP/1</li>
+  <li>HTTP/2 with prior knowledge</li>
 </ol>
 
-<h2>Feeding over HTTP/2</h2>
+
+
+<h2 id="feeding-over-http-2">Feeding over HTTP/2</h2>
 <p>
-    One of the major improvements with HTTP/2 is multiplexing of multiple concurrent requests over a single TCP connection.
-    This allows for high-throughput feeding through the <a href="../reference/document-v1-api-reference.html">Document v1 HTTP API</a>,
-    with a simple one-operation–one-request model, but without the overhead of
-    hundreds of parallel connections that HTTP/1.1 would require for sufficient concurrency.
+  One of the major improvements with HTTP/2 is multiplexing of multiple concurrent requests over a single TCP connection.
+  This allows for high-throughput feeding through the
+  <a href="../reference/document-v1-api-reference.html">Document v1 HTTP API</a>,
+  with a simple one-operation–one-request model,
+  but without the overhead of hundreds of parallel connections that HTTP/1.1 would require for sufficient concurrency.
 </p>
 <p>
-    Vespa provides a Java implementation of HTTP/2 + Document v1 in <a href="../vespa-feed-client.html">vespa-feed-client</a>.
-    This client is available both as a Java API and a command line client.
+  Vespa provides a Java implementation of HTTP/2 + Document v1 in
+  <a href="../vespa-feed-client.html">vespa-feed-client</a>.
+  This client is available both as a Java API and a command line client.
 </p>
 
-<h2>Performance tuning</h2>
-<h3>Client</h3>
+
+
+<h2 id="performance-tuning">Performance tuning</h2>
+
+
+<h3 id="client">Client</h3>
 <p>
-    The number of multiple concurrent requests per connection is typically adjustable in HTTP/2 clients/libraries.
-    Document v1 API is designed for high concurrency and can easily handle thousands of concurrent requests.
-    Its implementation is asynchronous and max concurrency is not restricted by a thread pool size,
-    so configure your client to allow enough concurrent requests/streams to saturate the feed container.
-    Other APIs such as the <a href="../query-api.html">Query API</a> is backed by a synchronous implementation,
-    and max concurrency is restricted by the <a href="container-tuning.html#container-worker-threads">underlying thread pool size</a>.
-    Too many concurrent streams may result in the container rejecting requests with 503 responses.
+  The number of multiple concurrent requests per connection is typically adjustable in HTTP/2 clients/libraries.
+  Document v1 API is designed for high concurrency and can easily handle thousands of concurrent requests.
+  Its implementation is asynchronous and max concurrency is not restricted by a thread pool size,
+  so configure your client to allow enough concurrent requests/streams to saturate the feed container.
+  Other APIs such as the <a href="../query-api.html">Query API</a> is backed by a synchronous implementation,
+  and max concurrency is restricted by the
+  <a href="container-tuning.html#container-worker-threads">underlying thread pool size</a>.
+  Too many concurrent streams may result in the container rejecting requests with 503 responses.
 </p>
 <p>
-    There are also still some reasons to use multiple TCP connections—even with HTTP/2:
+  There are also still some reasons to use multiple TCP connections—even with HTTP/2:
 </p>
 <ul>
-    <li><strong>Utilize multiple containers</strong>.
-        A single container may not saturate the content layer.
-        A client may have to use more connections than container nodes if the containers are behind a load balancer.</li>
-    <li><strong>Higher throughput</strong>.
-        Many clients allow only for a single thread to operate each connection.
-        Multiple connections may be required for utilizing several CPU cores.
-    </li>
+  <li><strong>Utilize multiple containers</strong>.
+    A single container may not saturate the content layer.
+    A client may have to use more connections than container nodes if the containers are behind a load balancer.</li>
+  <li><strong>Higher throughput</strong>.
+    Many clients allow only for a single thread to operate each connection.
+    Multiple connections may be required for utilizing several CPU cores.
+  </li>
 </ul>
 
-<h2>Client recommendations</h2>
+
+
+<h2 id="client-recommendations">Client recommendations</h2>
 <p>
-    Use <a href="../vespa-feed-client.html">vespa-feed-client</a> for feeding through Document v1 API (JDK8+).
+  Use <a href="../vespa-feed-client.html">vespa-feed-client</a> for feeding through Document v1 API (JDK8+).
 </p>
 <p>
-    We recommend the <a href="https://nghttp2.org/documentation/h2load-howto.html">h2load benchmarking tool</a> for load testing.
-    <a href="../reference/vespa-cmdline-tools.html#vespa-fbench">vespa-fbench</a> does not support HTTP/2 at the moment.
+  We recommend the <a href="https://nghttp2.org/documentation/h2load-howto.html">h2load benchmarking tool</a> for load testing.
+  <a href="../reference/vespa-cmdline-tools.html#vespa-fbench">vespa-fbench</a> does not support HTTP/2 at the moment.
 </p>
 <p>
-    For Java there are 4 good alternatives:
+  For Java there are 4 good alternatives:
 </p>
 <ol>
-    <li><a href="https://www.eclipse.org/jetty/javadoc/jetty-9/org/eclipse/jetty/client/HttpClient.html">Jetty Client</a>
-    <li><a href="https://square.github.io/okhttp/">OkHttp</a></li>
-    <li><a href="https://hc.apache.org/httpcomponents-client-5.1.x/">Apache HttpClient 5.x</a></li>
-    <li><a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.html">java.net.http.HttpClient (JDK11+)</a> </li>
+  <li><a href="https://www.eclipse.org/jetty/javadoc/jetty-9/org/eclipse/jetty/client/HttpClient.html">Jetty Client</a>
+  <li><a href="https://square.github.io/okhttp/">OkHttp</a></li>
+  <li><a href="https://hc.apache.org/httpcomponents-client-5.1.x/">Apache HttpClient 5.x</a></li>
+  <li><a href="https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.html">java.net.http.HttpClient (JDK11+)</a> </li>
 </ol>
