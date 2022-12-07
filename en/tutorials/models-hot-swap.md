@@ -106,7 +106,7 @@ search config {
         field version type long {
             indexing: summary | attribute
         }
-   }
+    }
 }
 ```
 
@@ -261,16 +261,19 @@ Note that a difference may be briefly acceptable during a hot swap,
 where ongoing queries should access documents from the set that became old.
 We can therefore allow some slack in our filter definition,
 defined in `services.xml` under the `<content>` tag:
-```
-    <documents garbage-collection="true" garbage-collection-interval="21600">
-      <document mode='index' type='config' global='true'/>
-      <document mode='index' type='news' global='true'
-                selection='(news.latest_version == null) or (news.version >= news.latest_version - 2)'/>
-      <document mode='index' type='news_model'
-                selection='(news_model.latest_version == null) or (news_model.version >= news_model.latest_version - 2)'/>
-      <document mode='index' type='user'
-                selection='(user.latest_version == null) or (user.version >= user.latest_version - 2)'/>
-    </documents>
+```xml
+<documents garbage-collection="true" garbage-collection-interval="21600">
+    <document mode='index' type='config' global='true'/>
+    <document mode='index' type='news' global='true'
+              selection='(news.latest_version == null)
+                      or (news.version >= news.latest_version - 2)'/>
+    <document mode='index' type='news_model'
+              selection='(news_model.latest_version == null)
+                      or (news_model.version >= news_model.latest_version - 2)'/>
+    <document mode='index' type='user'
+              selection='(user.latest_version == null)
+                      or (user.version >= user.latest_version - 2)'/>
+</documents>
 ```
 
 {% include note.html content="The filter not only compares the internal and the latest versions
@@ -328,7 +331,7 @@ search config {
         field next_version type long {
             indexing: summary | attribute
         }
-   }
+    }
 }
 ```
 
