@@ -36,7 +36,7 @@ const handleResults = (data, query) => {
     d:encodeURIComponent(slackQuery),
     r:encodeURIComponent(slackQuery)});
   a.href = 'https://app.slack.com/client/T01RFPFNAHX/search/search-' + btoa(slackJSON);
-  a.innerHTML = slackQuery;
+  a.innerHTML = "in:#troubleshooting in:#general " + query;
 
   const hits = data;
   if (hits && hits.length > 0) {
