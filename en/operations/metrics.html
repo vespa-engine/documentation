@@ -8,16 +8,28 @@ redirect_from:
 
 
 <p>
-  Metrics can be accessed aggregated on an application-level using
-  <em><a href="../reference/metrics-v2.html#metrics-v2-values">/metrics/v2/values</a></em>
-  or at node-level using either
+  Metrics for <span style="text-decoration: underline;">all nodes</span> is aggregated using
+  <em><a href="../reference/metrics-v2.html#metrics-v2-values">/metrics/v2/values</a></em> or
+  <em><a href="../reference/prometheus-v1.html#prometheus-v1-values">/prometheus/v1/values</a></em>
+  on a container node (normally on 8080).
+</p>
+<p>
+  Alternatively, at <span style="text-decoration: underline;">node-level</span> using either
   <em><a href="../reference/metrics-v1.html#metrics-v1-values">/metrics/v1/values</a></em> or
-  <em><a href="../reference/prometheus-v1.html#prometheus-v1-values">/prometheus/v1/values</a></em>:
+  <em><a href="../reference/prometheus-v1.html#prometheus-v1-values">/prometheus/v1/values</a></em>
+  on the metrics-proxy (normally on 19092)
+</p>
+<p>
+  Think of <em>/metrics/v2/values</em> as an aggregation over <em>/metrics/v1/values</em> for all nodes,
+  with some of the dimensions filtered out:
 </p>
 <img src="/assets/img/metrics-api.svg" alt="Metric endpoints" width="1000" height="auto">
-<p>
-  Example getting a metrics value from a node:
-</p>
+<p>See the <a href="monitoring.html">monitoring guide</a> for more details of the metrics endpoints.</p>
+{% include note.html content='<em>/metrics/v2/values</em> on the metrics-proxy (normally on 19092)
+got metrics for the current node, not all nodes.
+Metric-proxies intercommunicate to build a metric cache on the internal <em>applicationmetrics/v1/</em> -
+this is replicated on the container <em>/metrics/v2/values</em>.' %}
+<p>Example getting a metrics value from a node using <em>/metrics/v1/values</em>:</p>
 <pre>
 $ curl -s http://localhost:19092/metrics/v1/values/?consumer=vespa | \
   jq '.services[] | select(.name=="vespa.distributor") |
@@ -28,12 +40,22 @@ Same metric, using the prometheus endpoint:
 $ curl -s http://localhost:19092/prometheus/v1/values/?consumer=vespa | \
   grep "vds.idealstate.merge_bucket.pending.average" | egrep -v 'HELP|TYPE'
 </pre>
-{% include important.html content='Make sure to use <code>consumer=vespa</code> to list all metrics.' %}
-<p>
-  See the <a href="monitoring.html">monitoring guide</a> for more details of the metrics endpoints.
-</p>
+{% include important.html content='Make sure to use <a href="../reference/metrics-v1.html#consumer">consumer=vespa</a>
+to list all metrics.' %}
+<p>Example getting a metric value from a set of nodes using <em>/metrics/v2/values</em>:</p>
+<pre>
+$ curl http://localhost:8080/metrics/v2/values | \
+  jq -r -c '
+    .nodes[] |
+    .hostname as $h |
+    .services[].metrics[] |
+    select(.values."content.proton.documentdb.documents.total.last") |
+    [$h, .dimensions.documenttype, .values."content.proton.documentdb.documents.total.last"] |
+    @tsv'
 
-
+node9.vespanet	music	0
+node8.vespanet	music	0
+</pre>
 
 <h2 id="metric-sets">Metric-sets</h2>
 <p>
