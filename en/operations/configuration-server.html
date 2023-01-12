@@ -72,9 +72,8 @@ $ VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.my
 <p>
   When there are multiple config servers, the <a href="config-proxy.html">config proxy</a>
   will pick a config server randomly (to achieve load balancing between config servers).
-  The config proxy is fault-tolerant and will switch to another config server if the one it is using becomes unavailable
-  or there is an error in the configuration it receives.
-  With only one config server configured, it will continue using that in case of errors.
+  The config proxy is fault-tolerant and will switch to another config server (if there is more than one)
+  if the one it is using becomes unavailable or there is an error in the configuration it receives.
 </p>
 <p>
   For the system to tolerate <em>n</em> failures,
@@ -85,10 +84,10 @@ $ VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.my
 <p>
   Even when using just one config server, the application will work if the server goes down
   (but deploying application changes will not work).
-  Since the  <em>config proxy</em> runs on every node and caches configs,
+  Since the <em>config proxy</em> runs on every node and caches configs,
   it will continue to serve config to the services on that node.
   However, restarting a node when config servers are unavailable
-  will lead to a failure of that node since the cache will be destroyed when restarting the config proxy.
+  means that services on the node will be unable to start since the cache will be destroyed when restarting the config proxy.
 </p>
 <p>
   Refer to the <a href="../reference/services-admin.html#configservers">admin model reference</a>
@@ -205,24 +204,26 @@ Container.com.yahoo.vespa.config.server.session.SessionRepository	Session activa
 
 
 
-<h2 id="scaling-up">Scaling Up</h2>
+<h2 id="scaling-up">Scaling up</h2>
 <p>
-  Add config server nodes for increased fault tolerance. Procedure:
+  Do this by adding nodes one by one. Add a config server node for increased fault tolerance or when replacing a node. Procedure:
 </p>
 <ol>
   <li>
-    Install <em>vespa</em> on the new config server nodes
+    Install <em>vespa</em> on new config server node.
   </li><li>
-    Add config server hosts to <em>VESPA_CONFIGSERVERS</em> on <em>all</em> the nodes
+    Add config server node to <em>VESPA_CONFIGSERVERS</em> on all nodes (both config server nodes and other nodes)
   </li><li>
-    Restart the config server on one of the original config server hosts and start it on the new ones,
-    one by one.
+    Restart the config server on the original config server nodes and start it on the new one,
+    one at a time (if you want to verify that new config is in use, try using
+    <em>/opt/vespa/libexec/vespa/vespa-curl-wrapper https://localhost:19071/status| jq .configserverConfig.zookeeperserver</em>
+    after each restart to confirm that config servers are defined as expected).
   </li><li>
     Update <em>services.xml</em> and <em>hosts.xml</em> with the new set of config servers,
     then <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>
   </li>
   <li>
-    Restart other nodes one by one to start using the new config servers.
+    Restart other nodes (all except config servers) one by one to start using the new config servers.
   </li>
 </ol>
 <p>
@@ -245,27 +246,35 @@ Note: ZooKeeper will automatically redistribute the application data.
 
 <h2 id="scaling-down">Scaling down</h2>
 <p>
-  Remove config servers from a cluster:
+  Remove a config server from a cluster:
 </p>
 <ol>
   <li>
-    Remove config server hosts from <em>VESPA_CONFIGSERVERS</em> on <em>all</em> vespa nodes
+    Remove config server node from <em>VESPA_CONFIGSERVERS</em> on <em>all</em> vespa nodes
   </li>
   <li>
-    Restart nodes one by one to start using the new set of config servers.
+    Restart other nodes one by one to start using the new set of config servers.
   </li>
   <li>
-    Restart config servers on the new subset
+    Restart remaining config servers one by one.
   </li><li>
     Verify that these nodes have data, by using <em>vespa-get-config</em>
     or <em>vespa-zkcli ls</em> (see below).
     If they are blank, redo <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>.
     Also see <a href="#health-checks">health checks</a>.
   </li><li>
-    Pull removed hosts from production
+    Pull removed node from production.
   </li>
 </ol>
 
+
+<h2 id="scaling-up">Replacing nodes</h2>
+<p>
+  <li>Make sure to replace only one node at a time.</li>
+  <li>If you have less than 3 config servers you need to first scale up with a new node, then scale down by removing the old node. Repeat for each node you want to replace.</li>
+  <li>If you have 3 or more you can replace one of the old nodes in VESPA_CONFIGSERVERS with the new one instead of adding one, otherwise same procedure as
+    in <a href="#scaling-up">Scaling up</a>. Repeat for each node you want to replace.</li>
+</h2>
 
 
 <h2 id="tools">Tools</h2>
