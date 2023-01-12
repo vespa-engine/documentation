@@ -374,7 +374,7 @@ $ ./vespa-feed-client-cli/vespa-feed-client \
 The following sections uses the Vespa [query api](../reference/query-api-reference.html) and 
 formulate queries using Vespa [query language](../query-language.html). 
 For readability, all query examples are expressed using the 
-[vespa-cli](../vespa-cli.html) command which supports running queries against an Vespa instance. 
+[vespa-cli](../vespa-cli.html) command which supports running queries against a Vespa instance.
 The CLI uses the Vespa http search api internally. 
 Use `vespa query -v` to see the actual http request sent:
 
@@ -382,7 +382,7 @@ Use `vespa query -v` to see the actual http request sent:
 $ vespa query -v 'yql=select ..'
 </pre>
 
-The first query uses `where true` to match all all `track` documents.  
+The first query uses `where true` to match all `track` documents.
 It also uses [hits](../reference/query-api-reference.html#hits) to specify how many
 documents to return in the response:
 
@@ -561,8 +561,8 @@ $ vespa query \
 </pre>
 </div>
 
-Compared to the type `any` query which fully ranked 24,053 documents, 
-, `weakAnd` only fully ranks 3,679 documents.
+Compared to the type `any` query which fully ranked 24,053 documents,
+`weakAnd` only fully ranks 3,679 documents.
 Also notice that the faster search returns the same document at the first position. 
 Conceptually a search query is about finding the documents that match the query, 
 then score the documents using a ranking model. 
@@ -932,7 +932,7 @@ Now the `querytime` will be a few milliseconds since Vespa has built index struc
 increased memory usage and slightly reduced indexing throughput. See also
 [when to use fast-search for attributes](feature-tuning.html#when-to-use-fast-search-for-attribute-fields).
 
-For use cases requiring `match:text` when searching multi-valued string field types 
+For use cases requiring `match:text` when searching multivalued string field types
 like [weightedset](../reference/schema-reference.html#type:weightedset), see
 [searching multi-value fields](../searching-multi-valued-fields.html).
 
@@ -1908,7 +1908,7 @@ for filename in sorted_files:
     process_file(filename)
 </pre>
 
-<pre>{% highlight python%}
+```python
 import os
 import sys
 import json
@@ -1954,7 +1954,7 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-{% endhighlight %}</pre>
+```
 
 With this script, run through the dataset and create the [partial update](../partial-updates.html) feed :
 
@@ -2108,6 +2108,7 @@ using a `long` to represent a timestamp (e.g., using Unix epoch).
 - Compute personalization tensor expressions over pre-selected content, e.g. using popularity.
 - Optimize [sorting](../reference/sorting.html) queries, instead of sorting a large result, 
 find the smallest or largest values quickly by using range search with `hitLimit`.
+- Autosuggest - see [#25333](https://github.com/vespa-engine/vespa/issues/25333).
 
 Do note that any other query or filter terms in the query are applied after having found the 
 top-k documents, so an aggressive filter removing many documents might end up recalling 0 documents. 
