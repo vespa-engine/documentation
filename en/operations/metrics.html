@@ -181,10 +181,50 @@ node8.vespanet	music	0
   <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java">
     album-recommendation-java</a> sample application.
 </p>
-
-
 {% include note.html content="Metrics with no value do now show in the metric APIs -
 in the example above, make at least one query to set the metric value." %}
+
+
+<h3 id="example-qa">Example / QA</h3>
+<p>
+  I have two different libraries that are running as components with their own threads within the vespa container.
+  We are injecting MetricReceiver to each library.
+  After injecting the receiver we store the reference to this receiver in a container-wide object
+  so that they can be used inside these libraries
+  (the libraries each have several classes and such, so it is not possible to inject the receiver every time
+  and we need to use the stored reference). Questions:
+</p>
+<ol>
+  <li>
+    <p>
+      <strong>Q:</strong> Is the MetricReceiver object unique within the container?
+      That is, if I am injecting the receiver to two different components, is always the same object getting injected?
+    </p>
+    <p>
+      <strong>A:</strong> Yes, you get the same object.
+    </p>
+  </li>
+  <li>
+    <p>
+      <strong>Q:</strong> How long does an object remain valid?
+      Does the same object remain valid for the life of the container
+      (meaning from container booting up to the point of restart/shutdown) or can the object change?
+      I ask this because we store the reference to the receiver at a common place
+      so that it can be used to emit metrics elsewhere in the library where we can’t inject it,
+      so I am wondering how frequently we need to update this reference.
+    </p>
+    <p>
+      <strong>A:</strong> It remains valid for the lifetime of the component to which it got injected.
+      Therefore, if you share component references through some other mean than direct or indirect injection
+      you may end up with invalid references.
+      A "container-wide object" sounds like trouble.
+      You should have it injected into all the components that needs it instead.
+      Or, if you feel that will be too fine-grained,
+      create one large object which gets these things injected,
+      and then have that injected into all components that need the common stuff.
+    </p>
+  </li>
+</ol>
 
 
 
