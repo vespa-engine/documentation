@@ -47,7 +47,7 @@ $ minikube start --driver docker --memory 4096
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ git clone https://github.com/vespa-engine/sample-apps.git
+$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git
 $ export VESPA_SAMPLE_APPS=`pwd`/sample-apps
 </pre>
     </div>
@@ -109,12 +109,15 @@ spec:
         env:
         - name: VESPA_CONFIGSERVERS
           value: vespa-0.vespa.default.svc.cluster.local
+        securityContext:
+          privileged: true
+          runAsUser: 0
         ports:
         - containerPort: 8080
           protocol: TCP
         readinessProbe:
           httpGet:
-            path: /ApplicationStatus
+            path: /state/v1/health
             port: 19071
             scheme: HTTP
 EOF
@@ -163,7 +166,7 @@ $ kubectl port-forward vespa-0 19071 8080 &amp;
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ curl -s --head http://localhost:19071/ApplicationStatus
+$ curl -s --head http://localhost:19071/state/v1/health
 </pre>
     </div>
   </li>
@@ -196,7 +199,7 @@ $ curl --header Content-Type:application/zip --data-binary @application.zip \
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ curl -s --head http://localhost:8080/ApplicationStatus
+$ curl -s --head http://localhost:8080/state/v1/health
 </pre>
     </div>
   </li>
@@ -224,7 +227,12 @@ $ curl -s -H "Content-Type:application/json" \
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Metallica">
-$ curl "http://localhost:8080/search/?ranking=rank_albums&amp;yql=select%20%2A%20from%20sources%20%2A%20where%20sddocname%20contains%20%22music%22&amp;input.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D"
+$ curl -X POST -H "Content-Type: application/json" --data '
+  {
+    "yql": "select * from sources * where true",
+    "input.query(user_profile)": "{{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+  }' \
+  http://localhost:8080/search/
 </pre>
     </div>
     <p>
