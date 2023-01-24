@@ -113,6 +113,9 @@ get methods as Java objects from the Query to Searcher components.
     <li><a href="#trace.level">trace.level</a></li>
     <li><a href="#trace.explainlevel">trace.explainLevel</a></li>
     <li><a href="#trace.profiledepth">trace.profileDepth</a></li>
+    <li><a href="#trace.profiling.matching.depth">trace.profiling.matching.depth</a></li>
+    <li><a href="#trace.profiling.firstPhaseRanking.depth">trace.profiling.firstPhaseRanking.depth</a></li>
+    <li><a href="#trace.profiling.secondPhaseRanking.depth">trace.profiling.secondPhaseRanking.depth</a></li>
     <li><a href="#trace.timestamps">trace.timestamps</a></li>
     <li><a href="#trace.query">trace.query</a></li>
   </ul>
@@ -1274,7 +1277,7 @@ These parameters are defined in the <code>native</code> query profile type.
     <th>trace.level</th>
     <td>tracelevel</td>
     <td>Number</td>
-    <td></td>
+    <td>0</td>
     <td>
       <p id="trace.level">
         A positive number. Default is no tracing.
@@ -1282,7 +1285,7 @@ These parameters are defined in the <code>native</code> query profile type.
       <p>
         Collect trace information for debugging when running a query.
         Higher numbers give progressively more detail on query transformations,
-        searcher execution and search backend execution.
+        searcher execution and backend query execution.
         See <a href="../query-api.html#query-tracing">query tracing</a> for details and examples.
       </p> <!-- ToDo: Add links, rewrite -->
       <p>
@@ -1308,15 +1311,9 @@ These parameters are defined in the <code>native</code> query profile type.
     <th>trace.explainLevel</th>
     <td>explainlevel</td>
     <td>Number</td>
-    <td></td>
+    <td>0</td>
     <td>
       <p id="trace.explainlevel">
-        A positive number.
-        Note that you might get the same at <a href="#trace.level">trace.level</a> 5 and above.
-        Default is no explanation.
-      </p>
-      <p>Enable by setting a non-zero <a href="#trace.level">trace.level</a>.</p>
-      <p>
         Set to a positive number to collect query execution information for debugging when running a query.
         Higher numbers give progressively more detail on backend query execution.
       </p>
@@ -1326,30 +1323,120 @@ These parameters are defined in the <code>native</code> query profile type.
         <tr><th>Level</th><th>Description</th></tr>
         </thead>
         <tbody>
-        <tr><td>1</td><td>Timing and overall query plan(blueprint) from each backend node</td></tr>
-        <tr><td>2</td><td>Timing per search thread and execution tree(iterator tree)</td></tr>
+        <tr><td>1</td><td>Timing and overall query plan (blueprint) from each backend node</td></tr>
+        <tr><td>2</td><td>Timing per search thread and execution tree (search iterator tree)</td></tr>
         </tbody>
       </table>
+      <p>
+        Note that you might get the same at <a href="#trace.level">trace.level</a> 5 and above.
+        Default is no explanation.
+      </p>
+      <p>Enable by also setting a non-zero <a href="#trace.level">trace.level</a>.</p>
     </td>
   </tr>
   <tr>
     <th>trace.profileDepth</th>
     <td></td>
     <td>Number</td>
-    <td></td>
+    <td>0</td>
     <td>
       <p id="trace.profiledepth">
-        A positive number, a higher number means more profile data.
-        Content is subject to change at any time.
-        Expose information about how time spent on ranking is distributed
-        between individual <a href="rank-features.html">rank features</a>.
+        Turns on profiling of the backend query execution for
+        <a href="#trace.profiling.matching.depth">matching</a>,
+        <a href="#trace.profiling.firstPhaseRanking.depth">first-phase ranking</a>, and
+        <a href="#trace.profiling.secondPhaseRanking.depth">second-phase ranking</a>.
+        How profiling is performed is based on whether this value is positive or negative:
+      </p>
+      <table class="table">
+        <thead>
+        <tr><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+        <tr><td>Tree</td>
+        <td>A positive number specifies the depth used by a tree profiler.
+        A higher number means more profiler data.
+        The output resembles the structure of the search iterator tree or rank expression tree being profiled,
+        with total time and self time tracked per component (node in the tree).
+        </td></tr>
+        <tr><td>Flat</td><td>A negative number specifies the topn (cut-off) used by a flat profiler.
+        The output returns the topn components that use the most self time.
+        </td></tr>
+        </tbody>
+      </table>
+      <p>
+        The profiling output is subject to change at any time.
         Default is no information.
+      </p>
+      <p>
+        Enable by also setting a non-zero <a href="#trace.level">trace.level</a>.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <th>trace.profiling.matching.depth</th>
+    <td></td>
+    <td>Number</td>
+    <td>0</td>
+    <td>
+      <p id="trace.profiling.matching.depth">
+        Turns on profiling of
+        <a href="../performance/sizing-search.html#life-of-a-query-in-vespa">matching</a>
+        of the backend query execution.
+        This exposes information about how time spent on matching is distributed
+        between individual search iterators.
+        The profiling output is tagged <em>match_profiling</em> and is subject to change at any time.
+        Default is no information.
+        See <a href="#trace.profiledepth">trace.profileDepth</a> for semantics of this parameter.
+      </p>
+      <p>
+        Enable by also setting a non-zero <a href="#trace.level">trace.level</a>.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <th>trace.profiling.firstPhaseRanking.depth</th>
+    <td></td>
+    <td>Number</td>
+    <td>0</td>
+    <td>
+      <p id="trace.profiling.firstPhaseRanking.depth">
+        Turns on profiling of the <a href="../ranking.html">first-phase ranking</a>
+        of the backend query execution.
+        This exposes information about how time spent on first-phase ranking is distributed
+        between individual <a href="rank-features.html">rank features</a>.
+        The profiling output is tagged <em>first_phase_profiling</em> and is subject to change at any time.
+        Default is no information.
+        See <a href="#trace.profiledepth">trace.profileDepth</a> for semantics of this parameter.
+      </p>
+      <p>
+        Enable by also setting a non-zero <a href="#trace.level">trace.level</a>.
+      </p>
+    </td>
+  </tr>
+
+  <tr>
+    <th>trace.profiling.secondPhaseRanking.depth</th>
+    <td></td>
+    <td>Number</td>
+    <td>0</td>
+    <td>
+      <p id="trace.profiling.secondPhaseRanking.depth">
+        Turns on profiling of the <a href="../ranking.html">second-phase ranking</a>
+        of the backend query execution.
+        This exposes information about how time spent on second-phase ranking is distributed
+        between individual <a href="rank-features.html">rank features</a>.
+        The profiling output is tagged <em>second_phase_profiling</em> and is subject to change at any time.
+        Default is no information.
+        See <a href="#trace.profiledepth">trace.profileDepth</a> for semantics of this parameter.
       </p>
       <p>
         Enable by setting a non-zero <a href="#trace.level">trace.level</a>.
       </p>
     </td>
   </tr>
+
   <tr>
     <th>trace.timestamps</th>
     <td></td>
