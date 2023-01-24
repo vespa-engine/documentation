@@ -81,7 +81,7 @@ function openTab(url) {
   in multiple phases, as needed.
   As realizing such programs over a distributed data set requires more network round-trips than a regular search query,
   these queries may be more expensive than regular queries -
-  see <a href="reference/query-api-reference.html#grouping.defaultmaxgroups">defaultMaxGroups</a> and the likes
+  see <code><a href="reference/query-api-reference.html#grouping.defaultmaxgroups">defaultMaxGroups</a></code> and the likes
   for how to control resource usage.
 </p>
 
@@ -651,6 +651,52 @@ select (&hellip;) |
     all(group(b) max(3)
       each(output(count()) max(5)
         each(output(summary())))))
+</pre>
+
+<h3 id="global-limit-combining">Combining with default limits for groups/hits</h3>
+<p>
+  The <code>grouping.globalMaxGroups</code> restriction will utilize the
+  <code><a href="reference/query-api-reference.html#grouping.defaultmaxgroups">grouping.defaultMaxGroups</a></code>/
+  <code><a href="reference/query-api-reference.html#grouping.defaultmaxhits">grouping.defaultMaxHits</a></code>
+  values for grouping statements without a <code>max</code>. The two queries below are identical assuming
+  <code>defaultMaxGroups=5</code> and <code>defaultMaxHits=7</code>, and both will be rejected when
+  <code>globalMaxGroups &lt; 5+5*7</code>.
+</p>
+<pre>
+select (&hellip;) |
+  all(group(a) max(5)
+    each(output(count()) max(7)
+      each(output(summary()))))
+
+select (&hellip;) |
+  all(group(a)
+    each(output(count())
+      each(output(summary()))))
+</pre>
+<p>
+  A grouping without <code>max</code> combined with <code>defaultMaxGroups=-1</code>/<code>defaultMaxHits=-1</code>
+  will be rejected unless <code>globalMaxGroups=-1</code>. This is because the query produces an unbounded result,
+  infinite number of groups if <code>defaultMaxGroups=-1</code> or infinite number of summaries if
+  <code>defaultMaxHits=-1</code>.
+  An unintentional DoS (Denial of Service) could be the utter consequence if a query returns thousands of groups and summaries.
+  This is why setting <code>globalMaxGroups=-1</code> is risky.
+</p>
+
+<h3 id="global-limit-recommendation">Recommended settings</h3>
+<p>
+  The best practice is to always specify <code>max</code> in groupings,
+  making it easy to reason about the worst-case cardinality of the query results. The performance will also benefit.
+  Set <code>globalMaxGroups</code> to the overall worst-case result cardinality with some margin.
+  The <code>defaultMaxGroups</code>/<code>defaultMaxHits</code>
+  should be overridden in a query profile if some groupings do not use <code>max</code> and the default values are too low.
+</p>
+
+<pre>
+  &lt;query-profile id="default"&gt;
+    &lt;field name="grouping.defaultMaxGroups"&gt;20&lt;/field&gt;
+    &lt;field name="grouping.defaultMaxHits"&gt;100&lt;/field&gt;
+    &lt;field name="grouping.globalMaxGroups"&gt;8000&lt;/field&gt;
+  &lt;/query-profile&gt;
 </pre>
 
 <h2 id="performance-and-correctness">Performance and Correctness</h2>
