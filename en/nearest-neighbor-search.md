@@ -148,21 +148,21 @@ rank-profile image_similarity {
 The `rank-profile` specifies the query input tensor names and types. The query input tensors
 must be of the same dimensionality as the document vector and have the same dimension name. 
 
-Skipping the query tensor definition will cause a query time error:</p>
+Skipping the query tensor definition will cause a query time error:
 <pre>
 Expected a tensor value of 'query(query_embedding)' but has [...]
 </pre>
 
 The `closeness(field, image_embedding)` is a [rank-feature](reference/rank-features.html) calculated
 by the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator. 
-The `closeness(field, tensor)` rank feature calculates a score in the range [0, 1], where 0 is infinite distance,
+The `closeness` rank feature calculates a score in the range [0, 1], where 0 is infinite distance,
 and 1 is zero distance. This is convenient because Vespa sorts hits by decreasing relevancy score,
 and one usually want the closest hits to be ranked highest.
 
 The `first-phase` is part of Vespa's [phased ranking](phased-ranking.html) support. In this example
 the `closeness` feature is re-used and documents are not re-ordered. 
 
-Phased ranking or multi-stage document ranking, enables re-ranking of the top-k best scoring hits as ranked
+Phased ranking enables re-ranking of the top-k best scoring hits as ranked
 or retrieved from the previous ranking phase. The computed ranking score is rendered as `relevance` in
 the default [Vespa JSON result format](reference/default-result-format.html). If the `relevance` field
 of the hit becomes 0.0 one usually have forgotten to specify the correct ranking profile. 
@@ -253,9 +253,12 @@ To query the product dataset one uses the
 [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator.
 The operator expects two arguments; the document tensor field which is searched and the input query tensor name.
 
-The `targetHits` query annotation specifies the number of results that one wants to expose to `first-phase`
-ranking per node involved in the query. `targetHits` is a required parameter and the query will fail if not specified.
-The `targetHits` is a lower bound per node, and with exact search more hits than `targetHits` are exposed to `first-phase` ranking.
+The [targetHits](reference/query-language-reference.html#targethits)
+query annotation specifies the number of results that one wants to expose to `first-phase`
+ranking per content node involved in the query.
+`targetHits` is a required parameter and the query will fail if not specified.
+The `targetHits` is a lower bound per content node,
+and with exact search more hits than `targetHits` are exposed to `first-phase` ranking.
 
 The query tensor is sent as a query tensor input 
 and the query tensor name is referenced in the second argument of the `nearestNeighbor` operator.

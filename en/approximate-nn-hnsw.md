@@ -22,11 +22,12 @@ See many query examples in the [practical guide](nearest-neighbor-search-guide.h
 
 * **Real Time Indexing** - CRUD (Create, Add, Update, Remove) vectors in the index with low latency and high throughput.
 
-* **Mutable HNSW Graph** - No query or indexing overhead from searching multiple <em>HNSW</em> graphs. In Vespa, there is one graph per field. No
-segmented or partitioned graph where a query against a content node need to scan multiple HNSW graphs.
+* **Mutable HNSW Graph** - No query or indexing overhead from searching multiple <em>HNSW</em> graphs. In Vespa, there is one graph per tensor field per content node.
+No segmented or partitioned graph where a query against a content node need to scan multiple HNSW graphs.
 
-* **Multithreaded Indexing** - The costly part when performing real time changes to the *HNSW* graph is distance calculations while searching the graph layers
-to find which links to change. These distance calculations are performed by multiple indexing threads. 
+* **Multithreaded Indexing** - The costly part when performing real time changes to the *HNSW* graph
+is distance calculations while searching the graph layers to find which links to change.
+These distance calculations are performed by multiple indexing threads.
 
 ## Using Vespa's approximate nearest neighbor search
 The query examples in [nearest neighbor search](nearest-neighbor-search.html) uses exact search, which has perfect accuracy.
@@ -129,9 +130,10 @@ that are explored during the graph search. This parameter is used to tune accura
 ## Combining approximate nearest neighbor search with filters 
 The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator can be combined with other
 query filters using the [Vespa query language](reference/query-language-reference.html) and its query operators.
-There are two high-level strategies for combining query filters with the approximate nearest neighbor search:
-[post-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#post-filtering-strategy) and
-[pre-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#pre-filtering-strategy) (which is the default).
+There are two high-level strategies for combining query filters with approximate nearest neighbor search:
+* [post-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#post-filtering-strategy)
+* [pre-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#pre-filtering-strategy) (the default)
+
 These strategies can be configured in a rank profile using
 [post-filter-threshold](reference/schema-reference.html#post-filter-threshold) and
 [approximate-threshold](reference/schema-reference.html#approximate-threshold).
@@ -155,28 +157,30 @@ but this is less relevant as the `HNSW` index search first reduces the document 
 
 ## Nearest Neighbor Search Considerations
 
-* **targetHits**
-The `targetHits` specifies how many hits one wants to expose to [ranking](ranking.html) *per node*.
+* **targetHits**:
+The [targetHits](reference/query-language-reference.html#targethits)
+specifies how many hits one wants to expose to [ranking](ranking.html) *per conent node*.
 Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](phased-ranking.html)
 pipeline. See [performance sizing](performance/sizing-search.html). 
 
-* **Pagination**
+* **Pagination**:
 Pagination uses the standard [hits](reference/query-api-reference.html#hits) 
 and [offset](reference/query-api-reference.html#offset) query api parameters. 
-There is no caching of results in between pagination requests, so a query for a higher `offset` will cause the search to be performed over again. 
+There is no caching of results in between pagination requests,
+so a query for a higher `offset` will cause the search to be performed over again.
 This aspect is no different from [sparse search](using-wand-with-vespa.html) not using nearest neighbor query operator.  
 
-* **Total hit count is not accurate**
+* **Total hit count is not accurate**:
 Technically, all vectors in the searchable index are neighbors. There is no strict boundary between a match 
 and no match. Both exact (`approximate:false`) and approximate (`approximate:true`) usages
 of the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator
-does not produce an accurate `totalCount`. This is the same behavior as with sparse dynamic pruning search algorithms like 
+does not produce an accurate `totalCount`.
+This is the same behavior as with sparse dynamic pruning search algorithms like
 [weakAnd](reference/query-language-reference.html#weakand) and [wand](reference/query-language-reference.html#wand). 
   
-* **Grouping** counts are not accurate
-
+* **Grouping** counts are not accurate:
 Grouping counts from [grouping](grouping.html) are not accurate when using [nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
-search. This is the same behavior as with other dynamic pruning search algorithms like 
+search. This is the same behavior as with other dynamic pruning search algorithms like
 [weakAnd](reference/query-language-reference.html#weakand) and
 [wand](reference/query-language-reference.html#wand). 
 See the [Result diversification](https://blog.vespa.ai/result-diversification-with-vespa/) 
@@ -194,10 +198,10 @@ instead of `float` saves close to 50% memory usage without significant accuracy 
 
 Vespa [tensor cell value types](performance/feature-tuning.html#cell-value-types) include:
 
-* `int8` 1 byte per value. Used to represent binary vectors, for example 64 bits can be represented using 8 `int8` values.
-* `bfloat16` 2 bytes per value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).
-* `float` 4 bytes per value. Standard float. 
-* `double` 8 bytes per value. Standard double
+* `int8` - 1 byte per value. Used to represent binary vectors, for example 64 bits can be represented using 8 `int8` values.
+* `bfloat16` - 2 bytes per value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).
+* `float` - 4 bytes per value. Standard float.
+* `double` - 8 bytes per value. Standard double.
 
 
 ### Search latency and document volume
@@ -221,6 +225,6 @@ or combines nearest neighbor search with filters.
 
 ## HNSW Operations 
 Changing the [distance-metric](reference/schema-reference.html#distance-metric)
-for a tensor field with `hnsw` `index` requires [restarting](reference/schema-reference.html#changes-that-require-restart-but-not-re-feed), 
+for a tensor field with `hnsw` index requires [restarting](reference/schema-reference.html#changes-that-require-restart-but-not-re-feed),
 but not re-indexing (re-feed vectors). Similar, changing the `max-links-per-node` and
 `neighbors-to-explore-at-insert` construction parameters requires re-starting. 
