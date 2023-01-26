@@ -423,6 +423,57 @@ This can block POSTed queries." %}
 
 
 
+<h2 id="timeout">Timeout</h2>
+<p>
+  See the <a href="reference/query-api-reference.html#timeout">reference</a> for how to set the query timeout.
+  Common questions:
+</p>
+<ul>
+  <li>
+    <p>
+      <em>Does the timeout apply to the whole query or just from when it is sent to the content cluster?
+        If a <a href="searcher-development.html">Searcher</a> goes to sleep in the container for 2*timeout,
+        will the caller still get a response indicating a timeout?</em>
+    </p>
+    <p>
+      The timeout applies to the whole query, both container and content node processing.
+      However, the timeout handling is cooperative -
+      if having Searchers that are time-consuming or access external resources,
+      the Searcher code should check
+      <a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/Query.java">Query.getTimeLeft()</a>.
+      So, in this case, you will time out, but only after 2*timeout + some more.
+    </p>
+  </li>
+  <li>
+    <p>
+      <em>During multiphase searching, is the query timeout set for each individual searcher,
+        or is the query timeout set for the entire search chain?</em>
+    </p>
+    <p>
+      The timeout is for the entire query (and most Searchers don’t check timeout -
+      use <code>Query.getTimeLeft()</code>).
+      E.g., if a Search Chain has 3 Searchers,
+      it is OK for 1 Searcher to take 497 ms and 2 Searchers to each take 1 ms for a query timeout of 500 ms.
+    </p>
+  </li>
+  <li>
+    <p>
+      <em>If we asynchronously execute several search chains,
+        can we set different query timeouts for each of these chains
+        plus a separate overall timeout for the searcher that performs the asynchronous executions?</em>
+    </p>
+    <p>
+      You can set a different timeout in each cloned query you send to any of those chains,
+      and you can specify the timeout when waiting for responses from them.
+    </p>
+  </li>
+</ul>
+
+
+
+
+
+
 <h2 id="error-handling">Error handling</h2>
 <p>
   Check for a <code>root: error</code> element in the <a href="reference/default-result-format.html#error">result</a>:
