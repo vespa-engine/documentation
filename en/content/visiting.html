@@ -6,25 +6,30 @@ redirect_from:
 ---
 
 <p>
-Visiting is a feature to efficiently process a set of documents, identified by a
-<a href="../reference/document-select-language.html">document selection expression</a>.
-See <a href="#request-handling">request handling</a> for details on how the feature works.
-</p><p>
-In short, <em>visit</em> iterates over all, or a set of, <a href="buckets.html">buckets</a>
-and sends documents to (a set of) targets.
-The target is normally the visit client
-(like <a href="../reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a>),
-but can be set a set of targets that act like sinks for the documents -
-see <a href="../reference/vespa-cmdline-tools.html#vespa-visit-target">vespa-visit-target</a>.
-</p><p>
-Typical use cases are data dump and reprocessing that are not time sensitive.
-</p><p>
-Performance note: due to the bucket iteration, visiting is normally not a low-latency iteration.
-Even an empty content cluster is pre-partitioned into many data buckets to enable scaling.
-Dumping just one document requires iteration over all data buckets, unless <em>location</em>-specific selections are used.
-To test visiting performance, use larger data sets; do not extrapolate from small.
-Use search for low latency operations on small result sets.
+  Visiting is a feature to efficiently process a set of documents, identified by a
+  <a href="../reference/document-select-language.html">document selection expression</a>.
+  See <a href="#request-handling">request handling</a> for details on how the feature works.
 </p>
+<p>
+  In short, <em>visit</em> iterates over all, or a set of, <a href="buckets.html">buckets</a>
+  and sends documents to (a set of) targets.
+  The target is normally the visit client
+  (like <a href="../reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a>),
+  but can be set a set of targets that act like sinks for the documents -
+  see <a href="../reference/vespa-cmdline-tools.html#vespa-visit-target">vespa-visit-target</a>.
+</p>
+<p>
+  Typically, the visit use cases are not time sensitive, like data reprocessing,
+  and document dump for backup and cluster clone -
+  <a href="https://cloud.vespa.ai/en/cloning-applications-and-data">cloning applications and data</a>
+  is a good read for more details.
+</p>
+{% include note.html content='Due to the bucket iteration, visiting is normally a high-latency iteration.
+  Even an empty content cluster is pre-partitioned into many data buckets to enable scaling.
+  Dumping just one document requires iteration over all data buckets,
+  unless <em>location</em>-specific selections are used.
+  To test visiting performance, use larger data sets; do not extrapolate from small.
+  Use the <a href="../query-api.html">query API</a> for low latency operations on small result sets.' %}
 
 
 
@@ -80,26 +85,22 @@ or the <em>[document]</em> / <em>[all]</em> shorthand.
 
 <h2 id="data-export-import">Data export / import</h2>
 <p>
-Export data to stdout:
-<pre>
-$ vespa-visit
-</pre>
+Export data to stdout.
 As a full data dump takes time / space / resources, refine as needed:
+<!-- ToDo:
+           Should we replace this with a /document/v1 example that uses slicing instead?
+           The id.hash() construction requires a complete iteration,
+           whereas slicing inherently limits to a subset of the data space.
+           However, slicing is currently not supported by the vespa-visit CLI.
+ -->
 <pre>
-$ vespa-visit -v -p progress-file -s 'id.hash().abs() % 100 = 0' \
-  --fieldset 'music:[document]' > 100.json
+$ vespa-visit -v -p progress-file -s 'id.hash().abs() % 100 = 0' > 100.json
 </pre>
 <ul>
-  <li><em>-v</em> prints a % finished</li>
-  <li><em>-p progress-file</em> saves progress, allowing the visitor to resume at next startup.
+  <li><code>-v</code> prints a % finished</li>
+  <li><code>-p progress-file</code> saves progress, allowing the visitor to resume at next startup.
     Always remove the progress file to run the visiting operation from the start.</li>
-  <li><em>-s 'id.hash().abs() % 100 = 0'</em> dumps 1% of the corpus - see <a href="#selection">selection</a>.</li>
-  <li><em>--fieldset 'music:[document]'</em> dumps all fields, excluding synthetic fields.
-    When visiting Indexed Search, one might find more fields dumped than put in,
-    causing problems when re-feeding documents.
-    The solution is using a <a href="../documents.html#fieldsets">fieldset</a> to return document fields only.
-    <em>[document]</em> is a shorthand for all fields for the given document type.
-  </li>
+  <li><code>-s 'id.hash().abs() % 100 = 0'</code> dumps 1% of the corpus - see <a href="#selection">selection</a>.</li>
 </ul>
 <p>Import into a cluster using the <a href="../vespa-feed-client.html">vespa-feed-client</a>:</p>
 <pre>
@@ -188,7 +189,7 @@ It is assumed that a Vespa cluster is set up, with data.
   <li>deletes documents with an <em>artist</em> field whose value contains <em>Metallica</em></li>
   <li>uppercases <em>title</em> field values of all other documents</li>
 </ul>
-<pre>
+<pre>{% highlight java %}
 import com.yahoo.docproc.Arguments;
 import com.yahoo.docproc.DocumentProcessor;
 import com.yahoo.docproc.Processing;
@@ -213,7 +214,7 @@ public class ReProcessor extends DocumentProcessor {
     }
 
     public Progress process(Processing processing) {
-        Iterator&lt;DocumentOperation&gt; it = processing.getDocumentOperations().iterator();
+        Iterator<DocumentOperation> it = processing.getDocumentOperations().iterator();
         while (it.hasNext()) {
             DocumentOperation op = it.next();
             if (op instanceof DocumentPut) {
@@ -238,7 +239,7 @@ public class ReProcessor extends DocumentProcessor {
         return Progress.DONE;
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
 To compile this processor, see the <a href="../developer-guide.html">Developer Guide</a>.
 For more information on document processing, refer
@@ -397,7 +398,9 @@ the processing may occur in parallel with the document fetching.
 
 <h2 id="visitor-processor-types">Visitor processor types</h2>
 <table class="table">
-  <thead></thead><tbody>
+  <thead>
+    <tr><th>Processor Type</th><th>Description</th></tr>
+  </thead><tbody>
     <tr>
       <th>Dump visitor</th>
       <td>
@@ -432,7 +435,9 @@ the processing may occur in parallel with the document fetching.
   Requests sent from the visitor processor are sent to a visitor target - types:
 </p>
 <table class="table">
-  <thead></thead><tbody>
+  <thead>
+    <tr><th>Target Type</th><th>Description</th></tr>
+  </thead><tbody>
     <tr>
       <th style="white-space: nowrap">Message bus routes</th>
       <td>
@@ -491,3 +496,21 @@ the processing may occur in parallel with the document fetching.
     </tr>
   </tbody>
 </table>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>
+  Normally all documents share the same <a href="buckets.html#bucket-space">bucket space</a>—documents
+  for multiple schemas are co-located.
+  When using <a href="../parent-child.html">parent/child</a>, global documents are stored in a separate bucket space.
+  Use the <a href="../reference/document-v1-api-reference.html#bucketspace">bucketSpace</a> parameter
+  to visit the <code>default</code> or <code>global</code> space.
+  This is a common problem when dumping all documents and dumped count is not the expected count.
+</p>
+<p>
+  A visit operation might stall/hang if the content cluster is in an inconsistent
+  state—replicas are still merging between nodes.
+  Find more details at
+  <a href="../reference/vespa-cmdline-tools.html#visitinconsistentbuckets">visitinconsistentbuckets</a>.
+</p>
