@@ -198,6 +198,9 @@ It does not,
 _namespace_ is a mechanism to split the document space into parts that can be used for document selection -
 see [documentation](documents.html#namespace).
 
+#### Visiting does not dump all documents, and/or hangs.
+There are multiple things that can cause this, see [visiting troubleshooting](content/visiting.html#troubleshooting).
+
 
 
 {:.faq-section}
