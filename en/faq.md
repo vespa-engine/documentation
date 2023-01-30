@@ -299,20 +299,9 @@ This is because a given piece of text searching one fieldset is tokenized just o
 so there's no right choice of tokenization in this case.
 More details on [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues).
 
-#### Searchers and timeout questions
-During multi-phase searching, is the query timeout set for each individual searcher
-or is the query timeout set for the entire search chain?
-Also, if we asynchronously execute several search chains,
-can we set different query timeouts for each of these chains
-plus a separate overall timeout for the searcher that performs the asynchronous executions?
-
-The timeout is for the entire query
-(and most Searchers don’t check timeout -
-use [getTimeLeft](https://javadoc.io/static/com.yahoo.vespa/container-search/{{site.variables.vespa_version}}/com/yahoo/search/Query.html#getTimeLeft())).
-E.g. if a search chain has 3 searchers,
-it is OK for 1 searcher to take 497 ms and 2 searchers to each take 1 ms for a query timeout of 500 ms.
-You can set a different timeout in each cloned query you send to any of those chains,
-and you can specify the timeout when waiting for responses from them.
+#### How is the query timeout computed?
+Find query timeout details in the [Query API Guide](query-api.html#timeout)
+and the [Query API Reference](reference/query-api-reference.html#timeout).
 
 #### How does backslash escapes work?
 
