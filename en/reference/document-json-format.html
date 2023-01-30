@@ -178,84 +178,97 @@ Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshootin
     <th id="#tensor">tensor</th>
     <td>
       <p id="tensor">
-        <a href="../tensor-user-guide.html">Tensor</a> fields may be represented as an array of "cells":
+        <a href="../tensor-user-guide.html">Tensor</a> fields may be represented as an array of cells:
       </p>
 <pre>
-"tensorfield": {
-    "cells": [
+"tensorfield": [
         { "address": { "x": "a", "y": "0" }, "value": 2.0 },
         { "address": { "x": "a", "y": "1" }, "value": 3.0 },
         { "address": { "x": "b", "y": "0" }, "value": 4.0 },
         { "address": { "x": "b", "y": "1" }, "value": 5.0 }
-    ]
-}
+]
 </pre>
       <p>
-        This works for any tensor but is often unnecessarily verbose,
-        which impacts performance when transferring large tensors.
-        Therefore, a number of short forms are available.
+        This works for any tensor but is verbose, so shorter forms specific to various tensor types are also supported.
         Use the shortest form applicable to your tensor type for the best possible performance.
       </p>
       <p>
-        <strong>Indexed tensors</strong> short form:
-        May use a "values" array where the values are ordered in the standard value order,
+        The cells array can optionally be nested in an object under the key "cells".
+        This is how tensor values are returned <a href="document-v1-api-reference.html#format.tensors">by default</a>,
+        along with another key "type" containing the tensor type.
+      </p>
+
+      <p>
+        <strong>Indexed tensors short form:</strong>
+        An array where the values are ordered in the standard value order,
         where indexes of dimensions to the right are incremented before indexes to the left,
         where dimensions are ordered alphabetically
         (such that, e.g. with a tensor with dimensions x,y the "y" values for each value of "x" are adjacent):
       </p>
 <pre>
-"tensorfield": {
-    "values": [ 2.0, 3.0, 5.0, 7.0 ]
-}
+"tensorfield": [ 2.0, 3.0, 5.0, 7.0 ]
 </pre>
       <p>
-        <strong>Mixed tensors</strong> short form:
-        May use a "blocks" array where the mapped dimensions are given as an address,
-        and the dense values for each sparse address as a <code>values</code> array.
-        For example, to specify the same tensor as in the "cells" example above:
+      The cells array can optionally be nested in an object under the key "values".
+      This is how tensor values are returned <a href="document-v1-api-reference.html#format.tensors">by default</a>,
+      along with another key "type" containing the tensor type.
+      </p>
+
+      <p>
+        <strong>Mixed tensors short form:</strong>
+        If the tensor has a single sparse dimension: A map where the key is the value of that dimension and the value
+        is a nested array containing the values of the dense subspace within that key.<br/>
+        If the tensor has multiple sparse dimensions: An array where the elements consist of a map with the keys
+        "address" and "values", where "address" is a map with the sparse dimensions and their values (as in cells),
+        and "values" is a nested array containing the values of the dense subspace within that address.
+      </p>
+      <p>Example - single sparse dimension:</p>
+      <pre>
+"tensorfield": {
+       "x1":[2.0,3.0],
+       "x2":[4.0,5.0]
+}</pre>
+      <p>Example - multiple sparse dimensions:</p>
+      <pre>
+"tensorfield": [
+       {"address":{"x":"x1","y":"y2"},"values":[2.0,3.0]},
+       {"address":{"x":"x2","y":"y2"},"values":[4.0,5.0]}
+]</pre>
+      <p>
+      The values can optionally be nested in an object under the key "blocks".
+      This is how tensor values are returned <a href="document-v1-api-reference.html#format.tensors">by default</a>,
+      along with another key "type" containing the tensor type.
+      </p>
+
+      <p>
+        <strong>Short form for tensors with a single mapped dimension</strong>:
+        A map with the dimension key as key and the value as value.
       </p>
 <pre>
 "tensorfield": {
-   "blocks":[
-       {"address":{"x":"a"},"values":[2.0,3.0]},
-       {"address":{"x":"b"},"values":[4.0,5.0]}
-    ]
+      "a": 2.0,
+      "b": 3.0
 }
 </pre>
       <p>
-        Short form for <strong>tensors with a single mapped dimension</strong>:
-        May use an object to give cells or blocks where the label is the key to each value. E.g. for "cells":
+      The cells object can optionally be nested in an object under the key "cells".
+      This is how tensor values are returned <a href="document-v1-api-reference.html#format.tensors">by default</a>,
+      along with another key "type" containing the tensor type.
       </p>
-<pre>
-"tensorfield": {
-    "cells": {
-        "a": 2.0,
-        "b": 3.0
-    }
-}
-</pre>
-      <p>and similarly for "blocks" (where this specifies the same tensor as the "blocks" example above):</p>
-<pre>
-"tensorfield": {
-   "blocks":{
-       "a":[2.0,3.0],
-       "b":[4.0,5.0]
-    }
-}
-</pre>
+
       <p id="tensor-hex-dump">
-        Short form for <strong>indexed tensors representing binary data</strong>
+        <strong>Short form for indexed tensors representing binary data</strong>
         (with <code>int8</code> cell value type):
-        May use a string for "values" with a hex dump of the cell values:
+        May use a string with a hex dump of the cell values:
       </p>
 <pre>
-"tensorfield": {
-    "values": "FF00118022FE"
-}
+"tensorfield": "FF00118022FE"
 </pre>
       <p>
-        could be used to represent the value <code>tensor&lt;int8&gt;(x[6]):[-1,0,17,-128,34,-2]</code>
-        for the field <code>tensorfield</code>.
+        can be used to represent the value <code>tensor&lt;int8&gt;(x[6]):[-1,0,17,-128,34,-2]</code>.
+      </p>
+      <p>
+      The string object can optionally be nested in an object under the key "values".
       </p>
     </td>
   </tr>
@@ -921,7 +934,7 @@ field tensorfield type tensor(x{},y[3]) {
 }
 </pre>
 <p>
-In this example, cell <code>{"x":"b","y":"2"}</code> will implicitly be set will value 0.0.
+In this example, cell <code>{"x":"b","y":"2"}</code> will implicitly be set to 0.0.
 </p>
 <p>
 Prefer the <em>block short form</em> for mixed tensors instead. This also avoids the problem where cells with indexed dimensions are not specified:
