@@ -5,91 +5,14 @@ redirect_from:
 - /documentation/document-v1-api-guide.html
 ---
 
+<p>Use the <em>/document/v1/</em> API to read, write, update and delete documents.</p>
 <p>
-  Refer to the <a href="reference/document-v1-api-reference.html">document/v1 API reference</a> for details.
-  Examples below refer to the <a href="vespa-quick-start.html">sample application</a> configuration.
+  Refer to the <a href="reference/document-v1-api-reference.html">document/v1 API reference</a> for API details.
+  <a href="reads-and-writes.html">Reads and writes</a> has an overview of alternative tools and APIs
+  as well as the flow through the Vespa components when accessing documents.
+  See <a href="#getting-started">getting started</a> for how to work with the <em>/document/v1/ API</em>.
 </p>
-{% include note.html content='see
-<a href="#troubleshooting">troubleshooting</a> for looking up documents by IDs from query results.' %}
-<p>
-  Pro tip: It is easy to generate a <code>/document/v1</code> request by using the <a href="vespa-cli.html">Vespa CLI</a>,
-  with the <code>-v</code> option to output a generated <code>/document/v1</code> request - example:
-</p>
-<pre>
-$ vespa document -v ext/A-Head-Full-of-Dreams.json
-
-  <span class="pre-hilite">curl -X POST -H 'Content-Type: application/json'</span>
-  <span class="pre-hilite">--data-binary @ext/A-Head-Full-of-Dreams.json</span>
-  <span class="pre-hilite">http://127.0.0.1:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams</span>
-
-  Success: put id:mynamespace:music::a-head-full-of-dreams
-</pre>
-<p>
-  See the <a href="reference/document-json-format.html">document JSON format</a> for creating JSON payloads.
-</p>
-
-
-
-<h2 id="getting-started">Getting started</h2>
-<p>
-  This is a quick guide into dumping random documents from a cluster to get started:
-</p>
-<ol>
-  <li>
-    To get documents from a cluster,
-    look up the content cluster name from the configuration,
-    like in the <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/services.xml">
-    album-recommendation</a> example: <code>&lt;content id="music" version="1.0"&gt;</code>.
-  </li>
-  <li>
-    Use the cluster name to start dumping document IDs (skip <code>jq</code> for full json):
-<pre>
-$ curl -s 'http://localhost:8080/document/v1/?<span class="pre-hilite">cluster=music</span>&wantedDocumentCount=10&timeout=60s' | \
-  jq -r .documents[].id
-</pre>
-<pre>
-id:mynamespace:music::love-id-here-to-stay
-id:mynamespace:music::a-head-full-of-dreams
-id:mynamespace:music::hardwired-to-self-destruct
-</pre>
-    <code>wantedDocumentCount</code> is useful to let the operation run longer to find documents,
-    to avoid an empty result.
-    This operation is a scan through the corpus,
-    and it is normal to get empty result and the <a href="#data-dump">continuation token</a>.
-  </li>
-  <li>
-    Look up the document with id <code>id:mynamespace:music::love-id-here-to-stay</code>:
-<pre>
-$ curl -s 'http://localhost:8080/document/v1/mynamespace/music/docid/love-id-here-to-stay' | jq .
-</pre>
-<pre>{% highlight json %}
-{
-    "pathId": "/document/v1/mynamespace/music/docid/love-id-here-to-stay",
-    "id": "id:mynamespace:music::love-id-here-to-stay",
-    "fields": {
-        "artist": "Diana Krall",
-        "year": 2018,
-        "category_scores": {
-            "type": "tensor<float>(cat{})",
-            "cells": {
-                "pop": 0.4000000059604645,
-                "rock": 0,
-                "jazz": 0.800000011920929
-            }
-        },
-        "album": "Love Is Here To Stay"
-    }
-}
-{% endhighlight %}</pre>
-  </li>
-  <li>
-    Read more about <a href="documents.html">document IDs</a>.
-  </li>
-</ol>
-
-
-
-<h2 id="request-examples">Request examples</h2>
+<p>Examples:</p>
 <table class="table">
   <tr>
     <th>GET</th>
@@ -261,45 +184,6 @@ $ curl -X PUT -H "Content-Type:application/json" --data '
 
 
 
-<h2 id="visiting-throughput">Visiting throughput</h2>
-<p>
-  Note that visit with selection is a linear scan over all the music documents
-  in the <a href="#request-examples">request examples</a> in the table above.
-  Each complete visit thus requires the selection expression to be evaluated for all documents.
-  Running concurrent visits with selections that match disjoint subsets of the document corpus
-  is therefore a poor way of increasing throughput,
-  as work is duplicated across each such visit.
-  Fortunately, the API offers other options for increasing throughput:
-</p>
-<ul>
-  <li>
-    Split the corpus into any number of smaller <a href="reference/document-v1-api-reference.html#slices">slices</a>,
-    each to be visited by a separate, independent series of HTTP requests.
-    This is by far the most effective setting to change,
-    as it allows visiting through all HTTP containers simultaneously,
-    and from any number of clients—either of which is
-    typically the bottleneck for visits through <em>/document/v1</em>.
-    A good value for this setting is at least a handful per container.
-  </li>
-  <li>
-    Increase backend <a href="reference/document-v1-api-reference.html#concurrency">concurrency</a>
-    so each visit HTTP response is promptly filled with documents.
-    When using this together with slicing (above),
-    take care to also stream the HTTP responses (below),
-    to avoid buffering too much data in the container layer.
-    When a high number of slices is specified, this setting may have no effect.
-  </li>
-  <li>
-    <a href="reference/document-v1-api-reference.html#stream">Stream</a> the HTTP responses.
-    This lets you receive data earlier, and more of it per request, reducing HTTP overhead.
-    It also minimizes memory usage due to buffering in the container,
-    allowing higher concurrency per container.
-    It is recommended to always use this, but the default is not to, due to backwards compatibility.
-  </li>
-</ul>
-
-
-
 <h2 id="data-dump">Data dump</h2>
 <p>
   To iterate over documents, use <a href="content/visiting.html">visiting</a> — sample output:
@@ -376,6 +260,118 @@ done
 wait
 {% endhighlight %}</pre>
 
+
+<h3 id="visiting-throughput">Visiting throughput</h3>
+<p>
+  Note that visit with selection is a linear scan over all the music documents
+  in the request examples at the start of this guide.
+  Each complete visit thus requires the selection expression to be evaluated for all documents.
+  Running concurrent visits with selections that match disjoint subsets of the document corpus
+  is therefore a poor way of increasing throughput,
+  as work is duplicated across each such visit.
+  Fortunately, the API offers other options for increasing throughput:
+</p>
+<ul>
+  <li>
+    Split the corpus into any number of smaller <a href="reference/document-v1-api-reference.html#slices">slices</a>,
+    each to be visited by a separate, independent series of HTTP requests.
+    This is by far the most effective setting to change,
+    as it allows visiting through all HTTP containers simultaneously,
+    and from any number of clients—either of which is
+    typically the bottleneck for visits through <em>/document/v1</em>.
+    A good value for this setting is at least a handful per container.
+  </li>
+  <li>
+    Increase backend <a href="reference/document-v1-api-reference.html#concurrency">concurrency</a>
+    so each visit HTTP response is promptly filled with documents.
+    When using this together with slicing (above),
+    take care to also stream the HTTP responses (below),
+    to avoid buffering too much data in the container layer.
+    When a high number of slices is specified, this setting may have no effect.
+  </li>
+  <li>
+    <a href="reference/document-v1-api-reference.html#stream">Stream</a> the HTTP responses.
+    This lets you receive data earlier, and more of it per request, reducing HTTP overhead.
+    It also minimizes memory usage due to buffering in the container,
+    allowing higher concurrency per container.
+    It is recommended to always use this, but the default is not to, due to backwards compatibility.
+  </li>
+</ul>
+
+
+
+<h2 id="getting-started">Getting started</h2>
+<p>
+  Pro tip: It is easy to generate a <code>/document/v1</code> request by using the <a href="vespa-cli.html">Vespa CLI</a>,
+  with the <code>-v</code> option to output a generated <code>/document/v1</code> request - example:
+</p>
+<pre>
+$ vespa document -v ext/A-Head-Full-of-Dreams.json
+
+  <span class="pre-hilite">curl -X POST -H 'Content-Type: application/json'</span>
+  <span class="pre-hilite">--data-binary @ext/A-Head-Full-of-Dreams.json</span>
+  <span class="pre-hilite">http://127.0.0.1:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams</span>
+
+  Success: put id:mynamespace:music::a-head-full-of-dreams
+</pre>
+<p>
+  See the <a href="reference/document-json-format.html">document JSON format</a> for creating JSON payloads.
+</p>
+<p>
+  This is a quick guide into dumping random documents from a cluster to get started:
+</p>
+<ol>
+  <li>
+    To get documents from a cluster,
+    look up the content cluster name from the configuration,
+    like in the <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/services.xml">
+    album-recommendation</a> example: <code>&lt;content id="music" version="1.0"&gt;</code>.
+  </li>
+  <li>
+    Use the cluster name to start dumping document IDs (skip <code>jq</code> for full json):
+    <pre>
+$ curl -s 'http://localhost:8080/document/v1/?<span class="pre-hilite">cluster=music</span>&wantedDocumentCount=10&timeout=60s' | \
+  jq -r .documents[].id
+</pre>
+    <pre>
+id:mynamespace:music::love-is-here-to-stay
+id:mynamespace:music::a-head-full-of-dreams
+id:mynamespace:music::hardwired-to-self-destruct
+</pre>
+    <code>wantedDocumentCount</code> is useful to let the operation run longer to find documents,
+    to avoid an empty result.
+    This operation is a scan through the corpus,
+    and it is normal to get empty result and the <a href="#data-dump">continuation token</a>.
+  </li>
+  <li>
+    Look up the document with id <code>id:mynamespace:music::love-is-here-to-stay</code>:
+    <pre>
+$ curl -s 'http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay' | jq .
+</pre>
+    <pre>{% highlight json %}
+{
+    "pathId": "/document/v1/mynamespace/music/docid/love-is-here-to-stay",
+    "id": "id:mynamespace:music::love-is-here-to-stay",
+    "fields": {
+        "artist": "Diana Krall",
+        "year": 2018,
+        "category_scores": {
+            "type": "tensor<float>(cat{})",
+            "cells": {
+                "pop": 0.4000000059604645,
+                "rock": 0,
+                "jazz": 0.800000011920929
+            }
+        },
+        "album": "Love Is Here To Stay"
+    }
+}
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    Read more about <a href="documents.html">document IDs</a>.
+  </li>
+</ol>
 
 
 <h2 id="troubleshooting">Troubleshooting</h2>
