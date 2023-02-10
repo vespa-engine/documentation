@@ -6,10 +6,10 @@ redirect_from:
 ---
 
 Vespa can import TensorFlow models converted to the ONNX format. The tutorial 
-[TensorFlow: Deploy model to Vespa through ONNX](https://pyvespa.readthedocs.io/en/latest/use_cases/tensorflow-via-onnx.html) 
+[TensorFlow: Deploy model to Vespa through ONNX](https://vespa-engine.github.io/learntorank/notebooks/tensorflow-via-onnx.html) 
 shows an end-to-end example from training a Learning-to-Rank (LTR) model to 
 deploying it to Vespa. The tutorial can be reproduced by running the 
-[Jupyter Notebook](https://github.com/vespa-engine/pyvespa/blob/master/docs/sphinx/source/use_cases/tensorflow-via-onnx.ipynb).
+[Jupyter Notebook](https://github.com/vespa-engine/learntorank/blob/main/notebooks/tensorflow-via-onnx.ipynb).
 
 Key steps covered in the tutorial above:
 
