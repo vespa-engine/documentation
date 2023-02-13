@@ -144,6 +144,7 @@ for k,v in suggestions.items():
     	'fields': {
       	'term': k,
       	'namespace': 'term',
+      	'hash': id,
         'terms': get_phrases(k),
         'corpus_count': v,
         'document_count': v
