@@ -3,26 +3,19 @@
 
 import json
 import os
-import subprocess
 import sys
 import yaml
-
+import requests
+from requests.adapters import HTTPAdapter, Retry
 
 def find(json, path, separator = "."):
     if len(path) == 0: return json
     head, _, rest = path.partition(separator)
     return find(json[head], rest) if head in json else None
 
-
 # extract <id> from form id:open:doc::<id>
 def get_document_id(id):
     return id[id.rfind(":")+1:]
-
-
-def call(args):
-    proc = subprocess.Popen(args, stdout=subprocess.PIPE)
-    (out, err) = proc.communicate()
-    return out
 
 
 def get_private_key_path():
@@ -46,43 +39,18 @@ def get_public_cert_path():
 
 
 def vespa_get(endpoint, operation, options):
-    endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
     url = "{0}/{1}?{2}".format(endpoint, operation, "&".join(options))
-    return call([
-        "curl",
-        "-gsS",
-        "--cert", get_public_cert_path(),
-        "--key", get_private_key_path(),
-        url ])
+    return session.get(url).json()
 
 
 def vespa_delete(endpoint, operation, options):
-    endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
     url = "{0}/{1}?{2}".format(endpoint, operation, "&".join(options))
-    return call([
-        "curl",
-        "-gsS",
-        "--cert", get_public_cert_path(),
-        "--key", get_private_key_path(),
-        "-X", "DELETE",
-        url
-    ])
-
-
+    return session.delete(url).json()
+    
 def vespa_post(endpoint, doc, docid, namespace, doc_type):
-    endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
     url = "{0}/document/v1/{1}/{2}/docid/{3}".format(endpoint, namespace, doc_type, docid)
-    return call([
-        "curl",
-        "-sS",
-        "-H", "Content-Type:application/json",
-        "--cert", get_public_cert_path(),
-        "--key", get_private_key_path(),
-        "-X", "POST",
-        "--data-binary", "{0}".format(doc),
-        url
-    ])
-
+    return session.post(url, json=doc).json()
+    
 
 def vespa_visit(endpoint, namespace, doc_type, continuation = None):
     options = []
@@ -90,14 +58,8 @@ def vespa_visit(endpoint, namespace, doc_type, continuation = None):
     options.append("timeout=60s")
     if continuation is not None and len(continuation) > 0:
         options.append("&continuation={0}".format(continuation))
-    response = vespa_get(endpoint, "document/v1/{0}/{1}/docid".format(namespace,doc_type), options)
-    try:
-        return json.loads(response)
-    except:
-        print("Unable to parse JSON response from {0}. Should not happen, endpoint down? response: {1}".format(endpoint, response))
-        sys.exit(1)
-    return {}
-
+    return vespa_get(endpoint, "document/v1/{0}/{1}/docid".format(namespace,doc_type), options)
+    
 
 def vespa_remove(endpoint, doc_ids, namespace, doc_type):
     options = []
@@ -118,7 +80,6 @@ def vespa_feed(endpoint, feed, namespace, doc_type):
 def get_docs(index):
     file = open(index, "r", encoding='utf-8')
     return json.load(file)
-
 
 def get_indexed_docids(endpoint, namespace, doc_type):
     docids = set()
@@ -202,7 +163,16 @@ def update_endpoint(endpoint, config):
 def main():
     configuration_file = sys.argv[1]
     config = read_config(configuration_file)
+    global session
+    session = requests.Session()
+    retries = Retry(total=10, connect=10,
+        backoff_factor=0.8,
+        status_forcelist=[ 500, 503, 504, 429 ]
+    )
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+    session.cert = (get_public_cert_path(), get_private_key_path())
     for endpoint in config["search"]["feed_endpoints"]:
+        endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
         update_endpoint(endpoint, config)
 
 
