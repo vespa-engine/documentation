@@ -41,13 +41,30 @@ filters = {
 	"5.":1
 }
 
+invalid_starts = {
+	"a ":1,
+	"an ":1,
+	"any ":1,
+	"another ":1,
+	"the ":1,
+	"either ": 1,
+	"more ": 1,
+	"only ": 1
+}
+
 def filter(text):
 	if len(text) < 3 or len(text) > 64:
 		return True
-	if text.startswith("/") and len(text) < 5:
+	if text.startswith("/") and len(text) < 3:
 		return True
 	for f in filters:
 		if f in text:
+			return True
+	return False
+
+def filter_content(text):
+	for f in invalid_starts:
+		if text.startswith(f):
 			return True
 	return False
 
@@ -63,7 +80,7 @@ with open(sys.argv[1]) as fp:
 		fields = doc['fields']
 		title = clean_text(fields['title'])
 		if not filter(title):
-			suggestions[title] = 2
+			suggestions[title] = 4
 		headers = fields.get('headers')
 		if headers:
 			for h in headers:
@@ -97,6 +114,8 @@ with open(sys.argv[1]) as fp:
 			words = len(noun_phrase.split())
 			if words < 3 or words > 6:
 				continue
+			if filter_content(noun_phrase):
+				continue
 			for v in vocab.keys():
 				if v in noun_phrase:
 					if noun_phrase in suggestions:
@@ -117,6 +136,7 @@ def get_phrases(terms):
 		end = terms.find(' ', start)
 	return phrases
 
+suggest = []
 for k,v in suggestions.items():
 	id = mmh3.hash(k)
 	doc = {
@@ -128,8 +148,10 @@ for k,v in suggestions.items():
         'document_count': v
       }
   } 
-	print(json.dumps(doc))
+	suggest.append(doc)
 
+with open("suggestions_index.json", "w") as fp:
+	json.dump(suggest, fp)
 
 
 	
