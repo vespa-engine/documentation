@@ -191,7 +191,7 @@ def update_endpoint(endpoint, config):
             print_header("Removing indexed documents not in feed in {0}".format(endpoint_url))
             for id in docids_to_remove:
                 print("To Remove: {0}".format(id))
-            vespa_remove(endpoint_url, docids_to_remove, namespace)
+            vespa_remove(endpoint_url, docids_to_remove, namespace, doc_type)
             print("{0} documents removed.".format(len(docids_to_remove)))
         else:
             print("No documents to be removed.")
