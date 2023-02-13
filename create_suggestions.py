@@ -143,6 +143,7 @@ for k,v in suggestions.items():
 		'put': 'id:term:term::%i' % id,
     	'fields': {
       	'term': k,
+      	'namespace': 'term',
         'terms': get_phrases(k),
         'corpus_count': v,
         'document_count': v
