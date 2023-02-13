@@ -147,8 +147,8 @@ def print_header(msg):
     print("*" * 80)
 
 
-def read_config():
-    with open("_config.yml", "r") as f:
+def read_config(config_file):
+    with open(config_file, "r") as f:
         return yaml.safe_load(f)
 
 
@@ -198,7 +198,8 @@ def update_endpoint(endpoint, config):
 
 
 def main():
-    config = read_config()
+    configuration_file = sys.argv[1]
+    config = read_config(configuration_file)
     for endpoint in config["search"]["feed_endpoints"]:
         update_endpoint(endpoint, config)
 
