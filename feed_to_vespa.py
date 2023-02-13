@@ -48,7 +48,6 @@ def get_public_cert_path():
 def vespa_get(endpoint, operation, options):
     endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
     url = "{0}/{1}?{2}".format(endpoint, operation, "&".join(options))
-    print(url)
     return call([
         "curl",
         "-gsS",
@@ -104,7 +103,6 @@ def vespa_remove(endpoint, doc_ids, namespace, doc_type):
     options = []
     for doc_id in doc_ids:
         id = get_document_id(doc_id)
-        print("Removing: {0}".format(id))
         vespa_delete(endpoint, "document/v1/{0}/{1}/docid/{2}".format(namespace, doc_type, id), options)
 
 
@@ -130,8 +128,6 @@ def get_indexed_docids(endpoint, namespace, doc_type):
         documents = find(json, "documents")
         if documents is not None:
             ids = [ find(document, "id") for document in documents ]
-            for id in ids:
-                print("Found {0}".format(id))
             docids.update(ids)
         continuation = find(json, "continuation")
     return docids

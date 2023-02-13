@@ -146,6 +146,7 @@ for k,v in suggestions.items():
       	'namespace': 'term',
       	'hash': id,
         'terms': get_phrases(k),
+        'tokens': re.findall( r'\w+|[^\s\w\.\-\,]+', k),
         'corpus_count': v,
         'document_count': v
       }
