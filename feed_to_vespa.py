@@ -74,7 +74,7 @@ def vespa_feed(endpoint, feed, namespace, doc_type):
         		document_id = find(doc, "fields.namespace") +  find(doc, "fields.path")
         if doc_type == "term":
         		document_id = str(find(doc, "fields.hash")) 
-        print(vespa_post(endpoint, json.dumps(doc), document_id, namespace, doc_type))
+        print(vespa_post(endpoint, doc, document_id, namespace, doc_type))
 
 
 def get_docs(index):
