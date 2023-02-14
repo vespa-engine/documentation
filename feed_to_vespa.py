@@ -121,6 +121,7 @@ def update_endpoint(endpoint, config):
     doc_type = config["search"]["doc_type"]
 
     endpoint_url = endpoint["url"]
+    endpoint_url = endpoint_url[:-1] if endpoint_url.endswith("/") else endpoint_url
     endpoint_indexes = endpoint["indexes"]
 
     print_header("Retrieving already indexed document ids for endpoint {0}".format(endpoint_url))
@@ -172,7 +173,6 @@ def main():
     session.mount('https://', HTTPAdapter(max_retries=retries))
     session.cert = (get_public_cert_path(), get_private_key_path())
     for endpoint in config["search"]["feed_endpoints"]:
-        endpoint = endpoint[:-1] if endpoint.endswith("/") else endpoint
         update_endpoint(endpoint, config)
 
 
