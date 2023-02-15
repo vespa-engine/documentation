@@ -28,6 +28,7 @@ module Jekyll
                         :namespace => namespace,
                         :title => page.data["title"],
                         :content => text,
+                        :html => get_html(page),
                         :term_count => text.split.length(),
                         :last_updated => Time.now.to_i
                     }
@@ -46,6 +47,14 @@ module Jekyll
             # The generated client-side redirects should not be indexed -
             # they have no title and node content
             return page.content == "" && !page.data["title"]
+        end
+
+        def get_html(page)
+            if page.name[page.name.rindex('.')+1..-1] == "md"
+                doc = Kramdown::Document.new(page.content).to_html
+            else
+                doc = page.content
+            end
         end
 
         def get_doc(page)
