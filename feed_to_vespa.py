@@ -19,7 +19,6 @@ def get_document_id(id):
 
 
 def get_private_key_path():
-    return "foo"
     private_key_path = "data-plane-private-key.pem"
     if not os.path.isfile(private_key_path):
         private_key_raw = os.environ['DATA_PLANE_PRIVATE_KEY']
@@ -30,7 +29,6 @@ def get_private_key_path():
 
 
 def get_public_cert_path():
-    return "bar"
     public_cert_path = "data-plane-public-key.pem"
     if not os.path.isfile(public_cert_path):
         public_cert_raw = os.environ['DATA_PLANE_PUBLIC_KEY']
