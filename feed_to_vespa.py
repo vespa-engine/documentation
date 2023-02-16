@@ -71,11 +71,11 @@ def vespa_remove(endpoint, doc_ids, namespace, doc_type):
 def vespa_feed(endpoint, feed, namespace, doc_type):
     for doc in get_docs(feed):
         if doc_type == "doc": 
-        	    document_id = find(doc, "fields.namespace") +  find(doc, "fields.path")
+        	    document_id = find(doc, "fields.namespace") + find(doc, "fields.path")
         elif doc_type == "term":
         		document_id = str(find(doc, "fields.hash")) 
         elif doc_type == "paragraph":
-                document_id = get_document_id(feed['put'])
+                document_id = get_document_id(doc['put'])
         print(vespa_post(endpoint, doc, document_id, namespace, doc_type))
 
 def get_docs(index):
