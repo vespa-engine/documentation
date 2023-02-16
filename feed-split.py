@@ -22,7 +22,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
             "title": fields['title'],
             "path": fields['path'],
             "doc_id": fields['path'],
-            "namespace": fields['namespace'],
+            "namespace": new_namespace,
             "content": paragraph
         }
     }
