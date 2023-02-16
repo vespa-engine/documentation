@@ -36,7 +36,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
         paragraph_id = str(random.randint(0,1000))
 
     new_doc['fields']['path'] = new_doc['fields']['path'] + "#" + paragraph_id
-    new_doc['put'] = new_doc['put'] + "#" + paragraph_id
+    new_doc['put'] = new_doc['put'] + "-" + paragraph_id
     
     return new_doc 
 
