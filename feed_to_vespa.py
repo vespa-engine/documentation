@@ -99,8 +99,10 @@ def get_feed_docids(feed, namespace, doc_type):
         feed_json = json.load(f)
     if doc_type == "doc": 
     		return set([ "id:{0}:doc::".format(namespace) + find(doc, "fields.namespace") + find(doc, "fields.path") for doc in feed_json ])
-    if doc_type == "term": 
+    elif doc_type == "term": 
     		return set([ "id:{0}:term::".format(namespace) + str(find(doc, "fields.hash")) for doc in feed_json ])
+    elif doc_type == "paragraph": 
+    		return set([ doc['put'] for doc in feed_json ])
 
 def print_header(msg):
     print("")
