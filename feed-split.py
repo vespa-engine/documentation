@@ -7,12 +7,21 @@ from bs4 import BeautifulSoup
 import random
 
 def create_text_doc(doc, paragraph, paragraph_id, header):
+    id = doc['put']
+    #id:open:doc::open/en/access-logging.html#
+    _,namespace,doc_type,_,id = id.split(":")
+    #print("n={},doc_type={},id={}".format(namespace,doc_type,id))
+   
+    new_namespace = namespace + "-p"
+    id = id.replace(namespace, new_namespace)
+    id = "id:{}:{}::{}".format(new_namespace, "paragraph", id)
     fields = doc['fields']
     new_doc = {
-        "put": doc['put'],
+        "put": id,
         "fields": {
             "title": fields['title'],
             "path": fields['path'],
+            "doc_id": fields['path'],
             "namespace": fields['namespace'],
             "content": paragraph
         }
@@ -71,5 +80,5 @@ with open(sys.argv[1]) as fp:
         for text, index, header in texts:
             cleaner_text = " ".join(text.split())
             operations.append(create_text_doc(doc, cleaner_text, index, header))
-    with open("paragraphs.json", "w") as fp:    
+    with open("paragraph_index.json", "w") as fp:    
         json.dump(operations, fp)
