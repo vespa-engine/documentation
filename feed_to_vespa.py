@@ -19,6 +19,7 @@ def get_document_id(id):
 
 
 def get_private_key_path():
+    return "foo"
     private_key_path = "data-plane-private-key.pem"
     if not os.path.isfile(private_key_path):
         private_key_raw = os.environ['DATA_PLANE_PRIVATE_KEY']
@@ -29,6 +30,7 @@ def get_private_key_path():
 
 
 def get_public_cert_path():
+    return "bar"
     public_cert_path = "data-plane-public-key.pem"
     if not os.path.isfile(public_cert_path):
         public_cert_raw = os.environ['DATA_PLANE_PUBLIC_KEY']
@@ -99,8 +101,10 @@ def get_feed_docids(feed, namespace, doc_type):
         feed_json = json.load(f)
     if doc_type == "doc": 
     		return set([ "id:{0}:doc::".format(namespace) + find(doc, "fields.namespace") + find(doc, "fields.path") for doc in feed_json ])
-    if doc_type == "term": 
+    elif doc_type == "term": 
     		return set([ "id:{0}:term::".format(namespace) + str(find(doc, "fields.hash")) for doc in feed_json ])
+    elif doc_type == "paragraph": 
+    		return set([ doc['put'] for doc in feed_json ])
 
 def print_header(msg):
     print("")
