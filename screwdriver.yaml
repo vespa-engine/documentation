@@ -48,6 +48,27 @@ jobs:
             --hydra '{"max_concurrency": 1}' \
             _site
 
+  smoketest:
+    requires: [ ~pr, ~commit ]
+    image: vespaengine/vespa-build-centos-stream8:latest
+    annotations:
+      screwdriver.cd/cpu: HIGH
+      screwdriver.cd/ram: HIGH
+      screwdriver.cd/dockerEnabled: true
+      screwdriver.cd/dockerCpu: HIGH
+      screwdriver.cd/dockerRam: HIGH
+    steps:
+      - *install-deps-new
+      - install-bundler: |
+          gem install bundler
+          export LANG=C.UTF-8
+          bundle install
+      - build-site: |
+          bundle exec jekyll build
+      - run-tests: |
+          cd $SD_DIND_SHARE_PATH
+          $SD_SOURCE_DIR/test/test.py -c $SD_SOURCE_DIR/test/_smoketest_config.yml -w $SD_SOURCE_DIR
+
   verify-guides:
     requires: [~pr, ~commit]
     image: vespaengine/vespa-build-centos-stream8:latest
