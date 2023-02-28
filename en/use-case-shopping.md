@@ -44,8 +44,8 @@ not cause unexpected results.
     that defines how documents should be stored, indexed, ranked, and searched.
     In Vespa, you can have multiple documents types, which can be defined in
     `services.xml` how these should be distributed around the content clusters.
-    This application uses three document types that both are stored in the same
-    content cluster: item,review and query. Search is done on items, but reviews
+    This application uses three document types that are stored in the same
+    content cluster: item, review and query. Search is done on items, but reviews
     refer to a single parent item and are rendered on the item page. The query
     document type is used to power auto-suggest functionality.
 
@@ -109,7 +109,7 @@ not cause unexpected results.
     categories from the stored items. The search page groups results matching
     the query into categories, brands, item rating and price ranges. The order
     which the groups are rendered are determined by both counting and the
-    relevance of the hits. This enable query contextualized navigation. 
+    relevance of the hits. This enables query-contextualized navigation. 
 
 * [Rank profiles](ranking.html)
 
