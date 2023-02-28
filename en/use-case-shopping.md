@@ -44,9 +44,10 @@ not cause unexpected results.
     that defines how documents should be stored, indexed, ranked, and searched.
     In Vespa, you can have multiple documents types, which can be defined in
     `services.xml` how these should be distributed around the content clusters.
-    This application uses two document types that both are stored in the same
-    content cluster: item and review. Search is done on items, but reviews
-    refer to a single parent item and are rendered on the item page.
+    This application uses three document types that are stored in the same
+    content cluster: item, review and query. Search is done on items, but reviews
+    refer to a single parent item and are rendered on the item page. The query
+    document type is used to power auto-suggest functionality.
 
 * [Custom document processor](document-processing.html)
 
@@ -56,6 +57,13 @@ not cause unexpected results.
     fields to avoid unnecessary computation during ranking. This application
     uses a document processor to intercept reviews and update the parent item's
     review rating.
+
+* [Custom searcher processor](searcher-development.html)
+
+    In Vespa, you can set up custom searchers to perform any type of
+    extra processing during querying. In the sample app there is a single custom
+    searcher which builds the query for auto-suggestions, using a combination
+    of fuzzy matching and prefix search. 
 
 * [Custom handlers](jdisc/developing-request-handlers.html)
 
@@ -99,8 +107,9 @@ not cause unexpected results.
     this application, many of the queries to Vespa include grouping requests.
     The home page uses grouping to dynamically extract the first 3 levels of
     categories from the stored items. The search page groups results matching
-    the query into categories, brands, item rating and price ranges. The item
-    page groups review ratings to construct the rating graph.
+    the query into categories, brands, item rating and price ranges. The order
+    which the groups are rendered are determined by both counting and the
+    relevance of the hits. This enables query-contextualized navigation. 
 
 * [Rank profiles](ranking.html)
 
@@ -108,7 +117,21 @@ not cause unexpected results.
     documents for a given query. The most important part of rank profiles are
     the ranking expressions. The schemas for the item and review
     document types contain different rank profiles to sort or score the
-    data.
+    data. The item ranking is using a hybrid combination of keyword and vector matching.
+
+* [Native embedders](embedding.html)
+
+    Native embedders are used to map the textual query and document representations 
+    into dense high dimensional vectors which are used for semantic search. The application
+    uses an open-source embedding model and inference is performed using 
+    [stateless model evaluation](stateless-model-evaluation.html), both during
+    document and query processing. 
+
+* [Vector search](nearest-neighbor-search.html)
+
+    The default retrieval uses approximate nearest neighbor search in combination with traditional
+    lexical matching. Both the keyword and vector matching is constrained by the filters such as brand, price or
+    category. 
 
 * [Ranking functions](reference/schema-reference.html#function-rank)
 
