@@ -304,7 +304,6 @@ Find query timeout details in the [Query API Guide](query-api.html#timeout)
 and the [Query API Reference](reference/query-api-reference.html#timeout).
 
 #### How does backslash escapes work?
-
 Backslash is used to escape special characters in YQL.
 For example, to query with a literal backslash, which is useful in regexpes, 
 you need to escape it with another backslash: \\.
@@ -316,6 +315,21 @@ so if you query with Vespa CLI you need to escape with another backslash: \\\\.
 The same applies to strings in Java.
 
 Also note that both log messages and JSON results escape backslashes, so any \ becomes \\.
+
+#### Is it possible to have multiple SELECT statements in a single call (subqueries)?
+E.g. two select queries with slightly different filtering condition and have a limit operator for each of the subquery.
+This makes it impossible to do via OR conditions to select both collection of documents - something equivalent to:
+
+    SELECT 1 AS x
+    UNION ALL
+    SELECT 2 AS y;
+
+This isn’t possible, need to run 2 queries.
+Alternatively, split a single incoming query into two running in parallel in a [Searcher](searcher-development.html) - example:
+```java
+FutureResult futureResult = new AsyncExecution(settings).search(query);
+FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
+```
 
 
 {:.faq-section}
