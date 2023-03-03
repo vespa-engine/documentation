@@ -76,12 +76,14 @@ def parse_metrics(content, units):
             metric["name"] = matcher.group(1)
             metric["unit"] = units[matcher.group(2)]
             metric["description"] = matcher.group(3)
-            metrics.append(metric)
+            # No need to document internal metrics
+            if "Yahoo! Internal" not in metric["description"]:
+                metrics.append(metric)
     return metrics
 
 
 def get_metrics(metric_type, units):
-    response = requests.get(f'https://raw.githubusercontent.com/vespa-engine/vespa/master/container-core/src/main/java/com/yahoo/metrics/{metric_type}.java')
+    response = requests.get(f'https://raw.githubusercontent.com/vespa-engine/vespa/master/container-core/src/main/java/com/yahoo/metrics/{metric_type}Metrics.java')
     return parse_metrics(response.text, units)
 
 
@@ -90,21 +92,26 @@ def write_reference_doc(metric_reference):
     file.write(metric_reference.as_html())
 
 
+def generate_doc(metric_type, units):
+    filename = metric_type.lower() + "-metrics-reference.html"
+    title = metric_type.title() + " Metrics"
+    metrics = get_metrics(metric_type, units)
+    return MetricReference(filename, title, metrics)
+
 def generate_metrics_doc():
     units = get_units()
-
-    reference_docs = [
-        MetricReference("container-metrics-reference.html", "Container Metrics",
-                        get_metrics("ContainerMetrics", units)),
-        MetricReference("searchnode-metrics-reference.html", "Searchnode Metrics",
-                        get_metrics("SearchNodeMetrics", units)),
-        MetricReference("storage-metrics-reference.html", "Storage Metrics",
-                        get_metrics("StorageMetrics", units)),
-        MetricReference("distributor-metrics-reference.html", "Distributor Metrics",
-                        get_metrics("DistributorMetrics", units))
+    metric_types = [
+        "Container",
+        "SearchNode",
+        "Storage",
+        "Distributor",
+        "ConfigServer",
+        "Logd",
+        "NodeAdmin",
+        "Slobrok"
     ]
-
-    for reference_doc in reference_docs:
+    for metric_type in metric_types:
+        reference_doc = generate_doc(metric_type, units)
         write_reference_doc(reference_doc)
 
 
