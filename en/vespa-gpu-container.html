@@ -1,0 +1,81 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Container GPU setup"
+---
+
+<p>
+Vespa supports using GPUs to evaluate ONNX models, as part of
+its <a href="stateless-model-evaluation.html">stateless model evaluation
+feature</a>. When running Vespa inside a container engine such as Docker or
+Podman, special configuration is required to make GPU(s) available inside the
+container.
+</p>
+
+<p>
+The following guide explains how to do this for Nvidia GPUs, using Podman on
+RHEL8. For other platforms and container engines, see
+the <a href="//docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html">Nvidia
+container toolkit installation guide</a>.
+</p>
+
+<h2>Configuration steps</h2>
+<ol>
+  <li>
+    <p> Ensure that Nvidia drivers are installed on your host. On RHEL 8 this
+      can be done as follows:
+    </p>
+<pre>
+dnf config-manager \
+  --add-repo=https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+dnf module install -y --enablerepo cuda-rhel8-x86_64 nvidia-driver:latest
+</pre>
+  </li>
+  <li>
+    <p>
+      Install <code>nvidia-container-toolkit</code>. This grants the container engine access
+      to your GPU device(s). On RHEL 8 this can be done as follows:
+    </p>
+<pre>
+dnf config-manager \
+  --add-repo=https://nvidia.github.io/libnvidia-container/rhel8.6/libnvidia-container.repo
+dnf install -y --enablerepo libnvidia-container nvidia-container-toolkit
+</pre>
+  </li>
+  <li>
+    <p>
+      Generate a "Container Device Interface" config:
+    </p>
+<pre>
+nvidia-ctk cdi generate --device-name-strategy=type-index --format=json &gt; /etc/cdi/nvidia.json
+</pre>
+  </li>
+  <li>
+    <p>
+      Verify that the GPU device is exposed to the container:
+    </p>
+<pre>
+podman run --rm -it --device nvidia.com/gpu=all docker.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
+</pre>
+    <p>
+      This should print details about your GPU(s) if everything is configured
+      correctly.
+    </p>
+  </li>
+  <li>
+    <p>
+      Start the Vespa container with the <code>--device</code> option:
+    </p>
+<pre>
+podman run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  --device nvidia.com/gpu=all \
+  vespaengine/vespa
+</pre>
+  </li>
+  <li>All Nvidia GPUs on the host should be available inside the container, with
+  devices exposed at <code>/dev/nvidiaN</code>.
+  See <a href="stateless-model-evaluation.html#onnx-inference-options">stateless
+  model evaluation</a> for how to configure the ONNX runtime to use a GPU for
+  computation.
+  </li>
+</ol>
