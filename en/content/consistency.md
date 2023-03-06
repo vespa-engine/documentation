@@ -106,7 +106,12 @@ The rationale for this difference in behavior is that Document V1 is usually
 called in a real-time request context, whereas `vespa-visit` is usually called
 in a background/batch processing context.
 
-Visitor operations return the current state of the document set. They do not have snapshot isolation.
+Visitor operations iterate over the document corpus in an implementation-specific
+order. Any given document is returned in the state it was in at the time the visitor
+iterated over the data bucket containing the document. This means there is <em>no
+snapshot isolation</em>—a document mutation happening concurrently with a visitor
+may or may not be reflected in the returned document set, depending on whether
+the mutation happened before or after iteration of the bucket containing the document.
 
 ### Replica reconciliation
 
@@ -121,7 +126,8 @@ the union set of documents is present on all replicas. Metadata is checksummed
 to determine whether replicas are in sync with each other.
 
 When reconciling replicas, the newest available version of a document will
-"win" and become visible. This version may be a remove (tombstone).
+"win" and become visible. This version may be a remove (tombstone). Tombstones
+are replicated in the same way as regular documents.
 
 If a test-and-set operation updates at least one replica, it will eventually
 become visible on the other replicas.
