@@ -87,24 +87,45 @@ or the <em>[document]</em> / <em>[all]</em> shorthand.
 <p>
 Export data to stdout.
 As a full data dump takes time / space / resources, refine as needed:
-<!-- ToDo:
-           Should we replace this with a /document/v1 example that uses slicing instead?
-           The id.hash() construction requires a complete iteration,
-           whereas slicing inherently limits to a subset of the data space.
-           However, slicing is currently not supported by the vespa-visit CLI.
- -->
+<!-- ToDo: Add example with vespa-cli once slicing is implemented there -->
+</p>
+<p>
+On Vespa 8.133 and beyond:
+</p>
 <pre>
-$ vespa-visit -v -p progress-file -s 'id.hash().abs() % 100 = 0' > 100.json
+$ vespa-visit -v -p progress-file --slices 100 --sliceid 0 > 0.json
 </pre>
 <ul>
-  <li><code>-v</code> prints a % finished</li>
+  <li><code>-v</code> prints % finished to stderr.</li>
   <li><code>-p progress-file</code> saves progress, allowing the visitor to resume at next startup.
     Always remove the progress file to run the visiting operation from the start.</li>
-  <li><code>-s 'id.hash().abs() % 100 = 0'</code> dumps 1% of the corpus - see <a href="#selection">selection</a>.</li>
+  <li><code>--slices 100 --sliceid 0</code> dumps 1% of the corpus by efficiently iterating
+      over only 1/100th of the data space. For a given number of <code>--slices</code>, it's
+      possible to visit the entire corpus (possibly in parallel) with non-overlapping output
+      by visiting with all <code>--sliceid</code> values from (and including) 0 up to (and excluding)
+      <code>--slices</code>.</li>
 </ul>
+<p>
+On Vespa versions prior to 8.133:
+</p>
+<pre>
+$ vespa-visit -v -p progress-file -s 'id.hash().abs() % 100 = 0' > 0.json
+</pre>
+<ul>
+  <li><code>-v</code> prints % finished to stderr.</li>
+  <li><code>-p progress-file</code> saves progress, allowing the visitor to resume at next startup.
+    Always remove the progress file to run the visiting operation from the start.</li>
+  <li><code>-s 'id.hash().abs() % 100 == 0'</code> dumps 1% of the corpus - see <a href="#selection">selection</a>.
+      Note that this expression is evaluated for <em>every</em> document in the cluster, so running 100
+      visits comparing against all values in [0, 99) ends up reading all documents 100 times. Prefer
+      using <code>--slices</code> and <code>--sliceid</code> instead if available.</li>
+</ul>
+{% include note.html content='If you have <a href="../reference/services-content.html#document">global
+  document types</a>, you must add <code>--bucketspace global</code> to visit these documents.
+  By default, visiting only iterates over non-global documents.' %}
 <p>Import into a cluster using the <a href="../vespa-feed-client.html">vespa-feed-client</a>:</p>
 <pre>
-$ vespa-feed-client --file 100.json --endpoint https://container-endpoint:443/
+$ vespa-feed-client --file 0.json --endpoint https://container-endpoint:443/
 </pre>
 <p>
   Or see next section, routing output directly to another Vespa cluster.
