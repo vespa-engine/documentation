@@ -551,6 +551,7 @@ the processing may occur in parallel with the document fetching.
 
 
 <h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="not-seeing-all-documents-when-visiting">Not seeing all documents when visiting</h3>
 <p>
   Normally all documents share the same <a href="buckets.html#bucket-space">bucket space</a>—documents
   for multiple schemas are co-located.
@@ -559,6 +560,34 @@ the processing may occur in parallel with the document fetching.
   to visit the <code>default</code> or <code>global</code> space.
   This is a common problem when dumping all documents and dumped count is not the expected count.
 </p>
+<h3 id="visiting-performance-is-poor">Visiting performance is poor</h3>
+<p>
+  When visiting, all content nodes may push data to the visitor <em>client</em> in parallel.
+  Therefore, the client is often the bottleneck. Slow data processing implicitly slows down
+  the entire visiting process. In particular, large floating point tensor fields are very
+  expensive to render as JSON.
+</p>
+<p>
+  To verify if client-side rendering is the bottleneck, run <code>vespa-visit</code> with
+  your usual selection criteria and field set, but add the <code>--nullrender</code> argument
+  (available on Vespa 8.134 and above). This receives and processes documents as usual, but
+  completely skips rendering.
+</p>
+<p>
+  If you are redirecting the output of visiting to any custom business logic (such as running
+  <code>jq</code> on the stream of documents), make sure you are not accidentally buffering up
+  data internally—this goes for both input and output. To verify if processing the visitor output
+  is the bottleneck, run visiting with <code>stdout</code> redirected to <code>/dev/null</code>
+  and compare the time taken.
+</p>
+<p>
+  If the client is not the bottleneck, it is possible visiting performance is limited by disk
+  performance. Non-attribute fields are not memory backed and must be fetched from disk when
+  evaluating selections. This includes document IDs, which must always be returned for matching
+  documents. To see if any fields are particularly expensive to fetch or return, run visiting
+  with a selection and/or field set that does <em>not</em> include potentially expensive fields.
+</p>
+<h3 id="visitor-operations-are-hanging">Visitor operations are hanging</h3>
 <p>
   A visit operation might stall/hang if the content cluster is in an inconsistent
   state—replicas are still merging between nodes.
