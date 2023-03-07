@@ -72,10 +72,8 @@ add it to the application package resulting in a directory structure like this:
 ```
 
 Note that an application package can have multiple models. After putting the
-model somewhere under the `models` directory, it is then available for use in
-both ranking and [stateless model evaluation](stateless-model-evaluation.html).
-
-
+model in the `models` directory, it is available for both ranking and
+[stateless model evaluation](stateless-model-evaluation.html).
 
 ## Ranking with LightGBM models
 
@@ -128,7 +126,7 @@ feature names are valid [rank features](reference/rank-features.html).
 Examples are `attribute(field_name)` for a value that should be retrieved from
 a document, `query(name)` for a value that should be retrieved from the query,
 or possibly from other more complex rank features such as `fieldMatch(name)`.
-You can also define functions (which are valid rank features) with the LightGBM
+You can also define [functions](https://docs.vespa.ai/en/ranking-expressions-features.html#function-snippets) (which are valid rank features) with the LightGBM
 feature name to perform the mapping. An example:
 
 ```
@@ -146,6 +144,9 @@ schema test {
             expression: query(query_value)
         }
         first-phase {
+            expression: nativeRank
+        }
+        second-phase {
             expression: lightgbm("lightgbm_model.json")
         }
     }
@@ -160,6 +161,18 @@ from a query value passed along with the query.
 One can also use `attribute(doc_attrib)` directly as a feature name when
 training the LightGBM model. This allows dumping rank features from Vespa
 to train a model directly. 
+
+Here, we specify that the model `lightgbm_model.json` is applied to the top ranking documents by the first-phase ranking expression. 
+The query request must specify `classify` as the [ranking.profile](reference/query-api-reference.html#ranking.profile). 
+See also [Phased ranking](phased-ranking.html) on how to control number of data points/documents which is exposed to the model.
+
+Generally the run time complexity is determined by:
+
+* The number of documents evaluated [per thread](performance/sizing-search.html) / number of nodes and the query filter
+* The complexity of computing features. For example `fieldMatch` features are 100x more expensive that `nativeFieldMatch/nativeRank`.
+* The number of trees and the maximum depth per tree
+
+Serving latency can be brought down by [using multiple threads per query request](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking). 
 
 ## Objective functions
 
@@ -229,3 +242,22 @@ schema test {
 
 Here, the string value of the document would be used as the feature value when evaluating
 this model for every document.
+
+## Debugging Vespa inference score versus LightGBM predict score 
+ 
+* When dumping LightGBM models to a JSON representation some of the model information is lost
+  (e.g. the `base_score` or the optimal number of trees if trained with early stopping).
+  
+* For training, features should be scraped from Vespa, using either `match-features` or `summary-features` so
+  that features from offline training matches the online Vespa computed features. Dumping
+  features can also help debug any differences by zooming into specific query,document pairs
+  using [recall](reference/query-api-reference.html#recall) parameter. 
+
+* It's also important to use the highest possible precision
+  when reading Vespa features for training as Vespa outputs features using `double` precision. 
+  If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
+* In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
+  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](https://docs.vespa.ai/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
+  is related to *Inverse Document Frequency (IDF)*. 
+  > `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
+

@@ -28,7 +28,11 @@ Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 
   ]}
 ]
 ```
-Notice the `split` attribute which represents the feature name. The above model was produced using the XGBoost python api:
+Notice the `split` attribute which represents the Vespa feature name. The `split` feature must resolve to a Vespa
+[rank feature](reference/rank-features.html) defined in the [document schema](schemas.html). The feature can also
+be user defined features (for example using [functions](https://docs.vespa.ai/en/ranking-expressions-features.html#function-snippets)).
+
+The above model JSON was produced using the XGBoost Python api with a regression objective:
 
 ```python
 #!/usr/local/bin/python3
@@ -40,7 +44,7 @@ bst = xgb.train(param, dtrain, 2)
 bst.dump_model("trained-model.json",fmap='feature-map.txt', with_stats=False, dump_format='json')
 ```
 The training data is represented using [LibSVM text format](https://xgboost.readthedocs.io/en/latest/tutorials/input_format.html).
-
+See also a complete [XGBoost training notebook](https://github.com/vespa-engine/sample-apps/blob/master/commerce-product-ranking/notebooks/Train-xgboost.ipynb) using `ranking` objective. 
 
 ## Feature mappings from XGBoost to Vespa
 XGBoost is trained on array or array like data structures
@@ -65,7 +69,7 @@ Format of ```feature-map.txt: <featureid> <featurename> <q or i or int>\n ```:
   - "q" means this feature is a quantitative value, such as age, time, can be missing
   - "int" means this feature is integer value (when int is hinted, the decision boundary will be integer)
 
-When using `pandas` with `DataFrame` with columns names, one does not feature mappings.  
+When using `pandas``DataFrame`'s with columns names, one does not need to provide feature mappings.  
 
 See also a complete example of how to train a ranking function, using learning to rank 
 with ranking losses, in this 
@@ -94,7 +98,7 @@ see [deploying remote models](application-packages.html#deploying-remote-models)
 
 ## Ranking with XGBoost models
 
-Vespa has a special [ranking feature](reference/rank-features.html) called `xgboost`.
+Vespa has a `xgboost` [ranking feature](reference/rank-features.html).
 This ranking feature specifies the model to use in a ranking expression.
 Consider the following example:
 
@@ -102,22 +106,29 @@ Consider the following example:
 schema xgboost {
     rank-profile prediction inherits default {
         first-phase {
+          expression: nativeRank
+        }
+        second-phase {
             expression: xgboost("my_model.json")
         }
     }
 }
 ```
 
-Here, we specify that the model `my_model.json` is applied to all documents matching a query which uses rank-profile prediction.
-One can also use [Phased ranking](phased-ranking.html) to control number of data points/documents which is ranked with the model.
-Generally the run time complexity is determined by 
-* The number of documents evaluated [per thread](performance/sizing-search.html) / number of nodes and the query filter
-* The feature complexity (Features which are repeated over multiple trees/branches are not re-computed) 
-* The number of trees and the maximum depth per tree
+Here, we specify that the model `my_model.json` is applied to the top ranking documents by the first-phase ranking expression. 
+The query request must specify `prediction` as the [ranking.profile](reference/query-api-reference.html#ranking.profile). 
+See also [Phased ranking](phased-ranking.html) on how to control number of data points/documents which is exposed to the model.
 
+Generally the run time complexity is determined by:
+
+* The number of documents evaluated [per thread](performance/sizing-search.html) / number of nodes and the query filter
+* The complexity of computing features. For example `fieldMatch` features are 100x more expensive that `nativeFieldMatch/nativeRank`.
+* The number of XGboost trees and the maximum depth per tree
+
+Serving latency can be brought down by [using multiple threads per query request](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking). 
 
 ## XGBoost models 
-There are three [objective](https://xgboost.readthedocs.io/en/stable/parameter.html#learning-task-parameters) 
+There are six different [objective](https://xgboost.readthedocs.io/en/stable/parameter.html#learning-task-parameters) 
 types that Vespa supports: 
 
 * Regression ```reg:squarederror``` / ```reg:logistic```
@@ -126,8 +137,7 @@ types that Vespa supports:
 
 For `reg:logistic` and `binary:logistic` the raw margin tree sum (Sum of all trees)
 needs to be passed through the sigmoid function to represent the probability of class 1.
-F
-or regular regression the model can be directly imported
+For regular regression the model can be directly imported
 but the `base_score` should be set 0 as the `base_score` used during the training phase is not dumped with the model. 
 
 An example model using the sklearn toy datasets is given below:
@@ -155,9 +165,24 @@ schema xgboost {
 }
 ```
 
-## Known issues 
+## Debugging Vespa inference score versus XGBoost predict score 
+ 
 * When dumping XGBoost models to a JSON representation some of the model information is lost
-  (e.g. the base_score or the optimal number of trees if trained with early stopping).
+  (e.g. the `base_score` or the optimal number of trees if trained with early stopping).
   XGBoost also has different predict functions (e.g. predict/predict_proba).
   The following [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost)
   demonstrates how to represent different type of XGBoost models in Vespa. 
+* For training, features should be scraped from Vespa, using either `match-features` or `summary-features` so
+  that features from offline training matches the online Vespa computed features.
+  Dumping features can also help debug any differences by zooming into specific query,document pairs
+  using [recall](reference/query-api-reference.html#recall) parameter. 
+* It's also important to use the highest possible precision
+  when reading Vespa features for training as Vespa outputs features using `double` precision. 
+  If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
+* In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
+  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](https://docs.vespa.ai/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
+  is related to *Inverse Document Frequency (IDF)*. 
+  >`term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
+
+
+
