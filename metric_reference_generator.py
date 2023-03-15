@@ -108,7 +108,8 @@ def generate_metrics_doc():
         "ConfigServer",
         "Logd",
         "NodeAdmin",
-        "Slobrok"
+        "Slobrok",
+        "ClusterController"
     ]
     for metric_type in metric_types:
         reference_doc = generate_doc(metric_type, units)
