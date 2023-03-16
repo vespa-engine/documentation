@@ -22,7 +22,7 @@ redirect_from:
 </p>
 <p>
   Vespa configuration is set up using one or more configuration servers (config servers).
-  A config server uses <a href="https://zookeeper.apache.org/">ZooKeeper</a>
+  A config server uses <a href="https://zookeeper.apache.org/">Apache ZooKeeper</a>
   as a distributed data storage for the configuration system.
   In addition, each node runs a config proxy to cache configuration data -
   find an overview at <a href="config-sentinel.html">services start</a>.
@@ -206,72 +206,48 @@ Container.com.yahoo.vespa.config.server.session.SessionRepository	Session activa
 
 <h2 id="scaling-up">Scaling up</h2>
 <p>
-  Do this by adding nodes one by one. Add a config server node for increased fault tolerance or when replacing a node. Procedure:
+  Add a config server node for increased fault tolerance or when replacing a node.
+  Read up on <a href="#zookeeper-configuration">ZooKeeper configuration</a> before continuing.
+  Although it is <em>possible</em> to add more than one config server at a time,
+  doing it one by one is recommended, to keep the ZooKeeper quorum intact.
+</p>
+<p>
+  Due to the ZooKeeper majority vote, use one or three config servers.
 </p>
 <ol>
   <li>
     Install <em>vespa</em> on new config server node.
   </li><li>
-    Add config server node to <em>VESPA_CONFIGSERVERS</em> on all nodes (both config server nodes and other nodes)
-  </li><li>
-    Restart the config server on the original config server nodes and start it on the new one,
-    one at a time (if you want to verify that new config is in use, try using
-    <em>/opt/vespa/libexec/vespa/vespa-curl-wrapper https://localhost:19071/status| jq .configserverConfig.zookeeperserver</em>
-    after each restart to confirm that config servers are defined as expected).
+    Append the config server node's hostname to VESPA_CONFIGSERVERS on all nodes, then (re)start
+    all config servers in sequence to update the ZooKeeper config. By appending, the current
+    config server nodes keep their current ZooKeeper index. Restart the existing config server(s)
+    first. Config server will log which servers are configured when starting up to vespa log.
   </li><li>
     Update <em>services.xml</em> and <em>hosts.xml</em> with the new set of config servers,
-    then <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>
+    then <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>.
   </li>
   <li>
-    Restart other nodes (all except config servers) one by one to start using the new config servers.
+    Restart other nodes one by one to start using the new config servers.
+    This will let the vespa nodes use the updated set of config servers.
   </li>
 </ol>
 <p>
-Note: ZooKeeper will automatically redistribute the application data.
+  The config servers will automatically redistribute the application data to new nodes.
 </p>
-
-<h3 id="scaling-up-by-majority">Scaling up by Majority</h3>
-<p>
-  When increasing from 1 to 3 nodes or 3 to 7, the blank nodes constitutes a majority in the cluster.
-  After restarting the config servers, they will not contain the old application data,
-  because the blank nodes might win the ZooKeeper master election - depending on restart timing.
-  To avoid any issues with this, scale up by minor sets of the nodes - example:
-</p>
-<ol>
-  <li>Scale from 1 to 2</li>
-  <li>Scale from 2 to 3</li>
-</ol>
 
 
 
 <h2 id="scaling-down">Scaling down</h2>
 <p>
-  Remove a config server from a cluster:
+  This is the inverse of scaling up, and the procedure is the same.
+  Remove config servers from the end of <em>VESPA_CONFIGSERVERS</em>,
+  and here one can remove two nodes in one go, if going from three to one.
 </p>
-<ol>
-  <li>
-    Remove config server node from <em>VESPA_CONFIGSERVERS</em> on <em>all</em> vespa nodes
-  </li>
-  <li>
-    Restart other nodes one by one to start using the new set of config servers.
-  </li>
-  <li>
-    Restart remaining config servers one by one.
-  </li><li>
-    Verify that these nodes have data, by using <em>vespa-get-config</em>
-    or <em>vespa-zkcli ls</em> (see below).
-    If they are blank, redo <em>vespa-deploy prepare</em> and <em>vespa-deploy activate</em>.
-    Also see <a href="#health-checks">health checks</a>.
-  </li><li>
-    Pull removed node from production.
-  </li>
-</ol>
-
 
 <h2 id="scaling-up">Replacing nodes</h2>
 <p>
   <li>Make sure to replace only one node at a time.</li>
-  <li>If you have less than 3 config servers you need to first scale up with a new node, then scale down by removing the old node. Repeat for each node you want to replace.</li>
+  <li>If you have only one config server you need to first scale up with a new node, then scale down by removing the old node.</li>
   <li>If you have 3 or more you can replace one of the old nodes in VESPA_CONFIGSERVERS with the new one instead of adding one, otherwise same procedure as
     in <a href="#scaling-up">Scaling up</a>. Repeat for each node you want to replace.</li>
 </h2>
@@ -299,12 +275,6 @@ Note: ZooKeeper will automatically redistribute the application data.
   similar to a file system.
 </p>
 <p>
-  When starting or restarting the config server, the configuration file for ZooKeeper,
-  <em>$VESPA_HOME/var/zookeeper/conf/zookeeper.cfg</em>, is generated based on the contents of
-  <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>.
-  Hence, config server(s) must all be restarted if that changes on a config server node.
-</p>
-<p>
   At <a href="../application-packages.html#deploy">vespa-deploy prepare</a>, the application's files,
   along with global configurations, are stored in ZooKeeper.
   The application data is stored under <em>/config/v2/tenants/default/sessions/[sessionid]/userapp</em>.
@@ -325,7 +295,19 @@ $ vespa-zkcli get /config/v2/tenants/default/sessions/<span class="pre-hilite">s
 </p>
 
 
-<h3 id="zookeeper-recovery">ZooKeeper Recovery</h3>
+<h3 id="zookeeper-configuration">ZooKeeper configuration</h3>
+<p>
+  The members of the ZooKeeper cluster is generated based on the contents of
+  <a href="../reference/files-processes-and-ports.html#environment-variables">VESPA_CONFIGSERVERS</a>.
+  <em>$VESPA_HOME/var/zookeeper/conf/zookeeper.cfg</em> is written when (re)starting the config server.
+  Hence, config server(s) must all be restarted when <code>VESPA_CONFIGSERVERS</code> changes.
+</p>
+<p>
+  The order of the nodes is used to create indexes in <em>zookeeper.cfg</em>, do not change node order.
+</p>
+
+
+<h3 id="zookeeper-recovery">ZooKeeper recovery</h3>
 <p>
   If the config server(s) should experience data corruption,
   for instance a hardware failure, use the following recovery procedure.
@@ -506,7 +488,8 @@ $ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:19071,myadmin1.mydomain.com
     <th>ZooKeeper</th>
     <td>
       <p id="zookeeper-troubleshooting">
-        The following can be caused by a full disk on the config server, or clocks out of sync:</p>
+        The following can be caused by a full disk on the config server, or clocks out of sync:
+      </p>
 <pre>
 at com.yahoo.vespa.zookeeper.ZooKeeperRunner.startServer(ZooKeeperRunner.java:92)
 Caused by: java.io.IOException: The accepted epoch, 10 is less than the current epoch, 48
