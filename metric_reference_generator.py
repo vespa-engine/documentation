@@ -31,7 +31,7 @@ class MetricSetReference:
     def metric_tables(self):
         key = lambda x: x["metric_type"]
         sorted_metrics = sorted(self.metric_list, key=key)
-        return "\n".join([f'<h2>{metric_type.title()} Metrics</h2>\n'
+        return "\n".join([f'<h2 id={metric_type.lower()}-metrics>{metric_type.title()} Metrics</h2>\n'
                           f'<table class="table">\n'
                           f'    <thead>\n'
                           f'        <tr><th>Name</th><th>Description</th><th>Unit</th><th>Suffixes</th></tr>\n'
