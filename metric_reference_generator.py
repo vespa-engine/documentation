@@ -3,9 +3,10 @@ import re
 
 import requests
 from collections import namedtuple
+from itertools import groupby
 
 
-class MetricReference:
+class MetricSetReference:
     def __init__(self, filename, title, metric_list):
         self.filename = filename
         self.title = title
@@ -15,34 +16,65 @@ class MetricReference:
     def suffix_column(self, metric):
         return f'\t  <td>{metric["suffixes"]}</td>\n' if self.is_metric_set_reference else ''
 
-    def metric_html_rows(self):
-        return "\n".join([f'\t<tr>\n' +
-                          f'\t  <td>{metric["name"]}</td>\n' +
-                          f'\t  <td>{metric["description"]}</td>\n' +
-                          f'\t  <td>{metric["unit"]}</td>\n' +
-                          self.suffix_column(metric) +
-                          f'\t</tr>' for metric in self.metric_list])
+    def metric_html_rows(self, metrics):
+        return "\n".join([f'\t<tr>\n'
+                          f'\t  <td>{metric["name"]}</td>\n'
+                          f'\t  <td>{metric["description"]}</td>\n'
+                          f'\t  <td>{metric["unit"]}</td>\n'
+                          f'\t  <td>{metric["suffixes"]}</td>\n'
+                          f'\t</tr>' for metric in metrics])
 
     def metric_html_columns(self):
         optional_suffix_column = "<th>Suffixes</th>" if self.is_metric_set_reference else ""
         return "<th>Name</th><th>Description</th><th>Unit</th>" + optional_suffix_column
 
+    def metric_tables(self):
+        key = lambda x: x["metric_type"]
+        sorted_metrics = sorted(self.metric_list, key=key)
+        return "\n".join([f'<h2>{metric_type.title()} Metrics</h2>\n'
+                          f'<table class="table">\n'
+                          f'    <thead>\n'
+                          f'        <tr><th>Name</th><th>Description</th><th>Unit</th><th>Suffixes</th></tr>\n'
+                          f'    </thead>\n'
+                          f'    <tbody>\n'
+                          f'{self.metric_html_rows(metrics)}\n'
+                          f'    </tbody>\n'
+                          f'</table>\n' for metric_type, metrics in groupby(sorted_metrics, key=key)])
+
     def as_html(self):
-        return f"""---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "{self.title}"
----
+        return (f'---\n'
+                f'# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
+                f'title: "{self.title}"\n'
+                f'---\n\n\n'
+                f'{self.metric_tables()}')
 
 
-<table class="table">
-    <thead>
-        <tr>{self.metric_html_columns()}</tr>
-    </thead>
-    <tbody>
-{self.metric_html_rows()}
-    </tbody>
-</table>
-"""
+class MetricReference:
+    def __init__(self, filename, title, metric_list):
+        self.filename = filename
+        self.title = title
+        self.metric_list = metric_list
+
+    def metric_html_rows(self):
+        return "\n".join([f'\t<tr>\n'
+                          f'\t  <td>{metric["name"]}</td>\n'
+                          f'\t  <td>{metric["description"]}</td>\n'
+                          f'\t  <td>{metric["unit"]}</td>\n'
+                          f'\t</tr>' for metric in self.metric_list])
+
+    def as_html(self):
+        return (f'---\n'
+                f'# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
+                f'title: "{self.title}"\n'
+                f'---\n\n\n'
+                f'<table class="table">\n'
+                f'    <thead>\n'
+                f'        <tr><th>Name</th><th>Description</th><th>Unit</th></tr>\n'
+                f'    </thead>\n'
+                f'    <tbody>\n'
+                f'{self.metric_html_rows()}\n'
+                f'    </tbody>\n'
+                f'</table>\n')
 
 
 def parse_base_units(content):
@@ -83,7 +115,7 @@ def get_suffix_names():
     return parse_base_units(response.text)
 
 
-def parse_metrics(content, units):
+def parse_metrics(content, units, metric_type):
     metrics = []
     for line in content.split("\n"):
         metric = {}
@@ -94,6 +126,7 @@ def parse_metrics(content, units):
             metric["name"] = matcher.group(2)
             metric["unit"] = units[matcher.group(3)]
             metric["description"] = matcher.group(4)
+            metric["metric_type"] = metric_type
             metrics.append(metric)
     return metrics
 
@@ -124,7 +157,7 @@ def parse_metric_set(content, all_metrics, suffix_names):
         if not m:
             continue
         metric = {"name": m["name"], "suffixes": get_suffixes(optional_suffix, suffix_set, suffix_names),
-                  "unit": m["unit"], 'description': m['description']}
+                  "unit": m["unit"], 'description': m['description'], 'metric_type': m['metric_type']}
         metrics.append(metric)
 
     return metrics
@@ -133,7 +166,7 @@ def parse_metric_set(content, all_metrics, suffix_names):
 def get_metrics(metric_type, units):
     response = requests.get(
         f'https://raw.githubusercontent.com/vespa-engine/vespa/master/container-core/src/main/java/com/yahoo/metrics/{metric_type}Metrics.java')
-    return parse_metrics(response.text, units)
+    return parse_metrics(response.text, units, metric_type)
 
 
 def write_reference_doc(metric_reference):
@@ -171,7 +204,7 @@ def generate_metric_set_doc(metric_sets, metrics_superset):
         filename = metric_set.name.lower() + "-set-metric-reference.html"
         title = metric_set.name.title() + " Metric Set"
         metrics = get_metric_set(metric_set, metrics_superset, suffix_names)
-        write_reference_doc(MetricReference(filename, title, metrics))
+        write_reference_doc(MetricSetReference(filename, title, metrics))
 
 
 def generate_metrics_doc():
