@@ -121,6 +121,7 @@ and you want to extract the first value, this can be expressed by:
 onnx(my_onnx_model).output_name{d0:0,d1:0}
 ```
 
+Note that inputs to the ONNX model must be tensors; scalars are not supported.
 The input tensors must have dimension names starting with `"d0"` for the first
 dimension, and increasing for each dimension (i.e. `"d1"`, `"d2"`, etc.). The
 result of the evaluation will likewise be a tensor with names `"d0"`, `"d1"`,
