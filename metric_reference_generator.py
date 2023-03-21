@@ -77,6 +77,33 @@ class MetricReference:
                 f'</table>\n')
 
 
+class UnitReference:
+    def __init__(self, filename, title, units):
+        self.filename = filename
+        self.title = title
+        self.units = units
+
+    def unit_html_rows(self):
+        return "\n".join([f'\t<tr>\n'
+                          f'\t  <td>{unit.name}</td>\n'
+                          f'\t  <td>{unit.description}</td>\n'
+                          f'\t</tr>' for unit in self.units])
+
+    def as_html(self):
+        return (f'---\n'
+                f'# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
+                f'title: "{self.title}"\n'
+                f'---\n\n\n'
+                f'<table class="table">\n'
+                f'    <thead>\n'
+                f'        <tr><th>Unit</th><th>Description</th></tr>\n'
+                f'    </thead>\n'
+                f'    <tbody>\n'
+                f'{self.unit_html_rows()}\n'
+                f'    </tbody>\n'
+                f'</table>\n')
+
+
 def parse_base_units(content):
     base_unit_dict = {}
     for line in content.split("\n"):
@@ -89,15 +116,18 @@ def parse_base_units(content):
 # Maps unit enum to wanted string representation
 def parse_units(content, base_units):
     units = {}
+    Unit = namedtuple("Unit", "name description")
     for line in content.split("\n"):
         # Matches Unit name to base unit and optional per-unit
-        matcher = re.search(r"\s*([A-Z_]+)\(BaseUnit\.([A-Z_]+)(, BaseUnit\.([A-Z_]+))?", line)
+        matcher = re.search(r"\s*([A-Z_]+)\(BaseUnit\.([A-Z_]+)(, BaseUnit\.([A-Z_]+))?,\s*\"(.*)\"\)[,;]", line)
         if not matcher:
             continue
+        description = matcher.group(5).replace('\\', '')
         if matcher.group(4):
-            units[matcher.group(1)] = base_units[matcher.group(2)] + "/" + base_units[matcher.group(4)]
+            name = base_units[matcher.group(2)] + "/" + base_units[matcher.group(4)]
         else:
-            units[matcher.group(1)] = base_units[matcher.group(2)]
+            name = base_units[matcher.group(2)]
+        units[matcher.group(1)] = Unit(name, description)
     return units
 
 
@@ -124,7 +154,7 @@ def parse_metrics(content, units, metric_type):
         if matcher:
             metric["enum"] = matcher.group(1)
             metric["name"] = matcher.group(2)
-            metric["unit"] = units[matcher.group(3)]
+            metric["unit"] = units[matcher.group(3)].name
             metric["description"] = matcher.group(4)
             metric["metric_type"] = metric_type
             metrics.append(metric)
@@ -201,7 +231,7 @@ def get_metric_set(metric_set, metrics_superset, suffixes):
 def generate_metric_set_doc(metric_sets, metrics_superset):
     suffix_names = get_suffix_names()
     for metric_set in metric_sets:
-        filename = metric_set.name.lower() + "-set-metric-reference.html"
+        filename = metric_set.name.lower() + "-set-metrics-reference.html"
         title = metric_set.name.title() + " Metric Set"
         metrics = get_metric_set(metric_set, metrics_superset, suffix_names)
         write_reference_doc(MetricSetReference(filename, title, metrics))
@@ -229,6 +259,7 @@ def generate_metrics_doc():
         MetricSet("Vespa", "VespaMetricSet.java")
     ]
     generate_metric_set_doc(metric_sets, metrics_super_set)
+    write_reference_doc(UnitReference("unit-metrics-reference.html", "Metric Units Reference", units.values()))
 
 
 generate_metrics_doc()
