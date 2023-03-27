@@ -12,9 +12,11 @@ the instructions in the
 [README](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/README.md)
 in the sample app.
 
+<img src="/assets/img/shopping-1.png" alt="Shopping sample app screenshot" width="700" height="auto"/>
+
 To browse the application, navigate to
 <a href="http://localhost:8080/site" data-proofer-ignore>localhost:8080/site</a>.
-This site is  implemented through a custom [request handler](jdisc/developing-request-handlers.html)
+This site is implemented through a custom [request handler](jdisc/developing-request-handlers.html)
 and is meant to be a simple example of creating a front end / middleware that
 sits in front of the Vespa back end. As such it is fairly independent of Vespa
 features, and the code is designed to be fairly easy to follow and as
@@ -25,16 +27,20 @@ This sample application is built around the Amazon product data set found at
 [https://cseweb.ucsd.edu/~jmcauley/datasets.html](https://cseweb.ucsd.edu/~jmcauley/datasets.html).
 A small sample of this data is included in the sample application, and full
 data sets are available from the above site. This sample application contains
-scripts to convert from the data set format to Vespa format. These are the
-`convert_meta.py` and `convert_reviews.py`. See the README file for example of use.
+scripts to convert from the data set format to Vespa format:
+[convert_meta.py](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/convert_meta.py) and
+[convert_reviews.py](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/convert_reviews.py).
+See [README](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping#readme) for example use.
 
 When feeding reviews, there is a custom [document processor](document-processing.html)
-that intercepts document writes and updates the parent item with the review
-rating, so the aggregated review rating is kept stored with the item. This is
-more an example of a custom document processor than a recommended way to do
-this, as feeding the reviews more than once will result in inflated values. To
-do this correctly, one should probably calculate this offline so a re-feed does
-not cause unexpected results.
+that intercepts document writes and updates the parent item with the review rating,
+so the aggregated review rating is kept stored with the item -
+see [ReviewProcessor](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/java/ai/vespa/example/shopping/ReviewProcessor.java).
+This is more an example of a custom document processor than a recommended way to do this,
+as feeding the reviews more than once will result in inflated values.
+To do this correctly, one should probably calculate this offline so a re-feed does not cause unexpected results.
+
+
 
 ### Highlighted features
 
@@ -61,18 +67,21 @@ not cause unexpected results.
 * [Custom searcher processor](searcher-development.html)
 
     In Vespa, you can set up custom searchers to perform any type of
-    extra processing during querying. In the sample app there is a single custom
-    searcher which builds the query for auto-suggestions, using a combination
-    of fuzzy matching and prefix search. 
+    extra processing during querying.
+    In the sample app there is a single custom searcher which builds the query for auto-suggestions,
+    using a combination of [fuzzy matching](reference/query-language-reference.html#fuzzy)
+    and [prefix search](text-matching-ranking.html#prefix-match).
 
 * [Custom handlers](jdisc/developing-request-handlers.html)
 
-    With Vespa, you can set up general request handlers to handle any type of
-    request. This example site is implemented with a single such request
-    handler, `SiteHandler` which is set up in `services.xml` to be bound to
-    `/site`. Note that this handler is for example purposes and is designed to
-    be independent of Vespa. Most applications would serve this through a dedicated
-    setup.
+    With Vespa, you can set up general request handlers to handle any type of request.
+    This example site is implemented with a single such request handler,
+    [SiteHandler](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/java/ai/vespa/example/shopping/site/SiteHandler.java)
+    which is set up in
+    [services.xml](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/application/services.xml)
+    to be bound to `/site`.
+    Note that this handler is for example purposes and is designed to be independent of Vespa.
+    Most applications would serve this through a dedicated setup.
 
 * [Custom configuration](configuring-components.html)
 
@@ -138,12 +147,3 @@ not cause unexpected results.
     Ranking functions are contained in rank profiles and can be referenced
     as part of any ranking expression from either first phase, second phase or
     other functions.
-
-
-Going forward, there are quite a few things one could add to this application
-to get a more functional site. One important thing is user handling, with
-features such as user profiles, recently viewed items, marking of favorites
-etc. Then one could use a custom searcher that retrieves the user profile, for
-instance based on a cookie, and uses the profile during search to personalize
-results. However, this is currently left as exercises for the reader.
-
