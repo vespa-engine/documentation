@@ -14,25 +14,106 @@ redirect_from:
   Vespa supports multiple rank phases:
 </p>
 <ul>
-  <li>Re-ranking of the top hits from the content nodes
-      using a custom <a href="searcher-development.html">stateless searchers</a>. See concrete example
-      in <a href="reranking-in-searcher.html">reranking in searcher</a>.
+  <li>Some <a href="#top-k-query-operators">specialized query operators</a>
+      can do limited ranking to speed up retrieval of top matches by discarding
+      low-quality matches early in the matching phase.
       </li>
-  <li>Re-ranking at each content node using two phase ranking configured by rank profiles
-      with ranking expressions working on scalars, tensors or matching features</li>
-  <li>Retrieval and Ranking with query operators like <a href="using-wand-with-vespa.html">WAND/Weak And</a>
-      which speeds up retrieval of top matches of a disjunction query (OR) or
-      <a href="nearest-neighbor-search.html">Nearest Neighbor Search</a></li>
+  <li>Ranking at each content node in a
+      <a href="#first-phase-ranking">first-phase expression</a>;
+      configured by rank profiles with ranking expressions working
+      on scalars, tensors or matching features, possibly also
+      excluding low-quality matches.
+      </li>
+  <li>Re-ranking of the best hits at each content node using a
+      <a href="#two-phase-ranking-content-nodes">second-phase ranking</a>
+      (configured in rank profiles together with the first-phase expression).
+      </li>
+  <li>Re-ranking of the top hits from the content nodes in the stateless container
+      using a configured expression (usually with an AI-trained ONNX model),
+      see <a href="#global-phase">global-phase</a> below.
+      </li>
+  <li>For totally customized ranking it's possible to implement re-ranking of the top
+      hits from the content nodes using a custom
+      <a href="searcher-development.html">stateless searchers</a>.
+      See concrete example in <a href="reranking-in-searcher.html">reranking in searcher</a>.
+      </li>
 </ul>
 <img src="/assets/img/phased-ranking.png" alt="Ranking in 3 phases"/>
+
+<h2 id="first-phase-ranking">Simple ranking on content nodes</h2>
+<p>
+  Normal ranking will always start by having one ranking expression
+  that is evaluated on the content nodes.  This is configured in
+  the <code>rank-profile</code> section of a
+  <a href="reference/schema-reference.html#rank-profile">schema</a>
+  as a <code>first-phase</code> expression.  This expression can
+  use various <a href="ranking-expressions-features.html">rank features</a>
+  with information extracted during the matching phase to evaluate
+  the quality of each hit.
+  Because the first-phase is computed for every match, the cost is bounded
+  only by the number of documents on each content node multiplied with
+  the complexity of the first-phase expression; therefore the expression
+  needs be simple and cheap to allow scaling to large amounts of documents.
+</p>
+
+<h2 id="two-phase-ranking-content-nodes">Two-phase ranking on content nodes</h2>
+<p>
+  While some use cases only require one (simple) <code>first-phase</code>
+  ranking expression, for more advanced use cases it's possible to
+  add another <code>second-phase</code> ranking expression in a
+  <a href="reference/schema-reference.html#rank-profile">rank-profile</a>
+  in the schema.
+  This enables more expensive computations than would be feasible
+  to run as a <code>first-phase</code> computation, with predictable
+  upper bounds for the cost.  This phase runs only on the most
+  promising hits as selected by the first-phase ranking, so it's
+  important to have an appropriate first-phase, with good correlation
+  between first-phase and second-phase expressions.
+</p>
+<p>
+  By default, second-phase ranking (if specified) is run on the 100 best hits
+  from the first-phase ranking per content node,
+  after matching and before information is returned to the container.
+  The number of hits to rerank can be configured as well in the rank-profile.
+  Example:
+</p>
+<pre>
+schema myapp {
+    &hellip;
+    rank-profile title-freshness inherits default {
+        first-phase {
+            expression {
+                nativeRank(title) + freshness(timestamp)
+            }
+        }
+        second-phase {
+            expression {
+                xgboost("my-model.json")
+            }
+            rerank-count: 50
+        }
+    }
+}
+</pre>
+<p>
+  In this example, the first phase uses the text matching feature
+  <a href="reference/nativerank.html">nativeRank</a> scoped to the <em>title</em> field
+  plus one of the built-in document <a href="reference/rank-features.html">ranking features</a>
+  named <em>freshness</em> over a <em>timestamp</em> field which stores the epoch time in second resolution.
+  For each content node, the top 50 hits from the first phase function is re-ranked using
+  a trained <a href="xgboost.html">xgboost</a> model.
+</p>
 
 
 <h2 id="global-phase">Using a global-phase expression</h2>
 <p>
-  Using a rank expressions configured in the <code>rank-profile</code> section of
-  <a href="reference/schema-reference.html#rank-profile">schema</a>
-  you can add a ranking phase that will run in the stateless container after
-  gathering the best hits from all content nodes.
+  Using a rank expressions configured as a
+  <a href="reference/schema-reference.html#globalphase-rank">global-phase</a>
+  in the <code>rank-profile</code> section of a schema, you can add
+  a ranking phase that will run in the stateless container after
+  gathering the best hits from all content nodes; this can be used
+  instead of or in addition to
+  <a href="#two-phase-ranking-content-nodes">second-phase</a> ranking.
 </p>
 <p>
   This phase is optimized for running large ONNX models, taking
@@ -47,7 +128,7 @@ redirect_from:
   Note that both input and output from ONNX models must always be
   some sort of tensor (in the simplest case with 1 dimension of
   fixed size 1) so at minimum the output tensor must be reduced to a
-  simple number go get a ranking score.
+  simple number to get a ranking score.
 </p>
 <p>
   If you have large and complex expressions instead of an ONNX model,
@@ -99,7 +180,6 @@ schema myapp {
 
 }
 </pre>
-<p>
 
 
 <h2 id="stateless-re-ranking">Stateless re-ranking</h2>
@@ -128,44 +208,6 @@ schema myapp {
 </p>
 
 
-
-<h2 id="two-phase-ranking-content-nodes">Two-phase ranking content nodes</h2>
-<p>
-  Rank expressions are configured in the <code>rank-profile</code> section of
-  <a href="reference/schema-reference.html#rank-profile">schema</a>.
-  The rank-profile supports having two phases of ranking; first-phase and second-phase:
-<p>
-  By default, second-phase ranking (if specified) is run on the 100 best hits
-  from the first-phase ranking per content node,
-  after matching and before information is returned to the container.
-  The number of hits to rerank can be configured as well in the rank-profile. Example:
-</p>
-<pre>
-schema myapp {
-    &hellip;
-    rank-profile title-freshness inherits default {
-        first-phase {
-            expression {
-                nativeRank(title) + freshness(timestamp)
-            }
-        }
-        second-phase {
-            expression {
-                xgboost("my-model.json")
-            }
-            rerank-count: 50
-        }
-    }
-}
-</pre>
-<p>
-  In this example, the first phase uses the text matching feature
-  <a href="reference/nativerank.html">nativeRank</a> scoped to the <em>title</em> field
-  plus one of the built-in document <a href="reference/rank-features.html">ranking features</a>
-  named <em>freshness</em> over a <em>timestamp</em> field which stores the epoch time in second resolution.
-  For each content node, the top 50 hits from the first phase function is re-ranked using
-  a trained <a href="xgboost.html">xgboost</a> model.
-</p>
 
 
 
