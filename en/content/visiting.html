@@ -10,6 +10,11 @@ redirect_from:
   <a href="../reference/document-select-language.html">document selection expression</a>.
 </p>
 <p>
+  Visiting is often used to back up or migrate applications,
+  <a href="https://cloud.vespa.ai/en/cloning-applications-and-data">cloning applications and data</a>
+  is a good guide for this.
+</p>
+<p>
   Use the <a href="../vespa-cli.html">Vespa CLI</a> to run visit -
   example, using the <a href="../vespa-quick-start.html">quick start</a>:
 </p>
@@ -59,49 +64,58 @@ $ vespa visit
 </p>
 
 
+<h2 id="data-export">Data export</h2>
+<p>Export data to stdout:</p>
+<pre>
+$ vespa visit
+</pre>
+<p>
+  To export a subset, <code>--slices 100 --slice-id 0</code> exports 1% of the corpus by efficiently iterating
+  over only 1/100th of the data space.
+  For a given number of <code>--slices</code>,
+  it's possible to visit the entire corpus (possibly in parallel) with non-overlapping output
+  by visiting with all <code>--slice-id</code> values from (and including) 0 up to (and excluding) <code>--slices</code>:
+</p>
+<pre>
+$ vespa visit --slices 100 --slice-id 0
+</pre>
+{% include note.html content='If the application has
+<a href="../reference/services-content.html#document">global document types</a>,
+use <code>--bucket-space global</code> to visit these documents.
+By default, visiting only iterates over non-global documents.' %}
+
+
 
 <h2 id="selection">Selection</h2>
 <p>
-To select which documents to visit, use a
+To select (i.e. filter) which documents to visit, use a
 <a href="../reference/document-select-language.html">document selection expression</a>.
-</p><p>
-If co-localization of documents has been used, and the selection specifies location criteria,
-the visitor client may be able to identify one or a few buckets
-that are guaranteed to include all documents that will match the expression.
-In all other cases, visiting needs to visit all buckets in the cluster.
-</p><p>
-Note that streaming search typically relies on this behavior to ensure low latency,
-but the visitor client will only be able to map visitors to a bucket subset
-if the document selection is simple, i.e. maps to a <em>location</em>.
-If streaming search uses a lot of time,
-verify that the selection is actually simple enough
-for the visitor client to map it to a small bucket set.
 </p>
 
 
 
 <h2 id="fields">Fields</h2>
 <p>
-To select which fields to output, use a
-<a href="../documents.html#fieldsets">fieldset</a>.
-See examples below - common use cases is to use a comma-separated list of fields
-or the <em>[document]</em> / <em>[all]</em> shorthand.
+  To select which fields to output, use a <a href="../documents.html#fieldsets">fieldset</a>.
+  See <a href="../vespa-cli.html#documents">examples</a> - common use cases are using a comma-separated list of fields
+  or the <em>[document]</em> / <em>[all]</em> shorthand.
 </p>
+
+
 
 <h2 id="timestamp-ranges">Timestamp ranges</h2>
 <p>
-Both the <a href="../reference/document-v1-api-reference.html">Document V1 API</a>
-and the <code>vespa-visit</code> tool have options for only returning documents that
-were last modified within a particular timestamp range.
-Either—or both—of the <em>from</em> and <em>to</em> parts of the requested timestamp range
-may be specified, where <em>from</em> and <em>to</em> are microseconds from epoch in UTC
-wall-clock time.
+  Both the <a href="../reference/document-v1-api-reference.html">Document V1 API</a>
+  and the <a href="../vespa-cli.html">Vespa CLI</a> have options for returning documents
+  last modified within a particular timestamp range.
+  Either—or both—of the <em>from</em> and <em>to</em> parts of the requested timestamp range
+  can be specified:
 </p>
 <ul>
   <li>For Document V1, specify the range using the <code>fromTimestamp</code> and
-      <code>toTimestamp</code> HTTP request parameters.
-  <li>For <code>vespa-visit</code>, specify the range using the <code>--from</code> and
-      <code>--to</code> CLI parameters.</li>
+      <code>toTimestamp</code> HTTP request parameters (in microseconds).
+  <li>For <code>vespa visit</code>, specify the range using <code>--from</code> and
+      <code>--to</code> (in seconds).</li>
 </ul>
 <p>
 Setting a timestamp range is only a <em>filter</em> on the document set that would otherwise
@@ -109,105 +123,6 @@ be returned by a visitor without a timestamp range. It does <em>not</em> imply s
 The returned set of documents may be affected by concurrent modifications to documents, as any
 modification updates the document timestamp.
 </p>
-
-
-
-<h2 id="data-export-import">Data export / import</h2>
-<p>
-Export data to stdout.
-As a full data dump takes time / space / resources, refine as needed:
-<!-- ToDo: Add example with vespa-cli once slicing is implemented there -->
-</p>
-<p>
-On Vespa 8.133 and beyond:
-</p>
-<pre>
-$ vespa-visit -v -p progress-file --slices 100 --sliceid 0 > 0.json
-</pre>
-<ul>
-  <li><code>-v</code> prints % finished to stderr.</li>
-  <li><code>-p progress-file</code> saves progress, allowing the visitor to resume at next startup.
-    Always remove the progress file to run the visiting operation from the start.</li>
-  <li><code>--slices 100 --sliceid 0</code> dumps 1% of the corpus by efficiently iterating
-      over only 1/100th of the data space. For a given number of <code>--slices</code>, it's
-      possible to visit the entire corpus (possibly in parallel) with non-overlapping output
-      by visiting with all <code>--sliceid</code> values from (and including) 0 up to (and excluding)
-      <code>--slices</code>.</li>
-</ul>
-<p>
-On Vespa versions prior to 8.133:
-</p>
-<pre>
-$ vespa-visit -v -p progress-file -s 'id.hash().abs() % 100 = 0' > 0.json
-</pre>
-<ul>
-  <li><code>-v</code> prints % finished to stderr.</li>
-  <li><code>-p progress-file</code> saves progress, allowing the visitor to resume at next startup.
-    Always remove the progress file to run the visiting operation from the start.</li>
-  <li><code>-s 'id.hash().abs() % 100 == 0'</code> dumps 1% of the corpus - see <a href="#selection">selection</a>.
-      Note that this expression is evaluated for <em>every</em> document in the cluster, so running 100
-      visits comparing against all values in [0, 99) ends up reading all documents 100 times. Prefer
-      using <code>--slices</code> and <code>--sliceid</code> instead if available.</li>
-</ul>
-{% include note.html content='If you have <a href="../reference/services-content.html#document">global
-  document types</a>, you must add <code>--bucketspace global</code> to visit these documents.
-  By default, visiting only iterates over non-global documents.' %}
-<p>Import into a cluster using the <a href="../vespa-feed-client.html">vespa-feed-client</a>:</p>
-<pre>
-$ vespa-feed-client --file 0.json --endpoint https://container-endpoint:443/
-</pre>
-<p>
-  Or see next section, routing output directly to another Vespa cluster.
-</p>
-
-
-
-<h2 id="data-migration-synchronization">Data migration / synchronization</h2>
-<p>
-To migrate a set of documents from one cluster to another, use <em>visiting</em> -
-as the data is transferred directly, using a compact
-serialization format, from the source nodes to the targets,
-this is performance optimal (data is not piped through the visit client).
-Implement backup this way, or dump to file.
-</p><p>
-  Search node recovery: Feed the documents directly to a search cluster.
-  Example, selecting documents of type <em>music</em>:
-</p>
-<pre>
-$ vespa-visit --selection music --datahandler indexing
-</pre>
-<p>
-This feeds from the source into the search cluster in the same application.
-Note that simultaneous feed can make updates go lost.
-</p><p>
-Include <a href="../operations/admin-procedures.html#data-retention-vs-size">remove-entries</a>
-in the visit operation using <em>--visitremove</em> - this dumps the tombstones
-of documents recently removed.
-</p><p>
-The <a href="../reference/routingpolicies.html#content">content policy</a> can be configured to
-use a set of configuration servers from another cluster to configure
-itself. This is specified with the <em>config</em> parameter. As
-an example, the following route routes to the content cluster
-<em>mycluster</em> with a configuration server on
-<em>myconfigserver.mydomain.com:12345</em>:
-<pre>
-[Content:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]
-</pre>
-<p>
-  The following examples illustrate how to copy all data from a source cluster to another cluster using vespa-visit:
-</p>
-<pre>
-# Copies all data in the local cluster, routing it to the remote <em>mycluster</em>
-$ vespa-visit --datahandler '[Content:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]'
-
-# Limit to 'music' documents only
-$ vespa-visit --datahandler '[Content:config=tcp/myconfigserver.mydomain.com:19070;cluster=mycluster]' \
-  --selection music
-
-# Limit to all documents for user '1234'
-$ vespa-visit --datahandler '[Content:config=tcp/myconfigserver.mydomain.com:12345;cluster=mycluster]' \
-  --selection id.user=1234
-</pre>
 
 
 
@@ -339,7 +254,7 @@ reprocessing/chain.reprocessing-chain indexing
 <h3 id="reprocess">4. Reprocess</h3>
 <p>Start reprocessing:</p>
 <pre>
-$ vespa-visit -v --selection "music.year &gt; 1995" \
+$ <a href="../reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> -v --selection "music.year &gt; 1995" \
   --datahandler "reprocessing/chain.reprocessing-chain indexing"
 </pre>
 <p>The '-v' option emits progress information on standard error.</p>
@@ -456,116 +371,14 @@ the processing may occur in parallel with the document fetching.
 </p>
 
 
-<h2 id="visitor-processor-types">Visitor processor types</h2>
-<table class="table">
-  <thead>
-    <tr><th>Processor Type</th><th>Description</th></tr>
-  </thead><tbody>
-    <tr>
-      <th>Dump visitor</th>
-      <td>
-        The most commonly used visitor processor type is the dump visitor.
-        All it does is to send the read documents on to some external target
-        specified by the visitor.
-        Using the command line tool <em>vespa-visit</em>
-        the default is to just send the documents back to the client,
-        and have them printed to stdout.
-        The dump visitor is used to implement reprocessing.
-        Typically, using a messagebus route,
-        that will send the documents through the document processing cluster
-        and then back to the content cluster.
-        Migration of documents from one cluster to another
-        is also implemented using a dump visitor.
-      </td>
-    </tr><tr>
-      <th style="white-space: nowrap">Streaming search visitor</th>
-      <td>
-        The <a href="../streaming-search.html">streaming search</a> visitor runs in the Vespa container,
-        making it transparent whether search results were created from streaming or indexed search -
-        see <a href="../reference/services-content.html#document">indexing mode</a>.
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-
-
-<h2 id="visitor-targets">Visitor targets</h2>
-<p>
-  Requests sent from the visitor processor are sent to a visitor target - types:
-</p>
-<table class="table">
-  <thead>
-    <tr><th>Target Type</th><th>Description</th></tr>
-  </thead><tbody>
-    <tr>
-      <th style="white-space: nowrap">Message bus routes</th>
-      <td>
-        You can specify a <a href="../routing.html">message bus route</a> name directly,
-        and this route will be used to send the results.
-        This is typically used when doing reprocessing or migration.
-        Message bus routes is set up in the application package.
-        In addition, some routes may have been auto-generated in simple setups,
-        for instance a route called <em>default</em> is generated
-        if your setup is simple enough for the config model
-        to likely guess where you want to send your data.
-      </td>
-    </tr><tr>
-      <th>Slobrok address</th>
-      <td><p>
-        You can also specify a slobrok address for data to be sent to.
-        A slobrok address is a slash-separated path
-        where you can use asterisk to mean any element within this path.
-        For instance, if you have a docproc cluster called <em>mydpcluster</em>,
-        it will have registered its nodes with slobrok names like
-        <em>docproc/cluster.mydpcluster/docproc/0/feed_processor</em>,
-        where the 0 here indicates the first node in the cluster.
-        You can thus specify to send visit data to this docproc cluster
-        by stating a slobrok address of <em>docproc/cluster.mydpcluster/docproc/*/feed_processor</em>.
-        Note that this will not send all the data to one or all the nodes.
-        The data sent from the visitor will be distributed among the matching nodes,
-        but each message will just be sent to one node.
-        </p><p>
-        Slobrok names can be used when using
-        <a href="../reference/vespa-cmdline-tools.html#vespa-visit-target">vespa-visit-target</a>
-        to retrieve the data at some location.
-        If you start vespa-visit-target on two nodes,
-        listening to slobrok names <em>mynode/0/visit-destination</em>
-        and <em>mynode/1/visit-destination</em>,
-        you can send the results to these nodes by specifying
-        <em>mynode/*/visit-destination</em> as the data handler.
-        </p><p>
-        <a href="../reference/vespa-cmdline-tools.html#vespa-destination">vespa-destination</a>
-        is similar to vespa-visit-target in that it can receive messages
-        from messagebus and print the contents to stdout.
-        It can be useful in situations where you want to debug a route or a docproc,
-        by using the vespadestination as the endpoint of your route.</p>
-      </td>
-    </tr><tr>
-      <th>TCP socket</th>
-      <td>
-        TCP sockets can also be specified directly.
-        This requires that the endpoint speaks FNET RPC.
-        This is typically done, either by using the <em>vespa-visit-target</em> tool,
-        or by using a visitor destination programmatically by using utility class in the document API.
-        A socket address looks like the following:
-        tcp/<em>hostname</em>:<em>port</em>/<em>servicename</em>.
-        For instance, an address generated by <em>vespa-visit-target</em>
-        might look like: <em>tcp/myhost.mydomain.com:12345/visit-destination</em>
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-
 
 <h2 id="troubleshooting">Troubleshooting</h2>
-<h3 id="not-seeing-all-documents-when-visiting">Not seeing all documents when visiting</h3>
+<h3 id="not-exporting-all-documents">Not exporting all documents</h3>
 <p>
   Normally all documents share the same <a href="buckets.html#bucket-space">bucket space</a>—documents
   for multiple schemas are co-located.
   When using <a href="../parent-child.html">parent/child</a>, global documents are stored in a separate bucket space.
-  Use the <a href="../reference/document-v1-api-reference.html#bucketspace">bucketSpace</a> parameter
+  Use the <a href="../reference/document-v1-api-reference.html#bucketspace">bucket-space</a> parameter
   to visit the <code>default</code> or <code>global</code> space.
   This is a common problem when dumping all documents and dumped count is not the expected count.
 </p>
@@ -577,10 +390,11 @@ the processing may occur in parallel with the document fetching.
   expensive to render as JSON.
 </p>
 <p>
-  To verify if client-side rendering is the bottleneck, run <code>vespa-visit</code> with
-  your usual selection criteria and field set, but add the <code>--nullrender</code> argument
-  (available on Vespa 8.134 and above). This receives and processes documents as usual, but
-  completely skips rendering.
+  To verify if client-side rendering is the bottleneck,
+  run <a href="../reference/vespa-cmdline-tools.html#vespa-visit">vespa-visit</a> with
+  your usual selection criteria and field set,
+  but add the <code>--nullrender</code> argument (available from Vespa 8.134).
+  This receives and processes documents as usual, but completely skips rendering.
 </p>
 <p>
   If you are redirecting the output of visiting to any custom business logic (such as running
@@ -600,6 +414,4 @@ the processing may occur in parallel with the document fetching.
 <p>
   A visit operation might stall/hang if the content cluster is in an inconsistent
   state—replicas are still merging between nodes.
-  Find more details at
-  <a href="../reference/vespa-cmdline-tools.html#visitinconsistentbuckets">visitinconsistentbuckets</a>.
 </p>
