@@ -12,6 +12,8 @@ the instructions in the
 [README](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/README.md)
 in the sample app.
 
+<img src="/assets/img/shopping-1.png" alt="Shopping sample app screenshot" width="700" height="auto"/>
+
 To browse the application, navigate to
 <a href="http://localhost:8080/site" data-proofer-ignore>localhost:8080/site</a>.
 This site is  implemented through a custom [request handler](jdisc/developing-request-handlers.html)
