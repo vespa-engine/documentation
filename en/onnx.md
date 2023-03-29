@@ -152,14 +152,14 @@ set the batch dimension to size 1.
 
 Note that in the above rank profile example, the `onnx` model evaluation
 was put in the first phase ranking. In general, evaluating these models are
-expensive and more suitable in the second phase ranking.
+expensive and more suitable in the second-phase or global-phase ranking.
 
 The assumption when evaluating ONNX models in Vespa is that the models will be
 used in ranking, meaning that the model will be evaluated once for each
 document. Please be aware that this imposes some natural restrictions on the
 size and complexity of the models, particularly if the application has a large
-number of documents. However, effective use of the first and second phase can
-make running deep models feasible.
+number of documents. However, effective use of [phased ranking](phased-ranking.html)
+can make running deep models feasible.
 
 ## Examples
 
