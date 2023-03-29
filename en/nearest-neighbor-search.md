@@ -23,7 +23,7 @@ tensor&lt;float&gt;(x[384])
 </pre>
 
 Document vectors are stored in a
-tensor field [tensor field](reference/schema-reference.html#type:tensor)
+[tensor field](reference/schema-reference.html#type:tensor)
 defined in the document [schema](reference/schema-reference.html).
 A tensor type (dense) with one indexed dimension stores a single vector per document:
 <pre>
@@ -58,7 +58,7 @@ Note that the document schema can have multiple tensor fields storing vectors,
 and the query can have multiple `nearestNeighbor` operators searching different tensor fields.
 
 Support for using the `nearestNeighbor` operator with a mixed tensor with multiple vectors per document
-is available in Vespa versions >= 8.132.43.
+is available in Vespa 8.144.19.
 
 To learn how Vespa can create the vectors for you, see [embedding](embedding.html).
 
