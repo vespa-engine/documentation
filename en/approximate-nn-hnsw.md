@@ -10,7 +10,8 @@ For an introduction to nearest neighbor search, see [nearest neighbor search](ne
 for practical usage of Vespa's nearest neighbor search, see [nearest neighbor search - a practical guide](nearest-neighbor-search-guide.html),
 and to have Vespa create vectors for you, see [embedding](embedding.html).
 This document describes how to speed up searches for nearest neighbors by adding a
-[HNSW index](reference/schema-reference.html#index-hnsw) to the first-order dense tensor field.
+[HNSW index](reference/schema-reference.html#index-hnsw) to the
+tensor field.
 
 Vespa implements a modified version of the Hierarchical Navigable Small World (HNSW) graph algorithm [paper](https://arxiv.org/abs/1603.09320).
 The implementation in Vespa supports:
@@ -19,6 +20,13 @@ The implementation in Vespa supports:
 as the nearest neighbor search in Vespa is expressed as a query operator.
 The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator can be combined with other filters or query terms using the [Vespa query language](query-language.html).
 See many query examples in the [practical guide](nearest-neighbor-search-guide.html#combining-approximate-nearest-neighbor-search-with-query-filters).
+
+* **Multi-vector Indexing** - Since Vespa 8.144.19 multiple vectors per document can be indexed.
+In this case documents are retrieved by the closest vector in each document compared to the query vector.
+See the [Multi-vector indexing sample application](https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing)
+for examples.
+For use cases and implementation details see the following blog post:
+[Revolutionizing semantic search with multi-vector HNSW indexing in Vespa](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/#implementation)
 
 * **Real Time Indexing** - CRUD (Create, Add, Update, Remove) vectors in the index with low latency and high throughput.
 
@@ -34,19 +42,19 @@ The query examples in [nearest neighbor search](nearest-neighbor-search.html) us
 However, this is computationally expensive for large document volumes
 as distances are calculated for every document which matches the query filters.
 
-To enable fast approximate matching, the first-order dense tensor field definition 
+To enable fast approximate matching, the tensor field definition
 needs an `index` directive. A Vespa [document schema](schemas.html) can declare multiple tensor fields with `HNSW` enabled.
 
 <pre>
-field image_embedding type tensor&lt;float&gt;(x[512]) {
+field image_embeddings type tensor&lt;float&gt;(i{},x[512]) {
   indexing: summary | attribute | index
   attribute {
-    distance-metric: euclidean 
+    distance-metric: angular
   }
   index {
     hnsw {
       max-links-per-node: 16
-      neighbors-to-explore-at-insert: 200
+      neighbors-to-explore-at-insert: 100
     }
   }
 }
@@ -54,7 +62,7 @@ field image_embedding type tensor&lt;float&gt;(x[512]) {
 field text_embedding type tensor&lt;float&gt;(x[384]) {
   indexing: summary | attribute | index
   attribute {
-    distance-metric: angular
+    distance-metric: innerproduct
   }
   index {
     hnsw {
@@ -66,7 +74,9 @@ field text_embedding type tensor&lt;float&gt;(x[384]) {
 </pre>
 
 In the schema snippet above, fast approximate search is enabled by building an `HNSW` index for the
-`image_embedding` and the `text_embedding` tensor fields.
+`image_embeddings` and the `text_embedding` tensor fields.
+`image_embeddings` indexes multiple vectors per document,
+while `text_embedding` indexes one vector per document.
 
 The two vector fields use different [distance-metric](reference/schema-reference.html#distance-metric)
 and `HNSW` index settings:
@@ -106,7 +116,7 @@ or exact (brute-force) search by using the [approximate query annotation](refere
 
 <pre>
 {
-  "yql": "select * from doc where {targetHits: 100, approximate:false}nearestNeighbor(image_embedding,query_image_embedding)",
+  "yql": "select * from doc where {targetHits: 100, approximate:false}nearestNeighbor(image_embeddings,query_image_embedding)",
   "hits": 10
   "input.query(query_image_embedding)": [0.21,0.12,....],
   "ranking.profile": "image_similarity" 
@@ -131,12 +141,12 @@ that are explored during the graph search. This parameter is used to tune accura
 The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator can be combined with other
 query filters using the [Vespa query language](reference/query-language-reference.html) and its query operators.
 There are two high-level strategies for combining query filters with approximate nearest neighbor search:
-* [post-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#post-filtering-strategy)
 * [pre-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#pre-filtering-strategy) (the default)
+* [post-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#post-filtering-strategy)
 
 These strategies can be configured in a rank profile using
-[post-filter-threshold](reference/schema-reference.html#post-filter-threshold) and
-[approximate-threshold](reference/schema-reference.html#approximate-threshold).
+[approximate-threshold](reference/schema-reference.html#approximate-threshold) and
+[post-filter-threshold](reference/schema-reference.html#post-filter-threshold).
 See
 [Controlling the filtering behavior with approximate nearest neighbor search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#controlling-the-filtering-behavior-with-approximate-nearest-neighbor-search)
 for more details.
