@@ -145,5 +145,5 @@ To do this correctly, one should probably calculate this offline so a re-feed do
 * [Ranking functions](reference/schema-reference.html#function-rank)
 
     Ranking functions are contained in rank profiles and can be referenced
-    as part of any ranking expression from either first phase, second phase or
+    as part of any ranking expression from either first-phase, second-phase, global-phase or
     other functions.

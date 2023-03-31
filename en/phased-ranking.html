@@ -27,13 +27,89 @@ redirect_from:
 <img src="/assets/img/phased-ranking.png" alt="Ranking in 3 phases"/>
 
 
+<h2 id="global-phase">Using a global-phase expression</h2>
+<p>
+  Using a rank expressions configured in the <code>rank-profile</code> section of
+  <a href="reference/schema-reference.html#rank-profile">schema</a>
+  you can add a ranking phase that will run in the stateless container after
+  gathering the best hits from all content nodes.
+</p>
+<p>
+  This phase is optimized for running large ONNX models, taking
+  some input data from the document and some from the query, and
+  finding a score for how well they match. It's possibly to specify
+  <em>gpu-device</em> to get GPU-accelerated computation of the
+  model as well.  You can compute or re-shape the inputs to the
+  ONNX model in a function if necessary, and use the output in some
+  further calculation to compute the final score.
+</p>
+<p>
+  Note that both input and output from ONNX models must always be
+  some sort of tensor (in the simplest case with 1 dimension of
+  fixed size 1) so at minimum the output tensor must be reduced to a
+  simple number go get a ranking score.
+</p>
+<p>
+  If you have large and complex expressions instead of an ONNX model,
+  it's better to use the highly optimized
+  <a href="#two-phase-ranking-content-nodes">second-phase</a>
+  computation on content nodes.
+</p>
+<p>
+  The ranking expression configured for global-phase is independently
+  executed once for each matching document, so currently you cannot
+  compute anything that depends on <em>several</em> documents.
+  If you want to normalize something across the top 100 hits, for
+  example, you must currently program that in a Java plugin;
+  see <a href="#stateless-re-ranking">stateless re-ranking</a>
+  section.
+</p>
+<pre>
+schema myapp {
+    document myapp {
+        field per_doc_vector type tensor&lt;float&gt;(x[784]) {
+            indexing: attribute
+        }
+        &hellip;
+    }
+    &hellip;
+    rank-profile with-global-model inherits default {
+        first-phase {
+            expression: nativeRank(title)
+        }
+        inputs {
+            query(per_query_vector) tensor&lt;float&gt;(d0[32])
+        }
+        function per_doc_input() {
+            # simple reshaping: ONNX input wants the dimension name "d0"
+            expression: rename(attribute(per_doc_vector), x, d0)
+        }
+        onnx-model my_ranking_model {
+            file: files/my_ranking_model.onnx
+            input "model_input_1": per_doc_input
+            input "model_input_2": query(per_query_vector)
+            output "model_output_1": out
+        }
+        global-phase {
+            expression {
+                sum(onnx(my_ranking_model).out)
+            }
+            rerank-count: 50
+        }
+
+}
+</pre>
+<p>
+
 
 <h2 id="stateless-re-ranking">Stateless re-ranking</h2>
 <p>
-  It's possible to write <a href="searcher-development.html">stateless searchers</a>
+  If the logic required is not suited for the <a href="#global-phase">global-phase</a> above,
+  it's possible to write <a href="searcher-development.html">stateless searchers</a>
   which can re-rank hits using any custom scoring function or model.
   The searcher can also blend and re-order hits from multiple sources
   when using <a href="federation.html">federation</a> of content sources.
+
   See <a href="https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/src/main/java/ai/vespa/examples/searcher/ReRankingSearcher.java">
   ReRankingSearcher</a> for inspiration.
   The linked searcher re-ranks the top global results from all content nodes using a Transformer (BERT) model.

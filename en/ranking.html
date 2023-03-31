@@ -12,14 +12,12 @@ bundled into <a href="#rank-profiles">rank profiles</a> defined in <a href="sche
 These can range from simple math expressions combining some <a href="reference/rank-features.html">rank features</a>,
 to <a href="tensor-examples.html">tensor expressions</a> or large machine-learned <a href="onnx.html">Onnx models</a>.
 
-<p>These ranking expressions are evaluated locally on content nodes, which means that no data needs to be
-transferred to computing nodes to make inferences over data (it's also possible to define additional models
-to be <a href="stateless-model-evaluation.html">evaluated on stateless container nodes</a>).</p>
 
 
 <h2 id="two-phase-ranking">Two-phase ranking</h2>
 
-<p>Rank profiles can define two <i>phases</i>:</p>
+<p>Rank profiles can define two <i>phases</i> that are evaluated locally on content nodes, which means that
+no data needs to be transferred to container nodes to make inferences over data:</p>
 
 <pre>
 schema myapp {
@@ -48,6 +46,45 @@ best rerank-count documents per content node according to the first-phase functi
 is useful to direct more computation towards the most promising candidate documents, see
 <a href="phased-ranking.html">phased ranking</a>.</p>
 
+<h2 id="global-phase-ranking">Global-phase ranking</h2>
+<p>It's also possible to define an additional phase that runs on the
+stateless container nodes after merging hits from the content nodes.
+This can be more efficient use of CPU (especially with many content nodes)
+and can be used instead of second-phase, or in addition to a moderately
+expensive second-phase.</p>
+
+<pre>
+schema myapp {
+
+    rank-profile my-rank-profile {
+
+        num-threads-per-search:4
+
+        first-phase {
+            expression {
+                attribute(quality) * freshness(timestamp)
+            }
+        }
+
+        second-phase {
+            expression {
+                my_combination_of(fieldMatch(title), bm25(abstract), attribute(quality), freshness(timestamp))
+            }
+        }
+
+        global-phase {
+            expression: sum(onnx(my_onnx_model))
+            rerank-count: 100
+        }
+
+    }
+}
+</pre>
+
+In contrast to the first-phase and second-phase ranking, the global-phase expression needs
+its input data transferred from content nodes to the container; for the example above
+this means that any inputs used by <em>my_onnx_model</em> would be automatically added
+as match-features so the ONNX model can get the per-hit data it needs.
 
 <h2 id="machine-learned-model-inference">Machine-Learned model inference</h2>
 
