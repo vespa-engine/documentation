@@ -4,6 +4,7 @@ title: "Securing a Vespa Installation"
 redirect_from:
 - /documentation/securing-your-vespa-installation.html
 ---
+{% include note.html content="This document is only relevant for **self-hosting Vespa** as Vespa Cloud does this for you." %}
 
 It is critical to understand the security requirements and limitations
 of any networked system. Vespa is no exception. This document gives the most
@@ -46,7 +47,9 @@ queries. It should only be exposed to an untrusted network if you have properly
 should never be exposed directly to external traffic. All traffic to the containers
 should be sent by your frontends or backends.
  
-Inter-node communication inside a Vespa installation is not encrypted.
+Inter-node communication inside a Vespa installation is not encrypted by default
+and will need to be configured explicitly as documented in 
+[Securing Vespa with mutually authenticated TLS](mtls.html).
 
 
 
@@ -77,9 +80,9 @@ data under `$VESPA_HOME`. You should ensure the files and directories under
 Note also that private keys used by the container to set up TLS must be protected 
 to be readable by the container process only.
  
-Vespa does not have support for encryption of on-disk document stores or indexes.
-
-
+Vespa does not have application-level support for encryption of on-disk document stores or
+indexes. This would typically be implemented through file-system or storage-level (e.g. remote cloud storage)
+encryption.
 
 ## Securing Vespa with mutually authenticated TLS (mTLS)
 
