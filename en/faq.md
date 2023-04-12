@@ -282,6 +282,15 @@ also see [weightedset](reference/query-language-reference.html#weightedset)
 for writing a YQL query to select multiple IDs.
 The ID must be a field in the document type.
 
+#### How to query documents where one field matches any values in a list? Similar to using SQL IN operator
+Example:
+```
+select * from data where category = 'cat1' OR category = 'cat2'..
+```
+See [multi-lookup set filtering](#is-it-possible-to-query-vespa-using-a-list-of-document-ids) above,
+using a weighted set instead of a big OR.
+
+
 #### How to count hits / all documents without returning results?
 Count all documents using a query like [select * from doc where true](query-language.html) -
 this counts all documents from the "doc" source.
