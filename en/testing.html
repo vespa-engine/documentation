@@ -4,16 +4,21 @@ title: Vespa testing
 ---
 
 <p>
-  System tests are an invaluable tool both when developing and maintaing a complex Vespa application.
+  System tests are an invaluable tool both when developing and maintaining a complex Vespa application.
   These are functional tests which are run against a deployment of the application package to verify,
   and use its HTTP APIs to execute feed and query operations which are compared to expected outcomes.
   Vespa provides two formalizations of this:
 </p>
 <ul>
-  <li><p><a href="reference/testing.html">Basic HTTP tests</a>, expressing requests and expected responses as JSON,
-    and run with the <a href="vespa-cli.html">Vespa CLI</a>.</p></li>
-  <li><p><a href="reference/testing-java.html">Java JUnit tests</a>, for more advanced tests,
-    run as regular Java tests, with some extra configuration.</p></li>
+  <li>
+    <a href="reference/testing.html">Basic HTTP tests</a>,
+    expressing requests and expected responses as JSON,
+    and run with the <a href="vespa-cli.html">Vespa CLI</a>.
+  </li>
+  <li>
+    <a href="reference/testing-java.html">Java JUnit tests</a>, for more advanced tests,
+    run as regular Java tests, with some extra configuration.
+  </li>
 </ul>
 <p>
   These two frameworks also includes an upgrade—or staging—test construct for scenarios where the application
@@ -39,18 +44,57 @@ title: Vespa testing
   when fed and queried. Running a system test is as simple as making a separate deployment with the
   application package to test, and then running the system test suite, or one or a few or those tests.
 </p>
-<p>
-  Each system test should be self-contained, i.e., it should be able to run each test in isolation;
-  or all tests, in any order. To achieve this, <strong>system tests should generally start by clearing all
-  documents from the cluster to test.</strong> This is the case with our sample system tests, so take
-  care to not run them against a production cluster.
-</p>
+{% include note.html content="Each system test should be self-contained,
+i.e., it should be able to run each test in isolation; or all tests, in any order.
+To achieve this, <strong>system tests should generally start by clearing all documents from the cluster to test.</strong>
+This is the case with our sample system tests, so take care to not run them against a production cluster."%}
 <p>
   For the most part, system tests must be updated due to changes in the application package.
   Rarely, an upgrade of the Vespa version may also lead to changed functionality, but within
   major versions, this should only be new features and bug fixes. In any case, it is a good idea
   to always run system tests against a dedicated test deployment—both before upgrading the Vespa
   platform, and the application package—before deploying the change to production.
+</p>
+
+
+<h3 id="running-system-tests">Running system tests</h3>
+<p>
+  The <a href="vespa-cli.html">Vespa CLI</a> makes it easy to set up a test
+  deployment, and run system, staging or production tests.
+  To run a system test, first set up a test deployment:
+</p>
+<pre>{% highlight sh %}
+$ vespa deploy --wait 600
+{% endhighlight %}</pre>
+<p>
+  Then run the tests - example JSON-tests:
+</p>
+<pre>{% highlight sh %}
+$ vespa test tests/system-test/feed-and-search-test.json
+{% endhighlight %}</pre>
+<p>
+  Example Java API tests:
+</p>
+<pre>{% highlight sh %}
+$ mvn test -D test.categories=system -D vespa.test.config=/path-to/test-config.json
+{% endhighlight %}</pre>
+<p>
+  The test config file used by the test runner in the maven-plugin defines the endpoints for each of the clusters in
+  <a href="reference/services.html">services.xml</a> as fields under a <code>localEndpoints</code> JSON object:
+</p>
+<pre>{% highlight json %}
+{
+    "localEndpoints": {
+        "query-service": "http://localhost:8080/",
+        "feed-service" : "http://localhost:8081/"
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  <code>feed-service</code> is the endpoint of the container cluster with <code>&lt;document-api&gt;</code>
+  in <a href="reference/services.html">services.xml</a>.
+  <code>query-service</code> is the endpoint of the container cluster with <code>&lt;search&gt;</code>
+  in <a href="reference/services.html">services.xml</a>.
 </p>
 
 
@@ -64,17 +108,7 @@ title: Vespa testing
   compatible with the behavior expected by existing clients.
 </p>
 <p>
-  Running a staging test therefore requires more steps than a system test:
-</p>
-  <ol>
-    <li><p>First, a dedicated deployment is made with the <em>current</em> setup (package and Vespa version).</p></li>
-    <li><p>Next, <em>staging setup</em> code is run to put the test cluster in a particular state—typically
-      one that mimics the state in production clusters.</p></li>
-    <li><p>When this is done, the deployment is upgraded to the <em>new</em> setup (package and/or Vespa version).</p></li>
-    <li><p>Finally, <em>staging test</em> code is run to verify the cluster behaves as expected post-upgrade.</p></li>
-  </ol>
-<p>
-  As an example, consider a change in how documents are indexed, e.g., a adding new document processor.
+  As an example, consider a change in how documents are indexed, e.g., adding new document processor.
   A system test would test verify this new behavior by feeding a document, and then verifying the
   document processor modified the document, or perhaps did something else.
   A staging test, on the other hand, would feed the document <em>before</em> the document processor was added,
@@ -97,15 +131,52 @@ title: Vespa testing
   and this dictates the workflow when deploying a breaking change:
 </p>
 <ol>
-  <li><p>First, the application code and system and and staging tests are updated, so tests pass;
-    and clients are updated to reflect the updated test code.<p></li>
-  <li><p>Next, the application is upgraded.</p></li>
-  <li><p>Finally, the <em>staging setup</em> code is updated to match the new application code.</p></li>
+  <li>First, the application code and system and staging tests are updated, so tests pass;
+    and clients are updated to reflect the updated test code.</li>
+  <li>Next, the application is upgraded.</li>
+  <li>Finally, the <em>staging setup</em> code is updated to match the new application code.</li>
 </ol>
 <p>
   Again, it is a good idea to always run staging tests before deployment of every change—be it a
   change in the application package, or an upgrade of the Vespa platform.
 </p>
+
+
+<h3 id="running-staging-tests">Running staging tests</h3>
+<p>Steps:</p>
+<ol>
+  <li>A dedicated deployment is made with the <em>current</em> setup (package and Vespa version).</li>
+  <li>
+    <em>staging setup</em> code is run to put the test cluster in a particular state—typically
+    one that mimics the state in production clusters.
+  </li>
+  <li>The deployment is then upgraded to the <em>new</em> setup (package and/or Vespa version).</li>
+  <li><em>staging test</em> code is run to verify the cluster behaves as expected post-upgrade.</li>
+</ol>
+<p>
+  Example using JSON-tests:
+</p>
+<pre>{% highlight sh %}
+# load old application code, deploy it, run setup
+$ vespa deploy --wait 600
+$ vespa test tests/staging-setup
+
+# make changes to the application, deploy it, run tests
+$ vespa deploy --wait 120
+$ vespa test tests/staging-test
+{% endhighlight %}</pre>
+<p>
+  Example using Java tests (see <a href="#running-system-tests">system tests</a> for <em>test-config.json</em>):
+</p>
+<pre>{% highlight sh %}
+# load old application code, deploy it, run setup
+$ vespa deploy --wait 600
+$ mvn test -D test.categories=staging-setup -D vespa.test.config=/path-to/test-config.json
+
+# make changes to the application, deploy it, run tests
+$ vespa deploy --wait 120
+$ mvn test -D test.categories=staging -D vespa.test.config=/path-to/test-config.json
+{% endhighlight %}</pre>
 
 
 
