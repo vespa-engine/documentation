@@ -70,4 +70,6 @@ with open(sys.argv[1]) as fp:
         data.append((id,header, text))
         for paragraph_id, header, paragraph in data:
             paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
-            print(json.dumps(paragraph_doc))
+            operations.append(paragraph_doc)
+    with open("paragraph_index.json", "w") as fp:    
+        json.dump(operations, fp)
