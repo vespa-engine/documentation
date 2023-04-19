@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify
 import random
 
-
 def create_text_doc(doc, paragraph, paragraph_id, header):
     id = doc['put']
     #id:open:doc::open/en/access-logging.html#
