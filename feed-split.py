@@ -4,6 +4,7 @@
 import json
 import sys
 from bs4 import BeautifulSoup
+from markdownify import markdownify
 import random
 
 def create_text_doc(doc, paragraph, paragraph_id, header):
@@ -50,35 +51,23 @@ with open(sys.argv[1]) as fp:
         #    continue
         html_doc = doc['fields']['html']
         soup = BeautifulSoup(html_doc, 'html5lib')
-        texts = []
-        current_text = ""
-        current_id = None
-        current_header = ""
-        first = True
-        for element in soup.descendants:
-            if element.name in ["h1", "h2", "h3", "h4"]:
-                if current_text:
-                    if first and current_id == None:
-                        current_id = ""
-                        first = False
-                    texts.append((current_text.strip(), current_id, current_header))
-                    current_text = element.get_text().strip() + " - "
-                    current_id = None
-                current_id = element.attrs.get("id")
-                current_header = element.get_text()   
-                if current_id == None:
-                    print("Missing header id {} {}".format(doc['fields']['path'], current_header))
-                       
+        md = markdownify(html_doc,heading_style='ATX')
+        lines = md.split("\n")
+        headers = []
+        header = ""
+        text = ""
+        id = ""
+        data = []
+        for line in lines:
+            if line.startswith("#"):
+                if text:
+                    data.append((id,header, text))
+                    text = ""
+                header = line.lstrip("#")
+                id = "-".join(header.split()).lower()
             else:
-                if element.get_text() and element.name in ["p", "td", "th"]:
-                    current_text = current_text + " " + element.get_text().strip().replace("\n"," ")
-                    current_text = current_text.strip()
-    
-        if current_text:
-            texts.append((current_text.strip(), current_id, current_header))
-        
-        for text, index, header in texts:
-            cleaner_text = " ".join(text.split())
-            operations.append(create_text_doc(doc, cleaner_text, index, header))
-    with open("paragraph_index.json", "w") as fp:    
-        json.dump(operations, fp)
+                text = text + line.strip() + "\n"
+        data.append((id,header, text))
+        for paragraph_id, header, paragraph in data:
+            paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
+            print(json.dumps(paragraph_doc))
