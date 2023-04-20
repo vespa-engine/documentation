@@ -6,6 +6,24 @@ import sys
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 import random
+import re
+
+note_pattern = re.compile(r"\{%\s*include\s*note\.html\s*content='(?:[^']|'[^']*')*'\s*%\}")
+
+def what_language(el):
+    z = re.match("\{\% highlight (\w+) \%\}", el.text)
+    if z:
+        return z.group(1)
+    if el.text.find("curl") > 0:
+        return "bash"
+
+    return ""
+
+def remove_jekyll(text):
+    text = text.replace("\{\% highlight (\w+) \%\}","")
+    text =re.sub("\{\% highlight .* \%\}", "", text)
+    text = text.replace("{% endhighlight %}","")
+    return text
 
 def create_text_doc(doc, paragraph, paragraph_id, header):
     id = doc['put']
@@ -24,7 +42,8 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
             "path": fields['path'],
             "doc_id": fields['path'],
             "namespace": new_namespace,
-            "content": paragraph
+            "content": paragraph,
+            "base_uri": sys.argv[2]
         }
     }
     
@@ -51,7 +70,7 @@ with open(sys.argv[1]) as fp:
         #    continue
         html_doc = doc['fields']['html']
         soup = BeautifulSoup(html_doc, 'html5lib')
-        md = markdownify(html_doc,heading_style='ATX')
+        md = markdownify(html_doc,heading_style='ATX', code_language_callback=what_language)
         lines = md.split("\n")
         headers = []
         header = ""
@@ -66,10 +85,12 @@ with open(sys.argv[1]) as fp:
                 header = line.lstrip("#")
                 id = "-".join(header.split()).lower()
             else:
-                text = text + line.strip() + "\n"
+                text = text + remove_jekyll(line) + "\n"
         data.append((id,header, text))
         for paragraph_id, header, paragraph in data:
+            paragraph = note_pattern.sub("", paragraph)
             paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
             operations.append(paragraph_doc)
+            
     with open("paragraph_index.json", "w") as fp:    
         json.dump(operations, fp)
