@@ -1252,7 +1252,7 @@ query a linear scan over all tracks.
 
 The query returns:
 
-<pre>{% highlight json%}
+<pre>{% highlight json %}
 {
     "timing": {
         "querytime": 0.01,
@@ -1443,7 +1443,7 @@ Note that the tensor query input format is slightly different from the variable 
 the multivalued query operators `wand`, `weightedSet` and `dotProduct`.
 The above query produces the following result:
 
-<pre>{% highlight json%}
+<pre>{% highlight json %}
 {
     "timing": {
         "querytime": 0.121,
