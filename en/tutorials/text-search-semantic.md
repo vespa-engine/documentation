@@ -90,7 +90,7 @@ The match operator `AND` means that we are only matching documents that contain 
 either in the title or in the body of the document.
 A sample query looks like:
 
-```json
+<pre>{% highlight json%}
 {
     "yql": "select * from sources * where (userInput(@userQuery))",
     "userQuery": "what types of plate boundaries cause deep sea trenches",
@@ -99,18 +99,19 @@ A sample query looks like:
         "listFeatures": true
     }
 }
-```
+{% endhighlight %}</pre>
 
 The match operator `OR` means that we are matching documents that contain any of the query terms
 either in the title or in the body.
 The only difference is the inclusion of the `{grammar: "any"}` in the
 [YQL](../reference/query-language-reference.html#grammar) expression:
 
-```json
+<pre>{% highlight json%}
 {
     "yql": "select * from sources * where ({grammar: \"any\"}userInput(@userQuery))"
 }
-```
+{% endhighlight %}</pre>
+
 
 The baselines are two obvious choices that also represent two extremes that are interesting to analyze.
 The `AND` operator is too restrictive, matching few documents.
@@ -118,8 +119,6 @@ The consequence is that it ends up missing the relevant documents in the first 1
 for approximately half of the queries.
 The `OR` operator on the other hand, matches the majority of the documents in the corpus
 and recalls the relevant document for most of the queries.
-
-
 
 ## Pre-trained vector embeddings
 
@@ -150,7 +149,7 @@ Improving on text to embedding construction could be a nice topic to explore els
 For example, this is how it is presented at
 [the Universal Sentence Encoder page](https://tfhub.dev/google/universal-sentence-encoder/4) in TensorFlow Hub:
 
-```python
+<pre>{% highlight python%}
 From tensorflow hub
 
 import tensorflow as tf
@@ -161,12 +160,13 @@ embeddings = embed([
     "I am a sentence for which I would like to get its embedding"])
 
 print embeddings
-```
+{% endhighlight %}</pre>
+
 
 The following comes from the
 [sentence-transformers library](https://github.com/UKPLab/sentence-transformers#getting-started):
 
-```python
+<pre>{% highlight python%}
 From sentence-transformers library
 
 from sentence_transformers import SentenceTransformer
@@ -176,11 +176,9 @@ sentences = ["This framework generates embeddings for each input sentence",
     "Sentences are passed as a list of string.", 
     "The quick brown fox jumps over the lazy dog."]
 sentence_embeddings = model.encode(sentences)
-```
+{% endhighlight %}</pre>
 
 We have followed a similar pattern when creating the embeddings used here.
-
-
 
 ## Approximate Nearest Neighbor (ANN) operator
 
@@ -205,15 +203,15 @@ and query embeddings and use the embeddings in ranking functions.
 The document embeddings can be defined by adding the following fields in
 `src/main/application/schemas/msmarco.sd`:
 
-```
-field title_bert type tensor<float>(x[768]) {
+<pre>
+field title_bert type tensor&lt;float&gt;(x[768]) {
     indexing: attribute
 }
 
-field body_bert type tensor<float>(x[768]) {
+field body_bert type tensor&lt;float&gt;(x[768]) {
     indexing: attribute
 }
-```
+</pre>
 
 The code above defines one field for the title embedding and one for the text body embedding.
 Both are tensors of type float with indexed dimension of size 768, similar to the query embedding.
@@ -226,7 +224,7 @@ that will be discussed in the next section.
 However, it could be interesting to use those tensors to rank the documents as well.
 This can be accomplished by defining a [rank-profile](../ranking.html):
 
-```
+<pre>
 rank-profile bert_title_body_all inherits default {
     inputs {
         query(tensor_bert) tensor<float>(x[768])
@@ -241,7 +239,7 @@ rank-profile bert_title_body_all inherits default {
         expression: dot_product_title() + dot_product_body()
     }
 }
-```
+</pre>
 
 The [rank-profile](../reference/schema-reference.html#rank-profile) `bert_title_body_all` will sort all the
 matched documents according to the sum of the dot-products between query and title and query and body vectors.
@@ -252,14 +250,12 @@ Different rank-profiles can be defined for experimentation.
 
 We can send the query embeddings via the `input.query(tensor_bert)` parameter:
 
-```json
+<pre>{% highlight json%}
 {
   "yql": "...",
   "input.query(tensor_bert)": "[0.013267785266013195, -0.021684982513878254, ..., -0.007751454443551412]"
 }
-```
-
-
+{% endhighlight %}</pre>
 
 ### ANN operator
 
@@ -267,7 +263,7 @@ Once that query and document tensors as well as rank-profiles that use them are 
 it is possible to use the embeddings to match and to rank the documents by using the `nearestNeighbor` operator
 together with the appropriate rank-profile:
 
-```json
+<pre>{% highlight json%}
 {
     "yql": "select * from sources * where ({targetHits: 1000, label: \"nns\"}nearestNeighbor(title_bert, tensor_bert))",
     "userQuery": "what types of plate boundaries cause deep sea trenches",
@@ -277,7 +273,7 @@ together with the appropriate rank-profile:
     },
     "input.query(tensor_bert)": "[0.05121087115032622, -0.0035218095295999675, ..., 0.05303904445092506]"
 }
-```
+{% endhighlight %}</pre>
 
 The query above uses the `nearestNeighbor` operator to match documents based on the euclidean distance
 between the title embedding (`title_bert`) and the query embedding (`tensor_bert`).
@@ -345,7 +341,7 @@ and [term(n).weight](../reference/rank-features.html#term(n).weight).
 Below is a query example that uses the `weakAND` operator
 with an annotation that sets the target number of documents to be 1.000:
 
-```json
+<pre>{% highlight json%}
 {
     "yql": "select * from sources * where ({targetHits: 1000}weakAnd(default contains \"what\", default contains \"types\", default contains \"of\", default contains \"plate\", default contains \"boundaries\", default contains \"cause\", default contains \"deep\", default contains \"sea\", default contains \"trenches\"))",
     "userQuery": "what types of plate boundaries cause deep sea trenches",
@@ -354,15 +350,15 @@ with an annotation that sets the target number of documents to be 1.000:
         "listFeatures": true
     }
 }
-```
+{% endhighlight %}</pre>
 
 Remember that the `default` is the fieldset that includes both the `title` and the `body` fields. 
 
-```
+<pre>
 fieldset default {
     fields: title, body
 }
-```
+</pre>
 
 It was surprising to see the effectiveness of the WAND operator in this case:
 

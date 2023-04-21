@@ -96,7 +96,7 @@ still exist with a set bit that again became current.
 
 Versioning can be stored in a database or a configuration file,
 but the simplest place is probably the Vespa app itself, using a dedicated type:
-```
+<pre>
 search config {
     document config {
 
@@ -108,7 +108,7 @@ search config {
         }
     }
 }
-```
+</pre>
 
 Versioning is used as depicted below.
 The client running recommendation queries starts by obtaining the configuration of the target model.
@@ -138,7 +138,7 @@ so keeping the version and model apart simplifies other tasks.
 
 The following fields will thus be added to the news and user schemas
 (defined in [part 2](news-2-basic-feeding-and-query.html)):
-```
+<pre>
 schema news {
     document news {
 
@@ -153,14 +153,12 @@ schema news {
         }
     }
 }
-```
+</pre>
 
 Each model is generated using a different dataset,
 so it makes sense to separate the feeding procedures of each model.
 Consequently, each model should also have a separate configuration holding 
 (possibly) different inner versions and sets.
-
-
 
 ## Managing model-agnostic data using parent documents
 
@@ -179,7 +177,7 @@ This reference allows us to import fields from the parent (shared) doc to the ch
 making them searchable and retrievable as if they were part of the model doc.
 The `news_model` schema should look as follows:
 
-```
+<pre>
 schema news_model {
     document news_model {
 
@@ -204,7 +202,7 @@ schema news_model {
     import field news_ref.title as title {}
     import field news_ref.language as language {}
 }
-```
+</pre>
 
 {% include note.html content="The shared `news` schema neither holds the model vector nor has a model field.
 However, it still has a version field, obtained from a dedicated `news` configuration.
@@ -241,7 +239,7 @@ the latter will change any time the configuration is updated
 (imported fields are references, they don't hold the actual data).
 The relevant portions of the `user` and `news` schemas will now look as follows:
 
-```
+<pre>
         field version type long {
             indexing: attribute
             attribute: fast-search
@@ -252,7 +250,7 @@ The relevant portions of the `user` and `news` schemas will now look as follows:
         }
 
         import field config_ref.version as latest_version {}
-```
+</pre>
 
 Now, we can distinguish between up-to-date and obsolete documents
 by comparing the `version` and `latest_version` fields:
@@ -318,7 +316,7 @@ The new configuration schema can look as follows,
 using the new `next_version` field to store the _write_ version
 and the previously defined `version` field (imported for GC) for the read version:
 
-```
+<pre>
 search config {
     document config {
 
@@ -333,7 +331,7 @@ search config {
         }
     }
 }
-```
+</pre>
 
 ## Dealing with multi-region apps
 
