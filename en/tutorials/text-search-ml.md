@@ -292,7 +292,7 @@ where the only new parameter is `number_random_sample`,
 which specify how many documents we should sample from the matched set.
 
 The body of the request is given by
-{% highlight python %}</pre>
+<pre>{% highlight python %}
 body = {
     "yql": "select id, rankfeatures from sources * where (userInput(@userQuery))",
     "userQuery": query,
