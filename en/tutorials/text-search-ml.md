@@ -53,7 +53,7 @@ The list of rank features that are returned by default can change in the future 
 For the request specified by the body above we get the following (edited) json back.
 Each result will contain a field called `rankfeatures` containing the set of default ranking features:
 
-```json
+<pre>{% highlight json%}
 {
     "root": {
         "children": [
@@ -88,8 +88,7 @@ Each result will contain a field called `rankfeatures` containing the set of def
         ],
     ...
 }
-```
-
+{% endhighlight %}</pre>
 
 ### Chose and process specific rank features
 
@@ -217,13 +216,13 @@ This might be obvious at first but turns out to be easy to neglect when making s
 
 The logic behind the `collect_training_data.py` can be summarized by the pseudo-code below:
 
-```
+<pre>{% highlight python %}
 hits = get_relevant_hit(query, rank_profile, relevant_id)
 if relevant_hit:
     hits.extend(get_random_hits(query, rank_profile, number_random_sample))
     data = annotate_data(hits, query_id, relevant_id)
     append_data(file, data) 
-```
+{% endhighlight %}</pre>
 
 For each query, we first send a request to Vespa to get the relevant document associated with the query.
 If the relevant document is matched by the query, Vespa will return it,
@@ -248,7 +247,7 @@ where the `query` parameter contains the desired query string,
 and `relevant_id` is the document id that is said to be relevant to that specific query.
 
 The body of the request is given by:
-```
+<pre>{% highlight python %}
 body = {
     "yql": "select id, rankfeatures from sources * where userQuery()",
     "query": query,
@@ -256,7 +255,8 @@ body = {
     "recall": "+id:" + str(relevant_id),
     "ranking": {"profile": rank_profile, "listFeatures": "true"},
 }
-```
+{% endhighlight %}</pre>
+
 where the `yql` and `userQuery` parameters instruct Vespa to return the _id_ of the documents
 along with the selected rank-features defined in the `collect_rank_features` rank-profile.
 The `hits` parameter is set to 1 because we know there are only one relevant id for each query,
@@ -273,7 +273,7 @@ say documents with ids 1 and 2 is given by `"recall": "+(id:1 id:2)"`.
 If we wanted to retrieve the document even if it did not match the query specification we could
 alter the query to use the following query specification:
 
-```
+<pre>{% highlight python%}
 body = {
     "yql": "select id, rankfeatures from sources * where true or userQuery()",
     "query": query,
@@ -281,8 +281,7 @@ body = {
     "recall": "+id:" + str(relevant_id),
     "ranking": {"profile": rank_profile, "listFeatures": "true"},
 }
-```
-
+{% endhighlight %}</pre>
 
 ### Get random hits
 
@@ -293,23 +292,24 @@ where the only new parameter is `number_random_sample`,
 which specify how many documents we should sample from the matched set.
 
 The body of the request is given by
-```
+<pre>{% highlight python %}
 body = {
     "yql": "select id, rankfeatures from sources * where (userInput(@userQuery))",
     "userQuery": query,
     "hits": number_random_sample,
     "ranking": {"profile": collect_features, "listFeatures": "true"},
 }
-```
+{% endhighlight %}</pre>
+
 where the only changes with respect to the `get_relevant_hit` is that we no longer need to use the `recall` parameter
 and that we set the number of hits returned by Vespa to be equal to `number_random_sample`.
 
 Remember we had configured the second phase to use random scoring:
-```
+<pre>
 second-phase {
     expression: random
 }
-```
+</pre>
 
 Using `random` as our second-phase ranking function
 ensures that the top documents returned by Vespa are randomly selected
@@ -383,13 +383,13 @@ If the dataset is well-built and contains useful information about the task you 
 you should be able to get results at least as good as the one obtained by your baseline on a separate test set.
 
 In our case, the baseline is the ranking function used in [our previous tutorial](text-search.html):
-```
+<pre>
 rank-profile bm25 inherits default {
     first-phase {
         expression: bm25(title) + bm25(body)
     }
 }
-```
+</pre>
 Therefore, our sanity-check model will be a linear model containing only the two features above,
 i.e. `a + b * bm25(title) + c * bm25(body)`, where `a`, `b`and `c` should be learned by using our collected dataset.
 
@@ -403,11 +403,11 @@ and is recovered when `a=0`, `b=1` and `c=1`.
 
 This is a simple procedure, but it did catch some bugs while we were writing this tutorial.
 For example, at one point we forgot to include
-```
+<pre>
 first-phase {
     expression: random
 }
-```
+</pre>
 in the `collect_rank_features` rank-profile leading to a biased dataset
 where the negative examples were actually quite relevant to the query.
 The trained model did well on the validation set,
@@ -448,7 +448,7 @@ $ ./src/python/tfrank.py
 
 The two _rank-profile_'s below are obtained by training the linear model with a pointwise (sigmoid cross-entropy)
 and listwise (softmax cross-entropy) loss functions, respectively:
-```
+<pre>
 rank-profile pointwise_linear_bm25 inherits default {
     first-phase {
         expression: 0.22499913 * bm25(title) + 0.07596389 * bm25(body) 
@@ -460,7 +460,7 @@ rank-profile listwise_linear_bm25 inherits default {
         expression: 0.13446581 * bm25(title) + 0.5716889 * bm25(body)
     }
 }
-```
+</pre>
 It is interesting to see that a pointwise loss function set more weight into the title in relation to the body
 while the opposite happens when using the listwise loss function.
 

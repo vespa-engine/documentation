@@ -98,7 +98,7 @@ $ ./bin/convert-msmarco.sh
 To adjust the number of queries and documents to sample, edit this file to your liking.
 After running the script we end up with a file `msmarco/vespa.json` containing lines such as the one below:
 
-```json
+<pre>{% highlight json%}
 {
     "put": "id:msmarco:msmarco::D1555982",
     "fields": {
@@ -108,7 +108,8 @@ After running the script we end up with a file `msmarco/vespa.json` containing l
         "body": "Science   Mathematics Physics The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation ... "
     }
 }
-```
+{% endhighlight %}</pre>
+
 
 In addition to `vespa.json` we also have a `test-queries.tsv` file containing a list of the sampled queries
 along with the document id that is relevant to each particular query.
@@ -344,7 +345,7 @@ with Vespa's [simple query language](../reference/simple-query-language-referenc
 the default query type is using `all`, requiring that all the terms match the document.
 
 Following is a partial output of the query above when using the small dataset sample:
-```json
+<pre>{% highlight json%}
 {
     "root": {
         "id": "toplevel",
@@ -366,7 +367,7 @@ Following is a partial output of the query above when using the small dataset sa
         ]
     }
 }
-```
+{% endhighlight %}</pre>
 
 As we can see, there were 3 documents that matched the query out of 1000 available in the corpus.
 The number of matched documents will be much larger when using the full dataset.

@@ -100,7 +100,7 @@ with open(sys.argv[1]) as fp:
                 header = line.lstrip("#")
                 id = "-".join(header.split()).lower()
             else:
-                text = text + line + "\n"
+                text = text + line+ "\n"
 
         #Flush any last data
         data.append((id,header, text))
