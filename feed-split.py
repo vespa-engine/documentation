@@ -110,8 +110,8 @@ with open(sys.argv[1]) as fp:
             paragraph = paragraph.lstrip('\n').lstrip(" ")
             paragraph = paragraph.rstrip('\n')
 
-            paragraph = re.sub(r"\n*```","```",paragraph)
-            paragraph = re.sub(r"```\n*","```",paragraph)
+            paragraph = re.sub(r"\n*```","\n```",paragraph)
+            paragraph = re.sub(r"```\n*","```\n",paragraph)
         
             paragraph = remove_jekyll(paragraph)
             
