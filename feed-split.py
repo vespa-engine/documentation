@@ -9,11 +9,12 @@ import random
 import re
 from xml.sax.saxutils import escape
 
-note_pattern = re.compile(r"\{%\s*include\s*note\.html\s*content='(?:[^']|'[^']*')*'\s*%\}")
-note_pattern2 = re.compile(r"\{%\s*include\s*note\.html\s*content='.*?'\s*%\}")
-note_pattern3 = re.compile(r"\{%\s*include\s*query\.html\s*content='.*?'\s*%\}")
-important_pattern = re.compile(r"\{%\s*include\s*important\.html\s*content='(?:[^']|'[^']*')*'\s*%\}")
-important_pattern2 = re.compile(r"\{%\s*include\s*important\.html\s*content='.*?'\s*%\}")
+import tiktoken
+encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+note_pattern = re.compile(r"{%\s*include.*?%}", flags=re.DOTALL)
+highlight_pattern = re.compile(r"{%\s*(.*?)\s%}", flags=re.DOTALL)
+
 
 def what_language(el):
     z = re.match("\{\% highlight (\w+) \%\}", el.text)
@@ -21,13 +22,11 @@ def what_language(el):
         return z.group(1)
     if el.text.find("curl") > 0:
         return "bash"
-
     return ""
 
 def remove_jekyll(text):
-    text = text.replace("\{\% highlight (\w+) \%\}","")
-    text =re.sub("\{\% highlight .* \%\}", "", text)
-    text = text.replace("{% endhighlight %}","")
+    text = note_pattern.sub("", text)
+    text = highlight_pattern.sub("", text)
     return text
 
 def xml_fixup(text):
@@ -48,6 +47,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     id = id.replace(namespace, new_namespace)
     id = "id:{}:{}::{}".format(new_namespace, "paragraph", id)
     fields = doc['fields']
+    n_tokens = len(encoding.encode(paragraph))
     new_doc = {
         "put": id,
         "fields": {
@@ -56,6 +56,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
             "doc_id": fields['path'],
             "namespace": new_namespace,
             "content": paragraph,
+            "content_tokens": n_tokens,
             "base_uri": sys.argv[2]
         }
     }
@@ -99,16 +100,24 @@ with open(sys.argv[1]) as fp:
                 header = line.lstrip("#")
                 id = "-".join(header.split()).lower()
             else:
-                text = text + remove_jekyll(line) + "\n"
+                text = text + line + "\n"
+
+        #Flush any last data
         data.append((id,header, text))
+
         for paragraph_id, header, paragraph in data:
-            paragraph = note_pattern.sub("", paragraph)
-            paragraph = note_pattern2.sub("", paragraph)
-            paragraph = note_pattern3.sub("", paragraph)
-            paragraph = important_pattern.sub("",paragraph)
-            paragraph = important_pattern2.sub("",paragraph)
-            paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
-            operations.append(paragraph_doc)
+            
+            paragraph = paragraph.lstrip('\n').lstrip(" ")
+            paragraph = paragraph.rstrip('\n')
+
+            paragraph = re.sub(r"\n*```","```",paragraph)
+            paragraph = re.sub(r"```\n*","```",paragraph)
+        
+            paragraph = remove_jekyll(paragraph)
+            
+            if paragraph:
+                paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
+                operations.append(paragraph_doc)
             
     with open("paragraph_index.json", "w") as fp:    
         json.dump(operations, fp)
