@@ -22,7 +22,7 @@ This dumps the tree model and other useful data such as feature names,
 objective functions, and values of categorical features to a JSON file.  
 An example of training and saving a model suitable for use in Vespa is as follows.
 
-```
+<pre>{% highlight python %}
 import json
 import lightgbm as lgb
 import numpy as np
@@ -47,7 +47,7 @@ model = lgb.train(params, training_set, num_boost_round=5)
 # Save the model
 with open("lightgbm_model.json", "w") as f:
     json.dump(model.dump_model(), f, indent=2)
-```
+{% endhighlight %}</pre>
 
 While this particular model isn't doing anything really useful, the output
 file `lightgbm_model.json` can be imported directly into Vespa.
@@ -63,13 +63,13 @@ application package under a directory named `models`, or a
 subdirectory under `models`.  For instance, for the above model `lightgbm_model.json`,
 add it to the application package resulting in a directory structure like this:
 
-```
+<pre>
 ├── models
 │   └── lightgbm_model.json
 ├── schemas
 │   └── main.sd
 └── services.xml
-```
+</pre>
 
 Note that an application package can have multiple models. After putting the
 model in the `models` directory, it is available for both ranking and
@@ -81,7 +81,7 @@ Vespa has a [ranking feature](reference/rank-features.html)
 called `lightgbm`. This ranking feature specifies the model to use in a ranking
 expression, relative under the `models` directory. Consider the following example:
 
-```
+<pre>
 schema test {
     rank-profile classify inherits default {
         first-phase {
@@ -89,7 +89,7 @@ schema test {
         }
     }
 }
-```
+</pre>
 
 Here, we specify that the model `lightgbm_model.json` (directly under the
 `models` directory) is applied to all documents matching a query which uses
@@ -98,7 +98,7 @@ in the model to features that are available for Vespa to use in ranking.
 
 Take a look at the JSON file dumped from the example above:
 
-```
+<pre>
 {
   "name": "tree",
   "version": "v3",
@@ -118,7 +118,7 @@ Take a look at the JSON file dumped from the example above:
   ],
   "pandas_categorical": []
 }
-```
+</pre>
 
 Here, the section `feature_names` consists of the feature names used in the
 training set. When this model is evaluated in Vespa, Vespa expects that these
@@ -129,7 +129,7 @@ or possibly from other more complex rank features such as `fieldMatch(name)`.
 You can also define [functions](https://docs.vespa.ai/en/ranking-expressions-features.html#function-snippets) (which are valid rank features) with the LightGBM
 feature name to perform the mapping. An example:
 
-```
+<pre>
 schema test {
     document test {
         field doc_attrib type double {
@@ -151,8 +151,7 @@ schema test {
         }
     }
 }
-
-```
+</pre>
 
 Here, when Vespa evaluates the model, it retrieves the value of `feature_1`
 from a document attribute called `doc_attrib`, and the value if `feature_2`
@@ -197,12 +196,12 @@ For more information on LightGBM and objective functions, see
 
 LightGBM has the option of directly training on categorical features. Example:
 
-```
+<pre>
 features = pd.DataFrame({
             "numerical":   np.random.random(5),
             "categorical": pd.Series(np.random.permutation(["a", "b", "c", "d", "e"])), dtype="category"),
            })
-```
+</pre>
 
 Here, the `categorical` feature is marked with the Pandas dtype `category`. This
 tells LightGBM to send the categorical values in the `pandas_categorical` section
@@ -216,7 +215,7 @@ on Pandas tables and use the `category` dtype on categorical columns.
 In Vespa categorical features are strings, so mapping the above feature
 for instance to a document field would be:
 
-```
+<pre>
 schema test {
     document test {
         field numeric_attrib type double {
@@ -238,7 +237,7 @@ schema test {
         }
     }
 }
-```
+</pre>
 
 Here, the string value of the document would be used as the feature value when evaluating
 this model for every document.
@@ -258,6 +257,5 @@ this model for every document.
   If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
 * In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
   might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](https://docs.vespa.ai/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
-  is related to *Inverse Document Frequency (IDF)*. 
-  > `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
+  is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
 

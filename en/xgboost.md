@@ -16,7 +16,7 @@ and users can specify the feature names to be used in `fmap`.
 
 Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 1:
 
-```json
+<pre>{% highlight json %}
 [
   { "nodeid": 0, "depth": 0, "split": "fieldMatch(title).completeness", "split_condition": 0.772132337, "yes": 1, "no": 2, "missing": 1, "children": [
     { "nodeid": 1, "leaf": 0.673938096 },
@@ -27,14 +27,15 @@ Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 
     { "nodeid": 2, "leaf": 0.55586201 }
   ]}
 ]
-```
+{% endhighlight %}</pre>
+
 Notice the `split` attribute which represents the Vespa feature name. The `split` feature must resolve to a Vespa
 [rank feature](reference/rank-features.html) defined in the [document schema](schemas.html). The feature can also
 be user defined features (for example using [functions](https://docs.vespa.ai/en/ranking-expressions-features.html#function-snippets)).
 
 The above model JSON was produced using the XGBoost Python api with a regression objective:
 
-```python
+<pre>{% highlight python %}
 #!/usr/local/bin/python3
 import xgboost as xgb
 
@@ -42,7 +43,8 @@ dtrain = xgb.DMatrix('training-vectors.txt')
 param = {'base_score':0, 'max_depth':1,'objective':'reg:squarederror'}
 bst = xgb.train(param, dtrain, 2)
 bst.dump_model("trained-model.json",fmap='feature-map.txt', with_stats=False, dump_format='json')
-```
+{% endhighlight %}</pre>
+
 The training data is represented using [LibSVM text format](https://xgboost.readthedocs.io/en/latest/tutorials/input_format.html).
 See also a complete [XGBoost training notebook](https://github.com/vespa-engine/sample-apps/blob/master/commerce-product-ranking/notebooks/Train-xgboost.ipynb) using `ranking` objective. 
 
@@ -52,11 +54,11 @@ where features are named based on the index in the array  as in the example abov
 To convert the XGBoost features we need to map feature indexes to actual Vespa features
 (native features or custom defined features):
  
-```shell
+<pre>
 $ cat feature-map.txt |egrep "fieldMatch\(title\).completeness|fieldMatch\(title\).importance"
 36  fieldMatch(title).completeness q
 39  fieldMatch(title).importance q
-```
+</pre>
 In the feature mapping example, feature at index 36 maps to
 [fieldMatch(title).completeness](reference/rank-features.html#fieldMatch(name).completeness)
 and index 39 maps to [fieldMatch(title).importance](reference/rank-features.html#fieldMatch(name).importance).
@@ -82,13 +84,13 @@ model to your application package under a specific directory named `models`.
 For instance, if you would like to call the model above as `my_model`,
 you would add it to the application package resulting in a directory structure like this:
 
-```text
+<pre>
 ├── models
 │   └── my_model.json
 ├── schemas
 │   └── main.sd
 └── services.xml
-```
+</pre>
 
 An application package can have multiple models.
 
@@ -102,7 +104,7 @@ Vespa has a `xgboost` [ranking feature](reference/rank-features.html).
 This ranking feature specifies the model to use in a ranking expression.
 Consider the following example:
 
-```text
+<pre>
 schema xgboost {
     rank-profile prediction inherits default {
         first-phase {
@@ -113,7 +115,7 @@ schema xgboost {
         }
     }
 }
-```
+</pre>
 
 Here, we specify that the model `my_model.json` is applied to the top ranking documents by the first-phase ranking expression. 
 The query request must specify `prediction` as the [ranking.profile](reference/query-api-reference.html#ranking.profile). 
@@ -142,7 +144,7 @@ but the `base_score` should be set 0 as the `base_score` used during the trainin
 
 An example model using the sklearn toy datasets is given below:
 
-```python
+<pre>{% highlight python %}
 from sklearn import datasets
 import xgboost as xgb
 breast_cancer = datasets.load_breast_cancer()
@@ -150,12 +152,12 @@ c = xgb.XGBClassifier(n_estimators=20, objective='binary:logistic')
 c.fit(breast_cancer.data,breast_cancer.target) 
 c.get_booster().dump_model("binary_breast_cancer.json", fmap='feature-map.txt', dump_format='json')
 c.predict_proba(breast_cancer.data)[:,1]
-```
+{% endhighlight %}</pre>
 
 To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa,
 we need to use the [sigmoid function](reference/ranking-expressions.html):
 
-```text
+<pre>
 schema xgboost {
     rank-profile prediction-binary inherits default {
         first-phase {
@@ -163,7 +165,7 @@ schema xgboost {
         }
     }
 }
-```
+</pre>
 
 ## Debugging Vespa inference score versus XGBoost predict score 
  
@@ -181,8 +183,7 @@ schema xgboost {
   If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
 * In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
   might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](https://docs.vespa.ai/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
-  is related to *Inverse Document Frequency (IDF)*. 
-  >`term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
+  is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
 
 
 

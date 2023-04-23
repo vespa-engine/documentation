@@ -13,15 +13,18 @@ import tiktoken
 encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 note_pattern = re.compile(r"{%\s*include.*?%}", flags=re.DOTALL)
-highlight_pattern = re.compile(r"{%\s*(.*?)\s%}", flags=re.DOTALL)
+highlight_pattern = re.compile(r"{%\s*.*?\s%}", flags=re.DOTALL)
 
 
 def what_language(el):
-    z = re.match("\{\% highlight (\w+) \%\}", el.text)
+    z = re.match(r"{%\s*highlight\s*(\w+)\s%}", el.text)
     if z:
-        return z.group(1)
+        lang =  z.group(1)
+        return lang
     if el.text.find("curl") > 0:
         return "bash"
+    if el.text.find("import com.yahoo"):
+        return "java"
     return ""
 
 def remove_jekyll(text):
@@ -80,12 +83,12 @@ with open(sys.argv[1]) as fp:
     docs = json.load(fp)
     operations = []
     for doc in docs:
-        #if doc['fields']['path'] != "/en/reference/schema-reference.html":
-        #    continue
+        path = doc['fields']['path']
         html_doc = doc['fields']['html']
         html_doc = xml_fixup(html_doc)
         soup = BeautifulSoup(html_doc, 'html5lib')
-        md = markdownify(html_doc,heading_style='ATX', code_language_callback=what_language)
+        md = markdownify(html_doc, heading_style='ATX', code_language_callback=what_language)
+        
         lines = md.split("\n")
         headers = []
         header = ""
@@ -100,7 +103,7 @@ with open(sys.argv[1]) as fp:
                 header = line.lstrip("#")
                 id = "-".join(header.split()).lower()
             else:
-                text = text + line+ "\n"
+                text = text + "\n" + line
 
         #Flush any last data
         data.append((id,header, text))
@@ -110,8 +113,15 @@ with open(sys.argv[1]) as fp:
             paragraph = paragraph.lstrip('\n').lstrip(" ")
             paragraph = paragraph.rstrip('\n')
 
-            paragraph = re.sub(r"\n*```","\n```",paragraph)
-            paragraph = re.sub(r"```\n*","```\n",paragraph)
+            paragraph = re.sub(r"\n*```", "\n```", paragraph)
+            paragraph = re.sub(r"```\n*", "```\n", paragraph)
+            
+            paragraph = paragraph.replace("```\njson","```json")
+            paragraph = paragraph.replace("```\nxml","```xml")
+            paragraph = paragraph.replace("```\nbash","```bash")
+            paragraph = paragraph.replace("```\nsh","```sh")
+            paragraph = paragraph.replace("```\nraw","```\n")
+            paragraph = paragraph.replace("```\njava","```java\n")
         
             paragraph = remove_jekyll(paragraph)
             
