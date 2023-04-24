@@ -22,13 +22,13 @@ package. For instance, if your model file is `my_model.onnx` you could
 add it to the application package under a `files` directory something like
 this:
 
-```
+<pre>
 ├── files
 │   └── my_model.onnx
 ├── schemas
 │   └── main.sd
 └── services.xml
-```
+</pre>
 
 An application package can have multiple models.
 
@@ -50,7 +50,7 @@ To make the above model available for ranking, you define the model in the
 schema, and then you can refer to the model using the `onnx` (or `onnxModel`)
 ranking feature:
 
-```
+<pre>
 schema my_schema {
 
     document my_document {
@@ -83,8 +83,7 @@ schema my_schema {
     }
 
 }
-
-```
+</pre>
 
 This defines the model called `my_onnx_model`. It is evaluated using the
 `onnx` [ranking feature](reference/rank-features.html).
@@ -117,9 +116,9 @@ the result using Vespa's [tensor API](reference/ranking-expressions.html#tensor-
 For instance, if the output of the example above is a tensor with the two dimensions `d0` and `d1`,
 and you want to extract the first value, this can be expressed by:
 
-```
+<pre>
 onnx(my_onnx_model).output_name{d0:0,d1:0}
-```
+</pre>
 
 Note that inputs to the ONNX model must be tensors; scalars are not supported.
 The input tensors must have dimension names starting with `"d0"` for the first
@@ -179,7 +178,7 @@ sample application uses two different ONNX models:
 [vespa-analyze-onnx-model](reference/vespa-cmdline-tools.html#vespa-analyze-onnx-model)
 is useful to find model inputs and outputs -
 example run on a config server where an application package with a model is deployed to:
-```
+<pre>
 $ docker exec vespa /opt/vespa/bin/vespa-analyze-onnx-model \
   /opt/vespa/var/db/vespa/config_server/serverdb/tenants/default/sessions/1/files/Network.onnx
 
@@ -197,9 +196,10 @@ unspecified option[2](max concurrent evaluations), fallback: 1
 vm_size: 233792 kB, vm_rss: 54848 kB (no evaluations yet)
 vm_size: 233792 kB, vm_rss: 54848 kB (concurrent evaluations: 1)
 estimated model evaluation time: 0.00227701 ms
-```
+</pre>
+
 The corresponding input/output tensors should be defined as:
-```
+<pre>
 document doc {
     ...
     field flowercategory type tensor<float>(d0[1],d1[3]) {
@@ -220,4 +220,4 @@ rank-profile myRank {
         expression: sum( onnx(my_onnx_model).outputTensor * attribute(flowercategory) )
     }
 }
-```
+</pre>

@@ -137,6 +137,7 @@ of the product images and which use [angular](reference/schema-reference.html#di
 as `distance-metric`.
 See for example [text to image search using CLIP with Vespa](https://blog.vespa.ai/text-image-search/).
 
+### Distance metrics for nearest neighbor search
 Vespa supports five different [distance-metrics](reference/schema-reference.html#distance-metric):
 
 * `euclidean`
@@ -144,6 +145,8 @@ Vespa supports five different [distance-metrics](reference/schema-reference.html
 * `innerproduct`
 * `hamming`
 * `geodegrees`
+
+### Configure rank profiles for nearest neighbor search
 
 Lastly, one need to configure how to [rank](ranking.html) products which 
 are retrieved by the nearest neighbor search:

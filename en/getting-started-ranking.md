@@ -29,7 +29,8 @@ curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc
 
 The score, named `relevance` in query results, is the size of the `inlinks` attribute array in the document,
 as configured in the `expression`:
-```
+
+<pre>
 rank-profile inlinks {
     first-phase {
         expression: attribute(inlinks).count
@@ -38,7 +39,7 @@ rank-profile inlinks {
         attribute(inlinks).count
     }
 }
-```
+</pre>
 
 
 Count the number of entries in `inlinks` in the result and compare with `relevance` - it will be the same.
@@ -52,6 +53,7 @@ which is a [document feature](reference/rank-features.html#document-features).
 When developing ranking expressions, it is useful to observe the input values.
 Output the input values using [summary-features](reference/schema-reference.html#summary-features).
 In this experiment, we will use another rank function, still counting in-links but scoring older documents lower:
+
 
 <p><!-- depends on mathjax -->
     $$ num\_inlinks * {decay\_const}^{doc\_age\_seconds/3600} $$
@@ -69,7 +71,7 @@ curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc
 {% include query.html content=
 "[select * from doc where true&ranking=inlinks_age](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlinks_age)"%}
 
-```
+<pre>
 rank-profile inlinks_age {
     first-phase {
         expression: rank_score
@@ -99,10 +101,10 @@ rank-profile inlinks_age {
         expression: num_inlinks * age_decay
     }
 }
-```
+</pre>
 In the query results, here we observe a document with 27 in-links, 9703 seconds old, get at relevance at 20.32
 (the age of documents will vary with query time):
-```
+<pre>
 "relevance": 20.325190122213748,
 ...
 "summaryfeatures": {
@@ -114,7 +116,7 @@ In the query results, here we observe a document with 27 in-links, 9703 seconds 
     "rankingExpression(num_inlinks)": 27.0,
     "rankingExpression(rank_score)": 20.325190122213748,
 }
-```
+</pre>
 Using `summary-features` makes it easy to validate and develop the ranking expression.
 
 <!-- ToDo: also use reference/schema-reference.html#match-features -->
@@ -139,7 +141,7 @@ curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc
     $$ 1 - \frac{fabs(attribute(term\_count) - query(q\_term\_count))}{1 + attribute(term\_count) + query(q\_term\_count)} $$
 </p>
 
-```
+<pre>
 rank-profile term_count_similarity {
     first-phase {
         expression {
@@ -153,16 +155,16 @@ rank-profile term_count_similarity {
         query(q_term_count)
     }
 }
-```
+</pre>
 This rank function will score documents [0-1>, closer to 1 is more similar:
-```
+<pre>
 "relevance": 0.9985029940119761,
 ...    
 "summaryfeatures": {
     "attribute(term_count)": 1003.0,
     "query(q_term_count)": 1000.0,
 }
-```
+</pre>
 The key learning here is how to transfer ranking features in the query, using `input.query()`.
 Use different names for more query features.
 
@@ -187,10 +189,10 @@ it must be configured using a [inputs](reference/schema-reference.html#inputs)."
 As the in-link data is represented in a weightedset,
 we use the [tensorFromWeightedSet](reference/rank-features.html#document-features)
 rank feature to transform it into a tensor named _links_:
-```
+<pre>
 rank-profile inlink_similarity  {
     inputs {
-        query(links) tensor<float>(links{})
+        query(links) tensor&lt;float&gt;(links{})
     }
     first-phase {
         expression: sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
@@ -200,7 +202,7 @@ rank-profile inlink_similarity  {
         tensorFromWeightedSet(attribute(inlinks), links)
     }
 }
-```
+</pre>
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="tensor&lt;float&gt;(links{})">
 curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlink_similarity&input.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D'
@@ -211,12 +213,12 @@ curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc
 
 Inspect relevance and summary-features:
 
-```
+<pre>
 "relevance": 2.0
 ...
 "summaryfeatures": {
   "query(links)": {
-    "type": "tensor<float>(links{})",
+    "type": "tensor&lt;float&gt;(links{})",
     "cells": [
       { "address": { "links": "/en/query-profiles.html" }, "value": 1 },
       { "address": { "links": "/en/page-templates.html" }, "value": 1 },
@@ -230,7 +232,7 @@ Inspect relevance and summary-features:
       { "address": { "links": "/en/query-profiles.html" },             "value": 1 } ]
   }
 }
-```
+</pre>
 
 Here, the tensors have one dimension, so they are vectors - 
 the sum of the tensor product is hence the doc product.
@@ -254,9 +256,9 @@ Change values in the query tensor to see difference in rank score, setting diffe
 
 Summary: The problem of comparing two lists of links is transformed into a numerical problem
 of multiplying two occurrence vectors, summing co-occurrences and ranking by this sum:
-```
+<pre>
 sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
-```
+</pre>
 
 Notes:
 * Query tensors can grow large.
@@ -312,7 +314,7 @@ curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc
 {% include query.html content=
 "[select * from doc where title contains \"document\"&ranking=inlinks_twophase](https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22&ranking=inlinks_twophase)"%}
 
-```
+<pre>
 rank-profile inlinks_twophase inherits inlinks_age {
     first-phase {
         keep-rank-count       : 50
@@ -323,18 +325,18 @@ rank-profile inlinks_twophase inherits inlinks_age {
         expression            : rank_score
     }
 }
-```
+</pre>
 
 Note how using rank-profile `inherits` is a smart way to define functions once,
 then use in multiple rank-profiles.
 Read more about [schema inheritance](schemas.html#schema-inheritance).
 Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earlier:
 
-```
+<pre>
     function num_inlinks() {
         expression: attribute(inlinks).count
     }
-```
+</pre>
 
 In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than or equal to 10.0,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
@@ -395,7 +397,7 @@ Note that this blurs the distinction between filtering (retrieval) and ranking a
 here the `weakAnd` does <span style="text-decoration: underline">both</span> filtering and ranking
 to optimize the number of candidates for the later rank phases.
 The default rank-profile is used:
-```
+<pre>
 rank-profile documentation inherits default {
     inputs {
         query(titleWeight): 2.0
@@ -405,7 +407,7 @@ rank-profile documentation inherits default {
         expression: query(titleWeight) * bm25(title) + query(contentsWeight) * bm25(content)
     }
 }
-```
+</pre>
 Observe we are here using text matching rank features,
 which fits well with weakAnd's scoring function that also uses text matching features.
 

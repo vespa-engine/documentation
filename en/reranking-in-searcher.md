@@ -79,7 +79,7 @@ schema doc {
 
 The searcher implementing the re-ranking logic:
 
-<pre style="display:none" data-test="file" data-path="my-app/src/main/java/ai/vespa/example/searcher/ReRankingSearcher.java">
+<pre data-test="file" data-path="my-app/src/main/java/ai/vespa/example/searcher/ReRankingSearcher.java">
 package ai.vespa.example.searcher;
 
 import com.yahoo.search.Query;
@@ -128,57 +128,6 @@ public class ReRankingSearcher extends Searcher {
     }
 }
 </pre>
-
-```java
-package ai.vespa.example.searcher;
-
-import com.yahoo.search.Query;
-import com.yahoo.search.Result;
-import com.yahoo.search.Searcher;
-import com.yahoo.search.result.FeatureData;
-import com.yahoo.search.result.Hit;
-import com.yahoo.search.searchchain.Execution;
-
-public class ReRankingSearcher extends Searcher {
-    @Override
-    public Result search(Query query, Execution execution) {
-        int hits = query.getHits();
-        query.setHits(200); //Re-ranking window
-        query.getRanking().setProfile("rank-profile-with-match");
-        Result result = execution.search(query);
-        if(result.getTotalHitCount() == 0
-                || result.hits().getErrorHit() != null)
-            return result;
-        double max = 0;
-        //Find max value of the window
-        for (Hit hit : result.hits()) {
-            FeatureData featureData = (FeatureData) hit.getField("matchfeatures");
-            if(featureData == null)
-                throw new RuntimeException("No 'matchfeatures' found - wrong rank profile used?");
-            double downloads = featureData.getDouble("attribute(downloads)");
-            if (downloads > max)
-                max = downloads;
-        }
-        //re-rank using normalized value
-        for (Hit hit : result.hits()) {
-            FeatureData featureData = (FeatureData) hit.getField("matchfeatures");
-            if(featureData == null)
-                throw new RuntimeException("No 'matchfeatures' found - wrong rank profile used?");
-            double downloads = featureData.getDouble("attribute(downloads)");
-            double normalizedByMax = downloads / max; //Change me
-            double bm25Name = featureData.getDouble("bm25(name)");
-            double newScore = bm25Name + normalizedByMax;
-            hit.setField("rerank-score",newScore);
-            hit.setRelevance(newScore);
-
-        }
-        result.hits().sort();
-        //trim the result down to the requested number of hits
-        result.hits().trim(0, hits);
-        return result;
-    }
-}
-```
 
 [services.xml](reference/services.html) is needed 
 to make up a Vespa [application package](reference/application-packages-reference.html). 
@@ -322,7 +271,7 @@ $ vespa query 'yql=select * from doc where userQuery()' \
 </pre>
 </div>
 
-```json
+<pre>{% highlight json %}
 {
     "root": {
         "id": "toplevel",
@@ -374,14 +323,12 @@ $ vespa query 'yql=select * from doc where userQuery()' \
         ]
     }
 }
-```
-
+{% endhighlight %}</pre>
 
 <pre style="display:none" data-test="exec" data-test-assert-contains='"rerank-score": 1.18'>
 $ vespa query 'yql=select * from doc where userQuery()' \
  'query=sample' 
 </pre>
-
 
 ### Teardown
 Remove app and data:
