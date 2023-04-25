@@ -73,7 +73,7 @@ schema my_schema {
         }
 
         function my_function() {
-            expression: tensor<float>(d0[1],d1[10])(d1)
+            expression: tensor&lt;float&gt;(d0[1],d1[10])(d1)
         }
 
         first-phase {
