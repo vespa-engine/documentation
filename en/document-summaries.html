@@ -5,34 +5,74 @@ redirect_from:
 - /documentation/document-summaries.html
 ---
 
-<p>
-  Use <a href="query-language.html">YQL</a> to select which fields to include in results:
+<p>A <i>document summary</i> is the information that is shown for each document in a query result.
+What information to include is determined by a <i>document summary class</i>:
+A named set of fields with config on which information they should contain.
+A document summary named <code>default</code> is always present and used by default.
+This contains all declared fields which specifies in their indexing statements
+that they may be included in summaries plus <a href="reference/default-result-format.html#sddocname">sddocname</a>
+and <a href="reference/default-result-format.html#documentid">documentid</a>.
+</p>
+
+<p>Summary classes are defined in the schema:</p>
+
+<pre>
+schema music {
+
+    document music {
+        field artist type string {
+            indexing: summary | index
+        }
+        field album type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+        field year type int {
+            indexing: summary | attribute
+        }
+        field category_scores type tensor&lt;float&gt;(cat{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    <span class="pre-hilite">document-summary my-short-summary {</span>
+        <span class="pre-hilite">summary artist type string {}</span>
+        <span class="pre-hilite">summary album  type string {}</span>
+    <span class="pre-hilite">}</span>
+}
+</pre>
+
+<p>See the <a href="reference/schema-reference.html#summary">schema reference</a> for details.</p>
+
+<p>The summary class to use for a query is determined by the parameter
+<a href="reference/query-api-reference.html#presentation.summary">presentation.summary</a>;:
 </p>
 <pre>
-$ vespa query "select <span class="pre-hilite">artist</span>, <span class="pre-hilite">album</span> from music where album contains 'head'"
+$ vespa query "select <span class="pre-hilite">*</span> from music where album contains 'head'" \
+  <span class="pre-hilite">"presentation.summary=my-short-summary"</span>
 </pre>
-<pre>{% highlight json %}
-{
-    "root": { },
-        "children": [
-            {
-                "id": "index:mycontentcluster/0/de97c3f0cf0d1122b3494a44",
-                "relevance": 0.16343879032006284,
-                "source": "mycontentcluster",
-                "fields": {
-                    "artist": "Coldplay",
-                    "album": "A Head Full of Dreams"
-                }
-            }
-        ]
-    }
-}
-{% endhighlight %}</pre>
-<p>
-  In addition to the schema fields,
-  one can also select <a href="reference/default-result-format.html#sddocname">sddocname</a>
-  and <a href="reference/default-result-format.html#documentid">documentid</a>:
+
+<p>A common reason to define a document summary class is <a href="#performance">performance</a>:
+By configuring a document summary which only contains attributes the result can be generated
+without disk accesses. Note that this is needed to ensure only memory is accessed even if all fields are
+attributes because the <a href="documents.html#document-ids">document id</a> is not stored as an attribute.</p>
+
+<p>Document summaries may also contain <a href="#dynamic-snippets">dynamic snippets and highlighted terms</a>.</p>
+
+<p>The document summary class to use can also be issued programmatically to the <code>fill()</code>
+method from a searcher, and multiple fill operations interleaved with programmatic filtering can be used to
+optimize data access and transfer when programmatic filtering in a Searcher is used.</p>
+
+
+
+<h2>Selecting summary fields in YQL</h2>
+
+<p>A <a href="query-language.html">YQL</a> statement can also be used to filter which fields from a document summary
+to include in results. Note that this is just a field filter in the container -
+a summary containing all fields of a summary class is always
+fetched from content nodes, so to optimize performance it is necessary to create custom summary classes.
 </p>
+
 <pre>
 $ vespa query "select <span class="pre-hilite">artist</span>, <span class="pre-hilite">album</span>, <span class="pre-hilite">documentid</span>, <span class="pre-hilite">sddocname</span> from music where album contains 'head'"
 </pre>
@@ -57,10 +97,9 @@ $ vespa query "select <span class="pre-hilite">artist</span>, <span class="pre-h
 {% endhighlight %}</pre>
 <!-- ToDo: Add a detail on the id-field that in the latter case is the document-id -->
 <p>
-  Use <code>*</code> to select <span style="text-decoration: underline">all</span> fields.
-  As no <a href="#summary-classes">summary class</a> is given,
-  the <em>default</em> summary class with all fields is used:
-</p>
+Use <code>*</code> to select <span style="text-decoration: underline">all</span> the fields of the chosen document summary class used,
+(which is <code>default</code> by default).
+
 <pre>
 $ vespa query "select <span class="pre-hilite">*</span> from music where album contains 'head'"
 </pre>
@@ -92,77 +131,11 @@ $ vespa query "select <span class="pre-hilite">*</span> from music where album c
     }
 }
 {% endhighlight %}</pre>
-<p>
-  Query performance depends on the fields returned, see the <a href="#performance">performance</a> section.
-</p>
 
 
+<h2 id="summary-field-rename">Summary field rename</h2>
 
-<h2 id="summary-classes">Summary classes</h2>
-<p>
-  Use summary classes - <a href="reference/schema-reference.html#summary">reference</a> - to simplify the YQL,
-  by naming the fields in a class:
-</p>
-<pre>
-schema music {
-
-    document music {
-        field artist type string {
-            indexing: summary | index
-        }
-        field album type string {
-            indexing: summary | index
-            index: enable-bm25
-        }
-        field year type int {
-            indexing: summary | attribute
-        }
-        field category_scores type tensor&lt;float&gt;(cat{}) {
-            indexing: summary | attribute
-        }
-    }
-
-    <span class="pre-hilite">document-summary short-summary {</span>
-        <span class="pre-hilite">summary artist type string {}</span>
-        <span class="pre-hilite">summary album  type string {}</span>
-    <span class="pre-hilite">}</span>
-}
-</pre>
-<p>
-  Use <a href="reference/query-api-reference.html#presentation.summary">presentation.summary=[summary name]</a>
-  in queries to select summary class:
-</p>
-<pre>
-$ vespa query "select <span class="pre-hilite">*</span> from music where album contains 'head'" \
-  <span class="pre-hilite">"presentation.summary=short-summary"</span>
-</pre>
-<p>
-  The <code>select</code> statement in YQL lists a set of fields to return.
-  Vespa in general makes a best-effort to return those fields, and only those fields,
-  unless a wildcard ("*") is given as argument.
-  The wildcard implies returning the full set of fields included in the given summary class.
-</p>
-{% include note.html content='A good practice is to add the summary class to a
-<a href="query-profiles.html">query profile</a>.
-Application logic can then use the query profile in queries, having both query parameters and summary class in one.' %}
-<p>
-  In conjunction with YQL statements,
-  the summary class argument operates like a definition of the set
-  which YQL <code>select</code> then chooses a subset of fields from.
-  In other words, if the YQL expression is <code>select * …</code>,
-  and the summary class argument is <code>short-summary</code>,
-  all the fields in the summary class <code>short-summary</code> will be returned.
-</p>
-<p>
-  The <code>default</code> summary class contains <span style="text-decoration: underline">all</span> schema fields
-  plus <code>sddocname</code> and <code>documentid</code>.
-</p>
-
-
-<h3 id="summary-field-rename">Summary field rename</h3>
-<p>
-  Use a summary class to give a field another name in query results:
-</p>
+<p>Summary classes may define fields by names not used in the document type:
 <pre>
     document-summary rename-summary {
         summary artist_name type string {
@@ -170,26 +143,24 @@ Application logic can then use the query profile in queries, having both query p
         }
     }
 </pre>
-<p>
-  Refer to the <a href="reference/schema-reference.html#source">schema reference</a> for
-  adding <a href="reference/schema-reference.html#add-or-remove-an-existing-document-field-from-document-summary">
-  attribute</a> and
-  <a href="reference/schema-reference.html#add-or-remove-a-new-non-attribute-document-field-from-document-summary">
-  non-attribute</a> fields - some changes require re-indexing.
-</p>
+
+<p>Refer to the <a href="reference/schema-reference.html#source">schema reference</a> for
+adding <a href="reference/schema-reference.html#add-or-remove-an-existing-document-field-from-document-summary">
+attribute</a> and
+<a href="reference/schema-reference.html#add-or-remove-a-new-non-attribute-document-field-from-document-summary">
+non-attribute</a> fields - some changes require re-indexing.</p>
 
 
 
 <!-- ToDo: document the use of summary class and generated fields - fields outside the document clause -->
 
 
+<h2 id="dynamic-snippets">Dynamic snippets</h2>
 
-<h2 id="dynamic-summaries">Dynamic summaries</h2>
-<p>
-  Use <a href="reference/schema-reference.html#summary">dynamic</a>
-  to generate dynamic abstracts of fields, based on query keywords.
-  Example from Vespa Documentation Search - see the
-  <a href="https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd">
+<p>Use <a href="reference/schema-reference.html#summary">dynamic</a>
+to generate dynamic snippets from fields based on the query keywords.
+Example from Vespa Documentation Search - see the
+<a href="https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd">
     schema</a>:
 </p>
 <pre>
@@ -200,22 +171,41 @@ document doc {
         <span class="pre-hilite">summary : dynamic</span>
     }
 </pre>
-<p>
-  A query for <em>document summary</em> returns:
-</p>
+
+<p>A query for <em>document summary</em> returns:</p>
+
 <blockquote>
   Use <strong>document summaries</strong> to configure which fields ...
   indexing: <strong>summary</strong> | index } } <strong>document-summary</strong>
   titleyear { <strong>summary</strong> title type string ...
 </blockquote>
-<p>
-  The example above creates a dynamic summary with the matched terms highlighted.
-  The latter is called <a href="reference/schema-reference.html#bolding">bolding</a>
-  and can be enabled independently of dynamic summaries.
-</p>
-<p>
-  Refer to the <a href="reference/schema-reference.html#summary">reference</a> for the response format.
-</p>
+
+<p>The example above creates a dynamic summary with the matched terms highlighted.
+The latter is called <a href="reference/schema-reference.html#bolding">bolding</a>
+and can be enabled independently of dynamic summaries.</p>
+
+<p>Refer to the <a href="reference/schema-reference.html#summary">reference</a> for the response format.</p>
+
+<h3>Dynamic snippet configuration</h3>
+
+<p>You can configure generation of dynamic snippets by adding an instance of the
+<a href="https://github.com/vespa-engine/vespa/blob/master/searchsummary/src/vespa/searchsummary/config/juniperrc.def">vespa.config.search.summary.juniperrc config</a>
+in services.xml inside the &lt;content&gt; cluster tag for the content cluster in question. E.g:</p>
+
+<pre>
+&lt;content ...&gt;
+    ...
+    &lt;config name="vespa.config.search.summary.juniperrc"&gt;
+      &lt;max_matches&gt;2&lt;/max_matches&gt;
+      &lt;length&gt;1000&lt;/length&gt;
+      &lt;surround_max&gt;500&lt;/surround_max&gt;
+      &lt;min_length&gt;300&lt;/min_length&gt;
+    &lt;/config&gt;
+    ...
+&lt;/content&gt;
+</pre>
+
+<p>Numbers here are in bytes.</p>
 
 
 
@@ -224,9 +214,9 @@ document doc {
   <a href="attributes.html">Attribute</a> fields are held in memory.
   This means summaries are memory-only operations if all fields requested are attributes,
   and is the optimal way to get high query throughput.
-  The other document fields are stored as blobs/records in the
+  The other document fields are stored as blobs in the
   <a href="proton.html#document-store">document store</a>.
-  Requesting these fields will therefore require a disk access, increasing latency.
+  Requesting these fields may therefore require a disk access, increasing latency.
 </p>
 {% include important.html content='The default summary class will access the document store
 as it includes the <a href="reference/default-result-format.html#documentid">documentid</a> field
