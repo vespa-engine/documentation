@@ -199,7 +199,7 @@ _namespace_ is a mechanism to split the document space into parts that can be us
 see [documentation](documents.html#namespace).
 
 #### Visiting does not dump all documents, and/or hangs.
-There are multiple things that can cause this, see [visiting troubleshooting](content/visiting.html#troubleshooting).
+There are multiple things that can cause this, see [visiting troubleshooting](visiting.html#troubleshooting).
 
 
 
@@ -574,7 +574,7 @@ It is also at odds with realtime writes.
 For these reasons, it is not recommended, and not supported.
 
 #### Does vespa give us any tool to browse the index and attribute data?
-No. Use [visiting](content/visiting.html) to dump all or a subset of documents.
+No. Use [visiting](visiting.html) to dump all or a subset of documents.
 See [dumping-data](https://cloud.vespa.ai/en/dumping-data) for a sample script.
 
 #### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)? 
