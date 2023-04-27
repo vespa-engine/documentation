@@ -422,3 +422,37 @@ the processing may occur in parallel with the document fetching.
   A visit operation might stall/hang if the content cluster is in an inconsistent
   state—replicas are still merging between nodes.
 </p>
+
+
+<h3 id="handshake-failed">Handshake failed</h3>
+<p>Running vespa visit via the <a href="document-v1-api-guide.html">/document/v1</a> API:</p>
+<pre>
+[HANDSHAKE_FAILED @ localhost]: An error occurred while resolving version of recipient(s)
+[tcp/container0:37227/visitor-1-1682523227698 at tcp/container0:37227] from host 'content0'
+</pre>
+<p>
+  The visit client in this case is the Vespa Container node with the /document/v1 interface.
+  A visit is a relatively long-lived operation -
+  the client starts a visitor operation on each Content node,
+  that connects back to the client (here <code>tcp/container0:37227</code>) to send data.
+  This might sound a bit odd - why connect back?
+</p>
+<p>
+  The idea is that results of the visitor operation might go to multiple destinations for increased throughput -
+  see <a href="#request-handling">request handling</a>.
+  This explains why it connects back on a random port,
+  and why one cannot see the port in <a href="reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a> - it is temporary.
+</p>
+<p>
+  This also means, Vespa-nodes must be able to intercommunicate on all ports,
+  see <a href="operations/docker-containers.html">Docker containers</a>.
+</p>
+<p>
+  Check <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a>
+  for an example - a Docker network is used for all containers - also see "network" in
+  <a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/multinode-HA/docker-compose.yaml">
+    docker-compose.yaml</a>.
+</p>
+<p>
+  Another source of this error can be an unresponsive container instance, e.g. during overload.
+</p>
