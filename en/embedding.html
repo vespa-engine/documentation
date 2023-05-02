@@ -5,37 +5,21 @@ redirect_from:
 - /documentation/embedding.html
 ---
 
-<p>A common technique in modern big data serving applications is to map the subject data - say, text or images -
+<p>A common technique in modern big data serving applications is to map unstructured data - say, text or images -
 to points in an abstract vector space and then do computation in that vector space. For example, retrieve
 similar data by <a href="approximate-nn-hnsw.html">finding nearby points in the vector space</a>, or
 <a href="onnx.html">using the vectors as input to a neural net</a>. This mapping is usually referred to as
-<i>embedding</i>.</p>
-
-<p>Vespa provides built-in support for embedding, which is documented here.</p>
-
-<h2 id="embedders">Embedders</h2>
-
-<p>Vespa provides a Java interface for defining components which can provide embeddings of text:
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/process/Embedder.java">
-com.yahoo.language.process.Embedder</a>.</p>
-
-<p>To define a custom embedder in an application and make it usable by Vespa (see <a href="#embedding-a-query-text">below</a>),
-implement this interface and add it as a <a href="developer-guide.html#developing-components">component</a> to
-<a href="reference/services-container.html">services.xml</a>:</p>
-
-<pre>
-&lt;container version="1.0"&gt;
-    <span class="pre-hilite">&lt;component id="myEmbedder"</span>
-               <span class="pre-hilite">class="com.example.MyEmbedder"</span>
-               <span class="pre-hilite">bundle="the name in &lt;artifactId&gt; in pom.xml"/&gt;</span>
-&lt;/container&gt;
-</pre>
-
-
+<i>embedding</i>. 
+See <a href="https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/">Customizing Reusable Frozen ML-Embeddings with Vespa</a>
+for an introduction to embeddings, embedding management and how embeddings can be used for Machine Learning (ML) serving in Vespa.
+</p>
 
 <h2 id="provided-embedders">Provided embedders</h2>
 
-<p>Vespa provides some embedders as part of the platform.</p>
+<p>Vespa provides some embedders as part of the platform. Native Vespa embedders reduces complexity as developers does not need to 
+  host additional infrastructure for producing embeddings. Using the Vespa embedder functionality can also 
+  reduce latency as embeddings are large and network related latency can easily be higher than the ML computations.  
+</p>
 
 
 <h3 id="bertbase-embedder">BertBase embedder</h3>
@@ -54,65 +38,64 @@ when used with the syntax for invoking the embedder in queries and during indexi
 
 <p>To set up the
 <a href="https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/java/ai/vespa/embedding/BertBaseEmbedder.java">
-BertBase embedder</a>, add it to services.xml:</p>
+BertBase embedder</a>, add it to <a href="reference/services.html">services.xml</a>, within the <code>container</code> tag:</p>
 
-<pre>
-&lt;component id="myBert"
-           class=&quot;ai.vespa.embedding.BertBaseEmbedder&quot;
-           bundle=&quot;model-integration&quot;&gt;
-    &lt;config name=&quot;embedding.bert-base-embedder&quot;&gt;
-        &lt;transformerModel path="models/myBertModel.onnx"/&gt;
-        &lt;tokenizerVocab path="models/myTokenizerVocabulary.txt"/&gt;
-    &lt;/config&gt;
-&lt;/component&gt;
-</pre>
+<pre>{% highlight xml %}
+<container version="1.0"> 
+  <component id="myBert" class="ai.vespa.embedding.BertBaseEmbedder" bundle="model-integration">
+    <config name="embedding.bert-base-embedder">
+      <transformerModel path="models/myBertModel.onnx"/>
+      <tokenizerVocab path="models/myTokenizerVocabulary.txt"/>
+      <poolingStrategy>mean</poolingStrategy>
+    </config>
+  </component>
+</container>
+{% endhighlight %}</pre>
 
 <p>See the options available for configuring the BertBase embedder in
 <a href="https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/embedding.bert-base-embedder.def">
 the full configuration definition</a>. Notice that BertBase embedder uses mean pooling strategy by default. 
 </p>
 
-<p>The model files used must be supplied by the application (or specified by id when on Vespa Cloud),
-for example from <a href="https://huggingface.co/models?sort=downloads&search=bert-base">HuggingFace</a>.
-Refer to <a href="configuring-components.html#adding-files-to-the-component-configuration">adding files to the configuration</a>
+<p>The model files used must be supplied in the <a href="application-packages.html#deploying-remote-models">application package</a>. 
+  The above example uses files in the the <code>models</code> directory, or specified by 
+  <em>model-id</em> when deployed on Vespa Cloud. 
+  Refer to <a href="configuring-components.html#adding-files-to-the-component-configuration">adding files to the configuration</a>
 for the full syntax for specifying model files by url, path or model-id.</p>
-
-
 
 <h3 id="sentencepiece-embedder">SentencePiece embedder</h3>
 
 <p>A native Java implementation of <a href="https://github.com/google/sentencepiece">SentencePiece</a>.
-SentencePiece breaks text into chunks independent of spaces, which is robust to misspellings and works with CJK languages.
-It is also very fast.</p>
+SentencePiece breaks text into chunks independent of spaces, which is robust to misspellings and works with CJK languages.</p>
 
-<p>This is suitable to use in conjunction with custom components which processes the resulting encoding further
-to produce semantically meaningful vectors.</p>
+<p>This is suitable to use in conjunction with custom components, or the resulting 
+  tensor can be used in <a href="ranking.html">ranking</a>.</p>
 
 <p>To use the
 <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/sentencepiece/SentencePieceEmbedder.java">
-SentencePiece embedder</a>, add it to services.xml:</p>
+SentencePiece embedder</a>, add it to <a href="reference/services.html">services.xml</a>:</p>
 
-<pre>
-&lt;component id="mySentencePiece"
-           class=&quot;com.yahoo.language.sentencepiece.SentencePieceEmbedder&quot;
-           bundle=&quot;linguistics-components&quot;&gt;
-    &lt;config name=&quot;language.sentencepiece.sentence-piece&quot;&gt;
-        &lt;model&gt;
-            &lt;item&gt;
-                &lt;language&gt;unknown&lt;/language&gt;
-                &lt;path&gt;model/en.wiki.bpe.vs10000.model&lt;/path&gt;
-            &lt;/item&gt;
-        &lt;/model&gt;
-    &lt;/config&gt;
-&lt;/component&gt;
-</pre>
+<pre>{% highlight xml %}
+<container version="1.0">
+  <component id="mySentencePiece"
+           class="com.yahoo.language.sentencepiece.SentencePieceEmbedder"
+           bundle="linguistics-components">
+    <config name="language.sentencepiece.sentence-piece">;
+        <model>
+            <item>
+              <language>unknown</language>
+              <path>model/en.wiki.bpe.vs10000.model</path>
+            </item>
+        </model>
+      </config>
+  </component>
+</container>
+{% endhighlight %}</pre>
 
 <p>See the options available for configuring SentencePiece in
 <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.sentencepiece.sentence-piece.def">
 the full configuration definition</a>.
 </p>
-
-
 
 <h3 id="wordpiece-embedder">WordPiece embedder</h3>
 
@@ -120,36 +103,37 @@ the full configuration definition</a>.
 <a href="https://github.com/google-research/bert#tokenization">WordPiece</a>,
 which is commonly used with BERT models.</p>
 
-<p>This is suitable to use in conjunction with custom components which processes the resulting encoding further
-to produce semantically meaningful vectors.</p>
+<p>This is suitable to use in conjunction with custom components, or the resulting 
+  tensor can be used in <a href="ranking.html">ranking</a>.</p>
 
 <p>To use the
 <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/wordpiece/WordPieceEmbedder.java">
-  WordPiece embedder</a>, add it to services.xml:</p>
+  WordPiece embedder</a>, add it to <a href="reference/services.html">services.xml</a> within the <code>container</code> tag:</p>
 
-<pre>
-&lt;component id="myWordPiece"
+<pre>{% highlight xml %}
+<container version="1.0">
+  <component id="myWordPiece">
            class="com.yahoo.language.wordpiece.WordPieceEmbedder"
-           bundle="linguistics-components"&gt;
-    &lt;config name=&quot;language.wordpiece.word-piece&quot;&gt;
-        &lt;model&gt;
-            &lt;item&gt;
-                &lt;language&gt;unknown&lt;/language&gt;
-                &lt;path&gt;models/bert-base-uncased-vocab.txt&lt;/path&gt;
-            &lt;/item&gt;
-        &lt;/model&gt;
-    &lt;/config&gt;
-&lt;/component&gt;
-</pre>
+           bundle="linguistics-components">
+    <config name="language.wordpiece.word-piece">
+      <model>
+        <item>
+          <language>unknown</language>
+          <path>models/bert-base-uncased-vocab.txt</path>
+        </item>
+      </model>
+    </config>
+  </component>
+</container>
+{% endhighlight %}</pre>
 
 <p>See the options available for configuring WordPiece in
 <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.wordpiece.word-piece.def">
 the full configuration definition</a>.
 </p>
 
-<p>WordPiece is suitable to use in conjunction with custom components which processes the resulting encoding further
-to produce semantically meaningful vectors.</p>
-
+<p>WordPiece is suitable to use in conjunction with custom components, or the resulting 
+  tensor can be used in <a href="ranking.html">ranking</a>.</p>
 
 <h2 id="embedding-a-query-text">Embedding a query text</h2>
 
@@ -157,15 +141,36 @@ to produce semantically meaningful vectors.</p>
 you can with an embedder configured instead supply any text enclosed in <code>embed()</code>, e.g:</p>
 
 <pre>
-ranking.features.query(myEmbedding)=<span class="pre-hilite">embed(myEmbedderId, "Hello%20world")</span>
+input.query(myEmbedding)=<span class="pre-hilite">embed(myEmbedderId, "Hello%20world")</span>
 </pre>
-
 <p>If you have only configured a single embedder, you can skip the embedder id argument and optionally also the quotes.
-Both single and double quotes are permitted.</p>
+Both single and double quotes are permitted. Note that query <a href="reference/schema-reference.html#inputs">input tensors</a> 
+must be defined in the schema's rank-profile. See <a href="reference/schema-reference.html#inputs">schema reference inputs</a>.</p>
+<pre>
+inputs {
+  query(myEmbedding) tensor(x[3])
+}
+</pre>
+<p>Output from <code>embed</code> that cannot fit into the tensor dimensionality is truncated, only retaining the first values.</p>
+
+<p>A single Vespa <a href="query-api.html#http">query</a> can use multiple embedders or embed multiple texts with the same embedder:</p>
+<pre>{% highlight json %}
+ {
+    "yql": "select * from sources * where ...",
+    "query": "semantic search", 
+    "input.query(q)": "embed(bertModel, semantic search)", 
+    "input.query(q_2)": "embed(bertModel2, semantic search)", 
+    "input.query(query_tokens)": "embed(wordpiece, semantic search)",
+    "ranking": "semantic",
+}
+{% endhighlight %}</pre>
+In this JSON query example there are two <a href="#bertbase-embedder">bertbase-embedders</a> that produce 
+two different embedding representations of the query text. In addition, a third embedder maps the text into Wordpiece tokens.
+</p>
 
 <h2 id="embedding-a-document-field">Embedding a document field</h2>
-
-<p>Use the indexing language to convert a text field into an embedding by using the <code>embed</code> function,
+<p>Use the Vespa <a href="reference/advanced-indexing-language.html#statement">indexing language</a> 
+to convert one or more string fields into an embedding vector by using the <code>embed</code> function,
 for example:</p>
 
 <pre>
@@ -173,23 +178,31 @@ schema doc {
 
     document doc {
 
-        field myText type string {
-            indexing: index | summary
+        field title type string {
+            indexing: summary | index
+        }
+
+        field body type string {
+            indexing: summary | index
         }
 
     }
 
     field embeddingOfMyText type tensor(x[5]) {
-        indexing: input myText | <span class="pre-hilite">embed myEmbedderId</span> | attribute | index | summary
+        indexing: (input title || "") . " " . (input body || "") | <span class="pre-hilite">embed myEmbedderId</span> | attribute | index | summary
         index: hnsw
     }
 
 }
 </pre>
+<p>The above example uses two input fields and concatenate them into a single input string to the embedder. See 
+  <a href="reference/advanced-indexing-language.html#choice-example">indexing choice</a> for details.
+</p>
 
 <p>If each document has multiple text segments, represent them in an array and store the produced vector embeddings
 in a tensor field with one mapped and one indexed dimension.
-The array indexes (0-based) are used as labels in the mapped tensor dimension.
+The array indexes (0-based) are used as labels in the mapped tensor dimension. 
+See <a href="https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/">Revolutionizing Semantic Search with Multi-Vector HNSW Indexing in Vespa</a>.
 </p>
 
 <pre>
@@ -210,13 +223,14 @@ schema doc {
 
 }
 </pre>
-
-
-<p>If you only have configured a single embedder you can skip the embedder id argument.</p>
+<p>If you only have configured a single embedder you can skip the embedder id argument. 
+  The indexing expression can also use <code>for_each</code> and include other document fields.
+  See <a href="reference/advanced-indexing-language.html#execution-value-example">execution value</a>
+  for details.
+</p>
 
 {% include important.html content='Note that the generated embedding field
 is defined outside the <code>document</code> clause in the schema.' %}
-
 
 <h2 id="using-an-embedder-from-java">Using an embedder from Java</h2>
 
@@ -227,27 +241,45 @@ use embedders you have configured by
 <a href="jdisc/injecting-components.html">having them injected in the constructor</a>,
 just as any other component:
 </p>
-<pre>
-class MyComponent(ComponentRegistry&lt;Embedder&gt; embedders) {
+<pre>{% highlight java %}
+class MyComponent {
+  @Inject
+  public MyComponent(ComponentRegistry<Embedder> embedders) {
     // embedders contains all the embedders configured in your services.xml
+  }
 }
-</pre>
+{% endhighlight %}</pre>
 
+<h2 id="custom-embedders">Custom Embedders</h2>
+<p>Vespa provides a Java interface for defining components which can provide embeddings of text:
+<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/process/Embedder.java">
+com.yahoo.language.process.Embedder</a>.</p>
+
+<p>To define a custom embedder in an application and make it usable by Vespa (see <a href="#embedding-a-query-text">above</a>),
+implement this interface and add it as a <a href="developer-guide.html#developing-components">component</a> to
+<a href="reference/services-container.html">services.xml</a>:</p>
+
+<pre>{% highlight xml %}
+<container version="1.0">
+    <component id="myEmbedder"
+      class="com.example.MyEmbedder"
+      bundle="the name in artifactId in pom.xml"/>
+</container>
+{% endhighlight %}</pre>
 
 
 <h2 id="examples">Examples</h2>
 <p>
   Try the <a href="https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search">
-  simple-semantic-search</a> sample application.
-  A complete example application using multiple embedders can be found in
-  in <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/embedding/app_two_embedders/">this system test</a>.
+  simple-semantic-search</a> sample application. 
+  The <a href="https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking">commerce-product-ranking</a> 
+  demonstrates using multiple embedders. Another complete example application using multiple embedders can be found in
+  <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/embedding/app_two_embedders/">this system test</a>.
 </p>
-
-
 
 <h2 id="troubleshooting-model-signature">Troubleshooting model signature</h2>
 <p>
-  When loading models for the embedder, the model must have correct inputs and output signatures.
+  When loading <a href="https://onnx.ai/">ONNX</a> models for embedders, the model must have correct inputs and output signatures.
   Here, <em>minilm-l6-v2.onnx</em> is in current working directory:
 </p>
 <pre>
@@ -271,6 +303,8 @@ test setup:
   output[0]: float[1][1][384] -> tensor&lt;float&gt;(d0[1],d1[1],d2[384])
   output[1]: float[1][384] -> tensor&lt;float&gt;(d0[1],d1[384])
 </pre>
+<p>See <a href="https://github.com/vespa-engine/sample-apps/blob/master/simple-semantic-search/export_model_from_hf.py">export_model_from_hf.py</a>,
+  for how to export a <a href="https://www.sbert.net/">sentence-transformer</a> model to ONNX format.</p>
 <p>
   If loading models with other signatures, the Vespa Container node will not start
   (check <em>vespa.log</em> in the container running Vespa):
@@ -298,5 +332,5 @@ Error: service 'query' is unavailable: services have not converged
 </pre>
 <p>
   Use <a href="onnx.html#using-vespa-analyze-onnx-model">vespa-analyze-onnx-model</a> like in the example above
-  to analyze the signature.
+  to analyze the model signature.
 </p>
