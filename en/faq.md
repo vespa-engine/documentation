@@ -183,7 +183,7 @@ Read more about [document expiry](documents.html#document-expiry).
 Changing redundancy is a live and safe change
 (assuming there is headroom on disk / memory - e.g. from 2 to 3 is 50% more).
 The time to migrate will be quite similar to what it took to feed initially -
-a bit hard to say generally, and depends on IO and index settings, like if building a HNSW index.
+a bit hard to say generally, and depends on IO and index settings, like if building an HNSW index.
 To monitor progress, take a look at the
 [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode)
 sample application for the _clustercontroller_ status page - this shows buckets pending, live.
