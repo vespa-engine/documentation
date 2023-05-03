@@ -227,7 +227,7 @@ This can be accomplished by defining a [rank-profile](../ranking.html):
 <pre>
 rank-profile bert_title_body_all inherits default {
     inputs {
-        query(tensor_bert) tensor<float>(x[768])
+        query(tensor_bert) tensor&lt;float&gt;(x[768])
     }    
     function dot_product_title() {
         expression: sum(query(tensor_bert)*attribute(title_bert))

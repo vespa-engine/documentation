@@ -202,14 +202,14 @@ The corresponding input/output tensors should be defined as:
 <pre>
 document doc {
     ...
-    field flowercategory type tensor<float>(d0[1],d1[3]) {
+    field flowercategory type tensor&lt;float&gt;(d0[1],d1[3]) {
         indexing: attribute | summary
     }
 }
 
 rank-profile myRank {
     inputs {
-        query(myTensor) tensor<float>(d0[1],d1[4])
+        query(myTensor) tensor&lt;float&gt;(d0[1],d1[4])
     }
     onnx-model my_onnx_model {
         file: files/Network.onnx

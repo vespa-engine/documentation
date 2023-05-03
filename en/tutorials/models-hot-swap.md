@@ -181,7 +181,7 @@ The `news_model` schema should look as follows:
 schema news_model {
     document news_model {
 
-        field embedding type tensor<float>(d0[51]) {
+        field embedding type tensor&lt;float&gt;(d0[51]) {
             indexing: attribute
             attribute {
                 distance-metric: euclidean
@@ -195,7 +195,7 @@ schema news_model {
             attribute: fast-search
         }
 
-        field news_ref type reference<news> {
+        field news_ref type reference&lt;news&gt; {
             indexing: attribute
         }
     }
@@ -245,7 +245,7 @@ The relevant portions of the `user` and `news` schemas will now look as follows:
             attribute: fast-search
         }
 
-        field config_ref type reference<config> {
+        field config_ref type reference&lt;config&gt; {
             indexing: attribute
         }
 
