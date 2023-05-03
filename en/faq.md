@@ -168,7 +168,7 @@ Map needs to be defined with <code>indexing: attribute</code> and hence will be 
 Refer to [map](reference/schema-reference.html#type:map).
 
 #### Is there any size limitation in multivalued fields?
-No limit, except memory.
+No enforced limit, except resource usage (memory). 
 
 #### Can we set a limit for the number of elements that can be stored in an array?
 Implement a [document processor](document-processing.html) for this.
@@ -183,7 +183,7 @@ Read more about [document expiry](documents.html#document-expiry).
 Changing redundancy is a live and safe change
 (assuming there is headroom on disk / memory - e.g. from 2 to 3 is 50% more).
 The time to migrate will be quite similar to what it took to feed initially -
-a bit hard to say generally, and depends on IO and index settings, like if building an index for ANN.
+a bit hard to say generally, and depends on IO and index settings, like if building a HNSW index.
 To monitor progress, take a look at the
 [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode)
 sample application for the _clustercontroller_ status page - this shows buckets pending, live.
@@ -191,17 +191,15 @@ Finally, use the `.idealstate.merge_bucket.pending` metric to track progress -
 when 0, there are no more data syncing operations - see
 [monitor distance to ideal state](operations/admin-procedures.html#monitor-distance-to-ideal-state).
 Nodes will work as normal during data sync, and query coverage will be the same.
-Nodes will be busier, though.
 
 #### How does namespace relate to schema?
 It does not,
 _namespace_ is a mechanism to split the document space into parts that can be used for document selection -
-see [documentation](documents.html#namespace).
+see [documentation](documents.html#namespace). The namespace is not indexed and cannot
+be searched using the query api, but can be used by [visiting](visiting.html).
 
 #### Visiting does not dump all documents, and/or hangs.
 There are multiple things that can cause this, see [visiting troubleshooting](visiting.html#troubleshooting).
-
-
 
 {:.faq-section}
 ### Query
@@ -212,7 +210,8 @@ Groups can be multi-level.
 
 #### Is filters supported?
 Add filters to the query using [YQL](query-language.html)
-using boolean, numeric and [text matching](text-matching-ranking.html).
+using boolean, numeric and [text matching](text-matching-ranking.html). Query terms can be annotated
+as filters, which means that they are not highlighted when bolding results. 
 
 #### How to query for similar items?
 One way is to describe items using tensors and query for the
@@ -221,7 +220,7 @@ using full precision or approximate (ANN) - the latter is used when the set is t
 Apply filters to the query to limit the neighbor candidate set.
 Using [dot products](multivalue-query-operators.html) or [weak and](using-wand-with-vespa.html) are alternatives.
 
-#### Stop-word support?
+#### Does Vespa support stop-word removal?
 Vespa does not have a stop-word concept inherently.
 See the [sample app](https://github.com/vespa-engine/sample-apps/pull/335/files)
 for how to use [filter terms](reference/query-language-reference.html#annotations).
@@ -249,30 +248,32 @@ this creates a new Query, sets a new root and parameters - then `fill`s the Hits
 #### How to create a cache that refreshes itself regularly
 <!-- ToDo: Maybe a bit long for the FAQ and such a component could be added to a sample app instead later -->
 See the sub-query question above, in addition add something like:
-```java
+<pre>{% highlight java%}
+
 public class ConfigCacheRefresher extends AbstractComponent {
-...
+
     private final ScheduledExecutorService configFetchService = Executors.newSingleThreadScheduledExecutor();
     private Chain<Searcher> searcherChain;
-...
+
     void initialize() {
         Runnable task = () -> refreshCache();
         configFetchService.scheduleWithFixedDelay(task, 1, 1, TimeUnit.MINUTES);
         searcherChain = executionFactory.searchChainRegistry().getChain(new ComponentId("configDefaultProvider"));
     }
-...
+
     public void refreshCache() {
         Execution execution = executionFactory.newExecution(searcherChain);
         Query query = createQuery(execution);
-...
+
     public void deconstruct() {
         super.deconstruct();
         try {
             configFetchService.shutdown();
             configFetchService.awaitTermination(1, TimeUnit.MINUTES);
-...
+        }catch(Exception e) {..}
+    }
 }
-```
+{% endhighlight %}</pre>
 
 #### Is it possible to query Vespa using a list of document ids?
 The best article on the subject is
@@ -339,7 +340,13 @@ Alternatively, split a single incoming query into two running in parallel in a [
 FutureResult futureResult = new AsyncExecution(settings).search(query);
 FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
 ```
+#### Is it possible to query for the number of elements in an array 
+No, there is no index or attribute data structure that allows efficient searching for documents where 
+an array field has a certain number of elements or items.  
 
+#### Is it possible to query for fields with NaN/no value set/null/none
+No, there is no efficient way to query for not having a value. The [visiting](visiting.html) API
+using document selections does support it, but is a linear scan over all documents.
 
 {:.faq-section}
 ### Feeding
@@ -350,11 +357,12 @@ see [indexing](indexing.html) and [feed troubleshooting](operations/admin-proced
 
 #### I feed documents with no error, but they are not in the index
 This is often a problem if using [document expiry](documents.html#document-expiry),
-as documents already expired will not be persisted, they are silently dropped.
-Feeding stale test data with old timestamps can cause this.
+as documents already expired will not be persisted, they are silently dropped and ignored.
+Feeding stale test data with old timestamps in combination with document-expiry can cause this
+behavior.
 
 #### How to feed many files, avoiding 429 error?
-Using too many clients can generate a 429 response code.
+Using too many HTTP clients can generate a 429 response code.
 The Vespa sample apps use the [vespa-feed-client](vespa-feed-client.html) which uses HTTP/2 for high throughput -
 it is better to stream the feed files through this client.
 
