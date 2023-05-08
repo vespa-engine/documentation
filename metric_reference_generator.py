@@ -133,7 +133,7 @@ def parse_units(content, base_units):
 
 def get_units():
     response = requests.get(
-        "https://raw.githubusercontent.com/vespa-engine/vespa/master/container-core/src/main/java/com/yahoo/metrics/Unit.java")
+        "https://raw.githubusercontent.com/vespa-engine/vespa/master/metrics/src/main/java/ai/vespa/metrics/Unit.java")
     content = response.text
     base_unit_dict = parse_base_units(content)
     return parse_units(content, base_unit_dict)
@@ -141,7 +141,7 @@ def get_units():
 
 def get_suffix_names():
     response = requests.get(
-        "https://raw.githubusercontent.com/vespa-engine/vespa/master/container-core/src/main/java/com/yahoo/metrics/Suffix.java")
+        "https://raw.githubusercontent.com/vespa-engine/vespa/master/metrics/src/main/java/ai/vespa/metrics/Suffix.java")
     return parse_base_units(response.text)
 
 
@@ -195,7 +195,7 @@ def parse_metric_set(content, all_metrics, suffix_names):
 
 def get_metrics(metric_type, units):
     response = requests.get(
-        f'https://raw.githubusercontent.com/vespa-engine/vespa/master/container-core/src/main/java/com/yahoo/metrics/{metric_type}Metrics.java')
+        f'https://raw.githubusercontent.com/vespa-engine/vespa/master/metrics/src/main/java/ai/vespa/metrics/{metric_type}Metrics.java')
     return parse_metrics(response.text, units, metric_type)
 
 
