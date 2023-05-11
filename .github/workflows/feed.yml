@@ -3,6 +3,10 @@ on:
   push:
     branches: [ master ]
 
+env:
+  DATA_PLANE_PUBLIC_KEY : ${{ secrets.VESPA_TEAM_DATA_PLANE_PUBLIC_CERT }}
+  DATA_PLANE_PRIVATE_KEY: ${{ secrets.VESPA_TEAM_DATA_PLANE_PRIVATE_KEY }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,30 +28,21 @@ jobs:
       with:
         python-version: '3.x'
 
-    - name: Feed docs site
-      env:
-        DATA_PLANE_PUBLIC_KEY : ${{ secrets.VESPA_TEAM_DATA_PLANE_PUBLIC_CERT }}
-        DATA_PLANE_PRIVATE_KEY: ${{ secrets.VESPA_TEAM_DATA_PLANE_PRIVATE_KEY }}
+    - name: Install dependencies
       run: |
         pip3 install PyYAML spacy mmh3 requests html5lib beautifulsoup4 markdownify tiktoken
+
+    - name: Feed docs site
+      run: |
         ./feed_to_vespa.py _config.yml
 
     - name: Feed paragraphs site
-      env:
-        DATA_PLANE_PUBLIC_KEY : ${{ secrets.VESPA_TEAM_DATA_PLANE_PUBLIC_CERT }}
-        DATA_PLANE_PRIVATE_KEY: ${{ secrets.VESPA_TEAM_DATA_PLANE_PRIVATE_KEY }}
       run: |
-        pip3 install PyYAML spacy mmh3 requests html5lib beautifulsoup4 markdownify tiktoken
         ./feed-split.py open_index.json https://docs.vespa.ai
         ./feed_to_vespa.py _paragraphs_config.yml
 
-    - name: Feed suggestions 
-      env:
-        DATA_PLANE_PUBLIC_KEY : ${{ secrets.VESPA_TEAM_DATA_PLANE_PUBLIC_CERT }}
-        DATA_PLANE_PRIVATE_KEY: ${{ secrets.VESPA_TEAM_DATA_PLANE_PRIVATE_KEY }}
+    - name: Feed suggestions
       run: |
-        pip3 install PyYAML spacy mmh3 requests
         python3 -m spacy download en_core_web_sm 
         ./create_suggestions.py open_index.json 
         ./feed_to_vespa.py _suggestions_config.yml
-
