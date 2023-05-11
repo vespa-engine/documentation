@@ -105,7 +105,7 @@ schema product {
         field text_embedding type tensor&lt;float&gt;(x[384]) {
             indexing: summary | attribute
             attribute {
-                distance-metric: innerproduct
+                distance-metric: prenormalized-angular
             }
         }
 
@@ -128,7 +128,7 @@ The fields of type [tensor](tensor-user-guide.html) represent vector embeddings:
 - `image_embeddings` - multiple float vectors with 512 dimensions.
 
 The `text_embedding` field stores a dense vectorized embedding representation
-of the product description and which use [innerproduct](reference/schema-reference.html#distance-metric)
+of the product description and which use [prenormalized-angular](reference/schema-reference.html#distance-metric)
 as `distance-metric`. See for example
 [Dense Retrieval using bi-encoders over Transformer models](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-2/).
 
@@ -142,7 +142,7 @@ Vespa supports five different [distance-metrics](reference/schema-reference.html
 
 * `euclidean`
 * `angular`
-* `innerproduct`
+* `prenormalized-angular`
 * `hamming`
 * `geodegrees`
 

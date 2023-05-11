@@ -62,7 +62,7 @@ field image_embeddings type tensor&lt;float&gt;(i{},x[512]) {
 field text_embedding type tensor&lt;float&gt;(x[384]) {
   indexing: summary | attribute | index
   attribute {
-    distance-metric: innerproduct
+    distance-metric: prenormalized-angular
   }
   index {
     hnsw {
