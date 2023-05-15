@@ -23,7 +23,7 @@ def what_language(el):
         return lang
     if el.text.find("curl") > 0:
         return "bash"
-    if el.text.find("import com.yahoo"):
+    if el.text.find("import com.yahoo") > 0:
         return "java"
     return ""
 
@@ -128,6 +128,21 @@ with open(sys.argv[1]) as fp:
             if paragraph:
                 paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
                 operations.append(paragraph_doc)
-            
-    with open("paragraph_index.json", "w") as fp:    
-        json.dump(operations, fp)
+
+#Merge question expansion
+questions_expansion = dict()
+with open(sys.argv[3]) as fp:
+    for line in fp:
+        op = json.loads(line)
+        id = op['update']
+        fields = op['fields']
+        if "questions" in fields:
+            questions = fields['questions']['assign']
+            questions_expansion[id] = questions      
+for op in operations:
+    id = op['put']
+    if id in questions_expansion:
+        op['fields']['questions'] = questions_expansion[id]
+
+with open("paragraph_index.json", "w") as fp:    
+    json.dump(operations, fp)
