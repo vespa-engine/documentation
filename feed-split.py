@@ -8,10 +8,10 @@ from markdownify import markdownify
 import random
 import re
 from xml.sax.saxutils import escape
-
 import tiktoken
-encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+import urllib.parse
 
+encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
 note_pattern = re.compile(r"{%\s*include.*?%}", flags=re.DOTALL)
 highlight_pattern = re.compile(r"{%\s*.*?\s%}", flags=re.DOTALL)
 
@@ -47,7 +47,6 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     #print("n={},doc_type={},id={}".format(namespace,doc_type,id))
    
     new_namespace = namespace + "-p"
-    id = id.replace(namespace, new_namespace)
     id = "id:{}:{}::{}".format(new_namespace, "paragraph", id)
     fields = doc['fields']
     n_tokens = len(encoding.encode(paragraph))
@@ -73,7 +72,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
         paragraph_id = str(random.randint(0,1000))
 
     new_doc['fields']['path'] = new_doc['fields']['path'] + "#" + paragraph_id
-    new_doc['put'] = new_doc['put'] + "-" + paragraph_id
+    new_doc['put'] = new_doc['put'] + "-" + urllib.parse.quote(paragraph_id)
     
     return new_doc 
 
