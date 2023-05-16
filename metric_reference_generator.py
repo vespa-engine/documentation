@@ -18,7 +18,7 @@ class MetricSetReference:
 
     def metric_html_rows(self, metrics):
         return "\n".join([f'\t<tr>\n'
-                          f'\t  <td>{metric["name"]}</td>\n'
+                          f'\t  <td><p id="{metric["name"].replace(".", "_")}">{metric["name"]}</p></td>\n'
                           f'\t  <td>{metric["description"]}</td>\n'
                           f'\t  <td>{metric["unit"]}</td>\n'
                           f'\t  <td>{metric["suffixes"]}</td>\n'
@@ -31,7 +31,7 @@ class MetricSetReference:
     def metric_tables(self):
         key = lambda x: x["metric_type"]
         sorted_metrics = sorted(self.metric_list, key=key)
-        return "\n".join([f'<h2 id={metric_type.lower()}-metrics>{metric_type.title()} Metrics</h2>\n'
+        return "\n".join([f'<h2 id="{metric_type.lower()}-metrics">{metric_type.title()} Metrics</h2>\n'
                           f'<table class="table">\n'
                           f'    <thead>\n'
                           f'        <tr><th>Name</th><th>Description</th><th>Unit</th><th>Suffixes</th></tr>\n'
