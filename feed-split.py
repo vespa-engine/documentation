@@ -100,8 +100,10 @@ def split_text(htmldoc):
 
 def split_tables(htmldoc):
     soup = BeautifulSoup(htmldoc, 'html5lib')
-    non_nested_tables = [t for t in soup.find_all('table') if not t.find_all('table')]
-    for table in non_nested_tables:
+
+    # Only consider tables on top-level - i.e., do not find rows in tables within tables
+    top_level_tables = soup.body.find_all('table', recursive=False)
+    for table in top_level_tables:
         header_row = None
         thead = table.find_all('thead', recursive=False)
         if len(thead):
