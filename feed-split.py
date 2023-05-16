@@ -77,6 +77,27 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     return new_doc
 
 
+def split_text(htmldoc):
+    md = markdownify(split_tables(htmldoc), heading_style='ATX', code_language_callback=what_language)
+    lines = md.split("\n")
+    header = ""
+    text = ""
+    id = ""
+    data = []
+    for line in lines:
+        if line.startswith("#"):
+            if text:
+                data.append((id, header, text))
+                text = ""
+            header = line.lstrip("#")
+            id = "-".join(header.split()).lower()
+        else:
+            text = text + "\n" + line
+
+    data.append((id, header, text)) #Flush any last data
+    return data
+
+
 def split_tables(htmldoc):
     soup = BeautifulSoup(htmldoc, 'html5lib')
     non_nested_tables = [t for t in soup.find_all('table') if not t.find_all('table')]
@@ -108,69 +129,55 @@ def move_row_to_new_table_if_has_id(soup, header_row, row):
         soup.append(new_table)
 
 
-with open(sys.argv[1]) as fp:
-    random.seed(42)
-    docs = json.load(fp)
-    operations = []
-    for doc in docs:
-        path = doc['fields']['path']
-        html_doc = doc['fields']['html']
-        html_doc = xml_fixup(html_doc)
-        md = markdownify(split_tables(html_doc), heading_style='ATX', code_language_callback=what_language)
-        
-        lines = md.split("\n")
-        header = ""
-        text = ""
-        id = ""
-        data = []
-        for line in lines:
-            if line.startswith("#"):
-                if text:
-                    data.append((id,header, text))
-                    text = ""
-                header = line.lstrip("#")
-                id = "-".join(header.split()).lower()
-            else:
-                text = text + "\n" + line
+def main():
+    with open(sys.argv[1]) as fp:
+        random.seed(42)
+        docs = json.load(fp)
+        operations = []
+        for doc in docs:
+            html_doc = doc['fields']['html']
+            html_doc = xml_fixup(html_doc)
+            data = split_text(html_doc)
 
-        #Flush any last data
-        data.append((id,header, text))
+            for paragraph_id, header, paragraph in data:
 
-        for paragraph_id, header, paragraph in data:
-            
-            paragraph = paragraph.lstrip('\n').lstrip(" ")
-            paragraph = paragraph.rstrip('\n')
+                paragraph = paragraph.lstrip('\n').lstrip(" ")
+                paragraph = paragraph.rstrip('\n')
 
-            paragraph = re.sub(r"\n*```", "\n```", paragraph)
-            paragraph = re.sub(r"```\n*", "```\n", paragraph)
-            
-            paragraph = paragraph.replace("```\njson","```json")
-            paragraph = paragraph.replace("```\nxml","```xml")
-            paragraph = paragraph.replace("```\nbash","```bash")
-            paragraph = paragraph.replace("```\nsh","```sh")
-            paragraph = paragraph.replace("```\nraw","```\n")
-            paragraph = paragraph.replace("```\njava","```java\n")
-        
-            paragraph = remove_jekyll(paragraph)
-            
-            if paragraph:
-                paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
-                operations.append(paragraph_doc)
+                paragraph = re.sub(r"\n*```", "\n```", paragraph)
+                paragraph = re.sub(r"```\n*", "```\n", paragraph)
 
-#Merge question expansion
-questions_expansion = dict()
-with open(sys.argv[3]) as fp:
-    for line in fp:
-        op = json.loads(line)
-        id = op['update']
-        fields = op['fields']
-        if "questions" in fields:
-            questions = fields['questions']['assign']
-            questions_expansion[id] = questions      
-for op in operations:
-    id = op['put']
-    if id in questions_expansion:
-        op['fields']['questions'] = questions_expansion[id]
+                paragraph = paragraph.replace("```\njson","```json")
+                paragraph = paragraph.replace("```\nxml","```xml")
+                paragraph = paragraph.replace("```\nbash","```bash")
+                paragraph = paragraph.replace("```\nsh","```sh")
+                paragraph = paragraph.replace("```\nraw","```\n")
+                paragraph = paragraph.replace("```\njava","```java\n")
 
-with open("paragraph_index.json", "w") as fp:    
-    json.dump(operations, fp)
+                paragraph = remove_jekyll(paragraph)
+
+                if paragraph:
+                    paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
+                    operations.append(paragraph_doc)
+
+    #Merge question expansion
+    questions_expansion = dict()
+    with open(sys.argv[3]) as fp:
+        for line in fp:
+            op = json.loads(line)
+            id = op['update']
+            fields = op['fields']
+            if "questions" in fields:
+                questions = fields['questions']['assign']
+                questions_expansion[id] = questions
+    for op in operations:
+        id = op['put']
+        if id in questions_expansion:
+            op['fields']['questions'] = questions_expansion[id]
+
+    with open("paragraph_index.json", "w") as fp:
+        json.dump(operations, fp)
+
+
+if __name__ == "__main__":
+    main()
