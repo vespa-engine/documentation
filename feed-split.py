@@ -77,6 +77,28 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     return new_doc
 
 
+def split_text(htmldoc):
+    md = markdownify(split_tables(htmldoc), heading_style='ATX', code_language_callback=what_language)
+
+    lines = md.split("\n")
+    header = ""
+    text = ""
+    id = ""
+    data = []
+    for line in lines:
+        if line.startswith("#"):
+            if text:
+                data.append((id, header, text))
+                text = ""
+            header = line.lstrip("#")
+            id = "-".join(header.split()).lower()
+        else:
+            text = text + "\n" + line
+
+    data.append((id, header, text)) #Flush any last data
+    return data
+
+
 def split_tables(htmldoc):
     soup = BeautifulSoup(htmldoc, 'html5lib')
     non_nested_tables = [t for t in soup.find_all('table') if not t.find_all('table')]
@@ -114,28 +136,9 @@ def main():
         docs = json.load(fp)
         operations = []
         for doc in docs:
-            path = doc['fields']['path']
             html_doc = doc['fields']['html']
             html_doc = xml_fixup(html_doc)
-            md = markdownify(split_tables(html_doc), heading_style='ATX', code_language_callback=what_language)
-
-            lines = md.split("\n")
-            header = ""
-            text = ""
-            id = ""
-            data = []
-            for line in lines:
-                if line.startswith("#"):
-                    if text:
-                        data.append((id,header, text))
-                        text = ""
-                    header = line.lstrip("#")
-                    id = "-".join(header.split()).lower()
-                else:
-                    text = text + "\n" + line
-
-            #Flush any last data
-            data.append((id,header, text))
+            data = split_text(html_doc)
 
             for paragraph_id, header, paragraph in data:
 
