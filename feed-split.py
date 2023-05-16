@@ -79,7 +79,6 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
 
 def split_text(htmldoc):
     md = markdownify(split_tables(htmldoc), heading_style='ATX', code_language_callback=what_language)
-
     lines = md.split("\n")
     header = ""
     text = ""
