@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-
+import copy
 import json
 import sys
 from bs4 import BeautifulSoup
@@ -74,7 +74,38 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     new_doc['fields']['path'] = new_doc['fields']['path'] + "#" + paragraph_id
     new_doc['put'] = new_doc['put'] + "-" + urllib.parse.quote(paragraph_id)
     
-    return new_doc 
+    return new_doc
+
+
+def split_tables(htmldoc):
+    soup = BeautifulSoup(htmldoc, 'html5lib')
+    non_nested_tables = [t for t in soup.find_all('table') if not t.find_all('table')]
+    for table in non_nested_tables:
+        header_row = None
+        thead = table.find_all('thead', recursive=False)
+        if len(thead):
+            header_rows = thead[0].find_all('tr', recursive=False)
+            if len(header_rows):
+                header_row = header_rows[0]
+        tbody = table.find_all('tbody', recursive=False)
+        rows = tbody[0].find_all('tr', recursive=False)
+        for row in rows:
+            # Use soup as parent, append at end, as there are nested tables and H within table is no good here
+            move_row_to_new_table_if_has_id(soup, header_row, row)
+    return str(soup)
+
+
+def move_row_to_new_table_if_has_id(soup, header_row, row):
+    id_elem = row.find_all('p', {'id': True})
+    if len(id_elem):
+        new_h4 = soup.new_tag('h4', id=id_elem[0]['id'])
+        new_h4.string = id_elem[0]['id']
+        new_table = soup.new_tag('table')
+        new_table.insert(0, row)
+        if header_row:
+            new_table.insert(0, copy.copy(header_row))
+        soup.append(new_h4)
+        soup.append(new_table)
 
 
 with open(sys.argv[1]) as fp:
@@ -85,11 +116,9 @@ with open(sys.argv[1]) as fp:
         path = doc['fields']['path']
         html_doc = doc['fields']['html']
         html_doc = xml_fixup(html_doc)
-        soup = BeautifulSoup(html_doc, 'html5lib')
-        md = markdownify(html_doc, heading_style='ATX', code_language_callback=what_language)
+        md = markdownify(split_tables(html_doc), heading_style='ATX', code_language_callback=what_language)
         
         lines = md.split("\n")
-        headers = []
         header = ""
         text = ""
         id = ""
