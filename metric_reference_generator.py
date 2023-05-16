@@ -18,7 +18,7 @@ class MetricSetReference:
 
     def metric_html_rows(self, metrics):
         return "\n".join([f'\t<tr>\n'
-                          f'\t  <td>{metric["name"]}</td>\n'
+                          f'\t  <td><p id="{metric["name"].replace(".", "_")}">{metric["name"]}</p></td>\n'
                           f'\t  <td>{metric["description"]}</td>\n'
                           f'\t  <td>{metric["unit"]}</td>\n'
                           f'\t  <td>{metric["suffixes"]}</td>\n'
