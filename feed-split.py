@@ -77,8 +77,10 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     return new_doc
 
 
-def split_text(htmldoc):
-    md = markdownify(split_tables(htmldoc), heading_style='ATX', code_language_callback=what_language)
+def split_text(soup):
+    split_tables(soup)
+    split_lists(soup)
+    md = markdownify(str(soup), heading_style='ATX', code_language_callback=what_language)
     lines = md.split("\n")
     header = ""
     text = ""
@@ -98,37 +100,48 @@ def split_text(htmldoc):
     return data
 
 
-def split_tables(htmldoc):
-    soup = BeautifulSoup(htmldoc, 'html5lib')
+def remove_notext_tags(soup):
+    for remove_tag in soup.find_all(['style']):
+        remove_tag.decompose()
 
-    # Only consider tables on top-level - i.e., do not find rows in tables within tables
-    top_level_tables = soup.body.find_all('table', recursive=False)
+
+def split_lists(soup):
+    for list in soup.body.find_all(['ul', 'ol']):
+        for list_item in list.find_all('li'):
+            move_linkable_item_to_single_entity(soup, list_item)
+
+
+def split_tables(soup):
+    top_level_tables = soup.body.find_all('table', recursive=False)  # i.e., do not find rows in tables within tables
     for table in top_level_tables:
-        header_row = None
-        thead = table.find_all('thead', recursive=False)
-        if len(thead):
-            header_rows = thead[0].find_all('tr', recursive=False)
-            if len(header_rows):
-                header_row = header_rows[0]
-        tbody = table.find_all('tbody', recursive=False)
-        rows = tbody[0].find_all('tr', recursive=False)
-        for row in rows:
-            # Use soup as parent, append at end, as there are nested tables and H within table is no good here
-            move_row_to_new_table_if_has_id(soup, header_row, row)
-    return str(soup)
+        tbody = table.find('tbody')  # tbody is implicit and always there
+        for row in tbody.find_all('tr', recursive=False):
+            move_linkable_item_to_single_entity(soup, row)
 
 
-def move_row_to_new_table_if_has_id(soup, header_row, row):
-    id_elem = row.find_all('p', {'id': True})
-    if len(id_elem):
-        new_h4 = soup.new_tag('h4', id=id_elem[0]['id'])
-        new_h4.string = id_elem[0]['id']
-        new_table = soup.new_tag('table')
-        new_table.insert(0, row)
-        if header_row:
-            new_table.insert(0, copy.copy(header_row))
+def table_header_row(row):
+    thead = row.find_parent('table').find('thead')
+    if thead is not None:
+        return thead.find('tr')
+    return None
+
+
+def move_linkable_item_to_single_entity(soup, item):
+    id_elem = item.find('p', {'id': True})
+    if id_elem is not None:
+        new_h4 = soup.new_tag('h4', id=id_elem['id'])
+        new_h4.string = id_elem['id']
+        if item.name == 'tr':
+            header_row = table_header_row(item)
+            new_container = soup.new_tag('table')
+            if header_row is not None:
+                new_container.insert(0, copy.copy(header_row))
+        else:
+            new_container = soup.new_tag(item.parent.name)  # ul or ol
+
+        new_container.append(item)
         soup.append(new_h4)
-        soup.append(new_table)
+        soup.append(new_container)
 
 
 def main():
@@ -139,12 +152,16 @@ def main():
         for doc in docs:
             html_doc = doc['fields']['html']
             html_doc = xml_fixup(html_doc)
-            data = split_text(html_doc)
+            soup = BeautifulSoup(html_doc, 'html5lib')
+            remove_notext_tags(soup)
+            data = split_text(soup)
 
             for paragraph_id, header, paragraph in data:
 
                 paragraph = paragraph.lstrip('\n').lstrip(" ")
                 paragraph = paragraph.rstrip('\n')
+
+                paragraph = re.sub(r"\n{2,}", "\n\n", paragraph)
 
                 paragraph = re.sub(r"\n*```", "\n```", paragraph)
                 paragraph = re.sub(r"```\n*", "```\n", paragraph)
