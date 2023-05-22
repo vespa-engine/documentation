@@ -623,7 +623,8 @@ function execute_selected() {
 
     // If frame is a comment, update directly. Else execute all
     if (op == "c") {
-        results["f"][frame_index].set("t", converter.makeHtml(param["t"]));
+        var comment = escape_html_tags(param["t"]);
+        results["f"][frame_index].set("t", converter.makeHtml(comment));
         update();
     } else {
         execute_all();
@@ -646,7 +647,8 @@ function execute_all() {
             result.set("n", param["n"])
             result.set("e", param["e"])
         } else if (op == "c") {
-            result.set("t", converter.makeHtml(param["t"]));
+            var comment = escape_html_tags(param["t"]);
+            result.set("t", converter.makeHtml(comment));
         }
     }
     update();
@@ -842,6 +844,10 @@ function copy_to_clipboard(text) {
     textarea.select();
     document.execCommand('copy');
     document.body.removeChild(textarea);
+}
+
+function escape_html_tags(html) {
+  return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function setup_keybinds() {
