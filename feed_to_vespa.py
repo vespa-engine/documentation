@@ -3,6 +3,8 @@
 
 import json
 import os
+import re
+import subprocess
 import sys
 import yaml
 import requests
@@ -68,19 +70,32 @@ def vespa_remove(endpoint, doc_ids, namespace, doc_type):
         vespa_delete(endpoint, "document/v1/{0}/{1}/docid/{2}".format(namespace, doc_type, id), options)
 
 
+def feed_using_vespa_feed(endpoint, feed):
+    # Workaround, better to use vespa feed -t once it works
+    splits = re.split(r'/|\.', endpoint)
+    appstring = splits[3] + '.' + splits[2]
+    zone = 'dev.' + splits[4]
+    print(subprocess.call(['./vespa', 'feed', '-a', appstring, '-z', zone, '-C', 'default',  feed]))
+    return
+
+
 def vespa_feed(endpoint, feed, namespace, doc_type):
+    if doc_type == "paragraph":
+        feed_using_vespa_feed(endpoint, feed)
+        return
+    document_id = ''
     for doc in get_docs(feed):
         if doc_type == "doc": 
-        	    document_id = find(doc, "fields.namespace") + find(doc, "fields.path")
+            document_id = find(doc, "fields.namespace") + find(doc, "fields.path")
         elif doc_type == "term":
-        		document_id = str(find(doc, "fields.hash")) 
-        elif doc_type == "paragraph":
-                document_id = get_document_id(doc['put'])
+            document_id = str(find(doc, "fields.hash"))
         print(vespa_post(endpoint, doc, document_id, namespace, doc_type))
+
 
 def get_docs(index):
     file = open(index, "r", encoding='utf-8')
     return json.load(file)
+
 
 def get_indexed_docids(endpoint, namespace, doc_type):
     docids = set()
@@ -99,11 +114,12 @@ def get_feed_docids(feed, namespace, doc_type):
     with open(feed, "r", encoding='utf-8') as f:
         feed_json = json.load(f)
     if doc_type == "doc": 
-    		return set([ "id:{0}:doc::".format(namespace) + find(doc, "fields.namespace") + find(doc, "fields.path") for doc in feed_json ])
+        return set(["id:{0}:doc::".format(namespace) + find(doc, "fields.namespace") + find(doc, "fields.path") for doc in feed_json])
     elif doc_type == "term": 
-    		return set([ "id:{0}:term::".format(namespace) + str(find(doc, "fields.hash")) for doc in feed_json ])
+        return set(["id:{0}:term::".format(namespace) + str(find(doc, "fields.hash")) for doc in feed_json])
     elif doc_type == "paragraph": 
-    		return set([ doc['put'] for doc in feed_json ])
+        return set([doc['put'] for doc in feed_json])
+
 
 def print_header(msg):
     print("")
