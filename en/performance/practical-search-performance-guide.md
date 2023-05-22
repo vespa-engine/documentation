@@ -720,7 +720,7 @@ Accept-Encoding: gzip
 
 The previous section covered free text searching in a `fieldset` containing fields with
 `indexing:index`. See [indexing reference](../reference/schema-reference.html#indexing). 
-Fields of [type string](../reference/schema-reference.html#field-types) are 
+Fields of [type string](../reference/schema-reference.html#field) are 
 treated differently depending on having `index` or `attribute`:
 
 - `index` integrates with [linguistic](../linguistics.html) processing and is matched using 
@@ -746,7 +746,7 @@ for many different aspects: [ranking](../ranking.html), [result grouping](../gro
 The following section focuses on the `tags` field which we defined with `attribute`,
 matching in this field will be performed using `match:word` which is the
 default match mode for string fields with `indexing: attribute`.
-The `tags` field is of type [weightedset](../reference/schema-reference.html#type:weightedset).
+The `tags` field is of type [weightedset](../reference/schema-reference.html#weightedset).
 
 <pre>
  field tags type weightedset&lt;string&gt; {
@@ -933,7 +933,7 @@ increased memory usage and slightly reduced indexing throughput. See also
 [when to use fast-search for attributes](feature-tuning.html#when-to-use-fast-search-for-attribute-fields).
 
 For use cases requiring `match:text` when searching multivalued string field types
-like [weightedset](../reference/schema-reference.html#type:weightedset), see
+like [weightedset](../reference/schema-reference.html#weightedset), see
 [searching multi-value fields](../searching-multi-valued-fields.html).
 
 For fields that don't need any match ranking features, it's strongly recommended
@@ -1147,7 +1147,7 @@ which cannot make it into the top k results. See the [using wand with Vespa](../
 guide for more details on the WAND algorithm. 
 
 Finally, these multi-value query operators works on both single valued fields, and array fields, 
-but optimal performance is achieved using the [weightedset](../reference/schema-reference.html#type:weightedset) 
+but optimal performance is achieved using the [weightedset](../reference/schema-reference.html#weightedset)
 field type. The `weightedset` field type only supports integer weights. The next section
 covers tensors that support more floating point number types. 
 

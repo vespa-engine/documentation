@@ -128,7 +128,7 @@ Let's assume we want to find similar documents, and we define document similarit
 From most perspectives, this is a poor similarity function, better functions are described later.
 
 The documents have a `term_count` field -
-so let's add a [input.query()](reference/query-api-reference.html#ranking.features) for term count:
+so let's add an [input.query()](reference/query-api-reference.html#ranking.features) for term count:
 
 <pre style="display:none" data-test="exec" data-test-assert-contains="query(q_term_count)">
 curl -s 'https://doc-search.vespa.oath.cloud/search/?yql=select%20*%20from%20doc%20where%20true&ranking=term_count_similarity&input.query(q_term_count)=1000'
@@ -172,8 +172,8 @@ Use different names for more query features.
 
 ## Ranking with a query tensor
 Another similarity function can be overlap in in-links.
-We will map the inlinks [weightedset](reference/schema-reference.html#type:weightedset) into a
-[tensor](reference/schema-reference.html#type:tensor),
+We will map the inlinks [weightedset](reference/schema-reference.html#weightedset) into a
+[tensor](reference/schema-reference.html#tensor),
 query with a tensor of same type and create a scalar using a tensor product as the rank score.
 We use a [mapped](reference/tensor.html#general-literal-form) query tensor,
 where the document name is the address in the tensor, using a value of 1 for each in-link:

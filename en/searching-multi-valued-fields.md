@@ -1,12 +1,12 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Searching and ranking of multi-valued fields"
+title: "Searching and ranking of multivalued fields"
 ---
 
-This guide explores how to search and rank over structured multi-valued fields. The examples
-in this guide uses the [weightedset](reference/schema-reference.html#type:weightedset)
-[field type](reference/schema-reference.html#field-types). The generic
-[map<key-type,value-type>](reference/schema-reference.html#type:map) field type does not currently support
+This guide explores how to search and rank over structured multivalued fields. The examples
+in this guide uses the [weightedset](reference/schema-reference.html#weightedset)
+[field type](reference/schema-reference.html#field). The generic
+[map<key-type,value-type>](reference/schema-reference.html#map) field type does not currently support
 ranking and can only be used for matching and filtering. 
 
 ## Introduction
@@ -40,7 +40,7 @@ flexibility of the Vespa [ranking](ranking.html) framework.
 
 ## Exploration
 
-In the following sections we explore matching and ranking over multi-valued string fields.  
+In the following sections we explore matching and ranking over multivalued string fields.  
 
 {% include pre-req.html memory="4 GB" %}
 
@@ -68,8 +68,8 @@ tag-like field where there is a weight associated with each element.
 </pre>
 
 Structured data like the <code>tags</code>, where we both want to match and rank is best represented using 
-the [weightedset](reference/schema-reference.html#type:weightedset)
-[field type](reference/schema-reference.html#field-types). The Vespa weightedset field type can be used to represent:
+the [weightedset](reference/schema-reference.html#weightedset)
+[field type](reference/schema-reference.html#field). The Vespa weightedset field type can be used to represent:
 
 - Document side tags like in the above example
 - [Document expansion by query prediction](https://github.com/castorini/docTTTTTquery)  
@@ -252,7 +252,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
   'query=+sunset photos featuring +dog' 'type=any'
 </pre>
 
-Now, let us explore how Vespa matches the multi-valued tags field of 
+Now, let us explore how Vespa matches the multivalued tags field of 
 type [weightedset](reference/schema-reference.html#weightedset). 
 Notice that we change back to `type=all`.
 In this example we also use the [default-index](reference/query-api-reference.html#model.defaultindex) 
@@ -621,7 +621,7 @@ $ docker rm -f vespa
 
 ## Conclusion
 In this guide we have looked at how one can build a query retrieval strategy and how to change ranking 
-when searching multi-valued fields using the weightedset field type. 
+when searching multivalued fields using the weightedset field type. 
 
 
 <script src="/js/process_pre.js"></script>
