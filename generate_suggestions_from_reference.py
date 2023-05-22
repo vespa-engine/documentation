@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+
 from bs4 import BeautifulSoup
 import sys
 import json
@@ -34,7 +37,7 @@ for link_text, link in result:
     url = url_prefix + html_file + link
     id = id = mmh3.hash(url)
     term = {
-        'put': 'id:term:term::%i' % id,
+        'put': 'id:term-reference:term::%i' % id,
             'fields': {
                 'term': link_text,
                 'namespace': namespace,
