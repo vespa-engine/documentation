@@ -75,7 +75,7 @@ def feed_using_vespa_feed(endpoint, feed):
     splits = re.split(r'/|\.', endpoint)
     appstring = splits[3] + '.' + splits[2]
     zone = 'dev.' + splits[4]
-    print(subprocess.call(['./vespa', 'feed', '-a', appstring, '-z', zone, '-C', 'default',  feed]))
+    print(subprocess.run(['./vespa', 'feed', '-a', appstring, '-z', zone, '-C', 'default',  feed], capture_output=True))
     return
 
 
