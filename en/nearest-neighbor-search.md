@@ -23,7 +23,7 @@ tensor&lt;float&gt;(x[384])
 </pre>
 
 Document vectors are stored in a
-[tensor field](reference/schema-reference.html#type:tensor)
+[tensor field](reference/schema-reference.html#tensor)
 defined in the document [schema](reference/schema-reference.html).
 A tensor type (dense) with one indexed dimension stores a single vector per document:
 <pre>
