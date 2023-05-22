@@ -79,8 +79,8 @@ def feed_using_vespa_feed(endpoint, feed):
     print(subprocess.run(['./vespa', 'feed', '-a', appstring, '-z', zone, '-C', 'default',  feed],
                          capture_output=True,
                          env={"HOME": ".",
-                              "VESPA_CLI_DATA_PLANE_CERT": os.getenv("VESPA_CLI_DATA_PLANE_CERT"),
-                              "VESPA_CLI_DATA_PLANE_KEY": os.getenv("VESPA_CLI_DATA_PLANE_KEY")}))
+                              "VESPA_CLI_DATA_PLANE_CERT_FILE": get_public_cert_path(),
+                              "VESPA_CLI_DATA_PLANE_KEY_FILE": get_private_key_path()}))
     return
 
 
