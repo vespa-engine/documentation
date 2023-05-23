@@ -75,10 +75,15 @@ def feed_using_vespa_feed(endpoint, feed):
     splits = re.split(r'/|\.', endpoint)
     appstring = splits[3] + '.' + splits[2]
     zone = 'dev.' + splits[4]
-    print(subprocess.run(['./vespa', 'config', 'set', 'target', 'cloud'],
-                         capture_output=True,
-                         env={"HOME": "."}))
-    print(subprocess.run(['./vespa', 'feed', '-a', appstring, '-z', zone, '-C', 'default',  feed],
+    # print(subprocess.run(['./vespa', 'config', 'set', 'target', 'cloud'],
+    #                      capture_output=True,
+    #                      env={"HOME": "."}))
+    # print(subprocess.run(['./vespa', 'feed', '-a', appstring, '-z', zone, '-C', 'default',  feed],
+    #                      capture_output=True,
+    #                      env={"HOME": ".",
+    #                           "VESPA_CLI_DATA_PLANE_CERT": os.environ["VESPA_CLI_DATA_PLANE_CERT"],
+    #                           "VESPA_CLI_DATA_PLANE_KEY": os.environ["VESPA_CLI_DATA_PLANE_KEY"]}))
+    print(subprocess.run(['./vespa', 'feed', '-t', endpoint, '-C', 'default',  feed],
                          capture_output=True,
                          env={"HOME": ".",
                               "VESPA_CLI_DATA_PLANE_CERT": os.environ["VESPA_CLI_DATA_PLANE_CERT"],
