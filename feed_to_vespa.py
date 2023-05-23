@@ -92,15 +92,17 @@ def feed_using_vespa_feed(endpoint, feed):
 
 
 def vespa_feed(endpoint, feed, namespace, doc_type):
-    if doc_type == "paragraph":
-        feed_using_vespa_feed(endpoint, feed)
-        return
+    #if doc_type == "paragraph":
+    #    feed_using_vespa_feed(endpoint, feed)
+    #    return
     document_id = ''
     for doc in get_docs(feed):
         if doc_type == "doc": 
             document_id = find(doc, "fields.namespace") + find(doc, "fields.path")
         elif doc_type == "term":
             document_id = str(find(doc, "fields.hash"))
+        elif doc_type == "paragraph":
+            document_id = get_document_id(doc['put'])
         print(vespa_post(endpoint, doc, document_id, namespace, doc_type))
 
 
