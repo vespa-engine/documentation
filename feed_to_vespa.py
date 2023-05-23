@@ -9,6 +9,7 @@ import sys
 import yaml
 import requests
 from requests.adapters import HTTPAdapter, Retry
+import urllib.parse
 
 def find(json, path, separator = "."):
     if len(path) == 0: return json
@@ -119,7 +120,13 @@ def get_indexed_docids(endpoint, namespace, doc_type):
         documents = find(json, "documents")
         if documents is not None:
             ids = [ find(document, "id") for document in documents ]
-            docids.update(ids)
+            for id in ids:
+                # The document id might contain chars that needs to be escaped for the delete/put operation to work
+                # also for comparision with what is in the feed
+                docid = get_document_id(id) # return the last part 
+                encoded = urllib.parse.quote(docid) #escape
+                id = id.replace(docid, encoded)
+                docids.add(id)
         continuation = find(json, "continuation")
     return docids
 
