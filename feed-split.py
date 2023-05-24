@@ -126,6 +126,29 @@ def table_header_row(row):
     return None
 
 
+def max_cols(tbody):
+    max_cols = 0
+    for row in tbody.find_all('tr'):
+        cols = len(row.find_all(['th', 'td']))
+        if cols > max_cols:
+            max_cols = cols
+    return max_cols
+
+
+def add_header_to_tables_if_missing(soup):
+    for table in soup.body.find_all('table'):
+        thead = table.find('thead')
+        if thead is None:
+            thead = soup.new_tag('thead')
+            table.insert(0, thead)
+        header_row = thead.find('tr')
+        if header_row is None:
+            tr = soup.new_tag('tr')
+            thead.append(tr)
+            for _ in range(max_cols(table.tbody)):
+                tr.append(soup.new_tag('th'))
+
+
 def move_linkable_item_to_single_entity(soup, item):
     id_elem = item.find('p', {'id': True})
     if id_elem is not None:
@@ -164,6 +187,7 @@ def main():
             html_doc = xml_fixup(html_doc)
             soup = BeautifulSoup(html_doc, 'html5lib')
             remove_notext_tags(soup)
+            add_header_to_tables_if_missing(soup)
             data = split_text(soup)
 
             for paragraph_id, header, paragraph in data:
