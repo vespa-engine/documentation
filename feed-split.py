@@ -132,14 +132,24 @@ def move_linkable_item_to_single_entity(soup, item):
         new_h4 = soup.new_tag('h4', id=id_elem['id'])
         new_h4.string = id_elem['id']
         if item.name == 'tr':
-            header_row = table_header_row(item)
             new_container = soup.new_tag('table')
+            new_thead = soup.new_tag('thead')
+            new_tbody = soup.new_tag('tbody')
+            new_container.append(new_thead)
+            new_container.append(new_tbody)
+            header_row = table_header_row(item)
             if header_row is not None:
-                new_container.insert(0, copy.copy(header_row))
+                new_thead.append(copy.copy(header_row))
+            else:
+                dummy_tr = soup.new_tag('tr')
+                for _ in item.find_all(['th', 'td']):
+                    dummy_tr.append(soup.new_tag('th'))
+                new_thead.append(dummy_tr)
+            new_tbody.append(item)
         else:
             new_container = soup.new_tag(item.parent.name)  # ul or ol
+            new_container.append(item)
 
-        new_container.append(item)
         soup.append(new_h4)
         soup.append(new_container)
 
