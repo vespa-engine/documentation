@@ -101,7 +101,7 @@ def split_text(soup):
 
 
 def remove_notext_tags(soup):
-    for remove_tag in soup.find_all(['style']):
+    for remove_tag in soup.find_all(['style', 'script']):
         remove_tag.decompose()
 
 
