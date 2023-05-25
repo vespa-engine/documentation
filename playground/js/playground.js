@@ -167,7 +167,7 @@ var operations = {
 }
 
 function replace_html_code(str) {
-    return str.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function has_error(response, result) {
@@ -623,7 +623,7 @@ function execute_selected() {
 
     // If frame is a comment, update directly. Else execute all
     if (op == "c") {
-        var comment = escape_html_tags(param["t"]);
+        var comment = replace_html_code(param["t"]);
         results["f"][frame_index].set("t", converter.makeHtml(comment));
         update();
     } else {
@@ -644,10 +644,10 @@ function execute_all() {
                 result.set("result", "Executing...");
             }
             result.set("executing", true)
-            result.set("n", param["n"])
-            result.set("e", param["e"])
+            result.set("n", replace_html_code(param["n"]))
+            result.set("e", replace_html_code(param["e"]))
         } else if (op == "c") {
-            var comment = escape_html_tags(param["t"]);
+            var comment = replace_html_code(param["t"]);
             result.set("t", converter.makeHtml(comment));
         }
     }
@@ -844,10 +844,6 @@ function copy_to_clipboard(text) {
     textarea.select();
     document.execCommand('copy');
     document.body.removeChild(textarea);
-}
-
-function escape_html_tags(html) {
-  return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function setup_keybinds() {
