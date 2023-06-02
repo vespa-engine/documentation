@@ -2675,27 +2675,173 @@ sorting {
 
 <h2 id="distance-metric">distance-metric</h2>
 <p>
-
   Specifies the distance metric to use with the <a href="query-language-reference.html#nearestneighbor">nearestNeighbor</a>
   query operator to calculate the distance between document positions and the query position.
-  Only relevant for tensor attribute fields.
+  Only relevant for tensor attribute fields, where each tensor holds one or multiple vectors.
 </p>
 <p>
-  Distance metrics used with <a href="../approximate-nn-hnsw.html">HNSW</a>
-  must obey all the defining properties of a <a href="https://en.wikipedia.org/wiki/Metric_space">metric space</a>:
-</p>
-<ul>
-  <li>Distance is symmetric: <code>distance(q,d) = distance(d,q)</code></li>
-  <li>Distance is larger than 0 and the distance from any point to itself is zero. <code>distance(q,q) = 0</code></li>
-  <li>Distance obeys the <a href="https://en.wikipedia.org/wiki/Triangle_inequality">triangle inequality</a>:
-    <code>distance(q,d) &lt;= distance(q,r) + distance(r,d)</code></li>
-</ul>
-<p>
-  The distance metric used must match the distance metric used during metric representation learning (model).
-  If you are using an "off-the-shelf" model to vectorize your data, please ensure that the distance metric matches
-  the distance metric suggested used with the model.
+  Which distance metric to use depends on the model used to produce the vectors;
+  it must match the distance metric used during representation learning (model learning).
+  If you are using an "off-the-shelf" model to vectorize your data, please ensure
+  that the distance metric matches the distance metric suggested for use with the model.
   Different type of vectorization models use different type of distance metrics.
 </p>
+{% include important.html content="When changing the <code>distance-metric</code>,
+the content nodes must be restarted to rebuild the HNSW index - see
+<a href='#changes-that-require-restart-but-not-re-feed'>changes that require restart but not re-feed</a>"%}
+<p>
+  The calculated distance will be used to
+  select the closest hits for <em>nearestNeighbor</em> query operator, but also to
+  build the <a href="../approximate-nn-hnsw.html">HNSW</a> index (if specified) and
+  to produce the <em>distance</em> and <em>closeness</em> ranking features.
+</p>
+<p>
+<pre>
+distance-metric: [metric]
+</pre>
+These are the available metrics; the expressions given for <em>distance</em> and <em>closeness</em>
+assume a query vector <em>qv = [x0, x1, ...]</em> and an attribute vector <em>av = [y0, y1, ...]</em>
+<p>
+<table class="table">
+<thead>
+  <tr><th>Metric</th><th>Description</th><th>distance</th><th>closeness</tr>
+</thead>
+<tbody>
+  <tr>
+    <td>euclidean</td>
+    <td>The normal euclidean (aka L2) distance.</td>
+    <td><code>d = sqrt(sum((xi - yi)^2))</code> with range: <code>[0,inf)</code></td>
+    <td><code>1.0 / (1.0 + d)</code></td>
+  </tr>
+  <tr>
+    <td>angular</td>
+    <td>The <a href="#distance-metric-angular-notes">angle</a> between <em>qv</em> and <em>av</em> vectors.</td>
+    <td><code>d = acos(sum(xi * yi) / sqrt(sum(xi*xi)*sum(yi*yi)))</code> range: <code>[0,pi]</code></td>
+    <td><code>1.0 / (1.0 + d)</code></td>
+  </tr>
+  <tr>
+    <td>prenormalized-angular</td>
+    <td>Assumes normalized vectors, see <a href="#distance-metric-prenormalized-angular-notes">note</a> below.</td>
+    <td><code>d = 1.0 - (sum(xi * yi) / sum(xi*xi))</code> range: <code>[0,2]</code></td>
+    <td><code>1.0 / (1.0 + d)</code></td>
+  </tr>
+  <tr>
+    <td>geodegrees</td>
+    <td>Assumes geographical coordinates, see <a href="#distance-metric-geodegrees-notes">note</a> below.</td>
+    <td><code>d =</code> great-circle in km; range: <code>[0,20015]</td>
+    <td><code>1.0 / (1.0 + d)</code></td>
+  </tr>
+  <tr>
+    <td>hamming</td>
+    <td>Only useful for binary data, see <a href="#distance-metric-hamming-notes">note</a> below.</td>
+    <td><code>d = sum(popcount(xi XOR yi))</code></td>
+    <td><code>1.0 / (1.0 + d)</code></td>
+  </tr>
+</tbody>
+</table>
+
+<h3 id="distance-metric-angular-notes">Notes: angular</h3>
+<p>
+  The <em>angular</em> distance metric computes the <em>angle</em> between the vectors.
+  Its range is <code>[0,pi]</code>, which is the angular distance.
+  This is also known as ordering by
+  <a href="https://en.wikipedia.org/wiki/Cosine_similarity">cosine similarity</a>
+  where the score function is just the cosine of the angle.
+  One can get the cosine score for returned hits by
+  calculating the cosine of the angle returned by the distance
+  <a href="rank-features.html">rank-feature</a>:
+  <pre>
+    rank-profile cosine {
+      first-phase {
+        expression: cos(distance(field, embedding))
+      }
+    }
+  </pre>
+  If possible, it's slightly better for performance to normalize both query and document vectors to the same
+  L2 norm and use the <code>prenormalized-angular</code> metric instead; but note that returned
+  distance and closeness will be differerent.
+
+<h3 id="distance-metric-prenormalized-angular-notes">Notes: prenormalized-angular</h3>
+<p>
+  The <em>prenormalized-angular</em> distance metric
+  <strong>must only be used</strong> when <strong>both</strong> query and document vectors are normalized.
+  This metric was previously named "innerproduct" and required unit length vectors;
+  the new version computes the length of the query vector once and
+  assumes all other vectors are of the same length.
+</p>
+<p>
+  Using <em>prenormalized-angular</em> with vectors that are not
+  normalized causes unpredictable nearest neighbor search, and is
+  observed to give very bad results both for performance and quality.
+</p>
+<p>
+  The length, magnitude, or norm of a vector <em>x</em> is calculated as <code>length = sqrt(sum(power(xi,2)))</code>.
+  The unit length normalized vector is then given by <code>[xi/length]</code>.
+  Zero vectors may not be used at all.
+</p>
+<p>
+  The Vespa <em>prenormalized-angular</em> computes the
+  <a href="https://en.wikipedia.org/wiki/Cosine_similarity">cosine similarity</a>
+  and uses <code>1.0 - cos(angle)</code> as the distance metric.
+  It gives exactly the same ordering as <code>angular</code> distance,
+  but with a distance in the range [0,2], since cosine similarity has range [1,-1],
+  so the end result is 0.0 for same direction vectors,
+  1.0 for a right angle, and 2.0 for vectors with exactly opposite directions.
+  Getting the cosine score (or angle) is therefore easy:
+  <pre>
+    rank-profile cosine {
+      first-phase {
+        expression: 1.0 - distance(field, embedding)
+      }
+      function angle() {
+        expression: acos(1.0 - distance(field, embedding))
+      }
+    }
+  </pre>
+</p>
+
+<h3 id="distance-metric-geodegrees-notes">Notes: geodegrees</h3>
+<p>
+  The <em>geodegrees</em> distance metric is only valid for
+  geographical coordinates (two-dimensional vectors containing
+  latitude and longitude on Earth, in degrees).  It computes the
+  great-circle distance (in kilometers) between two geographical
+  points using the
+  <a href="https://en.wikipedia.org/wiki/Haversine_formula">Haversine formula</a>.
+  See
+  <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/nearest_neighbor/geo.sd">geodegrees system test</a>
+  for an example.
+</p>
+
+<h3 id="distance-metric-hamming-notes">Notes: hamming</h3>
+<p>
+  The <a href="https://en.wikipedia.org/wiki/Hamming_distance">Hamming distance</a>
+  metric counts the number of dimensions where the
+  vectors have different coordinates.
+  This isn't useful for floating-point data since it means you only
+  get 1 bit of information from each floating-point number.
+  Instead, it should be used for binary data where each bit is
+  considered a separate coordinate.  Practically, this means you
+  should use the
+  <code>int8</code> <a href="../performance/feature-tuning.html#cell-value-types">cell value type</a>
+  for your tensor, with the usual encoding from bit pattern to numerical value, for example:
+  <ul>
+      <li><code>00000000</code> &rarr;    <code>0</code> (hex <code>00</code>)</li>
+      <li><code>00010001</code> &rarr;   <code>17</code> (hex <code>11</code>)</li>
+      <li><code>00101010</code> &rarr;   <code>42</code> (hex <code>2A</code>)</li>
+      <li><code>01111111</code> &rarr;  <code>127</code> (hex <code>7F</code>)</li>
+      <li><code>10000000</code> &rarr; <code>-128</code> (hex <code>80</code>)</li>
+      <li><code>10000001</code> &rarr; <code>-127</code> (hex <code>81</code>)</li>
+      <li><code>11111110</code> &rarr;   <code>-2</code> (hex <code>FE</code>)</li>
+      <li><code>11111111</code> &rarr;   <code>-1</code> (hex <code>FF</code>)</li>
+  </ul>
+  Feeding data for this use case may be done with
+  <a href="document-json-format.html#tensor-hex-dump">"hex dump"</a> format
+  instead of numbers in range <code>[-128,127]</code> both to have a more natural format
+  for representing binary data, and to avoid the overhead of parsing a large json array of numbers.
+</p>
+
+<h3 id="distance-metric-mips-notes">Notes: maximal inner product search</h3>
 {% include note.html content="
 Some vectorization models, including matrix factorization, use \"maximum inner product\" (MIP),
 with vectors that aren't normalized to unit vectors. These models use both direction and magnitude.
@@ -2713,122 +2859,12 @@ unit length vectors will cause information loss which will impact the accuracy."
   The downside of this transformation is that maximum length or magnitude
   needs to be known prior to indexing the vectors in Vespa, making it only practical for batch oriented vector indexing.
 </p>
-{% include important.html content="When changing the <code>distance-metric</code>,
-the content nodes must be restarted to rebuild the HNSW index -
-see <a href='#changes-that-require-restart-but-not-re-feed'>changes that require restart but not re-feed</a>"%}
 <p>
   The <a href="https://github.com/vespa-engine/sample-apps/tree/master/dense-passage-retrieval-with-ann">Dense passage retrieval sample app</a>
   uses the mentioned transformation as the original text to vector model was trained using MIP.
   The <a href="https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking">MS Marco ranking sample app</a>
   uses a text to vector model which used cosine similarity during training so no transformation was required.
 </p>
-<pre>
-distance-metric: [metric]
-</pre>
-<table class="table">
-<thead>
-  <tr><th>Metric</th><th>Description</th></tr>
-</thead>
-<tbody>
-  <tr>
-    <td>euclidean</td>
-    <td>
-    The squared euclidean distance. Calculated by
-    <code>distance(q,d) = sqrt(sum((q - d)^2))</code>.
-    The
-    <a href="https://en.wikipedia.org/wiki/Euclidean_distance">Euclidean distance</a> metric.
-    This is the default distance-metric used if not specified.
-    </td>
-  </tr>
-  <tr>
-    <td>angular</td>
-    <td>
-    Computes the <em>angle</em> between the vectors and uses that as the distance metric.
-    This range is [0,pi], which is the angular distance.
-    Note that this is closely related to the
-    <a href="https://en.wikipedia.org/wiki/Cosine_similarity">cosine similarity</a>
-    which is just <code>cos(angle)</code>.
-    If possible, it's slightly better for performance to normalize both query and document vectors to unit vectors
-    and use the <code>prenormalized-angular</code> metric instead. Using the angle or cosine similarity produce
-    the same ordering. One can get the cosine score instead for returned hits by
-    calculating the cosine similarity for the angle returned by the distance
-    <a href="rank-features.html">rank-feature</a>.
-    <pre>
-    rank-profile cosine {
-      first-phase {
-        expression: cos(distance(field, embedding))
-      }
-    }
-    </pre>
-    </td>
-  </tr>
-  <tr>
-    <td>prenormalized-angular</td>
-    <td>
-    <p><strong>Must only be used</strong> when <strong>both</strong> query and document vectors are normalized.
-     There is no runtime
-     validation which checks that vectors are unit vectors as it would impact performance negatively.
-     Using <em>prenormalized-angular</em> with vectors that are not unit vectors violates the mentioned metric space properties
-     and causes unpredictable nearest neighbor search.
-     (Note: Previously named "innerproduct" which was misleading).
-    </p>
-    <p>
-    The length, magnitude, or norm of a vector <em>x</em> is calculated as <code>sqrt(sum(power(x,2)))</code>.
-    The unit length normalized
-    vector is given by <code>x/sqrt(sum(power(x,2)))</code>.
-    </p>
-    <p>
-    The Vespa <em>prenormalized-angular</em> computes the
-    <a href="https://en.wikipedia.org/wiki/Cosine_similarity">cosine similarity</a>
-    and uses <code>1.0 - cos(angle)</code> as the distance metric.
-
-    It gives exactly the same ordering as <code>angular</code> distance,
-    but with a distance in the range [0,2], since cosine similarity has range [1,-1],
-    so the end result is 0.0 for same direction vectors,
-    1.0 for a right angle, and 2.0 for vectors with exactly opposite directions.</p>
-    </td>
-  </tr>
-  <tr>
-    <td>geodegrees</td>
-    <td>
-    Only valid for geographical coordinates (two-dimensional vectors
-    containing latitude and longitude on Earth, in degrees).
-    Computes the great-circle distance (in kilometers) between two geographical points using the
-    <a href="https://en.wikipedia.org/wiki/Haversine_formula">Haversine formula</a>.
-    See
-    <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/nearest_neighbor/geo.sd">geodegrees system test</a>
-    for an example.
-    </td>
-  </tr>
-  <tr>
-    <td>hamming</td>
-    <td>
-    <a href="https://en.wikipedia.org/wiki/Hamming_distance">Hamming distance</a> metric.
-    This isn't useful for floating-point data since it only counts the number of dimensions
-    where the vectors have different coordinates, meaning you only get 1 bit of information
-    from each floating-point number.  Instead, it should be used for binary data where each
-    bit is considered a separate coordinate.  Practically, this means you should use the
-    <code>int8</code> <a href="../performance/feature-tuning.html#cell-value-types">cell value type</a>
-    for your tensor, with the usual encoding from bit pattern to numerical value, for example:
-    <ul>
-      <li><code>00000000</code> &rarr;    <code>0</code> (hex <code>00</code>)</li>
-      <li><code>00010001</code> &rarr;   <code>17</code> (hex <code>11</code>)</li>
-      <li><code>00101010</code> &rarr;   <code>42</code> (hex <code>2A</code>)</li>
-      <li><code>01111111</code> &rarr;  <code>127</code> (hex <code>7F</code>)</li>
-      <li><code>10000000</code> &rarr; <code>-128</code> (hex <code>80</code>)</li>
-      <li><code>10000001</code> &rarr; <code>-127</code> (hex <code>81</code>)</li>
-      <li><code>11111110</code> &rarr;   <code>-2</code> (hex <code>FE</code>)</li>
-      <li><code>11111111</code> &rarr;   <code>-1</code> (hex <code>FF</code>)</li>
-    </ul>
-    Feeding data for this use case may be done with
-    <a href="document-json-format.html#tensor-hex-dump">"hex dump"</a> format
-    instead of numbers in range <code>[-128,127]</code> both to have a more natural format
-    for representing binary data, and to avoid the overhead of parsing a large json array of numbers.
-    </td>
-  </tr>
-</tbody>
-</table>
-
 
 
 <h2 id="bolding">bolding</h2>
