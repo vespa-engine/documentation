@@ -138,10 +138,11 @@ as `distance-metric`.
 See for example [text to image search using CLIP with Vespa](https://blog.vespa.ai/text-image-search/).
 
 ### Distance metrics for nearest neighbor search
-Vespa supports five different [distance-metrics](reference/schema-reference.html#distance-metric):
+Vespa supports six different [distance-metrics](reference/schema-reference.html#distance-metric):
 
 * `euclidean`
 * `angular`
+* `dotproduct`
 * `prenormalized-angular`
 * `hamming`
 * `geodegrees`
