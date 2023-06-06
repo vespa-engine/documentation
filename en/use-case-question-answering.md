@@ -99,7 +99,7 @@ And Vespa will return the exact answer: `78.37 C`. This application uses the
     computation in ranking, for instance, when evaluating a large machine-learned
     model. In these cases, one can perform a fast first phase ranking and only
     perform the expensive computation on a smaller subset. This application first
-    uses a euclidean score from the ANN and only evaluates the large
+    uses a dotproduct score from the ANN and only evaluates the large
     Transformer model on the top 10 candidates.
 
 * [Summary features](reference/schema-reference.html#summary-features)

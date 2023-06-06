@@ -414,7 +414,11 @@ and have limited text match modes (i.e. `indexing: index` cannot be used).
 If you have added vectors to your documents and queries, and see that the rank feature 
 closeness(field, yourEmbeddingField) produces 1.0 for all documents, you are likely using
 [distance-metric](reference/schema-reference.html#distance-metric): innerproduct,
-but your vectors are not normalized, and the solution is normally to switch to distance-metric: angular.
+but your vectors are not normalized, and the solution is normally to switch to
+[distance-metric: angular](reference/schema-reference.html#angular)
+or use
+[distance-metric: dotproduct](reference/schema-reference.html#dotproduct)
+(available from Vespa version 8.170.18).
 
 With non-normalized vectors, you often get negative distances, and those are capped to 0,
 leading to closeness 1.0.

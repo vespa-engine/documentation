@@ -70,10 +70,10 @@ schema news {
         field impressions type int {
             indexing: summary | attribute
         }
-        field embedding type tensor&lt;float&gt;(d0[51]) {
+        field embedding type tensor&lt;float&gt;(d0[50]) {
             indexing: attribute 
             attribute {
-                distance-metric: euclidean
+                distance-metric: dotproduct
             }
         }
     }
@@ -106,12 +106,13 @@ Tensors can be either dense or sparse or both, and can contain any number of dim
 See [the tensor user guide](../tensor-user-guide.html) for more information.
 
 Here we have defined a dense tensor with a single dimension (`d0` - dimension 0), which represents a vector.
-The distance metric is euclidean as we would like to use this field for nearest-neighbor search.
+The distance metric is "dotproduct" as we would like to use this field for nearest-neighbor search
+where we search for the maximal dotproduct.
 
 This is seen in the `recommendation` rank profile.
 Here, we've added a ranking expression using the
 [closeness](../reference/rank-features.html#closeness(dimension,name)) ranking feature,
-which calculates the euclidean distance and uses that to rank the news articles.
+which calculates the dot product and uses that to rank the news articles.
 This depends on using the `nearestNeighbor` search operator,
 which we'll get back to below when searching.
 But for now, this expects a tensor in the query to be used as the initial search point.
@@ -149,7 +150,7 @@ schema user {
             indexing: summary | attribute
             attribute: fast-search
         }
-        field embedding type tensor&lt;float&gt;(d0[51]) {
+        field embedding type tensor&lt;float&gt;(d0[50]) {
             indexing: summary | attribute
         }
     }
@@ -262,11 +263,11 @@ To set up the query profile types, write them to the file
 
 <pre data-test="file" data-path="news/my-app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id="root" inherits="native"&gt;
-    &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[51])" /&gt;
+    &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[50])" /&gt;
 &lt;/query-profile-type&gt;
 </pre>
 
-This configures Vespa to expect a float tensor with dimension `d0[51]` when the
+This configures Vespa to expect a float tensor with dimension `d0[50]` when the
 query parameter `ranking.features.query(user_embedding)` is passed.
 We'll see how this works together with the `nearestNeighbor` search operator below.
 
@@ -311,7 +312,7 @@ This returns the document containing the user's embedding:
                 "fields": {
                     "user_id": "U33527",
                     "embedding": {
-                        "type": "tensor<float>(d0[51])",
+                        "type": "tensor<float>(d0[50])",
                         "values": [
                             0.0,
                             0.06090399995446205,
@@ -364,11 +365,14 @@ so Vespa knows what to expect here. <!-- ToDo: use inputs instead -->
 When Vespa receives this query, it scans linearly through all documents
 (28603 if you are using the MIND DEMO dataset),
 and scores them using the `recommendation` rank profile we set up above.
-Recall that we converted the problem from maximum inner product to euclidean distance.
+Recall that we ask Vespa to convert the problem from maximum inner product to
+a nearest distance problem by using the `dotproduct` distance metric;
+in this case `distance` ranking feature just outputs the negative dotproduct.
 
+With a distance search, we want to find the smallest distances.
 However, Vespa sorts the final results by decreasing rank score.
-With a euclidean distance search, we want to find the smallest distances.
-To invert the rank order, Vespa provides the `closeness` feature which is calculated as `1 / (1 + distance)`.
+To get the expected rank order, Vespa provides the `closeness` feature which
+in this case is just the dotproduct directly.
 
 Let's test that this works as intended, using
 [evaluate.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/evaluate.py):
@@ -474,7 +478,7 @@ schema news {
         field impressions type int {
             indexing: summary | attribute
         }
-        field embedding type tensor&lt;float&gt;(d0[51]) {
+        field embedding type tensor&lt;float&gt;(d0[50]) {
             indexing: attribute | index
             attribute {
                 distance-metric: euclidean

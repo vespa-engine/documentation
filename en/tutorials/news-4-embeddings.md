@@ -33,8 +33,8 @@ and use them to search for relevant news articles.
 We start by generating embeddings using a collaborative filtering method.
 We'll then improve upon that using a content-based approach, which generates embedding based on BERT models.
 Since we'll use this in a nearest neighbors algorithm,
-we'll touch upon how to convert a maximum inner product search to euclidean distance search
-before moving along to the next tutorial.
+we'll touch upon how the maximum inner product search is transformed
+to a distance search form.
 
 Let's start with taking a look again at what data the MIND dataset provides for us.
 
@@ -437,16 +437,16 @@ The training script writes these embeddings to the files
 
 ## Mapping from inner-product search to euclidean search
 
-There is one more step we need to do before feeding these vectors to Vespa.
-The vectors have been trained to maximize the inner product.
+These vectors have been trained to maximize the inner product.
 Finding the best news articles given a user vector is called Maximum Inner Product Search - or MIPS.
-Unfortunately, this form isn't really suitable for efficient retrieval.
-We'll get back to this later when discussing approximate nearest neighbors.
+This form isn't really suitable for efficient retrieval as-is,
+but it can be mapped to a nearest neighbor search problem, so
+we can use an efficient approximate nearest neighbors index.
 
-To facilitate efficient retrieval, we need to map the MIPS problem to a Euclidean nearest neighbor search problem.
-We use the technique discussed in
+When specifying "distance-metric: dotproduct", Vespa uses the technique discussed in
 [Speeding Up the Xbox Recommender System Using a Euclidean Transformation for Inner-Product
-Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf).
+Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf)
+to solve the MIPS case.
 
 See [Nearest Neighbor Search](../nearest-neighbor-search.html) for more
 information on nearest neighbor search and supported distance metrics in Vespa.
