@@ -173,7 +173,7 @@ and we can reference this as `attribute(global_category_ctrs)` during ranking.
 
 Up until this point, we've only used tensors as storage.
 We used tensors to hold news and user embeddings,
-and Vespa used these tensors to calculate the euclidean distances in nearest-neighbor searches.
+and Vespa used these tensors to calculate the dot product in nearest-neighbor searches.
 
 However, Vespa has a [rich language](../tensor-user-guide.html#ranking-with-tensors)
 to perform calculations with tensors.
