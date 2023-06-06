@@ -5,7 +5,6 @@ window.MathJax = {
     //    minScale: .5
     //},
     svg: {  // http://docs.mathjax.org/en/latest/options/output/svg.html
-        scale: 0.75,
         minScale: .5
     }
 };
