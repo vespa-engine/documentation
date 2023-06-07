@@ -290,7 +290,7 @@ You can stop and kill the Vespa container application like this:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="after">
-$ docker rm -f vespa
+$ docker stop vespa; docker rm -f vespa
 </pre>
 </div>
 
