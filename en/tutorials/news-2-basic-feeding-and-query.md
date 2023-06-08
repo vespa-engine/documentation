@@ -303,8 +303,7 @@ using the `vespa-feed-client`:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --file mind/vespa.json --endpoint http://localhost:8080
+$ vespa feed mind/vespa.json --target http://localhost:8080
 </pre>
 </div>
 
