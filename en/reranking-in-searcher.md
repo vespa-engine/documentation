@@ -180,6 +180,7 @@ Notice the `bundle` name of the searcher, this needs to be in synch with the `ar
         &lt;relativePath/&gt;
     &lt;/parent&gt;
     &lt;properties&gt;
+        &lt;bundle-plugin.failOnWarnings&gt;true&lt;/bundle-plugin.failOnWarnings&gt;
         &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
         &lt;test.hide&gt;true&lt;/test.hide&gt;
     &lt;/properties&gt;
