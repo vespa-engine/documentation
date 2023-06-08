@@ -64,9 +64,9 @@ See more usage examples in <a href="#embedding-a-query-text">embedding a query t
   </ul>
 </p>
 
-<p>The model files used must be supplied in the Vespa <a href="application-packages.html#deploying-remote-models">application package</a>
-  when using <code>path</code>. The above example uses files in the the <code>models</code> directory, or specified by 
-  <code>model-id</code> when deployed on <a href="https://cloud.vespa.ai/en/model-hub">Vespa Cloud</a>.</p>
+<p>When using <code>path</code>, the model files must be supplied in the Vespa <a href="application-packages.html#deploying-remote-models">application package</a>.
+  The above example uses files in the the <code>models</code> directory, or specified by 
+  <code>model-id</code> when deployed on <a href="https://cloud.vespa.ai/en/model-hub">Vespa Cloud</a>. See <a href="#model-config-reference">model config reference</a>.</p>
 
 <pre>{% highlight xml %}
 <container id="default" version="1.0">
@@ -137,16 +137,16 @@ with three model inputs (<em>input_ids, attention_mask, token_type_ids</em>). Pr
 <pre>{% highlight xml %}
   <container version="1.0"> 
     <component id="tokenizer" type="hugging-face-tokenizer">
-      <model  path="models/tokenizer.json"/>
+      <model url="https://huggingface.co/bert-base-uncased/raw/main/tokenizer.json"/>
       <special-tokens>false</special-tokens>
-      <max-length>512</max-length>
+      <max-length>64</max-length>
       <truncation>true</truncation>
     </component>
   </container>
   {% endhighlight %}</pre>
+<p>See <a href="#huggingface-tokenizer-reference-config">configuration reference</a> for all configuration options. </p>
 
 <h3 id="sentencepiece-embedder">SentencePiece embedder</h3>
-
 <p>A native Java implementation of <a href="https://github.com/google/sentencepiece">SentencePiece</a>.
 SentencePiece breaks text into chunks independent of spaces, which is robust to misspellings and works with CJK languages.
 Prefer the <a href="#huggingface-tokenizer-embedder">Huggingface tokenizer embedder</a> over this for better compability with Huggingface models.</p>
@@ -389,11 +389,24 @@ implement this interface and add it as a <a href="developer-guide.html#developin
   Try the <a href="https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search">
   simple-semantic-search</a> sample application. 
   The <a href="https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking">commerce-product-ranking</a> 
-  demonstrates using multiple embedders. Another complete example application using multiple embedders can be found in
-  <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/embedding/app_two_embedders/">this system test</a>.
+  demonstrates using multiple embedders. The 
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing">multi-vector-indexing</a> sample-app demonstrates
+  how to use embedders with multiple inputs. 
+</p>
+
+<h2 id="model-config-reference">Model config reference</h2>
+<p>Embedder models uses the <a href="reference/config-files.html#model">model</a> type configuration. 
+  The <em>model</em> type configuration accepts attributes <code>model-id</code>, <code>url</code> or <code>path</code>, 
+  and multiple of these can be specified as a single config value, where one is used depending on the deployment environment:
+
+  If a model-id is specified and the application is deployed on Vespa Cloud, the <code>model-id</code> is used.
+  Otherwise, if a <code>url</code> is specified, it is used. Otherwise, <code>path</code> is used. </p>
+<p>When using <code>path</code>, the model files must be supplied in the
+     Vespa <a href="application-packages.html#deploying-remote-models">application package</a>.
 </p>
 
 <h2 id="huggingface-embedder-reference-config">huggingface embedder reference config</h2>
+<p>In addition to <a href="#embedder-onnx-reference-config">embedder onnx parameters</a>:</p>
 <table class="table">
   <thead>
     <tr>
@@ -408,15 +421,15 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     <tr>
       <td>transformer-model</td>
       <td>One</td>
-      <td>Accepts <em>path</em>, <em>url</em> and <em>model-id</em> attributes. Use to point to the transformer ONNX model file</td>
-      <td>string</td>
+      <td>Use to point to the transformer ONNX model file</td>
+      <td><a href="#model-config-reference">model-type</a></td>
       <td>N/A</td>
     </tr>
     <tr>
       <td>tokenizer-model</td>
       <td>One</td>
-      <td>Accepts <em>path</em>, <em>url</em> and <em>model-id</em> attributes. Use to point to the <em>tokenizer.json</em> Huggingface configuration file file</td>
-      <td>string</td>
+      <td>Use to point to the <code>tokenizer.json</code> Huggingface tokenizer configuration file</td>
+      <td><a href="#model-config-reference">model-type</a></td>
       <td>N/A</td>
     </tr>
     <tr>
@@ -457,7 +470,7 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     <tr>
       <td>pooling-strategy</td>
       <td>One</td>
-      <td>How the output vectors of the ONNX model is pooled to obtain a single vector representation. Valid values are <em>mean</em>mean and <em>CLS</em></td>
+      <td>How the output vectors of the ONNX model is pooled to obtain a single vector representation. Valid values are <code>mean</code> and <code>cls</code></td>
       <td>string</td>
       <td>mean</td>
     </tr>
@@ -469,40 +482,12 @@ implement this interface and add it as a <a href="developer-guide.html#developin
       <td>boolean</td>
       <td>false</td>
     </tr>
-    <tr>
-      <td>onnx-execution-mode</td>
-      <td>One</td>
-      <td>Low level ONNX execution model. Valid values are "parallel" or "sequential". 
-        See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options</a></td>
-      <td>string</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>onnx-interop-threads</td>
-      <td>One</td>
-      <td>Low level ONNX setting. See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options</td>
-      <td>numeric</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>onnx-intraop-threads</td>
-      <td>One</td>
-      <td>Low level ONNX setting. See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options</td>
-      <td>numeric</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>onnx-gpu-device</td>
-      <td>One</td>
-      <td>The GPU device to run the model. See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options</td>
-      <td>numeric</td>
-      <td></td>
-    </tr>
   </tbody>
 </table>
 
 
 <h2 id="bert-embedder-reference-config">bert embedder reference config</h2>
+<p>In addition to <a href="#embedder-onnx-reference-config">embedder onnx parameters</a>:</p>
 <table class="table">
   <thead>
     <tr>
@@ -517,15 +502,15 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     <tr>
       <td>transformer-model</td>
       <td>One</td>
-      <td>Accepts <em>path</em>, <em>url</em> and <em>model-id</em> attributes. Use to point to the transformer ONNX model file</td>
-      <td>string</td>
+      <td>Use to point to the transformer ONNX model file</td>
+      <td><a href="#model-config-reference">model-type</a></td>
       <td>N/A</td>
     </tr>
     <tr>
       <td>tokenizer-vocab</td>
       <td>One</td>
-      <td>Accepts <em>path</em>, <em>url</em> and <em>model-id</em> attributes. Use to point to the <em>vocab.txt</em> file with valid wordpiece tokens</td>
-      <td>string</td>
+      <td>Use to point to the Huggingface <code>vocab.txt</code> tokenizer file with valid wordpiece tokens. Does not support <code>tokenizer.json</code> format.</td>
+      <td><a href="#model-config-reference">model-type</a></td>
       <td>N/A</td>
     </tr>
     <tr>
@@ -533,7 +518,7 @@ implement this interface and add it as a <a href="developer-guide.html#developin
       <td>One</td>
       <td>The maximum number of tokens allowed in the input</td>
       <td>integer</td>
-      <td>512</td>
+      <td>384</td>
     </tr>
     <tr>
       <td>transformer-input-ids</td>
@@ -561,7 +546,7 @@ implement this interface and add it as a <a href="developer-guide.html#developin
       <td>One</td>
       <td>The name or identifier for the transformer output</td>
       <td>string</td>
-      <td>last_hidden_state</td>
+      <td>output_0</td>
     </tr>
     <tr>
       <td>transformer-start-sequence-token</td>
@@ -580,52 +565,99 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     <tr>
       <td>pooling-strategy</td>
       <td>One</td>
-      <td>How the output vectors of the ONNX model is pooled to obtain a single vector representation. Valid values are <em>mean</em>mean and <em>CLS</em></td>
+      <td>How the output vectors of the ONNX model is pooled to obtain a single vector representation. Valid values are <code>mean</code> and <code>cls</code></td>
       <td>string</td>
       <td>mean</td>
-    </tr>
-    <tr>
-      <td>normalize</td>
-      <td>One</td>
-      <td>A boolean indicating whether to normalize the output embedding vector to unit length (length 1). Useful for <code>prenormalized-angular</code> 
-      <a href="reference/schema-reference.html#distance-metric">distance-metric</a></td>
-      <td>boolean</td>
-      <td>false</td>
-    </tr>
-    <tr>
-      <td>onnx-execution-mode</td>
-      <td>One</td>
-      <td>Low level ONNX execution model. Valid values are "parallel" or "sequential".
-         See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options</a></td>
-      <td>string</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>onnx-interop-threads</td>
-      <td>One</td>
-      <td>Low level ONNX setting. See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options</td>
-      <td>numeric</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>onnx-intraop-threads</td>
-      <td>One</td>
-      <td>Low level ONNX setting. See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options</td>
-      <td>numeric</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>onnx-gpu-device</td>
-      <td>One</td>
-      <td>The GPU device to run the model. See <a href="stateless-model-evaluation.html#onnx-inference-options">onxx inference options 
-        and <a href="vespa-gpu-container.html">Configuring GPU for Vespa</a>. 
-      </td>
-      <td>numeric</td>
-      <td></td>
     </tr>
   </tbody>
 </table>
 
+<h2 id="embedder-onnx-reference-config">embedder onnx reference config</h2>
+<p>Vespa uses <a href="https://onnxruntime.ai/">ONNXRuntime</a> to accelerate inference of embedding models. These parameters are valid for both 
+<a href="#bert-embedder">bert embedder</a> and <a href="#huggingface-embedder">huggingface embedder</a></p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>onnx-execution-mode</td>
+      <td>One</td>
+      <td>Low level ONNX execution model. Valid values are <code>parallel</code> or <code>sequential</code>.
+         See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options</a>. Only relevant for inference on CPU. 
+         See <a href="https://onnxruntime.ai/docs/performance/tune-performance/threading.html">ONNXruntime documentation</a> on threading.
+        </td>
+      <td>string</td>
+      <td>sequential</td>
+    </tr>
+    <tr>
+      <td>onnx-interop-threads</td>
+      <td>One</td>
+      <td>Low level ONNX setting. See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options</a>. Only relevant for inference on CPU.</td>
+      <td>numeric</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>onnx-intraop-threads</td>
+      <td>One</td>
+      <td>Low level ONNX setting. See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options</a>. Only relevant for inference on CPU.</td>
+      <td>numeric</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>onnx-gpu-device</td>
+      <td>One</td>
+      <td>The GPU device to run the model on. See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options 
+        and <a href="vespa-gpu-container.html">configuring GPU for Vespa container</a>. Use <code>-1</code> to not use GPU for the model, even
+        if the instance has available GPUs.
+      </td>
+      <td>numeric</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="huggingface-tokenizer-reference-config">huggingface tokenizer reference config</h2>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>One</td>
+      <td>Use to point to the <code>tokenizer.json</code> Huggingface tokenizer configuration file</td>
+      <td><a href="#model-config-reference">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-length</td>
+      <td>One</td>
+      <td>The maximum number of tokens allowed in the input</td>
+      <td>numeric</td>
+      <td>-1 (No length limitation)</td>
+    </tr>
+    <tr>
+      <td>truncation</td>
+      <td>One</td>
+      <td>Whether to to truncate the output at max-length</td>
+      <td>boolean</td>
+      <td>false</td>
+    </tr>
+  </tbody>
+</table>
 
 
 <h2 id="troubleshooting-model-signature">Troubleshooting model signature</h2>
@@ -670,7 +702,10 @@ test setup:
   at ai.vespa.embedding.BertBaseEmbedder.validateModel(BertBaseEmbedder.java:68)
 </pre>
 <p>
-  When this happens, a deploy looks like:
+In this case, the configuration specifies a required input <code>input_ids</code>, but when inspecting the onnx model, vespa finds 
+no such input, but a input called <code>input</code>.
+
+When this happens, a deploy looks like:
 </p>
 <pre>
 $ vespa deploy --wait 300
@@ -683,5 +718,16 @@ Error: service 'query' is unavailable: services have not converged
 </pre>
 <p>
   Use <a href="onnx.html#using-vespa-analyze-onnx-model">vespa-analyze-onnx-model</a> like in the example above
-  to analyze the model signature.
+  to analyze the model input and output signatures.
 </p>
+
+<h2 id="embedder-performance">Embedder performance</h2>
+<p>Embedding inference can be expensive for large embedding models. Factors that impacts performance:</p>
+
+<ul>
+  <li>The embedding model parameters. Larger models requires more compute than smaller models.</li>
+  <li>The sequence input length. Transformer type models scales quadratic with input length.</li>
+  <li>The number of sequence inputs. When embedding arrays of inputs consider how many inputs a single document can have. For CPU inference, increasing
+    <a href="reference/document-v1-api-reference.html#timeoutfeed timeout">feed timeout</a> settings might be required when documents have many inputs. 
+  </li>
+</ul>
