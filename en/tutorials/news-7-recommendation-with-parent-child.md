@@ -317,10 +317,8 @@ Feed the created feed files:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --file mind/global_category_ctr.json --endpoint http://localhost:8080
-$ ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --file mind/news_category_ctr_update.json --endpoint http://localhost:8080
+$ vespa feed mind/global_category_ctr.json --target http://localhost:8080
+$ vespa feed mind/news_category_ctr_update.json --target http://localhost:8080
 </pre>
 </div>
 
