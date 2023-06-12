@@ -5,45 +5,83 @@ redirect_from:
 - /documentation/embedding.html
 ---
 
-<p>A common technique in modern big data serving applications is to map unstructured data - say, text or images -
-to points in an abstract vector space and then do computation in that vector space. For example, retrieve
-similar data by <a href="approximate-nn-hnsw.html">finding nearby points in the vector space</a>, or
-<a href="onnx.html">using the vectors as input to a neural net</a>. This mapping is usually referred to as
-<i>embedding</i>. 
-See <a href="https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/">Customizing Reusable Frozen ML-Embeddings with Vespa</a>
-for an introduction to embeddings, embedding management and how embeddings can be used for Machine Learning (ML) serving in Vespa.
+<p>
+  A common technique in modern big data serving applications is to map unstructured data - say, text or images -
+  to points in an abstract vector space and then do computation in that vector space. For example, retrieve
+  similar data by <a href="approximate-nn-hnsw.html">finding nearby points in the vector space</a>,
+  or <a href="onnx.html">using the vectors as input to a neural net</a>.
+  This mapping is usually referred to as <em>embedding</em>.
+  See <a href="https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/">Customizing Reusable Frozen ML-Embeddings with Vespa</a>
+  for an introduction to embeddings, embedding management
+  and how embeddings can be used for Machine Learning (ML) serving in Vespa.
 </p>
-
-<h2 id="provided-embedders">Provided embedders</h2>
-
-<p>Vespa provides some embedders as part of the platform. Native Vespa embedders reduces complexity as developers does not need to 
-  host additional infrastructure for producing text embeddings. Native Vespa embedders embeds text for both queries and documents.
+<p>Example embeddings for document and queries look like:</p>
+<img src="/assets/img/vespa-overview-embeddings-1.svg" alt="document- and query-embeddings"
+  width="1000" height="auto"/>
+<p>
+  Above, embeddings are generated in documents <em>before</em> feeding to Vespa.
+  Also, the query embedding is pre-generated.
 </p>
 <p>
-  An example of a Vespa <a href="query-api.html#http">query</a> request using Vespa embed functionality:
+  By using the embedding features in Vespa, one can instead generate the embeddings
+  into the document feed and query flows.
+  Observe how <code>embed</code> is used to create the embeddings from text in the schema and queries:
+</p>
+<ol>
+  <li>
+    Add a synthetic <code>paragraph_embeddings</code> field (can be any name) in the schema,
+    using the <code>paragraph</code> text field as input.
+  </li>
+  <li>Feed documents with text data.</li>
+  <li>Send textual queries.</li>
+</ol>
+<img src="/assets/img/vespa-overview-embeddings-2.svg" alt="Vespa's embedding feature, creating embeddings from text"
+  width="800" height="auto"/>
+<p>
+  Integrating embedding <em>into</em> the Vespa application can simplify the architecture,
+  as well as cut latencies - vector data transfer is minimized, with less components.
+</p>
+
+
+
+<h2 id="provided-embedders">Provided embedders</h2>
+<p>
+  Vespa provides some embedders as part of the platform.
+  Native Vespa embedders reduces complexity,
+  as developers does not need to host additional infrastructure for producing text embeddings.
+  Native Vespa embedders embeds text for both queries and documents.
+</p>
+<p>An example of a Vespa <a href="query-api.html#http">query</a> request using Vespa embed functionality:</p>
 <pre>{% highlight json %}
  {
     "yql": "select * from doc where {targetHits:10)nearestNeighbor(embedding,query_embedding)",
-    "query": "semantic search", 
-    "input.query(query_embedding)": "embed(semantic search)", 
+    "query": "semantic search",
+    "input.query(query_embedding)": "embed(semantic search)",
 }
 {% endhighlight %}</pre>
-See more usage examples in <a href="#embedding-a-query-text">embedding a query text</a> and <a href="#embedding-a-document-field">embedding a document field</a>.
+<p>
+  See more usage examples in <a href="#embedding-a-query-text">embedding a query text</a>
+  and <a href="#embedding-a-document-field">embedding a document field</a>.
 </p>
+
 
 <h3 id="huggingface-embedder">Huggingface Embedder</h3>
-
-<p>An embedder using any <a href="https://huggingface.co/docs/tokenizers/index">Huggingface tokenizer</a>, including multilingual tokenizers,
-  to produce tokens which is then input to a supplied transformer model in ONNX model format.  
+<p>
+  An embedder using any <a href="https://huggingface.co/docs/tokenizers/index">Huggingface tokenizer</a>,
+  including multilingual tokenizers,
+  to produce tokens which is then input to a supplied transformer model in ONNX model format.
 </p>
-<p>This provides embeddings directly suitable for <a href="approximate-nn-hnsw.html">retrieval</a>
+<p>
+  This provides embeddings directly suitable for <a href="approximate-nn-hnsw.html">retrieval</a>
   and <a href="ranking.html">ranking</a> in Vespa, and makes it easy
   to implement semantic search with no need for custom components or client-side embedding inference
   when used with the syntax for invoking the embedder in queries and during document indexing described
-  in <a href="#embedding-a-query-text">embedding a query text</a> and <a href="#embedding-a-document-field">embedding a document field</a>.</p>
-
-<p>The Huggingface embedder is configured in <a href="reference/services.html">services.xml</a>, within the <code>container</code> tag:</p>
-
+  in <a href="#embedding-a-query-text">embedding a query text</a> and <a href="#embedding-a-document-field">embedding a document field</a>.
+</p>
+<p>
+  The Huggingface embedder is configured in <a href="reference/services.html">services.xml</a>,
+  within the <code>container</code> tag:
+</p>
 <pre>{% highlight xml %}
 <container id="default" version="1.0">
     <component id="hf-embedder" type="hugging-face-embedder">
@@ -53,21 +91,24 @@ See more usage examples in <a href="#embedding-a-query-text">embedding a query t
     ...
 </container>
 {% endhighlight %}</pre>
-<p>
-  <ul>
-    <li>The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a>.
+<ul>
+  <li>
+    The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a>.
     See <a href="https://github.com/vespa-engine/sample-apps/blob/master/simple-semantic-search/export_hf_model_from_hf.py">export_hf_model_from_hf.py</a>,
     for how to export embedding models from Huggingface to <a href="https://onnx.ai/">ONNX</a> format.
-    </li>
-    <li>The <code>tokenizer-model</code> specifies the Huggingface <code>tokenizer.json</code> formatted file.
-      See <a href="https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file">HF loading tokenizer from a json file.</a></li>
-  </ul>
+  </li>
+  <li>
+    The <code>tokenizer-model</code> specifies the Huggingface <code>tokenizer.json</code> formatted file.
+    See <a href="https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file">HF loading tokenizer from a json file.</a>
+  </li>
+</ul>
+<p>
+  When using <code>path</code>, the model files must be supplied in the Vespa
+  <a href="application-packages.html#deploying-remote-models">application package</a>.
+  The above example uses files in the the <code>models</code> directory,
+  or specified by <code>model-id</code> when deployed on <a href="https://cloud.vespa.ai/en/model-hub">Vespa Cloud</a>.
+  See <a href="#model-config-reference">model config reference</a>.
 </p>
-
-<p>When using <code>path</code>, the model files must be supplied in the Vespa <a href="application-packages.html#deploying-remote-models">application package</a>.
-  The above example uses files in the the <code>models</code> directory, or specified by 
-  <code>model-id</code> when deployed on <a href="https://cloud.vespa.ai/en/model-hub">Vespa Cloud</a>. See <a href="#model-config-reference">model config reference</a>.</p>
-
 <pre>{% highlight xml %}
 <container id="default" version="1.0">
     <component id="e5" type="hugging-face-embedder">
@@ -76,14 +117,14 @@ See more usage examples in <a href="#embedding-a-query-text">embedding a query t
     </component>
     ...
 </container>{% endhighlight %}</pre>
-
 <p>See <a href="#huggingface-embedder-reference-config">configuration reference</a> for all the parameters.</p>
 
 <h4 id="huggingface-embedder-models">Huggingface embedder models</h4>
-
-<p>The following are examples of text embedding models that can be used with the hugging-face-embedder and their output <a href="tensor-user-guide.html">tensor</a> dimensionality. 
+<p>
+  The following are examples of text embedding models that can be used with the hugging-face-embedder
+  and their output <a href="tensor-user-guide.html">tensor</a> dimensionality.
   The resulting <a href="reference/tensor.html#tensor-type-spec">tensor type</a> can be either <code>float</code>
-  or <code>bfloat16</code>. 
+  or <code>bfloat16</code>:
 </p>
   <ul>
     <li><a href="https://huggingface.co/intfloat/e5-small-v2">intfloat/e5-small-v2</a> produces <code>tensor&lt;float&gt;(x[384])</code></li>
@@ -95,47 +136,60 @@ See more usage examples in <a href="#embedding-a-query-text">embedding a query t
     <li><a href="https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2">sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2</a> produces <code>tensor&lt;float&gt;(x[768])</code></li>
     <li><a href="https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2">sentence-transformers/paraphrase-multilingual-mpnet-base-v2</a> produces <code>tensor&lt;float&gt;(x[768])</code></li>
   </ul>
-<p>All of these example text embedding models can be used in combination with Vespa's <a href="nearest-neighbor-search.html">nearest neighbor search</a>
-    using <a href="reference/schema-reference.html#distance-metric">distance-metric</a> <code>angular</code>.</p>
-<p>Check the <em>Massive Text Embedding Benchmark </em> (MTEB) benchmark and <a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB leaderboard</a> 
-  for help with choosing an embedding model. 
+<p>
+  All of these example text embedding models can be used in combination with Vespa's
+  <a href="nearest-neighbor-search.html">nearest neighbor search</a>
+  using <a href="reference/schema-reference.html#distance-metric">distance-metric</a> <code>angular</code>.
+</p>
+<p>
+  Check the <em>Massive Text Embedding Benchmark </em> (MTEB) benchmark and
+  <a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB leaderboard</a>
+  for help with choosing an embedding model.
 </p>
 
+
 <h3 id="bert-embedder">Bert embedder</h3>
-
-<p>An embedder using the <a href="#wordpiece-embedder">WordPiece</a> embedder to produce tokens which is then input to
-a supplied <a href="https://onnx.ai/">ONNX</a> model on the form expected by a BERT base model. The Bert embedder is limited to English (wordpiece) and BERT-styled transformer models
-with three model inputs (<em>input_ids, attention_mask, token_type_ids</em>). Prefer using the <a href="huggingface-embedder">Huggingface Embedder</a> instead of the Bert embedder.</p>
-<p>The Bert embedder is configured in <a href="reference/services.html">services.xml</a>, within the <code>container</code> tag:</p>
-
+<p>
+  An embedder using the <a href="#wordpiece-embedder">WordPiece</a> embedder to produce tokens
+  which is then input to a supplied <a href="https://onnx.ai/">ONNX</a> model on the form expected by a BERT base model.
+  The Bert embedder is limited to English (wordpiece) and BERT-styled transformer models with three model inputs
+  (<em>input_ids, attention_mask, token_type_ids</em>).
+  Prefer using the <a href="#huggingface-embedder">Huggingface Embedder</a> instead of the Bert embedder.
+</p>
+<p>
+  The Bert embedder is configured in <a href="reference/services.html">services.xml</a>,
+  within the <code>container</code> tag:
+</p>
 <pre>{% highlight xml %}
-<container version="1.0"> 
+<container version="1.0">
   <component id="myBert" type="bert-embedder">
     <transformer-model path="models/e5-small-v2.onnx"/>
     <tokenizer-vocab url="https://huggingface.co/intfloat/e5-small-v2/raw/main/vocab.txt"/>
   </component>
 </container>
 {% endhighlight %}</pre>
-
-<p>
-  <ul>
-    <li>The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a>.
+<ul>
+  <li>
+    The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a>.
     See <a href="https://github.com/vespa-engine/sample-apps/blob/master/simple-semantic-search/export_model_from_hf.py">export_model_from_hf.py</a>,
     for how to export embedding models from Huggingface to <a href="https://onnx.ai/">ONNX</a> format.
-    </li>
-    <li>The <code>tokenizer-vocab</code> specifies the Huggingface <code>vocab.txt</code> file, with one valid token per line. 
-      Note that the Bert embedder does not support the <code>tokenizer.json</code> formatted tokenizer configuration files.</li>
-  </ul>
-</p>
+  </li>
+  <li>
+    The <code>tokenizer-vocab</code> specifies the Huggingface <code>vocab.txt</code> file, with one valid token per line.
+    Note that the Bert embedder does not support the <code>tokenizer.json</code> formatted tokenizer configuration files.
+  </li>
+</ul>
 <p>See <a href="#bert-embedder-reference-config">configuration reference</a> for all configuration options. </p>
 
+
 <h3 id="huggingface-tokenizer-embedder">Huggingface tokenizer embedder</h3>
-<p>Use any Huggingface tokenizer implementation as an embedder, mapping from text to token identifiers. 
-  This is suitable to use in conjunction with <a href="jdisc/container-components.html">custom components</a>, or the resulting 
-  tensor output can be used in <a href="ranking.html">ranking</a>.</p>
+<p>
+  Use any Huggingface tokenizer implementation as an embedder, mapping from text to token identifiers.
+  This is suitable to use in conjunction with <a href="jdisc/container-components.html">custom components</a>,
+  or the resulting tensor output can be used in <a href="ranking.html">ranking</a>.
 </p>
 <pre>{% highlight xml %}
-  <container version="1.0"> 
+  <container version="1.0">
     <component id="tokenizer" type="hugging-face-tokenizer">
       <model url="https://huggingface.co/bert-base-uncased/raw/main/tokenizer.json"/>
       <special-tokens>false</special-tokens>
@@ -146,18 +200,24 @@ with three model inputs (<em>input_ids, attention_mask, token_type_ids</em>). Pr
 {% endhighlight %}</pre>
 <p>See <a href="#huggingface-tokenizer-reference-config">configuration reference</a> for all configuration options. </p>
 
+
 <h3 id="sentencepiece-embedder">SentencePiece embedder</h3>
-<p>A native Java implementation of <a href="https://github.com/google/sentencepiece">SentencePiece</a>.
-SentencePiece breaks text into chunks independent of spaces, which is robust to misspellings and works with CJK languages.
-Prefer the <a href="#huggingface-tokenizer-embedder">Huggingface tokenizer embedder</a> over this for better compability with Huggingface models.</p>
-
-<p>This is suitable to use in conjunction with <a href="jdisc/container-components.html">custom components</a>, or the resulting 
-  tensor can be used in <a href="ranking.html">ranking</a>.</p>
-
-<p>To use the
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/sentencepiece/SentencePieceEmbedder.java">
-SentencePiece embedder</a>, add it to <a href="reference/services.html">services.xml</a>:</p>
-
+<p>
+  A native Java implementation of <a href="https://github.com/google/sentencepiece">SentencePiece</a>.
+  SentencePiece breaks text into chunks independent of spaces,
+  which is robust to misspellings and works with CJK languages.
+  Prefer the <a href="#huggingface-tokenizer-embedder">Huggingface tokenizer embedder</a> over this
+  for better compatibility with Huggingface models.
+</p>
+<p>
+  This is suitable to use in conjunction with <a href="jdisc/container-components.html">custom components</a>,
+  or the resulting tensor can be used in <a href="ranking.html">ranking</a>.
+</p>
+<p>
+  To use the
+  <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/sentencepiece/SentencePieceEmbedder.java">
+  SentencePiece embedder</a>, add it to <a href="reference/services.html">services.xml</a>:
+</p>
 <pre>{% highlight xml %}
 <container version="1.0">
   <component id="mySentencePiece"
@@ -174,27 +234,31 @@ SentencePiece embedder</a>, add it to <a href="reference/services.html">services
   </component>
 </container>
 {% endhighlight %}</pre>
-
-<p>See the options available for configuring SentencePiece in
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.sentencepiece.sentence-piece.def">
-the full configuration definition</a>.
+<p>
+  See the options available for configuring SentencePiece in
+  <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.sentencepiece.sentence-piece.def">
+  the full configuration definition</a>.
 </p>
+
 
 <h3 id="wordpiece-embedder">WordPiece embedder</h3>
-
-<p>A native Java implementation of
-<a href="https://github.com/google-research/bert#tokenization">WordPiece</a>,
-which is commonly used with BERT models.
-Prefer the <a href="#huggingface-tokenizer-embedder">Huggingface tokenizer embedder</a> over this for better compability with Huggingface models.</p>
+<p>
+  A native Java implementation of
+  <a href="https://github.com/google-research/bert#tokenization">WordPiece</a>,
+  which is commonly used with BERT models.
+  Prefer the <a href="#huggingface-tokenizer-embedder">Huggingface tokenizer embedder</a>
+  over this for better compatibility with Huggingface models.
 </p>
-
-<p>This is suitable to use in conjunction with <a href="jdisc/container-components.html">custom components</a>, or the resulting 
-  tensor can be used in <a href="ranking.html">ranking</a>.</p>
-
-<p>To use the
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/wordpiece/WordPieceEmbedder.java">
-  WordPiece embedder</a>, add it to <a href="reference/services.html">services.xml</a> within the <code>container</code> tag:</p>
-
+<p>
+  This is suitable to use in conjunction with <a href="jdisc/container-components.html">custom components</a>,
+  or the resulting tensor can be used in <a href="ranking.html">ranking</a>.
+</p>
+<p>
+  To use the
+  <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/wordpiece/WordPieceEmbedder.java">
+  WordPiece embedder</a>,
+  add it to <a href="reference/services.html">services.xml</a> within the <code>container</code> tag:
+</p>
 <pre>{% highlight xml %}
 <container version="1.0">
   <component id="myWordPiece">
@@ -211,14 +275,17 @@ Prefer the <a href="#huggingface-tokenizer-embedder">Huggingface tokenizer embed
   </component>
 </container>
 {% endhighlight %}</pre>
-
-<p>See the options available for configuring WordPiece in
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.wordpiece.word-piece.def">
-the full configuration definition</a>.
+<p>
+  See the options available for configuring WordPiece in
+  <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.wordpiece.word-piece.def">
+  the full configuration definition</a>.
+</p>
+<p>
+  WordPiece is suitable to use in conjunction with custom components,
+  or the resulting tensor can be used in <a href="ranking.html">ranking</a>.
 </p>
 
-<p>WordPiece is suitable to use in conjunction with custom components, or the resulting 
-  tensor can be used in <a href="ranking.html">ranking</a>.</p>
+
 
 <h2 id="embedding-a-query-text">Embedding a query text</h2>
 
@@ -229,7 +296,7 @@ you can with an embedder configured instead supply any text enclosed in <code>em
 input.query(myEmbedding)=<span class="pre-hilite">embed(myEmbedderId, "Hello%20world")</span>
 </pre>
 <p>If you have only configured a single embedder, you can skip the embedder id argument and optionally also the quotes.
-Both single and double quotes are permitted. Note that query <a href="reference/schema-reference.html#inputs">input tensors</a> 
+Both single and double quotes are permitted. Note that query <a href="reference/schema-reference.html#inputs">input tensors</a>
 must be defined in the schema's rank-profile. See <a href="reference/schema-reference.html#inputs">schema reference inputs</a>.</p>
 <pre>
 inputs {
@@ -242,16 +309,18 @@ inputs {
 <pre>{% highlight json %}
  {
     "yql": "select * from sources * where ...",
-    "query": "semantic search", 
-    "input.query(embedding)": "embed(e5, semantic search)", 
-    "input.query(embedding2)": "embed(e5, semantic search)", 
+    "query": "semantic search",
+    "input.query(embedding)": "embed(e5, semantic search)",
+    "input.query(embedding2)": "embed(e5, semantic search)",
     "input.query(query_tokens)": "embed(wordpiece, semantic search)",
     "ranking": "semantic",
 }
 {% endhighlight %}</pre>
 
+
+
 <h2 id="embedding-a-document-field">Embedding a document field</h2>
-<p>Use the Vespa <a href="reference/advanced-indexing-language.html#statement">indexing language</a> 
+<p>Use the Vespa <a href="reference/advanced-indexing-language.html#statement">indexing language</a>
 to convert one or more string fields into an embedding vector by using the <code>embed</code> function,
 for example:</p>
 
@@ -272,20 +341,21 @@ schema doc {
 
     field embeddings type tensor&lt;bfloat16&gt;(x[384]) {
         indexing {
-            (input title || "") . " " . (input body || "") | <span class="pre-hilite">embed embedderId</span> | attribute | index 
+            (input title || "") . " " . (input body || "") | <span class="pre-hilite">embed embedderId</span> | attribute | index
         }
         index: hnsw
     }
 
 }
 </pre>
-<p>The above example uses two input fields and concatenate them into a single input string to the embedder. See 
-  <a href="reference/advanced-indexing-language.html#choice-example">indexing choice</a> for details.
+<p>
+  The above example uses two input fields and concatenate them into a single input string to the embedder.
+  See <a href="reference/advanced-indexing-language.html#choice-example">indexing choice</a> for details.
 </p>
 
 <p>If each document has multiple text segments, represent them in an array and store the vector embeddings
 in a tensor field with one mapped and one indexed dimension.
-The array indexes (0-based) are used as labels in the mapped tensor dimension. 
+The array indexes (0-based) are used as labels in the mapped tensor dimension.
 See <a href="https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/">Revolutionizing Semantic Search with Multi-Vector HNSW Indexing in Vespa</a>.
 </p>
 
@@ -301,7 +371,7 @@ schema doc {
     }
 
     field embeddings type tensor&lt;bfloat16&gt;(p{},x[5]) {
-        indexing: input chunks | <span class="pre-hilite">embed embedderId</span> | attribute | index 
+        indexing: input chunks | <span class="pre-hilite">embed embedderId</span> | attribute | index
         index: hnsw
     }
 
@@ -333,7 +403,7 @@ schema doc {
             input chunks |
                 for_each {
                     "passage: " . (input title || "") . " " . ( _ || "")
-                } | embed e5 | attribute | index 
+                } | embed e5 | attribute | index
         }
         attribute {
             distance-metric: prenormalized-angular
@@ -342,20 +412,22 @@ schema doc {
 }
 </pre>
 <p>
-See <a href="reference/advanced-indexing-language.html#execution-value-example">Indexing language execution value</a> for details.
+  See <a href="reference/advanced-indexing-language.html#execution-value-example">Indexing language execution value</a>
+  for details.
 </p>
 
 {% include important.html content='Note that the generated embedding fields
 are defined outside the <code>document</code> clause in the schema.' %}
 
-<h2 id="using-an-embedder-from-java">Using an embedder from Java</h2>
 
+
+<h2 id="using-an-embedder-from-java">Using an embedder from Java</h2>
 <p>
-When writing custom Java components (such as <a href="searcher-development.html">Searchers</a>
-or <a href="document-processing.html#document-processors">Document processors</a>),
-use embedders you have configured by
-<a href="jdisc/injecting-components.html">having them injected in the constructor</a>,
-just as any other component:
+  When writing custom Java components (such as <a href="searcher-development.html">Searchers</a>
+  or <a href="document-processing.html#document-processors">Document processors</a>),
+  use embedders you have configured by
+  <a href="jdisc/injecting-components.html">having them injected in the constructor</a>,
+  just as any other component:
 </p>
 <pre>{% highlight java %}
 class MyComponent {
@@ -365,6 +437,8 @@ class MyComponent {
   }
 }
 {% endhighlight %}</pre>
+
+
 
 <h2 id="custom-embedders">Custom Embedders</h2>
 <p>Vespa provides a Java interface for defining components which can provide embeddings of text:
@@ -393,26 +467,30 @@ implement this interface and add it as a <a href="developer-guide.html#developin
 <h2 id="examples">Examples</h2>
 <p>
   Try the <a href="https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search">
-  simple-semantic-search</a> sample application. 
-  The <a href="https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking">commerce-product-ranking</a> 
-  demonstrates using multiple embedders. The 
+  simple-semantic-search</a> sample application.
+  The <a href="https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking">commerce-product-ranking</a>
+  demonstrates using multiple embedders. The
   <a href="https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing">multi-vector-indexing</a> sample-app demonstrates
-  how to use embedders with multiple inputs. 
+  how to use embedders with multiple inputs.
 </p>
 
 <h2 id="model-config-reference">Model config reference</h2>
-<p>Embedder models uses the <a href="reference/config-files.html#model">model</a> type configuration. 
-  The <em>model</em> type configuration accepts attributes <code>model-id</code>, <code>url</code> or <code>path</code>, 
+<p>
+  Embedder models uses the <a href="reference/config-files.html#model">model</a> type configuration.
+  The <em>model</em> type configuration accepts attributes <code>model-id</code>, <code>url</code> or <code>path</code>,
   and multiple of these can be specified as a single config value, where one is used depending on the deployment environment:
-
+</p>
   <ul>
     <li>If a <code>model-id</code> is specified and the application is deployed on Vespa Cloud, the <code>model-id</code> is used.</li>
     <li>Otherwise, if a <code>url</code> is specified, it is used</li>
-    <li>Otherwise, <code>path</code> is used. </p></li>
+    <li>Otherwise, <code>path</code> is used.</li>
   </ul>
-<p>When using <code>path</code>, the model files must be supplied in the
-     Vespa <a href="application-packages.html#deploying-remote-models">application package</a>.
+<p>
+  When using <code>path</code>, the model files must be supplied in the
+  Vespa <a href="application-packages.html#deploying-remote-models">application package</a>.
 </p>
+
+
 
 <h2 id="huggingface-embedder-reference-config">Huggingface embedder reference config</h2>
 <p>In addition to <a href="#embedder-onnx-reference-config">embedder ONNX parameters</a>:</p>
@@ -486,13 +564,14 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     <tr>
       <td>normalize</td>
       <td>One</td>
-      <td>A boolean indicating whether to normalize the output embedding vector to unit length (length 1). Useful for <code>prenormalized-angular</code> 
+      <td>A boolean indicating whether to normalize the output embedding vector to unit length (length 1). Useful for <code>prenormalized-angular</code>
       <a href="reference/schema-reference.html#distance-metric">distance-metric</a></td>
       <td>boolean</td>
       <td>false</td>
     </tr>
   </tbody>
 </table>
+
 
 
 <h2 id="bert-embedder-reference-config">Bert embedder reference config</h2>
@@ -581,9 +660,14 @@ implement this interface and add it as a <a href="developer-guide.html#developin
   </tbody>
 </table>
 
+
+
 <h2 id="embedder-onnx-reference-config">Embedder ONNX reference config</h2>
-<p>Vespa uses <a href="https://onnxruntime.ai/">ONNX Runtime</a> to accelerate inference of embedding models. These parameters are valid for both
-<a href="#bert-embedder">Bert embedder</a> and <a href="#huggingface-embedder">Huggingface embedder</a></p>
+<p>
+  Vespa uses <a href="https://onnxruntime.ai/">ONNX Runtime</a> to accelerate inference of embedding models.
+  These parameters are valid for both <a href="#bert-embedder">Bert embedder</a> and
+  <a href="#huggingface-embedder">Huggingface embedder</a>.
+</p>
 <table class="table">
   <thead>
     <tr>
@@ -599,7 +683,7 @@ implement this interface and add it as a <a href="developer-guide.html#developin
       <td>onnx-execution-mode</td>
       <td>One</td>
       <td>Low level ONNX execution model. Valid values are <code>parallel</code> or <code>sequential</code>.
-         See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options</a>. Only relevant for inference on CPU. 
+         See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options</a>. Only relevant for inference on CPU.
          See <a href="https://onnxruntime.ai/docs/performance/tune-performance/threading.html">ONNX runtime documentation</a> on threading.
         </td>
       <td>string</td>
@@ -622,7 +706,7 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     <tr>
       <td>onnx-gpu-device</td>
       <td>One</td>
-      <td>The GPU device to run the model on. See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options 
+      <td>The GPU device to run the model on. See <a href="stateless-model-evaluation.html#onnx-inference-options">ONNX inference options</a>
         and <a href="vespa-gpu-container.html">configuring GPU for Vespa container</a>. Use <code>-1</code> to not use GPU for the model, even
         if the instance has available GPUs.
       </td>
@@ -631,6 +715,8 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     </tr>
   </tbody>
 </table>
+
+
 
 <h2 id="huggingface-tokenizer-reference-config">Huggingface tokenizer reference config</h2>
 <table class="table">
@@ -647,14 +733,15 @@ implement this interface and add it as a <a href="developer-guide.html#developin
     <tr>
       <td>model</td>
       <td>One To Many</td>
-      <td>Use to point to the <code>tokenizer.json</code> Huggingface tokenizer configuration file. 
+      <td>Use to point to the <code>tokenizer.json</code> Huggingface tokenizer configuration file.
         Also supports <code>language</code>, which is only relevant if one wants to tokenize differently based on the document language.
-        Use "unknown" for a model to be used for any language (i.e by default).</td>
+        Use "unknown" for a model to be used for any language (i.e. by default).</td>
       <td><a href="#model-config-reference">model-type</a></td>
       <td>N/A</td>
     </tr>
   </tbody>
 </table>
+
 
 
 <h2 id="troubleshooting-model-signature">Troubleshooting model signature</h2>
@@ -699,10 +786,11 @@ test setup:
   at ai.vespa.embedding.BertBaseEmbedder.validateModel(BertBaseEmbedder.java:68)
 </pre>
 <p>
-In this case, the configuration specifies a required input <code>input_ids</code>, but when inspecting the ONNX model file, Vespa finds 
-no such input, but an input called <code>input</code>.
-
-When this happens, a deploy looks like:
+  In this case, the configuration specifies a required input <code>input_ids</code>,
+  but when inspecting the ONNX model file, Vespa finds no such input, but an input called <code>input</code>.
+</p>
+<p>
+  When this happens, a <em>deploy</em> looks like:
 </p>
 <pre>
 $ vespa deploy --wait 300
@@ -724,10 +812,12 @@ Error: service 'query' is unavailable: services have not converged
 <ul>
   <li>The embedding model parameters. Larger models requires more compute than smaller models.</li>
   <li>The sequence input length. Transformer type models scales quadratic with input length.</li>
-  <li>The number of sequence inputs. When embedding arrays of inputs consider how many inputs a single document can have. For CPU inference, increasing
-    <a href="reference/document-v1-api-reference.html#timeoutfeed timeout">feed timeout</a> settings might be required when documents have many inputs. 
+  <li>
+    The number of sequence inputs. When embedding arrays of inputs consider how many inputs a single document can have.
+    For CPU inference, increasing <a href="reference/document-v1-api-reference.html#timeout">feed timeout</a> settings
+    might be required when documents have many inputs.
   </li>
 </ul>
-<p>Using GPU, especially for longer sequence lengths (documents), can dramatically improve performance and reduce cost. 
+<p>Using GPU, especially for longer sequence lengths (documents), can dramatically improve performance and reduce cost.
   See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>.
 </p>
