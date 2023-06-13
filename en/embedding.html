@@ -11,25 +11,23 @@ redirect_from:
   similar data by <a href="approximate-nn-hnsw.html">finding nearby points in the vector space</a>,
   or <a href="onnx.html">using the vectors as input to a neural net</a>.
   This mapping is usually referred to as <em>embedding</em>.
-  See <a href="https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/">Customizing Reusable Frozen ML-Embeddings with Vespa</a>
-  for an introduction to embeddings, embedding management
-  and how embeddings can be used for Machine Learning (ML) serving in Vespa.
+  Read more about embedding and embedding management in this 
+  <a href="https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/">blog post</a>.
 </p>
-<p>Without using Vespa native embedding support, the embeddings must be provided by the client like below:</p>
+
+<p>Without using Vespa native embedding support, the embedding vectors must be provided by the client like below:</p>
 <img src="/assets/img/vespa-overview-embeddings-1.svg" alt="document- and query-embeddings"
   width="1000" height="auto"/>
-<p>
-  Above, embeddings are generated in documents and queries <em>before</em> interacting with Vespa.
-</p>
-<p>
+
+  <p>
   By using the embedding features in Vespa, developers can instead generate the embeddings
   into the Vespa document and query flows.
-  Observe how <code>embed</code> is used to create the embeddings from text in the schema and queries:
+  Observe how <code>embed</code> is used to create the vector embeddings from text in the schema and queries:
 </p>
 <img src="/assets/img/vespa-overview-embeddings-2.svg" alt="Vespa's embedding feature, creating embeddings from text"
   width="800" height="auto"/>
 <p>
-  Integrating embedding <em>into</em> the Vespa application can simplify the architecture,
+  Integrating embedding <em>into</em> the Vespa application simplify the serving architecture,
   as well as cut serving latencies significantly - vector data transfer is minimized, with fewer components and serialization overhead.
 </p>
 
@@ -57,7 +55,7 @@ redirect_from:
   to produce tokens which is then input to a supplied transformer model in ONNX model format.
 </p>
 <p>
-  This provides embeddings directly suitable for <a href="approximate-nn-hnsw.html">retrieval</a>
+  The Huggingface Embedder provides embeddings directly suitable for <a href="approximate-nn-hnsw.html">retrieval</a>
   and <a href="ranking.html">ranking</a> in Vespa, and makes it easy
   to implement semantic search with no need for custom components or client-side embedding inference
   when used with the syntax for invoking the embedder in queries and during document indexing described
@@ -150,6 +148,7 @@ redirect_from:
   <component id="myBert" type="bert-embedder">
     <transformer-model path="models/e5-small-v2.onnx"/>
     <tokenizer-vocab url="https://huggingface.co/intfloat/e5-small-v2/raw/main/vocab.txt"/>
+    <max-tokens>128</max-tokens>
   </component>
 </container>
 {% endhighlight %}</pre>
@@ -162,6 +161,7 @@ redirect_from:
   <li>
     The <code>tokenizer-vocab</code> specifies the Huggingface <code>vocab.txt</code> file, with one valid token per line.
     Note that the Bert embedder does not support the <code>tokenizer.json</code> formatted tokenizer configuration files.
+    This means that tokenization settings like max tokens should be set explicitly. 
   </li>
 </ul>
 <p>See <a href="reference/embedding-reference.html#bert-embedder-reference-config">configuration reference</a> for all configuration options. </p>
@@ -188,12 +188,10 @@ inputs {
  {
     "yql": "select * from sources * where ...",
     "query": "semantic search",
-    "input.query(embedding)": "embed(e5, semantic search)",
-    "input.query(embedding2)": "embed(e5, semantic search)",
-    "input.query(query_tokens)": "embed(wordpiece, semantic search)",
+    "input.query(embedding)": "embed(e5, contextualized search)",
+    "input.query(embedding2)": "embed(e5, neural search)"
     "ranking": "semantic",
-}
-{% endhighlight %}</pre>
+}{% endhighlight %}</pre>
 
 <h2 id="embedding-a-document-field">Embedding a document field</h2>
 <p>Use the Vespa <a href="reference/advanced-indexing-language.html#statement">indexing language</a>
@@ -307,15 +305,16 @@ are defined outside the <code>document</code> clause in the schema.' %}
 </p>
 
 <h2 id="embedder-performance">Embedder performance</h2>
-<p>Embedding inference can be expensive for large embedding models. Factors that impacts performance:</p>
+<p>Embedding inference can be resource intensive for larger embedding models. Factors that impacts performance:</p>
 
 <ul>
-  <li>The embedding model parameters. Larger models requires more compute than smaller models.</li>
-  <li>The sequence input length. Transformer type models scales quadratic with input length.</li>
+  <li>The embedding model parameters. Larger models are more expensive to evaluate than smaller models.</li>
+  <li>The sequence input length. Transformer type models scales quadratic with input length.
+  </li>
   <li>
-    The number of sequence inputs. When embedding arrays of inputs consider how many inputs a single document can have.
+    The number of inputs to the <code>embed</code> call. When encoding arrays, consider how many inputs a single document can have.
     For CPU inference, increasing <a href="reference/document-v1-api-reference.html#timeout">feed timeout</a> settings
-    might be required when documents have many inputs.
+    might be required when documents have many <code>embed</code>inputs.
   </li>
 </ul>
 <p>Using GPU, especially for longer sequence lengths (documents), can dramatically improve performance and reduce cost.
