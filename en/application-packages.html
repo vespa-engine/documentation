@@ -9,74 +9,49 @@ redirect_from:
 <p>
   An <em>application package</em> is a set of files in a specific structure that defines a deployable application.
   It contains <i>all</i> the configuration, components and machine-learned models that is necessary to deploy
-  and run the application: No configuration is ever done locally on Vespa nodes or over remote API's.
+  and run the application: No configuration is ever done locally on Vespa nodes or over remote APIs.
 </p>
 <p>
   The application package is a directory, containing at minimum <a href="reference/services.html">services.xml</a>.
   Additionally, <em>services.xml</em> might consume other files or directories from the application package -
   see the <a href="reference/application-packages-reference.html">reference</a> for a full list.
-</p><p>
-  Most application packages are stored as source code in a code repository.
-  However, some resources are generated and/or too large to store in a code repository,
-  like models or an <a href="reference/vespa-cmdline-tools.html#vespa-makefsa">FSA</a>.
-  See below for how to use the <a href="reference/config-files.html#url">url</a> config type
-  to download resources to container nodes.
-</p><p>
-  Use the <a href="vespa-cli.html">Vespa CLI</a> to build and deploy your application package.
-  Refer to the <a href="components/bundles.html#maven-bundle-plugin">bundle plugin</a>
-  for how to build an application package with Java components.
-  Also, find more details in the config <a href="config-introduction.html">introduction</a>.
 </p>
-
-<!-- ToDo: make an illustration of the deploy-flow -->
-
-
-<h2 id="code-and-config-consistency">Code and config consistency</h2>
 <p>
   A change to code and configuration is atomically <em>deployed</em> to running instances.
-  To ensure code and config consistency, <em>config definition</em> files are compiled to Java code,
-  discrepancies causes build failures, which is easier to manage than production errors.
+  To ensure code and config consistency, <a href="configuring-components.html#config-definition">config definition</a>
+  files are compiled to Java code.
+  With this code/config discrepancies will make the build fail - this is better than production errors.
   Read more in <a href="configuring-components.html">configuring components</a>.
 </p>
+{% include note.html content='
+See <a href="https://cloud.vespa.ai/en/automated-deployments">automated deployments</a>
+for how to build a pipeline including tests to fully safeguard a new deployment.'%}
 
 
 
 <h2 id="deploy">Deploy</h2>
 <p>
-  Deploy the application package using <a href="vespa-cli.html#deployment">vespa deploy</a>
-  (alternatively <a href="reference/vespa-cmdline-tools.html#vespa-deploy">vespa-deploy</a>).
-  The application package is validated, and destructive changes rejected.
-  To allow such changes to pass the validation in <em>deploy prepare</em>,
-  add a <a href="reference/validation-overrides.html">validation override</a>.
+  Deploy the application package using <a href="vespa-cli.html#deployment">vespa deploy</a>:
+</p>
+<pre>{% highlight shell %}
+# Deploy an application package from cwd
+$ vespa deploy
+
+# Deploy an application package from cwd to a prod zone with CD pipeline in Vespa Cloud using deployment.xml
+$ vespa prod deploy
+{% endhighlight %}</pre>
+<p>
+  At deployment, the application package is validated, and destructive changes rejected.
+  Read more on how to handle application package changes in
+  <a href="reference/validation-overrides.html">validation overrides</a>.
 </p>
 <p>
-  Making changes to <a href="reference/schema-reference.html#modifying-schemas">schemas</a>,
-  like adding a field, is followed by a deployment to the application instance.
+  Make changes to <a href="reference/schema-reference.html#modifying-schemas">schemas</a>,
+  like adding a field, then deploy.
   Most such changes do not require restarts or re-indexing, if they do, deployment fails,
-  and a validation override is required.
-  Use deploy to:
+  and a validation override might be required - <a href="reference/schema-reference.html#modifying-schemas">read more</a>.
 </p>
-<ol>
-  <li><em>prepare:</em> Upload, validate and distribute to nodes</li>
-  <li>
-    <em>activate:</em> Activate on all nodes -
-    this reloads the application <a href="components/bundles.html">bundles</a>, while serving.
-    It waits for prepare to complete before running activation.
-  </li>
-</ol>
-<p>Find more details in the <a href="reference/application-packages-reference.html#deploy">reference</a>.</p>
-{% include important.html content='The <em>prepare</em> step does not validate
-<span style="text-decoration: underline">all</span> changes.
-E.g., the container itself is not started with the bundles and bundle configuration at <em>prepare</em>-time.
-See <a href="https://cloud.vespa.ai/en/automated-deployments">automated deployments</a>
-for how to build a pipeline including tests to fully safeguard a new deployment.' %}
-<p>During development it can also be handy to just wipe the state of Vespa completely and start over:</p>
-<ol>
-  <li><a href="operations/configuration-server.html#zookeeper-recovery">
-    Delete all config server state</a> on all config servers</li>
-  <li>Run <a href="reference/vespa-cmdline-tools.html#vespa-remove-index">
-    vespa-remove-index</a> to wipe content nodes</li>
-</ol>
+
 
 
 <h3 id="file-distribution">File distribution</h3>
@@ -105,6 +80,11 @@ for how to build a pipeline including tests to fully safeguard a new deployment.
 
 <h3 id="deploying-remote-models">Deploying remote models</h3>
 <p>
+  Most application packages are stored as source code in a code repository.
+  However, some resources are generated and/or too large to store in a code repository,
+  like models or an <a href="reference/vespa-cmdline-tools.html#vespa-makefsa">FSA</a>.
+</p>
+<p>
   Machine learned models in Vespa, either <a href="tensorflow.html">TensorFlow</a>,
   <a href="onnx.html">ONNX</a>, <a href="xgboost.html">XGBoost</a>, or
   <a href="lightgbm.html">LightGBM</a>,
@@ -117,33 +97,33 @@ for how to build a pipeline including tests to fully safeguard a new deployment.
   This is simply implemented by adding a step in <em>pom.xml</em>
   (see <a href="https://github.com/vespa-cloud/cord-19-search/blob/main/pom.xml">example</a>):
 </p>
-<pre>
-&lt;build&gt;
-    &lt;plugins&gt;
-        &lt;plugin&gt;
-            &lt;groupId&gt;org.codehaus.mojo&lt;/groupId&gt;
-            &lt;artifactId&gt;exec-maven-plugin&lt;/artifactId&gt;
-            &lt;version&gt;1.4.0&lt;/version&gt;
-            &lt;executions&gt;
-                &lt;execution&gt;
-                    &lt;id&gt;download-model&lt;/id&gt;
-                    &lt;phase&gt;generate-resources&lt;/phase&gt;
-                    &lt;goals&gt;
-                        &lt;goal&gt;exec&lt;/goal&gt;
-                    &lt;/goals&gt;
-                    &lt;configuration&gt;
-                        &lt;executable&gt;bin/download_models.sh&lt;/executable&gt;
-                        &lt;arguments&gt;
-                            &lt;argument&gt;target/application/models&lt;/argument&gt;
-                            &lt;argument&gt;MODEL-URL&lt;/argument&gt;
-                        &lt;/arguments&gt;
-                    &lt;/configuration&gt;
-                &lt;/execution&gt;
-            &lt;/executions&gt;
-        &lt;/plugin&gt;
-    &lt;/plugins&gt;
-&lt;/build&gt;
-</pre>
+<pre>{% highlight xml %}
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>1.4.0</version>
+            <executions>
+                <execution>
+                    <id>download-model</id>
+                    <phase>generate-resources</phase>
+                    <goals>
+                        <goal>exec</goal>
+                    </goals>
+                    <configuration>
+                        <executable>bin/download_models.sh</executable>
+                        <arguments>
+                            <argument>target/application/models</argument>
+                            <argument>MODEL-URL</argument>
+                        </arguments>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+{% endhighlight %}</pre>
 <p><em>bin/download_model.sh</em> example:</p>
 <pre>
 #!/bin/bash
@@ -162,7 +142,9 @@ popd
   Any necessary credentials for authentication and authorization should be added to this script,
   as well as any unpacking of archives (for TensorFlow models for instance).
 </p>
-
+<p>
+  Also see the <a href="reference/config-files.html#url">url</a> config type to download resources to container nodes.
+</p>
 
 
 <h2 id="services.xml">services.xml</h2>
@@ -222,3 +204,40 @@ popd
 <p>
   Read more in <a href="configuring-components.html">configuring components</a>.
 </p>
+
+
+
+<h2 id="further-reads">Further reads</h2>
+<ul>
+  <li>
+    Refer to the <a href="components/bundles.html#maven-bundle-plugin">bundle plugin</a>
+    for how to build an application package with Java components.</li>
+  <li>Find more details in the config <a href="config-introduction.html">introduction</a>.</li>
+  <li>
+    During development on a local instance it can be handy to just wipe the state completely and start over:
+    <ol>
+      <li><a href="operations/configuration-server.html#zookeeper-recovery">
+        Delete all config server state</a> on all config servers</li>
+      <li>Run <a href="reference/vespa-cmdline-tools.html#vespa-remove-index">
+        vespa-remove-index</a> to wipe content nodes</li>
+    </ol>
+  </li>
+  <li>
+    <p>
+      See <a href="reference/vespa-cmdline-tools.html#vespa-deploy">vespa-deploy</a> for an alternative debug tool
+      for local deployments - use it to:
+    </p>
+    <ol>
+      <li><em>prepare:</em> Upload, validate and distribute to nodes</li>
+      <li>
+        <em>activate:</em> Activate on all nodes -
+        this reloads the application <a href="components/bundles.html">bundles</a>, while serving.
+        It waits for prepare to complete before running activation.
+      </li>
+    </ol>
+    <p>Find more details in the <a href="reference/application-packages-reference.html#deploy">reference</a>.</p>
+    {% include important.html content='The <em>prepare</em> step does not validate
+    <span style="text-decoration: underline">all</span> changes.
+    E.g., the container itself is not started with the bundles and bundle configuration at <em>prepare</em>-time.' %}
+  </li>
+</ul>
