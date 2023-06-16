@@ -413,7 +413,7 @@ and have limited text match modes (i.e. `indexing: index` cannot be used).
 
 If you have added vectors to your documents and queries, and see that the rank feature 
 closeness(field, yourEmbeddingField) produces 1.0 for all documents, you are likely using
-[distance-metric](reference/schema-reference.html#distance-metric): innerproduct,
+[distance-metric](reference/schema-reference.html#distance-metric): innerproduct/prenormalized-angular,
 but your vectors are not normalized, and the solution is normally to switch to
 [distance-metric: angular](reference/schema-reference.html#angular)
 or use
@@ -422,7 +422,7 @@ or use
 
 With non-normalized vectors, you often get negative distances, and those are capped to 0,
 leading to closeness 1.0.
-Some models, such as models from sbert.net, claim to be normalized but are not.
+Some embedding models, such as models from sbert.net, claim to output normalized vectors but might not. 
 
 
 
