@@ -146,9 +146,12 @@ not only <em>fieldname</em>." %}
 
 <h2 id="create-if-nonexistent">Create if nonexistent</h2>
 <p>
+</p>
+<h3 id="upserts">Upserts</h3>
+<p>
   Updates to nonexistent documents are supported using
   <a href="reference/document-json-format.html#create">create</a>.
-  This is often called an <em>upsert</em> - insert a document if it does not already exist, or update it if it exists.
+  This is often called an <em>upsert</em> — insert a document if it does not already exist, or update it if it exists.
   An empty document is created on the content nodes, before the update is applied.
   This simplifies client code in the case of multiple writers. Example:
 </p>
@@ -163,27 +166,35 @@ $ curl -X PUT -H "Content-Type:application/json" --data '
   }' \
   http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts?create=true
 </pre>
+<h3 id="conditional-updates-and-puts-with-create">Conditional updates and puts with create</h3>
 <p>
-  <em>create</em> can be used in combination with a <a href="#conditional-writes">condition</a>.
-  If the document does not exist, the condition will be ignored
-  and a new document with the update applied is automatically created.
-  Otherwise, the condition must match for the update to take place.
+  Conditional updates and puts can be combined with <a href="reference/document-json-format.html#create">create</a>.
+  This has the following semantics:
 </p>
+<ul>
+  <li>If the document already exists, the condition is evaluated against the most recent document version available.
+      The operation is applied if (and only if) the condition matches.</li>
+  <li>Otherwise (i.e. the document does not exist or the newest document version is a tombstone),
+      the condition is <em>ignored</em> and the operation is applied as if no condition was provided.</li>
+</ul>
+<p>Support for conditional puts with create was added in Vespa 8.178.</p>
 <!-- ToDo: rewrite this / move to elasticity details ...
            What does it mean that a document is "missing"?
            When does this happen?
            Is it likely to happen, so we need to care about this?
            Where can I read more? -->
 {% include warning.html content="If all existing replicas of a document are missing
-  when an update with <code>\"create\": true</code> is executed, a new document will always be created.
+  when an operation with <code>\"create\": true</code> is executed, a new document will always be created.
   This happens even if a condition has been given.
   If the existing replicas become available later,
   their version of the document will be overwritten by the newest update since it has a higher timestamp." %}
 
 {% include note.html content="See <a href='documents.html#document-expiry'>document expiry</a>
-  for auto-created documents - it is possible to create documents that does not match the selection criterion." %}
+  for auto-created documents — it is possible to create documents that do not match the selection criterion." %}
 
-
+{% include note.html content="Specifying <em>create</em> for a Put operation <em>without</em> a
+  condition has no observable effect, as unconditional Put operations will always write
+  a new version of a document regardless of whether it existed already." %}
 
 <h2 id="data-dump">Data dump</h2>
 <p>
