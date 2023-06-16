@@ -457,6 +457,12 @@ injected and use that to get documents by id instead of the HTTP API.
 </ol-->
 <!-- ToDo: move this to the doc itself and link from here - and add something useful ... -->
 
+#### Does Vespa work with Java 20?
+Vespa uses Java 17 - it will support 20 some time in the future.
+
+#### How to write debug output from a custom component?
+Use `System.out.println` to write text to the [vespa.log](reference/logs.html).
+
 
 
 {:.faq-section}
@@ -711,3 +717,7 @@ The Config Server cluster with 3 nodes fails to start.
 The ZooKeeper cluster the Config Servers use waits for hosts on the network,
 the hosts wait for ZooKeeper in a catch 22 -
 see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
+
+#### How to display vespa.log?
+Use [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
+If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.
