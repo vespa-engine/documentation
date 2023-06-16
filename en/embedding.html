@@ -52,8 +52,11 @@ redirect_from:
 <p>
   An embedder using any <a href="https://huggingface.co/docs/tokenizers/index">Huggingface tokenizer</a>,
   including multilingual tokenizers,
-  to produce tokens which is then input to a supplied transformer model in ONNX model format.
+  to produce tokens which is then input to a supplied transformer model in <a href="https://onnx.ai/">ONNX</a> model format.
 </p>
+<p>The huggingface-embedder supports all <a href="https://huggingface.co/docs/tokenizers/index">Huggingface tokenizer implementations</a>
+ and input length settings, while the <a href="#bert-embedder">bert-embedder</a> 
+ only supports <a href="reference/embedding-reference.html#wordpiece-embedder">WordPiece</a> tokenization.</p>
 <p>
   The Huggingface Embedder provides embeddings directly suitable for <a href="approximate-nn-hnsw.html">retrieval</a>
   and <a href="ranking.html">ranking</a> in Vespa, and makes it easy
@@ -77,8 +80,8 @@ redirect_from:
 <ul>
   <li>
     The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a>.
-    See <a href="https://github.com/vespa-engine/sample-apps/blob/master/simple-semantic-search/export_hf_model_from_hf.py">export_hf_model_from_hf.py</a>,
-    for how to export embedding models from Huggingface to <a href="https://onnx.ai/">ONNX</a> format.
+    See <a href="#onnx-export">exporting models to ONNX</a>,
+    for how to export embedding models from Huggingface to compatible <a href="https://onnx.ai/">ONNX</a> format.
   </li>
   <li>
     The <code>tokenizer-model</code> specifies the Huggingface <code>tokenizer.json</code> formatted file.
@@ -125,7 +128,7 @@ redirect_from:
   using <a href="reference/schema-reference.html#distance-metric">distance-metric</a> <code>angular</code>.
 </p>
 <p>
-  Check the <em>Massive Text Embedding Benchmark </em> (MTEB) benchmark and
+  Check the <a href="https://huggingface.co/blog/mteb">Massive Text Embedding Benchmark</a> (MTEB) benchmark and
   <a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB leaderboard</a>
   for help with choosing an embedding model.
 </p>
@@ -133,9 +136,10 @@ redirect_from:
 
 <h3 id="bert-embedder">Bert embedder</h3>
 <p>
-  An embedder using the <a href="#wordpiece-embedder">WordPiece</a> embedder to produce tokens
+  An embedder using the <a href="reference/embedding-reference.html#wordpiece-embedder">WordPiece</a> embedder to produce tokens
   which is then input to a supplied <a href="https://onnx.ai/">ONNX</a> model on the form expected by a BERT base model.
-  The Bert embedder is limited to English (wordpiece) and BERT-styled transformer models with three model inputs
+  The Bert embedder is limited to English (<a href="reference/embedding-reference.html#wordpiece-embedder">WordPiece</a>) and 
+  BERT-styled transformer models with three model inputs
   (<em>input_ids, attention_mask, token_type_ids</em>).
   Prefer using the <a href="#huggingface-embedder">Huggingface Embedder</a> instead of the Bert embedder.
 </p>
@@ -155,8 +159,8 @@ redirect_from:
 <ul>
   <li>
     The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a>.
-    See <a href="https://github.com/vespa-engine/sample-apps/blob/master/simple-semantic-search/export_model_from_hf.py">export_model_from_hf.py</a>,
-    for how to export embedding models from Huggingface to <a href="https://onnx.ai/">ONNX</a> format.
+    See <a href="#onnx-export">exporting models to ONNX</a>,
+    for how to export embedding models from Huggingface to compatible <a href="https://onnx.ai/">ONNX</a> format.
   </li>
   <li>
     The <code>tokenizer-vocab</code> specifies the Huggingface <code>vocab.txt</code> file, with one valid token per line.
@@ -301,8 +305,64 @@ are defined outside the <code>document</code> clause in the schema.' %}
   The <a href="https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking">commerce-product-ranking</a>
   demonstrates using multiple embedders. The
   <a href="https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing">multi-vector-indexing</a> sample-app demonstrates
-  how to use embedders with multiple inputs.
+  how to use embedders with multiple document field inputs.
 </p>
+
+<h2 id="onnx-export">Exporting HF models to ONNX format</h2>
+<p>Transformer based models have named inputs and outputs that needs to be compatible 
+  with the input and output names used by the Bert embedder or the Huggingface embedder.   
+</p>
+<p>The <a href="https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search#model-exporting">simple-semantic-search</a>
+  sample app includes two scripts to export models and vocabulary files using the default expecteded input and output names for the bert-embedder 
+  and the huggingface-embedder. The input and output names to use can also be overriden by the various <code>transformer-</code> 
+  input and output <a href="reference/embedding-reference.html#huggingface-embedder-reference-config">huggingface-embedder parameters</a> 
+  and <a href="reference/embedding-reference.html#bert-embedder-reference-config">bert-embedder parameters</a>.
+</p>
+
+<h3 id="onnx-debug">Debugging ONNX models</h3>
+<p>
+  When loading <a href="https://onnx.ai/">ONNX</a> models for embedders, the model must have correct inputs and output parameters.
+  Vespa offers tools to inspect ONNX model files.  
+  Here, <em>minilm-l6-v2.onnx</em> is in current working directory:
+</p>
+<pre>
+$ docker run -v `pwd`:/w \
+  --entrypoint /opt/vespa/bin/vespa-analyze-onnx-model \
+  vespaengine/vespa \
+  /w/minilm-l6-v2.onnx
+
+...
+model meta-data:
+  input[0]: 'input_ids' long[batch][sequence]
+  input[1]: 'attention_mask' long[batch][sequence]
+  input[2]: 'token_type_ids' long[batch][sequence]
+  output[0]: 'output_0' float[batch][sequence][384]
+  output[1]: 'output_1' float[batch][384]
+...
+</pre>
+The above model input and output names conforms with the 
+default <a href="reference/embedding-reference.html#bert-embedder-reference-config">bert-embedder parameters</a>.
+</p>
+<p>
+  If loading models without the expected input and output parameter names, the Vespa Container node will not start
+  (check <em>vespa.log</em> in the container running Vespa):
+</p>
+<pre>
+ WARNING container        Container.com.yahoo.container.di.Container
+  Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: input
+</pre>
+<p>
+  When this happens, a deploy looks like:
+</p>
+<pre>
+$ vespa deploy --wait 300
+Uploading application package ... done
+
+Success: Deployed .
+
+Waiting up to 5m0s for query service to become available ...
+Error: service 'query' is unavailable: services have not converged
+</pre>
 
 <h2 id="embedder-performance">Embedder performance</h2>
 <p>Embedding inference can be resource intensive for larger embedding models. Factors that impacts performance:</p>
@@ -315,9 +375,10 @@ are defined outside the <code>document</code> clause in the schema.' %}
   <li>
     The number of inputs to the <code>embed</code> call. When encoding arrays, consider how many inputs a single document can have.
     For CPU inference, increasing <a href="reference/document-v1-api-reference.html#timeout">feed timeout</a> settings
-    might be required when documents have many <code>embed</code>inputs.
+    might be required when documents have many <code>embed</code>inputs. 
   </li>
 </ul>
 <p>Using <a href="reference/embedding-reference.html#embedder-onnx-reference-config">GPU</a>, especially for longer sequence lengths (documents), can dramatically improve performance and reduce cost.
   See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>.
+  See also <a href="vespa-gpu-container.html">Vespa container GPU setup</a> guide for using GPUs with Vespa.
 </p>
