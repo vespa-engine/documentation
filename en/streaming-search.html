@@ -5,72 +5,45 @@ redirect_from:
 - /documentation/streaming-search.html
 ---
 
-<p>
-  A search engine normally implements indexing structures like reverse indexes to reduce query latency.
-  It does <em>indexing</em> up-front, so later matching and ranking is efficient.
-  It also normally keeps a copy of the original document for later retrieval / use in search summaries.
-</p>
-<p>
-  Simplified, the engine keeps the original data plus auxiliary data structures to reduce query latency.
-  This induces both extra work - indexing - as compared to only store the raw data,
-  and extra static resource usage - disk, memory - to keep these structures.
-</p>
-<p>
-  Streaming search is an alternative to indexed search.
-  It is useful in cases where the document corpus is statically split
-  into many subsets and all searches go to just one (or a few) of the small subsets.
-  The canonical example being <em>personal indexes</em> where a user only searches his own data.
-  Read more on <a href="documents.html">document identifier schemes</a>
-  to learn how to specify subsets.
-</p>
-<p>
-  In streaming mode, only the raw data of the documents is stored, in the
-  <a href="proton.html#document-store">document store</a>.
-  Only data structures for document IDs are in memory,
-  not <a href="attributes.html">attributes</a>.
-  It matches documents to queries by streaming through them, similar to a grep.
-  This is too costly for a global search but works fine for searching small subsets of the
-  data. This means Vespa can avoid the overhead of maintaining indexes.
-  Streaming mode is suitable when subsets are <em>on average</em> small compared
-  to the entire corpus. Vespa maintains low latency also for the occasional large
-  subset (say, users with huge amounts of data) by automatically sharding the data
-  over many content nodes, searched in parallel.
-</p>
-<p>
-  Streaming search uses the same implementation of most features in Vespa, including ranking,
-  matching and grouping, and supports the same features.
-  However, streaming search supports neither <a href="linguistics.html#stemming">stemming</a>,
-  nor is the <a href="reference/advanced-indexing-language.html">indexing script</a>
-  evaluated when documents are fed — only <code>index</code> and <code>summary</code> are considered.
-</p>
-<p>
-  Streaming search supports a wider range of matching options (e.g, substring),
-  which can be specified either at query time or at configuration time.
-</p>
-<p>
-  Streaming mode does not support <a href="tensor-user-guide.html">Tensor fields, or tensor computations in ranking</a>.
-</p>
-<p>
-  Summary:
-</p>
+<p>Search engines make queries fast by creating indexes over the stored data.
+While the indexes cost extra resources to build and maintain this is usually
+a good tradeoff because they make queries so much cheaper. However, this
+does not hold for use cases where the data is split into many small subsets
+where each query just searches one (or a few) of these subsets, the canonical
+example being <em>personal indexes</em> where a user only searches her own data.</p>
+
+<p>For such use cases, Vespa provides <i>streaming search</i>
+- a mode where only the raw data of the documents is
+<a href="proton.html#document-store">stored</a> and searches are implemented
+by streaming - no indexes required. In addition, attributes
+are also only stored on disk so that the only data needed in memory is
+45 bytes per document, meaning that streaming mode lets you store billions of documents
+on each node.</p>
+
+<p>This is especially important in personal data applications using vector embeddings,
+which otherwise require a lot of memory and require ANN to perform well,
+which is often unsuited for searching personal data as they don't surface
+all the most relevant documents.</p>
+
+<p>Streaming mode is suitable when subsets are <em>on average</em> small compared
+to the entire corpus. Vespa delivers low query latency also for the occasional large
+subset (say, users with huge amounts of data) by automatically sharding such data groups
+over multiple content nodes, searched in parallel.</p>
+
+<p>Streaming search uses the same implementation of most features in Vespa, including ranking,
+matching and grouping, and supports the same features, with these exceptions:</p>
+
 <ul>
-  <li>Streaming search has low latency if the data searched per node is small.
-    Total data volume can be huge as data searched is limited by a predicate</li>
-  <li>Streaming search is highly flexible as it does not create precomputed indexes,
-    and hence supports more matching options</li>
-  <li>Streaming search uses less disk space and memory, and zero CPU for indexing.
-    It uses more CPU for search</li>
-  <li>Streaming search does not have linguistic features like
-    <a href="linguistics.html#stemming">stemming</a> and
-    <a href="linguistics.html#normalization">normalization</a>,
-    but does case-insensitive match</li>
+    <li><a href="linguistics.html#stemming">stemming</a> is not supported with streaming.</li>
+    <li>Streaming search supports a wider range of matching options (such as substring and prefix), and
+        these can be specified either at query time or at configuration time.
 </ul>
 
 
-
 <h2 id="using-streaming-search">Using streaming search</h2>
+
 <p>
-These are the minimal steps to get started using streaming search,
+These are the steps required to use streaming search,
 based on the <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation">
 sample apps</a>:
 </p>
@@ -82,162 +55,97 @@ sample apps</a>:
     &lt;documents&gt;
         &lt;document type="music" <span class="pre-hilite">mode="streaming"</span> /&gt;
 </pre>
-  </li><li>
-    <a href="documents.html">Document IDs</a> must have a numeric id or string for the set of documents to search -
-    numeric example:
-<pre>
-$ curl -H "Content-Type:application/json" \
-  --data-binary @feedfile.json \
-  http://localhost:8080/document/v1/mynamespace/music/<span class="pre-hilite">number/1234</span>/1
-</pre>
-  </li><li>
-    Specify the subset to search using the query request attribute
-    <a href="#streaming.groupname">streaming.groupname</a> or
-    <a href="#streaming.userid">streaming.userid</a>.
-    Example (URL decoded for readability):
-<pre>
-http://localhost:8080/search/?yql=select * from sources * where artist contains "coldplay"&amp;<span class="pre-hilite">streaming.userid=1234</span>
-</pre>
   </li>
+
+    <li>Use
+    <a href="documents.html">document IDs</a> which contains a <i>group</i> value specifying
+    the small subset the document belongs to (usually a userid). These have the form
+        <code>id:my-namespace:music:<b>g=my-userid</b>:my-localid</code>
+    and when represented as paths in <a href="document-v1-api-guide.html">document/v1</a> requests,
+    <code>document/v1/my-namespace/music/<span class="pre-hilite">group/my-userid</span>/my-localid</code>
+  </li>
+
+  <li>
+    Specify the subset to search using the query parameter
+    <a href="reference/query-api-reference.html#streaming.groupname">streaming.groupname</a>.
+  </li>
+
 </ol>
-<p>
-Streaming mode is search in document store data.
-Changing between "index" and "streaming" (or "store-only") mode hence requires refeeding all documents.
-Use <a href="reference/vespa-cmdline-tools.html#vespa-remove-index">vespa-remove-index</a>
-to drop documents on nodes before changing mode.
-</p>
 
 
-<h3 id="match">Match</h3>
-Next step is setting correct <a href="reference/schema-reference.html#match">match</a> settings for fields -
-example using default string tokenized matching:
-<pre>
-field artist type string {
-    indexing: summary | index
-}
-</pre>
-To find "Coldplay" or "Billie Eilish":
-<pre>
-select * from sources * where artist contains "coldplay"
-select * from sources * where artist contains "billie"
-</pre>
-Without changing schema, one can do substring matching in tokens using
-<a href="reference/query-language-reference.html#annotations">annotations</a> - this matches "Coldplay":
+<h2 id="matching-options-in-streaming-search">Matching options in streaming search</h2>
+
+<p>Streaming search offers more flexibility in matching text fields: Match settings
+can be specified at query time on any text field, and fields marked with <code>indexing: index</code>
+supports prefix and substring matching.</p>
+
+<p>To specify match settings at query time in YQL:</p>
 <pre>
 select * from sources * where artist contains ({prefix:true}"col")
 select * from sources * where artist contains ({substring:true}"old")
 select * from sources * where artist contains ({suffix:true}"play")
 </pre>
-Instead of annotating query terms, enable prefix matching as default,
-and find that this query now also matches "Coldplay":
+
+<p>To specify a default match setting for a field in the schema:</p>
+
 <pre>
 field artist type string {
     indexing: summary | index
-    match   : prefix
+    <a href="schemas.html#match">match</a>: prefix
 }
-
-select * from sources * where artist contains "col"
 </pre>
 
-<p>
-Note that configuring default
-matching behaviour in the schema is different from with regular indexed mode
-where only <em>attribute</em> fields support prefix search and
-where the query term must specify prefix true.
-</p>
 
-To match a field <em>exactly</em>:
-<pre>
-field artist type string {
-    indexing: summary | index
-    match   : exact
-}
+<h2 id="streaming-search-grouping-extensions">Streaming search grouping extension</h2>
 
-select * from sources * where artist contains "billie eilish"
-</pre>
-<p>
-Observe that the full string field value is now required for match.
-</p>
-<p>
-  Find match configuration per field -
-  the first example is using default (i.e. string tokenized) matching,
-  the <em>artist</em> field has default matching, so arg1 is empty.
-  The second example uses <em>match: exact</em>:
-</p>
-<pre>
-$ <a href="reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a> -n vespa.config.search.vsm.vsmfields -i music/search/cluster.music.music | egrep 'name|arg1'
-  fieldspec[0].name "artist"
-  fieldspec[0].arg1 ""
+<p><a href="grouping.html">Grouping</a> works as normal with streaming search but offers some additional features.</p>
 
-# vespa-get-config -n vespa.config.search.vsm.vsmfields -i music/search/cluster.music.music | egrep 'name|arg1'
-  fieldspec[0].name "artist"
-  fieldspec[0].arg1 "exact"
-</pre>
-<p>
-  Use <a href="reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a>
-  to find the value for the -i argument above.
-</p>
+<h3 id="grouping-over-all-documents">Grouping over all documents</h3>
+
+<p>Since streaming search "looks at" all documents matching the group name/selection
+  regardless of the query, it is possible to group over all those documents and not just the ones
+  matching the query. This is done by using <code>where(true)</code> in the grouping expression:
+
+<pre>all( where(true) all(group(myfield) each(output(count()))) )</pre>
+
+<p>When doing this, relevancy is not calculated for groups, as only matched hits have relevance.</p>
+
+<h3 id="docidnsspecific-function"><code>docidnsspecific</code> function</h3>
+
+<p>The <code>docidnsspecific</code> function returns the docid without namespace.</p>
+<pre>all( group(docidnsspecific()) each(output(count())) )</pre>
 
 
-<h2 id="disk-sizing">Disk sizing</h2>
-<p>
-Disk sizing for streaming search is:
-<ul>
-    <li>Space used to store IDs in the
-<a href="attributes.html#document-meta-store">document meta store</a></li>
-    <li>Space used in the
-<a href="proton.html#document-store">document store</a> (summary)</li>
-</ul>
-Example:
-<pre>
-$ du -sh $VESPA_HOME/var/db/vespa/search/cluster.mystream/n1/documents/doctype/0.ready/*
-  4.0K	attribute
-  <span class="pre-hilite">216M	documentmetastore</span>
-  4.0K	index
-  <span class="pre-hilite">1.5G	summary</span>
-</pre>
-<p>
-Run <a href="reference/vespa-cmdline-tools.html#vespa-proton-cmd">triggerFlush</a>
-if <em>documentmetastore</em> is empty.
-</p><p>
-Both scale linearly with number of documents -
-<em>document meta store</em> with approx 30 bytes per document,
-<em>document store</em> depending on document size.
-Hence, to estimate disk used, feed X% of corpus and extrapolate.
-</p>
 
-<h2 id="memory-sizing">Memory sizing</h2>
-<p>
-Two data structures are loaded into memory in a streaming search:
-<ul>
-  <li>The <a href="attributes.html#document-meta-store">document meta store</a></li>
-  <li>The <a href="proton.html#memory-usage">document store</a></li>
-</ul>
-<p>
-As a rule of thumb, assume 50 bytes memory usage per document for streaming search.
-</p>
+<h2 id="resource-usage-with-streaming-search">Resource usage with streaming search</h2>
 
-<h2 id="streaming-search-query-tuning">Streaming search query tuning</h2>
-<p>
-Streaming search is a <a href="visiting.html">visit</a> operation.
+<p><b>Memory</b>: Streaming search requires 45 bytes of memory per document regardless of the document content.</p>
+
+<p><b>Disk</b>: Streaming search requires disk space to store the raw document data in compressed form.
+The size is dependent on the actual data but can be extrapolated linearly eith the number of documents.</p>
+
+
+<h2 id="query-tuning-in-streaming-search">Query tuning in streaming search</h2>
+
+<p>Streaming search is a <a href="visiting.html">visit</a> operation.
 Parallelism is configured using <a href="reference/services-content.html#persistence-threads">persistence-threads</a>:
 </p>
+
 <pre>
 &lt;persistence-threads count='8'/&gt;
 &lt;visitors thread-count='8'/&gt;
 </pre>
-<p>
-Note: on <a href="https://cloud.vespa.ai/">Vespa Cloud</a>,
-this is auto-generated based on number of VCPUs set in
+
+<p>On <a href="https://cloud.vespa.ai/">Vespa Cloud</a>,
+this number is set automatically to match the number of VCPUs set in
 <a href="https://cloud.vespa.ai/en/reference/services#resources">resources</a>.
-To increase node performance, increase VCPU as long as query latency decreases -
-at some point, the application will be IO bound.
-</p>
+If you cannot get lower latency by increasing vcpus, it means your streaming searches have become
+IO bound.</p>
 
 
-<h3 id="summary-store-direct-io-and-cache">Summary store: Direct IO and cache</h3>
-<p>
-For better control of memory usage, use direct IO for reads when summary cache is enabled -
+<h3 id="tuning-summary-store-direct-io-and-cache">Tuning summary store: Direct IO and cache</h3>
+
+<p>For better control of memory usage, use direct IO for reads when summary cache is enabled -
 this makes the OS buffer cache size smaller and more predictable performance.
 The summary cache will cache recent entries and increase performance for users or groups doing repeated accesses.
 This sets aside 1 GB for summary cache.
@@ -257,503 +165,3 @@ This sets aside 1 GB for summary cache.
               &lt;maxsize&gt;1073741824&lt;/maxsize&gt;
             &lt;/cache&gt;</span>
 </pre>
-
-
-<h3 id="searchable-copies">Searchable copies</h3>
-<p>
-Vespa has a concept of searchable and ready copies for indexed search.
-In short, indices are generated for replicas used in search -
-other replicas do not have the indices generated.
-This does not apply for streaming search, where the point is <em>not</em> having indices.
-When nodes stop, replicas transfer to the active database -
-for streaming, disable this by setting <em>searchable copies</em>
-to the same level as <em>redundancy</em>:
-</p>
-<pre>
-  &lt;content id="mycluster" version="1.0"&gt;
-    <span class="pre-hilite">&lt;redundancy&gt;2&lt;/redundancy&gt;</span>
-    &lt;engine&gt;
-      &lt;proton&gt;
-        <span class="pre-hilite">&lt;searchable-copies&gt;2&lt;/searchable-copies&gt;</span>
-</pre>
-<p>
-The effect of <em>not</em> setting the same number is higher load on nodes
-and so worse latency during state transitions (i.e. nodes going up and down).
-</p><p>
-When redundancy = searchable copies, all documents are found in the <em>0.ready</em> database.
-</p>
-
-<h2 id="grouping">Grouping</h2>
-<p>
-<a href="grouping.html">Grouping</a> works for streaming search just as indexed search.
-In streaming search, <span style="text-decoration: underline;">all</span> documents
-matching the <a href="reference/services-content.html#documents.selection">selection string</a> are streamed.
-Streaming search hence has one grouping extension as document data is in memory already during search:
-<em>Also group documents that are not hits</em> when using <code>where(true)</code>:
-</p>
-<pre>all( where(true) all(group(myfield) each(output(count()))) )</pre>
-<p>
-  When using <code>where(true)</code>, relevancy is not calculated for groups, as only matched hits have relevance.
-</p>
-<p>
-  Example queries (urldecoded) - the first query results to the left, without <code>where(true)</code>:
-</p>
-<pre>
-/search/?&amp;streaming.selection=true&amp;hits=0&amp;yql=select * from sources * where a contains "a1" |
-  all(group(a) each(output(count())))
-
-/search/?&amp;streaming.selection=true&amp;hits=0&amp;yql=select * from sources * where a contains "a1" |
-  <span class="pre-hilite">all(where(true)</span> all(group(a) each(output(count())))<span class="pre-hilite">)</span>
-</pre>
-<table>
-    <tr><td>
-<pre>
-{
-  "root": {
-    "id": "toplevel",
-    "relevance": 1,
-    "fields": {
-      "totalCount": 10
-    },
-    "coverage": {
-      "coverage": 100,
-      "documents": 28,
-      "full": true,
-      "nodes": 1,
-      "results": 1,
-      "resultsFull": 1
-    },
-    "children": [
-      {
-        "id": "group:root:0",
-        "relevance": 1,
-        "continuation": {
-          "this": ""
-        },
-        "children": [
-          {
-            "id": "grouplist:a",
-            "relevance": 1,
-            "label": "a",
-            "children": [
-              {
-                "id": "group:string:a1",
-                "relevance": 123.4,
-                "value": "a1",
-                "fields": {
-                  "count()": 10
-                }
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</pre>
-  </td><td>
-<pre>
-{
-  "root": {
-    "id": "toplevel",
-    "relevance": 1,
-    "fields": {
-      "totalCount": 10
-    },
-    "coverage": {
-      "coverage": 100,
-      "documents": 28,
-      "full": true,
-      "nodes": 0,
-      "results": 1,
-      "resultsFull": 1
-    },
-    "children": [
-      {
-        "id": "group:root:0",
-        "relevance": 1,
-        "continuation": {
-          "this": ""
-        },
-        "children": [
-          {
-            "id": "grouplist:a",
-            "relevance": 1,
-            "label": "a",
-            "children": [
-              {
-                "id": "group:string:a1",
-                "relevance": 0,
-                "value": "a1",
-                "fields": {
-                  "count()": 10
-                }
-              },
-              {
-                "id": "group:string:a2",
-                "relevance": 0,
-                "value": "a2",
-                "fields": {
-                  "count()": 9
-                }
-              },
-              {
-                "id": "group:string:a3",
-                "relevance": 0,
-                "value": "a3",
-                "fields": {
-                  "count()": 9
-                }
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-}
-</pre>
-  </td></tr>
-</table>
-<p>Observe:</p>
-<ul>
-  <li><code>where(true)</code> includes groups for <em>a2</em> and <em>a3</em> even though these do not match the query</li>
-  <li>there is no relevance score for groups when using <code>where(true)</code></li>
-</ul>
-<p>
-This kind of grouping is useful when using grouping to evaluate the corpus in the selection string.
-One example is computing a checksum of all documents to validate correctness during search.
-</p>
-
-
-<h3 id="docidnsspecific">docidnsspecific</h3>
-<p>
-  <code>docidnsspecific</code> returns the docid without namespace.
-  Applies only to <em>streaming search</em>:
-</p>
-<pre>all( group(docidnsspecific()) each(output(count())) )</pre>
-
-
-
-<h2 id="routing">Routing</h2>
-<p>
-  <a href="streaming-search.html">Streaming search</a> does not generate posting lists,
-  and so the routing configuration is different too - indexed search:
-</p>
-<pre>
-$ vespa-route
-There are 6 route(s):
-    1. default
-    2. default-get
-    3. music
-    4. music-direct
-    5. music-index
-    6. storage/cluster.music
-
-There are 2 hop(s):
-    1. container/chain.indexing
-    2. indexing
-</pre>
-<p>Streaming search:</p>
-<pre>
-$ vespa-route
-There are 4 route(s):
-    1. default
-    2. default-get
-    3. music
-    4. storage/cluster.music
-
-There are 1 hop(s):
-    1. indexing
-</pre>
-<p>Trace from feeding using indexed search:</p>
-<pre>
-    [1564571762.403] Source session accepted a 4096 byte message. 1 message(s) now pending.
-    [1564571762.420] Sequencer sending message with sequence id '-1163801147'.
-    [1564571762.426] Recognized 'default' as route 'indexing'.
-    [1564571762.429] Recognized 'indexing' as HopBlueprint(selector = { '[DocumentRouteSelector]' }, recipients = { 'music' }, ignoreResult = false).
-    [1564571762.489] Running routing policy 'DocumentRouteSelector'.
-<span class="pre-hilite">    [1564571762.493] Component '[MessageType:music]' selected by policy 'DocumentRouteSelector'.
-    [1564571762.493] Resolving '[MessageType:music]'.
-    [1564571762.520] Running routing policy 'MessageType'.
-    [1564571762.520] Component 'music-index' selected by policy 'MessageType'.
-    [1564571762.520] Resolving 'music-index'.
-    [1564571762.520] Recognized 'music-index' as route 'container/chain.indexing [Content:cluster=music]'.
-    [1564571762.520] Recognized 'container/chain.indexing' as HopBlueprint(selector = { '[LoadBalancer:cluster=container;session=chain.indexing]' }, recipients = {  }, ignoreResult = false).
-    [1564571762.526] Running routing policy 'LoadBalancer'.
-    [1564571762.538] Component 'tcp/vespa-container:19101/chain.indexing' selected by policy 'LoadBalancer'.
-    [1564571762.538] Resolving 'tcp/vespa-container:19101/chain.indexing [Content:cluster=music]'.
-    [1564571762.580] Sending message (version 7.83.27) from client to 'tcp/vespa-container:19101/chain.indexing' with 179.853 seconds timeout.
-    [1564571762.581] Message (type 100004) received at 'container/container.0' for session 'chain.indexing'.
-    [1564571762.581] Message received by MbusServer.
-    [1564571762.582] Request received by MbusClient.</span>
-    [1564571762.582] Running routing policy 'Content'.
-    [1564571762.582] Selecting route
-</pre>
-<p>Streaming search:</p>
-<pre>
-    [1564578828.735] Source session accepted a 4096 byte message. 1 message(s) now pending.
-    [1564578828.752] Sequencer sending message with sequence id '-1163801147'.
-    [1564578828.759] Recognized 'default' as route 'indexing'.
-    [1564578828.763] Recognized 'indexing' as HopBlueprint(selector = { '[DocumentRouteSelector]' }, recipients = { 'music' }, ignoreResult = false).
-    [1564578828.810] Running routing policy 'DocumentRouteSelector'.
-<span class="pre-hilite">    [1564578828.814] Component '[Content:cluster=music]' selected by policy 'DocumentRouteSelector'.
-    [1564578828.814] Resolving '[Content:cluster=music]'.</span>
-    [1564578828.870] Running routing policy 'Content'.
-    [1564578828.870] Selecting route
-</pre>
-<p>
-  Observe that the <em>DocumentRouteSelector</em> selects different
-  <a href="routing.html#routing-policies">routing policies</a>.
-</p>
-
-
-
-<h2 id="linguistics">Linguistics</h2>
-<ul>
-  <li>Tokenization is not used in streaming search.</li>
-  <li>Normalization is not used in streaming search.</li>
-  <li>Note: Stemming is not applicable to streaming search.</li>
-</ul>
-
-
-
-<h2 id="query-api-reference">Query API reference</h2>
-<p>
-  The features in this section applies to streaming search only.
-</p>
-
-<h3 id="streaming.userid">streaming.userid</h3>
-<table class="table table-striped">
-  <tr><td>Alias</td><td></td></tr>
-  <tr><td>Values</td><td>An integer in decimal notation in the range [0, 2^64></td></tr>
-  <tr><td>Default</td><td>None</td></tr>
-</table>
-<p>
-  Restricts streaming search to only stream through documents with document ids having the n=&lt;number&gt;
-  modifier and the userid part matches the supplied value. This can be used for grouping documents on a 64-bit integer.
-</p>
-
-
-<h3 id="streaming.groupname">streaming.groupname</h3>
-<table class="table table-striped">
-  <tr><td>Alias</td><td></td></tr>
-  <tr><td>Values</td><td>A string</td></tr>
-  <tr><td>Default</td><td>None</td></tr>
-</table>
-<p>
-  Restricts streaming search to only stream through documents with document ids having the g=&lt;groupname&gt;
-  modifier and the groupname part matches the supplied value. This can be used for grouping documents on a string.
-</p>
-
-
-<h3 id="streaming.selection">streaming.selection</h3>
-<table class="table table-striped">
-  <tr><td>Alias</td><td></td></tr>
-  <tr><td>Values</td><td>A string</td></tr>
-  <tr><td>Default</td><td>None</td></tr>
-</table>
-<p>
-  Restricts streaming search using a <a href="reference/document-select-language.html">document selection</a>.
-  This can be used for selecting a subset of documents based on an advanced expression.
-</p>
-
-
-<h3 id="streaming.maxbucketspervisitor">streaming.maxbucketspervisitor</h3>
-<table class="table table-striped">
-  <tr><td>Alias</td><td></td></tr>
-  <tr><td>Values</td><td>int</td></tr>
-  <tr><td>Default</td><td>1 (if ordering is set), or infinite</td></tr>
-</table>
-<p>
-  If set, visit only this many buckets at a time.
-  Combine with ordering to reduce visiting time for large users/groups.
-</p>
-
-
-<h2 id="query-language-reference">Query language reference</h2>
-<table class="table">
-  <thead>
-  <tr>
-    <th>Annotation</th>
-    <th>Default</th>
-    <th>Values</th>
-    <th>Description</th>
-  </tr>
-  </thead>
-  <tbody>
-  <tr>
-    <td>substring</td>
-    <td>false</td>
-    <td>boolean</td>
-    <td>Do substring matching for this word if available in the index. ("Search for "*word*".")
-      Only supported for streaming search.</td>
-  </tr>
-  </tbody>
-</table>
-
-
-
-<h2 id="visiting-the-document-store">Visiting the document store</h2>
-<p>
-  A streaming search is a <a href="visiting.html">visit</a>, by buckets, in sequence or (semi)parallel.
-  Access to the document store is by local ID - LID.
-  In proton, a bucket is just a property on the <a href="documents.html">document's ID</a>.
-  As documents are added to the file pairs in insertion order,
-  a scan of all documents in a bucket is hence a set of random file accesses,
-  unless some kind of bucket localization is done.
-  The set of document IDs for a given bucket is easily generated from memory structures
-  and assumed to take little resources.
-</p>
-
-
-
-<h2 id="schema">Schema</h2>
-<p>
-  On <a href="reference/schema-reference.html#match">match</a>:
-</p>
-<table class="table">
-  <thead>
-  <tr><th>Property</th><th>Valid with</th><th>Description</th></tr>
-  </thead>
-  <tbody>
-  <tr><td><code>substring</code></td>
-    <td>Streaming</td>
-    <td><p id="substring">
-      Set default match mode to <em>substring</em> for the field.
-      Only available in streaming search.
-      As the data structures in streaming search support substring searches,
-      one can always set substring matching in the query,
-      without setting the field to substring default.
-      Also see <a href="reference/query-language-reference.html#matches">regular expressions</a>.
-    </p></td>
-  </tr>
-  <tr><td><code>suffix</code></td>
-    <td>Streaming</td>
-    <td><p id="suffix">
-      Like substring (above).
-    </p></td>
-  </tr>
-  </tbody>
-</table>
-
-
-<p>
-On <a href="reference/schema-reference.html#struct-field">struct-field</a>:
-</p>
-<p>
-  Contained in <code>field</code> or
-  <code>struct-field</code>.
-  Defines how this struct field (a subfield of a struct) should be stored,
-  indexed, searched, presented and how it should influence ranking.
-  The field in which this struct field is contained must be of
-  type struct or a collection of type struct.
-  Note that struct fields are supported differently in indexed search and streaming search:
-<pre>
-struct-field [name] {
-    [body]
-}
-</pre>
-The body of a struct field is optional and may contain the following elements:
-<table class="table">
-  <thead>
-  <tr><th>Name</th><th>Description</th><th>Supported in</th><th>Occurrence</th></tr>
-  </thead><tbody>
-<tr><td>indexing</td>
-  <td>The indexing statements used to create index structure additions from this field.
-    For indexed search only <code>attribute</code> is supported, which makes the struct field a searchable in-memory attribute.
-    For streaming search only <code>index</code> and <code>summary</code> is supported.
-  </td>
-  <td>Indexed and streaming</td>
-  <td>Zero to one</td>
-</tr>
-
-<tr><td>attribute</td>
-  <td>Specifies an attribute setting.</td>
-  <td>Indexed</td>
-  <td>Zero to many</td>
-</tr>
-
-<tr><td>match</td>
-  <td>Set the matching type to use for this field.</td>
-  <td>Streaming</td>
-  <td>Zero to one</td>
-</tr>
-
-<tr><td style="white-space: nowrap">query-command</td>
-  <td>Specifies a command which can be received by a plugin searcher in the Search Container.</td>
-  <td>Streaming</td>
-  <td>Zero to many</td>
-</tr>
-
-<tr><td>struct-field</td>
-  <td>A subfield of a field of type struct. The struct must have been defined to
-    contain this subfield in the struct definition. If you want the subfield to
-    be handled differently from the rest of the struct, you may specify it within
-    the body of the struct-field.</td>
-  <td>Streaming</td>
-  <td>Zero to many.</td>
-</tr>
-
-<tr><td>summary</td>
-  <td>Sets a summary setting of this field, set to <code>dynamic</code>
-    to make a dynamic summary.</td>
-  <td>Streaming</td>
-  <td>Zero to many</td>
-</tr>
-
-<tr><td>summary-to</td>
-  <td>
-    {% include deprecated.html content="Use document-summary instead."%}
-    The list of document summary names this should be included in.</td>
-  <td>Streaming</td>
-  <td>Zero to one</td>
-</tr>
-</tbody>
-</table>
-<p>
-  If this struct field is of type struct (i.e. a nested struct), only
-  <code>indexing</code>,
-  <code>match</code> and
-  <code>query-command</code> may be specified.
-</p>
-
-
-
-<h2 id="notes">Notes</h2>
-<p>
-  <a href="reference/services-content.html#searchable-copies">searchable-copies</a> does not apply to streaming search
-  as this does not use index structures.
-</p>
-<p>
-  Ref <a href="parent-child.html">parent/child</a>: References and imported fields are not supported in streaming mode.
-</p>
-<p>
-  The <a href="reference/rank-features.html#bm25">bm25(field)</a> rank feature
-  is not supported when using streaming search.
-</p>
-<p>
-  In streaming search the second phase ranking is run on all hits.
-  Therefore, put all the rank calculation in the first phase ranking expression and just skip second phase.
-</p>
-<p>
-  Refer to <a href="https://github.com/vespa-engine/documentation/pull/1829">#1829</a>
-  for PR for schema reference changes for streaming search ..
-</p>
