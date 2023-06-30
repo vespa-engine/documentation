@@ -18,9 +18,7 @@ In addition, we will showcase how easy it is to switch and experiment with diffe
 
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li>Python3</li>
-<li><code>curl</code></li>
-<li><code>wget</code> Note: not needed unless downloading the full dataset</li>' %}
-<!-- ToDo: rewrite download-msmarco.sh to using curl for one less dependency -->
+<li><code>curl</code></li>' %}
 
 Note: Use 12 GB Ram for Docker if running with the full dataset.
 
