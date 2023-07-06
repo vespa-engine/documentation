@@ -1,0 +1,196 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Constant Tensor JSON Format"
+redirect_from:
+- /documentation/reference/constant-tensor-json-format.html
+---
+
+<p>
+  This document describes with examples the JSON formats accepted when reading tensor constants from a file.
+  For convenience, compactness, and readability there are various formats that can be used depending on the detailed tensor type:
+  <ul>
+    <li>
+      <a href="#dense-tensors">Dense tensors</a>: indexed dimensions only
+    </li>
+    <li>
+      <a href="#sparse-tensors">Sparse tensors</a>: mapped dimensions only
+    </li>
+    <li>
+      <a href="#mixed-tensors">Mixed tensors</a>: both indexed and mapped dimensions
+    </li>
+  </ul>
+</p>
+
+<h2 id="canonical-type">Canonical type</h2>
+<p>
+  A tensor type can be declared with its dimension in any order, but
+  internally they will always be sorted in alphabetical order.
+  So the type "<code>tensor(category{}, brand{}, a[3], x[768], d0[1])</code>" has
+  the canonical string representation "<code>tensor(a[3],brand{},category{},d0[1],x[768])</code>"
+  and the "x" dimension with size 768 is the innermost.
+  For constants, all indexed dimensions must have a known size.
+</p>
+
+<h2 id="dense-tensors">Dense tensors</h2>
+<p>
+  Tensors using only indexed dimensions are used for storing a vector,
+  a matrix, and so on and are collectively known as "dense" tensors.
+  These are particularly easy to handle, as they always have a known
+  number of cells in a well-defined order.
+  They can be input as nested arrays of numerical values.
+  Example with vector of size 5:
+<pre>
+  {
+      "type": "tensor(x[5])",
+      "values": [ 13.25, -22, 0.4242, 0, -17.0 ]
+  }
+</pre>
+</p>
+<p>
+  The "type" field is optional, but must match the
+  <a href="#canonical-type">canonical form of the tensor type</a>
+  if present.  This format is similar to "Indexed tensors short form" in the
+  <a href="document-json-format.html#tensor-short-form-indexed">document JSON format</a>.
+</p>
+<p>
+  Example of a 3x4 matrix; note that the dimension names will
+  always be processed in
+  <a href="#canonical-type">alphabetical order</a>
+  from outermost to innermost.
+<pre>
+  {
+      "type": "tensor(bar[3],foo[4])",
+      "values": [
+            [ 2.5, 1.0, 2.0, 3.0 ],
+            [ 1.0, 2.0, 3.0, 2.0 ],
+            [ 2.0, 3.0, 2.0, 1.5 ]
+      ]
+  }
+</pre>
+  Note that the arrays must have exactly the declared number of
+  elements for each dimension, and be correctly nested.
+</p>
+<p>
+  Example of an ONNX model input where we have an extra "batch" dimension
+  which is unused (size 1) for this particular input, but still requires
+  extra brackets:
+<pre>
+  {
+      "type": "tensor(d0[1],d1[5],d2[2])",
+      "values": [ [
+          [ 1.1, 1.2 ],
+          [ 2.1, 2.2 ],
+          [ 3.1, 3.2 ],
+          [ 4.1, 4.2 ],
+          [ 5.1, 5.2 ]
+      ] ]
+  }
+</pre>
+</p>
+
+<h2 id="sparse-tensors">Sparse tensors</h2>
+<p>
+  Tensors using only mapped dimensions are collectively known as "sparse" tensors.
+  JSON input for these will list the cells directly.
+  Tensors with only one mapped dimension can use as simple JSON object as input:
+<pre>
+  {
+      "type": "tensor(category{})",
+      "cells": {
+          "tag": 2.5,
+          "another": 2.75
+      }
+  }
+</pre>
+  The "type" field is optional.
+  This format is similar to "Short form for tensors with a single mapped dimension"
+  in the <a href="document-json-format.html#tensor-short-form-mapped">document JSON format</a>.
+</p>
+<p>
+  Tensors with multiple mapped dimensions must use an array of objects,
+  where each object has an "address" containing the labels for all
+  dimensions, and a "value" with the cell value:
+<pre>
+  {
+      "type": "tensor(category{},product{})",
+      "cells": [
+          {
+              "address": { "category": "foo", "product": "bar" },
+              "value": 1.5
+          },
+          {
+              "address": { "category": "qux", "product": "zap" },
+              "value": 3.5
+          },
+          {
+              "address": { "category": "pop", "product": "rip" },
+              "value": 6.5
+          }
+      ]
+  }
+</pre>
+  Again, the "type" field is optional, but must match the
+  <a href="#canonical-type">canonical form of the tensor type</a>
+  if present.
+</p>
+<p>
+  This format is also known as the
+  <a href="document-json-format.html#tensor">general verbose form</a>
+  and it's possible to use it for any tensor type.
+</p>
+
+<h2 id="mixed-tensors">Mixed tensors</h2>
+<p>
+  Tensors with both mapped and indexed dimensions can use
+  a "blocks" format; this is similar to the "cells" formats for sparse tensors,
+  but instead of a single cell value you get a block of
+  values for each address.
+  With one mapped dimension and two indexed dimensions:
+<pre>
+  {
+      "type": "tensor(a{},x[3],y[4])",
+      "blocks": {
+          "bar": [
+              [ 1.0, 2.0, 0.0, 3.0 ],
+              [ 2.0, 2.5, 2.0, 0.5 ],
+              [ 3.0, 6.0, 9.0, 9.0 ]
+          ],
+          "foo": [
+              [ 1.0, 0.0, 2.0, 3.0 ],
+              [ 2.0, 2.5, 2.0, 0.5 ],
+              [ 3.0, 3.0, 6.0, 9.0 ]
+          ]
+      }
+  }
+</pre>
+  The "type" field is optional, but must match the
+  <a href="#canonical-type">canonical form of the tensor type</a>
+  if present.
+  This format is similar to the first variant of "Mixed tensors short form"
+  in the <a href="document-json-format.html#tensor-short-form-mixed">document JSON format</a>.
+</p>
+<p>
+  With two mapped dimensions and one indexed dimensions:
+<pre>
+  {
+      "type": "tensor(a{},b{},x[3])",
+      "blocks": [
+          {
+              "address": { "a": "qux", "b": "zap" },
+              "values": [ 2.5, 3.5, 4.5 ]
+          },
+          {
+              "address": { "a": "foo", "b": "bar" },
+              "values": [ 1.5, 2.5, 3.5 ]
+          },
+          {
+              "address": { "a": "pop", "b": "rip" },
+              "values": [ 3.5, 4.5, 5.5 ]
+          }
+      ]
+  }
+</pre>
+  Again, the "type" field is optional.
+  This format is similar to the second variant of "Mixed tensors short form"
+  in the <a href="document-json-format.html#tensor-short-form-mixed">document JSON format</a>.
+</p>
