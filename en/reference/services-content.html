@@ -6,18 +6,18 @@ redirect_from:
 ---
 
 <pre class="pre-config">
-<a href="#content">content [version, id, distributor-base-port]</a>
-    <a href="#documents">documents [selection, garbage-collection, garbage-collection-interval]</a>
-        <a href="#document">document [type, selection, mode]</a>
-        <a href="#document-processing">document-processing [cluster, chain]</a>
+<a href="#content">content</a>
+    <a href="#documents">documents</a>
+        <a href="#document">document</a>
+        <a href="#document-processing">document-processing</a>
     <a href="#min-redundancy">min-redundancy</a>
     <a href="#redundancy">redundancy</a>
     <a href="#nodes">nodes</a>
-        <a href="#node">node [baseport, hostalias, preload, distribution-key, capacity]</a>
-    <a href="#group">group [distribution-key, name]</a>
+        <a href="#node">node</a>
+    <a href="#group">group</a>
         <a href="#distribution">distribution</a>
-        <a href="#node">node [baseport, hostalias, preload, distribution-key, capacity]</a>
-        <a href="#group">group [distribution-key, name]</a>
+        <a href="#node">node</a>
+        <a href="#group">group</a>
     <a href="#engine">engine</a>
         <a href="#proton">proton</a>
             <a href="#searchable-copies">searchable-copies</a>
@@ -99,16 +99,16 @@ redirect_from:
     <a href="#dispatch">dispatch <strong>DEPRECATED</strong></a>
         <a href="#dispatch">num-dispatch-groups <strong>DEPRECATED</strong></a>
         <a href="#dispatch">group <strong>DEPRECATED</strong></a>
-            <a href="#dispatch">node [distribution-key] <strong>DEPRECATED</strong></a>
+            <a href="#dispatch">node<strong>DEPRECATED</strong></a>
     <a href="#tuning">tuning</a>
-        <a href="#bucket-splitting">bucket-splitting [max-documents, max-size, minimum-bits]</a>
+        <a href="#bucket-splitting">bucket-splitting</a>
         <a href="#min-node-ratio-per-group">min-node-ratio-per-group</a>
-        <a href="#distribution_type">distribution [type]</a>
-        <a href="#maintenance">maintenance [start, stop, high]</a>
-        <a href="#merges">merges [max-per-node, max-queue-size]</a>
-        <a href="#persistence-threads">persistence-threads [count]</a>
-        <a href="#visitors">visitors [thread-count, max-queue-size]</a>
-            <a href="#max-concurrent">max-concurrent [fixed, variable]</a>
+        <a href="#distribution_type">distribution</a>
+        <a href="#maintenance">maintenance</a>
+        <a href="#merges">merges</a>
+        <a href="#persistence-threads">persistence-threads</a>
+        <a href="#visitors">visitors</a>
+            <a href="#max-concurrent">max-concurrent</a>
         <a href="#dispatch-tuning">dispatch</a>
             <a href="#max-hits-per-partition">max-hits-per-partition</a>
             <a href="#top-k-probability">top-k-probability</a>
@@ -122,6 +122,7 @@ redirect_from:
             <a href="#min-distributor-up-ratio">min-distributor-up-ratio</a>
             <a href="#min-storage-up-ratio">min-storage-up-ratio</a>
 </pre>
+
 
 
 <h2 id="content">content</h2>
@@ -145,11 +146,22 @@ Contained in <a href="services.html">services</a>.
   <td>required for multiple clusters</td>
   <td>string</td>
   <td></td>
-  <td>Name of the content cluster. If none is supplied, the cluster name will be "content".
-    Cluster names must be unique within application,
-    so if several clusters are configured, name must be set for all but one at minimum.
-    Suggested set by everyone for cluster to have a meaningful name.
-    Allows you to add clusters later without having to rename existing one for the names to make sense.</td></tr>
+  <td>
+    <p>
+      Name of the content cluster.
+      If none is supplied, the cluster name will be <code>content</code>.
+      Cluster names must be unique within application,
+      if multiple clusters are configured, name must be set for all but one at minimum.
+    </p>
+    {% include note.html content="
+    Renaming a cluster is the same as dropping the current cluster and adding a new one.
+    This makes data unavailable or lost, depending on hosting model.
+    Deploying with a changed cluster id will therefore fail with a validation override requirement:
+    <code>Content cluster 'music' is removed. This will cause loss of all data in this cluster.
+    To allow this add &lt;allow until='yyyy-mm-dd'&gt;content-cluster-removal&lt;/allow&gt; to validation-overrides.xml,
+    see https://docs.vespa.ai/en/reference/validation-overrides.html</code>."%}
+  </td>
+</tr>
 <tr><th>distributor-base-port</th>
   <td>optional</td>
   <td>number</td>
@@ -159,7 +171,6 @@ Contained in <a href="services.html">services</a>.
 </table>
 <p>Subelements:</p>
 <ul>
-<li>
   <li><a href="#documents">documents</a> (required)</li>
   <li><a href="#min-redundancy">min-redundancy</a></li>
   <li><a href="#redundancy">redundancy</a></li>
@@ -351,16 +362,16 @@ Vespa Search specific configuration for which document processing cluster and ch
 Example - the container cluster enables <a href="services-docproc.html">document-processing</a>,
 referred to by the content cluster:
 </p>
-<pre>
-&lt;container id="my-indexing-cluster" version="1.0"&gt;
-    &lt;document-processing/&gt;
-&lt;/container&gt;
-&lt;content id="music" version="1.0"&gt;
-    &lt;documents&gt;
-        &lt;document-processing cluster="my-indexing-cluster"/&gt;
-    &lt;/documents&gt;
-&lt;/content&gt;
-</pre>
+<pre>{% highlight xml %}
+<container id="my-indexing-cluster" version="1.0">
+    <document-processing/>
+</container>
+<content id="music" version="1.0">
+    <documents>
+        <document-processing cluster="my-indexing-cluster"/>
+    </documents>
+</content>
+{% endhighlight %}</pre>
 <p>
   To add document processors either before or after the indexer,
   declare a chain (inherit <em>indexing</em>) in a <em>document-processing</em> container cluster
@@ -368,25 +379,27 @@ referred to by the content cluster:
   Annotate document processors with <code>before=indexingStart</code> or <code>after=indexingEnd</code>.
   Configure this cluster and chain as the indexing chain in the content cluster - example:
 </p>
-<pre>
-&lt;container id="my-indexing-cluster" version="1.0"&gt;
-    &lt;document-processing&gt;
-        &lt;chain id="my-document-processors" inherits="indexing"&gt;
-            &lt;documentprocessor id="MyDocproc"&gt;
-                &lt;before&gt;indexingStart&lt;/before&gt;
-            &lt;/documentprocessor&gt;
-            &lt;documentprocessor id="MyOtherDocproc"&gt;
-                &lt;after&gt;indexingEnd&lt;/after&gt;
-            &lt;/documentprocessor&gt;
-        &lt;/chain&gt;
-    &lt;/document-processing&gt;
-&lt;/container&gt;
-&lt;content id="music" version="1.0"&gt;
-    &lt;documents&gt;
-        &lt;document-processing cluster="my-indexing-cluster" chain="my-document-processors" /&gt;
-    &lt;/documents&gt;
-&lt;/content&gt;
-</pre>
+<pre>{% highlight xml %}
+<container id="my-indexing-cluster" version="1.0">
+    <document-processing>
+        <chain id="my-document-processors"
+               inherits="indexing">
+            <documentprocessor id="MyDocproc">
+                <before>indexingStart</before>
+            </documentprocessor>
+            <documentprocessor id="MyOtherDocproc">
+                <after>indexingEnd</after>
+            </documentprocessor>
+        </chain>
+    </document-processing>
+</container>
+<content id="music" version="1.0">
+    <documents>
+        <document-processing cluster="my-indexing-cluster"
+                             chain="my-document-processors" />
+    </documents>
+</content>
+{% endhighlight %}</pre>
 <p>
 Also note the <a href="services-container.html#document-api">document-api</a> configuration,
 applications can set up this API on the same nodes as <em>document-processing</em> -
@@ -702,21 +715,21 @@ Tune settings for search nodes in a content cluster - sub-elements:
     </tr>
     </tbody>
 </table>
-<pre>
-&lt;tuning&gt;
-    &lt;searchnode&gt;
-        &lt;lidspace&gt;&lt;/lidspace&gt;
-        &lt;requestthreads&gt;&lt;/requestthreads&gt;
-        &lt;flushstrategy&gt;&lt;/flushstrategy&gt;
-        &lt;resizing&gt;&lt;/resizing&gt;
-        &lt;initialize&gt;&lt;/initialize&gt;
-        &lt;feeding&gt;&lt;/feeding&gt;
-        &lt;index&gt;&lt;/index&gt;
-        &lt;attribute&gt;&lt;/attribute&gt;
-        &lt;summary&gt;&lt;/summary&gt;
-    &lt;/searchnode&gt;
-&lt;/tuning&gt;
-</pre>
+<pre>{% highlight xml %}
+<tuning>
+    <searchnode>
+        <lidspace></lidspace>
+        <requestthreads></requestthreads>
+        <flushstrategy></flushstrategy>
+        <resizing></resizing>
+        <initialize></initialize>
+        <feeding></feeding>
+        <index></index>
+        <attribute></attribute>
+        <summary></summary>
+    </searchnode>
+</tuning>
+{% endhighlight %}</pre>
 
 
 
@@ -760,13 +773,13 @@ Tune settings for search nodes in a content cluster - sub-elements:
   </tr>
   </tbody>
 </table>
-<pre>
-&lt;requestthreads&gt;
-    &lt;search&gt;64&lt;/search&gt;
-    &lt;persearch&gt;1&lt;/persearch&gt;
-    &lt;summary&gt;16&lt;/summary&gt;
-&lt;/requestthreads&gt;
-</pre>
+<pre>{% highlight xml %}
+<requestthreads>
+    <search>64</search>
+    <persearch>1</persearch>
+    <summary>16</summary>
+</requestthreads>
+{% endhighlight %}</pre>
 
 
 
@@ -837,28 +850,28 @@ Optional sub-elements:
     </ul>
     </li>
 </ul>
-<pre>
-&lt;flushstrategy&gt;
-    &lt;native&gt;
-        &lt;total&gt;
-            &lt;maxmemorygain&gt;4294967296&lt;/maxmemorygain&gt;
-            &lt;diskbloatfactor&gt;0.2&lt;/diskbloatfactor&gt;
-        &lt;/total&gt;
-        &lt;component&gt;
-            &lt;maxmemorygain&gt;1073741824&lt;/maxmemorygain&gt;
-            &lt;diskbloatfactor&gt;0.2&lt;/diskbloatfactor&gt;
-            &lt;maxage&gt;111600&lt;/maxage&gt;
-        &lt;/component&gt;
-        &lt;transactionlog&gt;
-            &lt;maxsize&gt;21474836480&lt;/maxsize&gt;
-        &lt;/transactionlog&gt;
-        &lt;conservative&gt;
-            &lt;memory-limit-factor&gt;0.5&lt;/memory-limit-factor&gt;
-            &lt;disk-limit-factor&gt;0.5&lt;/disk-limit-factor&gt;
-        &lt;/conservative&gt;
-    &lt;/native&gt;
-&lt;/flushstrategy&gt;
-</pre>
+<pre>{% highlight xml %}
+<flushstrategy>
+    <native>
+        <total>
+            <maxmemorygain>4294967296</maxmemorygain>
+            <diskbloatfactor>0.2</diskbloatfactor>
+        </total>
+        <component>
+            <maxmemorygain>1073741824</maxmemorygain>
+            <diskbloatfactor>0.2</diskbloatfactor>
+            <maxage>111600</maxage>
+        </component>
+        <transactionlog>
+            <maxsize>21474836480</maxsize>
+        </transactionlog>
+        <conservative>
+            <memory-limit-factor>0.5</memory-limit-factor>
+            <disk-limit-factor>0.5</disk-limit-factor>
+        </conservative>
+    </native>
+</flushstrategy>
+{% endhighlight %}</pre>
 
 
 
@@ -886,12 +899,12 @@ Optional sub-elements:
     You will not have to tune this. The default is good for all usecases. Documented for reference.
     </li>
 </ul>
-<pre>
-&lt;resizing&gt;
-    &lt;initialdocumentcount&gt;1024&lt;/initialdocumentcount&gt;
-    &lt;amortize-count&gt;1024&lt;/amortize-count&gt;
-&lt;/resizing&gt;
-</pre>
+<pre>{% highlight xml %}
+<resizing>
+    <initialdocumentcount>1024</initialdocumentcount>
+    <amortize-count>1024</amortize-count>
+</resizing>
+{% endhighlight %}</pre>
 
 
 
@@ -913,11 +926,11 @@ Tune settings related to how the search node (proton) is initialized. Optional s
     </ul>
   </li>
 </ul>
-<pre>
-&lt;initialize&gt;
-    &lt;threads&gt;2&lt;/threads&gt;
-&lt;/initialize&gt;
-</pre>
+<pre>{% highlight xml %}
+<initialize>
+    <threads>2</threads>
+</initialize>
+{% endhighlight %}</pre>
 
 <h2 id="lidspace">lidspace</h2>
 <p>
@@ -932,11 +945,11 @@ Tune settings related to how lidspace is managed. Optional sub-elements:
     Default value is 0.01 or 1% of total lidspace. Will be increased to target of 0.50 or 50%.
   </li>
 </ul>
-<pre>
-&lt;lidspace&gt;
-    &lt;max-bloat-factor&gt;0.5&lt;/max-bloat-factor&gt;
-&lt;/lidspace&gt;
-</pre>
+<pre>{% highlight xml %}
+<lidspace>
+    <max-bloat-factor>0.5</max-bloat-factor>
+</lidspace>
+{% endhighlight %}</pre>
 
 
 
@@ -958,11 +971,11 @@ Tune <a href="../proton.html">proton</a> settings for feed operations. Optional 
     exists in the OS level scheduler.
   </li>
 </ul>
-<pre>
-&lt;feeding&gt;
-    &lt;concurrency&gt;0.8&lt;/concurrency&gt;
-&lt;/feeding&gt;
-</pre>
+<pre>{% highlight xml %}
+<feeding>
+    <concurrency>0.8</concurrency>
+</feeding>
+{% endhighlight %}</pre>
 
 
 
@@ -1004,19 +1017,19 @@ Tune various aspect with the handling of disk and memory indexes. Optional sub-e
     </ul>
     </li>
 </ul>
-<pre>
-&lt;index&gt;
-    &lt;io&gt;
-        &lt;write&gt;directio&lt;/write&gt;
-        &lt;read&gt;directio&lt;/read&gt;
-        &lt;search&gt;mmap&lt;/search&gt;
-    &lt;/io&gt;
-    &lt;warmup&gt;
-        &lt;time&gt;60&lt;/time&gt;
-        &lt;unpack&gt;true&lt;/unpack&gt;
-    &lt;/warmup&gt;
-&lt;/index&gt;
-</pre>
+<pre>{% highlight xml %}
+<index>
+    <io>
+        <write>directio</write>
+        <read>directio</read>
+        <search>mmap</search>
+    </io>
+    <warmup>
+        <time>60</time>
+        <unpack>true</unpack>
+    </warmup>
+</index>
+{% endhighlight %}</pre>
 
 
 
@@ -1035,13 +1048,13 @@ Tune various aspect with the handling of attribute vectors. Optional sub-element
     </ul>
     </li>
 </ul>
-<pre>
-&lt;attribute&gt;
-    &lt;io&gt;
-        &lt;write&gt;directio&lt;/write&gt;
-    &lt;/io&gt;
-&lt;/attribute&gt;
-</pre>
+<pre>{% highlight xml %}
+<attribute>
+    <io>
+        <write>directio</write>
+    </io>
+</attribute>
+{% endhighlight %}</pre>
 
 
 
@@ -1068,13 +1081,13 @@ Tune various aspect of the db of removed documents. Optional sub-elements:
     </ul>
     </li>
 </ul>
-<pre>
-&lt;removed-db&gt;
-    &lt;prune&gt;
-        &lt;age&gt;86400&lt;/age&gt;
-    &lt;/prune&gt;
-&lt;/removed-db&gt;
-</pre>
+<pre>{% highlight xml %}
+<removed-db>
+    <prune>
+        <age>86400</age>
+    </prune>
+</removed-db>
+{% endhighlight %}</pre>
 
 
 
@@ -1149,30 +1162,30 @@ proton.def</a> to look for parameter values and defaults. Optional sub-elements:
     </ul>
   </li> <!-- summary-store -->
 </ul>
-<pre>
-&lt;summary&gt;
-    &lt;io&gt;
-        &lt;read&gt;directio&lt;/read&gt;
-    &lt;/io&gt;
-    &lt;store&gt;
-        &lt;cache&gt;
-            &lt;maxsize-percent&gt;5&lt;/maxsize-percent&gt;
-            &lt;compression&gt;
-                &lt;type&gt;none&lt;/type&gt;
-            &lt;/compression&gt;
-        &lt;/cache&gt;
-        &lt;logstore&gt;
-            &lt;chunk&gt;
-                &lt;maxsize&gt;16384&lt;/maxsize&gt;
-                &lt;compression&gt;
-                    &lt;type&gt;zstd&lt;/type&gt;
-                    &lt;level&gt;3&lt;/level&gt;
-                &lt;/compression&gt;
-            &lt;/chunk&gt;
-        &lt;/logstore&gt;
-    &lt;/store&gt;
-&lt;/summary&gt;
-</pre>
+<pre>{% highlight xml %}
+<summary>
+    <io>
+        <read>directio</read>
+    </io>
+    <store>
+        <cache>
+            <maxsize-percent>5</maxsize-percent>
+            <compression>
+                <type>none</type>
+            </compression>
+        </cache>
+        <logstore>
+            <chunk>
+                <maxsize>16384</maxsize>
+                <compression>
+                    <type>zstd</type>
+                    <level>3</level>
+                </compression>
+            </chunk>
+        </logstore>
+    </store>
+</summary>
+{% endhighlight %}</pre>
 
 
 
@@ -1245,12 +1258,12 @@ $${L_{proton}} = {L_{cluster}} + \frac{1-L_{cluster}}{2}$$
   </tbody>
 </table>
 <p>Example:</p>
-<pre>
-&lt;proton&gt;
-    &lt;resource-limits&gt;
-        &lt;disk&gt;0.83&lt;/disk&gt;
-        &lt;memory&gt;0.82&lt;/memory&gt;
-</pre>
+<pre>{% highlight xml %}
+<proton>
+    <resource-limits>
+        <disk>0.83</disk>
+        <memory>0.82</memory>
+{% endhighlight %}</pre>
 
 
 
@@ -1440,11 +1453,11 @@ Default is 0, which means that the automatic group out-of-service functionality 
 Example: assume a cluster has been configured with <em>n</em> groups of 4 nodes each
 and the following tuning config:
 </p>
-<pre>
-&lt;tuning&gt;
-    &lt;min-node-ratio-per-group&gt;0.75&lt;/min-node-ratio-per-group&gt;
-&lt;/tuning&gt;
-</pre>
+<pre>{% highlight xml %}
+<tuning>
+    <min-node-ratio-per-group>0.75</min-node-ratio-per-group>
+</tuning>
+{% endhighlight %}</pre>
 <p>
 This tuning allows for 1 node in a group to be down. If 2 or more nodes go down,
 all nodes in the group will be marked as down, letting the <em>n-1</em> remaining groups handle all the traffic.
@@ -1658,12 +1671,12 @@ They are best left untouched, using the defaults.
   </tbody>
 </table>
 Example:
-<pre>
-&lt;tuning&gt;
-    &lt;resource-limits&gt;
-        &lt;disk&gt;0.78&lt;/disk&gt;
-        &lt;memory&gt;0.77&lt;/memory&gt;
-</pre>
+<pre>{% highlight xml %}
+<tuning>
+    <resource-limits>
+        <disk>0.78</disk>
+        <memory>0.77</memory>
+{% endhighlight %}</pre>
 
 
 
