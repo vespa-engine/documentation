@@ -611,8 +611,8 @@ It is also at odds with realtime writes.
 For these reasons, it is not recommended, and not supported.
 
 #### Does vespa give us any tool to browse the index and attribute data?
-No. Use [visiting](visiting.html) to dump all or a subset of documents.
-See [dumping-data](https://cloud.vespa.ai/en/dumping-data) for a sample script.
+Use [visiting](visiting.html) to dump all or a subset of the documents.
+See [data-management-and-backup](https://cloud.vespa.ai/en/data-management-and-backup) for more information.
 
 #### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)? 
 Failure response will be given in case the document is not written on some replica nodes.

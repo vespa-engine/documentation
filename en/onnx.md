@@ -164,8 +164,8 @@ can make running deep models feasible.
 
 The [Transformers](https://github.com/vespa-engine/sample-apps/tree/master/transformers)
 sample application uses an ONNX model to
-[re-rank documents](https://github.com/vespa-engine/sample-apps/blob/master/transformers/src/main/application/schemas/msmarco.sd).
-The model is [exported](https://github.com/vespa-engine/sample-apps/blob/master/transformers/src/python/setup-model.py)
+[re-rank documents](https://github.com/vespa-engine/sample-apps/blob/master/transformers/application/schemas/msmarco.sd).
+The model is [exported](https://github.com/vespa-engine/sample-apps/blob/master/transformers/bin/setup-model.py)
 from [HuggingFace's Transformers](https://huggingface.co/docs/transformers/index) library.
 
 The [Question-Answering](https://github.com/vespa-engine/sample-apps/tree/master/dense-passage-retrieval-with-ann)
