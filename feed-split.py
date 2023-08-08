@@ -169,12 +169,12 @@ def move_linkable_item_to_single_entity(soup, item):
                     dummy_tr.append(soup.new_tag('th'))
                 new_thead.append(dummy_tr)
             new_tbody.append(item)
+            soup.append(new_h4)
+            soup.append(new_container)
         else:
-            new_container = soup.new_tag(item.parent.name)  # ul or ol
-            new_container.append(item)
-
-        soup.append(new_h4)
-        soup.append(new_container)
+            item.name = 'div'  # change <li> to <div> for nicer display
+            soup.append(new_h4)
+            new_h4.insert_after(item)
 
 
 def main():
