@@ -115,14 +115,64 @@ jobs:
             echo "Latest Vespa version is: " \${VESPA_VERSION}
             sed -i.orig "s/vespa_version: \"[0-9\.]*\"/vespa_version: \"\${VESPA_VERSION}\"/" _config.yml
             git diff
-            changes=\$(git status --porcelain | wc -l)            
+            changes=\$(git status --porcelain | wc -l)
             if (( changes > 0 )); then
               echo "Updating Vespa version in documentation to \${VESPA_VERSION}"
               git commit -m "Update Vespa-version to \${VESPA_VERSION} MERGEOK" _config.yml
               git pull --rebase
               git push
-            fi            
+            fi
           EOF
+          /usr/bin/ssh-agent /bin/bash pushtogit.sh
+
+  update-vespa-cli-doc:
+    requires: [~pr, ~commit]
+    image: buildpack-deps
+    annotations:
+      screwdriver.cd/buildPeriodically: H H(0-5) * * 1 # some time between 12:00 AM UTC (midnight) to 5:59 AM UTC Mon
+    secrets:
+      - VESPA_DOC_DEPLOY_KEY
+    environment:
+      GIT_SSH_COMMAND: "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+    steps:
+      - get-vespa-cli: |
+          VESPA_CLI_VERSION=$(curl -fsSL https://api.github.com/repos/vespa-engine/vespa/releases/latest | grep -Po '"tag_name": "v\K.*?(?=")') && \
+            curl -fsSL https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz | tar -zxf - -C /opt && \
+            ln -sf /opt/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa /usr/local/bin/
+      - update-to-latest: |
+          # must checkout the repo again using ssh for the credentials to work
+          cat << EOF > pushtogit.sh
+            #!/bin/bash
+            ssh-add -D
+            set +x
+            ssh-add <(echo $VESPA_DOC_DEPLOY_KEY | base64 -d)
+            set -x
+            git clone git@github.com:vespa-engine/documentation.git documentation
+            cd documentation/en/reference/vespa-cli
+            vespa gendoc .
+            find .  -name \*.md | \
+              while read f; do \
+              title=\${f//.md/}; \
+              title=\${title//.\//}; \
+              title=\${title//_/ }; \
+              (echo -e "---\ntitle: \$title\nrender_with_liquid: false\n---\n"; cat \${f})>\${f}.new; \
+              mv \${f}.new \${f}; \
+            done
+            # link to .html
+            sed -i.orig 's/\(vespa.*\).md)/\1.html)/' \*.md
+            # create links
+            sed -i.orig 's#\(https://docs.vespa.ai/[^\S]*\)#[\1](\1)#g' \*.md
+            rm \*.orig
+            git diff
+            changes=\$(git status --porcelain | wc -l)
+            if (( changes > 0 )); then
+              echo "Updating Vespa CLI reference documentation"
+              # git commit -m "Update Vespa-version to \${VESPA_VERSION} MERGEOK" _config.yml
+              # git pull --rebase
+              # git push
+            fi
+          EOF
+          cat pushtogit.sh
           /usr/bin/ssh-agent /bin/bash pushtogit.sh
 
   generate-metric-reference:
