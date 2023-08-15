@@ -72,25 +72,14 @@ def vespa_remove(endpoint, doc_ids, namespace, doc_type):
 
 
 def feed_using_vespa_feed(endpoint, feed):
-    # Workaround, better to use vespa feed -t once it works
     splits = re.split(r'/|\.', endpoint)
-    appstring = splits[3] + '.' + splits[2]
-    zone = 'dev.' + splits[4]
-    # print(subprocess.run(['./vespa', 'config', 'set', 'target', 'cloud'],
-    #                      capture_output=True,
-    #                      env={"HOME": "."}))
-    # print(subprocess.run(['./vespa', 'feed', '-a', appstring, '-z', zone, '-C', 'default',  feed],
-    #                      capture_output=True,
-    #                      env={"HOME": ".",
-    #                           "VESPA_CLI_DATA_PLANE_CERT": os.environ["VESPA_CLI_DATA_PLANE_CERT"],
-    #                           "VESPA_CLI_DATA_PLANE_KEY": os.environ["VESPA_CLI_DATA_PLANE_KEY"]}))
-    print(subprocess.run(['./vespa', 'feed', '-a', appstring, '-t', endpoint, feed],
-                         capture_output=True))
+    app_string = splits[3] + '.' + splits[2]
+    print(subprocess.run(['./vespa', 'feed', '-a', app_string, '-t', endpoint, feed], capture_output=True))
     return
 
 
 def vespa_feed(endpoint, feed, namespace, doc_type):
-    if doc_type == "paragraph":
+    if doc_type == "paragraph" or doc_type == "term":
         feed_using_vespa_feed(endpoint, feed)
         return
     document_id = ''
