@@ -1,4 +1,5 @@
 ---
+title: vespa auth cert add
 render_with_liquid: false
 ---
 

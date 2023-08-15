@@ -1,4 +1,5 @@
 ---
+title: vespa log
 render_with_liquid: false
 ---
 

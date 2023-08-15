@@ -1,4 +1,5 @@
 ---
+title: vespa auth logout
 render_with_liquid: false
 ---
 

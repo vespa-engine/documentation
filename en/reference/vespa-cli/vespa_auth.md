@@ -1,4 +1,5 @@
 ---
+title: vespa auth
 render_with_liquid: false
 ---
 

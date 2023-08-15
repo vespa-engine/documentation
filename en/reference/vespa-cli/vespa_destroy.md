@@ -1,4 +1,5 @@
 ---
+title: vespa destroy
 render_with_liquid: false
 ---
 
