@@ -1,4 +1,5 @@
 ---
+title: vespa config
 render_with_liquid: false
 ---
 

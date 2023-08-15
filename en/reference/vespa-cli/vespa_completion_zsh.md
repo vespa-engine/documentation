@@ -1,4 +1,5 @@
 ---
+title: vespa completion zsh
 render_with_liquid: false
 ---
 

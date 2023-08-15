@@ -1,4 +1,5 @@
 ---
+title: vespa completion
 render_with_liquid: false
 ---
 

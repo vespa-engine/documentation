@@ -1,4 +1,5 @@
 ---
+title: vespa status document
 render_with_liquid: false
 ---
 

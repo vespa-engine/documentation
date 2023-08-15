@@ -1,4 +1,5 @@
 ---
+title: vespa completion fish
 render_with_liquid: false
 ---
 

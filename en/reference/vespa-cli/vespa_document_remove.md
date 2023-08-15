@@ -1,4 +1,5 @@
 ---
+title: vespa document remove
 render_with_liquid: false
 ---
 
