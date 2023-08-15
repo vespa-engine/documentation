@@ -49,11 +49,11 @@ def vespa_get(endpoint, operation, options):
 def vespa_delete(endpoint, operation, options):
     url = "{0}/{1}?{2}".format(endpoint, operation, "&".join(options))
     return session.delete(url).json()
-    
+
 def vespa_post(endpoint, doc, docid, namespace, doc_type):
     url = "{0}/document/v1/{1}/{2}/docid/{3}".format(endpoint, namespace, doc_type, docid)
     return session.post(url, json=doc).json()
-    
+
 
 def vespa_visit(endpoint, namespace, doc_type, continuation = None):
     options = []
@@ -62,7 +62,7 @@ def vespa_visit(endpoint, namespace, doc_type, continuation = None):
     if continuation is not None and len(continuation) > 0:
         options.append("&continuation={0}".format(continuation))
     return vespa_get(endpoint, "document/v1/{0}/{1}/docid".format(namespace,doc_type), options)
-    
+
 
 def vespa_remove(endpoint, doc_ids, namespace, doc_type):
     options = []
@@ -84,21 +84,18 @@ def feed_using_vespa_feed(endpoint, feed):
     #                      env={"HOME": ".",
     #                           "VESPA_CLI_DATA_PLANE_CERT": os.environ["VESPA_CLI_DATA_PLANE_CERT"],
     #                           "VESPA_CLI_DATA_PLANE_KEY": os.environ["VESPA_CLI_DATA_PLANE_KEY"]}))
-    print(subprocess.run(['./vespa', 'feed', '-t', endpoint, '-C', 'default',  feed],
-                         capture_output=True,
-                         env={"HOME": ".",
-                              "VESPA_CLI_DATA_PLANE_CERT": os.environ["VESPA_CLI_DATA_PLANE_CERT"],
-                              "VESPA_CLI_DATA_PLANE_KEY": os.environ["VESPA_CLI_DATA_PLANE_KEY"]}))
+    print(subprocess.run(['./vespa', 'feed', '-a', appstring, '-t', endpoint, feed],
+                         capture_output=True))
     return
 
 
 def vespa_feed(endpoint, feed, namespace, doc_type):
-    #if doc_type == "paragraph":
-    #    feed_using_vespa_feed(endpoint, feed)
-    #    return
+    if doc_type == "paragraph":
+        feed_using_vespa_feed(endpoint, feed)
+        return
     document_id = ''
     for doc in get_docs(feed):
-        if doc_type == "doc": 
+        if doc_type == "doc":
             document_id = find(doc, "fields.namespace") + find(doc, "fields.path")
         elif doc_type == "term":
             document_id = str(find(doc, "fields.hash"))
@@ -123,7 +120,7 @@ def get_indexed_docids(endpoint, namespace, doc_type):
             for id in ids:
                 # The document id might contain chars that needs to be escaped for the delete/put operation to work
                 # also for comparision with what is in the feed
-                docid = get_document_id(id) # return the last part 
+                docid = get_document_id(id) # return the last part
                 encoded = urllib.parse.quote(docid) #escape
                 id = id.replace(docid, encoded)
                 docids.add(id)
@@ -134,11 +131,11 @@ def get_indexed_docids(endpoint, namespace, doc_type):
 def get_feed_docids(feed, namespace, doc_type):
     with open(feed, "r", encoding='utf-8') as f:
         feed_json = json.load(f)
-    if doc_type == "doc": 
+    if doc_type == "doc":
         return set(["id:{0}:doc::".format(namespace) + find(doc, "fields.namespace") + find(doc, "fields.path") for doc in feed_json])
-    elif doc_type == "term": 
+    elif doc_type == "term":
         return set(["id:{0}:term::".format(namespace) + str(find(doc, "fields.hash")) for doc in feed_json])
-    elif doc_type == "paragraph": 
+    elif doc_type == "paragraph":
         return set([doc['put'] for doc in feed_json])
 
 
