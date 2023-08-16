@@ -63,7 +63,7 @@ $ brew install vespa-cli
 
 This tutorial has a [companion sample application](https://github.com/vespa-engine/sample-apps/tree/master/news).
 Throughout the tutorial we will be using support code from this application.
-Also, the final state of each tutorial can be found in the various `app-...` sub-directories.
+Also, the final state of each tutorial can be found in the various `app-...` subdirectories.
 
 Let's start by cloning the sample application:
 
@@ -151,43 +151,25 @@ application changes in this manner.
 
 ## Feeding to Vespa
 
-We must index data before we can search for it. This is called "feeding", and
-we'll get back to that in more detail in the next part of the tutorial. For
-now, to test that everything is up and running, we'll feed in a single test
-document. 
-
-The first example uses the [vespa-feed-client](../vespa-feed-client.html) to index a document:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ curl -L -o vespa-feed-client-cli.zip \
-  "https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip"
-$ unzip vespa-feed-client-cli.zip
-</pre>
-</div>
-
-We can also feed using [Vespa document api](../document-v1-api-guide.html) directly,
-or use the [Vespa CLI](../vespa-cli.html), which also uses the http document api.
-
-This runs the `vespa-feed-client` Java client with the file `doc.json` file.
+We must index data before we can search for it.
+This is called "feeding", and we'll get back to that in more detail in the next part of the tutorial.
+For now, to test that everything is up and running, we'll feed in a single test document:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
-$ ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --file doc.json --endpoint http://localhost:8080
+$ vespa feed -t http://localhost:8080 doc.json
 </pre>
 </div>
 
-This runs the `vespa` cli with the file `doc.json` file. The `-v` option will make vespa-cli
-print the http request:
-
+The `-v` option will make vespa-cli print the http request:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
 $ vespa document -v doc.json
 </pre>
 </div>
+
+We can also feed using [Vespa document api](../document-v1-api-guide.html) directly.
 
 Once the feed operation is ack'ed by Vespa, the operation is visible in search.
 

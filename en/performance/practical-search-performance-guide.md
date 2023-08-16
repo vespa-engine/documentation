@@ -355,18 +355,12 @@ $ vespa deploy --wait 300 app
 </div>
 
 ## Index the dataset
-
-This guide uses the [vespa feed client](../vespa-feed-client.html) to
-feed the feed file generated in the previous section:
+Feed the feed file generated in the previous section:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ curl -L -o vespa-feed-client-cli.zip \
-    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip
-$ unzip vespa-feed-client-cli.zip
-$ ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --file feed.jsonl --endpoint http://localhost:8080
+$ vespa feed -t http://localhost:8080 feed.jsonl
 </pre>
 </div>
 
@@ -2056,8 +2050,7 @@ Adding a new field does not require a restart, apply the partial updates by:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ ./vespa-feed-client-cli/vespa-feed-client \
-    --verbose --file updates.jsonl --endpoint http://localhost:8080
+$ vespa feed -t http://localhost:8080 updates.jsonl
 </pre>
 </div>
 
