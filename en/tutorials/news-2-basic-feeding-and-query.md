@@ -28,7 +28,7 @@ before moving on to the next part of the tutorial: searching for content.
 
 For reference, the final state of this tutorial can be found in the
 [app-2-feed-and-query](https://github.com/vespa-engine/sample-apps/tree/master/news/app-2-feed-and-query)
-sub-directory of the `news` sample application.
+subdirectory of the `news` sample application.
 
 
 ## The Microsoft News Dataset
@@ -297,8 +297,7 @@ $ python3 src/python/convert_to_vespa_format.py mind
 The argument is where to find the downloaded data above, which was in the
 `mind` directory. This script creates a new file in that directory called
 `vespa.json`. This contains all 28603 news articles in the data set. This
-file can now be fed to Vespa. Use the method described in the previous part,
-using the `vespa-feed-client`:
+file can now be fed to Vespa. Use the method described in the previous part:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -307,9 +306,9 @@ $ vespa feed mind/vespa.json --target http://localhost:8080
 </pre>
 </div>
 
-The `vespa-feed-client` can read an JSON array of document operations, or JSONL with
-one Vespa document JSON formatted operation per line. Once the feed job finishes, 
-all our 28 603 documents are searchable, let us do a quick query to verify:
+`vespa feed` reads a JSON array of document operations,
+or JSONL with one Vespa document JSON formatted operation per line.
+Once the feed job finishes, all our 28 603 documents are searchable, let us do a quick query to verify:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

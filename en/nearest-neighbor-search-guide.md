@@ -433,16 +433,12 @@ $ vespa deploy --wait 300 app
 
 ## Index the dataset
 
-Feed the dataset using [Vespa feed client](vespa-feed-client.html):
+Feed the dataset:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ curl -L -o vespa-feed-client-cli.zip \
-    https://search.maven.org/remotecontent?filepath=com/yahoo/vespa/vespa-feed-client-cli/{{site.variables.vespa_version}}/vespa-feed-client-cli-{{site.variables.vespa_version}}-zip.zip
-$ unzip vespa-feed-client-cli.zip
-$ ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --file feed.jsonl --endpoint http://localhost:8080
+$ vespa feed -t http://localhost:8080 feed.jsonl
 </pre>
 </div>
 
@@ -690,8 +686,7 @@ The feed file uses [partial updates](partial-updates.html) to add the vector emb
 <pre data-test="exec">
 $ curl -L -o lastfm_embeddings.jsonl.zst \
     https://data.vespa.oath.cloud/sample-apps-data/lastfm_embeddings.jsonl.zst
-$ zstdcat lastfm_embeddings.jsonl.zst | ./vespa-feed-client-cli/vespa-feed-client \
-  --verbose --stdin --endpoint http://localhost:8080
+$ zstdcat lastfm_embeddings.jsonl.zst | vespa feed -t http://localhost:8080 -
 </pre>
 </div>
 
