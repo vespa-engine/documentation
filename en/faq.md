@@ -382,7 +382,7 @@ behavior.
 
 #### How to feed many files, avoiding 429 error?
 Using too many HTTP clients can generate a 429 response code.
-The Vespa sample apps use the [vespa-feed-client](vespa-feed-client.html) which uses HTTP/2 for high throughput -
+The Vespa sample apps use [vespa feed](vespa-cli.html#documents) which uses HTTP/2 for high throughput -
 it is better to stream the feed files through this client.
 
 
