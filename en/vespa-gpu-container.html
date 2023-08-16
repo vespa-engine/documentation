@@ -13,13 +13,32 @@ container.
 
 <p>
 The following guide explains how to do this for Nvidia GPUs, using Podman on
-RHEL8. For other platforms and container engines, see
+RHEL8. This should also work on plain Rocky Linux 8.8 and AlmaLinux 8.8 on x86_64.
+For other platforms and container engines, see
 the <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html">Nvidia
 container toolkit installation guide</a>.
+Commands below need to run as root (use <code>sudo bash</code> first).
+</p>
+
+<h2 id="configuration-script">Run a script</h2>
+<p>
+Fetch and run our script for RHEL8 / x86_64 and run it as follows:
+<pre>
+sudo dnf -y install wget
+wget https://raw.githubusercontent.com/vespa-engine/docker-image/master/experimental/gpu-setup-rhel8-x86.sh
+sh gpu-setup-rhel8-x86.sh
+</pre>
+This will follow the steps below and check if a sample application is able to utilise the GPU.
+For more details see the steps below.
 </p>
 
 <h2 id="configuration-steps">Configuration steps</h2>
 <ol>
+  <li>
+    <p> Check that SELinux is disabled with <code>getenforce</code>; edit <code>/etc/selinux/config</code> and reboot if necessary.
+        To temporarily avoid SELinux interfering, it's possible to run <code>setenforce Permissive</code> instead.
+    </p>
+  </li>
   <li>
     <p> Ensure that Nvidia drivers are installed on your <b>host</b> where you want to run the <code>vespaengine/vespa</code> 
       container image. On RHEL 8 this can be done as follows:
@@ -27,9 +46,21 @@ container toolkit installation guide</a>.
 <pre>
 dnf config-manager \
   --add-repo=https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
-dnf module install -y --enablerepo cuda-rhel8-x86_64 nvidia-driver:latest
+dnf module install -y --enablerepo cuda-rhel8-x86_64 nvidia-driver:530
+nvidia-modprobe
+ls -ld /dev/nvidia*
+</pre>
+    <p> You should have (at least) these devices listed after running the above commands: </p>
+<pre>
+crw-rw-rw-. 1 root root 195,   0 Aug 16 11:24 /dev/nvidia0
+crw-rw-rw-. 1 root root 195, 255 Aug 16 11:24 /dev/nvidiactl
+crw-rw-rw-. 1 root root 238,   0 Aug 16 11:24 /dev/nvidia-uvm
+crw-rw-rw-. 1 root root 238,   1 Aug 16 11:24 /dev/nvidia-uvm-tools
 </pre>
   </li>
+    <p> See <a href="https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#device-node-verification">
+        Device Node Verification</a> in the CUDA installation guide for more details.
+    </p>
   <li>
     <p>
       Install <code>nvidia-container-toolkit</code>. This grants the container engine access
@@ -46,7 +77,7 @@ dnf install -y --enablerepo libnvidia-container nvidia-container-toolkit
       Generate a "Container Device Interface" config:
     </p>
 <pre>
-nvidia-ctk cdi generate --device-name-strategy=type-index --format=json &gt; /etc/cdi/nvidia.json
+nvidia-ctk cdi generate --device-name-strategy=type-index --format=json --output /etc/cdi/nvidia.json
 </pre>
   </li>
   <li>
@@ -77,10 +108,10 @@ podman run --detach --name vespa --hostname vespa-container \
     necessary CUDA libraries by default, due to their large size. These
     libraries must be installed inside the container manually:
 <pre>
-podman exec -it vespa /bin/bash
+podman exec -u 0 -it vespa /bin/bash
 dnf config-manager \
   --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
-dnf -y install vespa-onnxruntime-cuda
+dnf -y install libcudnn8-8.9.4.25-1.cuda11.8 vespa-onnxruntime-cuda
 </pre>
 
 Instead of the above installation of <code>vespa-onnxruntime-cuda</code> inside the running container, 
@@ -93,6 +124,7 @@ FROM vespaengine/vespa
 USER root
   
 RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+RUN dnf -y install libcudnn8-8.9.4.25-1.cuda11.8
 RUN dnf -y install vespa-onnxruntime-cuda
   
 USER vespa
