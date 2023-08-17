@@ -77,13 +77,14 @@ This defines a 2-dimensional mapped tensor (matrix) of floats:
 <pre>
 tensor&lt;float&gt;(topic{},segment{})
 </pre>
-This is a 2-dimensional indexed tensor (a 2x3 matrix) of double (double is the default value type):
+This is a 2-dimensional indexed tensor (a 2x3 matrix) of double (double is the default 
+<a href="reference/tensor.html#tensor-type-spec">tensor value type</a>):
 <pre>
 tensor(x[2],y[3])
 </pre>
 A combination of mapped and indexed dimensions is a <i>mixed</i> tensor:
 <pre>
-tensor&lt;float&gt;(key{},x[1000])
+tensor&lt;int8&gt;(key{},x[1000])
 </pre>
 
 <p>Vespa uses the type information to optimize execution plans at configuration time.
@@ -116,13 +117,24 @@ to set tensor values in documents.
 </p>
 
 <h2 id="querying-with-tensors">Querying with tensors</h2>
+<p>Query input tensors must be defined in the schema using <a href="reference/schema-reference.html#inputs">inputs</a>:</p>
+<pre>
+  rank-profile semantic {
+    inputs {
+      query(q) tensor&lt;float&gt;(x[4])
+    }
+  }
+</pre>
 
-<p>Tensors with the following types can be indexed (HNSW) and used for searching (ANN):
+<p>Tensors with the following types can be indexed with <a href="approximate-nn-hnsw.html">HNSW</a> and queried 
+  efficiently using the <a href="reference/query-language-reference.html#nearestneighbor">nearestNeighbor</a> query operator:</p>
 <ul>
   <li>One indexed dimension - single vector per document</li>
   <li>One mapped and one indexed dimension - multiple vectors per document</li>
 </ul>
-See <a href="nearest-neighbor-search.html">nearest neighbor search</a>.</p>
+
+<p>See <a href="nearest-neighbor-search.html">nearest neighbor search</a> and 
+<a href="approximate-nn-hnsw.htmk">approximate nearest neighbor search</a>.</p>
 
 <h2 id="ranking-with-tensors">Ranking with tensors</h2>
 
@@ -150,9 +162,12 @@ Then you can either
 <p>With these tensors, you can write functions in rank profiles which computes over them. For example:</p>
 <pre>
 rank-profile dot-product {
+    inputs {
+      query(user_input_tensor) tensor&lt;float&gt;(x[4])
+    }
 
     first-phase {
-        expression: my_dot_product(query(tensor), attribute(tensor_attribute))
+        expression: my_dot_product(query(user_input_tensor), attribute(tensor_attribute))
     }
 
     function my_dot_product(a, b) {
@@ -207,7 +222,7 @@ for instance machine learned models. Example:
 </p>
 <pre>
 constants  {
-    my_tensor_constant tensor&lt;float&gt;(x[10000]): file: constants/constant_tensor_file.json
+    my_tensor_constant tensor&lt;float&gt;(x[4]): file: constants/constant_tensor_file.json
 }
 </pre>
 <p>
@@ -223,13 +238,14 @@ To use this tensor in a ranking expression, encapsulate the constant name with <
 </p>
 <pre>
 rank-profile use_constant_tensor {
+    inputs {
+      query(user_input_tensor) tensor&lt;float&gt;(x[4])
+    }
     first-phase {
-        expression: sum(query(tensor) * attribute(tensor_attribute) * constant(tensor_constant))
+        expression: sum(query(user_input_tensor) * attribute(tensor_attribute) * constant(tensor_constant))
     }
 }
 </pre>
-
-
 
 <h2 id="tensors-with-strings">Tensors with strings</h2>
 
