@@ -1003,9 +1003,11 @@ field myfieldname type array&lt;position&gt; {
         The following tensor field types are supported:
       </p>
         <ul>
-          <li>Single vector per document: Tensor type with one indexed dimension. Example: tensor&lt;float&gt;(x[3])</li>
+          <li>Single vector per document: Tensor type with one indexed dimension. 
+            Example: <code>tensor&lt;float&gt;(x[3])</code></li>
 
-          <li>Multiple vectors per document: Tensor type with one mapped and one indexed dimension. Example: tensor&lt;float&gt;(m{},x[3])</li>
+          <li>Multiple vectors per document: Tensor type with one mapped and one indexed dimension. 
+            Example: <code>tensor&lt;float&gt;(m{},x[3])</code></li>
         </ul>
       <p>
         Euclidean distance is used as the default
@@ -1017,26 +1019,39 @@ field myfieldname type array&lt;position&gt; {
         is specified on the tensor field, the approximate nearest neighbors are returned instead. Example:
       </p>
 <pre>
-where ({targetHits: 10}nearestNeighbor(doc_vector, query_vector))&amp;input.query(query_vector)=[3,5,7]
+where ({targetHits: 10}nearestNeighbor(doc_vector, query_vector))&amp;input.query(query_vector)=[3,5,7]&ranking=semantic
 </pre>
       <p>
         In this example we search for the top 10 nearest neighbors in a 3-dimensional vector space.
-        <em>targetHits</em> specifies the wanted top-k nearest neighbors to find. This parameter is required.
+        <em>targetHits</em> specifies the top-k nearest neighbors to expose to a user defined <code>semantic</code> 
+        <a href="../ranking.html">rank profile</a>. The <em>targetHits</em> parameter is required.
         The first parameter of <em>nearestNeighbor</em> is the name of the tensor field attribute containing the document vectors (<em>doc_vector</em>).
+      </p>
+      <p>
         The second parameter is the name of the tensor sent with the query request (<em>query_vector</em>).
         Specifying <em>query_vector</em> as the name means the query request must set this tensor as
-        <em>input.query(query_vector)</em>.
-        The document tensor field attribute is defined as follows:
-      </p>
+        <em>input.query(query_vector)</em>. The tensor type of the <b>input query vector must be defined</b> in the the rank profile,
+          see <a href="../ranking-expressions-features.html#query-feature-types">defining query feature types</a>.
+<pre>
+rank-profile semantic {
+    inputs {
+      query(query_vector) tensor&lt;float&gt;(x[3])
+    }
+    first-phase: closeness(field, doc_vector)
+}
+</pre>
+      <p>Failure to define the query input tensor in the schema will fail the request:</p>
+ <pre>
+  Expected 'query(query_vector)' to be a tensor, but it is the string '[3,5,7]'
+ </pre>
+      <p>The document tensor field attribute is defined as follows:</p>
 <pre>
 field doc_vector type tensor&lt;float&gt;(x[3]) {
     indexing: attribute | summary
 }
 </pre>
-      <p>
-        The last part of the YQL example specifies the query tensor,
-        see <a href="../ranking-expressions-features.html#query-feature-types">defining query feature types</a>
-        This must have the same type as the document tensor.
+      <p>The above example does not define HNSW <code>index</code> and the search for neighbors will be exact.</p>
+      <p></p>
         See <a href="../nearest-neighbor-search.html">Nearest Neighbor Search</a>,
         <a href="../approximate-nn-hnsw.html">Approximate Nearest Neighbor Search using HNSW Index</a> and
         <a href="../nearest-neighbor-search-guide.html">Nearest Neighbor Search Guide</a>
@@ -1053,7 +1068,8 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
         <tr>
           <td><a href="#targethits">targetHits</a></td>
           <td>
-            This annotation is required, and specifies the number of hits nearestNeighbor aims to produce.
+            This annotation is required, and specifies the number of hits nearestNeighbor 
+            should expose to <a href="../ranking.html">ranking</a>.
             Note that more or less hits might actually be produced. <em>targetHits</em> is per node
             involved in the query.
           </td>
@@ -1066,14 +1082,17 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
             This is especially useful to compare exact and approximate results in order to perform
             tuning of HNSW parameters.
             This annotation is default <code>true</code> when an HNSW index is specified,
-            otherwise it is always <code>false</code>.
+            otherwise it is always <code>false</code>. Setting this to <code>false</code>
+            might trigger <a href="../graceful-degradation.html">graceful query degradation</a>. Adjust 
+            <a href="#timeout">timeout</a> as needed.  
           </td>
         </tr>
         <tr>
           <td><a href="#hnsw-exploreadditionalhits">hnsw.exploreAdditionalHits</a></td>
           <td>
-            Tune how many extra nodes in the graph (in addition to <code>targetHits</code>)
-            that should be explored before selecting the best hits.
+            Tune how many extra nodes in the HNSW graph (in addition to <code>targetHits</code>)
+            that should be explored before selecting the best hits. Default is <code>0</code>. Increasing
+            this parameter increases the accuracy of the approximate search, at the cost of more distance computations.
           </td>
         </tr>
         <tr>
@@ -1082,7 +1101,7 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
             Use to mark the query operator with a label
             that can be referred to from the ranking expression in the rank profile.
             See the <a href="rank-features.html#closeness(dimension,name)">closeness</a> rank feature.
-            Useful when having multiple nearest neighbor query operators in the same query, see
+            Useful when having multiple <code>nearestNeighbor</code> operators in the same query, see
             <a href="../nearest-neighbor-search-guide.html#multiple-nearest-neighbor-search-operators-in-the-same-query">
               nearest neighbor search guide
             </a> for usage example.
@@ -1091,7 +1110,7 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
         <tr>
           <td><a href="#distancethreshold">distanceThreshold</a></td>
           <td>
-            Use to filter out hits with a higher distance than the given threshold.
+            Use to filter out hits with a higher distance than a threshold.
             See
             <a href="../nearest-neighbor-search-guide.html#strict-filters-and-distant-neighbors">
               nearest neighbor search guide
@@ -1105,7 +1124,7 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
         <thead></thead><tbody>
       <tr>
         <th>Field type</th>
-        <td>Tensor attribute with one indexed dimension of size N.</td>
+        <td>Tensor attribute with one indexed dimension of size N or with one mapped and one indexed dimension.</td>
       </tr><tr>
         <th>Query model</th>
         <td>Tensor with one indexed dimension of size N.</td>
