@@ -17,7 +17,7 @@ The operation must be on the format documented in
 When this returns successfully, the document is guaranteed to be visible in any
 subsequent get or query operation.
 
-To feed with high throughput, [https://docs.vespa.ai/en/vespa-feed-client.html](https://docs.vespa.ai/en/vespa-feed-client.html)
+To feed with high throughput, [https://docs.vespa.ai/en/reference/vespa-cli/vespa_feed.html](https://docs.vespa.ai/en/reference/vespa-cli/vespa_feed.html)
 should be used instead of this.
 
 ```
