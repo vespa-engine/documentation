@@ -184,7 +184,7 @@ where the document name is the address in the tensor, using a value of 1 for eac
 ```
 
 {% include important.html content="Vespa cannot know the query tensor type from looking at it -
-it must be configured using a [inputs](reference/schema-reference.html#inputs)."%}
+it must be configured using [inputs](reference/schema-reference.html#inputs)."%}
 
 As the in-link data is represented in a weightedset,
 we use the [tensorFromWeightedSet](reference/rank-features.html#document-features)
