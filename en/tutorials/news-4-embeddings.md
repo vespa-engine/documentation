@@ -443,15 +443,23 @@ This form isn't really suitable for efficient retrieval as-is,
 but it can be mapped to a nearest neighbor search problem, so
 we can use an efficient approximate nearest neighbors index.
 
-When specifying "distance-metric: dotproduct", Vespa uses the technique discussed in
+When specifying `distance-metric: dotproduct`, Vespa uses the technique discussed in
 [Speeding Up the Xbox Recommender System Using a Euclidean Transformation for Inner-Product
 Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf)
-to solve the MIPS case.
+to solve the MIPS case. See [blog post announcing MIPS support in Vespa](https://blog.vespa.ai/announcing-maximum-inner-product-search/).
+
+<pre>
+field embedding type tensor&lt;float&gt;(d0[50]) {
+            indexing: attribute | index
+            attribute {
+                distance-metric: dotproduct
+            }
+}</pre>
 
 See [Nearest Neighbor Search](../nearest-neighbor-search.html) for more
 information on nearest neighbor search and supported distance metrics in Vespa.
 
-We've included a script to map the embeddings to euclidean space and create a feed suitable for Vespa:
+We've included a script to create a feed suitable for Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
