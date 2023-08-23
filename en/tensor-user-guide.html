@@ -209,14 +209,14 @@ using <a href="partial-updates.html">partial updates</a>, avoiding re-feed or re
 <pre>{% highlight shell %}
 vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)' \
 'input.query(q_embedding)=[1,2,3,4]' \
-'input.query(q_category)={"Tablet Keyboard Cases":0.8}' \
+'input.query(q_category)={"Tablet Keyboard Cases":0.8, "Keyboards":0.3}' \
 'ranking=product_ranking' {% endhighlight %}</pre>
 
-This query request example assumes that the user query has been mapped (classified) to the 
-<em>Tablet Keyboard Cases</em> category. similarly, the user query has been mapped to
-a dense vector representation (<code>query(q_embedding</code>) and which is used as the 
+This query request example assumes that the user query has been mapped (classified) to be related to the 
+<em>Tablet Keyboard Cases</em> and <em>Keyboards</em> categories. Similarly, the user query has been mapped to
+a dense vector representation (<code>query(q_embedding</code>) and is used as 
 input to the <a href="reference/query-language-reference.html#nearestneighbor">nearestNeighbor</a>
-query operator used in the <a href="query-language.html">YQL query language</a>.</p>
+query operator, expressed with the <a href="query-language.html">YQL query language</a>.</p>
 
 <p>
 The Vespa CLI uses HTTP GET and you can use the <em>-v</em> flag to see the curl GET equivalent. For 
@@ -232,7 +232,7 @@ The Vespa CLI uses HTTP GET and you can use the <em>-v</em> flag to see the curl
             3,
             4
         ],
-        "query(q_category)": "{\"Tablet Keyboard Cases\": 1}"
+        "query(q_category)": "{\"Tablet Keyboard Cases\": 0.8, \"Keyboards\":0.3}"
     },
     "ranking": "product_ranking"
 }{% endhighlight %}</pre>
@@ -248,7 +248,8 @@ The Vespa CLI uses HTTP GET and you can use the <em>-v</em> flag to see the curl
 <h2 id="ranking-with-tensors">Ranking with tensors</h2>
 <p>Tensors can be used in making inference computations over documents that are matched by a query. 
   These computations are expressed with <a href="reference/ranking-expressions.html">ranking expressions</a> in
-schema <a href="reference/schema-reference.html#rank-profile">rank profiles</a>.</p>
+schema <a href="reference/schema-reference.html#rank-profile">rank profiles</a>. We can use this support
+to rank products by both the dense embedding dot product similarity and the category sales score.</p>
 <pre>
 rank-profile product_ranking inherits default {
 
@@ -278,13 +279,13 @@ by the <a href="query-language.html">YQL query language</a>.</p>
 
 <ul>
   <li>
-    The <b>p_sales_score</b> calculates the sparse tensor dot product between the <em>query(q_category)</em> and <em>attribute(sales_score)</em> tensor. 
+    The <em>p_sales_score</em> function calculates the sparse tensor dotproduct between the <em>query(q_category)</em> and <em>attribute(sales_score)</em> tensor. 
   </li>
   <li>
-    The <b>p_embedding_score</b> calculates the dense tensor dot product between the <em>query(q_embedding)</em> and <em>attribute(embedding)</em> tensors. 
+    The <em>p_embedding_score</em> calculates the dense tensor dotproduct between the <em>query(q_embedding)</em> and <em>attribute(embedding)</em> tensors. 
     The function uses the <a href="reference/rank-features.html#closeness(dimension,name)">closeness(dimension,name)</a> <a href="reference/rank-features.html">rank-feature</a>
     which is calculated by the <a href="reference/query-language-reference.html#nearestneighbor">nearestNeighbor</a> query operator. Alternatively, if we don't
-    use the <em>nearestNeighbor</em> operator in the query request, we could use sparse tensor dot product:
+    use the <em>nearestNeighbor</em> operator in the query request, we could use sparse tensor dotproduct:
 <pre>
 function p_embedding_score() {
   expression: sum(query(q_embedding) * attribute(embedding))
