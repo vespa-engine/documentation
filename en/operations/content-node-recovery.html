@@ -1,0 +1,64 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Content node recovery"
+---
+
+<p>
+    In exceptional cases, one or more content nodes may end up with corrupted data causing it to fail to restart.
+    Possible reasons are
+</p>
+    <ul>
+      <li>the application configuring a higher memory or disk limit such that the node is allowed to accept more data than it can manage,</li>
+      <li>hardware failure, or</li>
+      <li>a bug in Vespa.</li>
+    </ul>
+<p>
+    Normally a corrupted node can just be wiped of all data or removed from the cluster, but
+    when this happens simultaneously to multiple nodes, or redundancy 1 is used, it may be necessary to recover
+    the node(s) to avoid data loss. This documents explains the procedure.
+</p>
+
+<h2 id="recovery-steps">Recovery steps</h2>
+
+<p>On each of the nodes needing recovery:</p>
+
+<ol>
+    <li><a href="admin-procedures.html#vespa-start-stop-restart">Stop services</a> on the node if running.</li>
+    <li>Repair the node:
+        <ul>
+            <li>
+                If the node cannot start due to needing more memory than available:
+                Increase the memory available to the node, or if not possible stop all non-essential processes on the node
+                and (if necessary) start only the content node process using <code>vespa-sentinel-cmd start searchnode</code>.
+                When the node is successfully started, issue delete operations or increase the cluster size to reduce the
+                amount of data on the node if necessary.
+            </li>
+            <li>
+                If the node cannot start due to needing more disk than available:
+                Increase the disk available to the node, or if not possible delete non-essential data such as logs and cached packages.
+                When the node is successfully started, issue delete operations or increase the cluster size to reduce the
+                amount of data on the node if necessary.
+            </li>
+            <li>
+                If the node cannot start for any other reason, repair the data manually as needed.
+                This procedure will depend on the specific nature of the data corruption.
+            </li>
+        </ul>
+    <li>
+        <a href="admin-procedures.html#vespa-start-stop-restart">Start services</a> on the node.
+    </li>
+    <li>
+        Verify that the node is fully up before doing the next node -
+        metrics/interfaces to be used to evaluate if the next node can be stopped:
+        <ul>
+            <li>
+                Check if a node is up using
+                <a href="../reference/state-v1.html#state-v1-health">/state/v1/health</a>.
+            </li>
+            <li>
+                Check the <code>vds.idealstate.merge_bucket.pending.average</code> metric on content nodes.
+                When 0, all buckets are in sync - see <a href="metrics.html">example</a>.
+            </li>
+        </ul>
+    </li>
+</ol>
