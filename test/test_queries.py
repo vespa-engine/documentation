@@ -16,7 +16,7 @@ def extract_links(filename):
         soup = BeautifulSoup(fp, 'html.parser')
         for anchor in soup.find_all('a', {"class": "docsearch-x"}):
             sanitized_query = re.sub('\n', '', anchor.text)
-            links.add('https://doc-search.vespa.oath.cloud/search/?yql=' + quote(sanitized_query))
+            links.add('https://api.search.vespa.ai/search/?yql=' + quote(sanitized_query))
         for anchor in soup.find_all('a', {"class": "cord19-x"}):
             sanitized_query = re.sub('\n', '', anchor.text)
             links.add('https://api.cord19.vespa.ai/search/?yql=' + quote(sanitized_query))

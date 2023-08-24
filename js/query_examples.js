@@ -2,7 +2,7 @@
 function generateQueryExamples () {
     let docsearchQueries = document.getElementsByClassName("docsearch-x");
     for (let anchor of docsearchQueries) {
-        generateQuery(anchor, "https://doc-search.vespa.oath.cloud/search/");
+        generateQuery(anchor, "https://api.search.vespa.ai/search/");
     }
     let cord19Queries = document.getElementsByClassName("cord19-x");
     for (let anchor of cord19Queries) {
