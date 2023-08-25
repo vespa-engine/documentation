@@ -1,19 +1,27 @@
 
 function generateQueryExamples () {
-    let docsearchQueries = document.getElementsByClassName("docsearch-x");
+    let docsearchQueries = document.getElementsByClassName("yql-x");
     for (let anchor of docsearchQueries) {
-        generateQuery(anchor, "https://doc-search.vespa.oath.cloud/search/");
+        generateYQL(anchor, "https://doc-search.vespa.oath.cloud/search/");
     }
-    let cord19Queries = document.getElementsByClassName("cord19-x");
-    for (let anchor of cord19Queries) {
-        generateQuery(anchor, "https://api.cord19.vespa.ai/search/");
+    let queryStringQueries = document.getElementsByClassName("querystring-x");
+    for (let anchor of queryStringQueries) {
+        generateQuery(anchor, "https://doc-search.vespa.oath.cloud/search/");
     }
 }
 
+function generateYQL(anchor, endpoint) {
+    let processed = anchor.innerText
+        .replaceAll('”', '"')
+        .replaceAll('“', '"')
+    anchor.setAttribute("href", encodeURI(endpoint + "?yql=" + processed));
+}
+
 function generateQuery(anchor, endpoint) {
-    //let hr = document.createElement("hr");
-    //anchor.parentElement.insertBefore(hr, anchor);
-    anchor.setAttribute("href", encodeURI(endpoint + "?yql=" + anchor.innerText));
+    let processed = anchor.innerText
+        .replaceAll('”', '"')
+        .replaceAll('“', '"')
+    anchor.setAttribute("href", encodeURI(endpoint + "?" + processed));
 }
 
 document.addEventListener("DOMContentLoaded", generateQueryExamples);
