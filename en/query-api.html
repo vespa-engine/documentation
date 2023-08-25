@@ -153,17 +153,42 @@ select * from sources * where range(year, 1963, 2014) and (weakAnd(default conta
   A <a href="reference/query-api-reference.html#ranking.profile">rank profile</a>
   is a specification for how to compute a document's score.
   An application can have multiple rank profiles, to run different computations.
-  Example, query specifies <em>rank_albums</em>, with its schema definition:
+  Example, a query specifies query categories and a user embedding
+  (from the <a href="tensor-user-guide.html#ranking-with-tensors">tensor user guide</a>):
 </p>
 <pre>
-ranking=rank_albums
+rank-profile product_ranking inherits default {
 
-rank-profile rank_albums inherits default {
-    first-phase {
-        expression: sum(query(user_profile) * attribute(category_scores))
+    inputs {
+        query(q_category) tensor&lt;float&gt;(category{})
+        query(q_embedding) tensor&lt;float&gt;(x[4])
     }
+
+    function p_sales_score() {
+        expression: sum(query(q_category) * attribute(sales_score))
+    }
+
+    function p_embedding_score() {
+        expression: closeness(field, embedding)
+    }
+
+    first-phase {
+        expression: p_sales_score() + p_embedding_score()
+    }
+    match-features: p_sales_score() p_embedding_score()
 }
 </pre>
+<p>An example query for this rank profile is:</p>
+<pre>{% highlight shell %}
+vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)' \
+  'input.query(q_embedding)=[1,2,3,4]' \
+  'input.query(q_category)={"Tablet Keyboard Cases":0.8, "Keyboards":0.3}' \
+  'ranking=product_ranking'
+{% endhighlight %}</pre>
+{% include note.html content='In this example, <code>input.query(q_embedding)</code> is short for
+<code>ranking.features.query(q_embedding)</code> -
+see the <a href="reference/query-api-reference.html#ranking.features">reference</a>
+for tensor formats.' %}
 <p>
   Results can be ordered using <a href="reference/sorting.html">sorting</a> instead of ranking.
 </p>
