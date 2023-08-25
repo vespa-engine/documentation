@@ -11,17 +11,11 @@ function generateQueryExamples () {
 }
 
 function generateYQL(anchor, endpoint) {
-    let processed = anchor.innerText
-        .replaceAll('”', '"')
-        .replaceAll('“', '"')
-    anchor.setAttribute("href", encodeURI(endpoint + "?yql=" + processed));
+    anchor.setAttribute("href", encodeURI(endpoint + "?yql=" + anchor.innerText));
 }
 
 function generateQuery(anchor, endpoint) {
-    let processed = anchor.innerText
-        .replaceAll('”', '"')
-        .replaceAll('“', '"')
-    anchor.setAttribute("href", encodeURI(endpoint + "?" + processed));
+    anchor.setAttribute("href", encodeURI(endpoint + "?" + anchor.innerText));
 }
 
 document.addEventListener("DOMContentLoaded", generateQueryExamples);
