@@ -21,7 +21,7 @@ $ vespa status deploy
 
 ```
   -h, --help       help for deploy
-  -w, --wait int   Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
@@ -38,5 +38,5 @@ $ vespa status deploy
 
 ### SEE ALSO
 
-* [vespa status](vespa_status.html)	 - Verify that a service is ready to use (query by default)
+* [vespa status](vespa_status.html)	 - Verify that container service(s) are ready to use
 

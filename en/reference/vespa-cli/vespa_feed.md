@@ -14,14 +14,14 @@ Feed multiple document operations to a Vespa cluster.
 This command can be used to feed large amounts of documents to a Vespa cluster
 efficiently.
 
-The contents of FILE must be either a JSON array or JSON objects separated by
+The contents of JSON-FILE must be either a JSON array or JSON objects separated by
 newline (JSONL).
 
-If FILE is a single dash ('-'), documents will be read from standard input.
+If JSON-FILE is a single dash ('-'), documents will be read from standard input.
 
 
 ```
-vespa feed FILE [FILE]... [flags]
+vespa feed json-file [json-file]... [flags]
 ```
 
 ### Examples
@@ -45,7 +45,7 @@ $ cat docs.jsonl | vespa feed -
       --timeout int              Individual feed operation timeout in seconds. 0 to disable (default 0)
       --trace int                Network traffic trace level in the range [0,9]. 0 to disable (default 0)
       --verbose                  Verbose mode. Print successful operations in addition to errors
-  -w, --wait int                 Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int                 Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

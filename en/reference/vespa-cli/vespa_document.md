@@ -36,7 +36,7 @@ $ vespa document src/test/resources/A-Head-Full-of-Dreams.json
   -h, --help          help for document
   -T, --timeout int   Timeout for the document request in seconds (default 60)
   -v, --verbose       Print the equivalent curl command for the document operation
-  -w, --wait int      Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int      Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

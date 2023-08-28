@@ -30,7 +30,7 @@ $ vespa query "yql=select * from music where album contains 'head';" hits=5
   -h, --help          help for query
   -T, --timeout int   Timeout for the query in seconds (default 10)
   -v, --verbose       Print the equivalent curl command for the query
-  -w, --wait int      Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int      Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

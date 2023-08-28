@@ -19,7 +19,7 @@ For detailed description of flags and configuration, see 'vespa help config'.
 
 
 ```
-vespa command-name [flags]
+vespa [flags]
 ```
 
 ### Options
@@ -51,7 +51,7 @@ vespa command-name [flags]
 * [vespa prepare](vespa_prepare.html)	 - Prepare an application package for activation
 * [vespa prod](vespa_prod.html)	 - Deploy an application package to production in Vespa Cloud
 * [vespa query](vespa_query.html)	 - Issue a query to Vespa
-* [vespa status](vespa_status.html)	 - Verify that a service is ready to use (query by default)
+* [vespa status](vespa_status.html)	 - Verify that container service(s) are ready to use
 * [vespa test](vespa_test.html)	 - Run a test suite, or a single test
 * [vespa version](vespa_version.html)	 - Show current version and check for updates
 * [vespa visit](vespa_visit.html)	 - Visit and print all documents in a Vespa cluster

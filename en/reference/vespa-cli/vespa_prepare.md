@@ -8,7 +8,7 @@ render_with_liquid: false
 Prepare an application package for activation
 
 ```
-vespa prepare application-directory [flags]
+vespa prepare [application-directory-or-file] [flags]
 ```
 
 ### Options

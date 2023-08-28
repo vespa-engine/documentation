@@ -18,13 +18,13 @@ Nodes are allocated to the application according to resources specified in
 services.xml.
 
 For more information about production deployments in Vespa Cloud see:
-https://cloud.vespa.ai/en/production-deployment
-https://cloud.vespa.ai/en/automated-deployments
-https://cloud.vespa.ai/en/reference/vespa-cloud-api#submission-properties
+[https://cloud.vespa.ai/en/production-deployment](https://cloud.vespa.ai/en/production-deployment)
+[https://cloud.vespa.ai/en/automated-deployments](https://cloud.vespa.ai/en/automated-deployments)
+[https://cloud.vespa.ai/en/reference/vespa-cloud-api#submission-properties](https://cloud.vespa.ai/en/reference/vespa-cloud-api#submission-properties)
 
 
 ```
-vespa prod deploy [flags]
+vespa prod deploy [application-directory-or-file] [flags]
 ```
 
 ### Examples
