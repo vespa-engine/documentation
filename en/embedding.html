@@ -175,14 +175,19 @@ redirect_from:
 you can with an embedder configured instead supply any text enclosed in <code>embed()</code>, e.g:</p>
 
 <pre>
-input.query(myEmbedding)=<span class="pre-hilite">embed(myEmbedderId, "Hello%20world")</span>
+input.query(q)=<span class="pre-hilite">embed(myEmbedderId, "Hello%20world")</span>
 </pre>
-<p>If you have only configured a single embedder, you can skip the embedder id argument and optionally also the quotes.
-Both single and double quotes are permitted. Note that query <a href="reference/schema-reference.html#inputs">input tensors</a>
+<p>If you have only configured a single embedder, you can skip the embedder id argument and optionally also the quotes. Prefer 
+  to specify the embedder id as introducing more embedder models requires specifying the identifier. 
+</p>
+<p>Both single(') and double quotes(") are permitted. </p>
+
+<p>Note that query <a href="reference/schema-reference.html#inputs">input tensors</a>
 must be defined in the schema's rank-profile. See <a href="reference/schema-reference.html#inputs">schema reference inputs</a>.</p>
 <pre>
 inputs {
-  query(myEmbedding) tensor&lt;float&gt;(x[768])
+  query(q) tensor&lt;float&gt;(x[768])
+  query(q2) tensor&lt;float&gt;(x[768])
 }
 </pre>
 <p>Output from <code>embed</code> that cannot fit into the tensor dimensionality is truncated, only retaining the first values.</p>
@@ -190,12 +195,26 @@ inputs {
 <p>A single Vespa <a href="query-api.html#http">query</a> can use multiple embedders or embed multiple texts with the same embedder:</p>
 <pre>{% highlight json %}
  {
-    "yql": "select * from sources * where ...",
+    "yql": "select id,title from paragraph where ({targetHits:10}nearestNeighbor(embedding,q)) or ({targetHits:10}nearestNeighbor(embedding,q2)) or userQuery()",
     "query": "semantic search",
-    "input.query(embedding)": "embed(e5, contextualized search)",
-    "input.query(embedding2)": "embed(e5, neural search)"
+    "input.query(q)": "embed(e5, \"contextualized search\")",
+    "input.query(q2)": "embed(e5, \"neural search\")"
     "ranking": "semantic",
 }{% endhighlight %}</pre>
+<p>Above example using <a href="query-api.html#using-post">JSON POST</a> query. Notice how the input to the embedding is quoted. Since
+adding new embedders to services.xml will break queries not specifying embedder id, it is recommended to always specify embedder id.</p>
+
+<pre>{% highlight json %}
+  {
+     "yql": "select id,title from paragraph where ({targetHits:10}nearestNeighbor(embedding,q)) or ({targetHits:10}nearestNeighbor(question_embedding,q))",
+     "query": "semantic search",
+     "input.query(q)": "embed(e5, \"contextualized search\")",
+     "ranking": "semantic",
+ }{% endhighlight %}</pre>
+ <p>Using the same embedding tensor as input to two nearestNeighbor query operators, searching two different embedding fields. For this to
+  work, both <em>embedding</em> and <em>question_embedding</em> must have the same dimensionality.
+ </p>
+
 
 <h2 id="embedding-a-document-field">Embedding a document field</h2>
 <p>Use the Vespa <a href="reference/advanced-indexing-language.html#statement">indexing language</a>
