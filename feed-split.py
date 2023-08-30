@@ -209,6 +209,8 @@ def main():
 
                 paragraph = remove_jekyll(paragraph)
 
+                paragraph_id = re.sub(r"\?", "", paragraph_id)
+
                 if paragraph:
                     paragraph_doc = create_text_doc(doc, paragraph, paragraph_id, header)
                     operations.append(paragraph_doc)
