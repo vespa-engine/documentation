@@ -4,11 +4,12 @@ title: "Vespa nearest neighbor search - a practical guide"
 ---
 
  This guide is a practical introduction to using Vespa nearest neighbor search query operator and how to combine nearest
- neighbor search with other Vespa query operators. The guide also covers
- diverse, efficient candidate retrievers which can be used as candidate retrievers in a multi-phase ranking funnel. 
+ neighbor search with other Vespa query operators. The guide uses Vespa's [embedding](embedding.html)
+ support to map text to vectors. The guide also covers diverse, efficient candidate retrievers 
+ which can be used as candidate retrievers in a [multi-phase ranking](phased-ranking.html) funnel. 
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset for illustration. 
- Latency numbers mentioned in the guide are obtained from running this guide on a MacBook Pro x86.
+ Latency numbers mentioned in the guide are obtained from running this guide on a M1.
  See also the generic [Vespa performance - a practical guide](performance/practical-search-performance-guide.html).
 
 This guide covers the following:
@@ -27,8 +28,7 @@ The guide includes step-by-step instructions on how to reproduce the experiments
 
 {% include pre-req.html memory="4 GB" extra-reqs="
 <li>Python3 for converting the dataset to Vespa json.</li>
-<li><code>curl</code> to download the dataset and <code>zstd</code> to decompress published embedding data.</li>"%}
-
+<li><code>curl</code> to download the dataset.</li>"%}
 
 ## Installing vespa-cli
 This tutorial uses [Vespa-CLI](vespa-cli.html),
@@ -50,7 +50,7 @@ Note that the dataset is released under the following terms:
 >Research only, strictly non-commercial. For details, or if you are unsure, please contact Last.fm. 
 >Also, Last.fm has the right to advertise and refer to any work derived from the dataset.
 
-To download the dataset directly (About 120 MB zip file):
+To download the dataset execute the following (120 MB zip file):
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -60,12 +60,12 @@ $ unzip lastfm_test.zip
 </pre>
 </div>
 
-The downloaded data needs to be converted to
-[the Vespa JSON format](reference/document-json-format.html). 
+The downloaded data must to be converted to
+[the Vespa JSON feed format](reference/document-json-format.html). 
 
 This [python](https://www.python.org/) script can be used to traverse 
 the dataset files and create a JSONL formatted feed file with Vespa put operations. 
-The schema used with this feed format is introduced in the next section. 
+The [schema)(schemas.html) is covered in the next section. 
 The number of unique `tags` is used as a proxy for the popularity of the track. 
 
 <pre style="display:none" data-test="file" data-path="create-vespa-feed.py">
@@ -121,7 +121,8 @@ sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
 </pre>
-
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>{% highlight python%}
 import os
 import sys
@@ -174,7 +175,7 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-{% endhighlight %}</pre>
+{% endhighlight %}</pre></div>
 
 Process the dataset and convert it to
 [Vespa JSON document operation](reference/document-json-format.html) format.
@@ -193,20 +194,24 @@ what functionality to use, the available document types, how ranking will be don
 and how data will be processed during feeding and indexing.
 
 The minimum required files to create the basic search application are `track.sd` and `services.xml`.
-Create directories for the configuration files:
+Create directories for the configuration files and embedding model:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/
+$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/; mkdir -p app/model
 </pre>
 </div>
 
 ### Schema
 
-A [schema](schemas.html) is a configuration of a document type and what we should compute over it.
-For this application we define a document type called `track`.
+A [schema](schemas.html) is a configuration of a document type and additional synthetic fields and [ranking](ranking.html)
+configuration.
+
+For this application, we define a `track` document type.
+
 Write the following to `app/schemas/track.sd`:
+
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
@@ -231,10 +236,17 @@ schema track {
             attribute: fast-search
         }
 
-        field embedding type tensor&lt;float&gt;(x[384]) {
-            indexing: attribute | index
+        field popularity type int {
+            indexing: summary | attribute
+            attribute: fast-search
+            rank: filter
+        }
+    }
+
+    field embedding type tensor&lt;float&gt;(x[384]) {
+            indexing: input title | embed e5 |attribute | index
             attribute {
-                distance-metric: euclidean
+                distance-metric: angular
             }
             index {
                 hnsw {
@@ -242,13 +254,6 @@ schema track {
                     neighbors-to-explore-at-insert: 50
                 }
             }
-        }
-
-        field popularity type int {
-            indexing: summary | attribute
-            attribute: fast-search
-            rank: filter
-        }
     }
 
     fieldset default {
@@ -279,7 +284,7 @@ schema track {
 
         inputs {
             query(q)  tensor&lt;float&gt;(x[384])
-            query(qa) tensor&lt;float&gt;(x[384])
+            query(q1) tensor&lt;float&gt;(x[384])
         } 
 
         first-phase {
@@ -292,7 +297,7 @@ schema track {
     }
 
     rank-profile closeness-label inherits closeness {
-        match-features: closeness(label, q) closeness(label, qa)
+        match-features: closeness(label, q) closeness(label, q1)
     }
 
     rank-profile hybrid inherits closeness {
@@ -305,8 +310,8 @@ schema track {
         first-phase {
             expression {
                 query(wTags) * rawScore(tags) + 
-                query(wPopularity) * attribute(popularity) + 
-                query(wTitle) * bm25(title) + 
+                query(wPopularity) * log(attribute(popularity)) + 
+                query(wTitle) * log(bm25(title)) + 
                 query(wVector) * closeness(field, embedding)
             }
         }
@@ -322,15 +327,18 @@ schema track {
 </pre>
 
 This document schema is explained in the [practical search performance guide](performance/practical-search-performance-guide.html),
-the addition is the `embedding` field and the various `closeness` rank profiles. Note
-that the `closeness` schema defines the query tensor inputs which needs to be declared to be
-used with Vespa's nearestNeighbor query operator. 
+the addition is the `embedding` field which is defined as a synthetic field outside of the document. This 
+field is populated by Vespa's [embedding](embedding.html) functionality. Using the [E5](https://huggingface.co/intfloat/e5-small-v2) 
+text embedding model (described in this [blog post](https://blog.vespa.ai/enhancing-vespas-embedding-management-capabilities/)). 
+
+Note that the `closeness` rank-profile defines two
+query input tensors using [inputs](reference/schema-reference.html#inputs). 
 
 <pre>
 field embedding type tensor&lt;float&gt;(x[384]) {
-    indexing: attribute | index
+    indexing: input title | embed e5 | attribute | index
     attribute {
-        distance-metric: euclidean
+        distance-metric: angular
     }
     index {
         hnsw {
@@ -357,6 +365,10 @@ Write the following to `app/services.xml`:
     &lt;container id="default" version="1.0"&gt;
         &lt;search/&gt;
         &lt;document-api/&gt;
+        &lt;component id="e5" type="hugging-face-embedder"&gt;
+            &lt;transformer-model path="model/e5-small-v2-int8.onnx"/&gt;
+            &lt;tokenizer-model path="model/tokenizer.json"/&gt;
+        &lt;/component&gt;
     &lt;/container&gt;
 
     &lt;content id="tracks" version="1.0"&gt;
@@ -394,6 +406,18 @@ renders `weightedset` fields as a JSON maps.
     &lt;field name=&quot;renderer.json.jsonWsets&quot;&gt;true&lt;/field&gt;
 &lt;/query-profile&gt;
 </pre>
+
+The final step is to download embedding model files
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl -L -o app/model/e5-small-v2-int8.onnx \
+    https://github.com/vespa-engine/sample-apps/raw/master/simple-semantic-search/model/e5-small-v2-int8.onnx 
+$ curl -L -o app/model/tokenizer.json \
+    https://github.com/vespa-engine/sample-apps/raw/master/simple-semantic-search/model/tokenizer.json 
+</pre>
+</div>
 
 ## Deploy the application package
 
@@ -433,7 +457,8 @@ $ vespa deploy --wait 300 app
 
 ## Index the dataset
 
-Feed the dataset:
+Feed the dataset. During indexing, Vespa will invoke the embedding model (which is relatively computionally expensive), 
+so feeding and indexing this dataset takes about 180 seconds on a M1 laptop (535 inserts/s).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -676,38 +701,8 @@ using `wand` and `weakAnd` query operators.
 
 ## Exact nearest neighbor search
 Vespa's nearest neighbor search operator supports doing exact brute force nearest neighbor search
-using dense representations. This guide uses
-the [sentence-transformers/all-MiniLM-L6-V2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
-embedding model. Download the pre-generated document embeddings and feed them to Vespa. 
-The feed file uses [partial updates](partial-updates.html) to add the vector embedding. 
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ curl -L -o lastfm_embeddings.jsonl.zst \
-    https://data.vespa.oath.cloud/sample-apps-data/lastfm_embeddings.jsonl.zst
-$ zstdcat lastfm_embeddings.jsonl.zst | vespa feed -t http://localhost:8080 -
-</pre>
-</div>
-
-The following query examples use a static query vector embedding for the
-query string *Total Eclipse Of The Heart*. The query embedding was obtained by the
-following snippet using [sentence-transformers](https://www.sbert.net/):
-
-<pre>{% highlight python%}
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-print(model.encode("Total Eclipse Of The Heart").tolist())
-{% endhighlight %}</pre>
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
-</pre>
-</div>
-
-The first query example uses [exact nearest neighbor search](nearest-neighbor-search.html): 
+using dense representations. The first query example uses [exact nearest neighbor search](nearest-neighbor-search.html)
+and Vespa embed functionality: 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -716,7 +711,7 @@ $ vespa query \
     'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness' \
-    "input.query(q)=$Q"
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
@@ -730,7 +725,7 @@ requested does not impact `targetHits`. Notice that `targetHits` is per content 
 - `ranking=closeness` tells Vespa which [rank-profile](ranking.html) to score documents. One must 
 specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` ranking expression
 in the `rank-profile`.
-- `input.query(q)` points to the input query vector. 
+- `input.query(q)` is the query vector produced by the [embedder](embedding.html#embedding-a-query-text).
 
 Not specifying [ranking](reference/query-api-reference.html#ranking.profile) will cause
 Vespa to use [nativeRank](nativerank.html) which does not use the vector similarity, causing
@@ -742,15 +737,15 @@ The above exact nearest neighbor search will return the following
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.051,
+        "querytime": 0.012,
         "summaryfetchtime": 0.001,
-        "searchtime": 0.051
+        "searchtime": 0.014
     },
     "root": {
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 118
+            "totalCount": 101
         },
         "coverage": {
             "coverage": 100,
@@ -763,9 +758,12 @@ The above exact nearest neighbor search will return the following
         "children": [
             {
                 "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 0.5992897741908119,
+                "relevance": 1.0,
                 "source": "tracks",
                 "fields": {
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.0
+                    },
                     "title": "Total Eclipse Of The Heart",
                     "artist": "Bonnie Tyler"
                 }
@@ -775,14 +773,9 @@ The above exact nearest neighbor search will return the following
 }
 {% endhighlight %}</pre>
 
-The exact search takes approximately 51ms, performing 95,666 distance calculations. 
-A total of about 120 documents were exposed to the first-phase ranking during the search as can be seen from
-`totalCount`. 
-
-The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
-were put on the top-k heap are exposed to first phase ranking. Splitting the vectors into chunks 
-reduces the computational complexity as one can rule out distance neighbors just by comparing a few 
-chunks with the lowest scoring vector on the heap. 
+The exact search takes approximately 14ms, performing 95,666 distance calculations. 
+A total of about 101 documents were exposed to the first-phase ranking during the search as can be seen from
+`totalCount`. The `relevance` is the result of the `rank-profile` scoring. 
 
 It is possible to reduce search latency of the exact search by throwing more CPU resources at it. 
 Changing the rank-profile to `closeness-t4` makes Vespa use four threads per query:
@@ -794,7 +787,7 @@ $ vespa query \
     'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness-t4' \
-    "input.query(q)=$Q"
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
@@ -804,9 +797,9 @@ for more on this topic.
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.019,
+        "querytime": 0.008,
         "summaryfetchtime": 0.001,
-        "searchtime": 0.021
+        "searchtime": 0.008
     }
 }
 {% endhighlight %}</pre>
@@ -828,7 +821,7 @@ $ vespa query \
     'yql=select title, artist from track where {targetHits:10,hnsw.exploreAdditionalHits:20}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness' \
-    "input.query(q)=$Q"
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
@@ -870,17 +863,18 @@ Which returns the following response:
 }
 {% endhighlight %}</pre>
 
-Now, the query is significantly faster, and also uses less resources during the search. To get latency down 
-to 20 ms with the exact search one had to use 4 matching threads. In this case the
+Now, the query is faster, and also uses less resources during the search. 
+To get latency down to 20 ms with the exact search one had to use 4 matching threads. In this case the
 result latency is down to 4ms with a single matching thread. 
 For this query example, the approximate search returned the exact same top-1 hit and there was
-no accuracy loss for the top-1 position. 
+no accuracy loss for the top-1 position. Note that the overall query time is dominated
+by the `embed` inference. 
 
 A few key differences between `exact` and `approximate` neighbor search:
 
 - `totalCount` is different, when using the approximate version, Vespa exposes exactly `targethits` to the 
 configurable `first-phase` rank expression in the chosen `rank-profile`.
- The exact search is using a scoring heap during chunked distance calculations, and documents which at some time
+ The exact search is using a scoring heap during evaluation (chunked distance calculations), and documents which at some time
 were put on the top-k heap are exposed to first phase ranking.
 
 - The search is approximate and might not return the exact top 10 closest vectors as with exact search. This
@@ -900,15 +894,14 @@ In this query example the `title` field must contain the term `heart`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Heart Of My Heart">
+<pre data-test="exec" data-test-assert-contains="of the Heart">
 $ vespa query \
     'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains "heart"' \
     'hits=2' \
-    'ranking=closeness-t4' \
-    "input.query(q)=$Q"
+    'ranking=closeness' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
-
 Which returns the following response:
 <pre>{% highlight json%}
 {
@@ -921,7 +914,7 @@ Which returns the following response:
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 55
+            "totalCount": 47
         },
         "coverage": {
             "coverage": 100,
@@ -934,33 +927,41 @@ Which returns the following response:
         "children": [
             {
                 "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 0.5992897741908119,
+                "relevance": 1.0,
                 "source": "tracks",
                 "fields": {
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.0
+                    },
                     "title": "Total Eclipse Of The Heart",
                     "artist": "Bonnie Tyler"
                 }
             },
             {
-                "id": "index:tracks/0/cb79ca7f404071e95561ca38",
-                "relevance": 0.5259774715154759,
+                "id": "index:tracks/0/d0cb22cbcdb30796eca3a731",
+                "relevance": 0.6831990558852824,
                 "source": "tracks",
                 "fields": {
-                    "title": "Heart Of My Heart",
-                    "artist": "Quest"
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.46370225688355227
+                    },
+                    "title": "Cirrhosis of the Heart",
+                    "artist": "Foetus"
                 }
             }
         ]
     }
 }
 {% endhighlight %}</pre>
+The query term `heart` does in this case not impact the ordering (ranking) of the results, as the
+rank-profile used only uses the vector similarity closeness. 
 
 When using filtering, it is important for performance reasons that the fields that are included in the filters have
 been defined with `index` or `attribute:fast-search`.
 See [searching attribute fields](performance/practical-search-performance-guide.html#searching-attribute-fields).
 
-The optimal performance for pure filtering, where the query term(s) does not influence ranking, is achieved
-using `rank: filter` in the schema.
+The optimal performance for combining nearestNeighbor search with filtering, where the query term(s) does not influence ranking, is achieved
+using `rank: filter` in the schema (See [blog post for details](reference/ranking-expressions.html)):
 
 <pre>
 field popularity type int {
@@ -969,9 +970,10 @@ field popularity type int {
     attribute: fast-search
 }
 </pre>
-Matching against the popularity field does not influence ranking and Vespa can use the most efficient posting
+
+Matching against the popularity field does not influence ranking, and Vespa can use the most efficient posting
 list representation. Note that one can still access the value of
-the attribute in ranking expressions. 
+the `popularity` attribute in [ranking expressions](ranking.html). 
 
 <pre>
 rank-profile popularity {
@@ -991,12 +993,12 @@ the matching against the `title` field can use the most efficient posting list r
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Heart Of My Heart">
+<pre data-test="exec" data-test-assert-contains="of the Heart">
 $ vespa query \
     'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains ({ranked:false}"heart")' \
     'hits=2' \
-    'ranking=closeness-t4' \
-    "input.query(q)=$Q"
+    'ranking=closeness' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
@@ -1011,12 +1013,12 @@ Vespa also allows combining the `nearestNeighbor` query operator with any other 
 $ vespa query \
     'yql=select title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 20 and artist contains "Bonnie Tyler"' \
     'hits=2' \
-    'ranking=closeness-t4' \
-    "input.query(q)=$Q"
+    'ranking=closeness' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
-In this case restricting the nearest neighbor search to tracks by `Bonnie Tyler` with `popularity > 20`.
+This query example restricts the earch to tracks by `Bonnie Tyler` with `popularity > 20`.
 
 ### Strict filters and distant neighbors 
 When combining nearest neighbor search with strict filters which matches less than 5 percentage of the total number of documents, 
@@ -1028,11 +1030,11 @@ exact search. When using exact search with filters, the search can also use mult
 helps reduce the latency impact. 
 
 With strict filters that removes many hits, the hits (nearest neighbors) might not be *near* in the embedding space, but *far*,
-or *distant* neighbors. Technically, all document vectors are a neighbor of the query, 
-but with a varying distance, some are close, others are distant.
+or *distant* neighbors. Technically, all document vectors are a neighbor of the query vector, 
+but with a varying distance.
 
-With strict filters, the neighbors that are returned might be of low quality (far distance). 
-One way to combat this is to use the [distanceThreshold](reference/query-language-reference.html#distancethreshold)
+With restrictive filters, the neighbors that are returned might be of low quality (far distance). 
+One way to combat this effect is to use the [distanceThreshold](reference/query-language-reference.html#distancethreshold)
 query annotation parameter of the `nearestNeighbor` query operator. 
 The value of the `distance` depends on the [distance-metric](reference/schema-reference.html#distance-metric) used. 
 By adding the [distance(field,embedding)](reference/rank-features.html#distance(dimension,name)) rank-feature to
@@ -1051,10 +1053,10 @@ The following query with a restrictive filter on popularity is used for illustra
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select matchfeatures, title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
+    'yql=select title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
     'hits=2' \
     'ranking=closeness-t4' \
-    "input.query(q)=$Q"
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
@@ -1096,15 +1098,15 @@ The above query returns
                 }
             },
             {
-                "id": "index:tracks/0/3517728cc88356c8ca6de0d9",
-                "relevance": 0.5005276509131764,
+                "id": "index:tracks/0/57c74bd2d466b7cafe30c14d",
+                "relevance": 0.6700445710774405,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "distance(field,embedding)": 0.9978916213231626
+                        "distance(field,embedding)": 0.49243803049099677
                     },
-                    "title": "Closer To The Heart",
-                    "artist": "Rush",
+                    "title": "Eclipse",
+                    "artist": "Kyoto Jazz Massive",
                     "popularity": 100
                 }
             }
@@ -1113,17 +1115,17 @@ The above query returns
 }
 {% endhighlight %}</pre>
 
-By using a `distanceTreshold` of 0.7,  the `Closer To The Heart` track will be removed from the result
-because it's `distance(field, embedding)` is close to 1. 
+By using a `distanceTreshold` of 0.2,  the `Eclipse` track will be removed from the result
+because it's `distance(field, embedding)` is close to 0.5. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query \
-    'yql=select matchfeatures, title, popularity, artist from track where {distanceThreshold:0.7,targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
+    'yql=select title, popularity, artist from track where {distanceThreshold:0.2,targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
     'hits=2' \
-    'ranking=closeness-t4' \
-    "input.query(q)=$Q"
+    'ranking=closeness' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
@@ -1191,23 +1193,25 @@ both based on semantic (vector distance) and traditional sparse (exact) matching
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='matchfeatures'>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
+    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "input.query(q)=$Q"
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
-The query combines the sparse `weakAnd` and the dense `nearestNeighbor` query operators 
-using logical disjunction. Both query operator retrieves the target number of hits (or more), ranked by its inner 
-raw score/distance function. 
+The query combines the sparse `weakAnd` and dense `nearestNeighbor` query operators 
+using logical disjunction. 
+Both query operator retrieves the target number of hits (or more), ranked by its inner 
+raw score function.
+
 The hits exposed to the configurable `first-phase` ranking expression is a combination
 of the best hits from the two different retrieval strategies. 
-The ranking is performed using the following `hybrid` rank profile which serves as an example
+The ranking is performed using the `hybrid` rank profile which serves as an example
 how to combine the different efficient retrievers. 
 
 <pre>
@@ -1221,8 +1225,8 @@ rank-profile hybrid inherits closeness {
         first-phase {
             expression {
                 query(wTags) * rawScore(tags) + 
-                query(wPopularity) * attribute(popularity) + 
-                query(wTitle) * bm25(title) + 
+                query(wPopularity) * log(attribute(popularity)) + 
+                query(wTitle) * log(bm25(title)) + 
                 query(wVector) * closeness(field, embedding)
             }
         }
@@ -1240,15 +1244,15 @@ The query returns the following result:
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.007,
-        "summaryfetchtime": 0.001,
-        "searchtime": 0.009000000000000001
+        "querytime": 0.005,
+        "summaryfetchtime": 0.0,
+        "searchtime": 0.005
     },
     "root": {
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 1176
+            "totalCount": 1181
         },
         "coverage": {
             "coverage": 100,
@@ -1261,13 +1265,15 @@ The query returns the following result:
         "children": [
             {
                 "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 123.18970542319387,
+                "relevance": 8.72273659535481,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
                         "attribute(popularity)": 100.0,
-                        "bm25(title)": 22.590415639472816,
-                        "closeness(field,embedding)": 0.5992897837210658,
+                        "bm25(title)": 22.591334631476823,
+                        "closeness(field,embedding)": 1.0,
+                        "distance(field,embedding)": 0.0,
+                        "query(wVector)": 1.0,
                         "rawScore(tags)": 0.0
                     },
                     "title": "Total Eclipse Of The Heart",
@@ -1276,13 +1282,15 @@ The query returns the following result:
             },
             {
                 "id": "index:tracks/0/57c74bd2d466b7cafe30c14d",
-                "relevance": 112.03224663886917,
+                "relevance": 7.762818642331215,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
                         "attribute(popularity)": 100.0,
-                        "bm25(title)": 12.032246638869161,
-                        "closeness(field,embedding)": 0.0,
+                        "bm25(title)": 12.03241051547921,
+                        "closeness(field,embedding)": 0.6700445710774405,
+                        "distance(field,embedding)": 0.49243803049099677,
+                        "query(wVector)": 1.0,
                         "rawScore(tags)": 0.0
                     },
                     "title": "Eclipse",
@@ -1291,26 +1299,25 @@ The query returns the following result:
             }
         ]
     }
-{% endhighlight %}</pre>
+}{% endhighlight %}</pre>
 
 The result hits also include [match-features](reference/schema-reference.html#match-features) which 
 can be used for feature logging for learning to rank, or to simply
-debug the components in the final score. 
+debug the various feature components used to calculate the `relevance` score. 
 
-In the below query, the `weight` of the embedding similarity (closeness) is increased by overriding
-the `query(wVector)` weight:
+In the below query, we lower the weight of the popularity factor by adjusting `query(wPopularity)` to 0.1: 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='matchfeatures'>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
+    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "input.query(q)=$Q" \
-    'ranking.features.query(wVector)=40'
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' \
+    'input.query(wPopularity)=0.1'
 </pre>
 </div>
 
@@ -1319,15 +1326,15 @@ Which changes the order and a different hit is surfaced at position two:
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.011,
-        "summaryfetchtime": 0.001,
-        "searchtime": 0.014
+        "querytime": 0.005,
+        "summaryfetchtime": 0.0,
+        "searchtime": 0.006
     },
     "root": {
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 1176
+            "totalCount": 1181
         },
         "coverage": {
             "coverage": 100,
@@ -1340,13 +1347,15 @@ Which changes the order and a different hit is surfaced at position two:
         "children": [
             {
                 "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 146.56200698831543,
+                "relevance": 4.5780834279655265,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
                         "attribute(popularity)": 100.0,
-                        "bm25(title)": 22.590415639472816,
-                        "closeness(field,embedding)": 0.5992897837210658,
+                        "bm25(title)": 22.591334631476823,
+                        "closeness(field,embedding)": 1.0,
+                        "distance(field,embedding)": 0.0,
+                        "query(wVector)": 1.0,
                         "rawScore(tags)": 0.0
                     },
                     "title": "Total Eclipse Of The Heart",
@@ -1354,64 +1363,65 @@ Which changes the order and a different hit is surfaced at position two:
                 }
             },
             {
-                "id": "index:tracks/0/3517728cc88356c8ca6de0d9",
-                "relevance": 126.74309103465859,
+                "id": "index:tracks/0/51bae2353aa0c9e9c70bf94e",
+                "relevance": 4.044676118507788,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "attribute(popularity)": 100.0,
-                        "bm25(title)": 6.7219852584615865,
-                        "closeness(field,embedding)": 0.5005276444049249,
+                        "attribute(popularity)": 23.0,
+                        "bm25(title)": 20.07427771872962,
+                        "closeness(field,embedding)": 0.7316874168710507,
+                        "distance(field,embedding)": 0.3667038368328748,
+                        "query(wVector)": 1.0,
                         "rawScore(tags)": 0.0
                     },
-                    "title": "Closer To The Heart",
-                    "artist": "Rush"
+                    "title": "Total Eclipse",
+                    "artist": "The Alan Parsons Project"
                 }
             }
         ]
     }
 }
+
 {% endhighlight %}</pre>
 
-One can also throw the personalization component using the sparse
-user profile into the retriever mix. For example having a user profile:
-
+The following query adds the personalization component using the sparse
+user profile into the retriever mix. 
 <pre>
 userProfile={"love songs":1, "love":1,"80s":1}
 </pre>
-
-Which can be used with the `wand` query operator to retrieve personalized hits. 
+Which can be used with the `wand` query operator to retrieve personalized hits for ranking. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='Change My Love For You'>
+<pre data-test="exec" data-test-assert-contains='Straight From The Heart'>
 $ vespa query \
     'yql=select title, matchfeatures, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery() or ({targetHits:10}wand(tags, @userProfile))' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "input.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' \
+    'input.query(wPopularity)=0.1' \
     'userProfile={"love songs":1, "love":1,"80s":1}' 
 </pre>
 </div>
 
-In this case, another document is surfaced at position 2, which have a non-zero personalized score.
-Notice that `totalCount` increases as the `wand` query operator brought more hits into `first-phase` ranking.
+Now we have new top ranking documents. Notice that `totalCount` increases as the 
+`wand` query operator retrieved more hits into `first-phase` ranking.
 
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.014,
-        "summaryfetchtime": 0.001,
-        "searchtime": 0.017
+        "querytime": 0.01,
+        "summaryfetchtime": 0.003,
+        "searchtime": 0.014
     },
     "root": {
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 1244
+            "totalCount": 1243
         },
         "coverage": {
             "coverage": 100,
@@ -1423,70 +1433,43 @@ Notice that `totalCount` increases as the `wand` query operator brought more hit
         },
         "children": [
             {
-                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 326.34894210463517,
+                "id": "index:tracks/0/fc82cbb0d5d5b5747d65c451",
+                "relevance": 144.9997464905854,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
                         "attribute(popularity)": 100.0,
-                        "bm25(title)": 22.590415639472816,
-                        "closeness(field,embedding)": 0.5992897837210658,
+                        "bm25(title)": 6.722228506472074,
+                        "closeness(field,embedding)": 0.633809749439362,
+                        "distance(field,embedding)": 0.5777605202263811,
+                        "query(wVector)": 1.0,
                         "rawScore(tags)": 0.0
                     },
-                    "title": "Total Eclipse Of The Heart",
-                    "artist": "Bonnie Tyler"
+                    "title": "Straight From The Heart",
+                    "artist": "Bryan Adams"
                 }
             },
             {
-                "id": "index:tracks/0/8eb2e19ee627b054113ba4c9",
-                "relevance": 281.0,
+                "id": "index:tracks/0/66b3ab21d5eb0a9078bf8787",
+                "relevance": 135.51757722374737,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "attribute(popularity)": 100.0,
-                        "bm25(title)": 0.0,
-                        "closeness(field,embedding)": 0.0,
-                        "rawScore(tags)": 181.0
+                        "attribute(popularity)": 34.0,
+                        "bm25(title)": 4.7884050004449215,
+                        "closeness(field,embedding)": 0.5987438006081908,
+                        "distance(field,embedding)": 0.6701634304759765,
+                        "query(wVector)": 1.0,
+                        "rawScore(tags)": 0.0
                     },
-                    "title": "Nothing's Gonna Change My Love For You",
-                    "artist": "Glenn Medeiros"
+                    "title": "Lady Of The Dawn",
+                    "artist": "Mike Batt"
                 }
             }
         ]
     }
 }
 {% endhighlight %}</pre>
-
-In the examples above, some of the hits had 
-<pre>
-"closeness(field,embedding)": 0.0
-</pre>
-
-This means that the hit was not retrieved by the `nearestNeighbor` operator, similar `rawScore(tags)` might
-also be 0 if the hit was not retrieved by the `wand` query operator. 
-
-It is nevertheless possible to calculate the semantic distance/similarity using 
-[tensor computations](tensor-examples.html) for the hits that were not retrieved by the `nearestNeighbor`
-query operator. See also [tensor functions](reference/ranking-expressions.html#tensor-functions). 
-For example to compute the `euclidean` distance one can add a 
-[function](reference/schema-reference.html#function-rank) to the rank-profile:
-
-<pre>
-rank-profile compute-also-for-sparse inherits closeness {
-    function euclidean() {
-        expression: sqrt(sum(map(query(q) - attribute(embedding), f(x)(x * x))))
-    }
-    function match_closeness() {
-        expression: 1/(1 + euclidean())
-    }
-    first-phase {
-        expression {
-         bm25(title) + 
-         if(closeness(field, embedding) == 0, match_closeness(), closeness(field, embedding))
-        }
-    }
-}
-</pre>
 
 Changing from logical `OR` to `AND` instead will intersect the result of the two efficient retrievers.
 The search for nearest neighbors is then constrained to documents which at least matches one of
@@ -1494,15 +1477,14 @@ the query terms in the `weakAnd`.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='Closer To The Heart'>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
     'yql=select title, matchfeatures, artist from track where {targetHits:100}nearestNeighbor(embedding,q) and userQuery()' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "input.query(q)=$Q" \
-    'ranking.features.query(wVector)=340'
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
 </pre>
 </div>
 
@@ -1518,8 +1500,7 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "input.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' 
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
 </pre>
 </div>
 
@@ -1537,8 +1518,7 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "input.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' 
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
 </pre>
 </div>
 
@@ -1550,9 +1530,9 @@ the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.01,
-        "summaryfetchtime": 0.002,
-        "searchtime": 0.015
+        "querytime": 0.005,
+        "summaryfetchtime": 0.003,
+        "searchtime": 0.009000000000000001
     },
     "root": {
         "id": "toplevel",
@@ -1571,13 +1551,15 @@ the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm
         "children": [
             {
                 "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 326.34896241725517,
+                "relevance": 8.72273659535481,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
                         "attribute(popularity)": 100.0,
-                        "bm25(title)": 22.590435952092836,
-                        "closeness(field,embedding)": 0.5992897837210658,
+                        "bm25(title)": 22.591334631476823,
+                        "closeness(field,embedding)": 1.0,
+                        "distance(field,embedding)": 0.0,
+                        "query(wVector)": 1.0,
                         "rawScore(tags)": 0.0
                     },
                     "title": "Total Eclipse Of The Heart",
@@ -1585,18 +1567,20 @@ the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm
                 }
             },
             {
-                "id": "index:tracks/0/3517728cc88356c8ca6de0d9",
-                "relevance": 276.90138973270746,
+                "id": "index:tracks/0/202014b34cdd67ac28585105",
+                "relevance": 7.063803473430664,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
                         "attribute(popularity)": 100.0,
-                        "bm25(title)": 6.721990635032981,
-                        "closeness(field,embedding)": 0.5005276444049249,
+                        "bm25(title)": 6.120690332283275,
+                        "closeness(field,embedding)": 0.6469583978870177,
+                        "distance(field,embedding)": 0.5456944422794805,
+                        "query(wVector)": 1.0,
                         "rawScore(tags)": 0.0
                     },
-                    "title": "Closer To The Heart",
-                    "artist": "Rush"
+                    "title": "Loose Heart",
+                    "artist": "Riverside"
                 }
             }
         ]
@@ -1617,8 +1601,7 @@ $ vespa query \
     'type=weakAnd' \
     'hits=2' \
     'ranking=hybrid' \
-    "input.query(q)=$Q" \
-    'ranking.features.query(wVector)=340' 
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
 </pre>
 </div>
 
@@ -1628,64 +1611,47 @@ query retriever operators using `or`. See also the
 [Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/passage-ranking-README.md)
 for complete examples of different retrieval strategies for multi-phase ranking funnels.
 
+One can also use the `rank` operator to first retrieve by some logic, and then compute distance for the retrieved documents.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
+$ vespa query \
+    'yql=select title, popularity, artist from track where rank(popularity>99,{targetHits:100}nearestNeighbor(embedding,q))' \
+    'hits=2' \
+    'ranking=closeness' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
+</pre>
+</div>
+
 ## Multiple nearest neighbor search operators in the same query 
 This section looks at how to use multiple `nearestNeighbor` query operator instances in the same Vespa query request. 
-
-First, the query embedding for *Total Eclipse Of The Heart*:
-
-<pre>{% highlight python%}
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-print(model.encode("Total Eclipse Of The Heart").tolist())
-{% endhighlight %}</pre>
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ export Q='[-0.008,0.085,0.05,-0.009,-0.038,-0.003,0.019,-0.085,0.123,-0.11,0.029,-0.032,-0.059,-0.005,-0.022,0.031,0.007,0.003,0.006,0.041,-0.094,-0.044,-0.004,0.045,-0.016,0.101,-0.029,-0.028,-0.044,-0.012,0.025,-0.011,0.016,0.031,-0.037,-0.027,0.007,0.026,-0.028,0.049,-0.041,-0.041,-0.018,0.033,0.034,-0.01,-0.038,-0.052,0.02,0.029,-0.029,-0.043,-0.143,-0.055,0.052,-0.021,-0.012,-0.058,0.017,-0.017,0.023,0.017,-0.074,0.067,-0.043,-0.065,-0.028,0.066,-0.048,0.034,0.026,-0.034,0.085,-0.082,-0.043,0.054,-0.0,-0.075,-0.012,-0.056,0.027,-0.027,-0.088,0.01,0.01,0.071,0.007,0.022,-0.032,0.068,-0.003,-0.109,-0.005,0.07,-0.017,0.006,-0.007,-0.034,-0.062,0.096,0.038,0.038,-0.031,-0.023,0.064,-0.046,0.055,-0.011,0.016,-0.016,-0.007,-0.083,0.061,-0.037,0.04,0.099,0.063,0.032,0.019,0.099,0.105,-0.046,0.084,0.041,-0.088,-0.015,-0.002,-0.0,0.045,0.02,0.109,0.031,0.02,0.012,-0.043,0.034,-0.053,-0.023,-0.073,-0.052,-0.006,0.004,-0.018,-0.033,-0.067,0.126,0.018,-0.006,-0.03,-0.044,-0.085,-0.043,-0.051,0.057,0.048,0.042,-0.013,0.041,-0.017,-0.039,0.06,0.015,-0.031,0.043,-0.049,0.008,-0.008,0.028,-0.014,0.035,-0.08,-0.052,0.017,0.02,0.059,0.049,0.048,0.033,0.024,0.009,0.021,-0.042,-0.021,0.048,0.015,0.042,-0.004,-0.012,0.041,0.053,0.015,-0.034,-0.005,0.068,-0.053,-0.107,-0.051,0.03,-0.063,-0.036,0.032,-0.054,0.085,0.022,0.08,0.054,-0.045,-0.058,-0.161,0.066,0.065,-0.043,0.084,0.043,-0.01,-0.01,-0.084,-0.021,0.041,0.026,-0.011,-0.065,-0.046,0.0,-0.046,-0.014,-0.009,-0.08,0.063,0.02,-0.082,0.088,0.046,0.058,0.005,-0.024,0.047,0.019,0.051,-0.021,0.02,-0.003,-0.019,0.08,0.031,0.021,0.041,-0.01,-0.018,0.07,0.076,-0.021,0.027,-0.086,0.059,-0.068,-0.126,0.025,-0.037,0.036,-0.028,0.035,-0.068,0.005,-0.032,0.023,0.012,0.074,0.028,-0.02,0.054,0.124,0.022,-0.021,-0.099,-0.044,-0.044,0.093,0.004,-0.006,-0.037,0.034,-0.021,-0.046,-0.031,-0.034,0.015,-0.041,0.001,0.022,0.015,0.02,-0.16,0.065,-0.016,0.059,-0.249,0.023,0.031,0.047,0.063,-0.06,-0.002,-0.049,-0.06,-0.014,0.013,0.004,0.019,-0.039,0.007,0.024,-0.004,0.045,-0.026,0.078,-0.014,-0.038,0.003,-0.0,0.019,0.04,-0.017,-0.088,-0.04,-0.029,0.05,0.012,-0.042,0.052,0.035,0.061,0.011,0.03,-0.068,0.015,0.032,-0.028,-0.046,-0.032,0.094,0.006,0.082,-0.103,0.013,-0.054,0.038,0.01,0.029,-0.025,0.119,0.034,0.024,-0.034,-0.055,-0.014,0.026,0.068,-0.009,0.085,0.028,-0.086,0.038,0.01,-0.024,0.01,0.071,-0.078,-0.033,-0.024,0.023,-0.005,-0.002,-0.047,0.031,0.023,0.004,0.069,-0.018,0.034,0.109,0.036,0.009,0.029]'
-</pre>
-</div>
-
-Secondly, the query embedding for *Summer of '69*:
-<pre>{% highlight python%}
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-print(model.encode("Summer of '69").tolist())
-{% endhighlight %}</pre>
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ export QA='[-0.043,0.027,-0.017,0.018,0.034,0.067,0.037,-0.046,-0.014,-0.114,0.033,-0.028,0.02,0.024,0.025,0.019,0.045,0.007,0.018,-0.035,-0.126,0.024,0.005,0.05,-0.005,0.048,0.059,0.07,-0.041,0.006,-0.008,0.113,-0.046,-0.007,0.065,-0.02,-0.007,-0.067,-0.099,0.069,-0.068,-0.013,0.054,0.029,-0.031,-0.018,0.036,-0.015,0.027,0.011,0.04,0.038,-0.046,-0.025,-0.042,0.028,-0.006,-0.091,0.033,-0.016,-0.079,-0.058,-0.044,-0.022,0.086,-0.107,0.002,-0.037,-0.058,-0.039,-0.028,0.037,-0.015,0.035,0.0,0.072,-0.021,-0.01,0.044,-0.094,0.116,-0.109,-0.04,0.01,0.012,-0.031,0.087,0.005,-0.035,0.049,-0.088,-0.02,-0.023,-0.01,-0.063,-0.018,-0.024,-0.05,-0.009,0.115,0.049,0.017,-0.05,0.017,0.084,-0.053,0.051,0.033,-0.001,-0.087,-0.031,-0.019,0.132,0.006,0.056,-0.117,0.043,0.01,-0.03,0.176,0.055,0.042,0.051,0.025,-0.041,-0.027,0.041,-0.0,0.01,-0.016,0.048,-0.031,0.103,-0.044,-0.003,-0.005,-0.029,-0.032,-0.046,-0.095,-0.074,-0.094,0.111,-0.042,0.004,0.048,0.006,0.042,-0.092,0.109,0.016,-0.04,-0.01,0.033,-0.034,0.049,0.03,0.02,0.04,0.015,0.007,0.03,0.018,0.017,-0.029,-0.082,0.015,0.002,-0.048,0.047,-0.03,-0.029,-0.008,0.088,0.04,0.023,0.052,-0.034,0.006,0.003,-0.048,-0.094,-0.014,-0.086,-0.052,-0.01,0.062,-0.03,0.062,0.058,-0.027,-0.04,-0.084,-0.061,0.09,-0.049,-0.032,0.007,-0.071,-0.052,0.055,-0.064,0.041,-0.008,0.076,-0.018,-0.025,-0.034,0.016,-0.007,0.041,0.023,-0.021,-0.046,0.01,-0.022,-0.019,-0.027,-0.039,-0.037,0.014,0.004,0.017,0.0,0.034,0.003,0.015,-0.019,0.02,0.025,-0.05,0.056,-0.047,-0.088,0.004,-0.116,0.07,-0.057,0.032,0.006,-0.021,0.09,-0.02,0.035,-0.114,-0.006,-0.01,-0.005,0.025,-0.046,0.054,-0.002,-0.003,0.028,-0.025,0.001,-0.003,0.09,-0.084,0.058,0.091,-0.025,-0.034,-0.032,0.026,-0.032,0.054,0.039,0.033,-0.029,0.015,0.076,-0.054,0.021,-0.069,-0.049,-0.051,-0.006,0.002,-0.058,-0.021,-0.011,0.025,-0.003,-0.001,-0.018,-0.064,-0.023,-0.013,0.029,-0.022,0.023,-0.019,-0.028,-0.072,-0.044,-0.082,0.074,0.086,-0.016,0.041,0.004,-0.047,-0.029,-0.137,0.005,-0.075,0.136,0.054,0.024,0.052,0.01,0.024,-0.038,0.078,0.005,0.013,-0.034,-0.051,-0.0,0.03,-0.007,0.025,-0.042,0.065,0.02,0.05,0.045,0.004,0.095,0.044,0.044,0.091,0.024,0.0,0.022,0.027,0.011,-0.011,0.009,-0.056,-0.026,0.173,-0.019,0.024,-0.014,-0.064,0.079,0.083,-0.033,0.051,-0.005,-0.056,-0.043,-0.061,-0.034,0.112,0.072,0.042,-0.047,0.055,0.058,0.015,0.017,0.015,0.083,0.024,-0.023,-0.024,0.007,0.043,0.042,0.025,0.011,0.042,-0.032,-0.044,0.021,-0.064,-0.065,0.078,0.051,-0.028,-0.136]'
-</pre>
-</div>
-
 The following Vespa query combines two `nearestNeighbor` query operators 
 using logical disjunction (`OR`) and referencing two different
 query tensor inputs:
 
 - `input.query(q)` holding the *Total Eclipse Of The Heart* query vector.
-- `input.query(qa)` holding the *Summer of '69* query vector.
+- `input.query(q1)` holding the *Summer of '69* query vector.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title from track where ({targetHits:10}nearestNeighbor(embedding,q)) or ({targetHits:10}nearestNeighbor(embedding,qa))' \
+    'yql=select title from track where ({targetHits:10}nearestNeighbor(embedding,q)) or ({targetHits:10}nearestNeighbor(embedding,q1))' \
     'hits=2' \
-    'ranking=closeness-t4' \
-    "input.query(q)=$Q" \
-    "input.query(qa)=$QA" 
+    'ranking=closeness' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'  \
+    'input.query(q1)=embed(e5, "Summer of 69")'  
 </pre>
 </div>
 
-The above query returns 20 documents to first phase ranking, as seen from `totalCount`. Ten from each nearest neighbor query operator:
+The query exposes 20 hits to first phase ranking, as seen from `totalCount`. Ten from each nearest neighbor query operator:
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.007,
-        "summaryfetchtime": 0.001,
-        "searchtime": 0.01
+        "querytime": 0.004,
+        "summaryfetchtime": 0.002,
+        "searchtime": 0.007
     },
     "root": {
         "id": "toplevel",
@@ -1703,52 +1669,63 @@ The above query returns 20 documents to first phase ranking, as seen from `total
         },
         "children": [
             {
-                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 0.5992897917249415,
+                "id": "index:tracks/0/5b1c2ae1024d88451c2f1c5a",
+                "relevance": 1.0,
                 "source": "tracks",
                 "fields": {
-                    "title": "Total Eclipse Of The Heart"
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.0
+                    },
+                    "title": "Summer of 69"
                 }
             },
             {
-                "id": "index:tracks/0/5b1c2ae1024d88451c2f1c5a",
-                "relevance": 0.5794361034642413,
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 1.0,
                 "source": "tracks",
                 "fields": {
-                    "title": "Summer of 69"
+                    "matchfeatures": {
+                        "distance(field,embedding)": 0.0
+                    },
+                    "title": "Total Eclipse Of The Heart"
                 }
             }
         ]
     }
 }
+
 {% endhighlight %}</pre>
 
 One can also use the `label` annotation when there are multiple `nearestNeighbor` operators in the same query
-to differentiate which of them produced the match. 
+to get the distance or closeness per query vector. Notice we use the `closeness-label` rank-profile.
+
+<pre>
+rank-profile closeness-label inherits closeness {
+    match-features: closeness(label, q) closeness(label, q1)
+}
+</pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures from track where ({ label:"q", targetHits:10}nearestNeighbor(embedding,q)) or ({label:"qa",targetHits:10}nearestNeighbor(embedding,qa))' \
+    'yql=select title from track where ({ label:"q", targetHits:10}nearestNeighbor(embedding,q)) or ({label:"q1",targetHits:10}nearestNeighbor(embedding,q1))' \
     'hits=2' \
     'ranking=closeness-label' \
-    "input.query(q)=$Q" \
-    "input.query(qa)=$QA" 
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'  \
+    'input.query(q1)=embed(e5, "Summer of 69")'  
 </pre>
 </div>
 
 The above query annotates the two `nearestNeighbor` query operators using 
-[label](reference/query-language-reference.html#label) query annotation. The result include 
-`match-features` so one can see which query operator retrieved the document from the 
-`closeness(label, ..)` feature output:
+[label](reference/query-language-reference.html#label) query annotation. 
 
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.011,
-        "summaryfetchtime": 0.001,
-        "searchtime": 0.014
+        "querytime": 0.004,
+        "summaryfetchtime": 0.0,
+        "searchtime": 0.005
     },
     "root": {
         "id": "toplevel",
@@ -1766,47 +1743,46 @@ The above query annotates the two `nearestNeighbor` query operators using
         },
         "children": [
             {
-                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
-                "relevance": 0.5992897917249415,
+                "id": "index:tracks/0/5b1c2ae1024d88451c2f1c5a",
+                "relevance": 1.0,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "closeness(label,q)": 0.5992897917249415,
-                        "closeness(label,qa)": 0.0
+                        "closeness(label,q)": 0.6039000433424319,
+                        "closeness(label,q1)": 1.0
                     },
-                    "title": "Total Eclipse Of The Heart"
+                    "title": "Summer of 69"
                 }
             },
             {
-                "id": "index:tracks/0/5b1c2ae1024d88451c2f1c5a",
-                "relevance": 0.5794361034642413,
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 1.0,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "closeness(label,q)": 0.0,
-                        "closeness(label,qa)": 0.5794361034642413
+                        "closeness(label,q)": 1.0,
+                        "closeness(label,q1)": 0.6039000433424319
                     },
-                    "title": "Summer of 69"
+                    "title": "Total Eclipse Of The Heart"
                 }
             }
         ]
     }
-}
-{% endhighlight %}</pre>
+}{% endhighlight %}</pre>
 
 Note that the previous examples used `or` to combine the two operators. Using `and` instead, requires 
 that there are documents that is in both the top-k results. Increasing `targetHits` to 500,  
-finds 9 tracks that overlap. In this case both closeness labels have a non-zero score. 
+finds 5 tracks that overlap. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='Summer Of Love'>
+<pre data-test="exec" data-test-assert-contains='Dolorous Stroke'>
 $ vespa query \
-    'yql=select title, matchfeatures from track where ({label:"q", targetHits:500}nearestNeighbor(embedding,q)) and ({label:"qa",targetHits:500}nearestNeighbor(embedding,qa))' \
+    'yql=select title from track where ({label:"q", targetHits:500}nearestNeighbor(embedding,q)) and ({label:"q1",targetHits:500}nearestNeighbor(embedding,q1))' \
     'hits=2' \
     'ranking=closeness-label' \
-    "input.query(q)=$Q" \
-    "input.query(qa)=$QA" 
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'  \
+    'input.query(q1)=embed(e5, "Summer of 69")' 
 </pre>
 </div>
 
@@ -1818,15 +1794,15 @@ can be seen from the `relevance` value, compared with the labeled `closeness()` 
 <pre>{% highlight json%}
 {
     "timing": {
-        "querytime": 0.015,
-        "summaryfetchtime": 0.001,
-        "searchtime": 0.017
+        "querytime": 0.008,
+        "summaryfetchtime": 0.0,
+        "searchtime": 0.009000000000000001
     },
     "root": {
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 9
+            "totalCount": 5
         },
         "coverage": {
             "coverage": 100,
@@ -1838,33 +1814,32 @@ can be seen from the `relevance` value, compared with the labeled `closeness()` 
         },
         "children": [
             {
-                "id": "index:tracks/0/99a2a380cac4830bfee63ae0",
-                "relevance": 0.5174298300948759,
+                "id": "index:tracks/0/439ca5f008b2b72704704b65",
+                "relevance": 0.6442831379812195,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "closeness(label,q)": 0.4755796429687308,
-                        "closeness(label,qa)": 0.5174298300948759
+                        "closeness(label,q)": 0.6442831379812195,
+                        "closeness(label,q1)": 0.6212453963738567
                     },
-                    "title": "Summer Of Love"
+                    "title": "Dolorous Stroke"
                 }
             },
             {
-                "id": "index:tracks/0/a373d26938a20dbdda8fc7c1",
-                "relevance": 0.5099393361432658,
+                "id": "index:tracks/0/698485b7a93ddeb7574670ec",
+                "relevance": 0.6401157063988596,
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "closeness(label,q)": 0.5099393361432658,
-                        "closeness(label,qa)": 0.47990179066646654
+                        "closeness(label,q)": 0.6401157063988596,
+                        "closeness(label,q1)": 0.6324869732783777
                     },
-                    "title": "Midnight Heartache"
+                    "title": "Fever of the Time"
                 }
             }
         ]
     }
-}
-{% endhighlight %}</pre>
+}{% endhighlight %}</pre>
 
 Vespa also supports having multiple document side embedding fields, which also
 can be searched using multiple `nearestNeighbor` operators in the query.
@@ -1922,7 +1897,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=1.0' \
   'ranking.matching.approximateThreshold=0.05' \
-  "input.query(q)=$Q"
+  'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'  
 </pre>
 </div>
 
@@ -1938,15 +1913,36 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
   'ranking.matching.approximateThreshold=0.05' \
-  "input.query(q)=$Q"
+  'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
 </pre>
 </div>
 
 In this case, Vespa will estimate how many documents the filter matches and auto-adjust `targethits` internally to a
 higher number, attempting to expose the `targetHits` to first phase ranking:
 
-The query exposes 14 documents to ranking as can be seen from `totalCount`. There are `8420` documents in the collection
+The query exposes 16 documents to ranking as can be seen from `totalCount`. There are `8420` documents in the collection
 that are tagged with the `rock` tag, so roughly 8%. 
+
+Auto adjusting `targetHits` upwards for postFiltering is not always what you want, because it is slower than just retrieving
+uconstrained, and post filter the hits that does not satifies the filters. We can adjust the 
+`targetHits` adjustement factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](reference/query-api-reference.html#ranking.matching) parameter.
+In this case, we set it to 1, which effectively disables adjusting the `targetHits` upwards. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='totalCount": 1'>
+$ vespa query \
+  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
+  'hits=2' \
+  'ranking=closeness' \
+  'ranking.matching.postFilterThreshold=0.0' \
+  'ranking.matching.approximateThreshold=0.05' \
+  'ranking.matching.targetHitsMaxAdjustmentFactor=1' \
+  'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
+</pre>
+</div>
+Since we are post-filtering without upward adjusting the targetHits, we end up with just one hit. 
+
 
 Changing to a tag which is less frequent, for example, `90s`, which
 matches 1,695 documents or roughly 1.7% will cause Vespa to fall back to exact search as the estimated filter hit count
@@ -1961,7 +1957,7 @@ $ vespa query \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
   'ranking.matching.approximateThreshold=0.05' \
-  "input.query(q)=$Q"
+  'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
 
