@@ -1611,6 +1611,19 @@ query retriever operators using `or`. See also the
 [Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/passage-ranking-README.md)
 for complete examples of different retrieval strategies for multi-phase ranking funnels.
 
+One can also use the `rank` operator to first retrieve by some logic, and then compute distance for the retrieved documents.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
+$ vespa query \
+    'yql=select title, popularity, artist from track where rank(popularity>99,{targetHits:100}nearestNeighbor(embedding,q))' \
+    'hits=2' \
+    'ranking=closeness' \
+    'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
+</pre>
+</div>
+
 ## Multiple nearest neighbor search operators in the same query 
 This section looks at how to use multiple `nearestNeighbor` query operator instances in the same Vespa query request. 
 The following Vespa query combines two `nearestNeighbor` query operators 
