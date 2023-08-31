@@ -27,14 +27,18 @@ url_prefix = sys.argv[2]
 namespace = sys.argv[3]
 part = html_file.split("/")[-1]
 part = part.replace(".html","")
+prefix = "/".join(html_file.split("/")[:-1])
+
 result = extract_links_from_html(html_file)
 for link_text, link in result:
     if not link_text:
         continue
-
     if link_text.find("DEPRECATED") > 0:
         continue
-    url = url_prefix + html_file + link
+    if link.startswith("#"):
+        url = url_prefix + html_file + link 
+    else: 
+        url = url_prefix + prefix + '/' + link 
     id = id = mmh3.hash(url)
     term = {
         'put': 'id:term-reference:term::%i' % id,
