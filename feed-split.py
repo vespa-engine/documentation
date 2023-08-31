@@ -71,7 +71,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     if paragraph_id is None:
         paragraph_id = str(random.randint(0,1000))
 
-    new_doc['fields']['path'] = new_doc['fields']['path'] + "#" + paragraph_id
+    new_doc['fields']['path'] = new_doc['fields']['path'] + "#" + paragraph_id.replace("?","")
     new_doc['put'] = new_doc['put'] + "-" + urllib.parse.quote(paragraph_id)
     
     return new_doc
