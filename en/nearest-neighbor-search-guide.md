@@ -1473,7 +1473,7 @@ the `relevance` score changes.
 {% endhighlight %}</pre>
 
 Changing from logical `OR` to `AND` instead will intersect the result of the two efficient retrievers.
-The search for nearest neighbors is onstrained to documents which at least matches one of
+The search for nearest neighbors is constrained to documents that at least match one of
 the query terms in the `weakAnd`.
 
 <div class="pre-parent">
