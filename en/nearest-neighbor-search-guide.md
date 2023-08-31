@@ -1396,7 +1396,7 @@ Which can be used with the `wand` query operator to retrieve personalized hits f
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Straight From The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery() or ({targetHits:10}wand(tags, @userProfile))' \
+    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery() or ({targetHits:10}wand(tags, @userProfile))' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1408,7 +1408,8 @@ $ vespa query \
 </div>
 
 Now we have new top ranking documents. Notice that `totalCount` increases as the 
-`wand` query operator retrieved more hits into `first-phase` ranking.
+`wand` query operator retrieved more hits into `first-phase` ranking. Also notice that
+the `relevance` score changes.
 
 <pre>{% highlight json%}
 {
@@ -1472,14 +1473,14 @@ Now we have new top ranking documents. Notice that `totalCount` increases as the
 {% endhighlight %}</pre>
 
 Changing from logical `OR` to `AND` instead will intersect the result of the two efficient retrievers.
-The search for nearest neighbors is then constrained to documents which at least matches one of
+The search for nearest neighbors is constrained to documents that at least match one of
 the query terms in the `weakAnd`.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures, artist from track where {targetHits:100}nearestNeighbor(embedding,q) and userQuery()' \
+    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) and userQuery()' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1489,13 +1490,13 @@ $ vespa query \
 </div>
 
 In this case, the documents exposed to ranking must match at least one of the query terms (for WAND to retrieve it).
-It is also possible to combine hybrid search with filters:
+It is also possible to combine hybrid search with filters, this filters both the sparse and dense retrieval on popularity
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='Little Black Heart'>
+<pre data-test="exec" data-test-assert-contains='Total Eclipse'>
 $ vespa query \
-    'yql=select title, matchfeatures, artist from track where {targetHits:100}nearestNeighbor(embedding,q) and userQuery() and popularity < 75' \
+    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) and userQuery() and popularity < 75' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1513,7 +1514,7 @@ rank features for those hits retrieved by the first operand.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures, artist from track where rank({targetHits:100}nearestNeighbor(embedding,q), userQuery())' \
+    'yql=select title, artist from track where rank({targetHits:100}nearestNeighbor(embedding,q), userQuery())' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1596,7 +1597,7 @@ retrieved by the sparse query representation.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, matchfeatures, artist from track where rank(userQuery(),{targetHits:100}nearestNeighbor(embedding,q))' \
+    'yql=select title, artist from track where rank(userQuery(),{targetHits:100}nearestNeighbor(embedding,q))' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1609,20 +1610,23 @@ The `weakAnd` query operator exposes more hits to ranking than approximate neare
 to the `wand` query operator. Generally, using the `rank` query operator is more efficient than combining
 query retriever operators using `or`. See also the 
 [Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/passage-ranking-README.md)
-for complete examples of different retrieval strategies for multi-phase ranking funnels.
+for complete examples of different retrieval strategies for [multi-phase ranking](phased-ranking.html) funnels.
 
-One can also use the `rank` operator to first retrieve by some logic, and then compute distance for the retrieved documents.
+One can also use the `rank` operator to first retrieve by some filter logic, and compute distance or similarity for the retrieved documents.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, popularity, artist from track where rank(popularity>99,{targetHits:100}nearestNeighbor(embedding,q))' \
+    'yql=select title, popularity, artist from track where rank(popularity>99,{targetHits:10}nearestNeighbor(embedding,q))' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
 </pre>
 </div>
+
+Queries that only use the `nearestNeighbor` operator as the second operand of `rank` does not need to add `HNSW` indexing, which saves
+a lot of indexing and memory resource footprint. 
 
 ## Multiple nearest neighbor search operators in the same query 
 This section looks at how to use multiple `nearestNeighbor` query operator instances in the same Vespa query request. 
@@ -1692,12 +1696,15 @@ The query exposes 20 hits to first phase ranking, as seen from `totalCount`. Ten
             }
         ]
     }
-}
+}{% endhighlight %}</pre>
+Utilizing a combination of various query embeddings within a single query request holds numerous applications, 
+particularly in cases involving shorter queries with inherent ambiguity. 
+In such scenarios, employing query expansion and query rewrites can facilitate retrieval by accommodating multiple interpretations.
 
-{% endhighlight %}</pre>
-
-One can also use the `label` annotation when there are multiple `nearestNeighbor` operators in the same query
-to get the distance or closeness per query vector. Notice we use the `closeness-label` rank-profile.
+One can also use the [label](reference/query-language-reference.html#label) query term 
+annotation when there are multiple `nearestNeighbor` operators in the same query
+to get the distance or closeness per query vector. Notice we use the `closeness-label` rank-profile defined
+in the schema:
 
 <pre>
 rank-profile closeness-label inherits closeness {
@@ -1772,11 +1779,11 @@ The above query annotates the two `nearestNeighbor` query operators using
 
 Note that the previous examples used `or` to combine the two operators. Using `and` instead, requires 
 that there are documents that is in both the top-k results. Increasing `targetHits` to 500,  
-finds 5 tracks that overlap. 
+finds a few tracks that overlap. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='Dolorous Stroke'>
+<pre data-test="exec" data-test-assert-contains='matchfeatures'>
 $ vespa query \
     'yql=select title from track where ({label:"q", targetHits:500}nearestNeighbor(embedding,q)) and ({label:"q1",targetHits:500}nearestNeighbor(embedding,q1))' \
     'hits=2' \
@@ -1786,7 +1793,7 @@ $ vespa query \
 </pre>
 </div>
 
-Which returns the following top two hits. Note that the `closeness-label` rank profile
+Note that the `closeness-label` rank profile
 uses `closeness(field, embedding)` which in the case of multiple nearest neighbor search operators 
 uses the maximum score to represent the unlabeled `closeness(field,embedding)`. This
 can be seen from the `relevance` value, compared with the labeled `closeness()` rank features. 
@@ -1923,10 +1930,10 @@ higher number, attempting to expose the `targetHits` to first phase ranking:
 The query exposes 16 documents to ranking as can be seen from `totalCount`. There are `8420` documents in the collection
 that are tagged with the `rock` tag, so roughly 8%. 
 
-Auto adjusting `targetHits` upwards for postFiltering is not always what you want, because it is slower than just retrieving
-uconstrained, and post filter the hits that does not satifies the filters. We can adjust the 
+Auto adjusting `targetHits` upwards for post-filtering is not always what you want, because it is slower than just retrieving
+from the HNSW index without constraints. We can change the 
 `targetHits` adjustement factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](reference/query-api-reference.html#ranking.matching) parameter.
-In this case, we set it to 1, which effectively disables adjusting the `targetHits` upwards. 
+In this case, we set it to 1, which disables adjusting the `targetHits` upwards. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1943,9 +1950,8 @@ $ vespa query \
 </div>
 Since we are post-filtering without upward adjusting the targetHits, we end up with just one hit. 
 
-
-Changing to a tag which is less frequent, for example, `90s`, which
-matches 1,695 documents or roughly 1.7% will cause Vespa to fall back to exact search as the estimated filter hit count
+Changing the query to limit to a tag which is less frequent, for example, `90s`, which
+matches 1,695 documents or roughly 1.7%, will cause Vespa to fall back to exact search as the estimated filter hit count
 is less than the `approximateThreshold`. 
 
 <div class="pre-parent">
@@ -1961,12 +1967,14 @@ $ vespa query \
 </pre>
 </div>
 
-The exact search exposes more documents to ranking. Read more about combining filters with nearest neighbor search in the 
-[Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) 
+The fallback to exact search will expose more than `targetHits` documents to ranking. 
+Read more about combining filters with nearest neighbor search in 
+the [Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) 
 blog post. 
 
 ## Tear down the container
 This concludes this tutorial. 
+
 The following removes the container and the data:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
