@@ -14,6 +14,8 @@ This operator can be combined with other filters or query terms using the
 making it easy to create hybrid solutions that combine modern vector based techniques with
 [traditional information retrieval](text-matching-ranking.html).
 
+Also try [pyvespa examples](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
+
 
 ## Minimal example
 A nearest neighbor search has at least these components: a document vector, a query vector,
@@ -59,10 +61,14 @@ The `nearestNeighbor` query operator will calculate values
 used by the [closeness()](reference/rank-features.html#closeness(dimension,name)) rank feature.
 {% include note.html content='closeness(`field`, d_vector)
 means that the closeness rank feature shall use the d_vector <span style="text-decoration: underline">field</span>.
+<br/><br/>
+Applications can have multiple vector fields.
+These cases assign <span style="text-decoration: underline">labels</span> to the different `nearestNeighbor` operators,
+so the closeness() rank feature refers to the different operators (using different fields)
 See other examples of using closeness(`label`, q)
 in the [nearest neighbor search guide](nearest-neighbor-search-guide.html#using-label).' %}
 
-Read more in this guide on tensor types, distance functions, rank profiles
+Read more in this guide on tensor types, distance metrics, rank profiles
 and approximate nearest neighbor search.
 
 
@@ -104,7 +110,7 @@ rank-profile my_profile {
 This all ties together with the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator
 that expects two arguments; the document tensor field name which is searched and the input query tensor name.
 The operator finds the documents that are closest to the query vector
-using the [distance-metric](reference/schema-reference.html#distance-metric) defined in the tensor field.
+using the [distance-metric](#distance-metrics-for-nearest-neighbor-search) defined in the tensor field.
 Note that the document schema can have multiple tensor fields storing vectors,
 and the query can have multiple `nearestNeighbor` operators searching different tensor fields.
 
@@ -198,8 +204,16 @@ Vespa supports six different [distance-metrics](reference/schema-reference.html#
 * `hamming`
 * `geodegrees`
 
-### Configure rank profiles for nearest neighbor search
+The distance-metric is a property of the field.
+This is obvious when `index` is set on the vector field,
+as the distance metric is used when building the index structure.
+Without `index`, no extra data structures are built for the field,
+and the distance-metric setting is used when calculating the distance at query-time.
+It still makes sense to have the metric as a field-property,
+as the field values are often produced using a specific distance metric.
+Finally, without `index` there is no need to restart Vespa after redeploying with a new distance metric.
 
+### Configure rank profiles for nearest neighbor search
 Lastly, one need to configure how to [rank](ranking.html) products which 
 are retrieved by the nearest neighbor search:
 
