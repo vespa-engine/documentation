@@ -1002,10 +1002,12 @@ $ vespa query \
 </pre>
 </div>
 
-In the previous examples, since the rank-profile did only use the `closeness` rank feature,  
+In the previous examples, since the rank-profile did only use the
+[closeness](reference/rank-features.html#closeness(dimension,name)) rank feature,
 the matching would not impact the score anyway. 
 
-Vespa also allows combining the `nearestNeighbor` query operator with any other Vespa query operator.  
+Vespa also allows combining the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator
+with any other Vespa query operator.  
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1701,6 +1703,8 @@ Utilizing a combination of various query embeddings within a single query reques
 particularly in cases involving shorter queries with inherent ambiguity. 
 In such scenarios, employing query expansion and query rewrites can facilitate retrieval by accommodating multiple interpretations.
 
+
+### Using label
 One can also use the [label](reference/query-language-reference.html#label) query term 
 annotation when there are multiple `nearestNeighbor` operators in the same query
 to get the distance or closeness per query vector. Notice we use the `closeness-label` rank-profile defined
@@ -1796,7 +1800,8 @@ $ vespa query \
 Note that the `closeness-label` rank profile
 uses `closeness(field, embedding)` which in the case of multiple nearest neighbor search operators 
 uses the maximum score to represent the unlabeled `closeness(field,embedding)`. This
-can be seen from the `relevance` value, compared with the labeled `closeness()` rank features. 
+can be seen from the `relevance` value,
+compared with the labeled [closeness()](reference/rank-features.html#closeness(dimension,name)) rank features. 
 
 <pre>{% highlight json%}
 {
