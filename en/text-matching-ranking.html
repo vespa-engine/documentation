@@ -30,27 +30,28 @@ field album type string {
 Use inspection tools to dump data from a content node,
 and query tracing to understand matching details.</p>
 
-<p>The <em>album</em> field has <a href="reference/schema-reference.html#indexing">index</a> mode.
-For text fields, this enables the transformations below, and increases query recall.
-Use the <a href="vespa-quick-start.html">quick start</a> guide and stop after the feeding step.
-Make sure to feed all 5 albums with titles:</p>
+<p>
+  The <em>album</em> field has <a href="reference/schema-reference.html#indexing">index</a> mode.
+  For text fields, this enables the transformations below, and increases query recall.
+  Use the <a href="vespa-quick-start.html">quick start</a> guide and stop after the feeding step.
+</p>
 
 <pre>
-$ cat sample-apps/album-recommendation/src/test/resources/*.json | grep album
-        "album": "A Head Full of Dreams",
-        "album": "Hardwired...To Self-Destruct",
-        "album": "Liebe ist für alle da",
-        "album": "Love Is Here To Stay",
-        "album": "When We All Fall Asleep, Where Do We Go?",
+$ jq .fields.album < sample-apps/album-recommendation/ext/documents.jsonl
+  "A Head Full of Dreams"
+  "Hardwired...To Self-Destruct"
+  "Liebe ist für alle da"
+  "Love Is Here To Stay"
+  "When We All Fall Asleep, Where Do We Go?"
 </pre>
 
 <p>Flush and dump index data (file name can change for subsequent flushes):</p>
 
 <pre>
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush &amp;&amp; \
-    /opt/vespa/bin/<a href="reference/vespa-cmdline-tools.html#vespa-index-inspect">vespa-index-inspect</a> dumpwords \
-    --indexdir /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/index/index.flush.1 \
-    --field album'
+$ docker exec vespa sh -c 'vespa-proton-cmd --local triggerFlush &amp;&amp; \
+  <a href="reference/vespa-cmdline-tools.html#vespa-index-inspect">vespa-index-inspect</a> dumpwords \
+  --indexdir /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/index/index.flush.1 \
+  --field album'
 
 a	1
 all	2
@@ -88,7 +89,7 @@ where	1
   </thead>
   <tbody>
 <tr>
-  <td>Hardwired...To &#x2192; Hardwired To</td><td>Tokenization - split terms on non-characters</td>
+  <td>Hardwired...To &#x2192; hardwire to</td><td>Tokenization - split terms on non-characters, here "..."</td>
 </tr><tr>
   <td>Head &#x2192; head</td><td>Lowercasing</td>
 </tr><tr>
@@ -101,23 +102,40 @@ where	1
 <p>
 Then, change from <em>index</em> to <a href="reference/schema-reference.html#indexing">attribute</a>
 in <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/schemas/music.sd">
-src/main/application/schemas/music.sd</a>:
+schemas/music.sd</a> (and remove all bm25 settings):
 </p>
 <pre>
-    field album type string {
--       indexing: summary | index
-+       indexing: summary | attribute
-    }
+         field album type string {
+-            indexing: summary | index
+-            index: enable-bm25
++            indexing: summary | attribute
+         }
+
+         field year type int {
+@@ -42,7 +41,7 @@
+             query(user_profile) tensor<float>(cat{})
+         }
+         first-phase {
+-            expression: bm25(album) + 0.25 * sum(query(user_profile) * attribute(category_scores))
++            expression: 0.25 * sum(query(user_profile) * attribute(category_scores))
+         }
 </pre>
 <p>
-Run the tutorial again using the new schema, this time dumping data from the attributes
-(snapshot name can change with flushes):
+  Run the tutorial again using the new schema, stop efter feeding.
+  Find the snapshot number (here 12) and inspect data from the attributes:
 </p>
 <pre>
-$ docker exec vespa bash -c '/opt/vespa/bin/vespa-proton-cmd --local triggerFlush &amp;&amp; \
-  /opt/vespa/bin/<a href="reference/vespa-cmdline-tools.html#vespa-attribute-inspect">vespa-attribute-inspect</a> -p \
-  /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album/snapshot-10/album &amp;&amp; \
-  cat /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album/snapshot-10/album.out'
+$ docker exec vespa sh -c \
+  'ls /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album'
+
+  meta-info.txt
+  snapshot-12
+
+$ docker exec vespa sh -c \
+  'cd /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album/snapshot-12 &amp;&amp; \
+  <a href="reference/vespa-cmdline-tools.html#vespa-proton-cmd">vespa-proton-cmd</a> --local triggerFlush &amp;&amp; \
+  <a href="reference/vespa-cmdline-tools.html#vespa-attribute-inspect">vespa-attribute-inspect</a> -p album &amp;&amp; \
+  cat album.out'
 
 doc 0: valueCount(1)
     0: []
@@ -145,51 +163,51 @@ Read more about the attribute <a href="reference/schema-reference.html#match">wo
 
 <h3 id="query-trace">Query Trace</h3>
 <p>
-Adding <a href="reference/query-api-reference.html#trace.level">trace.level=2</a>
-gives insight when testing queries - example attribute lowercasing:
+  Adding <a href="reference/query-api-reference.html#trace.level">trace.level=2</a>
+  gives insight when testing queries - example attribute lowercasing
+  (observe that queries with "Liebe" and "liebe" give the same result):
 </p>
 <pre>
-http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20album%20contains%20%22Liebe+ist+f%C3%BCr+alle+da%22&trace.level=2
-
-http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20album%20contains%20%22liebe+ist+f%C3%BCr+alle+da%22&trace.level=2
+$ vespa config set target local
+$ vespa query 'select * from music where album contains "Liebe ist für alle da"' \
+  ranking=rank_albums \
+  trace.level=2
 </pre>
-<p>
-Also try query tracing to see how query parsing changes with
-<em>index</em> and <em>attribute</em> indexing modes.
-</p>
+<p>Also try query tracing to see how query parsing changes with <em>index</em> and <em>attribute</em> indexing modes.</p>
 
 
 <h3 id="prefix-match">Prefix Match</h3>
 <p>
-    A prefix search will match the query term "hea" to documents with the term "head" in a <code>string</code> field
-    with <code>indexing: attribute</code>. Note that it is requires that the field matching is
-    specified with the annotation <code>{prefix: true}</code> to enable prefix matching.
-</p><p>
-    E.g. <code>... contains ([{prefix:true}]"hea")</code>
-</p><p>
+  Use the <a href="https://docs.vespa.ai/en/reference/query-language-reference.html#prefix">prefix</a> annotation
+  to match string prefixes in attributes of type string:
+</p>
+<pre>
+$ vespa query 'select * from music where album contains ({prefix: true}"a hea")'
+</pre>
+<p>
   The <a href="https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-suggestions">
   search-suggestions</a> sample application uses prefix search, see README for a design discussion.
 </p>
-<h4 id="array-of-string-attributes">Array of string attributes</h4>
 <p>
-    Use an attribute with array of strings in addition to the index string field.
-    The array to support more terms - if only one term in the field, the array is not needed.
-    The application must split the text into terms and add these to the array.
-    This can be a viable approach for fields with few terms and semi-structured input - example:
+  To prefix-match individual terms in a string,
+  use an attribute with array of strings in addition to the index string field, e.g.:
 </p>
 <pre>
 schema company {
     document company {
         field company_name_string type string {
-            indexing: summary
+            indexing: index | summary
         }
     }
     field company_name_array type array&lt;string&gt; {
-        indexing: input company_name_string | trim | split " +" | attribute
+        indexing: input company_name_string | trim | split " +" | attribute | summary
     }
 }
 </pre>
-      Adding "Goldman" and "Sachs" will match query terms like "Gold" and "Sach".
+<p>
+  Use the <a href="reference/advanced-indexing-language.html">indexing-language</a> to split the string, as shown above.
+  Adding "Goldman" and "Sachs" will match query terms like "Gold" and "Sach".
+</p>
 
 <h3 id="n-gram-match">N-Gram Match</h3>
 
@@ -255,6 +273,28 @@ field album type string {
     is supported in attributes.
     There are however no optimizing data structures for query speed,
     it runs the expression over all attribute values.
+</p>
+<!-- ToDo: Add example -->
+
+
+<h3 id="fuzzy-match">Fuzzy Match</h3>
+<p>
+  Use <a href="reference/query-language-reference.html#fuzzy">fuzzy</a> matching
+  to match in string attributes with configurable edit distance - field configuration:
+</p>
+<pre>
+field album type string {
+    indexing:  summary | attribute
+    attribute: fast-search
+}
+</pre>
+<pre>
+$ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuzzy("A Head Full of Dreems"))'
+</pre>
+<p>
+  Fuzzy matching is great for misspellings.
+  See use of <em>prefixLength</em> and <em>fast-search</em> in the <a href="reference/query-language-reference.html#fuzzy">
+  reference</a>.
 </p>
 
 
@@ -347,20 +387,59 @@ by sending weight, significance and connectedness with the query:
 
 
 
-<h2 id="match-configuration-debug">Match Configuration Debug</h2>
+<h2 id="example-use-case">Example use case</h2>
 <p>
-Sometimes it is useful to inspect generated configuration
-to understand or validate the match configuration.
-Run this to find the value of the -i argument below:
+  <em>What is the best way to index short word-length documents,
+    like names of all locations/towns in the world, such that they:</em>
+</p>
+<ul>
+  <li><em>Are robust to misspelling in user queries eg: "Amsterdam" --> "amstredam"</em></li>
+  <li><em>Are cross-lingual for search, e.g.: "America" --> "美国"</em></li>
+</ul>
+<p>
+  To make this multilingual,
+  use an <a href="reference/schema-reference.html#array">array&lt;string&gt;</a> field to store all the alternatives.
+  One can also translate to a canonical single language used in indexing at query time,
+  but in cases with very short documents, opt for doing it indexing time.
+</p>
+<p>Alternatives for matching with spell checking:</p>
+<ol>
+  <li>Make the field an attribute and use <a href="#fuzzy-match">fuzzy matching</a>.</li>
+  <li>Make the field an index with <a href="#n-gram-match">gram matching</a>.</li>
+  <li>
+    Having an array of alternatives anyway, just stuff all the misspellings to match into it.
+    Consider using a <a href="reference/schema-reference.html#weightedset">weighted set</a> instead
+    to weight them by closeness to the original.
+  </li>
+</ol>
+<p>
+  3. will give the cheapest queries and exact control over misspelled matching,
+  but a larger index, more work for the developer, and adjusting spell correction becomes more complicated.
+  1. will be most expensive, but maybe also most convenient
+  There are currently no rank signals giving you the match quality.
+  2. Is in between, and will probably work best when incorporating ranking signals that use proximity
+  (such as e.g. <a href="nativerank.html">nativeRank</a> but not <a href="reference/bm25.html">bm25</a>).
+</p>
+<p>
+  Read <a href="https://blog.vespa.ai/simplify-search-with-multilingual-embeddings">
+  Simplify Search with Multilingual Embedding Models</a> for semantic matching and ranking.
+</p>
+
+
+
+<h2 id="appendix-match-configuration-debug">Appendix: Match Configuration Debug</h2>
+<p>
+  Inspect generated configuration to understand or validate the match configuration.
+  Run this to find the value of the -i argument used below:
 </p>
 <pre>
-$ <a href="reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a>
+$ docker exec vespa sh -c <a href="reference/vespa-cmdline-tools.html#vespa-configproxy-cmd">vespa-configproxy-cmd</a> | grep IndexingProcessor
+
+  vespa.configdefinition.ilscripts,<span class="pre-hilite">default/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor</span>, ...
 </pre>
-
-
-<h3 id="indexed-search">Indexed Search</h3>
 <p>
-Note the difference for the <em>artist</em> and <em>album</em> fields:
+  Start over, deploy with the indexing settings below and feed data.
+  Note the difference for the <em>artist</em> (with exact matching) and <em>album</em> fields:
 </p>
 <pre>
 field artist type string {
@@ -371,8 +450,10 @@ field album type string {
     indexing: summary | index
 }
 
-$ <a href="reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a> -n vespa.configdefinition.ilscripts \
-    -i container/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor
+$ docker exec vespa sh -c '<a href="reference/vespa-cmdline-tools.html#vespa-get-config">vespa-get-config</a> \
+  -n vespa.configdefinition.ilscripts \
+  -i default/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor'
+
 maxtermoccurrences 100
 fieldmatchmaxlength 1000000
 ilscript[0].doctype "music"
@@ -380,10 +461,8 @@ ilscript[0].docfield[0] "artist"
 ilscript[0].docfield[1] "album"
 ilscript[0].docfield[2] "year"
 ilscript[0].docfield[3] "category_scores"
-ilscript[0].docfield[4] "tags"
-ilscript[0].content[0] "clear_state | guard { input artist | exact                          | summary artist | index artist; }"
-ilscript[0].content[1] "clear_state | guard { input album  | tokenize normalize stem:"BEST" | summary album | index album; }"
+ilscript[0].content[0] "clear_state | guard { input artist | exact | summary artist | index artist; }"
+ilscript[0].content[1] "clear_state | guard { input album | tokenize normalize stem:"BEST" | summary album | index album; }"
 ilscript[0].content[2] "clear_state | guard { input year | summary year | attribute year; }"
 ilscript[0].content[3] "clear_state | guard { input category_scores | summary category_scores | attribute category_scores; }"
-ilscript[0].content[4] "input tags | passthrough tags"
 </pre>
