@@ -69,7 +69,7 @@ def vespa_remove(endpoint, doc_ids, namespace, doc_type):
 
 
 def vespa_feed(endpoint, feed, namespace, doc_type):
-    if doc_type == "paragraph" or doc_type == "term" or doc_type == "term":
+    if doc_type == "paragraph" or doc_type == "term" or doc_type == "doc":
         splits = re.split(r'/|\.', endpoint)
         app_string = splits[3] + '.' + splits[2]
         print(subprocess.run(['./vespa', 'feed', '-a', app_string, '-t', endpoint, feed], capture_output=True))
