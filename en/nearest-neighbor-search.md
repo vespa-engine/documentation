@@ -211,7 +211,6 @@ Without `index`, no extra data structures are built for the field,
 and the distance-metric setting is used when calculating the distance at query-time.
 It still makes sense to have the metric as a field-property,
 as the field values are often produced using a specific distance metric.
-Finally, without `index` there is no need to restart Vespa after redeploying with a new distance metric.
 
 ### Configure rank profiles for nearest neighbor search
 Lastly, one need to configure how to [rank](ranking.html) products which 
