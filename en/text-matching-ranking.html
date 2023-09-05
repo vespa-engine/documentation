@@ -49,9 +49,9 @@ $ jq .fields.album < sample-apps/album-recommendation/ext/documents.jsonl
 
 <pre>
 $ docker exec vespa sh -c 'vespa-proton-cmd --local triggerFlush &amp;&amp; \
-    <a href="reference/vespa-cmdline-tools.html#vespa-index-inspect">vespa-index-inspect</a> dumpwords \
-    --indexdir /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/index/index.flush.1 \
-    --field album'
+  <a href="reference/vespa-cmdline-tools.html#vespa-index-inspect">vespa-index-inspect</a> dumpwords \
+  --indexdir /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/index/index.flush.1 \
+  --field album'
 
 a	1
 all	2
@@ -274,6 +274,7 @@ field album type string {
     There are however no optimizing data structures for query speed,
     it runs the expression over all attribute values.
 </p>
+<!-- ToDo: Add example -->
 
 
 <h3 id="fuzzy-match">Fuzzy Match</h3>
@@ -386,7 +387,47 @@ by sending weight, significance and connectedness with the query:
 
 
 
-<h2 id="match-configuration-debug">Match Configuration Debug</h2>
+<h2 id="example-use-case">Example use case</h2>
+<p>
+  <em>What is the best way to index short word-length documents,
+    like names of all locations/towns in the world, such that they:</em>
+</p>
+<ul>
+  <li><em>Are robust to misspelling in user queries eg: "Amsterdam" --> "amstredam"</em></li>
+  <li><em>Are cross-lingual for search, e.g.: "America" --> "美国"</em></li>
+</ul>
+<p>
+  To make this multilingual,
+  use an <a href="reference/schema-reference.html#array">array&lt;string&gt;</a> field to store all the alternatives.
+  One can also translate to a canonical single language used in indexing at query time,
+  but in cases with very short documents, opt for doing it indexing time.
+</p>
+<p>Alternatives for matching with spell checking:</p>
+<ol>
+  <li>Make the field an attribute and use <a href="#fuzzy-match">fuzzy matching</a>.</li>
+  <li>Make the field an index with <a href="#n-gram-match">gram matching</a>.</li>
+  <li>
+    Having an array of alternatives anyway, just stuff all the misspellings to match into it.
+    Consider using a <a href="reference/schema-reference.html#weightedset">weighted set</a> instead
+    to weight them by closeness to the original.
+  </li>
+</ol>
+<p>
+  3. will give the cheapest queries and exact control over misspelled matching,
+  but a larger index, more work for the developer, and adjusting spell correction becomes more complicated.
+  1. will be most expensive, but maybe also most convenient
+  There are currently no rank signals giving you the match quality.
+  2. Is in between, and will probably work best when incorporating ranking signals that use proximity
+  (such as e.g. <a href="nativerank.html">nativeRank</a> but not <a href="reference/bm25.html">bm25</a>).
+</p>
+<p>
+  Read <a href="https://blog.vespa.ai/simplify-search-with-multilingual-embeddings">
+  Simplify Search with Multilingual Embedding Models</a> for semantic matching and ranking.
+</p>
+
+
+
+<h2 id="appendix-match-configuration-debug">Appendix: Match Configuration Debug</h2>
 <p>
   Inspect generated configuration to understand or validate the match configuration.
   Run this to find the value of the -i argument used below:
