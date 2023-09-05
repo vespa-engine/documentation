@@ -79,7 +79,7 @@ def feed_using_vespa_feed(endpoint, feed):
 
 
 def vespa_feed(endpoint, feed, namespace, doc_type):
-    if doc_type == "paragraph" or doc_type == "term" or doc_type == "term":
+    if doc_type == "paragraph" or doc_type == "term" or doc_type == "doc":
         feed_using_vespa_feed(endpoint, feed)
         return
     document_id = ''
