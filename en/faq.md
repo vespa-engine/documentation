@@ -212,7 +212,7 @@ Groups can be multi-level.
 
 #### Is filters supported?
 Add filters to the query using [YQL](query-language.html)
-using boolean, numeric and [text matching](text-matching-ranking.html). Query terms can be annotated
+using boolean, numeric and [text matching](text-matching.html). Query terms can be annotated
 as filters, which means that they are not highlighted when bolding results. 
 
 #### How to query for similar items?

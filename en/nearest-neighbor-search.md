@@ -12,7 +12,7 @@ This is supported in Vespa using the
 This operator can be combined with other filters or query terms using the
 [Vespa query language](query-language.html),
 making it easy to create hybrid solutions that combine modern vector based techniques with
-[traditional information retrieval](text-matching-ranking.html).
+[traditional information retrieval](text-matching.html).
 
 Also try [pyvespa examples](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
 

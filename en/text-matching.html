@@ -1,12 +1,14 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Text Matching and Ranking"
+title: "Text Matching"
 redirect_from:
 - /documentation/text-matching-ranking.html
+- /en/text-matching-ranking.html
 ---
 
+<!-- ToDo: Rewrite to better intro -->
 <p>
-  Refer to the <a href="ranking.html">ranking</a> introduction for Vespa ranking,
+  Refer to the <a href="ranking.html#text-ranking">text ranking</a> introduction for ranking,
   and review the different <a href="reference/schema-reference.html#match">match modes</a>.
   See the <a href="tutorials/text-search.html">text search</a> and
   <a href="tutorials/text-search-ml.html">text search through ML</a> tutorials.
@@ -14,12 +16,15 @@ redirect_from:
   <a href="semantic-qa-retrieval.html">Semantic Retrieval for Question Answering Applications</a>.
   Finally, refer to <a href="linguistics.html">Linguistics</a> for details.
 </p>
+<p>
+  This guide has examples based on the <a href="vespa-quick-start.html">quick start</a>.
+  Use this, reconfigure the schema field, deploy and stop after the feeding step.
+</p>
 
 
-<h2 id="matching">Matching</h2>
 
+<h2 id="index-and-attribute">Index and attribute</h2>
 <p>Text search is normally best run using a string field in <em>index</em> mode:</p>
-
 <pre>
 field album type string {
     indexing: summary | index
@@ -33,7 +38,6 @@ and query tracing to understand matching details.</p>
 <p>
   The <em>album</em> field has <a href="reference/schema-reference.html#indexing">index</a> mode.
   For text fields, this enables the transformations below, and increases query recall.
-  Use the <a href="vespa-quick-start.html">quick start</a> guide and stop after the feeding step.
 </p>
 
 <pre>
@@ -161,7 +165,8 @@ Read more about the attribute <a href="reference/schema-reference.html#match">wo
 <!-- ToDo: Add more match examples for indexed search-->
 
 
-<h3 id="query-trace">Query Trace</h3>
+
+<h2 id="query-trace">Query Trace</h2>
 <p>
   Adding <a href="reference/query-api-reference.html#trace.level">trace.level=2</a>
   gives insight when testing queries - example attribute lowercasing
@@ -176,7 +181,8 @@ $ vespa query 'select * from music where album contains "Liebe ist für alle da"
 <p>Also try query tracing to see how query parsing changes with <em>index</em> and <em>attribute</em> indexing modes.</p>
 
 
-<h3 id="prefix-match">Prefix Match</h3>
+
+<h2 id="prefix-match">Prefix Match</h2>
 <p>
   Use the <a href="https://docs.vespa.ai/en/reference/query-language-reference.html#prefix">prefix</a> annotation
   to match string prefixes in attributes of type string:
@@ -209,9 +215,9 @@ schema company {
   Adding "Goldman" and "Sachs" will match query terms like "Gold" and "Sach".
 </p>
 
-<h3 id="n-gram-match">N-Gram Match</h3>
 
-<h4 id="n-gram-indexing">N-Gram indexing</h4>
+
+<h2 id="n-gram-match">N-Gram Match</h2>
 <p>
     This is most often used in languages that are not tokenized (example: many Asian languages).
     Example - this will index "A Head Full of Dreams" to:
@@ -266,8 +272,10 @@ field album type string {
 <p>
     This will enable matching of any 2-term substring, which makes more sense in traditional Chinese than in English.
 </p>
-<h3 id="regexp-match">Regular expression Match</h3>
-<h4 id="regular-expressions">Regular expressions</h4>
+
+
+
+<h2 id="regexp-match">Regular expression Match</h2>
 <p>
     Using <a href="reference/query-language-reference.html#matches">regular expressions</a>
     is supported in attributes.
@@ -277,7 +285,8 @@ field album type string {
 <!-- ToDo: Add example -->
 
 
-<h3 id="fuzzy-match">Fuzzy Match</h3>
+
+<h2 id="fuzzy-match">Fuzzy Match</h2>
 <p>
   Use <a href="reference/query-language-reference.html#fuzzy">fuzzy</a> matching
   to match in string attributes with configurable edit distance - field configuration:
@@ -298,92 +307,6 @@ $ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuz
 </p>
 
 
-<h2 id="ranking">Ranking</h2>
-
-<p>The default ranking is the first-phase function <code>nativeRank</code>, that is a function returning the value of
-the <a href="nativerank.html">nativeRank rank feature</a>, and no second-phase.</p>
-
-<p>An good simple alternative to <code>nativeRank</code> for text ranking is using the
-<a href="reference/bm25.html">BM25</a> rank feature.</p>
-
-<p>If the expression is written manually, it might be most convenient to
-stick with using the <code>fieldMatch(<em>name</em>)</code> feature for each field.
-This feature combines the more basic fieldMatch features in a reasonable way.
-A good way to combine the fieldMatch score of each field is to use a weighted average as explained above.
-Another way is to combine the field match scores
-using the <code>fieldMatch(<em>name</em>).weight/significance/importance</code> features
-which takes term weight or rareness or both into account
-and allows a normalized score to be produced by simply summing the product of this feature
-and any other normalized per-field score for each field.
-In addition, some attribute value(s) must usually be included
-to determine the a priori quality of each document.
-</p><p>
-For example, assuming the title field is more important than the body field,
-create a ranking expression which gives more weight to that field, as in the example above.
-Vespa contains some built-in convenience support for this -
-weights can be set in the individual fields by <code>weight: &lt;number&gt;</code>
-and the feature <code>match</code> can be used to get a weighted average
-of the fieldMatch scores of each field.
-The overall ranking expression might contain other ranking dimensions than just text match,
-like freshness, the quality of the document, or any other property of the document or query.
-</p>
-
-
-<h3 id="weight-significance-and-connectedness">Weight, significance and connectedness</h3>
-<p>
-Modify the values of the match features from the query
-by sending weight, significance and connectedness with the query:
-</p>
-<table class="table">
-  <thead></thead><tbody>
-    <tr><th>Weight</th><td><p>
-      Set query term <a href="reference/query-language-reference.html#weight">weight</a>.
-      Example: <code>... where (title contains ({weight:200}"heads") AND title contains "tails")</code>
-      specifies that <code>heads</code> is twice as important for the final rank score than <code>tails</code>
-      (the default weight is 100).
-      </p><p>
-      Weight is used in <a href="reference/rank-features.html#fieldMatch(name).weight">
-      fieldMatch(<em>name</em>).weight</a>, which can be multiplied with
-      <a href="reference/rank-features.html#fieldMatch(name)">
-      fieldMatch(<em>name</em>)</a> to yield a weighted score for the field,
-      and in <a href="reference/rank-features.html#fieldMatch(name).weightedOccurrence">
-      fieldMatch(<em>name</em>).weightedOccurrence</a>
-      to get an occurrence score which is higher if higher weighted terms occurs most.
-      Configure static field weights in the
-      <a href="reference/schema-reference.html#weight">schema</a>.</p></td>
-    </tr><tr><th>Significance</th><td><p>
-      An indication of how rare a term is in the corpus of the language, used by a number
-      of text matching <a href="reference/rank-features.html">rank features</a>.
-      This can be set explicitly for each term in
-      <a href="reference/query-language-reference.html#significance">the query</a>,
-      or by calling item.setSignificance() in a <a href="searcher-development.html">Searcher</a>.
-      With indexed search, default significance values are calculated automatically during indexing.
-      However, unless the indexed corpus is representative of the word frequencies in the user's language,
-      relevance can be improved by passing significances derived from a representative corpus.
-      Relative significance is accessible in ranking through the
-      <a href="reference/rank-features.html#fieldMatch(name).significance">
-      fieldMatch(<em>name</em>).significance</a> feature.
-      Weight and significance are also averaged into
-      <a href="reference/rank-features.html#fieldMatch(name).importance">
-      fieldMatch(<em>name</em>).importance</a> for convenience.</p></td>
-    </tr><tr><th>Connectedness</th><td><p>
-      Signify the degree of connection between adjacent terms in the query -
-      set query term <a href="reference/query-language-reference.html#connectivity">connectivity</a> to another term.
-      For example, the query <code>new york newspaper</code> should have a higher connectedness
-      between the terms "new" and "york" than between "york" and "newspaper" to rank documents higher
-      if they contain "new york" as a phrase.
-      Term connectedness is taken into account by
-      <a href="reference/rank-features.html#fieldMatch(name).proximity">
-      fieldMatch(<em>name</em>).proximity</a>,
-      which is also an important contribution to
-      <a href="reference/rank-features.html#fieldMatch(name)">fieldMatch(<em>name</em>)</a>.
-      Connectedness is a normalized value which is 0.1 by default.
-      It must be set by a custom Searcher,
-      looking up connectivity information from somewhere - there is no query syntax for it.</p></td>
-      <!-- ToDo: Use connectivity and id query annotations to do this? -->
-    </tr>
-  </tbody>
-</table>
 
 
 
@@ -427,7 +350,7 @@ by sending weight, significance and connectedness with the query:
 
 
 
-<h2 id="appendix-match-configuration-debug">Appendix: Match Configuration Debug</h2>
+<h2 id="appendix-match-configuration-debugging">Appendix: Match Configuration Debugging</h2>
 <p>
   Inspect generated configuration to understand or validate the match configuration.
   Run this to find the value of the -i argument used below:
