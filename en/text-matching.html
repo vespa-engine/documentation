@@ -16,6 +16,7 @@ redirect_from:
   <a href="semantic-qa-retrieval.html">Semantic Retrieval for Question Answering Applications</a>.
   Finally, refer to <a href="linguistics.html">Linguistics</a> for details.
 </p>
+<p>Using <a href="#query-trace">query tracing</a> is useful when debugging text matching.</p>
 <p>
   This guide has examples based on the <a href="vespa-quick-start.html">quick start</a>.
   Use this, reconfigure the schema field, deploy and stop after the feeding step.
@@ -160,25 +161,7 @@ Hence, values are matched in full, including whitespace.
 When searching attributes, both query terms and attribute data are lowercased before matching.
 Read more about the attribute <a href="reference/schema-reference.html#match">word match mode</a>.
 </p>
-
-
 <!-- ToDo: Add more match examples for indexed search-->
-
-
-
-<h2 id="query-trace">Query Trace</h2>
-<p>
-  Adding <a href="reference/query-api-reference.html#trace.level">trace.level=2</a>
-  gives insight when testing queries - example attribute lowercasing
-  (observe that queries with "Liebe" and "liebe" give the same result):
-</p>
-<pre>
-$ vespa config set target local
-$ vespa query 'select * from music where album contains "Liebe ist für alle da"' \
-  ranking=rank_albums \
-  trace.level=2
-</pre>
-<p>Also try query tracing to see how query parsing changes with <em>index</em> and <em>attribute</em> indexing modes.</p>
 
 
 
@@ -187,6 +170,11 @@ $ vespa query 'select * from music where album contains "Liebe ist für alle da"
   Use the <a href="https://docs.vespa.ai/en/reference/query-language-reference.html#prefix">prefix</a> annotation
   to match string prefixes in attributes of type string:
 </p>
+<pre>
+field album type string {
+    indexing: summary | attribute
+}
+</pre>
 <pre>
 $ vespa query 'select * from music where album contains ({prefix: true}"a hea")'
 </pre>
@@ -214,6 +202,51 @@ schema company {
   Use the <a href="reference/advanced-indexing-language.html">indexing-language</a> to split the string, as shown above.
   Adding "Goldman" and "Sachs" will match query terms like "Gold" and "Sach".
 </p>
+
+
+
+<h2 id="fuzzy-match">Fuzzy Match</h2>
+<p>
+  Use <a href="reference/query-language-reference.html#fuzzy">fuzzy</a> matching
+  to match in string attributes with configurable edit distance - field configuration:
+</p>
+<pre>
+field album type string {
+    indexing:  summary | attribute
+    attribute: fast-search
+}
+</pre>
+<pre>
+$ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuzzy("A Head Full of Dreems"))'
+</pre>
+<p>
+  Fuzzy matching is great for misspellings.
+  See use of <em>prefixLength</em> and <em>fast-search</em> in the <a href="reference/query-language-reference.html#fuzzy">
+  reference</a>.
+</p>
+
+
+
+<h2 id="regexp-match">Regular expression Match</h2>
+<p>
+  Using <a href="reference/query-language-reference.html#matches">regular expressions</a>
+  is supported in attributes.
+  There are however no optimizing data structures for query speed,
+  it runs the expression over all attribute values.
+</p>
+<pre>
+field album type string {
+    indexing:  summary | attribute
+}
+</pre>
+<p>Example, matching from start of string:</p>
+<pre>
+$ vespa query 'select * from music where album matches "^a head fu[l]+ of dreams"'
+</pre>
+<p>A substring search:</p>
+<pre>
+$ vespa query 'select * from music where album matches "head"'
+</pre>
 
 
 
@@ -275,41 +308,6 @@ field album type string {
 
 
 
-<h2 id="regexp-match">Regular expression Match</h2>
-<p>
-    Using <a href="reference/query-language-reference.html#matches">regular expressions</a>
-    is supported in attributes.
-    There are however no optimizing data structures for query speed,
-    it runs the expression over all attribute values.
-</p>
-<!-- ToDo: Add example -->
-
-
-
-<h2 id="fuzzy-match">Fuzzy Match</h2>
-<p>
-  Use <a href="reference/query-language-reference.html#fuzzy">fuzzy</a> matching
-  to match in string attributes with configurable edit distance - field configuration:
-</p>
-<pre>
-field album type string {
-    indexing:  summary | attribute
-    attribute: fast-search
-}
-</pre>
-<pre>
-$ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuzzy("A Head Full of Dreems"))'
-</pre>
-<p>
-  Fuzzy matching is great for misspellings.
-  See use of <em>prefixLength</em> and <em>fast-search</em> in the <a href="reference/query-language-reference.html#fuzzy">
-  reference</a>.
-</p>
-
-
-
-
-
 <h2 id="example-use-case">Example use case</h2>
 <p>
   <em>What is the best way to index short word-length documents,
@@ -347,6 +345,22 @@ $ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuz
   Read <a href="https://blog.vespa.ai/simplify-search-with-multilingual-embeddings">
   Simplify Search with Multilingual Embedding Models</a> for semantic matching and ranking.
 </p>
+
+
+
+<h2 id="query-trace">Query Trace</h2>
+<p>
+  Adding <a href="reference/query-api-reference.html#trace.level">trace.level=2</a>
+  gives insight when testing queries - example attribute lowercasing
+  (observe that queries with "Liebe" and "liebe" give the same result):
+</p>
+<pre>
+$ vespa config set target local
+$ vespa query 'select * from music where album contains "Liebe ist für alle da"' \
+  ranking=rank_albums \
+  trace.level=2
+</pre>
+<p>Also try query tracing to see how query parsing changes with <em>index</em> and <em>attribute</em> indexing modes.</p>
 
 
 
