@@ -70,7 +70,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     extra processing during querying.
     In the sample app there is a single custom searcher which builds the query for auto-suggestions,
     using a combination of [fuzzy matching](reference/query-language-reference.html#fuzzy)
-    and [prefix search](text-matching-ranking.html#prefix-match).
+    and [prefix search](text-matching.html#prefix-match).
 
 * [Custom handlers](jdisc/developing-request-handlers.html)
 
