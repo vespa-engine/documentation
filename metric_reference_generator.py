@@ -107,7 +107,7 @@ class UnitReference:
 def parse_base_units(content):
     base_unit_dict = {}
     for line in content.split("\n"):
-        matcher = re.search(r"\s*([a-zA-Z_]+)\(\"([a-z0-9]+)\"", line)
+        matcher = re.search(r"\s*([a-zA-Z_]+)\(\"([a-z0-9 ]+)\"", line)
         if matcher:
             base_unit_dict[matcher.group(1)] = matcher.group(2)
     return base_unit_dict
@@ -155,7 +155,7 @@ def parse_metrics(content, units, metric_type):
             metric["enum"] = matcher.group(1)
             metric["name"] = matcher.group(2)
             metric["unit"] = units[matcher.group(3)].name
-            metric["description"] = matcher.group(4)
+            metric["description"] = matcher.group(4).replace('\\', '')
             metric["metric_type"] = metric_type
             metrics.append(metric)
     return metrics
@@ -224,7 +224,7 @@ def generate_docs(metric_types, units):
 
 def get_metric_set(metric_set, metrics_superset, suffixes):
     response = requests.get(
-        f'https://raw.githubusercontent.com/vespa-engine/vespa/master/config-model/src/main/java/com/yahoo/vespa/model/admin/monitoring/{metric_set.enum_filename}')
+        f'https://raw.githubusercontent.com/vespa-engine/vespa/master/metrics/src/main/java/ai/vespa/metrics/set/{metric_set.enum_filename}')
     return parse_metric_set(response.text, metrics_superset, suffixes)
 
 
