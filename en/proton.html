@@ -7,11 +7,12 @@ redirect_from:
 ---
 
 <p>
-  Proton is Vespa's search core. Proton maintains disk and memory structures for documents.
-  As the data is dynamic, these structures are periodically optimized by
-  <a href="#proton-maintenance-jobs">maintenance jobs</a> and the resource footprint of these background jobs
-  are primarily controlled by the
-  <a href="reference/services-content.html#feeding-concurrency">concurrency</a> setting.
+  Proton is Vespa's search core and runs on each content node as the <em>vespa-proton-bin</em> process.
+  Proton maintains disk and memory structures for documents (organized per document type),
+  handles <a href="reads-and-writes.html#operations">read and write operations</a>,
+  and execution of <a href="#queries">queries</a>.
+  As the document data is dynamic, disk and memory structures are periodically optimized by
+  <a href="#proton-maintenance-jobs">maintenance jobs</a>.
 </p>
 <p>
   The content node has a <em>bucket management system</em>
@@ -58,10 +59,10 @@ This local id is used to address the document in the document store.
 The document meta store also maintains information on the
 state of the buckets that are present in the sub-database.
 </p><p>
-The sub-databases are maintained by the <em>index maintainer</em>.
+The sub-databases are maintained by the <em>Maintenance Controller</em>.
 The document distribution changes as the system is resized.
 When the number of nodes in the system changes,
-the index maintainer will move documents between the Ready and
+the Maintenance Controller will move documents between the Ready and
 Not Ready sub-databases to reflect the new distribution.
 When an entry in the Removed sub-database gets old it is purged.
 The sub-databases are:
@@ -79,7 +80,7 @@ The sub-databases are:
     </tr><tr>
       <th>Ready</th>
       <td>
-        Maintains an index of all <em>ready</em> documents and keeps them searchable.
+        Maintains attributes and indexes of all <em>ready</em> documents and keeps them searchable.
         One of the ready copies is <em>active</em> while the rest are <em>not active:</em>
         <table class="table">
           <tr>
@@ -110,7 +111,6 @@ The sub-databases are:
 </table>
 
 
-
 <h2 id="transaction-log">Transaction log</h2>
 <p>
 Content nodes have a transaction log to persist mutating operations.
@@ -138,6 +138,11 @@ like attribute vectors and memory index on shutdown, for quicker startup after s
   and <a href="document-summaries.html">summary fields</a>.
 </p>
 <p>
+The Index in the Ready sub-database consists of a memory index and one or more disk indexes.
+Mutating document operations are applied to the memory index,
+which is <a href="#memory-index-flush">flushed</a> regularly.
+Flushed memory indexes are <a href="#disk-index-fusion">merged</a> with the primary disk index.
+</p><p>
 Proton stores position information in text indices by default, for proximity relevance -
   <code>posocc</code> (below).
 All the occurrences of a term is stored in the posting list, with its position.
@@ -187,9 +192,22 @@ drwxr-xr-x 74 org users    4096 Oct 29 06:11 ..
 </p>
 
 
+<h2 id="attributes">Attributes</h2>
+<p>
+<a href="attributes.html">Attribute</a> fields are in-memory fields used for
+matching, ranking, sorting and grouping.
+Each attribute is a separate component that consists of a set of
+<a href="attributes.html#data-structures">data structures</a>
+to store values for that field across all documents in a sub-database.
+Attributes are managed by the Ready sub-database.
+Some attributes can also be managed by the Not Ready sub-database,
+see <a href="attributes.html#fast-access">high-throughput updates</a> for details.
+</p>
+
+
 <h2 id="document-store">Document store</h2>
 <p>
-  Documents are stored in the <em>document store</em>.
+  Documents are stored as compressed serialized blobs in the <em>document store</em>.
   Put, update and remove operations are persisted in the <a href="#transaction-log">transaction log</a>
   before updating the document in the document store.
   The operation is ack'ed to the client and the result of the operation is immediately seen in search results.
@@ -242,9 +260,12 @@ Notes:
   Refer to <a href="reference/services-content.html#summary">summary tuning</a> for details.
 </p>
 <p>
-  Defragmentation status is best observed by tracking <em>max_bucket_spread</em> over time,
-  a sawtooth pattern is normal for corpora that change over time.
-  The <em>document_store_compact</em> metric tracks when proton is running compaction jobs.
+  Defragmentation status is best observed by tracking the
+  <a href="reference/searchnode-metrics-reference.html#content_proton_documentdb_ready_document_store_max_bucket_spread">max_bucket_spread</a>
+  metric over time.
+  A sawtooth pattern is normal for corpora that change over time.
+  The <a href="reference/searchnode-metrics-reference.html#content_proton_documentdb_job_document_store_compact">document_store_compact</a>
+  metric tracks when proton is running the document store compaction job.
   Compaction settings can be set too tight, in that case, the metric is always, or close to, 1.
 </p>
 <p>
@@ -265,7 +286,7 @@ Notes:
 </p>
 <p>
   The first document read in a visit operation for a bucket will read a chunk from the .dat file into memory.
-  Subsequent document accesses are served be a memory lookup only.
+  Subsequent document accesses are served by a memory lookup only.
   The chunk size is configured by
   <a href="reference/services-content.html#summary-store-logstore-chunk-maxsize">maxsize</a>:
 </p>
@@ -312,7 +333,7 @@ Notes:
   Part of this mapping is persisted in the .idx-file paired to the .dat file.
   The memory used by the document store is linear with number of documents and updates to these.
 </p><p>
-  The metric <em>content.proton.documentdb.ready.document_store.memory_usage.allocated_bytes</em>
+  The metric <a href="reference/searchnode-metrics-reference.html#content_proton_documentdb_ready_document_store_memory_usage_allocated_bytes">content.proton.documentdb.ready.document_store.memory_usage.allocated_bytes</a>
   gives the size in memory -
   use the <a href="reference/state-v1.html#state-v1-metrics">metric API</a> to find it.
   A rule of thumb is 12 bytes per document.
@@ -731,8 +752,15 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
   This section describes the custom extensions of the proton custom component state API.
   Component status can be found by HTTP GET at <code>http://host:stateport/state/v1/custom/component</code>.
   This gives an overview of the relevant search node components and their internal state.
-  Note that this is not a stable API, and it will expand and change between releases.
+  Note that this is <strong>not</strong> a stable API, and it will expand and change between releases.
 </p>
+<p>
+  Run <a href="reference/vespa-cmdline-tools.html#vespa-model-inspect">vespa-model-inspect</a>
+  to find the JSON HTTP stateport:
+</p>
+<pre>
+vespa-model-inspect service searchnode
+</pre>
 <p>
   Example <code>state/v1/custom/component</code>:
 </p>
@@ -747,12 +775,15 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
             },
             "documents": {
                 "active": 10,
-                "indexed": 10,
-                "stored": 10,
+                "ready": 10,
+                "total": 10,
                 "removed": 0
             },
             "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype"
         }
+    },
+    "threadpools": {
+        "url": "http://host:stateport/state/v1/custom/component/threadpools"
     },
     "matchengine": {
         "status": {
@@ -765,6 +796,21 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
     },
     "tls": {
         "url": "http://host:stateport/state/v1/custom/component/tls"
+    },
+    "hwinfo": {
+        "url": "http://host:stateport/state/v1/custom/component/hwinfo"
+    },
+    "resourceusage": {
+        "url": "http://host:stateport/state/v1/custom/component/resourceusage",
+        "disk": 0.25,
+        "memory": 0.35,
+        "attribute_address_space": 0
+    },
+    "session": {
+        "search": {
+            "url": "http://host:stateport/state/v1/custom/component/session/search",
+            "numSessions": 0
+        }
     }
 }
 {% endhighlight %}</pre>
@@ -780,8 +826,8 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
     },
     "documents": {
         "active": 10,
-        "indexed": 10,
-        "stored": 10,
+        "ready": 10,
+        "total": 10,
         "removed": 0
     },
     "subdb": {
@@ -795,11 +841,15 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
             "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/subdb/notready"
         }
     },
+    "threadingservice": {
+        "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/threadingservice"
+    },
+    "bucketdb": {
+        "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/bucketdb",
+        "numBuckets": 1
+    },
     "maintenancecontroller": {
         "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/maintenancecontroller"
-    },
-    "session": {
-        "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/session"
     }
 }
 {% endhighlight %}</pre>
