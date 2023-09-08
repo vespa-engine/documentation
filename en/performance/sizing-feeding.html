@@ -37,7 +37,6 @@ redirect_from:
 </p>
 
 
-
 <h2 id="content-node">Content node</h2>
 <p>
   The content node runs the <a href="../proton.html">proton</a> process - overview:
@@ -48,9 +47,6 @@ redirect_from:
   this guide starts with the simplest examples and then adds optimizations and complexity.
   Flushing of index structures is covered at the end of this guide.
 </p>
-
-
-
 
 
 <h2 id="index">Index</h2>
@@ -153,6 +149,152 @@ $ <a href="../reference/vespa-cmdline-tools.html#vespa-logfmt">vespa-logfmt</a> 
 https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/proton/server/summaryadapter.cpp#L75
 -->
 
+
+<h2 id="thread-pools">Thread pools</h2>
+<p>
+Several thread pools are involved when handling write operations on a content node.
+These are summarized in the following table.
+Metrics are available for each thread pool, see
+<a href="../reference/vespa-set-metrics-reference.html#searchnode-metrics">searchnode metrics</a>
+for details.
+To analyse performance and bottlenecks, the most relevant metrics are <em>.utilization</em> and <em>.queuesize</em>.
+In addition, <em>.saturation</em> is relevant for the <a href="#field-writer-executor">field writer</a> thread pool.
+</p>
+
+<table class="table">
+  <thead>
+  <tr>
+    <th>Thread pool</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+
+  <tr>
+    <th rowspan="4">master</th>
+    <td colspan="2">
+      <p id="master-thread">
+      Updates the
+      <a href="../attributes.html#document-meta-store">document metastore</a>,
+      prepares tasks to the <a href="#index-thread">index</a> and <a href="#summary-thread">summary</a> threads,
+      and splits a write operation into a subset of tasks to update individual
+      <a href="../proton.html#attributes">attributes</a>,
+      executed by the threads in the <a href="#field-writer-executor">field writer</a>.
+      </p>
+    </td>
+    <td></td>
+  </tr>
+  <tr>
+    <th>Threads</th>
+    <td>1</td>
+  </tr>
+  <tr>
+    <th>Instances</th>
+    <td>One instance per document database.</td>
+  </tr>
+  <tr>
+    <th style="white-space:nowrap;">Metric prefix</th>
+    <td><em>content.proton.documentdb.threading_service.master.</em></td>
+  </tr>
+
+  <tr>
+    <th rowspan="4">index</th>
+    <td colspan="2">
+      <p id="index-thread">
+      Manages writing of index fields in the <a href="../proton.html#index">memory index</a>.
+      It splits a write operation into a subset of tasks to update individual index fields,
+      executed by the threads in the <a href="#field-writer-executor">field writer</a>.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>Threads</th>
+    <td>1</td>
+  </tr>
+  <tr>
+    <th>Instances</th>
+    <td>One instance per document database.</td>
+  </tr>
+  <tr>
+    <th style="white-space:nowrap;">Metric prefix</th>
+    <td><em>content.proton.documentdb.threading_service.index.</em></td>
+  </tr>
+
+  <tr>
+    <th rowspan="4">summary</th>
+    <td colspan="2">
+      <p id="summary-thread">
+      Writes documents to the
+      <a href="../proton.html#document-store">document store</a>.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>Threads</th>
+    <td>1</td>
+  </tr>
+  <tr>
+    <th>Instances</th>
+    <td>One instance per document database.</td>
+  </tr>
+  <tr>
+    <th style="white-space:nowrap;">Metric prefix</th>
+    <td><em>content.proton.documentdb.threading_service.summary.</em></td>
+  </tr>
+
+  <tr>
+    <th rowspan="4">field writer</th>
+    <td colspan="2">
+      <p id="field-writer-executor">
+      The threads in this thread pool are used to invert index fields,
+      write changes to the memory index, and write changes to attributes.
+      Index fields and attribute fields across all document databases are randomly assigned
+      to one of the threads in this thread pool.
+      A field that is costly to write or update might become the bottleneck during feeding.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>Threads</th>
+    <td>Many, controlled by <a href="../reference/services-content.html#feeding">feeding concurrency</a>.</td>
+  </tr>
+  <tr>
+    <th>Instances</th>
+    <td>One instance shared between all document databases.</td>
+  </tr>
+  <tr>
+    <th style="white-space:nowrap;">Metric prefix</th>
+    <td><em>content.proton.executor.field_writer.</em></td>
+  </tr>
+
+  <tr>
+    <th rowspan="4">shared</th>
+    <td colspan="2">
+      <p id="shared-executor">
+      The threads in this thread pool are among other used to compress and
+      de-compress documents in the
+      <a href="../proton.html#document-store">document store</a>,
+      merge files as part of
+      <a href="../proton.html#disk-index-fusion">disk index fusion</a>,
+      and prepare for inserting a vector into a
+      <a href="../reference/schema-reference.html#index-hnsw">HNSW index</a>.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>Threads</th>
+    <td>Many, controlled by <a href="../reference/services-content.html#feeding">feeding concurrency</a>.</td>
+  </tr>
+  <tr>
+    <th>Instances</th>
+    <td>One instance shared between all document databases.</td>
+  </tr>
+  <tr>
+    <th style="white-space:nowrap;">Metric prefix</th>
+    <td><em>content.proton.executor.shared.</em></td>
+  </tr>
+
+</table>
 
 
 <h2 id="multivalue-attribute">Multivalue attribute</h2>
