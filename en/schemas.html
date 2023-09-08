@@ -194,8 +194,7 @@ fieldset default {
     fields: artist, title, album
 }
 
-$ENDPOINT/search/?
-  yql=select * from sources * where default contains "bob" and title contains "best"
+vespa query "select * from sources * where default contains \"bob\" and title contains \"best\""
 </pre>
 
 
@@ -269,12 +268,9 @@ set <a href="reference/query-api-reference.html#model.restrict">restrict</a>
 to a comma-separated list of schema names:
 </p>
 <pre>
-$ENDPOINT/search/?
-  yql=select * from sources * where title contains "bob"&amp;
+vespa query "select * from sources * where title contains \"bob\"" \
   <span class="pre-hilite">restrict=music,books</span>
 </pre>
-<!-- ToDo: Not sure if sources in YQL is the same as query param restrict, sources, or both ...
-           Clarify this in later commit -->
 
 
 
@@ -286,26 +282,39 @@ Applications can map many schemas to one content cluster.
 Use multiple content clusters if documents of different schemas have different performance characteristics -
 read more in the <a href="performance/sizing-search.html">serving scaling guide</a>.
 </p>
+<code>my-app/services.xml</code>:
 <pre>
-&lt;content id="items" version="1.0"&gt;
-    &lt;documents&gt;
-        &lt;document <span class="pre-hilite">type="music"</span> mode="index" /&gt;
-        &lt;document <span class="pre-hilite">type="books"</span> mode="index" /&gt;
-    &lt;/documents&gt;
-&lt;/content&gt;
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;services version="1.0"&gt;
+    &lt;container id="default" version="1.0"&gt;
+        &lt;search /&gt;
+        &lt;document-api /&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1" /&gt;
+        &lt;/nodes&gt;
+    &lt;/container&gt;
+    &lt;content id="items" version="1.0"&gt;
+        &lt;redundancy&gt;1&lt;/redundancy&gt;
+        &lt;documents&gt;
+            &lt;document <span class="pre-hilite">type="music"</span> mode="index" /&gt;
+            &lt;document <span class="pre-hilite">type="books"</span> mode="index" /&gt;
+        &lt;/documents&gt;
+        &lt;nodes&gt;
+            &lt;node hostalias="node1" distribution-key="0" /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
+&lt;/services&gt;
 </pre>
 <p>
 To limit a query to a subset of the content clusters,
-set <a href="reference/query-api-reference.html#model.sources">sources</a>
+set <a href="reference/query-language-reference.html#from-sources">from sources</a>
 to a comma-separated list of content cluster ids, e.g.:
 </p>
 <pre>
-$ENDPOINT/search/?
-  yql=select * from sources * where title contains "bob"&amp;
-  <span class="pre-hilite">sources=items,news</span>
+vespa query "select * from sources <span class="pre-hilite">items, news</span> where title contains \"bob\""
 </pre>
 <p>
-Both <em>restrict</em> and <em>sources</em> can be combined
+The request parameter <em>restrict</em> and <em>from sources</em> can be combined
 to search both a subset of document types and content clusters.
 </p>
 <p>
@@ -346,6 +355,7 @@ which is a feature to import field values at query time."%}
 <p>
   Both schemas <em>music</em> and <em>books</em> have the <em>title</em> field through inheritance:
 </p>
+<code>my-app/schemas/items.sd</code>:
 <pre>
 schema items {
     document items {
@@ -354,16 +364,22 @@ schema items {
         }
     }
 }
+</pre>
 
-schema books {
+<code>my-app/schemas/books.sd</code>:
+<pre>
+schema books <span class="pre-hilite">inherits items</span> {
     document books <span class="pre-hilite">inherits items</span> {
         field author type string {
             indexing: summary | index
         }
     }
 }
+</pre>
 
-schema music {
+<code>my-app/schemas/music.sd</code>:
+<pre>
+schema music <span class="pre-hilite">inherits items</span> {
     document music <span class="pre-hilite">inherits items</span> {
         field artist type string {
             indexing: summary | index
@@ -374,6 +390,7 @@ schema music {
 <p>
   This is equivalent to:
 </p>
+<code>my-app/schemas/books.sd</code>:
 <pre>
 schema books {
     document books {
@@ -385,7 +402,10 @@ schema books {
         }
     }
 }
+</pre>
 
+<code>my-app/schemas/music.sd</code>:
+<pre>
 schema music {
     document music  {
         field title type string {
@@ -414,8 +434,16 @@ schema music {
   Where fields define the document types, rank profiles define the computations over the documents.
   Rank profiles can be inherited:
 </p>
+
+<code>my-app/schemas/items.sd</code>:
 <pre>
 schema items {
+    document items {
+        field title type string {
+            indexing: summary | index
+        }
+    }
+
     rank-profile items_ranking_base {
         function title_score() {
             expression: fieldLength(title)
@@ -428,8 +456,17 @@ schema items {
         }
     }
 }
+</pre>
 
-schema books {
+<code>my-app/schemas/books.sd</code>:
+<pre>
+schema books <span class="pre-hilite">inherits items</span> {
+    document books inherits items {
+        field author type string {
+            indexing: summary | index
+        }
+    }
+
     rank-profile items_ranking <span class="pre-hilite">inherits items_ranking_base</span> {}
 
     rank-profile items_subschema_ranking <span class="pre-hilite">inherits items_ranking_base</span> {
@@ -441,8 +478,17 @@ schema books {
         }
     }
 }
+</pre>
 
-schema music {
+<code>my-app/schemas/music.sd</code>:
+<pre>
+schema music <span class="pre-hilite">inherits items</span> {
+    document music inherits items {
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+
     rank-profile items_ranking <span class="pre-hilite">inherits items_ranking_base</span> {}
 
     rank-profile items_subschema_ranking <span class="pre-hilite">inherits items_ranking_base</span> {
@@ -460,6 +506,7 @@ schema music {
   Pro-tip: Set this as the <em>default</em> rank profile
   by modifying the default <a href="query-profiles.html">query profile</a>:
 </p>
+<code>my-app/search/query-profiles/default.xml</code>:
 <pre>
 &lt;query-profile id="default"&gt;
     &lt;field name="ranking.profile"&gt;items_ranking&lt;/field&gt;
@@ -498,8 +545,18 @@ schema music {
   <a href="document-summaries.html">Document summaries</a> can inherit others defined in the same
   or an inherited schema.
 </p>
+<code>my-app/schemas/books.sd</code>:
 <pre>
 schema books {
+    document books {
+        field title type string {
+            indexing: summary | index
+        }
+        field author type string {
+            indexing: summary | index
+        }
+    }
+
     document-summary items_summary_tiny {
         summary title type string {}
     }
