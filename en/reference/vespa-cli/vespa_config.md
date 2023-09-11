@@ -30,13 +30,13 @@ most to least preferred:
 3. Global config value
 4. Default value
 
-The following flags/options can be configured:
+The following global flags/options can be configured:
 
 application
 
 Specifies the application ID to manage. It has three parts, separated by
 dots, with the third part being optional. This is only relevant for the "cloud"
-and "hosted" targets. See https://cloud.vespa.ai/en/tenant-apps-instances for
+and "hosted" targets. See [https://cloud.vespa.ai/en/tenant-apps-instances](https://cloud.vespa.ai/en/tenant-apps-instances) for
 more details. This has no default value. Examples: tenant1.app1,
 tenant1.app1.instance1
 
@@ -46,7 +46,7 @@ Specifies the container cluster to manage. If left empty (default) and the
 application has only one container cluster, that cluster is chosen
 automatically. When an application has multiple cluster this must be set a
 valid cluster name, as specified in services.xml. See
-[https://docs.vespa.ai/en/reference/services-container.html for more details.](https://docs.vespa.ai/en/reference/services-container.html for more details.)
+[https://docs.vespa.ai/en/reference/services-container.html](https://docs.vespa.ai/en/reference/services-container.html) for more details.
 
 color
 
@@ -74,18 +74,11 @@ e.g. vespa deploy or vespa query. Possible values are:
 - hosted: Connect to hosted Vespa (internal platform)
 - *url*: Connect to a platform running at given URL.
 
-wait
-
-Specifies the number of seconds to wait for a service to become ready or
-deployment to complete. Use this to have a potentially long-running command
-block until the operation is complete, e.g. with vespa deploy. Defaults to 0
-(no waiting)
-
 zone
 
 Specifies a custom dev or perf zone to use when connecting to a Vespa platform.
 This is only relevant for cloud and hosted targets. By default, a zone is
-chosen automatically. See https://cloud.vespa.ai/en/reference/zones for
+chosen automatically. See [https://cloud.vespa.ai/en/reference/zones](https://cloud.vespa.ai/en/reference/zones) for
 available zones. Examples: dev.aws-us-east-1c, perf.aws-us-east-1c
 
 

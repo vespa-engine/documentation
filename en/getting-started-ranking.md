@@ -18,14 +18,9 @@ This schema has a set of (contrived) ranking functions, to help learn Vespa rank
 
 ## Ranking using document features only
 Let's start with something simple: _Irrespective of the query, score all documents by the number of in-links to it_.
-That is, for any query, return the documents with most in-links first in the result set:
+That is, for any query, return the documents with most in-links first in the result set (these queries are clickable!):
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="attribute(inlinks).count">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlinks'
-</pre>
-
-{% include query.html content=
-"[select * from doc where true;&ranking=inlinks](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlinks)"%}
+<a class="querystring-x">yql=select * from doc where true&ranking=inlinks</a>
 
 The score, named `relevance` in query results, is the size of the `inlinks` attribute array in the document,
 as configured in the `expression`:
@@ -59,17 +54,12 @@ In this experiment, we will use another rank function, still counting in-links b
     $$ num\_inlinks * {decay\_const}^{doc\_age\_seconds/3600} $$
 </p>
 
-Note:
+Notes:
 * use of the `now` [ranking feature](reference/rank-features.html)
 * use `pow`, a mathematical function in [ranking expressions](reference/ranking-expressions.html)
 * use of constants and functions to write better code
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="summaryfeatures">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlinks'
-</pre>
-
-{% include query.html content=
-"[select * from doc where true&ranking=inlinks_age](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlinks_age)"%}
+<a class="querystring-x">yql=select * from doc where true&ranking=inlinks_age</a>
 
 <pre>
 rank-profile inlinks_age {
@@ -130,12 +120,7 @@ From most perspectives, this is a poor similarity function, better functions are
 The documents have a `term_count` field -
 so let's add an [input.query()](reference/query-api-reference.html#ranking.features) for term count:
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="query(q_term_count)">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=term_count_similarity&input.query(q_term_count)=1000'
-</pre>
-
-{% include query.html content=
-"[select * from doc where true;&ranking=term_count_similarity&input.query(q_term_count)=1000](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=term_count_similarity&input.query(q_term_count)=1000)"%}
+<a class="querystring-x">yql=select * from doc where true;&ranking=term_count_similarity&input.query(q_term_count)=1000</a>
 
 <p><!-- depends on mathjax -->
     $$ 1 - \frac{fabs(attribute(term\_count) - query(q\_term\_count))}{1 + attribute(term\_count) + query(q\_term\_count)} $$
@@ -178,9 +163,11 @@ query with a tensor of same type and create a scalar using a tensor product as t
 We use a [mapped](reference/tensor.html#general-literal-form) query tensor,
 where the document name is the address in the tensor, using a value of 1 for each in-link:
 ```
-{% raw %}{{links:/en/query-profiles.html}:1,
- {links:/en/page-templates.html}:1,
- {links:/en/overview.html}:1}{% endraw %}
+{
+    {links:/en/query-profiles.html}:1,
+    {links:/en/page-templates.html}:1,
+    {links:/en/overview.html}:1
+}
 ```
 
 {% include important.html content="Vespa cannot know the query tensor type from looking at it -
@@ -204,12 +191,10 @@ rank-profile inlink_similarity  {
 }
 </pre>
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="tensor&lt;float&gt;(links{})">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlink_similarity&input.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D'
-</pre>
-
-{% include query.html content=
-"[select * from doc where true&ranking=inlink_similarity&input.query(links)={{inlinks:/en/query-profiles.html}:1,{inlinks:/en/page-templates.html}:1,{inlinks:/en/overview.html}:1}](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlink_similarity&input.query(links)=%7B%7Blinks%3A%2Fen%2Fquery-profiles.html%7D%3A1%2C%7Blinks%3A%2Fen%2Fpage-templates.html%7D%3A1%2C%7Blinks%3A%2Fen%2Foverview.html%7D%3A1%7D)"%}
+<a class="querystring-x">yql=select * from doc where true&ranking=inlink_similarity&input.query(links)={
+  {links:/en/query-profiles.html}:1,
+  {links:/en/page-templates.html}:1,
+  {links:/en/overview.html}:1  }</a>
 
 Inspect relevance and summary-features:
 
@@ -277,15 +262,10 @@ optimizing by reducing the candidate set will increase performance.
 Example query using text matching,
 dumping [calculated rank features](reference/query-api-reference.html#ranking.listfeatures):
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="attributeMatch(inlinks)">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22&ranking.listFeatures'
-</pre>
-
-{% include query.html content=
-"[select * from doc where title contains \"document\"&ranking.listFeatures](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22&ranking.listFeatures)"%}
+<a class="querystring-x">yql=select * from doc where title contains "document"&ranking.listFeatures</a>
 
 See the **long** list of rank features calculated per result.
-However, the query filters on documents with "ranking" in the title,
+However, the query filters on documents with "document" in the title,
 so the features are only calculated for the small set of matching documents.
 
 Running a filter like this is _document retrieval_. Another good example is web search -
@@ -307,12 +287,7 @@ In short, use increasingly more power per document as the candidate set shrinks:
 
 Let's try the same query again, with a two-phase rank-profile that also does an explicit rank score cutoff:
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="attribute(inlinks).count">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22&ranking=inlinks_twophase'
-</pre>
-
-{% include query.html content=
-"[select * from doc where title contains \"document\"&ranking=inlinks_twophase](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22&ranking=inlinks_twophase)"%}
+<a class="querystring-x">yql=select * from doc where title contains "attribute"&ranking=inlinks_twophase</a>
 
 <pre>
 rank-profile inlinks_twophase inherits inlinks_age {
@@ -358,24 +333,26 @@ Read more in [first-phase](reference/schema-reference.html#firstphase-rank).
 This guide will not go deep in query operators in the retrieval phase,
 see [query-api](query-api.html) for details.
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20AND%20default%20contains%20%22documents%22%20AND%20default%20contains%20%22about%22%20AND%20default%20contains%20%22ranking%22%20AND%20default%20contains%20%22and%22%20AND%20default%20contains%20%22retrieval%22)'
-</pre>
-<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20OR%20default%20contains%20%22documents%22%20OR%20default%20contains%20%22about%22%20OR%20default%20contains%20%22ranking%22%20OR%20default%20contains%20%22and%22%20OR%20default%20contains%20%22retrieval%22)'
-</pre>
 Consider a query like _"vespa documents about ranking and retrieval"_.
 A query AND-ing these terms hits less than 3% of the document corpus,
 missing some of the documents about ranking and retrieval:
 
-{% include query.html content=
-"[select * from doc where (default contains \"vespa\" AND default contains \"documents\" AND default contains \"about\" AND default contains \"ranking\" AND default contains \"and\" AND default contains \"retrieval\")](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20AND%20default%20contains%20%22documents%22%20AND%20default%20contains%20%22about%22%20AND%20default%20contains%20%22ranking%22%20AND%20default%20contains%20%22and%22%20AND%20default%20contains%20%22retrieval%22))"%}
+<a class="querystring-x">yql=select * from doc where (default contains "vespa"
+AND default contains "documents"
+AND default contains "about"
+AND default contains "ranking"
+AND default contains "and"
+AND default contains "retrieval")</a>
 
 Alternatively, OR-ing the terms hits more than 95% of the documents,
 unable to filter out irrelevant documents in the retrieval phase:
 
-{% include query.html content=
-"[select * from doc where (default contains \"vespa\" OR default contains \"documents\" OR default contains \"about\" OR default contains \"ranking\" OR default contains \"and\" OR default contains \"retrieval\")](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20OR%20default%20contains%20%22documents%22%20OR%20default%20contains%20%22about%22%20OR%20default%20contains%20%22ranking%22%20OR%20default%20contains%20%22and%22%20OR%20default%20contains%20%22retrieval%22))"%}
+<a class="querystring-x">yql=select * from doc where (default contains "vespa"
+OR default contains "documents"
+OR default contains "about"
+OR default contains "ranking"
+OR default contains "and"
+OR default contains "retrieval")</a>
 
 Using a "weak AND" can address the problems of too few (AND) or too many (OR) hits in the retrieval phase.
 Think of it as an _optimized OR_, where the least relevant candidates are discarded from further evaluation.
@@ -386,12 +363,14 @@ To find the least relevant candidates, a simple scoring function is used:
 As the point of [weakAnd](reference/query-language-reference.html#weakand) is to early discard the worst candidates,
 _totalCount_ is an approximation:
 
-<pre style="display:none" data-test="exec" data-test-assert-contains="semantic-qa-retrieval.html">
-curl -s 'https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22)'
-</pre>
-
-{% include query.html content=
-"[select * from doc where {scoreThreshold: 0, targetHits: 10}weakAnd(default contains \"vespa\", default contains \"documents\", default contains \"about\", default contains \"ranking\", default contains \"and\", default contains \"retrieval\")](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20%5B%7B%22scoreThreshold%22%3A0%2C%22targetHits%22%3A10%7D%5D%0AweakAnd(default%20contains%20%22vespa%22,default%20contains%20%22documents%22,default%20contains%20%22about%22,default%20contains%20%22ranking%22,default%20contains%20%22and%22,default%20contains%20%22retrieval%22))"%}
+<a class="querystring-x">yql=select * from doc where
+{scoreThreshold: 0, targetHits: 10}weakAnd(
+default contains "vespa",
+default contains "documents",
+default contains "about",
+default contains "ranking",
+default contains "and",
+default contains "retrieval")</a>
 
 Note that this blurs the distinction between filtering (retrieval) and ranking a little -
 here the `weakAnd` does <span style="text-decoration: underline">both</span> filtering and ranking

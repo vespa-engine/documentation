@@ -5,7 +5,7 @@ render_with_liquid: false
 
 ## vespa status
 
-Verify that a service is ready to use (query by default)
+Verify that container service(s) are ready to use
 
 ```
 vespa status [flags]
@@ -14,14 +14,15 @@ vespa status [flags]
 ### Examples
 
 ```
-$ vespa status query
+$ vespa status
+$ vespa status --cluster mycluster
 ```
 
 ### Options
 
 ```
   -h, --help       help for status
-  -w, --wait int   Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
@@ -40,6 +41,5 @@ $ vespa status query
 
 * [vespa](vespa.html)	 - The command-line tool for Vespa.ai
 * [vespa status deploy](vespa_status_deploy.html)	 - Verify that the deploy service is ready to use
-* [vespa status document](vespa_status_document.html)	 - Verify that the document service is ready to use
-* [vespa status query](vespa_status_query.html)	 - Verify that the query service is ready to use (default)
+* [vespa status deployment](vespa_status_deployment.html)	 - Verify that deployment has converged on latest, or given, ID
 

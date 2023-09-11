@@ -29,7 +29,7 @@ Example of loading the key from a custom path:
 Note that when overriding API key through environment variables, that key will
 always be used. It's not possible to specify a tenant-specific key.
 
-Read more in https://cloud.vespa.ai/en/security/guide
+Read more in [https://cloud.vespa.ai/en/security/guide](https://cloud.vespa.ai/en/security/guide)
 
 ```
 vespa auth api-key [flags]

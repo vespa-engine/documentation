@@ -38,6 +38,6 @@ vespa auth [flags]
 * [vespa](vespa.html)	 - The command-line tool for Vespa.ai
 * [vespa auth api-key](vespa_auth_api-key.html)	 - Create a new user API key for control-plane authentication with Vespa Cloud
 * [vespa auth cert](vespa_auth_cert.html)	 - Create a new private key and self-signed certificate for data-plane access with Vespa Cloud
-* [vespa auth login](vespa_auth_login.html)	 - Authenticate the Vespa CLI
-* [vespa auth logout](vespa_auth_logout.html)	 - Log out of Vespa Cli
+* [vespa auth login](vespa_auth_login.html)	 - Authenticate Vespa CLI with Vespa Cloud
+* [vespa auth logout](vespa_auth_logout.html)	 - Sign out of Vespa Cloud
 

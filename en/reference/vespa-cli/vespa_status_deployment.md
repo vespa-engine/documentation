@@ -1,21 +1,30 @@
 ---
-title: vespa activate
+title: vespa status deployment
 render_with_liquid: false
 ---
 
-## vespa activate
+## vespa status deployment
 
-Activate (deploy) a previously prepared application package
+Verify that deployment has converged on latest, or given, ID
 
 ```
-vespa activate [flags]
+vespa status deployment [flags]
+```
+
+### Examples
+
+```
+$ vespa status deployment
+$ vespa status deployment -t cloud [run-id]
+$ vespa status deployment -t local [session-id]
+
 ```
 
 ### Options
 
 ```
-  -h, --help       help for activate
-  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 60)
+  -h, --help       help for deployment
+  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
@@ -32,5 +41,5 @@ vespa activate [flags]
 
 ### SEE ALSO
 
-* [vespa](vespa.html)	 - The command-line tool for Vespa.ai
+* [vespa status](vespa_status.html)	 - Verify that container service(s) are ready to use
 

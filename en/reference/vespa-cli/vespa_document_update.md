@@ -29,7 +29,7 @@ $ vespa document update id:mynamespace:music::a-head-full-of-dreams src/test/res
   -h, --help          help for update
   -T, --timeout int   Timeout for the document request in seconds (default 60)
   -v, --verbose       Print the equivalent curl command for the document operation
-  -w, --wait int      Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int      Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

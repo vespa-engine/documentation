@@ -44,7 +44,7 @@ $ vespa visit --field-set "[id]" # list document IDs
       --slice-id int             The number of the slice this visit invocation should fetch (default -1)
       --slices int               Split the document corpus into this number of independent slices (default -1)
       --to string                Timestamp to visit up to, in seconds
-  -w, --wait int                 Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int                 Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

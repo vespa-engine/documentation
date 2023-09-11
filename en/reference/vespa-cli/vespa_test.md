@@ -13,7 +13,7 @@ Run a test suite, or a single test
 
 Runs all JSON test files in the specified directory, or the single JSON test file specified.
 
-See [https://docs.vespa.ai/en/reference/testing.html for details.](https://docs.vespa.ai/en/reference/testing.html for details.)
+See [https://docs.vespa.ai/en/reference/testing.html](https://docs.vespa.ai/en/reference/testing.html) for details.
 
 ```
 vespa test test-directory-or-file [flags]
@@ -30,7 +30,7 @@ $ vespa test src/test/application/tests/system-test/feed-and-query.json
 
 ```
   -h, --help       help for test
-  -w, --wait int   Number of seconds to wait for a service to become ready. 0 to disable (default 0)
+  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

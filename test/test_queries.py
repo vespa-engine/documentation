@@ -14,12 +14,12 @@ links = set()
 def extract_links(filename):
     with open(filename) as fp:
         soup = BeautifulSoup(fp, 'html.parser')
-        for anchor in soup.find_all('a', {"class": "docsearch-x"}):
+        for anchor in soup.find_all('a', {"class": "yql-x"}):
             sanitized_query = re.sub('\n', '', anchor.text)
-            links.add('https://api.search.vespa.ai/search/?yql=' + quote(sanitized_query))
-        for anchor in soup.find_all('a', {"class": "cord19-x"}):
+            links.add((filename, 'https://api.search.vespa.ai/search/?yql=' + quote(sanitized_query)))
+        for anchor in soup.find_all('a', {"class": "querystring-x"}):
             sanitized_query = re.sub('\n', '', anchor.text)
-            links.add('https://api.cord19.vespa.ai/search/?yql=' + quote(sanitized_query))
+            links.add((filename, 'https://api.search.vespa.ai/search/?' + quote(sanitized_query, safe='&=')))
 
 
 def get_links(directory):
@@ -30,11 +30,11 @@ def get_links(directory):
                 extract_links(os.path.join(root, filename))
 
 
-def check_total_count(query):
-    r = requests.get(query)
+def check_total_count(querytuple):
+    r = requests.get(querytuple[1])
     d = r.json()
     total_count = d["root"]["fields"]["totalCount"]
-    print("{0} results for {1}".format(total_count, query))
+    print("{0} results: {1}".format(total_count, querytuple))
     return total_count > 0
 
 
@@ -46,8 +46,8 @@ def main():
         sys.exit(("{} does not exist".format(directory)))
     get_links(directory)
     print("Checking queries: {}".format(links))
-    for query in links:
-        if not check_total_count(query):
+    for querytuple in links:
+        if not check_total_count(querytuple):
             sys.exit("Query failed")
 
 

@@ -12,11 +12,68 @@ This is supported in Vespa using the
 This operator can be combined with other filters or query terms using the
 [Vespa query language](query-language.html),
 making it easy to create hybrid solutions that combine modern vector based techniques with
-[traditional information retrieval](text-matching-ranking.html).
+[traditional information retrieval](text-matching.html).
+
+Also try [pyvespa examples](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
 
 
-## Vectors in Vespa
-In Vespa a vector is represented by a [tensor](tensor-user-guide.html) with one indexed dimension.
+## Minimal example
+A nearest neighbor search has at least these components: a document vector, a query vector,
+a rank profile using `closeness()` and a query with the `nearestNeighbor` operator:
+<pre>
+# Schema definition of the vector in documents
+    document doc {
+
+        field <span class="pre-hilite">d_vector</span> type tensor&lt;float&gt;(d[3]) {
+            indexing: summary | attribute
+        }
+
+    }
+
+# Rank profile definition in schema:
+#  - using the closeness() rank feature
+#  - defining the q_vector type that must match the d_vector type
+    rank-profile rank_docs inherits default {
+        inputs {
+            query(<span class="pre-hilite">q_vector</span>) tensor&lt;float&gt;(d[3])
+        }
+        first-phase {
+            expression: <span class="pre-hilite">closeness</span>(field, d_vector)
+        }
+    }
+
+# A query with
+#  - a nearestNeighbor operator with document and query vectors
+#  - selecting the rank_docs rank profile
+$ vespa query 'select * from docs where {targetHits: 3}<span class="pre-hilite">nearestNeighbor</span>(d_vector, q_vector)' \
+  <span class="pre-hilite">ranking=rank_docs</span> \
+  'input.query(q_vector)'='[1,2,3]'
+
+# Documents with vectors
+{
+    "put": "id:mynamespace:music::a-head-full-of-dreams",
+    "fields": {
+        "d_vector": [0,1,2]
+    }
+}
+</pre>
+The `nearestNeighbor` query operator will calculate values
+used by the [closeness()](reference/rank-features.html#closeness(dimension,name)) rank feature.
+{% include note.html content='closeness(`field`, d_vector)
+means that the closeness rank feature shall use the d_vector <span style="text-decoration: underline">field</span>.
+<br/><br/>
+Applications can have multiple vector fields.
+These cases assign <span style="text-decoration: underline">labels</span> to the different `nearestNeighbor` operators,
+so the closeness() rank feature refers to the different operators (using different fields)
+See other examples of using closeness(`label`, q)
+in the [nearest neighbor search guide](nearest-neighbor-search-guide.html#using-label).' %}
+
+Read more in this guide on tensor types, distance metrics, rank profiles
+and approximate nearest neighbor search.
+
+
+## Vectors
+A vector is represented by a [tensor](tensor-user-guide.html) with one indexed dimension.
 Example [tensor type](reference/tensor.html#tensor-type-spec) representing a float vector with 384 dimensions:
 <pre>
 tensor&lt;float&gt;(x[384])
@@ -53,7 +110,7 @@ rank-profile my_profile {
 This all ties together with the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator
 that expects two arguments; the document tensor field name which is searched and the input query tensor name.
 The operator finds the documents that are closest to the query vector
-using the [distance-metric](reference/schema-reference.html#distance-metric) defined in the tensor field.
+using the [distance-metric](#distance-metrics-for-nearest-neighbor-search) defined in the tensor field.
 Note that the document schema can have multiple tensor fields storing vectors,
 and the query can have multiple `nearestNeighbor` operators searching different tensor fields.
 
@@ -63,7 +120,7 @@ is available in Vespa 8.144.19.
 To learn how Vespa can create the vectors for you, see [embedding](embedding.html).
 
 
-## Using Vespa's nearest neighbor search
+## Using nearest neighbor search
 The following sections demonstrates how to use the
 [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator.
 
@@ -84,7 +141,7 @@ A cost-efficient approach is to use **approximate** search instead.
 See how to use **approximate** nearest neighbor search with `HNSW` in
 the [Approximate Nearest Neighbor Search](approximate-nn-hnsw.html) document.
 
-The following Vespa [document schema](schemas.html) is used to illustrate Vespa's support for 
+The following [document schema](schemas.html) is used to illustrate Vespa's support for 
 vector search, or nearest neighbor search:
 
 <pre>
@@ -147,8 +204,15 @@ Vespa supports six different [distance-metrics](reference/schema-reference.html#
 * `hamming`
 * `geodegrees`
 
-### Configure rank profiles for nearest neighbor search
+The distance-metric is a property of the field.
+This is obvious when `index` is set on the vector field,
+as the distance metric is used when building the index structure.
+Without `index`, no extra data structures are built for the field,
+and the distance-metric setting is used when calculating the distance at query-time.
+It still makes sense to have the metric as a field-property,
+as the field values are often produced using a specific distance metric.
 
+### Configure rank profiles for nearest neighbor search
 Lastly, one need to configure how to [rank](ranking.html) products which 
 are retrieved by the nearest neighbor search:
 
@@ -176,17 +240,17 @@ The `rank-profile` specifies the query input tensor names and types. The query i
 must be of the same dimensionality as the document vector and have the same dimension name. 
 
 Skipping the query tensor definition will cause a query time error:
-<pre>
+```
 Expected a tensor value of 'query(query_embedding)' but has [...]
-</pre>
+```
 
-The `closeness(field, text_embedding)` is a [rank-feature](reference/rank-features.html) calculated
-by the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator. 
+The `closeness(field, text_embedding)` is a [rank-feature](reference/rank-features.html#closeness(dimension,name))
+calculated by the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator. 
 This calculates a score in the range [0, 1], where 0 is infinite distance,
 and 1 is zero distance. This is convenient because Vespa sorts hits by decreasing relevancy score,
 and one usually want the closest hits to be ranked highest.
 
-The `closeness(field, image_embeddings)` [rank-feature](reference/rank-features.html)
+The `closeness(field, image_embeddings)` [rank-feature](reference/rank-features.html#closeness(dimension,name))
 operators over a tensor field that stores multiple vectors per document.
 For each document, the vector that is closest to the query vector is used in the calculation.
 
@@ -218,6 +282,7 @@ the product's popularity as a signal. The value of the `popularity` field can be
  `attribute(popularity)` rank-feature. The `second-phase` [ranking expression](ranking-expressions-features.html)
 combines the popularity with the `closeness(field, image_embeddings)` rank-feature using multiplication.
 
+
 ## Indexing product data
 After deploying the application package with the document schema, one
 can [index](reads-and-writes.html) the product data using the
@@ -227,54 +292,54 @@ In the example below there are two documents.
 The vector embedding fields are using
 [indexed tensor short form](reference/document-json-format.html#tensor)
 and [mixed tensor short form](reference/document-json-format.html#tensor):
-<pre>
+```json
 [
-  {
-    "put": "id:shopping:product::998211",
-    "fields": {
-      "in_stock": true,
-      "popularity": 0.342,
-      "text_embedding": [
-        0.16766378547490635,
-        0.3737005826272204,
-        0.040492891373747675,
-        ..
-      ],
-      "image_embeddings": {
-        "0": [
-          0.9147281579191466,
-          0.5453696694173961,
-          0.7529545687063771,
-          ..
-        ],
-        "1": [0.3737005826272204, ..]
-      }
+    {
+        "put": "id:shopping:product::998211",
+        "fields": {
+            "in_stock": true,
+            "popularity": 0.342,
+            "text_embedding": [
+                0.16766378547490635,
+                0.3737005826272204,
+                0.040492891373747675,
+                ..
+            ],
+            "image_embeddings": {
+                "0": [
+                    0.9147281579191466,
+                    0.5453696694173961,
+                    0.7529545687063771,
+                    ..
+                ],
+                "1": [0.3737005826272204, ..]
+            }
+        }
+    },
+    {
+        "put": "id:shopping:product::97711",
+        "fields": {
+            "in_stock": false,
+            "popularity": 0.538,
+            "text_embedding": [
+                0.03515862084651311,
+                0.24585168798559187,
+                0.6123057708571111,
+                ..
+            ],
+            "image_embeddings": {
+                "0": [
+                    0.9785931815169806,
+                    0.5697209315543527,
+                    0.5352198004501647,
+                    ..
+                ],
+                "1": [0.24585168798559187, ..]
+            }
+        }
     }
-  },
-  {
-    "put": "id:shopping:product::97711",
-    "fields": {
-      "in_stock": false,
-      "popularity": 0.538,
-      "text_embedding": [
-        0.03515862084651311,
-        0.24585168798559187,
-        0.6123057708571111,
-        ..
-      ],
-      "image_embeddings": {
-        "0": [
-          0.9785931815169806,
-          0.5697209315543527,
-          0.5352198004501647,
-          ..
-        ],
-        "1": [0.24585168798559187, ...]
-      }
-    }
-  }
 ]
-</pre>
+```
 
 The above JSON formatted data can be fed to Vespa using any of the
 [Vespa feeding APIs](reads-and-writes.html#api-and-utilities).
@@ -303,19 +368,19 @@ Note that the nearest neighbors search is limited to products where `in_stock` i
 The overall query is specified using the [Vespa query language](query-language.html)
 using the [Query API](query-api.html#http): 
 
-<pre>
+```json
 {
     "yql": "select * from product where {targetHits: 100}nearestNeighbor(image_embeddings, image_query_embedding) and in_stock = true",
     "input.query(image_query_embedding)": [
         0.22507139604882176,
         0.11696498718517367,
         0.9418422036734729,
-        ...
+        ..
     ],
     "ranking.profile": "image_similarity",
     "hits": 10
 }
-</pre>
+```
 
 The YQL query uses logical conjunction `and` to filter the `nearestNeighbor`
 by a constraint on the `in_stock` field. 

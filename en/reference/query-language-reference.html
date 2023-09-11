@@ -452,6 +452,7 @@ where myStringAttribute contains ({prefixLength:1, maxEditDistance:2}fuzzy("para
         </tr>
         </tbody>
       </table>
+      <p>Find an example in <a href="../text-matching.html#fuzzy-match">text matching</a>.</p>
       {% include important.html content="Only string <a href='schema-reference.html#attribute'>attribute</a>
       fields in <a href='services-content.html#document'>documents</a> are supported (single, array or weightedset).
       It is also not optimized, but setting <a href='#prefixlength'>prefixLength</a> greater than 0
@@ -463,28 +464,18 @@ where myStringAttribute contains ({prefixLength:1, maxEditDistance:2}fuzzy("para
     <th>matches</th>
     <td>
       <p id="matches">
-        Regular expressions is supported using
-        <a href="https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Extended_Regular_Expressions">posix extended syntax</a>
+        Regular expression match is supported using
+        <a href="https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Extended_Regular_Expressions">posix extended syntax</a>,
         with the limitation that it is <strong>case insensitive</strong>.
-        Replace <code>contains</code> with <code>matches</code> to run a regexp search. A few
-        examples running regular expression search on a field named <code>attribute_field</code>. Only
-        fields defined with <code>indexing: attribute</code> supports regexp search.
       </p>
-      <p>This example becomes a substring search:</p>
-<pre>
-where attribute_field matches "madonna"
-</pre>
-      <p>This example matches both <code>madonna</code>, <code>madona</code> and with any number of <code>n</code>s:</p>
+      <p>Example matching both <code>madonna</code>, <code>madona</code> and with any number of <code>n</code>s:</p>
 <pre>
 where attribute_field matches "mado[n]+a"
 </pre>
-      <p>Here you match any string starting with <code>mad</code>:</p>
-<pre>
-where attribute_field matches "^mad"
-</pre>
+      <p>Find more examples in the <a href="../text-matching.html#regexp-match">text matching</a> guide.</p>
       {% include important.html content="Only <a href='schema-reference.html#attribute'>attribute</a>
       fields in <a href='services-content.html#document'>documents</a> is supported.
-      It is also not optimized.
+      It is not optimized for performance.
       Having a prefix using the <code>^</code> will be faster than not having one."%}
     </td>
   </tr>
@@ -997,16 +988,18 @@ field myfieldname type array&lt;position&gt; {
         Points in the vector space are specified as
         <a href="../tensor-user-guide.html">tensors</a> with one indexed dimension,
         where the size of that dimension is equal to the dimensionality of the vector space.
+      </p>
+      <p>
         The document vectors are stored in a
         <a href="schema-reference.html#tensor">tensor field attribute</a>,
         and the query vector is sent with the query request.
         The following tensor field types are supported:
       </p>
         <ul>
-          <li>Single vector per document: Tensor type with one indexed dimension. 
+          <li>Single vector per document: Tensor type with one indexed dimension.
             Example: <code>tensor&lt;float&gt;(x[3])</code></li>
 
-          <li>Multiple vectors per document: Tensor type with one mapped and one indexed dimension. 
+          <li>Multiple vectors per document: Tensor type with one mapped and one indexed dimension.
             Example: <code>tensor&lt;float&gt;(m{},x[3])</code></li>
         </ul>
       <p>
@@ -1015,35 +1008,40 @@ field myfieldname type array&lt;position&gt; {
         and the exact nearest neighbors are returned.
         When storing multiple vectors per document, the vector that is closest to the query vector
         is used when calculating the distance between the document and the query.
-        If a <a href="schema-reference.html#index-hnsw">HNSW index</a>
-        is specified on the tensor field, the approximate nearest neighbors are returned instead. Example:
+        If an <a href="schema-reference.html#index-hnsw">HNSW index</a> is specified on the tensor field,
+        the <span style="text-decoration: underline">approximate</span> nearest neighbors are returned. Example:
       </p>
 <pre>
 where ({targetHits: 10}nearestNeighbor(doc_vector, query_vector))&amp;input.query(query_vector)=[3,5,7]&ranking=semantic
 </pre>
       <p>
         In this example we search for the top 10 nearest neighbors in a 3-dimensional vector space.
-        <em>targetHits</em> specifies the top-k nearest neighbors to expose to a user defined <code>semantic</code> 
-        <a href="../ranking.html">rank profile</a>. The <em>targetHits</em> parameter is required.
-        The first parameter of <em>nearestNeighbor</em> is the name of the tensor field attribute containing the document vectors (<em>doc_vector</em>).
+        <em>targetHits</em> specifies the top-k nearest neighbors to expose to a user defined <code>semantic</code>
+        <a href="../ranking.html">rank profile</a>. The <a href="#targethits">targetHits</a> annotation is required.
+        The first parameter of <em>nearestNeighbor</em> is the name of the tensor field attribute
+        containing the document vectors (<em>doc_vector</em>).
       </p>
       <p>
         The second parameter is the name of the tensor sent with the query request (<em>query_vector</em>).
         Specifying <em>query_vector</em> as the name means the query request must set this tensor as
-        <em>input.query(query_vector)</em>. The tensor type of the <b>input query vector must be defined</b> in the the rank profile,
-          see <a href="../ranking-expressions-features.html#query-feature-types">defining query feature types</a>.
+        <em>input.query(query_vector)</em> - see the <a href="query-api-reference.html#ranking.features">reference</a>.
+        The tensor type of the <b>input query vector must be defined</b> in the rank profile:
+      </p>
 <pre>
 rank-profile semantic {
     inputs {
-      query(query_vector) tensor&lt;float&gt;(x[3])
+        query(query_vector) tensor&lt;float&gt;(x[3])
     }
     first-phase: closeness(field, doc_vector)
 }
 </pre>
-      <p>Failure to define the query input tensor in the schema will fail the request:</p>
- <pre>
+      <p>
+        Also see <a href="../ranking-expressions-features.html#query-feature-types">defining query feature types</a>.
+        Failure to define the query input tensor in the schema will fail the request:
+      </p>
+<pre>
   Expected 'query(query_vector)' to be a tensor, but it is the string '[3,5,7]'
- </pre>
+</pre>
       <p>The document tensor field attribute is defined as follows:</p>
 <pre>
 field doc_vector type tensor&lt;float&gt;(x[3]) {
@@ -1051,7 +1049,7 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
 }
 </pre>
       <p>The above example does not define HNSW <code>index</code> and the search for neighbors will be exact.</p>
-      <p></p>
+      <p>
         See <a href="../nearest-neighbor-search.html">Nearest Neighbor Search</a>,
         <a href="../approximate-nn-hnsw.html">Approximate Nearest Neighbor Search using HNSW Index</a> and
         <a href="../nearest-neighbor-search-guide.html">Nearest Neighbor Search Guide</a>
@@ -1068,7 +1066,7 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
         <tr>
           <td><a href="#targethits">targetHits</a></td>
           <td>
-            This annotation is required, and specifies the number of hits nearestNeighbor 
+            This annotation is required, and specifies the number of hits nearestNeighbor
             should expose to <a href="../ranking.html">ranking</a>.
             Note that more or less hits might actually be produced. <em>targetHits</em> is per node
             involved in the query.
@@ -1083,8 +1081,8 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
             tuning of HNSW parameters.
             This annotation is default <code>true</code> when an HNSW index is specified,
             otherwise it is always <code>false</code>. Setting this to <code>false</code>
-            might trigger <a href="../graceful-degradation.html">graceful query degradation</a>. Adjust 
-            <a href="#timeout">timeout</a> as needed.  
+            might trigger <a href="../graceful-degradation.html">graceful query degradation</a>. Adjust
+            <a href="#timeout">timeout</a> as needed.
           </td>
         </tr>
         <tr>
@@ -1100,9 +1098,11 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
           <td>
             Use to mark the query operator with a label
             that can be referred to from the ranking expression in the rank profile.
-            See the <a href="rank-features.html#closeness(dimension,name)">closeness</a> rank feature.
-            Useful when having multiple <code>nearestNeighbor</code> operators in the same query, see
-            <a href="../nearest-neighbor-search-guide.html#multiple-nearest-neighbor-search-operators-in-the-same-query">
+            See the <a href="rank-features.html#closeness(dimension,name)">closeness</a> and
+            <a href="rank-features.html#distance(dimension,name)">distance</a> rank features.
+            Useful when having multiple <code>nearestNeighbor</code> operators in the same query,
+            e.g., when the schema has multiple vector fields.
+            See <a href="../nearest-neighbor-search-guide.html#multiple-nearest-neighbor-search-operators-in-the-same-query">
               nearest neighbor search guide
             </a> for usage example.
           </td>
@@ -1489,7 +1489,7 @@ where text contains ({distance: 5}near("a", "b")) and text contains ({distance:2
       <p id="connectivity">
       Map of <code>id: int, weight: double</code> of explicit connectivity between this item
       and the item with the given <a href="#id">id</a> -
-      see <a href="../text-matching-ranking.html#weight-significance-and-connectedness">text matching and ranking</a>.
+      see <a href="../ranking.html#weight-significance-and-connectedness">text matching and ranking</a>.
       Example:
       </p>
       <pre>connectivity: {id: 4, weight: 0.8}</pre>
@@ -1747,7 +1747,7 @@ where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai"))
       <p id="label">
       Used by <a href="#geolocation">geoLocation</a>
       and <a href="#nearestneighbor">nearestNeighbor</a>. <!-- ToDo: and probably others ... -->
-      Label for referring to this term during ranking.
+      Label for referring to this term/operator during ranking.
       </p>
     </td>
   </tr>
@@ -1861,7 +1861,7 @@ where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai"))
     <td>
       <p id="significance">
       Significance value for text ranking features -
-      see <a href="../text-matching-ranking.html#weight-significance-and-connectedness">text matching and ranking</a>.
+      see <a href="../ranking.html#weight-significance-and-connectedness">text matching and ranking</a>.
       </p>
     </td>
   </tr>
@@ -1909,12 +1909,18 @@ where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai"))
     <td>int</td>
     <td>
       <p id="targethits">
-      Used by <a href="#wand">wand</a>, <a href="#weakand">weakAnd</a>
-      and <a href="#nearestneighbor">nearestNeighbor</a>.
-      It sets the wanted number of hits exposed to the real first-phase ranking function per content node.
-      If additional second phase ranking with rerank-count is used,
-      do not set <code>targetHits</code> less than the configured rank-profile's
-      <a href="schema-reference.html#secondphase-rerank-count">rerank-count</a>.
+        Used by <a href="#wand">wand</a>and <a href="#weakand">weakAnd</a>, where the default is 100.
+      </p>
+      <p>
+        It is also used with <a href="#nearestneighbor">nearestNeighbor</a>,
+        where it has no default - it must always be set,
+        see examples in <a href="../nearest-neighbor-search.html">nearest neighbor search</a>.
+      </p>
+      <p>
+        It sets the wanted number of hits exposed to the real first-phase ranking function per content node.
+        If additional second phase ranking with rerank-count is used,
+        do not set <code>targetHits</code> less than the configured rank-profile's
+        <a href="schema-reference.html#secondphase-rerank-count">rerank-count</a>.
       </p>
     </td>
   </tr>
@@ -1938,7 +1944,7 @@ where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai"))
     <td>
       <p id="weight">
       Term weight, used in some text ranking features -
-      see <a href="../text-matching-ranking.html#weight-significance-and-connectedness">text matching and ranking</a>.
+      see <a href="../ranking.html#weight-significance-and-connectedness">text matching and ranking</a>.
       </p>
 <pre>
 where title contains ({weight:200}"heads")
