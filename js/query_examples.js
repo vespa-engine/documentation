@@ -2,11 +2,11 @@
 function generateQueryExamples () {
     let docsearchQueries = document.getElementsByClassName("yql-x");
     for (let anchor of docsearchQueries) {
-        generateYQL(anchor, "https://doc-search.vespa.oath.cloud/search/");
+        generateYQL(anchor, "https://api.search.vespa.ai/search/");
     }
     let queryStringQueries = document.getElementsByClassName("querystring-x");
     for (let anchor of queryStringQueries) {
-        generateQuery(anchor, "https://doc-search.vespa.oath.cloud/search/");
+        generateQuery(anchor, "https://api.search.vespa.ai/search/");
     }
 }
 

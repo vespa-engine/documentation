@@ -287,7 +287,7 @@ In short, use increasingly more power per document as the candidate set shrinks:
 
 Let's try the same query again, with a two-phase rank-profile that also does an explicit rank score cutoff:
 
-<a class="querystring-x">yql=select * from doc where title contains "document"&ranking=inlinks_twophase</a>
+<a class="querystring-x">yql=select * from doc where title contains "attribute"&ranking=inlinks_twophase</a>
 
 <pre>
 rank-profile inlinks_twophase inherits inlinks_age {
