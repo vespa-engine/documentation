@@ -27,9 +27,10 @@ redirect_from:
   Allocate enough CPU for the indexing load.
 </p>
 <p>
-  All operations are written and synched to the <a href="../proton.html#transaction-log">transaction log</a>.
+  All operations are written and synched to the <a href="../proton.html#transaction-log">transaction log</a>
+  on each content node.
   This is sequential (not random) IO but might impact overall feed performance if running on NAS attached storage
-  where the synch operation has a much higher cost than on local attached storage (e.g. SSD).
+  where the sync operation has a much higher cost than on local attached storage (e.g. SSD).
   See <a href="../reference/services-content.html#sync-transactionlog">sync-transactionlog</a>.
 </p><p>
   The remainder of this document concerns how to configure the application
@@ -39,62 +40,42 @@ redirect_from:
 
 <h2 id="content-node">Content node</h2>
 <p>
-  The content node runs the <a href="../proton.html">proton</a> process - overview:
+  Each content node runs the <em>vespa-proton-bin</em> process.
+  The following illustrates the components involved during feeding,
+  see <a href="../proton.html">proton</a> for details.
 </p>
 <img src="/assets/img/proton-feed.svg" alt="Proton feed overview" width="930px" height="auto"/>
 <p>
   As there are multiple components and data structures involved,
   this guide starts with the simplest examples and then adds optimizations and complexity.
-  Flushing of index structures is covered at the end of this guide.
 </p>
 
 
-<h2 id="index">Index</h2>
+<h2 id="document-store">Document store</h2>
 <p>
-  Documents are written to the <a href="../proton.html#document-store">document store</a> in all indexing modes -
+  Documents are written to the <a href="../proton.html#document-store">document store</a> in all
+  <a href="../reference/services-content.html#document">indexing modes</a> -
   this is where the copy of the PUT document is persisted.
   See <em>Summary Manager + Document store</em> in illustration above.
-  In short, this is <em>append</em> operations to large files, and (simplified) each PUT is one write.
 </p>
 <p>
   PUT-ing documents to the document store can be thought of as appending to files using sequential IO,
-  expecting a high write rate, using little memory and CPU.
+  expecting a high write rate, using little memory and CPU. Each PUT is one write (simplified).
   Writing a new version of a document (PUT a document that already exists) is the same as non-existent -
-  the index on the document is updated to point to the latest version in both cases.
+  the in-memory mapping from document id to data file position is updated to point to the
+  latest version in both cases.
 </p>
 <p>
   A partial UPDATE to a document incurs a read from the document store to get the current fields.
   Then the new field values are applied and the new version or the document is written.
   Hence, like a PUT with an extra read.
 </p>
-<pre>
-schema music {
-    document music {
-        field artist type string {
-            indexing: summary | index
-        }
-</pre>
-<p>
-  Observe that documents are written to summary (i.e. document store), but there is also an <em>index</em>.
-  See <em>Index Manager + Index</em> in illustration above.
-</p>
-<p>
-  Refer to <a href="../partial-updates.html">partial updates</a> for the index write.
-  In short, it updates the memory index, which is flushed regularly.
-  The PUT to the index is a memory only operation, but uses CPU to update the index.
-</p>
-
 
 
 <h2 id="attribute">Attribute</h2>
 <p>
-  Some applications have a limited set of documents,
-  with a high change-rate to fields in the documents
-  (e.g. stock prices - number of stocks is almost fixed, prices changes constantly).
-  Such applications are easily write bound.
-</p>
-<p>
-  To real-time update fields in high volume, use <a href="../attributes.html">attribute</a> fields:
+  To real-time update fields in high volume, use <a href="../attributes.html">attribute</a> fields.
+  See <em>Attribute Manager + Attributes</em> in illustration above.
 </p>
 <pre>
 schema ticker {
@@ -105,7 +86,14 @@ schema ticker {
 </pre>
 <p>
   Attribute fields are not stored in the document store, so there is no IO (except sequential flushing).
-  This enables application to write at memory speed to vespa - a 10k update rate per node is possible.
+  This enables application to write at memory speed to Vespa - a 10k update rate per node is possible.
+  See <a href="../partial-updates.html">partial updates</a> for details.
+</p>
+<p>
+  Some applications have a limited set of documents,
+  with a high change-rate to fields in the documents
+  (e.g. stock prices - number of stocks is almost fixed, prices changes constantly).
+  Such applications are easily write bound.
 </p>
 
 
@@ -113,7 +101,7 @@ schema ticker {
 <p>
 To achieve memory-only updates,
 make sure all attributes to update are <a href="../proton.html#sub-databases">ready</a>,
-meaning the content node has loaded the attribute into memory:
+meaning the content node has loaded the attribute field into memory:
 </p>
 <ul>
   <li>
@@ -150,6 +138,24 @@ https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcor
 -->
 
 
+<h2 id="index">Index</h2>
+<p>
+  Changes to index fields are written to the <a href="#document-store">document store</a>
+  and the <a href="../proton.html#index">index</a>. See <em>Index Manager + Index</em> in illustration above.
+</p>
+<pre>
+schema music {
+    document music {
+        field artist type string {
+            indexing: summary | index
+        }
+</pre>
+<p>
+  Both PUTs and UPDATEs to the index are memory only operations, but use CPU to update the index.
+  Refer to <a href="../partial-updates.html">partial updates</a> for details.
+</p>
+
+
 <h2 id="thread-pools">Thread pools</h2>
 <p>
 Several thread pools are involved when handling write operations on a content node.
@@ -157,8 +163,11 @@ These are summarized in the following table.
 Metrics are available for each thread pool, see
 <a href="../reference/vespa-set-metrics-reference.html#searchnode-metrics">searchnode metrics</a>
 for details.
+</p>
+<p>
 To analyse performance and bottlenecks, the most relevant metrics are <em>.utilization</em> and <em>.queuesize</em>.
 In addition, <em>.saturation</em> is relevant for the <a href="#field-writer-executor">field writer</a> thread pool.
+See <a href="#bottlenecks">bottlenecks</a> for details.
 </p>
 
 <table class="table">
