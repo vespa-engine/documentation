@@ -5,7 +5,7 @@ render_with_liquid: false
 
 ## vespa auth login
 
-Authenticate the Vespa CLI
+Authenticate Vespa CLI with Vespa Cloud
 
 ```
 vespa auth login [flags]

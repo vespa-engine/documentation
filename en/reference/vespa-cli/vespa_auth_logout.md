@@ -5,7 +5,7 @@ render_with_liquid: false
 
 ## vespa auth logout
 
-Log out of Vespa Cli
+Sign out of Vespa Cloud
 
 ```
 vespa auth logout [flags]
