@@ -117,7 +117,7 @@ availability](https://github.com/vespa-engine/sample-apps/tree/master/examples/o
 sample application. 
 
 We mentioned these files in the previous part but didn't really explain them at the time.
-We'll go through them here, starting with the services specification.
+We'll go through them here, starting with the specification of services.
 
 
 ### Services Specification
