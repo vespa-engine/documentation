@@ -1,13 +1,104 @@
 ---
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
-title: "Vespa quick start using Kubernetes"
+title: "Using Kubernetes with Vespa"
 redirect_from:
 - /documentation/vespa-quick-start-kubernetes.html
+- /en/vespa-quick-start-kubernetes.html
 ---
 
 <p>
-  This guide describes how to install and run Vespa on a single machine using Kubernetes, K8s.
-  See <a href="getting-started.html">Getting Started</a> for troubleshooting, next steps and other guides.
+  This article outlines how to run Vespa using Kubernetes.
+  Find a quickstart for running Vespa in a single pod in <a href="#singlenode-quickstart-with-minikube">
+  singlenode quickstart with minikube</a>.
+</p>
+<p>
+  Setting up a multi-pod Vespa cluster is a bit more complicated,
+  and requires knowledge about how Vespa configures its services.
+  Use the <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA/gke">
+  multinode-HA</a> sample application as a basis for configuration.
+</p>
+<img src="/assets/img/vespa-overview.svg" src="Vespa overview illustration"
+     width="825px" height="auto" />
+<ul>
+  <li>
+    A Vespa cluster is made of one or more config servers in a config server cluster.
+    This cluster keeps configuration for the services running in the service pods.
+    The config server cluster pods should hence be started first.
+  </li>
+  <li>
+    Config servers use Apache Zookeeper for shared state.
+    The config servers will not set their <em>/state/v1/health</em> to UP before Zookeeper quorum is reached.
+    This means that all config server pods must be running before quorum is reached,
+    and one cannot use a <em>readinessProbe</em> probe for the config servers for a staggered start.
+  </li>
+  <li>
+    See a practical example at <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA/gke#config-server-cluster-startup">
+    config server cluster startup</a> - once completed it should look like:
+<pre>
+$ kubectl get pods
+NAME                   READY   STATUS    RESTARTS   AGE
+vespa-configserver-0   1/1     Running   0          2m45s
+vespa-configserver-1   1/1     Running   0          107s
+vespa-configserver-2   1/1     Running   0          62s
+</pre>
+  </li>
+  <li>
+    Once the config server cluster is started successfully,
+    the <a href="/en/application-packages.html">application package</a> can be deployed,
+    and the pods for the services nodes started.
+    The application package maps services to pods (nodes),
+    so this must be deployed successfully before the services in the pods can start.
+    It does not matter whether one deploys the application package before or after starting the service pods,
+    as the pods will idle, waiting for configuration.
+  </li>
+  <li>
+    <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA/gke">
+    multinode-HA</a> starts the pods first,
+    see <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA/gke#vespa-startup">
+    Vespa startup</a>.
+    As the application package is not yet deployed, the service inside the pods is not started (as it is not configured).
+    The Vespa infrastructure is started, however, see <a href="https://docs.vespa.ai/en/operations/config-sentinel.html">
+    config sentinel</a> - so the pod is started with the config-proxy waiting for services config at this point.
+  </li>
+  <li>
+    The <a href="config-sentinel.html#cluster-startup">cluster startup</a> feature is good to know.
+    This is a setting to not start a service before <span style="text-decoration: underline">enough</span> services can run -
+    see the <em>Connectivity check</em> log messages.
+  </li>
+  <li>
+    Deploy the application package.
+    At this point, the pods will know which service to run, and start a container or content node service.
+    Shortly after, the <em>/state/v1/health</em> endpoint is enabled on the pods.
+  </li>
+  <li>
+    Note that ports are allocated dynamically,
+    but the defaults will get you started -
+    see the illustration with <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA#get-started">
+    services and ports</a> for <em>/state/v1/health</em>:
+    <ul>
+      <li>Config server: 19071</li>
+      <li>Container node: 8080</li>
+      <li>Content node: 19107</li>
+    </ul>
+  </li>
+</ul>
+<p>
+  The list above is an overview of the config server -&gt; application package -&gt; service <em>/state/v1/health</em>
+  dependency chain.
+  This sequence of steps must be considered when building the Kubernetes cluster configuration.
+</p>
+<p>
+  A good next step is running the <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA/gke">
+  multinode-HA</a> for Kubernetes - there you will also find useful
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA/gke#misc--troubleshooting">
+  troubleshooting</a> tools.
+</p>
+
+
+<h2 id="singlenode-quickstart-with-minikube">Singlenode quickstart with minikube</h2>
+<p>
+  This section describes how to install and run Vespa on a single machine using Kubernetes (K8s).
+  See <a href="/en/getting-started.html">Getting Started</a> for troubleshooting, next steps and other guides.
   Also see <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/basic-search-on-gke">
   Vespa example on GKE</a>.
 </p>
@@ -21,7 +112,7 @@ redirect_from:
   <li>
     <strong>Validate environment:</strong>
     <p>
-      Refer to <a href="operations/docker-containers.html#memory">Docker memory</a>
+      Refer to <a href="/en/operations/docker-containers.html#memory">Docker memory</a>
       for details and troubleshooting:
     </p>
     <div class="pre-parent">
@@ -110,8 +201,7 @@ spec:
         - name: VESPA_CONFIGSERVERS
           value: vespa-0.vespa.default.svc.cluster.local
         securityContext:
-          privileged: true
-          runAsUser: 0
+          runAsUser: 1000
         ports:
         - containerPort: 8080
           protocol: TCP
@@ -152,7 +242,7 @@ $ kubectl get pods --watch
   </li>
 
   <li>
-    <strong>Start port forwarding from localhost to pod:</strong>
+    <strong>Start port forwarding to pods:</strong>
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
@@ -172,23 +262,11 @@ $ curl -s --head http://localhost:19071/state/v1/health
   </li>
 
   <li>
-    <strong>Zip the application package:</strong>
-    <div class="pre-parent">
-      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ (cd ${VESPA_SAMPLE_APPS}/album-recommendation &amp;&amp; \
-  zip -r ../../application.zip .)
-</pre>
-    </div>
-  </li>
-
-  <li>
     <strong>Deploy and activate the application package:</strong>
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ curl --header Content-Type:application/zip --data-binary @application.zip \
-  localhost:19071/application/v2/tenant/default/prepareandactivate
+$ vespa deploy ${VESPA_SAMPLE_APPS}/album-recommendation
 </pre>
     </div>
   </li>
@@ -209,15 +287,7 @@ $ curl -s --head http://localhost:8080/state/v1/health
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ curl -s -H "Content-Type:application/json" \
-  --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/ext/A-Head-Full-of-Dreams.json \
-  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
-$ curl -s -H "Content-Type:application/json" \
-  --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/ext/Love-Is-Here-To-Stay.json \
-  http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay
-$ curl -s -H "Content-Type:application/json" \
-  --data-binary @${VESPA_SAMPLE_APPS}/album-recommendation/ext/Hardwired...To-Self-Destruct.json \
-  http://localhost:8080/document/v1/mynamespace/music/docid/hardwired-to-self-destruct
+$ vespa feed sample-apps/album-recommendation/ext/documents.jsonl
 </pre>
     </div>
   </li>
@@ -226,21 +296,10 @@ $ curl -s -H "Content-Type:application/json" \
     <p><strong>Make a query:</strong></p>
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="Metallica">{% raw %}
-$ curl -X POST -H "Content-Type: application/json" --data '
-  {
-    "yql": "select * from sources * where true",
-    "input.query(user_profile)": "{{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
-  }' \
-  http://localhost:8080/search/
-{% endraw %}</pre>
+<pre data-test="exec" data-test-assert-contains="Metallica">
+$ vespa query 'select * from music where true'
+</pre>
     </div>
-    <p>
-      Read more in the <a href="query-api.html">Query API</a>.
-      {% include note.html content="Try the
-      <a href='https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder'>Query Builder</a>
-      application!" %}
-    </p>
   </li>
 
   <li>
@@ -248,7 +307,7 @@ $ curl -X POST -H "Content-Type: application/json" --data '
     <div class="pre-parent">
       <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ curl -s http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay
+$ vespa document get id:mynamespace:music::love-is-here-to-stay
 </pre>
     </div>
   </li>
@@ -279,3 +338,13 @@ $ minikube stop
   </li>
 
 </ol>
+
+
+
+<p>At any point during the procedure, dump logs for troubleshooting:</p>
+  <div class="pre-parent">
+    <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ kubectl logs vespa-0
+</pre>
+  </div>
