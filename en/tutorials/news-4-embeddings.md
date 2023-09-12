@@ -262,34 +262,39 @@ Here, we use a medium-sized BERT model with 8 layers and a hidden dimension size
 This means that the embedding will be a vector of size 512.
 We use the vector from the first `CLS` token to represent the combined title and abstract.
 
-To generate these embeddings for all news content, run the following.
-This might take a while, around an hour for all news articles in the `train` and `dev` demo dataset.
-Alternatively, skip this step and download pre-processed embeddings, see step below.
+To generate these embeddings for all news content, run one of the following:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<ol>
+  <li>
+  Generate embeddings.
+  This might take a while, around an hour for all news articles in the <code>train</code> and <code>dev</code> demo dataset.
+
+  <div class="pre-parent">
+    <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ python3 src/python/create_bert_embeddings.py mind
 </pre>
-</div>
+  </div>
 
-<!-- ToDo: create_bert_embeddings emit a lot of:
-Be aware, overflowing tokens are not returned for the setting you have chosen,
-i.e. sequence pairs with the 'longest_first' truncation strategy.
-So the returned list will always be empty even if some tokens have been removed.
--->
+  <!-- ToDo: create_bert_embeddings emit a lot of:
+             Be aware, overflowing tokens are not returned for the setting you have chosen,
+             i.e. sequence pairs with the 'longest_first' truncation strategy.
+             So the returned list will always be empty even if some tokens have been removed. -->
+  </li>
+  <li>
+  Download pre-processed embeddings:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+  <div class="pre-parent">
+    <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir -p news/mind/train
-$ mkdir -p news/mind/dev
 $ curl -L -o mind/train/news_embeddings.tsv \
   https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding.tsv
 $ curl -L -o mind/dev/news_embeddings.tsv \
   https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding_dev.tsv
 </pre>
-</div>
+  </div>
+  </li>
+</ol>
 
 This creates a `news_embeddings.tsv` file under the `mind/train` and `mind/dev` subdirectories.
 
