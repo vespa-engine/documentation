@@ -287,8 +287,6 @@ $ python3 src/python/create_bert_embeddings.py mind
   <div class="pre-parent">
     <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ mkdir -p news/mind/train
-$ mkdir -p news/mind/dev
 $ curl -L -o mind/train/news_embeddings.tsv \
   https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding.tsv
 $ curl -L -o mind/dev/news_embeddings.tsv \
