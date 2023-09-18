@@ -370,6 +370,24 @@ $ vespa query 'select * from music where true' \
 {:.faq-section}
 ### Feeding
 
+#### How to debug a feeding 400 response?
+The best option is to use `--verbose` option, like `vespa feed --verbose myfile.jsonl` -
+see [documentation](/en/vespa-cli.html#documents).
+A common problem is a mismatch in schema names and [document IDs](/en/documents.html#document-ids) - a schema like:
+```
+schema article {
+    document article {
+        ...
+    }
+}
+```
+will have a document feed like:
+```
+{"put": "id:mynamespace:article::1234", "fields": { ... }}
+```
+Note that the [namespace](/en/glossary.html#namespace) is not mentioned in the schema,
+and the schema name is the same as the document name.
+
 #### How to debug document processing chain configuration?
 This configuration is a combination of content and container cluster configuration,
 see [indexing](indexing.html) and [feed troubleshooting](operations/admin-procedures.html#troubleshooting).
