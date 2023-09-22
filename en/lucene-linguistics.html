@@ -1,0 +1,250 @@
+---
+# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Lucene Linguistics"
+redirect_from:
+- /documentation/lucene-linguistics.html
+---
+
+<p>
+  Lucene Linguistics is a custom <a href="linguistics.html">linguistics</a> implementation on to of the
+  <a href="https://lucene.apache.org">Apache Lucene</a> library.
+  It allows to provide a Lucene analyzer to handle text processing for a language.
+</p>
+
+<p>
+  Check <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/lucene-linguistics">sample apps</a> to
+  get started.
+</p>
+
+<h2 id="lucene-text-analysis">Crash course on the Lucene text analysis</h2>
+
+<p>
+  A Lucene <a href="https://lucene.apache.org/core/9_0_0/core/org/apache/lucene/analysis/package-summary.html">text
+  analysis</a>
+  is a process of converting text into searchable tokens.
+  The text analysis consists of a series of components applied on the text in order.
+  The components are:
+</p>
+<ul>
+  <li>
+    <a href="https://lucene.apache.org/core/9_0_0/core/org/apache/lucene/analysis/CharFilter.html">CharFilters</a>:
+    transform the text before it is tokenized, while providing corrected character offsets to account for these
+    modifications.
+  </li>
+  <li><a href="https://lucene.apache.org/core/9_0_0/core/org/apache/lucene/analysis/Tokenizer.html">Tokenizers</a>:
+    responsible for breaking up incoming text into tokens.
+  </li>
+  <li>
+    <a href="https://lucene.apache.org/core/9_0_0/core/org/apache/lucene/analysis/TokenFilter.html">TokenFilters</a>:
+    responsible for modifying tokens that have been created by the Tokenizer.
+  </li>
+</ul>
+
+The text analysis works as follows:
+<ol>
+  <li>All char filters are applied in the specified order on the entire text string</li>
+  <li>Exactly one tokenizer is applied on the text string</li>
+  <li>Token filters in the specified order are applied on each token.</li>
+</ol>
+
+<h2 id="default-analysis">Defaults language analysis</h2>
+
+<p>
+  Lucene Linguistics by out-of-the-box exposes these analysis components provided
+  by the <a href="https://lucene.apache.org/core/9_0_0/core/index.html">lucene-core</a>
+  and the
+  <a href="https://lucene.apache.org/core/9_0_0/analysis/common/index.html">lucene-analysis-common</a>
+  libraries.
+  Other libraries with Lucene text analysis components
+  (e.g. <a href="https://lucene.apache.org/core/9_7_0/analysis/kuromoji/index.html">analysis-kuromoji</a>)
+  can be added to the application package as a maven dependency.
+</p>
+
+<!--TODO: should the list of components with links be provided?-->
+
+<p>
+  Lucene Linguistics out-of-the-box provides configured analyzers for 37 languages:
+</p>
+<ul>
+  <li>Arabic</li>
+  <li>Bulgarian</li>
+  <li>Bengali</li>
+  <li>Catalan</li>
+  <li>Kurdish</li>
+  <li>Czech</li>
+  <li>Danish</li>
+  <li>German</li>
+  <li>Greek</li>
+  <li>English</li>
+  <li>Spanish</li>
+  <li>Estonian</li>
+  <li>Basque</li>
+  <li>Persian</li>
+  <li>Finnish</li>
+  <li>French</li>
+  <li>Irish</li>
+  <li>Galician</li>
+  <li>Hindi</li>
+  <li>Hungarian</li>
+  <li>Armenian</li>
+  <li>Indonesian</li>
+  <li>Italian</li>
+  <li>Lithuanian</li>
+  <li>Latvian</li>
+  <li>Nepali</li>
+  <li>Dutch</li>
+  <li>Norwegian_bokmal</li>
+  <li>Portuguese</li>
+  <li>Romanian</li>
+  <li>Russian</li>
+  <li>Serbian</li>
+  <li>Swedish</li>
+  <li>Tamil</li>
+  <li>Telugu</li>
+  <li>Thai</li>
+  <li>Turkish</li>
+</ul>
+
+<p>
+  The Lucene
+  <a href="https://lucene.apache.org/core/9_0_0/core/org/apache/lucene/analysis/standard/StandardAnalyzer.html">StandardAnalyzer</a>
+  is used for the languages that doesn't have neither a custom nor a default analyzer.
+</p>
+
+<h2 id="custom-analysis">Customizing text analysis</h2>
+
+<p>
+  The Lucene linguistics provides multiple ways to customize the text analysis per language:
+</p>
+<ul>
+  <li>
+    <code>LuceneLinguistics</code> component configuration in the <code>services.xml</code>
+  </li>
+  <li>
+    <code>ComponentsRegistry</code>
+  </li>
+</ul>
+
+<h3 id="lucene-linguistics-configuration">LuceneLinguistics component configuration</h3>
+
+<p>
+  In the <code>services.xml</code> out of all text analysis components
+  that are available on the classpath
+  it is possible to construct a Analyzer by providing
+  <a href="https://github.com/vespa-engine/vespa/blob/master/lucene-linguistics/src/main/resources/configdefinitions/lucene-analysis.def">configuration for the</a>
+  <code>LuceneLinguistics</code> component.
+  Example for the English language:
+</p>
+
+<pre>
+  &lt;component id=&quot;linguistics&quot;
+             class=&quot;com.yahoo.language.lucene.LuceneLinguistics&quot;
+             bundle=&quot;your-bundle-name&quot;&gt;
+    &lt;config name=&quot;com.yahoo.language.lucene.lucene-analysis&quot;/&gt;
+      &lt;configDir&gt;lucene-linguistics&lt;/configDir&gt;
+      &lt;analysis&gt;
+        &lt;item key=&quot;en&quot;&gt;
+          &lt;tokenizer&gt;
+            &lt;name&gt;standard&lt;/name&gt;
+          &lt;/tokenizer&gt;
+          &lt;tokenFilters&gt;
+            &lt;item&gt;
+              &lt;name&gt;stop&lt;/name&gt;
+              &lt;conf&gt;
+                &lt;item key=&quot;words&quot;&gt;en/stopwords.txt&lt;/item&gt;
+                &lt;item key=&quot;ignoreCase&quot;&gt;true&lt;/item&gt;
+              &lt;/conf&gt;
+            &lt;/item&gt;
+            &lt;item&gt;
+              &lt;name&gt;englishMinimalStem&lt;/name&gt;
+            &lt;/item&gt;
+          &lt;/tokenFilters&gt;
+        &lt;/item&gt;
+      &lt;/analysis&gt;
+  &lt;/component&gt;
+</pre>
+
+<p>Notes:</p>
+<ul>
+  <li>
+    the <code>en/stopwords.txt</code> file must be placed in your application package under
+    the <code>lucene-linguistics</code> directory.
+  </li>
+  <li>
+    Exactly one analyzer per language can be specified.
+  </li>
+  <li>
+    If the `configDir` is not provided the files must be on the classpath.
+  </li>
+</ul>
+
+<h3 id="components-registry">Components registry</h3>
+
+<p>
+  The <a href="jdisc/injecting-components.html#depending-on-all-components-of-a-specific-type">ComponentsRegistry</a> mechanism can be used to set a Lucene Analyzer for a language.
+</p>
+
+<p>
+</p>
+
+<pre>
+&lt;component
+    id=&quot;en&quot;
+    class=&quot;org.apache.lucene.analysis.core.SimpleAnalyzer&quot;
+    bundle=&quot;your-bundle-name&quot; /&gt;
+</pre>
+
+<p>
+  Where:
+</p>
+<ul>
+  <li>
+    <code>id</code> must be a Language code;
+  </li>
+  <li>
+    <code>class</code> is the implementation class that extends the `Analyzer` class;
+  </li>
+  <li>
+    <code>bundle</code> is a name of the application package as specified in the <code>pom.xml</code>
+    (or can be any bundle added to your VAP <code>components</code> dir that contains the class).
+  </li>
+</ul>
+
+<p>
+  For this to work, the class must provide <b>only</b> a constructor without arguments.
+</p>
+
+<p>
+  In case your analyzer class needs some initialization you must wrap the analyzer into a class
+  that implements the <code>Provider&lt;Analyzer&gt;</code>.
+</p>
+
+<h3 id="adding-custom-analysis-component">Custom text analysis components</h3>
+
+<p>
+  The text analysis components are loaded via Java Service provider interface (<a
+    href="https://www.baeldung.com/java-spi">SPI</a>).
+</p>
+
+<p>
+  To use an external library that is properly prepared it is enough to add the
+  library to the application package as a maven dependency.
+</p>
+
+<p>
+  In case you need to create a custom components the steps are:
+</p>
+<ol>
+  <li>implement a component in a Java class</li>
+  <li>register the component class in the (e.g. a custom token filter) <code>META-INF/services/org.apache.lucene.analysis.TokenFilterFactory</code>
+    file that is on the classpath.
+  </li>
+</ol>
+
+<h2 id="language-detection">Language Detection</h2>
+
+<p>
+  Lucene Linguistics doesn't provide language detection.
+  This means that for both feeding and searching you should provide a
+  <a href="reference/query-api-reference.html#model.language">language parameter</a>.
+</p>
