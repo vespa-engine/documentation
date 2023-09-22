@@ -104,3 +104,94 @@ drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
     </p>
   </li>
 </ol>
+
+
+
+<h2 id="example">Example</h2>
+<p>
+  This is an end-to-end example on how to track number of documents, and delete a subset using a
+  <a href="/en/reference/document-select-language.html">selection string</a>.
+</p>
+<h3 id="feed-sample-documents">Feed sample documents</h3>
+<p>
+  Feed a batch of documents, e.g. using the <a href="https://github.com/vespa-cloud/vector-search">vector-search</a>
+  sample application:</p>
+<pre>
+$ vespa feed <(python3 feed.py 100000 3)
+</pre>
+<p>
+  See number of documents for a node using the
+  <a href="/en/reference/searchnode-metrics-reference.html#content_proton_documentdb_documents_total">
+  content.proton.documentdb.documents.total</a> metric (here 100,000):
+</p>
+<pre>
+$ docker exec vespa curl -s http://localhost:19092/prometheus/v1/values | grep ^content.proton.documentdb.documents.total
+
+  content_proton_documentdb_documents_total_max{metrictype="standard",instance="searchnode",documenttype="vector",clustername="vectors",vespa_service="vespa_searchnode",} 100000.0 1695383025000
+
+  content_proton_documentdb_documents_total_last{metrictype="standard",instance="searchnode",documenttype="vector",clustername="vectors",vespa_service="vespa_searchnode",} 100000.0 1695383025000
+</pre>
+<p>
+  Using the metric above is useful while feeding this example.
+  Another alternative is <a href="../visiting.html">visiting</a> all documents to print the ID:
+</p>
+<pre>
+$ vespa visit --field-set "[id]" | wc -l
+  100000
+</pre>
+<p>At this point, there are 100,000 document in the index.</p>
+
+
+<h3 id="define-selection">Define selection</h3>
+<p>
+  Define the subset of documents to delete - e.g. by age or other criteria.
+  In this example, select random 1%. Do a test run:
+</p>
+<pre>
+$ vespa visit --field-set "[id]" --selection 'id.hash().abs() % 100 == 0' | wc -l
+    1016
+</pre>
+<p>
+  Hence, the selection string <code>id.hash().abs() % 100 == 0</code> hits 1,016 documents.
+</p>
+
+
+<h3 id="delete-documents">Delete documents</h3>
+<p>
+  Delete documents, see the number of documents deleted in the response:
+</p>
+<pre>
+$ curl -X DELETE \
+  "http://localhost:8080/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors"
+
+  {
+      "pathId":"/document/v1/mynamespace/vector/docid",
+      "documentCount":1016
+  }
+</pre>
+<p>In case of a large result set, a continuation token might be returned in the response, too:</p>
+<pre>
+"continuation": "AAAAEAAAA"
+</pre>
+<p>If so, add the token and redo the request:</p>
+<pre>
+$ curl -X DELETE \
+  "http://localhost:8080/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors&continuation=AAAAEAAAA"
+</pre>
+<p>
+  Repeat as long as there are tokens in the output.
+  The token changes in every response.
+</p>
+
+
+<h3 id="validate">Validate</h3>
+<p>Check that all documents matching the selection criterion are deleted:</p>
+<pre>
+$ vespa visit --selection 'id.hash().abs() % 100 == 0' --field-set "[id]" | wc -l
+  0
+</pre>
+<p>List remaining documents:</p>
+<pre>
+$ vespa visit --field-set "[id]" | wc -l
+  98984
+</pre>
