@@ -201,6 +201,9 @@ be searched using the query api, but can be used by [visiting](visiting.html).
 #### Visiting does not dump all documents, and/or hangs.
 There are multiple things that can cause this, see [visiting troubleshooting](visiting.html#troubleshooting).
 
+#### How to find number of documents in the index?
+Use metrics or `vespa visit` - see [examples](/en/operations/batch-delete.html#example).
+
 
 
 {:.faq-section}
@@ -402,6 +405,10 @@ behavior.
 Using too many HTTP clients can generate a 429 response code.
 The Vespa sample apps use [vespa feed](vespa-cli.html#documents) which uses HTTP/2 for high throughput -
 it is better to stream the feed files through this client.
+
+#### Can I use Kafka to feed to Vespa?
+Vespa does not have a Kafka connector.
+Refer to third-party connectors like [kafka-connect-vespa](https://github.com/vinted/kafka-connect-vespa).
 
 
 
