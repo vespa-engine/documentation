@@ -202,7 +202,8 @@ be searched using the query api, but can be used by [visiting](visiting.html).
 There are multiple things that can cause this, see [visiting troubleshooting](visiting.html#troubleshooting).
 
 #### How to find number of documents in the index?
-Use metrics or `vespa visit` - see [examples](/en/operations/batch-delete.html#example).
+Run a query like `vespa query "select * from sources * where true"` and see the `totalCount` field.
+Alternatively, use metrics or `vespa visit` - see [examples](/en/operations/batch-delete.html#example).
 
 
 
