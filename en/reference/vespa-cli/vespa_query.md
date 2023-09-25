@@ -21,7 +21,7 @@ vespa query query-parameters [flags]
 ### Examples
 
 ```
-$ vespa query "yql=select * from music where album contains 'head';" hits=5
+$ vespa query "yql=select * from music where album contains 'head'" hits=5
 ```
 
 ### Options

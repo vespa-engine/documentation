@@ -46,7 +46,7 @@ $ vespa deploy -t cloud -z perf.aws-us-east-1c
   -h, --help               help for deploy
   -l, --log-level string   Log level for Vespa logs. Must be "error", "warning", "info" or "debug" (default "error")
   -V, --version string     Override the Vespa runtime version to use in Vespa Cloud
-  -w, --wait int           Number of seconds to wait for service(s) to become ready. 0 to disable (default 60)
+  -w, --wait int           Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

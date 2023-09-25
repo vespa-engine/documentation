@@ -15,7 +15,7 @@ vespa activate [flags]
 
 ```
   -h, --help       help for activate
-  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 60)
+  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

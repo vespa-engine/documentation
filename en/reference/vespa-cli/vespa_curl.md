@@ -25,7 +25,7 @@ vespa curl [curl-options] path [flags]
 ```
 $ vespa curl /ApplicationStatus
 $ vespa curl -- -X POST -H "Content-Type:application/json" --data-binary @src/test/resources/A-Head-Full-of-Dreams.json /document/v1/namespace/music/docid/1
-$ vespa curl -- -v --data-urlencode "yql=select * from music where album contains 'head';" /search/\?hits=5
+$ vespa curl -- -v --data-urlencode "yql=select * from music where album contains 'head'" /search/\?hits=5
 ```
 
 ### Options
@@ -34,7 +34,7 @@ $ vespa curl -- -v --data-urlencode "yql=select * from music where album contain
   -n, --dry-run          Print the curl command that would be executed
   -h, --help             help for curl
   -s, --service string   Which service to query. Must be "deploy" or "container" (default "container")
-  -w, --wait int         Number of seconds to wait for service(s) to become ready. 0 to disable (default 60)
+  -w, --wait int         Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
