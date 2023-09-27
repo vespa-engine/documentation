@@ -134,6 +134,13 @@ The additional filters are applied as a post filtering
 step over the hits from the capped range query. *match-phase* on the other hand is safe to use with filters or other query terms, and also supports diversification which the capped range query term 
 does not support.  
 
+#### What could cause the relevance field to be -Infinity
+The returned [relevance](reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
+of a double. This can happen in two cases:
+
+- The [ranking](ranking.html) expression used a feature which became `NaN` (Not a Number). For example `log(0)` would produce
+-Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this. 
+- Surfacing low scoring hits using [grouping](grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](reference/schema-reference.html#keep-rank-count).
 
 
 {:.faq-section}
