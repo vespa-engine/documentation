@@ -184,7 +184,7 @@ jobs:
        GIT_SSH_COMMAND: "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
     steps:
       - update-to-latest: |
-          apt-get update && apt-get -y install python3-requests
+          apt-get update && apt-get -y install openjdk-17-jdk
           # must checkout the repo again using ssh for the credentials to work
           cat << EOF > pushtogit.sh
             #!/bin/bash
@@ -194,7 +194,10 @@ jobs:
             ssh-add <(echo \$VESPA_DOC_DEPLOY_KEY | base64 -d)
             set -x
             git clone git@github.com:vespa-engine/documentation.git documentation && cd documentation
-            python3 metric_reference_generator.py
+            VESPA_VERSION=\$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/metrics/maven-metadata.xml | \
+              grep -oP '<latest>\K([0-9]+\.[0-9]+\.[0-9]+)')
+            curl -SsLo metrics.jar "https://repo1.maven.org/maven2/com/yahoo/vespa/metrics/${VESPA_VERSION}/metrics-${VESPA_VERSION}.jar"
+            java -cp metrics.jar ai.vespa.metrics.docs.DocumentationGenerator en/reference
             git diff
             changes=\$(git status --porcelain | wc -l)
             if (( changes > 0 )); then
