@@ -131,80 +131,6 @@ like attribute vectors and memory index on shutdown, for quicker startup after s
 
 
 
-<h2 id="index">Index</h2>
-<p>
-  Index fields are string fields, used for text search.
-  Other field types are <a href="attributes.html">attributes</a>
-  and <a href="document-summaries.html">summary fields</a>.
-</p>
-<p>
-The Index in the Ready sub-database consists of a memory index and one or more disk indexes.
-Mutating document operations are applied to the memory index,
-which is <a href="#memory-index-flush">flushed</a> regularly.
-Flushed memory indexes are <a href="#disk-index-fusion">merged</a> with the primary disk index.
-</p><p>
-Proton stores position information in text indices by default, for proximity relevance -
-  <code>posocc</code> (below).
-All the occurrences of a term is stored in the posting list, with its position.
-This provides superior ranking features,
-but is somewhat more expensive than just storing a single occurrence per document.
-For most applications it is the correct tradeoff,
-since most of the cost is usually elsewhere and relevance is valuable.
-</p><p>
-Applications that only need occurrence information for filtering
-can use <a href="reference/schema-reference.html#rank">rank: filter</a>
-to optimize query performance, using only <code>boolocc</code>-files (below).
-</p><p>
-The memory index has a dictionary per index field.
-This contains all unique words in that field with mapping to posting lists with position information.
-The position information is used during ranking, see
-<a href="nativerank.html">nativeRank</a> for details on how a text match score is calculated.
-</p><p>
-The disk index stores the content of each index field in separate folders.
-Each folder contains:
-</p>
-<ul>
-    <li>Dictionary. Files: <code>dictionary.pdat</code>,
-      <code>dictionary.spdat</code>, <code>dictionary.ssdat</code>.</li>
-    <li>Compressed posting lists with position information. File: <code>posocc.dat.compressed</code>.</li>
-    <li>Posting lists with only occurrence information (bitvector). These are generated for common words.
-        Files: <code>boolocc.bdat</code>, <code>boolocc.idx</code>.</li>
-</ul>
-<p>
-Example:
-</p>
-<pre>{% highlight sh%}
-$ pwd
-/opt/vespa/var/db/vespa/search/cluster.mycluster/n1/documents/myschema/0.ready/index/index.flush.1/myfield
-$ ls -la
-total 7632
-drwxr-xr-x  2 org users     145 Oct 29 06:09 .
-drwxr-xr-x 74 org users    4096 Oct 29 06:11 ..
--rw-r--r--  1 org users    4096 Oct 29 06:11 boolocc.bdat
--rw-r--r--  1 org users    4096 Oct 29 06:11 boolocc.idx
--rw-r--r--  1 org users    8192 Oct 29 06:11 dictionary.pdat
--rw-r--r--  1 org users    8192 Oct 29 06:11 dictionary.spdat
--rw-r--r--  1 org users    4120 Oct 29 06:11 dictionary.ssdat
--rw-r--r--  1 org users 7778304 Oct 29 06:11 posocc.dat.compressed
-{% endhighlight %}</pre>
-<p>
-  Note that <code>boolocc</code>-files are empty if number of occurrences is small, like in the example above.
-</p>
-
-
-<h2 id="attributes">Attributes</h2>
-<p>
-<a href="attributes.html">Attribute</a> fields are in-memory fields used for
-matching, ranking, sorting and grouping.
-Each attribute is a separate component that consists of a set of
-<a href="attributes.html#data-structures">data structures</a>
-to store values for that field across all documents in a sub-database.
-Attributes are managed by the Ready sub-database.
-Some attributes can also be managed by the Not Ready sub-database,
-see <a href="attributes.html#fast-access">high-throughput updates</a> for details.
-</p>
-
-
 <h2 id="document-store">Document store</h2>
 <p>
   Documents are stored as compressed serialized blobs in the <em>document store</em>.
@@ -326,7 +252,6 @@ Notes:
 </ul>
 
 
-
 <h3 id="memory-usage">Memory usage</h3>
 <p>
   The document store has a mapping in memory from local ID (LID) to position in a document store file (.dat).
@@ -337,6 +262,82 @@ Notes:
   gives the size in memory -
   use the <a href="reference/state-v1.html#state-v1-metrics">metric API</a> to find it.
   A rule of thumb is 12 bytes per document.
+</p>
+
+
+
+<h2 id="attributes">Attributes</h2>
+<p>
+<a href="attributes.html">Attribute</a> fields are in-memory fields used for
+matching, ranking, sorting and grouping.
+Each attribute is a separate component that consists of a set of
+<a href="attributes.html#data-structures">data structures</a>
+to store values for that field across all documents in a sub-database.
+Attributes are managed by the Ready sub-database.
+Some attributes can also be managed by the Not Ready sub-database,
+see <a href="attributes.html#fast-access">high-throughput updates</a> for details.
+</p>
+
+
+
+<h2 id="index">Index</h2>
+<p>
+  Index fields are string fields, used for text search.
+  Other field types are <a href="attributes.html">attributes</a>
+  and <a href="document-summaries.html">summary fields</a>.
+</p>
+<p>
+The Index in the Ready sub-database consists of a memory index and one or more disk indexes.
+Mutating document operations are applied to the memory index,
+which is <a href="#memory-index-flush">flushed</a> regularly.
+Flushed memory indexes are <a href="#disk-index-fusion">merged</a> with the primary disk index.
+</p><p>
+Proton stores position information in text indices by default, for proximity relevance -
+  <code>posocc</code> (below).
+All the occurrences of a term is stored in the posting list, with its position.
+This provides superior ranking features,
+but is somewhat more expensive than just storing a single occurrence per document.
+For most applications it is the correct tradeoff,
+since most of the cost is usually elsewhere and relevance is valuable.
+</p><p>
+Applications that only need occurrence information for filtering
+can use <a href="reference/schema-reference.html#rank">rank: filter</a>
+to optimize query performance, using only <code>boolocc</code>-files (below).
+</p><p>
+The memory index has a dictionary per index field.
+This contains all unique words in that field with mapping to posting lists with position information.
+The position information is used during ranking, see
+<a href="nativerank.html">nativeRank</a> for details on how a text match score is calculated.
+</p><p>
+The disk index stores the content of each index field in separate folders.
+Each folder contains:
+</p>
+<ul>
+    <li>Dictionary. Files: <code>dictionary.pdat</code>,
+      <code>dictionary.spdat</code>, <code>dictionary.ssdat</code>.</li>
+    <li>Compressed posting lists with position information. File: <code>posocc.dat.compressed</code>.</li>
+    <li>Posting lists with only occurrence information (bitvector). These are generated for common words.
+        Files: <code>boolocc.bdat</code>, <code>boolocc.idx</code>.</li>
+</ul>
+<p>
+Example:
+</p>
+<pre>{% highlight sh%}
+$ pwd
+/opt/vespa/var/db/vespa/search/cluster.mycluster/n1/documents/myschema/0.ready/index/index.flush.1/myfield
+$ ls -la
+total 7632
+drwxr-xr-x  2 org users     145 Oct 29 06:09 .
+drwxr-xr-x 74 org users    4096 Oct 29 06:11 ..
+-rw-r--r--  1 org users    4096 Oct 29 06:11 boolocc.bdat
+-rw-r--r--  1 org users    4096 Oct 29 06:11 boolocc.idx
+-rw-r--r--  1 org users    8192 Oct 29 06:11 dictionary.pdat
+-rw-r--r--  1 org users    8192 Oct 29 06:11 dictionary.spdat
+-rw-r--r--  1 org users    4120 Oct 29 06:11 dictionary.ssdat
+-rw-r--r--  1 org users 7778304 Oct 29 06:11 posocc.dat.compressed
+{% endhighlight %}</pre>
+<p>
+  Note that <code>boolocc</code>-files are empty if number of occurrences is small, like in the example above.
 </p>
 
 
