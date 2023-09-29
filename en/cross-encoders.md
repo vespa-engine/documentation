@@ -30,7 +30,7 @@ a ROBERTA-based transformer model for English and Chinese texts (multilingual):
 $ optimum-cli export onnx --task text-classification -m BAAI/bge-reranker-base ranker
 </pre>
 
-These two example ranking models uses different 
+These two example ranking models use different 
 language model [tokenization](reference/embedding-reference.html#huggingface-tokenizer-embedder) and also
 different transformer inputs.
 
@@ -206,7 +206,7 @@ tensor that we defined in the ranking profile.
 }{% endhighlight %}</pre>
 
 The retriever (query + first-phase ranking) can be anything, including 
-[nearest neighbor search](nearest-neighbor-search.html) aka dense retrival using bi-encoders.
+[nearest neighbor search](nearest-neighbor-search.html) a.k.a. dense retrival using bi-encoders.
 
 ## Performance
 There are three major scaling dimensions:
