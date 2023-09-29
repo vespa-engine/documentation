@@ -2,7 +2,7 @@
 # Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking With Transformer Cross-Encoder Models"
 redirect_from:
-- /documentation/onnx.html
+- /documentation/cross-encoders.html
 ---
 
 [Cross-Encoder Transformer](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-4/) 
