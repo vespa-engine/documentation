@@ -246,7 +246,7 @@ This document contains several fields. Each field has a
 `tensor`. Fields also have properties. For instance, property `indexing`
 configures the _indexing pipeline_ for a field, which defines how Vespa will
 treat input during indexing — see [indexing
-language](../reference/advanced-indexing-language.html). Each part of the
+language](../reference/indexing-language-reference.html). Each part of the
 indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
