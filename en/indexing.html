@@ -6,26 +6,9 @@ redirect_from:
 ---
 
 <p>
-  Indexing is the process of <a href="/en/operations-selfhosted/routing.html">routing</a>
-  document writes to indexing processors,
-  processing (indexing) documents and writing the documents to content clusters.
-</p>
-<p>
   Refer to the <a href="overview.html">overview</a>.
   The primary index configuration is the <a href="schemas.html">schema</a>.
   <a href="reference/services.html">services.xml</a> configures how indexing is distributed to the nodes.
-</p>
-<p>
-  This article documents the default indexing, how to configure indexing for different clusters
-  and how to add custom document processing.
-</p>
-<p>
-  See <a href="https://github.com/vespa-engine/vespa/issues/13193">#13193</a>
-  for a discussion on using <em>default</em> as a name.
-</p>
-<p>
-  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing">
-    document-processing</a> is an example of custom document processing, and useful for testing routing.
 </p>
 
 
@@ -35,7 +18,7 @@ redirect_from:
   Vespa does not have a "date" field type.
   Best practise is using a <a href="reference/schema-reference.html#long">long</a> field.
   If the date is a string in the source data,
-  one can use <a href="reference/advanced-indexing-language.html#to_epoch_second">to_epoch_second</a>
+  one can use <a href="reference/indexing-language-reference.html#to_epoch_second">to_epoch_second</a>
   to transform into a long-field:
 </p>
 <pre>
@@ -50,18 +33,127 @@ schema docs {
     field date type long {
         indexing: input date_string | to_epoch_second | attribute | summary
     }
+
+    field last_modified type long {
+        indexing: now | attribute | summary
+    }
 }
 </pre>
 <p>
-  Query results will have the two fields,
-  and the synthetic <code>date</code> field can be used in queries and <a href="grouping.html">grouping</a>:
+  The synthetic <code>date</code> field can be used in queries and <a href="grouping.html">grouping</a>:
 </p>
 <pre>{% highlight json %}
 "fields": {
+    "last_modified": 1695995429,
     "date": 1703437243,
     "date_string": "2023-12-24T17:00:43.000Z"
 }
 {% endhighlight %}</pre>
-{% include note.html content='The <code>date</code> field above is placed
+{% include note.html content='The <code>date</code> and <code>last_modified</code> fields above are placed
 <span style="text-decoration: underline">outside</span> the <code>document</code> section,
-as its content is generated from the document input.' %}
+as their content is generated from the document input.
+Use <code>vespa visit --field-set "[all]"</code> to dump all fields' %}
+<p>Note how <a href="/en/reference/indexing-language-reference.html#now">now</a> is used to get current time.</p>
+
+
+
+
+<h2 id="execution-value-example">Execution value example</h2>
+
+<p>Accessing the execution value (the value passed into this expression) explicitly is useful when it is to be used
+  as part of an expression such as concatenation. In this example we have a document with a title and an array of sentences, and we
+  prepend each sentence by the document title (and a space), before converting it to a set of embedding vectors
+  (represented by a 2d mixed tensor).</p>
+
+<pre>
+input mySentenceArray | for_each { input title . " " . _ } | embed | attribute my2dTensor | index my2dTensor
+</pre>
+
+
+<h2 id="choice-example">Choice (||) example</h2>
+
+<p>The choice expression is used to provide alternatives if an expression may return null.</p>
+<pre>
+(input myField1 || "") . " " . (input myField2 || "") | embed | attribute | index
+</pre>
+<p>
+  In this example two fields are concatenated, but if one of the fields is empty, the empty string is used instead.
+  If the empty string alternatives are not provided, no embedding will be produced if either input field is missing.
+</p>
+
+
+<h2 id="select-input-example">select_input example</h2>
+<p>
+  The <code>select_input</code> expression is used to choose a statement to
+  execute based on which fields are non-empty in the input document:
+</p>
+<pre>
+select_input {
+    CX:   input CX | set_var CX;
+    CA:   input CA . " " . input CB | set_var CX;
+}
+</pre>
+<p>
+  This statement executes <code>input CX | set_var CX;</code> unless CX is empty.
+  If so, it will execute <code>input CA . " " . input CB | set_var CX;</code> unless CA is empty.
+</p>
+
+
+
+<h2 id="switch-example">Switch example</h2>
+<p>
+  The switch-expression behaves similarly to the switch-statement in other
+  programming languages. Each case in the switch-expression consists of a
+  string and a statement. The execution value is compared to each string,
+  and if there is a match, the corresponding statement is executed. An
+  optional default operation (designated by <code>default:</code>) can be
+  added to the end of the switch:
+</p>
+<pre>
+input mt | switch {
+    case "audio": input fa | index;
+    case "video": input fv | index;
+    default: 0 | index;
+};
+</pre>
+
+
+
+<h2 id="combine-values-in-indexing-statements">Indexing statements example</h2>
+<p>
+  Using indexing statements, multiple document fields can be used to produce one index structure field.
+  For example, the index statement:
+</p>
+<pre>
+input field1 . input field2 | attribute field2;
+</pre>
+<p>
+  combines <em>field1</em> and <em>field2</em> into the attribute named <em>field2</em>.
+  When partially updating documents which contains indexing statement which
+  combines multiple fields the following rules apply:
+</p>
+<ul>
+  <li>Only attributes where <em>all</em> the source values are available in
+    the source document update will be updated</li>
+  <li>The document update will fail when indexed (only) if <em>no</em>
+    attributes end up being updated when applying the rule above</li>
+</ul>
+<p>
+  Example: If a schema has the indexing statements
+</p>
+<pre>
+input field1 | attribute field1;
+input field1 . input field2 | attribute field2;
+</pre>
+<p>the following will happen for the different partial updates:</p>
+<table class="table">
+  <thead>
+  <tr><th>Partial update contains</th><th>Result</th></tr>
+  </thead>
+  <tbody>
+  <tr><td>field1</td><td>field1 is updated</td></tr>
+  <tr><td>field2</td><td>The update fails</td></tr>
+  <tr><td>field1 and field2</td><td>field1 and field2 are updated</td></tr>
+  </tbody>
+</table>
+
