@@ -10,7 +10,8 @@ based text ranking models are generally more effective than [text embedding](emb
 as they take both the query and the document as input with full cross-attention between all the query and document tokens. 
 
 The downside of cross-encoder models is the computional complexity. This document is a guide
-on how to export cross-encoder Transformer based models from [huggingface](https://huggingface.co/) for use in Vespa. 
+on how to export cross-encoder Transformer based models from [huggingface](https://huggingface.co/), 
+and how to configure them for use in Vespa. 
 
 ## Exporting cross-encoder models 
 For exporting models from HF to [ONNX](onnx.html), we recommend the [Optimum](https://huggingface.co/docs/optimum/main/en/index)
@@ -211,14 +212,16 @@ The retriever (query + first-phase ranking) can be anything, including
 ## Performance
 There are three major scaling dimensions:
 
-- The number of hits that are re-ranked (`rerank-count`). Complexity is linear with the number of hits that is re-ranked.
-- The size of the transformer model and the weights (float versus quantized)
+- The number of hits that are re-ranked [rerank-count](reference/schema-reference.html#globalphase-rerank-count) Complexity is linear with the number of hits that are re-ranked.
+- The size of the transformer model used.
 - The sequence input length. Transformer models scales quadratic with the input sequence length.
 
-For any models larger than 30-40M parameters we recommend using GPU to accelerate inference.
+For models larger than 30-40M parameters, we recommend using GPU to accelerate inference. 
+Quantization of model weights can drastically improve serving efficiency on CPU. See
+[Optimum Quantization](https://huggingface.co/docs/optimum/onnxruntime/usage_guides/quantization)
 
 ## Examples
 
 The [Transformers](https://github.com/vespa-engine/sample-apps/tree/master/transformers)
-sample application demonstrates using cross-encoders to re-rank documents. 
+sample application demonstrates using cross-encoders. 
 
