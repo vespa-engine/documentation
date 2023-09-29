@@ -679,7 +679,7 @@ function execute_all() {
                 var param = setup["f"][cell]["p"];
                 var result = results["f"][cell];
 
-                result.set("n", param["n"]);
+                result.set("n", replace_html_code(param["n"]));
                 result.set("e", param["e"]);
                 result.set("executing", false);
 
