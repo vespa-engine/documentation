@@ -196,7 +196,7 @@ To monitor progress, take a look at the
 sample application for the _clustercontroller_ status page - this shows buckets pending, live.
 Finally, use the `.idealstate.merge_bucket.pending` metric to track progress -
 when 0, there are no more data syncing operations - see
-[monitor distance to ideal state](operations/admin-procedures.html#monitor-distance-to-ideal-state).
+[monitor distance to ideal state](/en/operations-selfhosted/admin-procedures.html#monitor-distance-to-ideal-state).
 Nodes will work as normal during data sync, and query coverage will be the same.
 
 #### How does namespace relate to schema?
@@ -401,7 +401,7 @@ and the schema name is the same as the document name.
 
 #### How to debug document processing chain configuration?
 This configuration is a combination of content and container cluster configuration,
-see [indexing](indexing.html) and [feed troubleshooting](operations/admin-procedures.html#troubleshooting).
+see [indexing](indexing.html) and [feed troubleshooting](/en/operations-selfhosted/admin-procedures.html#troubleshooting).
 
 #### I feed documents with no error, but they are not in the index
 This is often a problem if using [document expiry](documents.html#document-expiry),
@@ -588,7 +588,7 @@ keeping <span style="text-decoration: underline">maximum</span> memory used unde
 using features like [feed block](operations/feed-block.html).
 
 When deleting documents, one can observe a slight <span style="text-decoration: underline">increase</span> in memory.
-A deleted document is represented using a [tombstone](operations/admin-procedures.html#content-cluster-configuration),
+A deleted document is represented using a [tombstone](/en/operations-selfhosted/admin-procedures.html#content-cluster-configuration),
 that will later be removed, see [removed-db-prune-age](reference/services-content.html#removed-db-prune-age).
 When running garbage collection,
 the summary store is scanned using mmap and both VIRT and page cache memory usage increases.

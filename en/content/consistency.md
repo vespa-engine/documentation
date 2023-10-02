@@ -142,4 +142,4 @@ than this TTL should ideally have their indexes removed before being allowed bac
 If not, there is a risk of resurrecting previously removed documents.
 Vespa does not currently detect or handle this scenario automatically.
 
-See the documentation on [data-retention-vs-size](../operations/admin-procedures.html#data-retention-vs-size).
+See the documentation on [data-retention-vs-size](/en/operations-selfhosted/admin-procedures.html#data-retention-vs-size).
