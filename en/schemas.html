@@ -252,6 +252,7 @@ Read more in <a href="reference/schema-reference.html#modifying-schemas">modifyi
 
 
 <h2 id="multiple-schemas">Multiple schemas</h2>
+<!-- ToDo: Go over this section once more and restructure a little / clarify doc type / schema  -->
 <p>
 An application can define multiple document types, each in their own schema.
 Multiple schemas can either be mapped to a single content cluster, or one
@@ -264,24 +265,82 @@ Vespa will by default query all document types and all clusters in parallel,
 and blend results based on score - find details in <a href="federation.html">federation</a>.
 </p>
 <p>
-To limit the query to a subset of the document types,
+To limit a query to a subset of the document types,
 set <a href="reference/query-api-reference.html#model.restrict">restrict</a>
 to a comma-separated list of schema names:
 </p>
 <pre>
-vespa query "select * from sources * where title contains \"bob\"" \
-  <span class="pre-hilite">restrict=music,books</span>
+$ vespa query 'select * from sources * where title contains "bob"' <span class="pre-hilite">restrict=music,books</span>
 </pre>
 
 
-
-<h2 id="content-cluster-mapping">Content cluster mapping</h2>
+<h3 id="content-nodes-and-schemas">Content nodes and schemas</h3>
 <p>
-A schema is mapped to a content cluster in <a href="reference/services.html">services.xml</a>.
-The content cluster stores and computes over documents in the schema using the rank profile.
-Applications can map many schemas to one content cluster.
-Use multiple content clusters if documents of different schemas have different performance characteristics -
-read more in the <a href="performance/sizing-search.html">serving scaling guide</a>.
+  Schemas can be thought of as tables in a database.
+  Most applications start off with one schema, adding schemas as more content types are needed.
+  Queries can hit one, some, or all schemas,
+  using the <a href="../schemas.html#multiple-schemas">restrict</a> query parameter
+  or selecting in <a href="../query-language.html">YQL</a>.
+</p>
+<p>
+  Content nodes can hold multiple schemas:
+</p>
+<pre>{% highlight xml %}
+<content id="musiccluster" version="1.0">
+    <documents>
+        <document type="albums" mode="index" />
+        <document type="lyrics" mode="index" />
+        <document type="tracks" mode="index" />
+    </documents>
+{% endhighlight %}</pre>
+<p>
+  One or more schemas can be deployed in separate content clusters:
+</p>
+<pre>{% highlight xml %}
+<content id="musiccluster" version="1.0">
+    <documents>
+        <document type="albums" mode="index" />
+        <document type="tracks" mode="index" />
+    </documents>
+
+<content id="lyricscluster" version="1.0">
+    <documents>
+        <document type="lyrics" mode="index" />
+    </documents>
+{% endhighlight %}</pre>
+<p>
+  The evolution can be illustrated like:
+</p>
+<img src="/assets/img/schemas-and-content-clusters.svg" alt="Schemas deployed in multiple content clusters"
+     width="570px" height="auto" />
+<p>
+  The optimal mapping from schema to content cluster is application dependent:
+</p>
+<ul>
+  <li>
+    If there are no performance or sizing problems with all schemas in one content cluster,
+    keep this - one cluster is easier to manage than multiple.
+  </li>
+  <li>
+    Data in one schema can dominate the others.
+    In these cases, consider a separate content cluster with a resource specification targeted for the write/query load.
+    The extreme case of this is one content cluster per schema.
+    This is a simple model, too, and enables resource optimization per schema.
+  </li>
+</ul>
+<p>
+  <a href="../performance/sizing-search.html">Sizing search</a> is a good read for how to optimize content clusters.
+</p>
+
+
+<h3 id="content-cluster-mapping">Content cluster mapping</h3>
+<!--
+<p>
+  A schema is mapped to a content cluster in <a href="reference/services.html">services.xml</a>.
+  The content cluster stores and computes over documents in the schema using the rank profile.
+  Applications can map many schemas to one content cluster.
+  Use multiple content clusters if documents of different schemas have different performance characteristics -
+  read more in the <a href="performance/sizing-search.html">serving scaling guide</a>.
 </p>
 <code>my-app/services.xml</code>:
 <pre>
@@ -290,9 +349,6 @@ read more in the <a href="performance/sizing-search.html">serving scaling guide<
     &lt;container id="default" version="1.0"&gt;
         &lt;search /&gt;
         &lt;document-api /&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" /&gt;
-        &lt;/nodes&gt;
     &lt;/container&gt;
     &lt;content id="items" version="1.0"&gt;
         &lt;redundancy&gt;1&lt;/redundancy&gt;
@@ -300,27 +356,21 @@ read more in the <a href="performance/sizing-search.html">serving scaling guide<
             &lt;document <span class="pre-hilite">type="music"</span> mode="index" /&gt;
             &lt;document <span class="pre-hilite">type="books"</span> mode="index" /&gt;
         &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" distribution-key="0" /&gt;
-        &lt;/nodes&gt;
     &lt;/content&gt;
 &lt;/services&gt;
 </pre>
+-->
 <p>
-To limit a query to a subset of the content clusters,
-set <a href="reference/query-language-reference.html#from-sources">from sources</a>
-to a comma-separated list of content cluster ids, e.g.:
+  To limit a query to a subset of the content clusters,
+  set <a href="reference/query-language-reference.html#from-sources">from sources</a>
+  to a comma-separated list of content cluster ids, e.g.:
 </p>
 <pre>
-vespa query "select * from sources <span class="pre-hilite">items, news</span> where title contains \"bob\""
+$ vespa query 'select * from sources <span class="pre-hilite">items, news</span> where title contains "bob"'
 </pre>
 <p>
-The request parameter <em>restrict</em> and <em>from sources</em> can be combined
-to search both a subset of document types and content clusters.
-</p>
-<p>
-  See <a href="operations/multinode-systems.html#content-nodes-and-schemas">content nodes and schemas</a>
-  for more details.
+  The request parameter <em>restrict</em> and <em>from sources</em> can be combined
+  to search both a subset of document types and content clusters.
 </p>
 
 
