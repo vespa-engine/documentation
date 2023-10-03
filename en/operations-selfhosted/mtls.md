@@ -3,15 +3,16 @@
 title: "Securing Vespa with mutually authenticated TLS (mTLS)"
 redirect_from:
 - /documentation/mtls.html
+- /en/mtls.html
 ---
 
-{% include note.html content="This document is only relevant if **self-hosting Vespa**." %}
+{% include note.html content="This document is relevant for **self-hosted Vespa** only." %}
 
 [Transport Layer Security (TLS)](https://datatracker.ietf.org/doc/html/rfc5246) is a protocol that uses cryptography
 to enable secure, tamper-proof communication over the network.
 This document describes the TLS functionality in Vespa and how to configure it.
 When properly configured, TLS ensures only trusted Vespa services can talk to each other.
-See accompanying [reference](reference/mtls.html) for details on configuration syntax.
+See accompanying [reference](/en/reference/mtls.html) for details on configuration syntax.
 
 By default, all communication between self-hosted Vespa nodes is *unauthenticated* and *unencrypted*.
 This means anyone with network access can read and write data and potentially execute commands on the system.
@@ -25,8 +26,8 @@ To ensure you are ready for this, secure your systems as soon as possible.
 Vespa offers two separate planes of TLS connectivity:
 * **HTTP(S) application containers.** This is the edge of your cluster where search queries and feed requests are handled.
   Authentication and authorization for this plane is handled separately from Vespa-internal traffic; this is covered
-  in [Configuring Http Servers and Filters](jdisc/http-server-and-filters.html#tls).
-  See also [Securing the application container](securing-your-vespa-installation.html#securing-the-application-container).
+  in [Configuring Http Servers and Filters](/en/jdisc/http-server-and-filters.html#tls).
+  See also [Securing the application container](/en/securing-your-vespa-installation.html#securing-the-application-container).
 * **Vespa-internal communication.** This is all communication between processes running on the nodes in your cluster.
   This includes clients connecting directly to the backends instead of going through the application container APIs.
   Only mutually authenticated TLS (mTLS) may be configured for this traffic.
@@ -128,7 +129,7 @@ In that case simply having a valid certificate is not sufficient to be used as a
 You can constrain which certificates may access the internal Vespa service by using *authorization rules*.
 These are consulted as part of every TLS handshake and must pass before any connection can be established.
 
-Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](reference/mtls.html#top-level-elements) member.
+Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](/en/reference/mtls.html#top-level-elements) member.
 
 #### Example
 
@@ -169,7 +170,7 @@ Our TLS config file implementing these rules may look like this:
 }
 {% endhighlight %}</pre>
 
-See the [reference documentation](reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
+See the [reference documentation](/en/reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
 
 
 ### Automatic reloading of crypto material
@@ -196,8 +197,8 @@ With no Vespa services running on any nodes, ensure the `VESPA_TLS_CONFIG_FILE` 
 a valid configuration file path on every node,
 and [is visible to any Vespa start scripts](/en/operations-selfhosted/files-processes-and-ports.html#environment-variables).
 Start Vespa services as you normally would. Check cluster health with
-[vespa-get-cluster-state](reference/vespa-cmdline-tools.html#vespa-get-cluster-state)
-and check [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
+[vespa-get-cluster-state](/en/reference/vespa-cmdline-tools.html#vespa-get-cluster-state)
+and check [vespa-logfmt](/en/reference/vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
 that indicate a misconfiguration (such as certificate rejections etc.)—see the Troubleshooting section.
 The cluster should quickly converge to an available state.
 
@@ -272,7 +273,7 @@ $ openssl s_client -connect <hostname>:<port> \
 Vespa enables the [HTTPS endpoint identification algorithm](https://datatracker.ietf.org/doc/html/rfc2818#section-3) by default.
 This extra verification can only be used if all certificates have their respective host's IP addresses and hostnames
 in the Subject / Subject Alternative Names extensions.
-[Disable hostname validation](reference/mtls.html#top-level-elements) if this is not the case.
+[Disable hostname validation](/en/reference/mtls.html#top-level-elements) if this is not the case.
 
 
 ### Application deployment fails with `SEC_ERROR_BAD_KEY`
