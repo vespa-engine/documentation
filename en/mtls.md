@@ -85,7 +85,7 @@ VESPA_TLS_CONFIG_FILE=/absolute/path/to/my-tls-config.json
 This environment variable must be set to a valid file path before any Vespa services are started on the node.
 All nodes in your Vespa application must have a TLS config file pointing to the certificates that are trusted by the other nodes.
 
-See [Vespa environment variables](reference/files-processes-and-ports.html#environment-variables)
+See [Vespa environment variables](/en/operations-selfhosted/files-processes-and-ports.html#environment-variables)
 for information on configuring environment variables for Vespa.
 
 Setting `VESPA_TLS_CONFIG_FILE` automatically enables TLS for all Vespa processes on the node.
@@ -109,7 +109,7 @@ Example:
 {% endhighlight %}</pre>
 
 Set the environment variable, for example by appending to
-[conf/vespa/default-env.txt](reference/files-processes-and-ports.html#environment-variables):
+[conf/vespa/default-env.txt](/en/operations-selfhosted/files-processes-and-ports.html#environment-variables):
 
 <pre>{% highlight sh %}
 override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
@@ -194,7 +194,7 @@ consider splitting file refreshing into multiple phases:
 ## Setting up TLS for a new Vespa application or upgrading with downtime
 With no Vespa services running on any nodes, ensure the `VESPA_TLS_CONFIG_FILE` environment variable is set to
 a valid configuration file path on every node,
-and [is visible to any Vespa start scripts](reference/files-processes-and-ports.html#environment-variables).
+and [is visible to any Vespa start scripts](/en/operations-selfhosted/files-processes-and-ports.html#environment-variables).
 Start Vespa services as you normally would. Check cluster health with
 [vespa-get-cluster-state](reference/vespa-cmdline-tools.html#vespa-get-cluster-state)
 and check [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
