@@ -3,6 +3,7 @@
 title: "Securing a Vespa Installation"
 redirect_from:
 - /documentation/securing-your-vespa-installation.html
+- /en/securing-your-vespa-installation.html
 ---
 {% include note.html content="This document is only relevant for **self-hosting Vespa** as Vespa Cloud does this for you." %}
 
