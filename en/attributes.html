@@ -19,8 +19,9 @@ field price type int {
 </p>
 <ul>
   <li>Flexible <a href="reference/schema-reference.html#match">match modes</a>
-    including exact match, prefix match, case-sensitive matching.</li>
-  <li>High sustained update rates by writing directly to memory.
+    including exact match, prefix match, and case-sensitive matching, but not token matching.</li>
+  <li>High sustained update rates (avoiding read-apply-write patterns). Any mutating operation against an attribute field 
+    is written to Vespa's <a href="proton.html#transaction-log">transaction log</a> and persisted, but appending to the log is sequential access, not random. 
     Read more in <a href="partial-updates.html">partial updates</a>.</li>
   <li>Instant query updates - values are immediately searchable.</li>
   <li><a href="document-summaries.html">Document Summaries</a> are memory-only operations if all fields are attributes.</li>
@@ -61,8 +62,7 @@ import field advertiser_ref.name as advertiser_name {}
   Attributes speed up query execution and <a href="partial-updates.html">document updates</a>, trading off memory.
   As data structures are regularly optimized, consider both static and temporary resource usage -
   see <a href="#attribute-memory-usage">attribute memory usage</a> below.
-  Attributes are regularly <a href="proton.html#attribute-flush">flushed</a> to disk.
-  Use attributes in document summaries to limit accesses to storage to generate result sets.
+  Use attributes in document summaries to limit access to storage to generate result sets.
 </p>
 <img src="/assets/img/attributes-update.svg" width="788px" height="auto"
      alt="Attribute is an in-memory data structure" />
@@ -137,7 +137,7 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
 <p>
   The attribute field's data type decides which data structures are used by the attribute
   to store values for that field across all documents on a content node.
-  For some data types a combination of data structures are used:
+  For some data types, a combination of data structures is used:
 </p>
 <ul>
   <li><em>Attribute Multivalue Mapping</em> stores arrays of values for array and weighed set types.</li>
@@ -146,7 +146,7 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
   <li><em>Attribute Tensor Store</em> stores tensor values for all tensor attributes.</li>
 </ul>
 <p>
-  In the following illustration a row represents a document, while a named column represents an attribute.
+  In the following illustration, a row represents a document, while a named column represents an attribute.
 </p>
 <img src="/assets/img/attributes.svg" width="668px" height="auto"
      alt="Attribute in-memory stores"/>
@@ -165,7 +165,7 @@ field image_sift_encoding type tensor&lt;float&gt;(x[128]) {
     <td>
       Like the "A" attribute, example <code>int</code>.
       The element size is the size of the type, like 4 bytes for an integer.
-      A memory buffer (indexed by Local ID) is holding all values directly.
+      A memory buffer (indexed by Local ID) holds all values directly.
     </td>
   </tr><tr>
     <td>Multi-valued</td>
@@ -280,7 +280,7 @@ Notes:
 
 <h2 id="attribute-memory-usage">Attribute memory usage</h2>
 <p>
-  Attribute structures are regularly optimized and this causes temporary resource usage -
+  Attribute structures are regularly optimized, and this causes temporary resource usage -
   read more in <a href="proton.html#proton-maintenance-jobs">maintenance jobs</a>.
   The memory footprint of an attribute depends on a few factors,
   data type being the most important:
@@ -345,9 +345,9 @@ schema foo {
 
 <h2 id="sizing">Sizing</h2>
 <p>
-  Attribute sizing is not an exact science, rather an  approximation.
+  Attribute sizing is not an exact science but rather an  approximation.
   The reason is that they vary in size.
-  Both number of documents, number of values and uniqueness of the values are variable.
+  Both the number of documents, number of values, and uniqueness of the values are variable.
   The components of the attributes that occupy memory are:
 </p>
 <table class="table">
@@ -554,12 +554,12 @@ schema foo {
 <p>
   For example using a second phase <a href="reference/schema-reference.html#secondphase-rerank-count">rerank-count</a>
   of 100 will limit the maximum number of page-ins/disk access per query to 100.
-  Running at 100 QPS would then need up to 10K disk accesses per query.
-  This is the worst case, if none of the accessed attribute data were already paged into memory.
+  Running at 100 QPS would need up to 10K disk accesses per query.
+  This is the worst case if none of the accessed attribute data were already paged into memory.
   This depends on access locality and memory pressure (size of the attribute data versus available memory).
 </p>
 <p>
-  In this example we have a dense tensor with
+  In this example, we have a dense tensor with
   1024 <a href="reference/tensor.html#tensor-type-spec">int8</a> values.
   The tensor attribute is only accessed during re-ranking (second-phase ranking expression):
 </p>
@@ -594,16 +594,16 @@ schema foo {
 <ul>
 <li>
 Unpredictable query latency as attribute access might touch disk. Limited queries per second throughput
-per node (depends on locality of document re-ranking requests).
+per node (depends on the locality of document re-ranking requests).
 </li>
 <li>
-Paged attributes are implemented by file backed memory mappings. The performance depends on
+Paged attributes are implemented by file-backed memory mappings. The performance depends on
 the <a href="https://tldp.org/LDP/tlk/mm/memory.html">Linux virtual memory management</a> ability to page
 data in and out. Using many threads per search/high query throughput might cause high system (kernel) CPU and
 system unresponsiveness.
 </li>
 <li>
-The content nodes total memory utilization will be close to 100% when using large paged attributes.
+The content node's total memory utilization will be close to 100% when using paged attributes.
 It's up to the Linux kernel to determine what part of the attribute data is paged into memory based on access patterns.
 A good understanding of how the Linux virtual memory management system works is recommended before enabling paged attributes.
 </li>
@@ -613,7 +613,7 @@ The
 from content nodes are not reflecting the reality when using paged attributes.
 They can indicate a usage that is much higher than the available memory on the node.
 This is because attribute memory usage is reported as the amount of data contained in the attribute,
-and whether this data is paged out to disk is under the control of the Linux kernel.
+and whether this data is paged out to disk is controlled by the Linux kernel.
 </li>
 <li>
 Using paged attributes doubles the disk usage of attribute data.
@@ -621,20 +621,20 @@ For example if the original attribute size is 92 GB (100M documents of the above
 using the <code>paged</code> setting will double the attribute disk usage to close to 200 GB.
 </li>
 <li>
-Changing the <code>paged</code> setting (e.g. removing the option) on a running system might cause hard out of memory situations as
-without <code>paged</code> the content nodes will attempt loading the attribute into memory without the option for page outs.
+Changing the <code>paged</code> setting (e.g. removing the option) on a running system might cause hard out-of-memory situations as
+without <code>paged</code>, the content nodes will attempt loading the attribute into memory without the option for page outs.
 </li>
 <li>
 Using a paged attribute in <a href="phased-ranking.html">first-phase</a> ranking
 can result in extremely high query latency if a large amount of the corpus is retrieved by the query.
-The number of disk accesses will in the worst case be equal to the number of hits the query produces.
+The number of disk accesses will, in the worst case, be equal to the number of hits the query produces.
 A similar problem can occur if running a query that searches a paged attribute.
 </li>
 <li>
 Using <code>paged</code> in combination with <a href="approximate-nn-hnsw.html">HNSW indexing</a> is <em>strongly</em> discouraged.
 <em>HNSW</em> indexing
-also searches and read tensors during indexing, causing random access during feeding. Once the total system memory usage reaches 100%,
-the Linux kernel will start paging pages in and out of memory. This can cause high system (kernel) CPU and slows down HNSW indexing
+also searches and reads tensors during indexing, causing random access during feeding. Once the system memory usage reaches 100%,
+the Linux kernel will start paging pages in and out of memory. This can cause a high system (kernel) CPU and slows down HNSW indexing
 throughput significantly.
 </li>
 </ul>
