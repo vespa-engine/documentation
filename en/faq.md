@@ -630,7 +630,7 @@ Topology matters, and this is much used in the high-volume Vespa applications to
 With [Vespa Cloud](https://cloud.vespa.ai/),
 we do automated background upgrades daily without noticeable serving impact.
 If you host Vespa yourself, you can do this, but need to implement the orchestration logic necessary to handle this.
-The high level procedure is found in [live-upgrade](operations/live-upgrade.html).
+The high level procedure is found in [live-upgrade](/en/operations-selfhosted/live-upgrade.html).
 
 #### Can Vespa be deployed multi-region?
 [Vespa Cloud](https://cloud.vespa.ai/en/reference/zones) has integrated support - query a global endpoint.
