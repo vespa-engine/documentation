@@ -630,7 +630,7 @@ Topology matters, and this is much used in the high-volume Vespa applications to
 With [Vespa Cloud](https://cloud.vespa.ai/),
 we do automated background upgrades daily without noticeable serving impact.
 If you host Vespa yourself, you can do this, but need to implement the orchestration logic necessary to handle this.
-The high level procedure is found in [live-upgrade](operations/live-upgrade.html).
+The high level procedure is found in [live-upgrade](/en/operations-selfhosted/live-upgrade.html).
 
 #### Can Vespa be deployed multi-region?
 [Vespa Cloud](https://cloud.vespa.ai/en/reference/zones) has integrated support - query a global endpoint.
@@ -759,7 +759,7 @@ Make sure you are running a recent version of the Docker image, do `docker pull 
 <!-- ToDo: remove this soon -->
 
 #### Deployment fails / nothing is listening on 19071
-Make sure all [Config servers](operations/configuration-server.html#troubleshooting) are started,
+Make sure all [Config servers](/en/operations-selfhosted/configuration-server.html#troubleshooting) are started,
 and are able to establish ZooKeeper quorum (if more than one) -
 see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) sample application.
 Validate that the container has [enough memory](operations/docker-containers.html).
