@@ -277,7 +277,7 @@ $ docker stop vespa; docker rm -f vespa
 </div>
 
 This will delete the Vespa application, including all data and configuration. See 
-[container tuning for production](../operations/docker-containers.html). 
+[container tuning for production](/en/operations-selfhosted/docker-containers.html). 
 
 
 ## Conclusion

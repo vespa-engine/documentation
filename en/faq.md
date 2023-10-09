@@ -762,7 +762,7 @@ Make sure you are running a recent version of the Docker image, do `docker pull 
 Make sure all [Config servers](/en/operations-selfhosted/configuration-server.html#troubleshooting) are started,
 and are able to establish ZooKeeper quorum (if more than one) -
 see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) sample application.
-Validate that the container has [enough memory](operations/docker-containers.html).
+Validate that the container has [enough memory](/en/operations-selfhosted/docker-containers.html).
 
 #### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
 The Config Server cluster with 3 nodes fails to start.
