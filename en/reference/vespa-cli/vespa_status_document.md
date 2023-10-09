@@ -33,6 +33,11 @@ title: vespa status document
 render_with_liquid: false
 ---
 
+---
+title: vespa status document
+render_with_liquid: false
+---
+
 ## vespa status document
 
 Verify that the document service is ready to use
