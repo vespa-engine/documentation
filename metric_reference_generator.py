@@ -1,4 +1,4 @@
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 import re
 
 import requests
@@ -43,7 +43,7 @@ class MetricSetReference:
 
     def as_html(self):
         return (f'---\n'
-                f'# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
+                f'# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
                 f'title: "{self.title}"\n'
                 f'---\n\n\n'
                 f'{self.metric_tables()}')
@@ -64,7 +64,7 @@ class MetricReference:
 
     def as_html(self):
         return (f'---\n'
-                f'# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
+                f'# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
                 f'title: "{self.title}"\n'
                 f'---\n\n\n'
                 f'<table class="table">\n'
@@ -91,7 +91,7 @@ class UnitReference:
 
     def as_html(self):
         return (f'---\n'
-                f'# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
+                f'# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.\n'
                 f'title: "{self.title}"\n'
                 f'---\n\n\n'
                 f'<table class="table">\n'
