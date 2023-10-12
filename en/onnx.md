@@ -175,7 +175,7 @@ sample application uses two different ONNX models:
 - One for extracting an answer string from a relevant passage
 
 ## Using vespa-analyze-onnx-model
-[vespa-analyze-onnx-model](reference/vespa-cmdline-tools.html#vespa-analyze-onnx-model)
+[vespa-analyze-onnx-model](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-analyze-onnx-model)
 is useful to find model inputs and outputs -
 example run on a config server where an application package with a model is deployed to:
 <pre>

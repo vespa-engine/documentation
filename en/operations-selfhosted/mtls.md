@@ -197,8 +197,8 @@ With no Vespa services running on any nodes, ensure the `VESPA_TLS_CONFIG_FILE` 
 a valid configuration file path on every node,
 and [is visible to any Vespa start scripts](/en/operations-selfhosted/files-processes-and-ports.html#environment-variables).
 Start Vespa services as you normally would. Check cluster health with
-[vespa-get-cluster-state](/en/reference/vespa-cmdline-tools.html#vespa-get-cluster-state)
-and check [vespa-logfmt](/en/reference/vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
+[vespa-get-cluster-state](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-get-cluster-state)
+and check [vespa-logfmt](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
 that indicate a misconfiguration (such as certificate rejections etc.)—see the Troubleshooting section.
 The cluster should quickly converge to an available state.
 

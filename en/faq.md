@@ -771,5 +771,5 @@ the hosts wait for ZooKeeper in a catch 22 -
 see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 #### How to display vespa.log?
-Use [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
+Use [vespa-logfmt](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
 If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.
