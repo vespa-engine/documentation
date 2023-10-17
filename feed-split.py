@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 import copy
 import json
 import sys
@@ -40,12 +40,20 @@ def xml_fixup(text):
         text = text.replace(match,escaped_match)
     return text
 
+
+def is_selfhosted_doc(doc):
+    path = doc['fields']['path']
+    if "/en/operations-selfhosted" in path:
+        return True
+    return False
+
+
 def create_text_doc(doc, paragraph, paragraph_id, header):
     id = doc['put']
     #id:open:doc::open/en/access-logging.html#
     _,namespace,doc_type,_,id = id.split(":")
     #print("n={},doc_type={},id={}".format(namespace,doc_type,id))
-   
+
     new_namespace = namespace + "-p"
     id = "id:{}:{}::{}".format(new_namespace, "paragraph", id)
     fields = doc['fields']
@@ -59,10 +67,11 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
             "namespace": new_namespace,
             "content": paragraph,
             "content_tokens": n_tokens,
-            "base_uri": sys.argv[2]
+            "base_uri": sys.argv[2],
+            "selfhosted": is_selfhosted_doc(doc)
         }
     }
-    
+
     if header:
         title = fields['title']
         new_title = title + " - " + header
@@ -73,7 +82,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
 
     new_doc['fields']['path'] = new_doc['fields']['path'] + "#" + paragraph_id.replace("?","")
     new_doc['put'] = new_doc['put'] + "-" + urllib.parse.quote(paragraph_id)
-    
+
     return new_doc
 
 
@@ -227,7 +236,7 @@ def main():
         id = op['put']
         if id in questions_expansion:
             op['fields']['questions'] = questions_expansion[id]
-        else: 
+        else:
             op['fields']['questions'] = [op['fields']['title']]
 
     with open("paragraph_index.json", "w") as fp:

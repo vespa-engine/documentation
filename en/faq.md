@@ -1,5 +1,5 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: FAQ - frequently asked questions
 style: faq
 redirect_from:
@@ -196,7 +196,7 @@ To monitor progress, take a look at the
 sample application for the _clustercontroller_ status page - this shows buckets pending, live.
 Finally, use the `.idealstate.merge_bucket.pending` metric to track progress -
 when 0, there are no more data syncing operations - see
-[monitor distance to ideal state](operations/admin-procedures.html#monitor-distance-to-ideal-state).
+[monitor distance to ideal state](/en/operations-selfhosted/admin-procedures.html#monitor-distance-to-ideal-state).
 Nodes will work as normal during data sync, and query coverage will be the same.
 
 #### How does namespace relate to schema?
@@ -401,7 +401,7 @@ and the schema name is the same as the document name.
 
 #### How to debug document processing chain configuration?
 This configuration is a combination of content and container cluster configuration,
-see [indexing](indexing.html) and [feed troubleshooting](operations/admin-procedures.html#troubleshooting).
+see [indexing](indexing.html) and [feed troubleshooting](/en/operations-selfhosted/admin-procedures.html#troubleshooting).
 
 #### I feed documents with no error, but they are not in the index
 This is often a problem if using [document expiry](documents.html#document-expiry),
@@ -588,7 +588,7 @@ keeping <span style="text-decoration: underline">maximum</span> memory used unde
 using features like [feed block](operations/feed-block.html).
 
 When deleting documents, one can observe a slight <span style="text-decoration: underline">increase</span> in memory.
-A deleted document is represented using a [tombstone](operations/admin-procedures.html#content-cluster-configuration),
+A deleted document is represented using a [tombstone](/en/operations-selfhosted/admin-procedures.html#content-cluster-configuration),
 that will later be removed, see [removed-db-prune-age](reference/services-content.html#removed-db-prune-age).
 When running garbage collection,
 the summary store is scanned using mmap and both VIRT and page cache memory usage increases.
@@ -630,7 +630,7 @@ Topology matters, and this is much used in the high-volume Vespa applications to
 With [Vespa Cloud](https://cloud.vespa.ai/),
 we do automated background upgrades daily without noticeable serving impact.
 If you host Vespa yourself, you can do this, but need to implement the orchestration logic necessary to handle this.
-The high level procedure is found in [live-upgrade](operations/live-upgrade.html).
+The high level procedure is found in [live-upgrade](/en/operations-selfhosted/live-upgrade.html).
 
 #### Can Vespa be deployed multi-region?
 [Vespa Cloud](https://cloud.vespa.ai/en/reference/zones) has integrated support - query a global endpoint.
@@ -759,10 +759,10 @@ Make sure you are running a recent version of the Docker image, do `docker pull 
 <!-- ToDo: remove this soon -->
 
 #### Deployment fails / nothing is listening on 19071
-Make sure all [Config servers](operations/configuration-server.html#troubleshooting) are started,
+Make sure all [Config servers](/en/operations-selfhosted/configuration-server.html#troubleshooting) are started,
 and are able to establish ZooKeeper quorum (if more than one) -
 see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) sample application.
-Validate that the container has [enough memory](operations/docker-containers.html).
+Validate that the container has [enough memory](/en/operations-selfhosted/docker-containers.html).
 
 #### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
 The Config Server cluster with 3 nodes fails to start.
@@ -771,5 +771,5 @@ the hosts wait for ZooKeeper in a catch 22 -
 see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 #### How to display vespa.log?
-Use [vespa-logfmt](reference/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
+Use [vespa-logfmt](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
 If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.

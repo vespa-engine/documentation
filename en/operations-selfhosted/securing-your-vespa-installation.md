@@ -1,8 +1,9 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Securing a Vespa Installation"
 redirect_from:
 - /documentation/securing-your-vespa-installation.html
+- /en/securing-your-vespa-installation.html
 ---
 {% include note.html content="This document is only relevant for **self-hosting Vespa** as Vespa Cloud does this for you." %}
 
@@ -35,7 +36,7 @@ a controlled set of trusted hosts. All Vespa hosts must be able to connect
 to, and receive connections from, all other Vespa hosts that are part of the
 same installation. For added security, consider limiting Vespa hosts to only
 be able to talk to other Vespa hosts. If you are contacting external services
-as part of [federation](federation.html) in the application container, your
+as part of [federation](/en/federation.html) in the application container, your
 container hosts must be able to connect to these services.
  
 This may be implemented by e.g. iptables, AWS Security Groups or similar technologies.
@@ -49,7 +50,7 @@ should be sent by your frontends or backends.
  
 Inter-node communication inside a Vespa installation is not encrypted by default
 and will need to be configured explicitly as documented in 
-[Securing Vespa with mutually authenticated TLS](mtls.html).
+[Securing Vespa with mutually authenticated TLS](/en/operations-selfhosted/mtls.html).
 
 
 
@@ -58,11 +59,11 @@ and will need to be configured explicitly as documented in
 By default, the container allows unauthenticated writes to, and reads from, the Vespa installation.
 For a production deployment, this must be locked down.
  
-Connections to the HTTP containers may be [protected with TLS](jdisc/http-server-and-filters.html#tls).
+Connections to the HTTP containers may be [protected with TLS](/en/jdisc/http-server-and-filters.html#tls).
 Mutual TLS is supported and should be configured.
  
 Access to the container API endpoints can be controlled using
-[request filters](jdisc/http-server-and-filters.html#set-up-filter-chains).
+[request filters](/en/jdisc/http-server-and-filters.html#set-up-filter-chains).
 These filters can implement the required authentication and authorization logic
 for your specific use case.
  
@@ -84,9 +85,11 @@ Vespa does not have application-level support for encryption of on-disk document
 indexes. This would typically be implemented through file-system or storage-level (e.g. remote cloud storage)
 encryption.
 
+
+
 ## Securing Vespa with mutually authenticated TLS (mTLS)
 
 Protect all internal endpoints and protocols in Vespa with mutually authenticated Transport Layer Security (mTLS).
-See the [dedicated documentation](mtls.html) on how to get started,
+See the [dedicated documentation](/en/operations-selfhosted/mtls.html) on how to get started,
 and try the [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
 example.

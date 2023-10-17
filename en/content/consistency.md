@@ -1,5 +1,5 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Vespa Consistency Model"
 redirect_from:
 - /documentation/content/consistency.html
@@ -95,7 +95,7 @@ requested document from all divergent replicas. The client then receives the
 version with the newest timestamp.
 
 If replicas diverge during a Visit, the behavior is slightly different between
-the Document V1 API and [vespa-visit](../reference/vespa-cmdline-tools.html#vespa-visit):
+the Document V1 API and [vespa-visit](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-visit):
 
   * Document V1 will prefer immediately visiting the replica that contains the
     most documents. This means it's possible for a subset of documents in a bucket
@@ -142,4 +142,4 @@ than this TTL should ideally have their indexes removed before being allowed bac
 If not, there is a risk of resurrecting previously removed documents.
 Vespa does not currently detect or handle this scenario automatically.
 
-See the documentation on [data-retention-vs-size](../operations/admin-procedures.html#data-retention-vs-size).
+See the documentation on [data-retention-vs-size](/en/operations-selfhosted/admin-procedures.html#data-retention-vs-size).

@@ -1,13 +1,12 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Mutually authenticated TLS (mTLS) reference"
 redirect_from:
 - /documentation/reference/mtls.html
 ---
 
-{% include note.html content="See [Securing Vespa with mutually authenticated TLS (mTLS)](../mtls.html) 
-on how to secure Vespa with mutually authenticated TLS."
-%}
+{% include note.html content="See [Securing a self-hosted Vespa application with mutually authenticated TLS (mTLS)](/en/operations-selfhosted/mtls.html) 
+for a practical guide." %}
 
 ## Environment variables
 

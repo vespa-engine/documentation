@@ -1,5 +1,5 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Vespa query performance - a practical guide"
 ---
 
@@ -878,7 +878,7 @@ Waiting up to 300 seconds for query service to become available ...
 To enable `fast-search`, content node(s) needs to be restarted to re-build the fast-search data structures
 for the attribute. 
 
-The following uses [vespa-sentinel-cmd command tool](../reference/vespa-cmdline-tools.html#vespa-sentinel-cmd)
+The following uses [vespa-sentinel-cmd command tool](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-sentinel-cmd)
 to restart the searchnode process:
 
 <div class="pre-parent">

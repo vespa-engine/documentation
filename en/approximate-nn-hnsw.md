@@ -1,5 +1,5 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. 
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. 
 title: "Approximate Nearest Neighbor Search using HNSW Index"
 keywords: "ann, approximate nearest neighbor"
 redirect_from:

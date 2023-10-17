@@ -1,5 +1,5 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "News search and recommendation tutorial - getting started on Docker"
 redirect_from:
 - /documentation/tutorials/news-1-getting-started.html
@@ -277,7 +277,7 @@ $ docker stop vespa; docker rm -f vespa
 </div>
 
 This will delete the Vespa application, including all data and configuration. See 
-[container tuning for production](../operations/docker-containers.html). 
+[container tuning for production](/en/operations-selfhosted/docker-containers.html). 
 
 
 ## Conclusion

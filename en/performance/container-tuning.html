@@ -1,5 +1,5 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Container Tuning"
 redirect_from:
 - /documentation/performance/container-tuning.html
@@ -22,7 +22,7 @@ redirect_from:
   Most components including request handlers use the container's <em>default thread pool</em>,
   which is controlled by a shared executor instance.
   Any component can utilize the default pool by injecting an <code>java.util.concurrent.Executor</code> instance.
-  Some built-in components have dedicated thread pools - such as the Jetty server, the search handler and the feed handler.
+  Some built-in components have dedicated thread pools - such as the Jetty server and the search handler.
   These thread pools are injected through special wiring in the config model and
   are not easily accessible from other components.
 </p>
@@ -38,7 +38,7 @@ redirect_from:
 <p>
   The container will pre-start the minimum number of worker threads,
   so even an idle container may report running several hundred threads.
-  For thread pools with fixed size (<em>min == max</em>), all threads are pre-started.
+  The thread pool is pre-started with the number of thread specified in the <code>threads</code> parameter.
   Note that tuning the capacity upwards increases the risk of high GC pressure
   as concurrency becomes higher with more in-flight requests.
   The GC pressure is a function of number of in-flight requests, the time it takes to complete the request
@@ -46,7 +46,7 @@ redirect_from:
   Increasing the queue size will allow the application to handle shorter traffic bursts without rejecting requests,
   although increasing the average latency for those requests that are queued up.
   Large queues will also increase heap consumption in overload situations.
-  Extra threads will be created once the queue is full (if <em>max &gt; min</em>), and are destroyed after an idle timeout.
+  Extra threads will be created once the queue is full (when <code>boost</code> is specified), and are destroyed after an idle timeout.
   If all threads are occupied, requests are rejected with a 503 response.
 </p>
 <p>
@@ -54,29 +54,28 @@ redirect_from:
   <a href="../operations/container.html#container-metrics">Container Metrics</a>.
   See <a href="../operations/container.html#thread-pool-metrics">Thread Pool Metrics</a> for a list of metrics exported.
 </p>
-<p>Example configuration override:</p>
+{% include note.html content=' If the queue size is set to 0 the metric measuring the queue size -
+<code>jdisc.thread_pool.work_queue.size</code> - will instead switch to measure how many threads are active.'%}
+
+<h3 id="container-worker-threads-min">Lower limit</h3>
+The container will override any configuration if the effective value is below a fixed minimum. This is to
+reduce the risk of certain deadlock scenarios and improve concurrency for low-resource environments.
+<ul>
+    <li>Minimum 8 threads.</li>
+    <li>Minimum 650 queue capacity (if queue is not disabled).</li>
+</ul>
+
+<h3 id="container-worker-threads-example">Example</h3>
 <pre>{% highlight xml %}
 <container id="container" version="1.0">
 
     <search>
         <!-- Search handler thread pool -->
         <threadpool>
-            <max-threads>500</max-threads>
-            <min-threads>500</min-threads>
-            <queue-size>0</queue-size>
+            <threads boost="12">4</threads>
+            <queue>100</queue>
         </threadpool>
     </search>
-
-    <document-api>
-        <!-- Feed handler thread pool -->
-        <http-client-api>
-            <threadpool>
-                <max-threads>50</max-threads>
-                <min-threads>10</min-threads>
-                <queue-size>1000</queue-size>
-            </threadpool>
-        </http-client-api>
-    </document-api>
 
     <!-- Default thread pool -->
     <config name="container.handler.threadpool">
@@ -152,7 +151,7 @@ VESPA_CONFIGSERVER_JVMARGS      -Xlog:gc
 VESPA_CONFIGPROXY_JVMARGS       -Xlog:gc -Xmx256m
 </pre>
 <p>
-  Refer to <a href="../reference/files-processes-and-ports.html#environment-variables">Setting Vespa variables</a>.
+  Refer to <a href="/en/operations-selfhosted/files-processes-and-ports.html#environment-variables">Setting Vespa variables</a>.
 </p>
 
 

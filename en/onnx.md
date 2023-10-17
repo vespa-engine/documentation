@@ -1,5 +1,5 @@
 ---
-# Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Ranking With ONNX Models"
 redirect_from:
 - /documentation/onnx.html
@@ -175,7 +175,7 @@ sample application uses two different ONNX models:
 - One for extracting an answer string from a relevant passage
 
 ## Using vespa-analyze-onnx-model
-[vespa-analyze-onnx-model](reference/vespa-cmdline-tools.html#vespa-analyze-onnx-model)
+[vespa-analyze-onnx-model](/en/operations/tools.html#vespa-analyze-onnx-model)
 is useful to find model inputs and outputs -
 example run on a config server where an application package with a model is deployed to:
 <pre>
