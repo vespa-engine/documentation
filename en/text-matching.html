@@ -43,49 +43,63 @@ and query tracing to understand matching details.</p>
   For text fields, this enables the transformations below, and increases query recall.
 </p>
 
+<p id="linguistics-tokens-example">
+Add another <a href="document-summaries.html">document summary</a>
+to  <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/schemas/music.sd">schemas/music.sd</a> that contains an extra summary field
+using <a href="reference/schema-reference.html#linguistics-tokens">linguistics-tokens</a>
+with the <a href="reference/schema-reference.html#source">source</a>
+set to the proper index field:
 <pre>
-$ jq .fields.album < sample-apps/album-recommendation/ext/documents.jsonl
-  "A Head Full of Dreams"
-  "Hardwired...To Self-Destruct"
-  "Liebe ist für alle da"
-  "Love Is Here To Stay"
-  "When We All Fall Asleep, Where Do We Go?"
+@@ -27,6 +27,15 @@
+ 
+     }
+ 
++    document-summary my-debug-summary {
++        summary album type string { }
++        summary album_tokens type string {
++            source: album
++            linguistics-tokens
++        }
++        from-disk
++    }
++
+     fieldset default {
+         fields: artist, album
+     }
 </pre>
+</p>
 
-<p>Flush and dump index data (file name can change for subsequent flushes):</p>
-
+<p>
+Redepoy the application to enable the new document summary:
 <pre>
-$ docker exec vespa sh -c 'vespa-proton-cmd --local triggerFlush &amp;&amp; \
-  <a href="/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-index-inspect">vespa-index-inspect</a> dumpwords \
-  --indexdir /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/index/index.flush.1 \
-  --field album'
-
-a	1
-all	2
-asleep	1
-da	1
-destruct	1
-do	1
-dream	1
-fall	1
-full	1
-fur	1
-go	1
-hardwire	1
-head	1
-here	1
-is	1
-ist	1
-lieb	1
-love	1
-of	1
-self	1
-stay	1
-to	2
-we	1
-when	1
-where	1
+$ vespa deploy --wait 300
 </pre>
+</p>
+
+<p>Show original content of album field:
+<pre>
+$ vespa query "select * from music where true" summaryclass=my-debug-summary | \
+  jq -c '.root.children[].fields.album'
+"Liebe ist für alle da"
+"A Head Full of Dreams"
+"Hardwired...To Self-Destruct"
+"When We All Fall Asleep, Where Do We Go?"
+"Love Is Here To Stay"
+</pre>
+</p>
+
+<p>Show tokens used for indexing the album field:
+<pre>
+$ vespa query "select * from music where true" summaryclass=my-debug-summary | \
+  jq -c '.root.children[].fields.album_tokens'
+["lieb","ist","fur","all","da"]
+["a","head","full","of","dream"]
+["hardwire","to","self","destruct"]
+["when","we","all","fall","asleep","where","do","we","go"]
+["love","is","here","to","stay"]
+</pre>
+</p>
+
 <p>Observe the <a href="linguistics.html">linguistic transformations</a> to the data before indexed:</p>
 <table class="table">
   <thead>
