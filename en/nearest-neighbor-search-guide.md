@@ -1092,7 +1092,7 @@ The above query returns
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "distance(field,embedding)": 0.6686418170467985
+                        "distance(field,embedding)": 0.0
                     },
                     "title": "Total Eclipse Of The Heart",
                     "artist": "Bonnie Tyler",
@@ -1159,7 +1159,7 @@ $ vespa query \
                 "source": "tracks",
                 "fields": {
                     "matchfeatures": {
-                        "distance(field,embedding)": 0.6686418170467985
+                        "distance(field,embedding)": 0.0
                     },
                     "title": "Total Eclipse Of The Heart",
                     "artist": "Bonnie Tyler",
