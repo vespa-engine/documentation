@@ -147,9 +147,11 @@ of a double. This can happen in two cases:
 ### Documents
 
 #### What limits apply to json document size?
-There is no hard limit.
-Vespa requires a document to be able to load into memory in serialized form.
-Vespa is not optimized for huge documents.
+There is no hard limit, see [field size](/en/schemas.html#field-size).
+
+#### Is there any size limitation in multivalued fields?
+No enforced limit, except resource usage (memory).
+See [field size](/en/schemas.html#field-size).
 
 #### Can a document have lists (key value pairs)?
 E.g. a product is offered in a list of stores with a quantity per store.
@@ -173,9 +175,6 @@ Wildcard fields are not supported in vespa.
 Workaround would be to use maps to store the wildcard fields.
 Map needs to be defined with <code>indexing: attribute</code> and hence will be stored in memory.
 Refer to [map](reference/schema-reference.html#map).
-
-#### Is there any size limitation in multivalued fields?
-No enforced limit, except resource usage (memory). 
 
 #### Can we set a limit for the number of elements that can be stored in an array?
 Implement a [document processor](document-processing.html) for this.
