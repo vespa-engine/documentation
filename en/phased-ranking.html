@@ -114,6 +114,18 @@ schema myapp {
   gathering the best hits from all content nodes; this can be used
   instead of or in addition to
   <a href="#two-phase-ranking-content-nodes">second-phase</a> ranking.
+  The global-phase can also perform
+  <a href="#normalizers">cross-hit normalization</a>
+  to combine unrelated scoring methods.
+</p>
+<p id="globalphase-rerank-count">
+  By default, global-phase ranking runs on the 100 globally best hits for
+  a schema; this can be tuned in the rank-profile using
+  <a href="reference/schema-reference.html#globalphase-rerank-count">
+    <code>rerank-count</code>
+  </a>
+  or per-query using the <code>ranking.globalPhase.rerankCount</code>
+  query property.
 </p>
 <p>
   This phase is optimized for running large ONNX models, taking
@@ -132,18 +144,11 @@ schema myapp {
 </p>
 <p>
   If you have large and complex expressions instead of an ONNX model,
-  it's better to use the highly optimized
+  it's often better to use the highly optimized
   <a href="#two-phase-ranking-content-nodes">second-phase</a>
-  computation on content nodes.
-</p>
-<p>
-  The ranking expression configured for global-phase is independently
-  executed once for each matching document, so currently you cannot
-  compute anything that depends on <em>several</em> documents.
-  If you want to normalize something across the top 100 hits, for
-  example, you must currently program that in a Java plugin;
-  see <a href="#stateless-re-ranking">stateless re-ranking</a>
-  section.
+  computation on content nodes.  You can also force a sub-expression
+  to be computed on the content nodes by making it a function and
+  adding it as a <em>match-feature</em> in the ranking profile.
 </p>
 <pre>
 schema myapp {
@@ -181,6 +186,70 @@ schema myapp {
 }
 </pre>
 
+<h2 id="normalizers">Cross-hit normalization in global-phase</h2>
+<p>
+  The ranking expressions configured for global-phase may perform
+  cross-hit normalization of input rank features or functions.  This
+  is designed to make it easy to combine unrelated scoring methods
+  into one final relevance score.
+  The syntax looks like a special pseudo-function call:
+  <ul>
+    <li> <code>normalize_linear(<em>my_function_or_feature</em>)</code> </li>
+    <li> <code>reciprocal_rank(<em>my_function_or_feature</em>)</code> </li>
+    <li> <code>reciprocal_rank(<em>my_function_or_feature</em>, <em>k</em>)</code> </li>
+    <li> <code>reciprocal_rank_fusion(<em>score_1</em>, <em>score_2</em> ...)</code> </li>
+  </ul>
+  The normalization will be performed across the hits that global-phase
+  reranks (see <a href="#globalphase-rerank-count">configuration</a> above).
+  This means that first, the input (<em>my_function_or_feature</em>)
+  is computed or extracted from each hit that global-phase will
+  rerank; then the normalization step is applied; afterwards when
+  computing the actual global-phase expression the normalized output
+  is used.
+  As an example, assume some text fields with bm25 enabled, an onnx
+  model like above, and a "popularity" numeric attribute:
+</p>
+<pre>
+    rank-profile with-normalizers inherits with-global-model {
+        function my_bm25_sum {
+            expression: bm25(title) + bm25(abstract)
+        }
+        function my_model_out {
+            expression: sum(onnx(my_ranking_model).out)
+        }
+        global-phase {
+            expression {
+                normalize_linear(my_bm25_sum) + normalize_linear(my_model_out) + normalize_linear(attribute(popularity))
+            }
+            rerank-count: 200
+        }
+    }
+</pre>
+<p>
+  The <code>normalize_linear</code> normalizer takes a single argument which must be
+  a rank-feature or the name of a function.  It computes the maximum and minimum
+  values of that input and scales linearly to the range [0, 1], basically using
+  the formula <code>output = (input - min) / (max - min)</code>
+</p>
+<p>
+  The <code>reciprocal_rank</code> normalizer takes one or two arguments; the first
+  must be a rank-feature or the name of a function, while the second (if present)
+  must be a numerical constant, called <code>k</code> with default value 60.0.
+  It sorts the input values and finds their <em>rank</em> (so highest score gets
+  rank 1, next highest 2, and so on). The output from reciprocal_rank is computed
+  with the formula <code> output = 1.0 / (k + rank) </code> so note that even the best
+  input only gets <code>1.0 / 61 = 0.016393</code> as output with the default k.
+</p>
+<p>
+  The <code>reciprocal_rank_fusion</code> pseudo-function takes at least two arguments
+  and expands to the sum of their <code>reciprocal_rank</code>; it's just a
+  convenient way to write
+  <pre class=code>
+  reciprocal_rank(a) + reciprocal_rank(b) + reciprocal_rank(c) </pre>
+  as
+  <pre class=code>
+  reciprocal_rank_fusion(a,b,c) </pre> for example.
+</p>
 
 <h2 id="stateless-re-ranking">Stateless re-ranking</h2>
 <p>
