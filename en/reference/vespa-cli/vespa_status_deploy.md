@@ -5,7 +5,7 @@ render_with_liquid: false
 
 ## vespa status deploy
 
-Verify that the deploy service is ready to use
+Show status of the Vespa deploy service
 
 ```
 vespa status deploy [flags]
@@ -27,16 +27,16 @@ $ vespa status deploy
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use
+  -a, --application string   The application to use (cloud only)
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
-  -i, --instance string      The instance of the application to use
+  -i, --instance string      The instance of the application to use (cloud only)
   -q, --quiet                Print only errors
   -t, --target string        The target platform to use. Must be "local", "cloud", "hosted" or an URL (default "local")
-  -z, --zone string          The zone to use. This defaults to a dev zone
+  -z, --zone string          The zone to use. This defaults to a dev zone (cloud only)
 ```
 
 ### SEE ALSO
 
-* [vespa status](vespa_status.html)	 - Verify that container service(s) are ready to use
+* [vespa status](vespa_status.html)	 - Show Vespa endpoints and status
 

@@ -5,11 +5,11 @@ render_with_liquid: false
 
 ## vespa auth cert
 
-Create a new private key and self-signed certificate for data-plane access with Vespa Cloud
+Create a new self-signed certificate for authentication with Vespa Cloud data plane
 
 ### Synopsis
 
-Create a new private key and self-signed certificate for data-plane access with Vespa Cloud.
+Create a new self-signed certificate for authentication with Vespa Cloud data plane.
 
 The private key and certificate will be stored in the Vespa CLI home directory
 (see 'vespa help config'). Other commands will then automatically load the
@@ -34,11 +34,16 @@ Example of loading CA certificate, certificate and key from custom paths:
     export VESPA_CLI_DATA_PLANE_CERT_FILE=/path/to/cert
     export VESPA_CLI_DATA_PLANE_KEY_FILE=/path/to/key
 
+Example of disabling verification of the server's certificate chain and
+hostname:
+
+    export VESPA_CLI_DATA_PLANE_TRUST_ALL=true
+
 Note that when overriding key pair through environment variables, that key pair
 will always be used for all applications. It's not possible to specify an
 application-specific key.
 
-Read more in [https://cloud.vespa.ai/en/security/guide](https://cloud.vespa.ai/en/security/guide)
+See [https://cloud.vespa.ai/en/security/guide](https://cloud.vespa.ai/en/security/guide) for more details.
 
 ```
 vespa auth cert [flags]
@@ -47,6 +52,7 @@ vespa auth cert [flags]
 ### Examples
 
 ```
+$ vespa auth cert
 $ vespa auth cert -a my-tenant.my-app.my-instance
 $ vespa auth cert -a my-tenant.my-app.my-instance path/to/application/package
 ```
@@ -62,13 +68,13 @@ $ vespa auth cert -a my-tenant.my-app.my-instance path/to/application/package
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use
+  -a, --application string   The application to use (cloud only)
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
-  -i, --instance string      The instance of the application to use
+  -i, --instance string      The instance of the application to use (cloud only)
   -q, --quiet                Print only errors
   -t, --target string        The target platform to use. Must be "local", "cloud", "hosted" or an URL (default "local")
-  -z, --zone string          The zone to use. This defaults to a dev zone
+  -z, --zone string          The zone to use. This defaults to a dev zone (cloud only)
 ```
 
 ### SEE ALSO
