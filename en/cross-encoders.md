@@ -24,7 +24,7 @@ a BERT-based transformer model for English texts:
 $ optimum-cli export onnx --task text-classification -m intfloat/simlm-msmarco-reranker ranker
 </pre>
 
-Export [BAAI/bge-reranker-base](https://huggingface.co/BAAI/bge-reranker-base/tree), which is
+Export [BAAI/bge-reranker-base](https://huggingface.co/BAAI/bge-reranker-base), which is
 a ROBERTA-based transformer model for English and Chinese texts (multilingual):
 
 <pre>
