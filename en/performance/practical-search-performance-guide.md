@@ -884,7 +884,7 @@ to restart the searchnode process:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker exec vespa /opt/vespa/bin/vespa-sentinel-cmd restart searchnode
+$ docker exec vespa vespa-sentinel-cmd restart searchnode
 </pre>
 </div>
 
@@ -1612,7 +1612,7 @@ And again, adding `fast-search`, requires a re-start of the searchnode process:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker exec vespa /opt/vespa/bin/vespa-sentinel-cmd restart searchnode
+$ docker exec vespa vespa-sentinel-cmd restart searchnode
 </pre>
 </div>
 
@@ -1706,7 +1706,7 @@ Changing the global threads per search requires a restart of the `searchnode` pr
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker exec vespa /opt/vespa/bin/vespa-sentinel-cmd restart searchnode
+$ docker exec vespa vespa-sentinel-cmd restart searchnode
 </pre>
 </div>
 

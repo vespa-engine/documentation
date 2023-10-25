@@ -732,7 +732,7 @@ Another example:
 ```
 There are many ways this can fail, the first step is to check the Vespa Container:
 ```
-$ docker exec vespa /opt/vespa/bin/vespa-logfmt -l error
+$ docker exec vespa vespa-logfmt -l error
 
 [2022-10-21 10:55:09.744] ERROR   container
 Container.com.yahoo.container.jdisc.ConfiguredApplication

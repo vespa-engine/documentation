@@ -179,7 +179,7 @@ sample application uses two different ONNX models:
 is useful to find model inputs and outputs -
 example run on a config server where an application package with a model is deployed to:
 <pre>
-$ docker exec vespa /opt/vespa/bin/vespa-analyze-onnx-model \
+$ docker exec vespa vespa-analyze-onnx-model \
   /opt/vespa/var/db/vespa/config_server/serverdb/tenants/default/sessions/1/files/Network.onnx
 
 unspecified option[0](optimize model), fallback: true
