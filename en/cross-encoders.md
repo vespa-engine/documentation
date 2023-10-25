@@ -112,8 +112,9 @@ Bert-based models have three inputs:
 
 The [onnx-model](reference/schema-reference.html#onnx-model) configuration specifies the input names
 of the model and how to calculate them. It also specifies the file `models/model.onnx`.
-Notice also the [GPU](vespa-gpu-container.html). GPU inference is not required, and Vespa will fallback to CPU 
-if no GPU device is found. See section on [performance](#performance).
+Notice also the [GPU](/en/operations-selfhosted/vespa-gpu-container.html).
+GPU inference is not required, and Vespa will fallback to CPU if no GPU device is found.
+See section on [performance](#performance).
 
 <pre>
 rank-profile bert-ranker inherits default {
