@@ -1,16 +1,17 @@
 ---
 # Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Container GPU setup"
+redirect_from:
+- /en/vespa-gpu-container.html
 ---
 
 <p>
 Vespa supports using GPUs to evaluate ONNX models, as part of
-its <a href="stateless-model-evaluation.html">stateless model evaluation
+its <a href="/en/stateless-model-evaluation.html">stateless model evaluation
 feature</a>. When running Vespa inside a container engine such as Docker or
 Podman, special configuration is required to make GPU(s) available inside the
 container.
 </p>
-
 <p>
 The following guide explains how to do this for Nvidia GPUs, using Podman on
 RHEL8. This should also work on plain Rocky Linux 8.8 and AlmaLinux 8.8 on x86_64.
@@ -20,27 +21,32 @@ container toolkit installation guide</a>.
 Commands below need to run as root (use <code>sudo bash</code> first).
 </p>
 
+
+
 <h2 id="configuration-script">Run a script</h2>
-<p>
-Fetch and run our script for RHEL8 / x86_64 and run it as follows:
+<p>Fetch and run our script for RHEL8 / x86_64 and run it as follows:</p>
 <pre>
 sudo dnf -y install wget
 wget https://raw.githubusercontent.com/vespa-engine/docker-image/master/experimental/gpu-setup-rhel8-x86.sh
 sh gpu-setup-rhel8-x86.sh
 </pre>
+<p>
 This will follow the steps below and check if a sample application is able to utilise the GPU.
 For more details see the steps below.
 </p>
 
+
 <h2 id="configuration-steps">Configuration steps</h2>
 <ol>
   <li>
-    <p> Check that SELinux is disabled with <code>getenforce</code>; edit <code>/etc/selinux/config</code> and reboot if necessary.
-        To temporarily avoid SELinux interfering, it's possible to run <code>setenforce Permissive</code> instead.
+    <p>
+      Check that SELinux is disabled with <code>getenforce</code>; edit <code>/etc/selinux/config</code> and reboot if necessary.
+      To temporarily avoid SELinux interfering, it's possible to run <code>setenforce Permissive</code> instead.
     </p>
   </li>
   <li>
-    <p> Ensure that Nvidia drivers are installed on your <b>host</b> where you want to run the <code>vespaengine/vespa</code> 
+    <p>
+      Ensure that Nvidia drivers are installed on your <b>host</b> where you want to run the <code>vespaengine/vespa</code>
       container image. On RHEL 8 this can be done as follows:
     </p>
 <pre>
@@ -50,17 +56,18 @@ dnf module install -y --enablerepo cuda-rhel8-x86_64 nvidia-driver:530
 nvidia-modprobe
 ls -ld /dev/nvidia*
 </pre>
-    <p> You should have (at least) these devices listed after running the above commands: </p>
+    <p>You should have (at least) these devices listed after running the above commands: </p>
 <pre>
 crw-rw-rw-. 1 root root 195,   0 Aug 16 11:24 /dev/nvidia0
 crw-rw-rw-. 1 root root 195, 255 Aug 16 11:24 /dev/nvidiactl
 crw-rw-rw-. 1 root root 238,   0 Aug 16 11:24 /dev/nvidia-uvm
 crw-rw-rw-. 1 root root 238,   1 Aug 16 11:24 /dev/nvidia-uvm-tools
 </pre>
-  </li>
-    <p> See <a href="https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#device-node-verification">
-        Device Node Verification</a> in the CUDA installation guide for more details.
+    <p>
+      See <a href="https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#device-node-verification">
+      Device Node Verification</a> in the CUDA installation guide for more details.
     </p>
+  </li>
   <li>
     <p>
       Install <code>nvidia-container-toolkit</code>. This grants the container engine access
@@ -73,29 +80,20 @@ dnf install -y --enablerepo libnvidia-container nvidia-container-toolkit
 </pre>
   </li>
   <li>
-    <p>
-      Generate a "Container Device Interface" config:
-    </p>
+    <p>Generate a "Container Device Interface" config:</p>
 <pre>
 nvidia-ctk cdi generate --device-name-strategy=type-index --format=json --output /etc/cdi/nvidia.json
 </pre>
   </li>
   <li>
-    <p>
-      Verify that the GPU device is exposed to the container:
-    </p>
+    <p>Verify that the GPU device is exposed to the container:</p>
 <pre>
 podman run --rm -it --device nvidia.com/gpu=all docker.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
 </pre>
-    <p>
-      This should print details about your GPU(s) if everything is configured
-      correctly.
-    </p>
+    <p>This should print details about your GPU(s) if everything is configured correctly.</p>
   </li>
   <li>
-    <p>
-      Start the Vespa container with the <code>--device</code> option:
-    </p>
+    <p>Start the Vespa container with the <code>--device</code> option:</p>
 <pre>
 podman run --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 \
@@ -113,37 +111,36 @@ dnf config-manager \
   --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
 dnf -y install libcudnn8-8.9.4.25-1.cuda11.8 vespa-onnxruntime-cuda
 </pre>
-
-Instead of the above installation of <code>vespa-onnxruntime-cuda</code> inside the running container, 
-you might want to build your own container image using the following <code>Dockerfile</code> as 
-it avoids having to run the container image with install priviliges. 
-
+    <p>
+      Instead of the above installation of <code>vespa-onnxruntime-cuda</code> inside the running container,
+      you might want to build your own container image using the following <code>Dockerfile</code> as
+      it avoids having to run the container image with install privileges.
+    </p>
 <pre>
 FROM vespaengine/vespa
 
 USER root
-  
+
 RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
 RUN dnf -y install libcudnn8-8.9.4.25-1.cuda11.8
 RUN dnf -y install vespa-onnxruntime-cuda
-  
+
 USER vespa
 </pre>
-
-Then instead run with your container image name:
+    <p>Then instead run with your container image name:</p>
 <pre>
 podman run --detach --name vespa --hostname vespa-container \
   --publish 8080:8080 --publish 19071:19071 \
   --device nvidia.com/gpu=all \
-  your-container-image-name 
+  your-container-image-name
 </pre>
-
   </li>
-  <li>All Nvidia GPUs on the host should now be available inside the container,
-  with devices exposed at <code>/dev/nvidiaN</code>.
-  See <a href="stateless-model-evaluation.html#onnx-inference-options">stateless
-  model evaluation</a> for how to configure the ONNX runtime to use a GPU for
-  computation. Similar for embedding models using GPU, see 
-  <a href="reference/embedding-reference.html#embedder-onnx-reference-config">embedder onnx reference</a>.
+  <li>
+    All Nvidia GPUs on the host should now be available inside the container,
+    with devices exposed at <code>/dev/nvidiaN</code>.
+    See <a href="/en/stateless-model-evaluation.html#onnx-inference-options">stateless
+    model evaluation</a> for how to configure the ONNX runtime to use a GPU for
+    computation. Similar for embedding models using GPU, see
+    <a href="/en/reference/embedding-reference.html#embedder-onnx-reference-config">embedder onnx reference</a>.
   </li>
 </ol>
