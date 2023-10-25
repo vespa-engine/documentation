@@ -212,7 +212,7 @@ For this application, we define a `track` document type.
 
 Write the following to `app/schemas/track.sd`:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre style="display:none" data-test="file" data-path="app/schemas/track.sd">
 schema track {
 
     document track {
@@ -252,6 +252,7 @@ schema track {
                 hnsw {
                     max-links-per-node: 16
                     neighbors-to-explore-at-insert: 50
+                    multi-threaded-indexing: false
                 }
             }
     }
@@ -325,6 +326,121 @@ schema track {
     }
 }
 </pre>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+schema track {
+
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset&lt;string&gt; {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field popularity type int {
+            indexing: summary | attribute
+            attribute: fast-search
+            rank: filter
+        }
+    }
+
+    field embedding type tensor&lt;float&gt;(x[384]) {
+            indexing: input title | embed e5 |attribute | index
+            attribute {
+                distance-metric: angular
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 50
+                }
+            }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id type string {
+            source: track_id
+        }
+    }
+
+    rank-profile tags {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile bm25 {
+        first-phase {
+            expression: bm25(title)
+        }
+    }
+
+    rank-profile closeness {
+        num-threads-per-search: 1
+        match-features: distance(field, embedding)
+
+        inputs {
+            query(q)  tensor&lt;float&gt;(x[384])
+            query(q1) tensor&lt;float&gt;(x[384])
+        }
+
+        first-phase {
+            expression: closeness(field, embedding)
+        }
+    }
+
+    rank-profile closeness-t4 inherits closeness {
+        num-threads-per-search: 4
+    }
+
+    rank-profile closeness-label inherits closeness {
+        match-features: closeness(label, q) closeness(label, q1)
+    }
+
+    rank-profile hybrid inherits closeness {
+        inputs {
+            query(wTags) : 1.0
+            query(wPopularity) :  1.0
+            query(wTitle) : 1.0
+            query(wVector) : 1.0
+        }
+        first-phase {
+            expression {
+                query(wTags) * rawScore(tags) +
+                query(wPopularity) * log(attribute(popularity)) +
+                query(wTitle) * log(bm25(title)) +
+                query(wVector) * closeness(field, embedding)
+            }
+        }
+        match-features {
+            rawScore(tags)
+            attribute(popularity)
+            bm25(title)
+            closeness(field, embedding)
+            distance(field, embedding)
+        }
+    }
+}
+</pre></div>
 
 This document schema is explained in the [practical search performance guide](performance/practical-search-performance-guide.html),
 the addition is the `embedding` field which is defined as a synthetic field outside of the document. This 
