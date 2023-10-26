@@ -236,8 +236,8 @@ To stop Vespa, we can run the following commands:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ docker exec vespa /opt/vespa/bin/vespa-stop-services
-$ docker exec vespa /opt/vespa/bin/vespa-stop-configserver
+$ docker exec vespa vespa-stop-services
+$ docker exec vespa vespa-stop-configserver
 </pre>
 </div>
 
@@ -246,8 +246,8 @@ Likewise, to start the Vespa services:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ docker exec vespa /opt/vespa/bin/vespa-start-configserver
-$ docker exec vespa /opt/vespa/bin/vespa-start-services
+$ docker exec vespa vespa-start-configserver
+$ docker exec vespa vespa-start-services
 </pre>
 </div>
 
@@ -261,9 +261,9 @@ To wipe the index and restart:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
 $ docker exec vespa sh -c ' \
-  /opt/vespa/bin/vespa-stop-services && \
-  /opt/vespa/bin/vespa-remove-index -force && \
-  /opt/vespa/bin/vespa-start-services'
+  vespa-stop-services && \
+  vespa-remove-index -force && \
+  vespa-start-services'
 </pre>
 </div>
 
