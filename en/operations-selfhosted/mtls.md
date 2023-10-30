@@ -276,15 +276,6 @@ in the Subject / Subject Alternative Names extensions.
 [Disable hostname validation](/en/reference/mtls.html#top-level-elements) if this is not the case.
 
 
-### Application deployment fails with `SEC_ERROR_BAD_KEY`
-
-This is usually caused by running `vespa-deploy` from an OS that has an old version of `curl` (such as on CentOS 7).
-Older versions of the NSS cryptographic library used by `curl` do not support elliptic curve (EC) keys.
-
-To resolve this, either run `vespa-deploy` from an environment with a sufficiently new version of `curl` or
-use RSA keys instead of EC keys.
-
-
 ## Appendix A: setting up with a self-signed Certificate Authority
 
 Our goal is to create cryptographic keys and certificates that can be used by Vespa for secure mTLS
