@@ -8,42 +8,21 @@ redirect_from:
 
 
 <p>
-  Metrics for <span style="text-decoration: underline;">all nodes</span> is aggregated using
+  Metrics for all nodes is aggregated using
   <em><a href="../reference/metrics-v2.html#metrics-v2-values">/metrics/v2/values</a></em> or
-  <em><a href="../reference/prometheus-v1.html#prometheus-v1-values">/prometheus/v1/values</a></em>
-  on a container node (normally on 8080).
+  <em><a href="../reference/prometheus-v1.html#prometheus-v1-values">/prometheus/v1/values</a></em>.
 </p>
-<p>
-  Alternatively, at <span style="text-decoration: underline;">node-level</span> using either
-  <em><a href="../reference/metrics-v1.html#metrics-v1-values">/metrics/v1/values</a></em> or
-  <em><a href="../reference/prometheus-v1.html#prometheus-v1-values">/prometheus/v1/values</a></em>
-  on the metrics-proxy (normally on 19092)
-</p>
-<p>
-  Think of <em>/metrics/v2/values</em> as an aggregation over <em>/metrics/v1/values</em> for all nodes,
-  with some dimensions filtered out:
-</p>
-<img src="/assets/img/metrics-api.svg" alt="Metric endpoints" width="1000" height="auto">
-<p>See the <a href="monitoring.html">monitoring guide</a> for more details of the metrics endpoints.</p>
-{% include note.html content='<em>/metrics/v2/values</em> on the metrics-proxy (normally on 19092)
-got metrics for the current node, not all nodes - <a href="/en/operations-selfhosted/metrics-proxy.html">details</a>.
-' %}
-<p>Example getting a metrics value from a node using <em>/metrics/v1/values</em>:</p>
+<p>Example getting a metric value from using the prometheus endpoint:</p>
+
 <pre>
-$ curl -s http://localhost:19092/metrics/v1/values/?consumer=vespa | \
-  jq '.services[] | select(.name=="vespa.distributor") |
-  .metrics[].values."vds.idealstate.merge_bucket.pending.average"'
-</pre>
-Same metric, using the prometheus endpoint:
-<pre>
-$ curl -s http://localhost:19092/prometheus/v1/values/?consumer=vespa | \
+$ curl -s http://ENDPOINT/prometheus/v1/values/?consumer=vespa | \
   grep "vds.idealstate.merge_bucket.pending.average" | egrep -v 'HELP|TYPE'
 </pre>
 {% include important.html content='Make sure to use <a href="../reference/metrics-v1.html#consumer">consumer=vespa</a>
 to list all metrics.' %}
-<p>Example getting a metric value from a set of nodes using <em>/metrics/v2/values</em>:</p>
+<p>Example getting a metric value using <em>/metrics/v2/values</em>:</p>
 <pre>
-$ curl http://localhost:8080/metrics/v2/values | \
+$ curl ENDPOINT/metrics/v2/values | \
   jq -r -c '
     .nodes[] |
     .hostname as $h |
@@ -57,8 +36,8 @@ node8.vespanet	music	0
 </pre>
 
 
-<h2 id="aggregating-metrics">Aggregating metrics</h2>
 
+<h2 id="aggregating-metrics">Aggregating metrics</h2>
 <p>
   Metrics in Vespa are generated from services running on the individual nodes, and in many cases
   have many recordings per metric, from within each node, with unique tag / dimension combinations.
@@ -134,6 +113,8 @@ node8.vespanet	music	0
 </table>
 
 
+
+<!-- ToDo: rewrite the below for Vespa Cloud usage / generic -->
 <h2 id="metric-sets">Metric-sets</h2>
 <p>
   Node metrics in <em>/metrics/v1/values</em> are listed per service,
@@ -384,48 +365,3 @@ in the example above, make at least one query to set the metric value." %}
     </p>
   </li>
 </ol>
-
-
-
-<h2 id="histograms">Histograms</h2>
-<p>
-  Metric histograms is supported for
-  <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/metrics/simple/Gauge.html">
-    Gauge</a> metrics.
-  Create the metric like in
-  <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java">
-    album-recommendation-java</a>, adding the histogram:
-</p>
-<pre>
-public HitCountSearcher(MetricReceiver receiver) {
-    this.hitCountMetric = receiver.declareGauge(EXAMPLE_METRIC_NAME, Optional.empty(),
-        new MetricSettings.Builder()<span class="pre-hilite">.histogram(true)</span>.build());
-}
-</pre>
-<p>
-  The histograms for the last five minutes of logged data are available as CSV per
-  dimension at <a href="../reference/state-v1.html#state-v1-metrics-histograms">/state/v1/metrics/histograms</a>.
-  Example output:
-</p>
-<pre>
-# start of metric hits_per_query, dimensions: { "chain": "metalchain" }
-"Value","Percentile","TotalCount","1/(1-Percentile)"
-1.00,0.000000000000,1,1.00
-1.00,1.000000000000,1,Infinity
-# end of metric hits_per_query, dimensions: { "chain": "metalchain" }
-# start of metric example_hitcounts, dimensions: { "query_language": "en" }
-"Value","Percentile","TotalCount","1/(1-Percentile)"
-1.00,0.000000000000,1,1.00
-1.00,1.000000000000,1,Infinity
-# end of metric example_hitcounts, dimensions: { "query_language": "en" }
-# start of metric query_latency, dimensions: { "chain": "metalchain" }
-"Value","Percentile","TotalCount","1/(1-Percentile)"
-5.69,0.000000000000,1,1.00
-5.69,1.000000000000,1,Infinity
-# end of metric query_latency, dimensions: { "chain": "metalchain" }
-# start of metric totalhits_per_query, dimensions: { "chain": "metalchain" }
-"Value","Percentile","TotalCount","1/(1-Percentile)"
-1.00,0.000000000000,1,1.00
-1.00,1.000000000000,1,Infinity
-# end of metric totalhits_per_query, dimensions: { "chain": "metalchain" }
-</pre>
