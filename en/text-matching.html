@@ -78,7 +78,7 @@ $ vespa deploy --wait 300
 
 <p>Show original content of album field:
 <pre>
-$ vespa query "select * from music where true" summaryclass=my-debug-summary | \
+$ vespa query "select * from music where true" summary=my-debug-summary | \
   jq -c '.root.children[].fields.album'
 "Liebe ist für alle da"
 "A Head Full of Dreams"
@@ -90,7 +90,7 @@ $ vespa query "select * from music where true" summaryclass=my-debug-summary | \
 
 <p>Show tokens used for indexing the album field:
 <pre>
-$ vespa query "select * from music where true" summaryclass=my-debug-summary | \
+$ vespa query "select * from music where true" summary=my-debug-summary | \
   jq -c '.root.children[].fields.album_tokens'
 ["lieb","ist","fur","all","da"]
 ["a","head","full","of","dream"]
@@ -126,55 +126,43 @@ in <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recomm
 schemas/music.sd</a> (and remove all bm25 settings):
 </p>
 <pre>
+@@ -13,8 +13,7 @@
+         }
+ 
          field album type string {
 -            indexing: summary | index
 -            index: enable-bm25
 +            indexing: summary | attribute
          }
-
+ 
          field year type int {
-@@ -42,7 +41,7 @@
-             query(user_profile) tensor<float>(cat{})
+@@ -51,7 +50,7 @@
+             query(user_profile) tensor&lt;float&gt;(cat{})
          }
          first-phase {
 -            expression: bm25(album) + 0.25 * sum(query(user_profile) * attribute(category_scores))
 +            expression: 0.25 * sum(query(user_profile) * attribute(category_scores))
          }
+     }
+ 
 </pre>
 <p>
-  Run the tutorial again using the new schema, stop efter feeding.
-  Find the snapshot number (here 12) and inspect data from the attributes:
+Run the tutorial again using the new schema, stop efter feeding.
+Show tokens used for indexing the album field:
 </p>
 <pre>
-$ docker exec vespa sh -c \
-  'ls /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album'
-
-  meta-info.txt
-  snapshot-12
-
-$ docker exec vespa sh -c \
-  'cd /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready/attribute/album/snapshot-12 &amp;&amp; \
-  <a href="/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-proton-cmd">vespa-proton-cmd</a> --local triggerFlush &amp;&amp; \
-  <a href="/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-attribute-inspect">vespa-attribute-inspect</a> -p album &amp;&amp; \
-  cat album.out'
-
-doc 0: valueCount(1)
-    0: []
-doc 1: valueCount(1)
-    0: [A Head Full of Dreams]
-doc 2: valueCount(1)
-    0: [Love Is Here To Stay]
-doc 3: valueCount(1)
-    0: [Hardwired...To Self-Destruct]
-doc 4: valueCount(1)
-    0: [Liebe ist für alle da]
-doc 5: valueCount(1)
-    0: [When We All Fall Asleep, Where Do We Go?]
+$ vespa query "select * from music where true" summary=my-debug-summary | \
+  jq -c '.root.children[].fields.album_tokens'
+["a head full of dreams"]
+["love is here to stay"]
+["when we all fall asleep, where do we go?"]
+["liebe ist für alle da"]
+["hardwired...to self-destruct"]
 </pre>
 <p>
 The most important observation is that the strings are added <em>as-is</em> to attributes.
 Hence, values are matched in full, including whitespace.
-When searching attributes, both query terms and attribute data are lowercased before matching.
+When searching attributes, both query terms and attribute data are lowercased before matching unless the <code>match</code> setting for the field has been set to <code>cased</code>.
 Read more about the attribute <a href="reference/schema-reference.html#match">word match mode</a>.
 </p>
 <!-- ToDo: Add more match examples for indexed search-->
