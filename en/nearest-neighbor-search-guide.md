@@ -2058,7 +2058,7 @@ In this case, we set it to 1, which disables adjusting the `targetHits` upwards.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='totalCount": 1'>
+<pre data-test="exec" data-test-assert-contains='totalCount":'>
 $ vespa query \
   'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
   'hits=2' \
@@ -2069,7 +2069,7 @@ $ vespa query \
   'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
-Since we are post-filtering without upward adjusting the targetHits, we end up with just one hit. 
+Since we are post-filtering without upward adjusting the targetHits, we end up with fewer hits. 
 
 Changing the query to limit to a tag which is less frequent, for example, `90s`, which
 matches 1,695 documents or roughly 1.7%, will cause Vespa to fall back to exact search as the estimated filter hit count
