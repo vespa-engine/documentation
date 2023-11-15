@@ -84,7 +84,7 @@ Assuming we have two fields that we want to index and use for re-ranking (title,
 can use the `embed` indexing expression to invoke the tokenizer configured above:
 
 <pre>
-schema  {
+schema my_document {
     document my_document {
         field title type string {..}
         field body type string {..}
@@ -225,4 +225,58 @@ Quantization of model weights can drastically improve serving efficiency on CPU.
 
 The [Transformers](https://github.com/vespa-engine/sample-apps/tree/master/transformers)
 sample application demonstrates using cross-encoders. 
+
+## Using cross-encoders with multi-vector indexing
+When using [multi-vector indexing](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/) 
+we can do the following to feed the best (closest) paragraph using the 
+[closest()](reference/rank-features.html#closest(name)) feature into re-ranking with the cross-encoder model. 
+
+<pre>
+schema my_document {
+    document my_document {  
+        field paragraphs type array&lt;string&gt;string {..}
+    }
+    field tokens type tensor&lt;float&gt;(p{}, d0[512]) {
+        indexing: input paragraphs | embed tokenizer | attribute
+    }
+    field embedding type tensor&lt;float&gt;(p{}, x[768]) {
+        indexing: input paragraphs | embed embedder | attribute
+    }
+}</pre>
+
+Notice that both tokens uses the same mapped embedding dimension name `p`. 
+
+<pre>
+rank-profile max-paragraph-into-cross-encoder inherits default {
+    inputs {
+        query(tokens) tensor&lt;float&gt;(d0[32])
+        query(q) tensor&lt;float&gt;(x[768])
+    }
+    first-phase {
+        expression: closeness(field, embedding)
+    }
+    function best_input() {
+        expression: reduce(closest(embedding)*attribute(tokens), max, p)
+    }
+    function my_input_ids() {
+        expression: tokenInputIds(256, query(tokens), best_input)
+    }
+    function my_token_type_ids() {
+        expression: tokenTypeIds(256, query(tokens), best_input)
+    }
+
+    function my_attention_mask() {
+        expression: tokenAttentionMask(256, query(tokens), best_input)
+    }
+    global-phase {
+        rerank-count: 25
+        expression: onnx(cross_encoder){d0:0,d1:0}
+    }
+}
+</pre>
+
+The `best_input` uses a tensor join between the `closest(embedding)` tensor and the `tokens` tensor
+which then returns the tokens of the best matching paragraph, this is then fed into the other transformer
+related functions as the document tokens.  
+
 
