@@ -47,6 +47,8 @@ def is_selfhosted_doc(doc):
         return True
     return False
 
+def remove_escape(text):
+    return text.replace("\\_","_")
 
 def create_text_doc(doc, paragraph, paragraph_id, header):
     id = doc['put']
@@ -65,7 +67,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
             "path": fields['path'],
             "doc_id": fields['path'],
             "namespace": new_namespace,
-            "content": paragraph,
+            "content": remove_escape(paragraph),
             "content_tokens": n_tokens,
             "base_uri": sys.argv[2],
             "selfhosted": is_selfhosted_doc(doc)
@@ -75,12 +77,12 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     if header:
         title = fields['title']
         new_title = title + " - " + header
-        new_doc["fields"]["title"] = new_title
+        new_doc["fields"]["title"] = remove_escape(new_title)
 
     if paragraph_id is None:
         paragraph_id = str(random.randint(0,1000))
 
-    new_doc['fields']['path'] = new_doc['fields']['path'] + "#" + paragraph_id.replace("?","")
+    new_doc['fields']['path'] = remove_escape(new_doc['fields']['path'] + "#" + paragraph_id.replace("?",""))
     new_doc['put'] = new_doc['put'] + "-" + urllib.parse.quote(paragraph_id)
 
     return new_doc
