@@ -250,8 +250,8 @@ schema track {
             }
             index {
                 hnsw {
-                    max-links-per-node: 16
-                    neighbors-to-explore-at-insert: 50
+                    max-links-per-node: 32
+                    neighbors-to-explore-at-insert: 200
                     multi-threaded-indexing: false
                 }
             }
@@ -366,8 +366,8 @@ schema track {
             }
             index {
                 hnsw {
-                    max-links-per-node: 16
-                    neighbors-to-explore-at-insert: 50
+                    max-links-per-node: 32
+                    neighbors-to-explore-at-insert: 200
                 }
             }
     }
@@ -458,8 +458,8 @@ field embedding type tensor&lt;float&gt;(x[384]) {
     }
     index {
         hnsw {
-            max-links-per-node: 16
-            neighbors-to-explore-at-insert: 50
+            max-links-per-node: 32
+            neighbors-to-explore-at-insert: 200
         }
     }
  }
