@@ -285,6 +285,14 @@ $ docker run --detach --name vespa-msmarco --hostname vespa-msmarco \
 </pre>
 </div>
 
+Configure the Vespa CLI to use the local Docker container:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa config set target local
+</pre>
+</div>
+
 Starting the container can take a short while. Before continuing, make sure
 that the configuration service is running by using `vespa status`. 
 
@@ -295,7 +303,7 @@ $ vespa status deploy --wait 300
 </pre>
 </div>
 
-Now, deploy the Vespa application:
+Now, deploy the Vespa application that you have created in the `app` directory:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
