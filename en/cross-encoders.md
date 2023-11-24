@@ -244,7 +244,7 @@ schema my_document {
     }
 }</pre>
 
-Notice that both tokens uses the same mapped embedding dimension name `p`. 
+Notice that both tokens use the same mapped embedding dimension name `p`. 
 
 <pre>
 rank-profile max-paragraph-into-cross-encoder inherits default {
@@ -268,15 +268,18 @@ rank-profile max-paragraph-into-cross-encoder inherits default {
     function my_attention_mask() {
         expression: tokenAttentionMask(256, query(tokens), best_input)
     }
+    match-features: best_input my_input_ids my_token_type_ids my_attention_mask
     global-phase {
         rerank-count: 25
-        expression: onnx(cross_encoder){d0:0,d1:0}
+        expression: onnx(cross_encoder){d0:0,d1:0} #Slice 
     }
 }
 </pre>
 
-The `best_input` uses a tensor join between the `closest(embedding)` tensor and the `tokens` tensor
-which then returns the tokens of the best matching paragraph, this is then fed into the other transformer
-related functions as the document tokens.  
+The `best_input` uses a tensor join between the `closest(embedding)` tensor and the `tokens` tensor,
+which then returns the tokens of the best-matching (closest) paragraph. 
+
+This tensor is used in the other Transformer-related functions 
+(`tokenTypeIds tokenAttentionMask tokenInputIds`) as the document tokens.  
 
 
