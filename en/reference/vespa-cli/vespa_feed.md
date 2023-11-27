@@ -14,10 +14,36 @@ Feed multiple document operations to Vespa.
 This command can be used to feed large amounts of documents to a Vespa cluster
 efficiently.
 
-The contents of JSON-FILE must be either a JSON array or JSON objects separated by
+The contents of json-file must be either a JSON array or JSON objects separated by
 newline (JSONL).
 
-If JSON-FILE is a single dash ('-'), documents will be read from standard input.
+If json-file is a single dash ('-'), documents will be read from standard input.
+
+Once feeding completes, metrics of the feed session are printed to standard out
+in a JSON format:
+
+- feeder.operation.count: Number of operations passed to the feeder by the user,
+  not counting retries.
+- feeder.seconds: Total time spent feeding.
+- feeder.ok.count: Number of successful operations.
+- feeder.ok.rate: Number of successful operations per second.
+- feeder.error.count: Number of network errors (transport layer).
+- feeder.inflight.count: Number of operations currently being sent.
+- http.request.count: Number of HTTP requests made, including retries.
+- http.request.bytes: Number of bytes sent.
+- http.request.MBps: Request throughput measured in MB/s. This is the raw
+  operation throughput, and not the network throughput,
+  I.e. using compression does not affect this number.
+- http.exception.count: Same as feeder.error.count. Present for compatiblity
+  with vespa-feed-client.
+- http.response.count: Number of HTTP responses received.
+- http.response.bytes: Number of bytes received.
+- http.response.MBps: Response throughput measured in MB/s.
+- http.response.error.count: Number of non-OK HTTP responses received.
+- http.response.latency.millis.min: Lowest latency of a successful operation.
+- http.response.latency.millis.avg: Average latency of successful operations.
+- http.response.latency.millis.max: Highest latency of a successful operation.
+- http.response.code.counts: Number of responses grouped by their HTTP code.
 
 
 ```
