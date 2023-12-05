@@ -87,6 +87,30 @@ $ vespa visit --slices 100 --slice-id 0
 use <code>--bucket-space global</code> to visit these documents.
 By default, visiting only iterates over non-global documents.' %}
 
+<h3 id="performance-note-feeding-data-exported-via-visiting">Performance note: feeding data exported via visiting</h3>
+<p>
+Vespa uses hashing to distribute documents pseudo-randomly across many
+<a href="/en/content/buckets.html">buckets</a>. The operations in an incoming document stream are
+expected to be distributed evenly across both the set of all buckets and the content nodes
+storing them. This parallelizes the load and efficiently utilizes the hardware resources in the cluster.
+</p>
+<p>
+Visiting iterates over the buckets in the cluster, returning all documents stored in
+a bucket before moving on to the next bucket (often processing many buckets in parallel).
+As a consequence there's a direct correlation between the internal document-to-bucket
+distribution and the document output ordering of the visiting process.
+</p>
+<p>
+If the output of visiting is fed directly back into a content cluster, this correlation
+means that the stream of documents is no longer uniformly distributed across buckets and/or
+content nodes. This is likely to greatly reduce feeding performance due to increased
+contention around backend bucket-level write locks and indexing threads.
+</p>
+<p>
+A simple strategy to avoid this problem is to <em>shuffle</em> the visiting output prior to
+re-feeding it. This removes any correlation between feed operations and the underlying
+data distribution.
+</p>
 
 
 <h2 id="selection">Selection</h2>
