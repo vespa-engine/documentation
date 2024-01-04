@@ -126,19 +126,34 @@ rank-profile drop-low-score {
 }
 </pre>
 
+#### Are ranking expressions or functions evaluated lazily
+<p>Rank expressions are not evaluated lazily.  No, this would require lambda arguments.
+  Only doubles and tensors are passed between functions.
+  
+   Example:</p>
+<pre>
+function inline foo(tensor, defaultVal) {
+    expression: if (count(tensor) == 0, defaultValue, sum(tensor))
+}
+
+function bar() {
+    expression: foo(tensor, sum(tensor1 * tensor2))
+}
+</pre>
+
 #### Does Vespa support early termination of matching and ranking?
 Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the rank profile,  or by adding a range query item using *hitLimit* to the query tree, 
 see [capped numeric range search](reference/query-language-reference.html#numeric).  
-Both methods require an *attribute* field with *fast-search*. The capped range query is faster but beware that if there are other restrictive filters in the query one might end up with 0 hits. 
+Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if there are other restrictive filters in the query, one might end up with 0 hits. 
 The additional filters are applied as a post filtering 
-step over the hits from the capped range query. *match-phase* on the other hand is safe to use with filters or other query terms, and also supports diversification which the capped range query term 
-does not support.  
+step over the hits from the capped range query. *match-phase* on the other hand, is safe to use with filters or other query terms, 
+and also supports diversification which the capped range query term does not support.  
 
 #### What could cause the relevance field to be -Infinity
 The returned [relevance](reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
 of a double. This can happen in two cases:
 
-- The [ranking](ranking.html) expression used a feature which became `NaN` (Not a Number). For example `log(0)` would produce
+- The [ranking](ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
 -Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this. 
 - Surfacing low scoring hits using [grouping](grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](reference/schema-reference.html#keep-rank-count).
 
