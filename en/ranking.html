@@ -5,13 +5,14 @@ redirect_from:
 - /documentation/ranking.html
 ---
 
-<p><i>Ranking</i> is where Vespa does computing, or <i>inference</i> over documents.
-The computations to be done are expressed in functions called
+<p><i>Ranking</i> is where Vespa does computing, or <i>inference</i> over documents retrieved by a query. The goal is to order (rank)
+  the documents retrieved. </p>
+
+<p>The computations are expressed in functions called
 <a href="ranking-expressions-features.html">ranking expressions</a>,
 bundled into <a href="#rank-profiles">rank profiles</a> defined in <a href="schemas.html">schemas</a>.
 These can range from simple math expressions combining some <a href="reference/rank-features.html">rank features</a>,
 to <a href="tensor-examples.html">tensor expressions</a> or large machine-learned <a href="onnx.html">Onnx models</a>.
-
 
 
 <h2 id="two-phase-ranking">Two-phase ranking</h2>
@@ -42,8 +43,9 @@ schema myapp {
 </pre>
 
 <p>The first phase is executed for all matching documents while the second is executed for the
-best rerank-count documents per content node according to the first-phase function. This
-is useful to direct more computation towards the most promising candidate documents, see
+top-scoring <i>rerank-count</i> documents per content node as scored by the first-phase function. 
+
+This is useful to direct more computation towards the most promising candidate documents, see
 <a href="phased-ranking.html">phased ranking</a>.</p>
 
 <h2 id="global-phase-ranking">Global-phase ranking</h2>
@@ -53,7 +55,7 @@ Please read the <a href="phased-ranking.html#global-phase">global-phase as part 
 documentation for more details.
 This can be more efficient use of CPU (especially with many content nodes)
 and can be used instead of second-phase, or in addition to a moderately
-expensive second-phase as in the example below.
+expensive second-phase as in the example below. This phase also supports GPU acceleration. 
 </p>
 
 <pre>
@@ -149,63 +151,27 @@ This profile is available also if not defined explicitly.</p>
 Specifying this boosts performance in queries which do not need ranking because random order is fine or
 <a href="reference/sorting.html">explicit sorting</a> is used.</p>
 
-
-<h3 id="evaluation">Evaluation</h3>
-<p>Rank profiles are <span style="text-decoration: underline">not</span> evaluated lazily. Example:</p>
-<pre>
-function inline foo(tensor, defaultVal) {
-    expression: if (count(tensor) == 0, defaultValue, sum(tensor))
-}
-
-function bar() {
-    expression: foo(tensor, sum(tensor1 * tensor2))
-}
-</pre>
-<p>
-  <em>Will the <code>sum</code> in the <code>bar</code> function be computed lazily,
-    meaning only if <code>tensor</code> is empty?</em>
-</p>
-<p>
-  No, this would require lambda arguments.
-  Only doubles and tensors are passed between functions.
-</p>
-
-
-
 <h2 id="text-ranking">Text ranking</h2>
 <p>
   The default ranking is the first-phase function <code>nativeRank</code>,
   that is a function returning the value of the <a href="nativerank.html">nativeRank rank feature</a>,
-  and no second-phase.
-</p>
+  and no second-phase. This default text scoring feature only considers how well a query matches
+  the searched field/fieldset. 
 <p>
-  A good simple alternative to <code>nativeRank</code> for text ranking is using the
-  <a href="reference/bm25.html">BM25</a> rank feature.
-</p>
-<p>
-  If the expression is written manually, it might be most convenient to
-  stick with using the <code>fieldMatch(<em>name</em>)</code> feature for each field.
-  This feature combines the more basic fieldMatch features in a reasonable way.
-  A good way to combine the fieldMatch score of each field is to use a weighted average as explained above.
-  Another way is to combine the field match scores
-  using the <code>fieldMatch(<em>name</em>).weight/significance/importance</code> features
-  which takes term weight or rareness or both into account
-  and allows a normalized score to be produced by simply summing the product of this feature
-  and any other normalized per-field score for each field.
-  In addition, some attribute value(s) must usually be included
-  to determine the a priori quality of each document.
-</p>
-<p>
-  For example, assuming the title field is more important than the body field,
-  create a ranking expression which gives more weight to that field, as in the example above.
-  Vespa contains some built-in convenience support for this -
-  weights can be set in the individual fields by <code>weight: &lt;number&gt;</code>
-  and the feature <code>match</code> can be used to get a weighted average
-  of the fieldMatch scores of each field.
   The overall ranking expression might contain other ranking dimensions than just text match,
   like freshness, the quality of the document, or any other property of the document or query.
+  </p>
 </p>
-
+<p>
+  A simple alternative to <code>nativeRank</code> for text scoring is using the
+  <a href="reference/bm25.html">BM25</a> feature. 
+</p>
+<p>
+  Another text matching feature is <code>fieldMatch(field)</code> <a href="/reference/string-segment-match.html">string segment match</a>.
+  This feature combines the more basic fieldMatch sub-features in a reasonable way but has a 
+  high computional cost compared to <code>nativeRank</code> and <code>BM25</code> and is only 
+  suitable for <code>second-phase</code> evaluation.
+</p>
 
 <h3 id="weight-significance-and-connectedness">Weight, significance and connectedness</h3>
 <p>
@@ -227,13 +193,9 @@ function bar() {
     (the default weight is 100).
   </p>
   <p>
-    Weight is used in <a href="reference/rank-features.html#fieldMatch(name).weight">
-    fieldMatch(<em>name</em>).weight</a>, which can be multiplied with
-    <a href="reference/rank-features.html#fieldMatch(name)">
-        fieldMatch(<em>name</em>)</a> to yield a weighted score for the field,
-    and in <a href="reference/rank-features.html#fieldMatch(name).weightedOccurrence">
-    fieldMatch(<em>name</em>).weightedOccurrence</a>
-    to get an occurrence score which is higher if higher weighted terms occurs most.
+    The term weight is used in several text scoring features, including <a href="reference/rank-features.html#fieldMatch(name).weight">
+    fieldMatch(<em>name</em>).weight</a> and <a href="reference/nativerank.html">nativeRank</a>. Note that the term weight
+    is not applicable for all text scoring features, for example <a href="reference/bm25.html">bm25</a> does not use the term weigth. 
   </p>
   <p>
     Configure static field weights in the <a href="reference/schema-reference.html#weight">schema</a>.
