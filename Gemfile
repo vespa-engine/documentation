@@ -32,4 +32,4 @@ gem "webrick"
 
 # Get the html-proofer to work
 gem 'rake'
-gem 'html-proofer --verbose'
+gem 'html-proofer'
