@@ -67,10 +67,6 @@ operation orderings.
 Vespa has support for conditional writes for individual documents through
 test-and-set operations. Multi-document transactions are not supported.
 
-If possible, prefer using conditional updates with `create: true` instead
-of conditional puts. This is because the write repair logic for conditional
-updates is capable of handling data consistency edge cases.
-
 After a successful response, changes to the search indexes are immediately
 visible by default.
 
