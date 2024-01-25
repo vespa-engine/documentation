@@ -302,21 +302,21 @@ select * from sources * where user_id = 1 or user_id = 2 or user_id = 3 or user_
 </pre>
 <p>
   For OR filters over the same field it is strongly recommended using the
-  <a href="../reference/query-language-reference.html#weightedset">weighted set query operator</a>.
-  It has considerably less overhead than plain OR for set filtering:
+  <a href="../reference/query-language-reference.html#in">in query operator</a> instead.
+  It has considerably better performance than plain OR for set filtering:
 </p>
 <pre>
-select * from sources * where weightedSet(user_id, {"1":1, "2":1, "3":1})
+select * from sources * where user_id in (1, 2, 3, 4, 5)
 </pre>
 {% include note.html content='
 Large sets can slow down YQL-parsing of the query -
-see <a href="../reference/query-language-reference.html#parameter-substitution">Parameter substitution</a>
+see <a href="../reference/query-language-reference.html#parameter-substitution">parameter substitution</a>
 for how to send the set in a compact, performance-effective way.'%}
 <p>
   Attribute fields used like the above without other stronger query terms,
-  should have <code>fast-search</code> and <code>rank:filter</code>.
+  should have <code>fast-search</code> and <code>rank: filter</code>.
   If there is a large number of unique values in the field,
-  it is faster to use <code>hash</code> dictionary instead of <code>btree</code>,
+  it is also faster to use <code>hash</code> dictionary instead of <code>btree</code>,
   which is the default data structure for dictionaries for attribute fields with <code>fast-search</code>:
 </p>
 <pre>
@@ -327,9 +327,9 @@ field user_id type long {
     rank:       filter
 }
 </pre>
-<P>
+<p>
   For <code>string</code> fields, we also need to include <a href="/en/reference/schema-reference.html#match">match</a>
-  settings:</p>
+  settings if using the <code>hash</code> dictionary:</p>
 <pre>
 field user_id_str type string {
     indexing:   summary | attribute
@@ -337,19 +337,19 @@ field user_id_str type string {
     match:      cased	
     rank:       filter
     dictionary { 
-		hash
-		cased
+        hash
+        cased
     }
 }
 </pre>
 <p>
- If having 10M unique user_ids in the dictionary, a search for 1000 users per query,
+If having 10M unique user_ids in the dictionary and searching for 1000 users per query,
 the <em>btree</em> dictionary would be 1000 lookup times log(10M),
 while <em>hash</em> based would be 1000 lookups times O(1). Still, the <em>btree</em> dictionary
 offers more flexiblity in terms of <a href="/en/reference/schema-reference.html#match">match</a> settings.
 </p>
 <p>
-  The <code>weightedSet</code> query set filtering approach can be used in combination with hybrid <em>TAAT</em>,
+  The <code>in</code> query set filtering approach can be used in combination with hybrid <em>TAAT</em>,
   evaluation to further improve performance. See the <a href="#hybrid-taat-daat">hybrid TAAT/DAAT</a> section.
 </p>
 <p>
