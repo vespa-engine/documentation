@@ -272,3 +272,47 @@ if(reduce(query(my_key)*attribute(my_map),count) == 3,
 The above syntax allows an optimized execution, find an example in the
 <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gFssATAgGwGcSybIiEkAC4FanLACcAFIwD6ASxbAAvsQAeiAMwBdAJRxgjAIxxEAFgB0ABmJgArNdsA2a9tuMATKYDsjsAA4-AE5XZUheCGVeVV5qclwGIlIaKEo0CLoGZjZ2BRYeFIh+BhExSRk8lX1DLyNrMIyojBiMOMwEwSSMinw28npBRgBDHBwCFll2LCwAawBXPGTC4sFOOcYZVg5OACpsjjziOUVdcJSm1BbUPqgOwgK+NJuigahOdnkAYy7C+8FNnK7fa5E6GPJwTwNc7RFDaEDKIA">
   Tensor Playground</a>.' %}
+
+
+<h2 id="slicing-with-lambda">Slicing with lambda</h2>
+<p>A common use case is to use a tensor lambda function to slice out the first <code>k</code> dimensions of a vector representation of <code>m</code> 
+  dimensions where <code>m</code> is larger than <code>k</code>.
+Slicing with lambda functions is great for representing vectors from <a href="https://arxiv.org/abs/2205.13147">Matryoshka Representation Learning</a>. </p>
+<blockquote>Matryoshka Representation Learning (MRL) which encodes information at different granularities and allows a single embedding to adapt to the computational constraints of downstream tasks.</blockquote>
+
+The following slices the first 256 dimensions of a tensor <code>t</code>:
+<pre>
+  tensor&lt;float&gt;(x[256])(t{x:(x)})
+</pre>
+Importantly, this does only reference into the original tensor, avoiding copying the tensory to a smaller tensor. 
+
+The following is a complete example where we have stored an original vector representation with 3072 dimensions, And
+ we slice the first 256 dimensions of the original representation to perform a dot product in the first-phase expression, 
+ followed by a full computation over all dimensions in the second-phase expression. See <a href="phased-ranking.html">phased ranking</a> 
+ for context on using Vespa phased computations and <a href="https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/">customizing reusable frozen embeddings with Vespa</a>.
+</p>
+  <pre>{% raw %}
+schema example {
+  document example {
+    field document_vector type tensor&lt;foat&gt;(x[3072]) {
+      indexing: attribute | summary
+    }
+  }
+  rank-profile small-256-first-phase {
+    inputs {
+      query(query_vector) tensor&lt;float&gt;(x[3072])
+    }
+    function slice_first_dims(t) {
+      expression: l2_normalize(tensor&lt;float&gt;(x[256])(t{x:(x)}), x)
+    }
+    first-phase {
+      expression: sum( slice_first_dims(query(query_vector)) * slice_first_dims(attribute(document_vector)) )
+    }
+    second-phase {
+      expression: sum( query(query_vector) * attribute(document_vector) )
+    }
+  }
+}    
+{% endraw %}</pre>
+See also a runnable example in this <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gFsBPAfQAsBLAc3dYBNOjVgDcCAYwAuWAE4kyNSEQSRJBWgGdZAHmgAbLAENJAPgAUAD0QBGAEwBdAJRwbxW8QDMxACzEArMQAbMQA7MQAHMQAnMTWAAyx1rEOkAoQAL4K6aQY1OS4DEQ5ipRoaXQM0JwyGpKsgQJCGqxY0KwsHDx8gsJiUrLyNJjKUGqaspaIgU5mHVy8jb0S0jLAFnCWjumOqUOZGNkKeZgFKkXlFPjH5PQqtLKMhnqcAF7nQxBKDHq2rPcyj2ebzMVRqdQaPWarXabHm3SEomWsmIYAsO3K+1QmPsIHSQA">
+tensor playground example</a>.
