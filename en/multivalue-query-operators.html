@@ -98,10 +98,10 @@ rank-profile default {
 
 
 
-<h2 id="weightedset-example">weightedSet example</h2>
+<h2 id="in-example">IN operator example</h2>
 <p>
-Refer to the <a href="reference/query-language-reference.html#weightedset">weightedSet</a> reference.
-The use cases for <em>weightedSet</em> are for limiting the search result
+Refer to the <a href="reference/query-language-reference.html#in">in operator</a> reference.
+The use cases for the <em>in</em> operator are for limiting the search result
 to documents with specific properties that can have a large number of distinct values, like:
 </p>
 <ul>
@@ -112,9 +112,10 @@ to documents with specific properties that can have a large number of distinct v
   <li>We have recorded the documents that have been clicked by users
       in the last 10 minutes, and want to search only in these</li>
 </ul>
-<p>Using a weightedSet is more performant than a big OR expression:</p>
+<p>Using the <em>in</em> operator is more performant than a big OR expression:</p>
 <pre>
-select * from data where category = 'cat1' OR category = 'cat2'..
+select * from data where category in ('cat1', 'cat2', 'cat3')
+select * from data where category = 'cat1' OR category = 'cat2' OR category = 'cat3' ...
 </pre>
 <p>
   See <a href="performance/feature-tuning.html#multi-lookup-set-filtering">multi-lookup set filtering</a> for details.
@@ -126,56 +127,59 @@ and can often be modeled as a number -
 usually in a field of type <code>long</code>
 (or <code>array&lt;long&gt;</code> if multiple values are needed).
 If a string field is used, it will usually also be some sort of ID;
-if you have data in a string field intended for searching with WeightedSetItem,
-then using <code>match: word</code> for that field is recommended.
+if you have data in a string field intended for searching with the <em>in</em> operator,
+then using <code>match: word</code> (default for attribute string fields) is recommended.
 </p><p>
-The decision to use a <code>WeightedSetItem</code> must be taken by application-specific logic.
-This must be in the form of a Container plugin where the query object can be manipulated as follows:
+The following example shows how to use the <em>in</em> operator
+programmatically in a <a href="searcher-development.html">Java Searcher</a>
+to search a category field:
+<pre>
+field category type string {
+    indexing: attribute | summary
+    attribute: fast-search
+    rank: filter
+}
+</pre>
+The Searcher will typically do the following:
 </p>
 <ul>
-  <li>Decide if <code>WeightedSetItem</code> should be used</li>
-  <li>Create a new <code>WeightedSetItem</code> for the field you want to use as filter</li>
-  <li>Find the tokens and optionally weights to insert into the set</li>
-  <li>Combine new <code>WeightedSetItem</code> with the original query by using an <code>AndItem</code></li>
+  <li>Create a new <code>StringInItem</code> (or <code>NumericInIterm</code>) for the field you want to use as filter.</li>
+  <li>Find the tokens to insert into the query item.</li>
+  <li>Combine the new <code>StringInItem</code> with the original query by using an <code>AndItem</code>.</li>
 </ul>
 <p>A simple code example adding a hardcoded filter containing 10 tokens:</p>
 <pre>
 private Result hardCoded(Query query, Execution execution) {
-    WeightedSetItem filter = new WeightedSetItem("author");
-    filter.addToken("magazine1", 2);
-    filter.addToken("magazine2", 2);
-    filter.addToken("magazine3", 2);
-    filter.addToken("tv", 3);
-    filter.addToken("tabloid1", 1);
-    filter.addToken("tabloid2", 1);
-    filter.addToken("tabloid3", 1);
-    filter.addToken("tabloid4", 1);
-    filter.addToken("tabloid5", 1);
-    filter.addToken("tabloid6", 1);
-    QueryTree tree = query.getModel().getQueryTree();
-    Item oldroot = tree.getRoot();
-    AndItem newtop = new AndItem();
-    newtop.addItem(oldroot);
-    newtop.addItem(filter);
-    tree.setRoot(newtop);
-    query.trace("FriendFilterSearcher added hardcoded filter: ", true, 2);
+    var filter = new StringInItem("category");
+    filter.addToken("magazine1");
+    filter.addToken("magazine2");
+    filter.addToken("magazine3");
+    filter.addToken("tv");
+    filter.addToken("tabloid1");
+    filter.addToken("tabloid2");
+    filter.addToken("tabloid3");
+    filter.addToken("tabloid4");
+    filter.addToken("tabloid5");
+    filter.addToken("tabloid6");
+    var tree = query.getModel().getQueryTree();
+    var oldRoot = tree.getRoot();
+    var newRoot = new AndItem();
+    newRoot.addItem(oldRoot);
+    newRoot.addItem(filter);
+    tree.setRoot(newRoot);
+    query.trace("MyCustomFilterSearcher added hardcoded filter: ", true, 2);
     return execution.search(query);
 }
 </pre>
 <p>
 The biggest challenge here is finding the tokens to insert;
-normally the incoming search request URL should not contain all the tokens directly.
+normally the incoming search request URL might not contain all the tokens directly.
 For example, the search request could contain the user id,
-and a lookup (in a database or a Vespa index) would fetch the friends list.
+and a lookup (in a database or a Vespa index) would fetch the relevant categories for this user.
 </p><p>
-Since the tokens are inserted directly into the query
-without going through the Search Container query parsing and query handling,
-they won't be subject to transforms such as lowercasing, stemming, or phrase generation.
-This means that if the field is a string field you'll need to insert lowercased tokens only,
-and only single tokens in the index can be matched.
-</p><p>
-For more examples on how the code might look there is
-<a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeightedSetItem.html">container javadoc</a> available.
+Refer to javadoc for more details:
+<a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NumericInItem.html">NumericInItem</a> and
+<a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/StringInItem.html">StringInItem</a>.</td>
 </p>
 
 

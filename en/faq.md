@@ -303,20 +303,22 @@ public class ConfigCacheRefresher extends AbstractComponent {
 {% endhighlight %}</pre>
 
 #### Is it possible to query Vespa using a list of document ids?
+Yes, using the [in query operator](reference/query-language-reference.html#in). Example:
+```
+select * from data where user_id in (10, 20, 30)
+```
 The best article on the subject is
 [multi-lookup set filtering](performance/feature-tuning.html#multi-lookup-set-filtering).
-Refer to the [weightedset-example](multivalue-query-operators.html#weightedset-example) -
-also see [weightedset](reference/query-language-reference.html#weightedset)
-for writing a YQL query to select multiple IDs.
-The ID must be a field in the document type.
+Refer to the [in operator example](multivalue-query-operators.html#in-example)
+on how to use it programmatically in a [Java Searcher](searcher-development.html).
 
 #### How to query documents where one field matches any values in a list? Similar to using SQL IN operator
-Example:
+Use the [in query operator](reference/query-language-reference.html#in). Example:
 ```
-select * from data where category = 'cat1' OR category = 'cat2'..
+select * from data where category in ('cat1', 'cat2', 'cat3')
 ```
-See [multi-lookup set filtering](#is-it-possible-to-query-vespa-using-a-list-of-document-ids) above,
-using a weighted set instead of a big OR.
+See [multi-lookup set filtering](#is-it-possible-to-query-vespa-using-a-list-of-document-ids)
+above for more details.
 
 
 #### How to count hits / all documents without returning results?

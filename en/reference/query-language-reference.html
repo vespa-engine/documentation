@@ -610,6 +610,80 @@ where rank(a contains "A", b contains "B")
   </tr>
 
   <tr>
+    <th>in</th>
+    <td>
+      <p id="in">
+        The <em>in</em> operator is used to match a set of values in an integer or string field.
+        A document is considered a match when at least one of the values matches the content of the field.
+        This is an optimized shorthand for multiple OR conditions, and is similar to the IN operator in SQL.
+        Available since Vespa 8.293.15. Example:
+      </p>
+<pre>
+where integer_field in (10, 20, 30)
+where string_field in ('germany', 'france', 'norway')
+</pre>
+      <p>
+        The argument before <em>in</em> is the name of the field or <a href="schema-reference.html#fieldset">fieldset</a> to search.
+        The argument after <em>in</em> is a comma-separated list of values, enclosed in parenthesis.
+        When searching a string field, values must be single or double-quoted if passed inline in YQL.
+        String values are automatically <a href="schema-reference.html#match">lowercased</a>.
+      </p>
+      <p>
+        For faster query parsing use <a href="#parameter-substitution">parameter substitution</a>
+        to submit the values as an additional request parameter.
+        Quoting of string values are optional. Example:
+      </p>
+<pre>
+where integer_field in (@integer_values)&amp;integer_values=10,20,30
+where string_field in (@string_values)&amp;string_values=germany,france,norway
+</pre>
+      <p>
+        The <em>in</em> operator acts as a single term in the query,
+        and does not provide any match information for ranking.
+        It is an operator solely used for filtering.
+      </p>
+      <p>
+        For a discussion of usage and examples refer to:
+        <ul>
+          <li><a href="../multivalue-query-operators.html#in-example">multivalue query operators</a></li>
+          <li><a href="../performance/feature-tuning.html#multi-lookup-set-filtering">multi-lookup set filtering</a></li>
+          <li><a href="https://github.com/vespa-engine/system-test/tree/master/tests/search/in_operator">in operator system test</a></li>
+        </ul>
+      </p>
+      <table class="table">
+        <thead></thead><tbody>
+      <tr>
+        <th>Field type</th>
+        <td>Singlevalue or <a href="../schemas.html#multivalue-field">multivalue</a>
+        <a href="../schemas.html#indexing">attribute or index field</a>
+        with basic type <a href="schema-reference.html#byte">byte</a>, <a href="schema-reference.html#int">int</a>,
+        <a href="schema-reference.html#long">long</a> or <a href="schema-reference.html#string">string</a>.
+        </td>
+      </tr><tr>
+        <th>Query model</th>
+        <td>A set of values/tokens.</td>
+      </tr><tr>
+        <th>Matching</th>
+        <td>Documents where the field contains at least one of the values in the query.</td>
+      </tr><tr>
+        <th>Ranking</th>
+        <td>None.</td>
+      </tr><tr>
+        <th style="white-space:nowrap;">Java Query Item</th>
+        <td><a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NumericInItem.html">NumericInItem</a> and
+        <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/StringInItem.html">StringInItem</a>.</td>
+      </tr>
+      </tbody>
+      </table>
+      <p>
+      {% include important.html content="When using the <em>in</em> operator with an attribute field,
+      set <a href='../attributes.html#fast-search'>fast-search</a> and <a href='schema-reference.html#filter'>rank: filter</a>
+      for best possible performance." %}
+      </p>
+    </td>
+  </tr>
+
+  <tr>
     <th>dotProduct</th>
     <td>
       <p id="dotproduct">
@@ -692,11 +766,6 @@ where weightedSet(description, {"a":1, "b":2})
         for large sets of tokens compared to using the generic <a href="#equiv">equiv</a> or <a href="#or">or</a> operators.
       </p>
       <p>
-        Refer to <a href="../multivalue-query-operators.html">multivalue query operators</a>
-        for a discussion of usage and examples.
-        Also see <a href="../performance/feature-tuning.html#multi-lookup-set-filtering">multi-lookup set filtering</a>.
-      </p>
-      <p>
         Keys must be single or double-quoted if passed inline in YQL -
         alternatively, use <a href="#parameter-substitution">parameter substitution</a>
         to submit the weighted set with a simple format for faster query parsing -
@@ -713,7 +782,9 @@ where weightedSet(description, {"a":1, "b":2})
         <td>Weighted set with {token, weight} pairs.</td>
       </tr><tr>
         <th>Matching</th>
-        <td>Documents where the field contains at least one of the tokens in the query.</td>
+        <td>Documents where the field contains at least one of the tokens in the query.
+          For filtering use cases we recommend using the <a href="#in">in operator</a> instead,
+          as it is simpler to use and has slightly better performance.</td>
       </tr><tr>
         <th>Ranking</th>
         <td>The operator will act as a single term in the back-end.
@@ -1339,11 +1410,15 @@ whereas the native execution parameter <a href="query-api-reference.html#timeout
 
 <h2 id="parameter-substitution">Parameter substitution</h2>
 <p>
-  The query operators <a href="#dotproduct">dotProduct(field, value)</a>,
+  The query operators <a href="#in">field in (value)</a>,
+  <a href="#dotproduct">dotProduct(field, value)</a>,
   <a href="#weightedset">weightedSet(field, value)</a> and <a href="#wand">wand(field, value)</a>
   support parameter substitution for the <code>value</code> parameter - example of equivalent queries:
 </p>
 <pre>
+... where field in ("a", "b")
+... where field in (@my_values)&amp;my_values=a,b
+
 ... where weightedSet(field, {"a":1, "b":2})
 ... where weightedSet(field, @myset)&amp;myset={a:1,b:2}
 </pre>
@@ -1359,8 +1434,12 @@ whereas the native execution parameter <a href="query-api-reference.html#timeout
   The value string can be passed in one of:
 </p>
 <ul>
-  <li>Array form: <code>[[key, value], ...]</code></li>
-  <li>Map form: <code>{key: value, ...}</code></li>
+  <li>List form: <code>value, ...</code>.
+    For <a href="#in">in</a> operator only.</li>
+  <li>Array form: <code>[[key, value], ...]</code>.
+    For <a href="#dotproduct">dotproduct</a>, <a href="#weightedset">weightedset</a> and <a href="#wand">wand</a>.</li>
+  <li>Map form: <code>{key: value, ...}</code>.
+    For <a href="#dotproduct">dotproduct</a>, <a href="#weightedset">weightedset</a> and <a href="#wand">wand</a>.</li>
 </ul>
 <p>
   The query operator <a href="#userinput">userInput(value)</a>

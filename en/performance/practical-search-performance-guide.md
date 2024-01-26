@@ -10,7 +10,7 @@ Latency numbers mentioned in the guide are obtained from running this guide on a
 This guide covers the following query serving performance aspects:
 - [Basic text search query performance](#basic-text-search-query-performance)
 - [Hits and document summaries](#hits-and-summaries)
-- [Multivalued query operators (dotProduct, weakAnd, wand, weightedSet)](#multi-valued-query-operators)
+- [Multivalued query operators (dotProduct, weakAnd, wand, in)](#multi-valued-query-operators)
 - [Searching attribute fields](#searching-attribute-fields)
 - [Searching attribute fields with fast-search](#searching-attribute-fields-using-fast-search)
 - [Ranking with tensor computations](#tensor-computations)
@@ -1409,10 +1409,10 @@ This query also retrieved some of the previous *liked* tracks. These can be remo
 from the result set using the `not` query operator, in YQL represented as `!`.
 
 <pre>
-where !weightedSet(track_id, @userLiked) 
+where !(track_id in (@userLiked))
 </pre>
 
-The [weightedSet query operator](../reference/query-language-reference.html#weightedset) 
+The [in query operator](../reference/query-language-reference.html#in)
 is the most efficient multi-value *filtering* query operator, either
 using a positive filter (match if any of the keys matches) or negative filter using `not`
 (remove from result if any of the keys matches).
@@ -1425,16 +1425,16 @@ Run query with the `not` filter:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title, artist, track_id from track where !weightedSet(track_id, @userLiked)' \
+    'yql=select title, artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
-    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
 {% endraw %}</pre>
 </div>
 
 Note that the tensor query input format is slightly different from the variable substitution supported for 
-the multivalued query operators `wand`, `weightedSet` and `dotProduct`.
+the multivalued query operators `wand`, `in` and `dotProduct`.
 The above query produces the following result:
 
 <pre>{% highlight json %}
@@ -1523,11 +1523,11 @@ query as fewer documents gets ranked by the tensor ranking expression:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Ronan Keating">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where tags contains "popular" and !weightedSet(track_id,@userLiked)' \
+    'yql=select title,artist, track_id from track where tags contains "popular" and !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
-    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
 {% endraw %}</pre>
 </div>
 
@@ -1635,11 +1635,11 @@ Re-run the tensor ranking query:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
-    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
 {% endraw %}</pre>
 </div>
 
@@ -1728,11 +1728,11 @@ Then repeat the tensor ranking query:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
-    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
 {% endraw %}</pre>
 </div>
 
@@ -1827,11 +1827,11 @@ now using the `similar-t2` profile:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where !weightedSet(track_id,@userLiked)' \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar-t2' \
     'hits=5' \
-    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
 {% endraw %}</pre>
 </div>
 
@@ -2081,11 +2081,11 @@ over the most popular tracks:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="1349">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !weightedSet(track_id, @userLiked)' \
+    'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
-    'userLiked={TRQIQMT128E0791D9C:1,TRWJIPT128E0791D99:1,TRGVORX128F4291DF1:1}'
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
 {% endraw %}</pre>
 </div>
 
