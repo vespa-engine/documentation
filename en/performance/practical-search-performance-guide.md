@@ -1409,7 +1409,7 @@ This query also retrieved some of the previous *liked* tracks. These can be remo
 from the result set using the `not` query operator, in YQL represented as `!`.
 
 <pre>
-where !track_id in (@userLiked)
+where !(track_id in (@userLiked))
 </pre>
 
 The [in query operator](../reference/query-language-reference.html#in)
@@ -1425,7 +1425,7 @@ Run query with the `not` filter:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title, artist, track_id from track where !track_id in (@userLiked)' \
+    'yql=select title, artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
@@ -1523,7 +1523,7 @@ query as fewer documents gets ranked by the tensor ranking expression:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Ronan Keating">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where tags contains "popular" and !track_id in (@userLiked)' \
+    'yql=select title,artist, track_id from track where tags contains "popular" and !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
@@ -1635,7 +1635,7 @@ Re-run the tensor ranking query:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where !track_id in (@userLiked)' \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
@@ -1728,7 +1728,7 @@ Then repeat the tensor ranking query:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where !track_id in (@userLiked)' \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
@@ -1827,7 +1827,7 @@ now using the `similar-t2` profile:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id from track where !track_id in (@userLiked)' \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar-t2' \
     'hits=5' \
@@ -2081,7 +2081,7 @@ over the most popular tracks:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="1349">{% raw %}
 $ vespa query \
-    'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !track_id in (@userLiked)' \
+    'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !(track_id in (@userLiked))' \
     'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
     'ranking=similar' \
     'hits=5' \
