@@ -34,7 +34,7 @@ In the next part of the tutorial, we'll start developing our application.
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li>Python3 for converting the dataset to Vespa JSON.</li>
 <li><code>curl</code> to download the dataset and run the Vespa health-checks.</li>
-<li><a href="https://openjdk.org/projects/jdk/17/">Java 17</a> in part 6.</li>
+<li><a href="https://openjdk.org/projects/jdk/17/" data-proofer-ignore>Java 17</a> in part 6.</li>
 <li><a href="https://maven.apache.org/install.html">Apache Maven</a> in part 6.</li>' %}
 
 {% include note.html content='4 GB Docker memory is sufficient for the demo dataset in part 2.
