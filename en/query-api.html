@@ -167,6 +167,61 @@ $ vespa query "select * from music where userQuery()" \
 </p>
 
 
+<h3 id="parameter-substitution">Parameter substitution</h3>
+<p>
+  Parameter substitution lets you provide query values as request parameters
+  instead of inserting this into the YQL string itself.
+  This simplifies query generation, separating the value of the string/set/array from the YQL string -
+  i.e. the value will not corrupt the YQL string if it contains YQL-like syntax:
+</p>
+<ul>
+  <li>
+    Simplify query generation, separating the value of the set/array from the YQL string.
+
+  </li>
+  <li>Speed up query parsing. Using parameter substitution accelerates string parsing.</li>
+  <li>Reduce duplication.</li>
+</ul>
+<p>
+  In its simplest form,
+  use <a href="/en/reference/query-language-reference.html#userinput">userInput()</a> for strings:
+</p>
+
+<pre>
+... where userInput(@user_input)&user_input=free+text
+</pre>
+<p>Lists, maps and arrays can also be used - examples:</p>
+<pre>
+# Simple example: provide a set for the IN operator
+... where id in (@my_set)&my_set=10,20,30
+
+# Same set, but use the set as a block-list (exclude items in the set)
+... where !(id in (@my_set))&my_set=10,20,30
+
+# Use a weightedSet operator
+... where weightedSet(field, @my_set)&my_set={a:1,b:2}
+</pre>
+<p>
+  It is also great to eliminate data duplication,
+  from Vespa 8.287 one can use parameter substitution with <code>embed</code>:</p>
+<pre>
+$ vespa query \
+  'yql=select id, from product where {targetHits:10}nearestNeighbor(embedding, query_embedding) or <span class="pre-hilite">userQuery()</span>' \
+  'input.query(query_embedding)=embed(transformer, <span class="pre-hilite">@query</span>)' \
+  'input.query(query_tokens)=embed(tokenizer, <span class="pre-hilite">@query</span>)' \
+  '<span class="pre-hilite">query=running shoes for kids, white</span>'
+</pre>
+<p>
+  Note the use of the parameter named <a href="/en/reference/query-api-reference.html#model.querystring">query</a>
+  used by the <a href="/en/reference/query-language-reference.html#userquery">userQuery()</a> operator.
+  Also note the value substituted in the <a href="/en/embedding.html#embedding-a-query-text">embed</a> functions.
+</p>
+<p>
+  See the <a href="/en/reference/query-language-reference.html#parameter-substitution">reference</a>
+  for a complete list of formats.
+</p>
+
+
 
 <h2 id="ranking">Ranking</h2>
 <p>
