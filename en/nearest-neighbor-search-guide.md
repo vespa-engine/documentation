@@ -1727,7 +1727,7 @@ $ vespa query \
 The `weakAnd` query operator exposes more hits to ranking than approximate nearest neighbor search, similar
 to the `wand` query operator. Generally, using the `rank` query operator is more efficient than combining
 query retriever operators using `or`. See also the 
-[Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/passage-ranking-README.md)
+[Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/)
 for complete examples of different retrieval strategies for [multi-phase ranking](phased-ranking.html) funnels.
 
 One can also use the `rank` operator to first retrieve by some filter logic, and compute distance or similarity for the retrieved documents.
