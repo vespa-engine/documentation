@@ -103,7 +103,7 @@ def split_text(soup):
                 data.append((id, header, text))
                 text = ""
             header = line.lstrip("#")
-            id = "-".join(header.split()).lower()
+            id = "-".join(header.replace(',', '').split()).lower()
         else:
             text = text + "\n" + line
 
