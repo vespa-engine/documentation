@@ -188,6 +188,13 @@ def move_linkable_item_to_single_entity(soup, item):
             new_h4.insert_after(item)
 
 
+def fix_pre_content(soup):
+    # Workaround: ensure no faux headings from pre content
+    for pre in soup.body.find_all('pre'):
+        pre_text = pre.get_text()
+        pre.string = re.sub(r'^#', ' #', pre_text, flags=re.MULTILINE)
+
+
 def main():
     with open(sys.argv[1]) as fp:
         random.seed(42)
@@ -198,6 +205,7 @@ def main():
             html_doc = xml_fixup(html_doc)
             soup = BeautifulSoup(html_doc, 'html5lib')
             remove_notext_tags(soup)
+            fix_pre_content(soup)
             add_header_to_tables_if_missing(soup)
             data = split_text(soup)
 
