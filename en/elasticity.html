@@ -142,30 +142,59 @@ redirect_from:
 </p>
 
 
-<h3 id="topology-change">Topology change</h3>
+
+<h2 id="changing-topology">Changing topology</h2>
 <p>
-  A great elasticity feature is the ability to change topology without service disruption.
+  A Vespa elasticity feature is the ability to change topology (i.e. grouped distribution) without service disruption.
   This is a live change, and will auto-redistribute documents to the new topology.
-  If full query coverage is required during the transition,
-  make sure that there is always one or more "full" group(s):
+</p>
+<p>
+  Also read <a href="/en/operations-selfhosted/admin-procedures.html#topology-change">topology change</a>
+  if running Vespa self-hosted - the below steps are general for all hosting options.
+</p>
+
+
+<h3 id="replicas">Replicas</h3>
+<p>
+  When changing topology, pay attention to the <a href="/en/reference/services-content.html#min-redundancy">min-redundancy</a> setting -
+  this setting configures a <em>minimum</em> number of replicas in a cluster,
+  the <em>actual</em> number is topology dependent - example:
+</p>
+<p>
+  A flat cluster with min-redundancy n=2 and 15 nodes is changed into a grouped cluster with 3 groups with 5 nodes each
+  (total node count and n is kept unchanged).
+  In this case, the actual redundancy will be 3 after the change,
+  as each of the 3 groups will have at least 1 replica for full query coverage.
+  The practical consequence is that disk and memory requirements per node <em>increases</em> due to the change to topology.
+  It is therefore important to calculate the actual replica count before reconfiguring topology.
+</p>
+
+
+<h3 id="query-coverage">Query coverage</h3>
+<p>
+  Changing topology might cause query coverage loss in the transition, unless steps taken in the right order.
+  If full coverage is not important, just make the change and wait for document redistribution to complete.
+</p>
+<p>
+  To keep full query coverage, make sure not to change both group size and number of groups at the same time:
 </p>
 <ol>
-  <li>Generally, do not move current nodes to new groups.</li>
-  <li>If starting from non-grouped, configure the current nodes in one group and new nodes is a new group.</li>
   <li>
-    If changing both node count within group and group count, keep the current nodes in the current groups.
+    To add nodes for more data, or to have less data per node, increase group size.
+    E.g., in a 2-row cluster with 8 nodes per row, add 4 nodes for a 25% capacity increase with 10 nodes per row.
+  </li>
+  <li>
+    If the goal is to add query capacity, add one or more rows, with the same node count as existing row(s).
+    A flat cluster is the same as one row - if the flat cluster has 8 nodes,
+    change to a grouped cluster with 2 rows of 8 nodes per group.
+    This will add an empty row, which is put in query serving once populated.
   </li>
 </ol>
 <p>
-  It is possible to stage a migration in two steps:
-</p>
-<ol>
-  <li>Expand or shrink number of nodes within groups.</li>
-  <li>Add or remove groups.</li>
-</ol>
-<p>
-  A common way to increase capacity is then to add more nodes to existing groups,
-  wait for re-distribution to complete, then add groups.
+  In short, if the end-state means both changing number of rows and node count per row,
+  do this as separate steps, as a combination of the above.
+  Between each step, wait for document redistribution to complete using the <code>merge_bucket.pending</code> metric -
+  see <a href="https://cloud.vespa.ai/en/index-bootstrap">example</a>.
 </p>
 
 
