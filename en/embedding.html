@@ -59,11 +59,14 @@ input.query(q)=<span class="pre-hilite">embed(myEmbedderId, "Hello%20world")</sp
 you can skip the embedder id argument and the quotes.</p>
 
 <p>The text argument can be supplied by a referenced parameter instead, using the <code>@parameter</code> syntax:
+<pre>{% highlight json %}
 {
     "yql": "select * from doc where {targetHits:10)nearestNeighbor(embedding_field, query_embedding)",
     "text": "my text to embed",
     "input.query(query_embedding)": "embed(@text)",
 }
+{% endhighlight %}</pre>
+
 </p>
 
 <p>Remember that regardless of whether you are using embedders, input tensors
@@ -148,8 +151,8 @@ to produce tokens which is then input to a supplied transformer model in <a href
 <ul>
     <li>
         The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a>.
-        See <a href="#onnx-export">exporting models to ONNX</a>,
-        for how to export embedding models from Huggingface to compatible <a href="https://onnx.ai/">ONNX</a> format.
+        See <a href="onnx.html#onnx-export">exporting models to ONNX</a>,
+        for how to export embedding models from Huggingface to be compatible with Vespa's <code>hugging-face-embedder</code>.
     </li>
     <li>
         The <code>tokenizer-model</code> specifies the Huggingface <code>tokenizer.json</code> formatted file.
@@ -205,7 +208,7 @@ for help with choosing an embedding model.</p>
 <h3 id="bert-embedder">Bert embedder</h3>
 
 <p>An embedder using the <a href="reference/embedding-reference.html#wordpiece-embedder">WordPiece</a> embedder to produce tokens
-which are then input to a supplied <a href="https://onnx.ai/">ONNX</a> model on the form expected by a BERT base model.:</p>
+which are then input to a supplied <a href="https://onnx.ai/">ONNX</a> model on the form expected by a BERT base model:</p>
 
 <pre>{% highlight xml %}
 <container version="1.0">
@@ -219,7 +222,7 @@ which are then input to a supplied <a href="https://onnx.ai/">ONNX</a> model on 
 <ul>
     <li>
         The <code>transformer-model</code> specifies the embedding model in <a href="https://onnx.ai/">ONNX</a> format.
-        See <a href="#onnx-export">exporting models to ONNX</a>,
+        See <a href="onnx.html#onnx-export">exporting models to ONNX</a>,
         for how to export embedding models from Huggingface to compatible <a href="https://onnx.ai/">ONNX</a> format.
     </li>
     <li>
@@ -241,7 +244,11 @@ Prefer using the <a href="#huggingface-embedder">Huggingface Embedder</a> instea
 
 <p>An embedder supporting <a href="https://github.com/stanford-futuredata/ColBERT">ColBERT</a> models. The
 ColBERT embedder maps text to <i>token</i> embeddings, representing a text as multiple
-contextualized embeddings. This produces better quality than compressing all tokens into a single vector.</p>
+contextualized embeddings. This produces better quality than reduing all tokens into a single vector.</p>
+
+<p>Read more about ColBERT and the ColBERT embedder in blog post form 
+  <a href="https://blog.vespa.ai/announcing-colbert-embedder-in-vespa/">Announcing the Vespa ColBERT embedder</a> 
+  and <a href="https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/">Announcing Vespa Long-Context ColBERT</a>.</p>
 
 <pre>{% highlight xml %}
 <container version="1.0">
@@ -257,7 +264,7 @@ contextualized embeddings. This produces better quality than compressing all tok
 <ul>
     <li>
         The <code>transformer-model</code> specifies the ColBERT embedding model in <a href="https://onnx.ai/">ONNX</a> format.
-        See <a href="#onnx-export">exporting models to ONNX</a>,
+        See <a href="onnx.html#onnx-export">exporting models to ONNX</a>,
         for how to export embedding models from Huggingface to compatible <a href="https://onnx.ai/">ONNX</a> format.
         The <a href="https://huggingface.co/vespa-engine/col-minilm">vespa-engine/col-minilm</a> page on the HF
         model hub has a detailed example of how to export a colbert checkpoint to ONNX format for accelerated inference.
@@ -341,103 +348,81 @@ where you can e.g. use a document level vector and/or lexical matching.</p>
 
 <p>To reduce memory footprint, use <a href="attributes.html#paged-attributes">paged attributes</a>.</p>
 
-<h4 id="colbert-ranking">ColBert ranking</h4>
+<h4 id="colbert-ranking">ColBERT ranking</h4>
 
-<p>The following <a href="ranking.html">rank-profile</a> is an example of
-using a <a href="reference/ranking-expressions.html#tensor-functions">tensor expression</a> to
-express the ColBERT MaxSim operator between the query and document representation, as
-<a href="phased-ranking.html">second-phase ranking</a>.</p>
+See sample-applications for how to use ColBERT in ranking with variants of the MaxSim similarity operator
+expressed using Vespa tensor computation expressions. See:
 
-<p>This example uses the compressed version with <a href="reference/ranking-expressions.html#unpack-bits">unpack_bits</a>.
-Note that the query tensor is not compressed, this is an example
-of asymmetric compression, as the query does not need to be compressed.</p>
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/colbert">colbert</a> and
+ <a href="https://github.com/vespa-engine/sample-apps/tree/master/colbert-long">colbert-long</a>.
 
+<h3 id="splade-embedder">SPLADE embedder</h3>
+
+<p>An embedder supporting <a href="https://github.com/naver/splade">SPLADE</a> models. The
+SPLADE embedder maps text to mapped tensor, representing a text as a sparse vector of unique tokens and their weights.</p>
+
+
+<pre>{% highlight xml %}
+<container version="1.0">
+    <component id="splade" type="splade-embedder">
+      <transformer-model path="models/splade_model.onnx"/>
+      <tokenizer-model path="models/tokenizer.json"/>
+    </component>
+</container>
+{% endhighlight %}</pre>
+
+<ul>
+    <li>
+        The <code>transformer-model</code> specifies the SPLADE embedding model in <a href="https://onnx.ai/">ONNX</a> format.
+        See <a href="onnx.html#onnx-export">exporting models to ONNX</a>,
+        for how to export embedding models from Huggingface to compatible <a href="https://onnx.ai/">ONNX</a> format.
+    </li>
+    <li>
+        The <code>tokenizer-model</code> specifies the Huggingface <code>tokenizer.json</code> formatted file.
+        See <a href="https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file"> HF loading tokenizer from a json file.</a>
+    </li>
+</ul>
+<p>See <a href="reference/embedding-reference.html#splade-embedder-reference-config">configuration reference</a> for all
+configuration options and defaults.</p>
+
+<p>The splade token weights are represented as a
+  <a href="tensor-user-guide.html#tensor-concepts">mapped tensor</a>: <code>tensor&lt;float&gt;(token{})</code>. </p>
+  <p>The embedder destination tensor is defined in the <a href="schemas.html">schema</a>. 
+  The following demonstrates how to use the SPLADE embedder in the document schema to <a href="#embedding-a-document-field">embed a document field</a>.</p>
+  </p>
+  
+  <pre>
+  schema doc {
+    document doc {
+      field text type string {..}
+    }
+    field splade_tokens type tensor&lt;float&gt;(token{}) {
+      indexing: input text | embed splade | attribute
+    }
+  }
+  </pre>
+
+<p>You can also use the SPLADE embedder with an array of strings (representing chunks). Here, also 
+  using lower tensor cell precision <code>bfloat16</code>:</p>
 <pre>
-rank-profile max-sim inherits default {
-    inputs {
-      query(qt) tensor&lt;float&gt;(qt{}, x[128])
-    }
-    function unpack() {
-      expression: unpack_bits(attribute(colbert_tokens_compressed))
-    }
-    first-phase {
-      expression: nativeRank(text) # example
-    }
-    second-phase {
-      rerank-count: 1000
-      expression {
-        sum(
-          reduce(
-            sum(
-              query(qt) * unpack() , x
-            ),
-            max, token
-          ),
-          qt
-        )
-    }
+schema doc {
+  document doc {
+    field chunks type array&lt;string&gt; {..}
+  }
+  field splade_tokens type tensor&lt;bfloat16&gt;(chunk{}, token{}) {
+    indexing: input text | embed splade chunk | attribute
   }
 }
 </pre>
 
+<p>Here, we need a second mapped dimension in the target tensor, and a second argument to embed,
+telling the splade embedder the name of the tensor dimension to use for the chunks.</p>
 
+<p>To reduce memory footprint, use <a href="attributes.html#paged-attributes">paged attributes</a>.</p>
 
-<h2 id="onnx-export">Exporting HF models to ONNX format</h2>
-
-<p>Transformer based models have named inputs and outputs that needs to be compatible
-with the input and output names used by the embedder.</p>
-
-<p>The <a href="https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search#model-exporting">simple-semantic-search</a>
-sample app includes two scripts to export models and vocabulary files using the default expected input and output names
-for embedders using ONNX models. The input and output names to use can also be overriden by the various <code>transformer-</code>
-parameters in the <a href="reference/embedding-reference.html">config of the embedder in question</a>.
-
-<h3 id="onnx-debug">Debugging ONNX models</h3>
-
-<p>When loading <a href="https://onnx.ai/">ONNX</a> models for embedders, the model must have correct inputs and output parameters.
-Vespa offers tools to inspect ONNX model files.
-Here, <em>minilm-l6-v2.onnx</em> is in the current working directory:
-</p>
-<pre>
-$ docker run -v `pwd`:/w \
-  --entrypoint /opt/vespa/bin/vespa-analyze-onnx-model \
-  vespaengine/vespa \
-  /w/minilm-l6-v2.onnx
-
-...
-model meta-data:
-  input[0]: 'input_ids' long[batch][sequence]
-  input[1]: 'attention_mask' long[batch][sequence]
-  input[2]: 'token_type_ids' long[batch][sequence]
-  output[0]: 'output_0' float[batch][sequence][384]
-  output[1]: 'output_1' float[batch][384]
-...
-</pre>
-
-<p>The above model input and output names conforms with the
-default <a href="reference/embedding-reference.html#bert-embedder-reference-config">bert-embedder parameters</a>.</p>
-
-<p>If loading models without the expected input and output parameter names, the container service will not start
-(check <em>vespa.log</em> in the container running Vespa):</p>
-
-<pre>
- WARNING container        Container.com.yahoo.container.di.Container
-  Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: input
-</pre>
-
-<p>When this happens, a deploy looks like:</p>
-<pre>
-$ vespa deploy --wait 300
-Uploading application package ... done
-
-Success: Deployed .
-
-Waiting up to 5m0s for query service to become available ...
-Error: service 'query' is unavailable: services have not converged
-</pre>
-<p>Embedders supports changing the input and output names, consult <a href="reference/embedding-reference.html">embedding reference</a>
-documentation.</p>
-
+<h4 id="splade-ranking">SPLADE ranking</h4>
+See the splade <a href="https://github.com/vespa-engine/sample-apps/tree/master/splade">splade</a> sample application for how to use SPLADE in ranking. including
+also how to use the SPLADE embedder with an array of strings (representing chunks).
 
 <h2 id="embedder-performance">Embedder performance</h2>
 
@@ -473,11 +458,17 @@ emit the same predefined metrics, although emitting custom metrics is perfectly 
 <p>These sample applications use embedders:</p>
 <ul>
     <li><a href="https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search">
-        simple-semantic-search</a>.
+        simple-semantic-search</a></li>
     <li><a href="https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking">commerce-product-ranking</a> -
-        demonstrates using multiple embedders.
-    <li></li><a href="https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing">multi-vector-indexing</a>
-    demonstrates how to use embedders with multiple document field inputs.
+        demonstrates using multiple embedders</li>
+    <li><a href="https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing">multi-vector-indexing</a>
+    demonstrates how to use embedders with multiple document field inputs</li>
+    <li><a href="https://github.com/vespa-engine/sample-apps/tree/master/colbert">colbert</a>
+      demonstrates how to use the colbert-embedder </li>
+      <li><a href="https://github.com/vespa-engine/sample-apps/tree/master/colbert-long">colbert-long</a>
+        demonstrates how to use the colbert-embedder with long contexts (array input) </li>
+      <li><a href="https://github.com/vespa-engine/sample-apps/tree/master/splade">splade</a> demonstrates
+      how to use the splade-embedder.</li>
 </ul>
 
 <h2 id="tricks-and-tips">Tricks and tips</h2>
