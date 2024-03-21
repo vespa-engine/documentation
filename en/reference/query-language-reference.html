@@ -601,11 +601,18 @@ $ vespa query 'select * from sources * where vendor contains "brick and mortar" 
       <p id="rank">
       The first, and only the first, argument of the <em>rank()</em> function
       determines whether a document is a match,
-      but all arguments are used for calculating rank score.
+      but all arguments are used for calculating rank features. The <code>rank</code> operator
+      is useful for boosting documents based on the presence of certain terms without impacting matching or retrieval logic.
       </p>
 <pre>
-where rank(a contains "A", b contains "B")
+where rank(a contains "A", b contains "B", c contains "C")
 </pre>
+<p>It's also useful in hybrid search use cases. See <a href="https://blog.vespa.ai/redefining-hybrid-search-possibilities-with-vespa/">blog post</a> 
+  for usage examples. For example, retrieve using the <a href="#nearestneighbor">nearestNeighbor</a> query operator
+  as the first argument and have matching features calculated for the the other arguments. </p>
+  <pre>
+where rank(nearestNeighbor(field, queryVector), a contains "A", b contains "B", c contains "C")
+  </pre>
     </td>
   </tr>
 
@@ -622,11 +629,23 @@ where rank(a contains "A", b contains "B")
 where integer_field in (10, 20, 30)
 where string_field in ('germany', 'france', 'norway')
 </pre>
+Where <code>string_field</code> is a field with <code>match:word</code>. 
+There is no <a href="../linguistic.html">linguistic</a> processing like tokenization or stemming 
+of the string values used in the <code>in</code> operator except lowercasing. See string <a href="schema-reference.html#match">match</a>.
+<pre>
+field string_field type string {
+    indexing: summary | index # or attribute 
+    match: word
+    rank:filter
+    attribute: fast-search # if attribute 
+  }
+</pre>
+<p>Using the in operator against string fields with <code>match:text</code> will cause recall issues because
+  the field contents will be tokenized during indexing while the in operator does not tokenize the values.</p>
       <p>
         The argument before <em>in</em> is the name of the field or <a href="schema-reference.html#fieldset">fieldset</a> to search.
         The argument after <em>in</em> is a comma-separated list of values, enclosed in parenthesis.
-        When searching a string field, values must be single or double-quoted if passed inline in YQL.
-        String values are automatically <a href="schema-reference.html#match">lowercased</a>.
+        String values must be single or double-quoted if passed inline in YQL
       </p>
       <p>
         For faster query parsing use <a href="#parameter-substitution">parameter substitution</a>
@@ -638,9 +657,8 @@ where integer_field in (@integer_values)&amp;integer_values=10,20,30
 where string_field in (@string_values)&amp;string_values=germany,france,norway
 </pre>
       <p>
-        The <em>in</em> operator acts as a single term in the query,
-        and does not provide any match information for ranking.
-        It is an operator solely used for filtering.
+        The <em>in</em> operator acts as a single term in the query tree,
+        and does not provide any match information for text ranking features.
       </p>
       <p>
         For a discussion of usage and examples refer to:
@@ -657,7 +675,7 @@ where string_field in (@string_values)&amp;string_values=germany,france,norway
         <td>Singlevalue or <a href="../schemas.html#multivalue-field">multivalue</a>
         <a href="../schemas.html#indexing">attribute or index field</a>
         with basic type <a href="schema-reference.html#byte">byte</a>, <a href="schema-reference.html#int">int</a>,
-        <a href="schema-reference.html#long">long</a> or <a href="schema-reference.html#string">string</a>.
+        <a href="schema-reference.html#long">long</a> or <a href="schema-reference.html#string">string</a>. String fields must have <code>match:word</code> or <code>match:text</code>.
         </td>
       </tr><tr>
         <th>Query model</th>
@@ -678,7 +696,7 @@ where string_field in (@string_values)&amp;string_values=germany,france,norway
       <p>
       {% include important.html content="When using the <em>in</em> operator with an attribute field,
       set <a href='../attributes.html#fast-search'>fast-search</a> and <a href='schema-reference.html#filter'>rank: filter</a>
-      for best possible performance." %}
+      for best possible performance. Always use <code>match:word</code> for string fields." %}
       </p>
     </td>
   </tr>
