@@ -231,11 +231,11 @@ Alternatively, use metrics or `vespa visit` - see [examples](/en/operations/batc
 {:.faq-section}
 ### Query
 
-#### Is hierarchical facets supported?
+#### Are hierarchical facets supported?
 Facets is called <a href="grouping.html">grouping</a> in Vespa.
 Groups can be multi-level.
 
-#### Is filters supported?
+#### Are filters supported?
 Add filters to the query using [YQL](query-language.html)
 using boolean, numeric and [text matching](text-matching.html). Query terms can be annotated
 as filters, which means that they are not highlighted when bolding results. 
