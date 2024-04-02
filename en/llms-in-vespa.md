@@ -17,7 +17,7 @@ generation.
 ### Setting up LLM clients in services.xml
 
 Vespa distinguishes between the clients used to connect to LLMs and how these
-clients are used. You can for instance set up a single LLM connection to a
+clients are used. You can, for instance, set up a single LLM connection to a
 [OpenAI-compatible
 API](https://platform.openai.com/docs/guides/text-generation/chat-completions-api)
 and use this connection for both query understanding or retrieval-augmented
@@ -83,8 +83,9 @@ Vespa also has the option of running custom LLMs locally. Please refer to
 
 After setting up the client connections above, you can use them for various
 tasks such as retrieval-augmented generation. To do this, you need to set up the
-searchers or document processors that will use them. A simple searcher that uses
-the client component is the `LLMSearcher`, which can be set up like this:
+searchers or document processors that will use them. An example of a simple
+searcher that uses the client component is the `LLMSearcher`, which can be set
+up like this:
 
 ```
 <services version="1.0">
@@ -208,8 +209,8 @@ The Manhattan Project was a research and development project during World War II
 ```
 
 The Vespa CLI understands this format and will stream the tokens as they arrive.
-The underlying format is (Server-Sent
-Events)[https://html.spec.whatwg.org/multipage/server-sent-events.html], and the
+The underlying format is [Server-Sent
+Events](https://html.spec.whatwg.org/multipage/server-sent-events.html), and the
 output from Vespa is like this:
 
 ```
