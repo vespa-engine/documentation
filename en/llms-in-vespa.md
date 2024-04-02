@@ -14,6 +14,12 @@ apply LLMs' deep linguistic and semantic capabilities across different stages,
 improving tasks from query comprehension to summarization and response
 generation.
 
+Vespa is ideally suited for retrieval-augmented generation (RAG). This technique
+allows these models to access relevant and up-to-date information beyond their
+training in real-time, enabling Vespa's output to be contextually informed. For
+more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.hmtl).
+
+
 ### Setting up LLM clients in services.xml
 
 Vespa distinguishes between the clients used to connect to LLMs and how these
