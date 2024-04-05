@@ -22,7 +22,7 @@ more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.ht
 
 ### Setting up LLM clients in services.xml
 
-<!-- Todo: add availability form which Vespa version here when it is known -->
+{% include note.html content='This feature is available in Vespa versions >= 8.327' %}
 
 Vespa distinguishes between the clients used to connect to LLMs and how these
 clients are used. You can, for instance, set up a single LLM connection to a
