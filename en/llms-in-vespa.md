@@ -17,10 +17,12 @@ generation.
 Vespa is ideally suited for retrieval-augmented generation (RAG). This technique
 allows these models to access relevant and up-to-date information beyond their
 training in real-time, enabling Vespa's output to be contextually informed. For
-more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.hmtl).
+more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.html).
 
 
 ### Setting up LLM clients in services.xml
+
+<!-- Todo: add availability form which Vespa version here when it is known -->
 
 Vespa distinguishes between the clients used to connect to LLMs and how these
 clients are used. You can, for instance, set up a single LLM connection to a
@@ -120,7 +122,7 @@ up like this:
 ```
 
 This sets up a new [search chain](reference/services-search.html#chain) which
-includes a `LLMSearcher`. This searcher has the responsibility of calling out to
+includes an `LLMSearcher`. This searcher has the responsibility of calling out to
 the LLM connection using some prompt that has been sent along with the query.
 
 Note the `providerId` configuration parameter: this must match the `id` given in

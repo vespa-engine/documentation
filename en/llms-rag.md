@@ -64,7 +64,7 @@ $ vespa query \
 However, notice here the use of the `query` query parameter. In [LLMs in
 Vespa](llms-in-vespa.html), we used a `prompt` parameter to set up the prompt
 to send to the LLM. You can also do that in the `RAGSearcher`, however this means 
-that no actualy query is run in Vespa. For Vespa to run a search, you need to 
+that no actual query is run in Vespa. For Vespa to run a search, you need to 
 specify a `yql` or `query` parameter. By using `query` here, this text is 
 used as both query text for the document retrieval, and in the prompt sent to
 the LLM, as we will see below.
