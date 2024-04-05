@@ -31,6 +31,8 @@ API](https://platform.openai.com/docs/guides/text-generation/chat-completions-ap
 and use this connection for both query understanding or retrieval-augmented
 generation (RAG).
 
+![LLM/RAG searcher](../assets/img/llm-rag-searcher.svg)
+
 To set up a connection to an LLM service such as OpenAI's ChatGPT, you need to 
 define a component in your application's
 [services.xml](reference/services.html):
