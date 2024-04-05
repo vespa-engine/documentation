@@ -44,7 +44,7 @@ define a component in your application's
     <component id="openai" class="ai.vespa.llm.clients.OpenAI">
 
       <!-- Optional configuration: -->
-      <config name="ai.vespa.llm.llm-client">
+      <config name="ai.vespa.llm.clients.llm-client">
         <apiKeySecretName> ... </apiKeySecretName>
         <endpoint> ... </endpoint>
       </config>
@@ -107,8 +107,8 @@ up like this:
     
     <search>
       <chain id="llm" inherits="vespa">
-        <searcher id="ai.vespa.llm.search.LLMSearcher">
-          <config name="ai.vespa.llm.llm-searcher">
+        <searcher id="ai.vespa.search.llm.LLMSearcher">
+          <config name="ai.vespa.search.llm.llm-searcher">
             <providerId>openai</providerId>
           </config>
         </searcher>
@@ -301,14 +301,14 @@ with different property prefixes in `services.xml`. For instance:
 
 ```
 <chain id="rag" inherits="vespa">
-  <searcher id="ai.vespa.llm.search.RAGSearcher">
-    <config name="ai.vespa.llm.llm-searcher">
+  <searcher id="ai.vespa.search.llm.RAGSearcher">
+    <config name="ai.vespa.search.llm.llm-searcher">
       <providerId>openai</providerId>
       <propertyPrefix>rag</propertyPrefix>
     </config>
   </searcher>
-  <searcher id="ai.vespa.llm.search.LLMSearcher">
-    <config name="ai.vespa.llm.llm-searcher">
+  <searcher id="ai.vespa.search.llm.LLMSearcher">
+    <config name="ai.vespa.search.llm.llm-searcher">
       <providerId>openai</providerId>
       <propertyPrefix>llm</propertyPrefix>
     </config>

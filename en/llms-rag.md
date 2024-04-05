@@ -36,8 +36,8 @@ In `services.xml`, specify your LLM connection and the `RAGSearcher`:
     
     <search>
       <chain id="rag" inherits="vespa">
-        <searcher id="ai.vespa.llm.search.RAGSearcher">
-          <config name="ai.vespa.llm.llm-searcher">
+        <searcher id="ai.vespa.search.llm.RAGSearcher">
+          <config name="ai.vespa.search.llm.llm-searcher">
             <providerId>openai</providerId>
           </config>
         </searcher>
