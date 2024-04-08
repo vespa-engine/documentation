@@ -739,7 +739,7 @@ try increasing the heap to e.g. 4 Gb when executing 'docker run ...' by adding a
 variable to the command line:
 
 ```
-docker run ....  --env VESPA_CONFIGSERVER_JVMARGS=-Xmx4g
+docker run --env VESPA_CONFIGSERVER_JVMARGS=-Xmx4g <other options> <image>
 ```
 
 #### The endpoint does not come up after deployment
