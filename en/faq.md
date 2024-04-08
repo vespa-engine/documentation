@@ -731,6 +731,17 @@ Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa 
 {:.faq-section}
 ### Troubleshooting
 
+#### Deployment fails with response code 413
+If deployment fails with error message "Deployment failed, code: 413 ("Payload Too Large.")"
+you might need to increase the config server's JVM heap size. The config server has a default
+JVM heap size of 2 Gb. When deploying an app with e.g. large models this might not be enough,
+try increasing the heap to e.g. 4 Gb when executing 'docker run ...' by adding an environment
+variable to the command line:
+
+```
+docker run --env VESPA_CONFIGSERVER_JVMARGS=-Xmx4g <other options> <image>
+```
+
 #### The endpoint does not come up after deployment
 When deploying an application package, with some kind of error, the endpoints might fail, like:
 ```
