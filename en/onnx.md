@@ -237,7 +237,7 @@ For example, to export <a href="https://huggingface.co/BAAI/bge-small-en">BAAI/b
 
 <pre>
 $ python3 -m pip install optimum onnx  onnxruntime
-$ optimum-cli export onnx --task feature-exctraction -m BAAI/bge-small-en --optimize O3 model-output-dir
+$ optimum-cli export onnx --task feature-extraction -m BAAI/bge-small-en --optimize O3 model-output-dir
 </pre>
 
 The exported files in <code>model-output-dir</code>: <code>model.onnx</code> and <code>tokenizer.json</code> imported directly
