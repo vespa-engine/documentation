@@ -182,23 +182,41 @@ for all configuration parameters.</p>
 <p>
     The following are examples of text embedding models that can be used with the hugging-face-embedder
     and their output <a href="tensor-user-guide.html">tensor</a> dimensionality.
-    The resulting <a href="reference/tensor.html#tensor-type-spec">tensor type</a> can be either <code>float</code>
-    or <code>bfloat16</code>:
+    The resulting <a href="reference/tensor.html#tensor-type-spec">tensor type</a> can be <code>float</code>,
+    <code>bfloat16</code> or using binarized quantization into <code>int8</code>.
 </p>
+
+<p>The following models use <code>pooling-strategy</code> <code>mean</code>,
+   which is the default <a href="reference/embedding-reference.html#huggingface-embedder-reference-config">pooling-strategy</a>:</p>
 <ul>
     <li><a href="https://huggingface.co/intfloat/e5-small-v2">intfloat/e5-small-v2</a> produces <code>tensor&lt;float&gt;(x[384])</code></li>
     <li><a href="https://huggingface.co/intfloat/e5-base-v2">intfloat/e5-base-v2</a> produces <code>tensor&lt;float&gt;(x[768])</code></li>
     <li><a href="https://huggingface.co/intfloat/e5-large-v2">intfloat/e5-large-v2</a> produces <code>tensor&lt;float&gt;(x[1024])</code></li>
     <li><a href="https://huggingface.co/intfloat/multilingual-e5-base">intfloat/multilingual-e5-base</a> produces <code>tensor&lt;float&gt;(x[768])</code></li>
-    <li><a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2">sentence-transformers/all-MiniLM-L6-v2</a> produces <code>tensor&lt;float&gt;(x[384])</code></li>
-    <li><a href="https://huggingface.co/sentence-transformers/all-mpnet-base-v2">sentence-transformers/all-mpnet-base-v2</a> produces <code>tensor&lt;float&gt;(x[768])</code></li>
-    <li><a href="https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2">sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2</a> produces <code>tensor&lt;float&gt;(x[768])</code></li>
-    <li><a href="https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2">sentence-transformers/paraphrase-multilingual-mpnet-base-v2</a> produces <code>tensor&lt;float&gt;(x[768])</code></li>
+</ul>
+<p>The following models are useful for binarization and Matryoshka chomping where only the first k values are retained. When 
+  enabling binarization with <code>int8</code> use <a href="reference/schema-reference.html#hamming">distance-metric hamming</a>:</p>
+<ul>
+    <li><a href="https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1">mxbai-embed-large-v1</a> produces <code>tensor&lt;float&gt;(x[1024])</code>. This model 
+    is also useful for binarization which can be triggered by using destination <code>tensor&lt;int8&gt;(x[128])</code>. 
+    Use <code>pooling-strategy</code> <code>cls</code> and <code>normalize</code> <code>true</code>.</li>
+    <li><a href="https://huggingface.co/nomic-ai/nomic-embed-text-v1.5">nomic-embed-text-v1.5</a> produces <code>tensor&lt;float&gt;(x[768])</code>. This model 
+      is also useful for binarization which can be triggered by using destination <code>tensor&lt;int8&gt;(x[96])</code>.  Use <code>normalize</code> <code>true</code>.</li>
+</ul>
+
+<p>Snowflake arctic model series:</p>
+<ul>
+  <li><a href="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs">snowflake-arctic-embed-xs</a> produces <code>tensor&lt;float&gt;(x[384])</code>.  
+    Use <code>pooling-strategy</code> <code>cls</code> and <code>normalize</code> <code>true</code>.</li>
+    <li><a href="https://huggingface.co/Snowflake/snowflake-arctic-embed-m">snowflake-arctic-embed-m</a> produces <code>tensor&lt;float&gt;(x[768])</code>.  
+      Use <code>pooling-strategy</code> <code>cls</code> and <code>normalize</code> <code>true</code>.</li>
 </ul>
 
 <p>All of these example text embedding models can be used in combination with Vespa's
 <a href="nearest-neighbor-search.html">nearest neighbor search</a>
-using <a href="reference/schema-reference.html#distance-metric">distance-metric</a> <code>angular</code>.</p>
+using the appropriate <a href="reference/schema-reference.html#distance-metric">distance-metric</a>. Notice that in order 
+to use the <a href="https://docs.vespa.ai/en/reference/schema-reference.html#prenormalized-angular">distance-metric: prenormalized-angular</a>, the 
+<code>normalize</code> configuration must be set to <code>true</code>.</p>
 
 <p>Check the <a href="https://huggingface.co/blog/mteb">Massive Text Embedding Benchmark</a> (MTEB) benchmark and
 <a href="https://huggingface.co/spaces/mteb/leaderboard">MTEB leaderboard</a>
@@ -431,7 +449,7 @@ also how to use the SPLADE embedder with an array of strings (representing chunk
 <ul>
   <li>The embedding model parameters. Larger models are more expensive to evaluate than smaller models.</li>
   <li>The sequence input length. Transformer models scales quadratic with input length. Since queries
-    are typically shorter than documents, embedding queries is less resource intensive than documents.
+    are typically shorter than documents, embedding queries is less computionally intensive than embedding documents.
   </li>
   <li>
     The number of inputs to the <code>embed</code> call. When encoding arrays, consider how many inputs a single document can have.
@@ -441,7 +459,8 @@ also how to use the SPLADE embedder with an array of strings (representing chunk
 </ul>
 <p>Using <a href="reference/embedding-reference.html#embedder-onnx-reference-config">GPU</a>, especially for longer sequence lengths (documents),
 can dramatically improve performance and reduce cost.
-See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>.</p>
+See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>.
+With GPU-accelerated instances, using fp16 models instead of fp32 can increase throughput by as much as 3x compared to fp32.</p>
 
 
 <h2 id="metrics">Metrics</h2>
@@ -477,11 +496,32 @@ emit the same predefined metrics, although emitting custom metrics is perfectly 
 
 <h3 id="adding a fixed string to a query text">Adding a fixed string to a query text</h3>
 
-<p>If you need to add a standard wrapper text around the text you are embedding,
+<p>If you need to add a standard wrapper or a prefix instruction around the input text you want to embed
     use parameter substitution to suppoly the text, as in <code>embed(myEmbedderId, @text)</code>,
     and let the parameter (<code>text</code> here) be defined in a <a href="query-profiles.html">query profile</a>,
     which in turn uses <a href="query-profiles.html#value-substitution">value substitution</a>
-    to place anpther query-supplied text value within it.</p>
+    to place another query request supplied text value within it. The following is a concrete example 
+  where queries should have a prefix instruction before embedded to vector representation. The following
+  defines a <code>text</code> input field to <code>search/query-profiles/default.xml</code>:</p>
+
+<pre>
+  &lt;query-profile id=&quot;default&quot;&gt;
+      &lt;field name=&quot;text&quot;&gt;Represent this sentence for searching relevant passages: %{user_query}&lt;/field&gt;
+  &lt;/query-profile&gt;
+</pre>
+
+<p>Then at query request time, we can pass <code>user_query</code> as a request parameter, this parameter is then used to produce
+the <code>text</code> value which then is embedded.</p>
+<pre>
+  {
+    "yql": "select * from doc where userQuery() or ({targetHits: 100}nearestNeighbor(embedding, e))",
+    "input.query(e)": "embed(mxai, @text)",
+    "user_query": "space contains many suns"
+}
+</pre>
+
+The text that is embedded by the embedder is then:
+<em>Represent this sentence for searching relevant passages: space contains many suns</em>.
 
 
 <h3 id="concatenating-input-fields">Concatenating input fields</h3>
