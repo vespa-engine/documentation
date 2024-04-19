@@ -613,9 +613,7 @@ transferred during the summary fill phase.
 
 <pre>
 document-summary track_id {
-    summary track_id type string { 
-        source: track_id
-    }
+    summary track_id { }
 }
 </pre>
 
@@ -655,9 +653,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
-            source: track_id
-        }
+        summary track_id { }
     }
 }
 </pre>
@@ -844,9 +840,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
-            source: track_id
-        }
+        summary track_id { }
     }
 }
 </pre>
@@ -1004,9 +998,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
-            source: track_id
-        }
+        summary track_id { }
     }
 
     rank-profile personalized {
@@ -1349,9 +1341,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
-            source: track_id
-        }
+        summary track_id { }
     }
 
     rank-profile personalized {
@@ -1576,9 +1566,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
-            source: track_id
-        }
+        summary track_id { }
     }
 
     rank-profile personalized {
@@ -1785,9 +1773,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
-            source: track_id
-        }
+        summary track_id { }
     }
 
     rank-profile personalized {
@@ -2003,9 +1989,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
-            source: track_id
-        }
+        summary track_id { }
     }
 
     rank-profile personalized {
