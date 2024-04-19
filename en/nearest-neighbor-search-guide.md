@@ -262,9 +262,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id {
-            source: track_id
-        }
+        summary track_id { }
     }
 
     rank-profile tags {
@@ -377,9 +375,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id {
-            source: track_id
-        }
+        summary track_id { }
     }
 
     rank-profile tags {
