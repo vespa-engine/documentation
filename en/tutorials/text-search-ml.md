@@ -124,7 +124,7 @@ schema msmarco {
     }
 
     document-summary minimal {
-        summary id type string {  }
+        summary id {  }
     }
 
     fieldset default {

@@ -613,7 +613,7 @@ transferred during the summary fill phase.
 
 <pre>
 document-summary track_id {
-    summary track_id type string { 
+    summary track_id {
         source: track_id
     }
 }
@@ -655,7 +655,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
+        summary track_id {
             source: track_id
         }
     }
@@ -844,7 +844,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
+        summary track_id {
             source: track_id
         }
     }
@@ -1004,7 +1004,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
+        summary track_id {
             source: track_id
         }
     }
@@ -1349,7 +1349,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
+        summary track_id {
             source: track_id
         }
     }
@@ -1576,7 +1576,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
+        summary track_id {
             source: track_id
         }
     }
@@ -1785,7 +1785,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
+        summary track_id {
             source: track_id
         }
     }
@@ -2003,7 +2003,7 @@ schema track {
     }
 
     document-summary track_id {
-        summary track_id type string { 
+        summary track_id {
             source: track_id
         }
     }
