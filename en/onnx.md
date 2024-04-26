@@ -254,7 +254,9 @@ into the Vespa <a href="embedding.html#huggingface-embedder">huggingface-embedde
     </component>
     ...
 </container>{% endhighlight %}</pre>
-<p> Vespa defaults to <code>mean</code> <code>pooling-strategy</code>. Consult the model card for the pooling method used.</p>
+<p> Vespa defaults to <code>mean</code> <code>pooling-strategy</code>. Consult the model card for the pooling method used. Note the url patterns on HUB, the url
+must point to the actual file, not the model card. Also, Vespa only supports models that are contained in a single onnx file, if the original model is larger than
+2GB, the model is split over multiple files and this is not currently supported.</p>
 
 <p>See <a href="cross-encoders.html#exporting-cross-encoder-models">cross-encoders</a> documentation for examples on how to 
 export cross-encoder re-rankers using the Optimum library.</p>
