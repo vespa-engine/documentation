@@ -48,7 +48,7 @@ Make sure you have all the necessary dependencies by running the following in th
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ python3 -m pip install -r requirements.txt
+$ python3 -m pip install --ignore-installed -r requirements.txt
 </pre>
 </div>
 
