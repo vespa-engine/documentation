@@ -20,6 +20,11 @@ In Vespa, the `RAGSearcher` first performs the query as specified by the user,
 creates a prompt based on the results, and queries the language model to
 generate a response.
 
+For a quick start, check out the [RAG sample
+app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
+which demonstrates using either an external LLM service or a local LLM.
+
+
 ### Setting up the RAGSearcher
 
 In `services.xml`, specify your LLM connection and the `RAGSearcher`:
@@ -33,7 +38,7 @@ In `services.xml`, specify your LLM connection and the `RAGSearcher`:
     <component id="openai" class="ai.vespa.llm.clients.OpenAI">
       <!-- Configure as required -->
     </component>
-    
+
     <search>
       <chain id="rag" inherits="vespa">
         <searcher id="ai.vespa.search.llm.RAGSearcher">
@@ -50,34 +55,34 @@ In `services.xml`, specify your LLM connection and the `RAGSearcher`:
 </services>
 ```
 
-As mentioned in [LLMs in Vespa](llms-in-vespa.html), you can call this chain 
+As mentioned in [LLMs in Vespa](llms-in-vespa.html), you can call this chain
 using the Vespa CLI:
 
 ```
 $ vespa query \
-    --header="X-LLM-API-KEY:..." \ 
+    --header="X-LLM-API-KEY:..." \
     query="what was the manhattan project?" \
     searchChain=rag \
-    format=sse 
+    format=sse
 ```
 
 However, notice here the use of the `query` query parameter. In [LLMs in
 Vespa](llms-in-vespa.html), we used a `prompt` parameter to set up the prompt
-to send to the LLM. You can also do that in the `RAGSearcher`, however this means 
-that no actual query is run in Vespa. For Vespa to run a search, you need to 
-specify a `yql` or `query` parameter. By using `query` here, this text is 
+to send to the LLM. You can also do that in the `RAGSearcher`, however this means
+that no actual query is run in Vespa. For Vespa to run a search, you need to
+specify a `yql` or `query` parameter. By using `query` here, this text is
 used as both query text for the document retrieval, and in the prompt sent to
 the LLM, as we will see below.
 
 Indeed, with the `RAGSearcher` you can use any type of [search in
 Vespa](query-api.html), including [text search based on
 BM25](tutorials/text-search.html) and advanced [approximate vector
-search](approximate-nn-hnsw.html). This makes the retrieval part of 
+search](approximate-nn-hnsw.html). This makes the retrieval part of
 RAG very flexible.
 
 ### Controlling the prompt
 
-Based on the query, Vespa will retrieve a set of documents. The `RAGSearcher` 
+Based on the query, Vespa will retrieve a set of documents. The `RAGSearcher`
 will create a context from these documents looking like this:
 
 ```
@@ -101,7 +106,7 @@ can issue a query like this:
 
 ```
 $ vespa query \
-    --header="X-LLM-API-KEY:..." \ 
+    --header="X-LLM-API-KEY:..." \
     yql="select title,body from msmarco where userQuery()" \
     query="what was the manhattan project?" \
     searchChain=rag \
@@ -126,7 +131,7 @@ For instance:
 
 ```
 $ vespa query \
-    --header="X-LLM-API-KEY:..." \ 
+    --header="X-LLM-API-KEY:..." \
     yql="select title,body from msmarco where userQuery()" \
     query="what was the manhattan project?" \
     prompt="{context} @query Be as concise as possible." \
@@ -149,7 +154,7 @@ what was the manhattan project? Be as concise as possible.
 ```
 
 Note that if your `prompt` does not contain `{context}`, the context will
-automatically be prepended to your prompt. However, if `@query` is not 
+automatically be prepended to your prompt. However, if `@query` is not
 found in the prompt, it will not automatically be added to the prompt.
 
 Please be advised that all documents as returned by Vespa will be used in the
@@ -165,7 +170,7 @@ To debug the prompt, i.e. what is actually sent to the LLM, you can use the
 
 ```
 $ vespa query \
-    --header="X-LLM-API-KEY:..." \ 
+    --header="X-LLM-API-KEY:..." \
     query="what was the manhattan project?" \
     searchChain=rag \
     format=sse \
