@@ -6,76 +6,82 @@ redirect_from:
 ---
 
 <p>
-  Ranking, in general, becomes more accurate by using complex expressions which use many features.
-</p><p>
-  Read the <a href="query-api.html">query API</a> guide
-  to get an overview of how queries are executed in Vespa, before continuing this guide.
-</p><p>
-  Vespa supports multiple rank phases:
+Vespa allows expressing multi-phased retrieval and ranking of documents. The retrieval phase is done close to the data in the content nodes,
+while the ranking phase(s) can be done in the content nodes or in the stateless container after scatter-and-gather from content node(s).
+The retrieval part of a phased pipeline is expressed by using the <a href="query-api.html">query API</a> 
+and the ranking part is expressed by using the <a href="reference/schema-reference.html#rank-profile">rank-profile</a> in the schema.
 </p>
+
 <ul>
-  <li>Some <a href="#top-k-query-operators">specialized query operators</a>
-      can do limited ranking to speed up retrieval of top matches by discarding
-      low-quality matches early in the matching phase.
+  <li><strong>Retrieval:</strong><a href="#top-k-query-operators"> <em>Top-k</em> query operators</a>, like <a href="using-wand-with-vespa.html">weakAnd/wand</a> and 
+  <a href="nearest-neighbor-search.html">nearest neighbor search</a> allow retrieval with sub-linear complexity. These 
+  query operators use simple  scoring functions that are computionally cheap to evaluate over Vespa indexes. Using
+  the expressiveness of the Vespa query language, developers can combine multiple retrievers in the query, and expose 
+  the union of retrieved documents into Vespa ranking phases.</li>
+  </li>
+  
+  <li>
+    <strong>Per node ranking:</strong>The query specification retrieves documents and ranks them using declarative phases evaluated within 
+    the <a href="#two-phase-ranking-content-nodes">content nodes</a>:
+    <ul>
+
+      <li><a href="#first-phase-ranking">first-phase expression</a>;
+      configured in <a href="reference/schema-reference.html#rank-profile">rank-profile</a>. 
+      This phase is evalutated for <em>all</em> hits retrieved by the query logic. This phase can also remove 
+      retrieved documents using <a href="reference/schema-reference.html#rank-score-drop-limit">rank-score-drop-limit</a>.</li>
       </li>
-  <li>Ranking at each content node in a
-      <a href="#first-phase-ranking">first-phase expression</a>;
-      configured by rank profiles with ranking expressions working
-      on scalars, tensors or matching features, possibly also
-      excluding low-quality matches.
+      <li><a href="#two-phase-ranking-content-nodes">second-phase ranking</a>; 
+      configured in <a href="reference/schema-reference.html#rank-profile">rank-profile</a>.
+      Optionally re-rank the top-scoring hits from the first-phase ranking using a more complex expression. The
+      <a href="reference/schema-reference.html#secondphase-rerank-count">rerank-count</a> sets a strict upper bound on the 
+      number of documents that are re-ranked.  
       </li>
-  <li>Re-ranking of the best hits at each content node using a
-      <a href="#two-phase-ranking-content-nodes">second-phase ranking</a>
-      (configured in rank profiles together with the first-phase expression).
-      </li>
-  <li>Re-ranking of the top hits from the content nodes in the stateless container
-      using a configured expression (usually with an AI-trained ONNX model),
-      see <a href="#global-phase">global-phase</a> below.
-      </li>
-  <li>For totally customized ranking it's possible to implement re-ranking of the top
-      hits from the content nodes using a custom
-      <a href="searcher-development.html">stateless searchers</a>.
-      See concrete example in <a href="reranking-in-searcher.html">reranking in searcher</a>.
-      </li>
+    </ul>
+  <li><strong>Global ranking:</strong>Following the per content node local ranking phases, 
+    re-ranking can occur after the content nodes have returned the merged top-scoring hits to the stateless container. 
+    This phase is specified using a <a href="#global-phase">global-phase</a> expression in the 
+    <a href="reference/schema-reference.html#rank-profile">rank-profile</a>. 
+    Additionally, the global-phase can conduct <a href="#cross-hit-normalization-including-reciprocal-rank-fusion">
+      cross-hit normalization</a> to combine unrelated scoring methods.
+  </li>
+  <li>Finally, for customized ranking that is difficult to express in declarative phases, one can implement 
+    re-ranking using <a href="reranking-in-searcher.html">reranking in searcher</a>.
+  </li>
 </ul>
 <img src="/assets/img/phased-ranking.png" alt="Ranking in 3 phases"/>
 
-<h2 id="first-phase-ranking">Simple ranking on content nodes</h2>
+<h2 id="first-phase-ranking">First-phase ranking on content nodes</h2>
 <p>
-  Normal ranking will always start by having one ranking expression
+  Normally, you will always start by having one ranking expression
   that is evaluated on the content nodes.  This is configured in
   the <code>rank-profile</code> section of a
   <a href="reference/schema-reference.html#rank-profile">schema</a>
   as a <code>first-phase</code> expression.  This expression can
   use various <a href="ranking-expressions-features.html">rank features</a>
   with information extracted during the matching phase to evaluate
-  the quality of each hit.
-  Because the first-phase is computed for every match, the cost is bounded
-  only by the number of documents on each content node multiplied with
+  the relevance of each document. The first-phase expression is
+  is computed for every document retrieved by the query. The computionally cost 
+  is bounded by the number of documents exposed to the ranking phase on each content node multiplied with
   the complexity of the first-phase expression; therefore the expression
-  needs be simple and cheap to allow scaling to large amounts of documents.
+  needs be simple and cheap to allow scaling to large amounts retrieved docs. Alternatively,
+  use retrieval operators that will expose only the top-k hits to the first-phase expression.
 </p>
 
 <h2 id="two-phase-ranking-content-nodes">Two-phase ranking on content nodes</h2>
 <p>
-  While some use cases only require one (simple) <code>first-phase</code>
+  While some use cases only require one (simple) first-phase
   ranking expression, for more advanced use cases it's possible to
-  add another <code>second-phase</code> ranking expression in a
+  add a <code>second-phase</code> ranking expression in a
   <a href="reference/schema-reference.html#rank-profile">rank-profile</a>
   in the schema.
   This enables more expensive computations than would be feasible
-  to run as a <code>first-phase</code> computation, with predictable
-  upper bounds for the cost.  This phase runs only on the most
-  promising hits as selected by the first-phase ranking, so it's
-  important to have an appropriate first-phase, with good correlation
-  between first-phase and second-phase expressions.
+  to run as a first-phase computation, with predictable
+  upper bounds for the cost.
 </p>
 <p>
-  By default, second-phase ranking (if specified) is run on the 100 best hits
-  from the first-phase ranking per content node,
-  after matching and before information is returned to the container.
-  The number of hits to rerank can be configured as well in the rank-profile.
-  Example:
+  By default, second-phase ranking (if specified) is evaluated for the 100 best hits
+  from the first-phase ranking per content node, tunable with 
+  <a href="reference/schema-reference.html#secondphase-rerank-count">rerank-count</a>.
 </p>
 <pre>
 schema myapp {
@@ -83,7 +89,7 @@ schema myapp {
     rank-profile title-freshness inherits default {
         first-phase {
             expression {
-                nativeRank(title) + freshness(timestamp)
+                bm25(title) + 3*freshness(timestamp)
             }
         }
         second-phase {
@@ -97,8 +103,8 @@ schema myapp {
 </pre>
 <p>
   In this example, the first phase uses the text matching feature
-  <a href="reference/nativerank.html">nativeRank</a> scoped to the <em>title</em> field
-  plus one of the built-in document <a href="reference/rank-features.html">ranking features</a>
+  <a href="reference/bm25.html">bm25</a> scoped to the <em>title</em> field
+  plus one of the built-in document <a href="reference/rank-features.html">rank feature</a>
   named <em>freshness</em> over a <em>timestamp</em> field which stores the epoch time in second resolution.
   For each content node, the top 50 hits from the first phase function is re-ranked using
   a trained <a href="xgboost.html">xgboost</a> model.
@@ -111,7 +117,7 @@ schema myapp {
   <a href="reference/schema-reference.html#globalphase-rank">global-phase</a>
   in the <code>rank-profile</code> section of a schema, you can add
   a ranking phase that will run in the stateless container after
-  gathering the best hits from all content nodes; this can be used
+  gathering the best hits from the content node phases; this can be used
   instead of or in addition to
   <a href="#two-phase-ranking-content-nodes">second-phase</a> ranking.
   The global-phase can also perform
@@ -131,27 +137,32 @@ schema myapp {
   query property.
 </p>
 <p>
-  This phase is optimized for running large ONNX models, taking
+  This phase is optimized for inference with <a href="onnx.html">ONNX</a> models, taking
   some input data from the document and some from the query, and
-  finding a score for how well they match. It's possibly to specify
+  finding a score for how well they match. A typical use case is 
+  re-ranking using <a href="cross-encoders.html">cross-encoders</a>. 
+   
+  It's possibly to specify
   <em>gpu-device</em> to get GPU-accelerated computation of the
   model as well.  You can compute or re-shape the inputs to the
   ONNX model in a function if necessary, and use the output in some
   further calculation to compute the final score.
 </p>
 <p>
-  Note that both input and output from ONNX models must always be
-  some sort of tensor (in the simplest case with 1 dimension of
-  fixed size 1) so at minimum the output tensor must be reduced to a
-  simple number to get a ranking score.
-</p>
-<p>
-  If you have large and complex expressions instead of an ONNX model,
-  it's often better to use the highly optimized
+  If you have large and complex expressions (including <a href="xgboost.html">xgboost</a>, <a href="lightgbm.html">lightgbm</a>),
+  instead of an ONNX model, it's more efficient to use the highly optimized
   <a href="#two-phase-ranking-content-nodes">second-phase</a>
-  computation on content nodes.  You can also force a sub-expression
-  to be computed on the content nodes by making it a function and
-  adding it as a <em>match-feature</em> in the ranking profile.
+  computation on content nodes. This is also true to sub-expressions that require lots of vector data, moving
+  vector data across the network is expensive.</p>
+
+</p>
+{% include note.html content='You can force a sub-expression
+to be computed on the content nodes by making it a function and
+adding it to match-features' %}
+<p>
+By adding the feature to <a href="reference/schema-reference.html#match-features">match-features</a> in the ranking profile, the 
+the global-phase expression can re-use the function output without the complexity of transferring the data across the network
+and performing inference in the stateless container (which is less optimized).
 </p>
 <pre id="myapp-with-global-model">
 schema myapp {
@@ -163,12 +174,17 @@ schema myapp {
     }
     &hellip;
     rank-profile with-global-model inherits default {
-        first-phase {
-            expression: nativeRank(title)
-        }
         inputs {
-            query(per_query_vector) tensor&lt;float&gt;(d0[32])
+          query(per_query_vector) tensor&lt;float&gt;(d0[32])
         }
+        first-phase {
+            expression: bm25(title)
+        }
+
+        function my_expensive_function() {
+            expression: # some expensive computation better done on content nodes
+        }
+        
         function per_doc_input() {
             # simple reshaping: ONNX input wants the dimension name "d0"
             expression: rename(attribute(per_doc_vector), x, d0)
@@ -181,13 +197,18 @@ schema myapp {
         }
         global-phase {
             expression {
-                sum(onnx(my_ranking_model).out)
+                my_expensive_function + sum(onnx(my_ranking_model).out)
             }
             rerank-count: 50
+        }
+        match-features {
+            my_expensive_function
         }
     }
 }
 </pre>
+<p>In the above example, the <em>my_expensive_function</em> will be evaluated on the content nodes
+for the 50 top ranking documents from the first-phase so that the global-phase does not need to re-evaluate.</p>
 
 <h2 id="cross-hit-normalization-including-reciprocal-rank-fusion">Cross-hit normalization including reciprocal rank fusion</h2>
 <p>
@@ -278,44 +299,29 @@ schema myapp {
 </p>
 
 
-
-
-
 <h2 id="top-k-query-operators">Top-K Query Operators</h2>
 <p>
   If the first-phase ranking function can be approximated as a simple linear function,
-  and the query mode is <em>any</em>,
+  and the query mode is <em>weakAnd</em>,
   the <a href="using-wand-with-vespa.html">Weak And/WAND</a> implementations in Vespa
   allows avoiding fully evaluating all the documents matching the query with the <em>first-phase</em> function.
-  Instead, only the top K hits using the internal operator ranking will be exposed
-  to the <em>first-phase</em> ranking function.
-</p><p>
-  Both wand implementations accepts a targeted number of hits (top N).
-  Each content node will expose all hits that were evaluated to the first-phase ranking function,
-  while skipped documents will not.
-  The skipped set are the ones that matches the query,
-  but which cannot outperform any of the already collected hits on the internal scoring heap.
-  Due to not fully evaluating all documents matching the query,
-  the total hit count becomes inaccurate when using weakAnd/Wand.
-</p><p>
-  The <a href="nearest-neighbor-search.html">nearest neighbor search</a> operator is also a top k retrieval operator which does ranking (by distance) and retrieval
-  in one process and exposes only a small subset of the matching documents to the <em>first-phase</em> ranking function.
+  Instead, only the top-K hits using the internal wand scoring are exposed
+  to the <em>first-phase</em> ranking expression.
+</p><p>  
+<p>
+  The <a href="nearest-neighbor-search.html">nearest neighbor search</a> operator is also a top-k 
+  retrieval operator and the two operators can be combined in the same query.
 </p>
-
-
 
 <h2 id="choosing-phased-ranking-functions">Choosing phased ranking functions</h2>
 <p>
-A good ranking expression will for most applications consume too much CPU
-to be runnable on the entire result set within the latency budget/SLA.
+A good quality ranking expression will for most applications consume too much CPU
+to be runnable on all retrieved or matched documents within the latency budget/SLA.
+
 The application ranking function should hence in most cases be a second phase function.
 The task then becomes to find a first phase function,
-which correlates sufficiently well with the second phase function -
-this to ensure that relevance is not hurt too much
-by not evaluating the real ranking function on all the hits.
+which correlates sufficiently well with the second phase function.
 </p>
-
-
 
 <h2 id="rank-phase-statistics">Rank phase statistics</h2>
 <p>
