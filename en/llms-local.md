@@ -232,12 +232,9 @@ low enough to stop the model from generating tokens infinitely.
 Using a GPU can significantly speed up token generation and is generally
 recommended. The discussion above about memory requirements are especially
 acute when running on GPUs due to memory limitations. In Vespa, the default is
-to offload the entire model to the GPU, but by using the `gpuLayers` parameter
-one can experiment with offloading parts of the model to GPU.
-
-To enable GPU inference, you need to [request
-GPUs](https://cloud.vespa.ai/en/reference/services.html#gpu) on the container
-nodes. A simplified snippet example from `services.xml`:
+to offload the entire model to the GPU if it is available, but by using the
+`gpuLayers` parameter one can experiment with offloading parts of the model to
+GPU.
 
 ```
 <services version="1.0">
@@ -249,33 +246,31 @@ nodes. A simplified snippet example from `services.xml`:
           <model url="url/to/mistral-7B-8bit" />
           <parallelRequests>10</parallelRequests>
           <contextSize>40960</contextSize>
-          <!-- useGpu is default true -->
+          <useGpu>true</useGpu> <!-- default is true -->
+          <gpuLayers>100</gpuLayers>
       </config>
     </component>
-
-    ...
-
-    <!-- Request a GPU node for this container -->
-    <nodes count="1">
-      <resources vcpu="4.0" memory="16Gb" architecture="x86_64" storage-type="local" disk="125Gb">
-        <gpu count="1" memory="16.0Gb"/>
-      </resources>
-    </nodes>
-
 
   </container>
 </services>
 
 ```
 
-When this application is deployed to Vespa Cloud, a single node with a 16Gb
-memory GPU is requested. By supplying a URL to a 7B 8-bit model such as can be
-found on HuggingFace, this should fit comfortably within the node. Note that if
-too much memory is requested, the node will refuse to start.
+Here, the model itself has 33 layers, and all are offloaded to the GPU. If your
+model is too large to fit on the GPU, you can speed up model evaluation by
+offloading parts of the model to the GPU.
 
-Running GPUs on self-hosted is possible, please refer to [Container GPU
+To set up GPUs on self-hosted, please refer to [Container GPU
 setup](https://docs.vespa.ai/en/operations-selfhosted/vespa-gpu-container.html)
 for more details.
+
+It is very easy to use GPU acceleration on Vespa Cloud. To enable GPU
+inference, you need to [request
+GPUs](https://cloud.vespa.ai/en/reference/services.html#gpu) on the container
+nodes. For a more practical introduction, please take a look at the [RAG sample
+app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
+which also demonstrates how to evaluate the LLM on GPUs on Vespa Cloud.
+
 
 
 <!--
