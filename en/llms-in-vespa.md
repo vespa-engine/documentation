@@ -19,6 +19,15 @@ allows these models to access relevant and up-to-date information beyond their
 training in real-time, enabling Vespa's output to be contextually informed. For
 more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.html).
 
+In addition to using LLM services such as OpenAI's ChatGPT and Anthropic's
+Claude, Vespa can run LLMs within a Vespa application. This avoids sending data
+outside of the application and allows running customized models. For more
+information, please see [Running LLMs locally in Vespa](llms-local.html).
+
+For a quick start, check out the [RAG sample
+app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
+which demonstrates using either an external LLM service or a local LLM.
+
 
 ### Setting up LLM clients in services.xml
 
@@ -32,7 +41,7 @@ generation (RAG).
 
 ![LLM/RAG searcher](../assets/img/llm-rag-searcher.svg)
 
-To set up a connection to an LLM service such as OpenAI's ChatGPT, you need to 
+To set up a connection to an LLM service such as OpenAI's ChatGPT, you need to
 define a component in your application's
 [services.xml](reference/services.html):
 
@@ -51,7 +60,7 @@ define a component in your application's
       </config>
 
     </component>
-    
+
     ...
 
   </container>
@@ -80,12 +89,9 @@ see below how this is used to control which LLM is used for which task.
 Using the `OpenAI` client, you can connect to any OpenAI-compatible API.
 Currently, this is the only client for external services that Vespa provides.
 
-<!--
-Wait with this until code has been shipped:
-
-Vespa also has the option of running custom LLMs locally. Please refer to 
+Vespa also has the option of running custom LLMs locally. Please refer to
 [running LLMs in your application](llms-local.md) for more information.
--->
+
 
 ### Using LLMs
 
@@ -104,7 +110,7 @@ up like this:
     <component id="openai" class="ai.vespa.llm.clients.OpenAI">
       <!-- Configure as required -->
     </component>
-    
+
     <search>
       <chain id="llm" inherits="vespa">
         <searcher id="ai.vespa.search.llm.LLMSearcher">
@@ -132,7 +138,7 @@ searchers and combinations of these as one needs. If you do not specify a
 
 This particular searcher doesn't provide a lot of functionality, it only calls
 out to the LLM service using a provided prompt sent along with the query. The
-searcher expects the prompt to be passed in the query parameter `prompt`. For 
+searcher expects the prompt to be passed in the query parameter `prompt`. For
 instance, using the Vespa CLI:
 
 ```
@@ -142,12 +148,12 @@ $ vespa query \
     prompt="what was the manhattan project?"
 ```
 
-Here, we first pass along the API key to the OpenAI API. You need to provide your 
+Here, we first pass along the API key to the OpenAI API. You need to provide your
 own OpenAI key for this. The `searchChain` parameter selects the `llm` chain set
 up in `services.xml`. Finally, the `prompt` parameter determines what is sent to
 the lanaguage model.
 
-Note that if the `prompt` query parameter is not provided, the `LLMSearcher` will 
+Note that if the `prompt` query parameter is not provided, the `LLMSearcher` will
 try to use the `query` query parameter.
 
 By running the above command you will get something like the following:
@@ -213,7 +219,7 @@ $ vespa query \
     prompt="what was the manhattan project?" \
     format=sse
 
-The Manhattan Project was a research and development project during World War II that produced the first nuclear weapons. It was led by the United States with the support of the United Kingdom and Canada, and aimed to develop the technology necessary to build an atomic bomb. The project culminated in the bombings of the Japanese cities of Hiroshima and Nagasaki in August 1945. 
+The Manhattan Project was a research and development project during World War II that produced the first nuclear weapons. It was led by the United States with the support of the United Kingdom and Canada, and aimed to develop the technology necessary to build an atomic bomb. The project culminated in the bombings of the Japanese cities of Hiroshima and Nagasaki in August 1945.
 ```
 
 The Vespa CLI understands this format and will stream the tokens as they arrive.
@@ -276,7 +282,7 @@ data: {
 
 ### LLM parameters
 
-The LLM service typically has a set of inference parameters that can be set. This can 
+The LLM service typically has a set of inference parameters that can be set. This can
 be parameters such as:
 
 - `model` - for OpenAI can be any valid model such as `GPT-3.5-turbo` or `GPT-4`
@@ -334,7 +340,7 @@ keys sent along with the query by prepending them as well with the
 
 ### Query profiles
 
-In all the above you have sent parameters along with each query. It is worth 
+In all the above you have sent parameters along with each query. It is worth
 mentioning that Vespa supports [query profiles](query-profiles.html), which are
 named collections of search parameters. This frees the client from having to
 manage and send a large number of parameters, and enables the request parameters
@@ -343,7 +349,7 @@ for a use case to be changed without having to change the client.
 
 ### Retrieval-Augmented Generation (RAG)
 
-Above we used the `LLMSearcher` to call out to LLMs using a pre-specified 
+Above we used the `LLMSearcher` to call out to LLMs using a pre-specified
 prompt. Vespa provides the `RAGSearcher` to construct a prompt based on search
 results. This enables a flexible way of first searching for content in Vespa,
 and using the results to generate a response.
@@ -366,16 +372,13 @@ Note that it should not be necessary to create your own components in Java to
 use this functionality.
 
 
-<!-- 
+<!--
 
 ### Query understanding using LLMs
 
 Todo
 
 
-### Local language models
-
-Coming soon
 -->
 
 
