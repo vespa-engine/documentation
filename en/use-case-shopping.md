@@ -24,7 +24,7 @@ non-magical as possible. All the queries against Vespa are sent as HTTP
 requests, and the JSON results from Vespa are parsed and rendered.
 
 This sample application is built around the Amazon product data set found at
-[https://cseweb.ucsd.edu/~jmcauley/datasets.html](https://cseweb.ucsd.edu/~jmcauley/datasets.html).
+<a href ="https://cseweb.ucsd.edu/~jmcauley/datasets.html" data-proofer-ignore>https://cseweb.ucsd.edu/~jmcauley/datasets.html</a>.
 A small sample of this data is included in the sample application, and full
 data sets are available from the above site. This sample application contains
 scripts to convert from the data set format to Vespa format:

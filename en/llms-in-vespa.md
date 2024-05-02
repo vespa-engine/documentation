@@ -35,8 +35,7 @@ which demonstrates using either an external LLM service or a local LLM.
 
 Vespa distinguishes between the clients used to connect to LLMs and how these
 clients are used. You can, for instance, set up a single LLM connection to a
-[OpenAI-compatible
-API](https://platform.openai.com/docs/guides/text-generation/chat-completions-api)
+<a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI-compatible API</a>
 and use this connection for both query understanding or retrieval-augmented
 generation (RAG).
 
@@ -71,10 +70,9 @@ define a component in your application's
 This sets up a client component that can be used in a
 [searcher](glossary.html#searcher) or a [document
 processor](glossary.html#document-processor). By default, this particular
-client connects to the OpenAI service, but can be used against any [OpenAI chat
-completion compatible
-API](https://platform.openai.com/docs/guides/text-generation/chat-completions-api)
-by changing the `endpoint` configuration parameter.
+client connects to the OpenAI service, but can be used against any 
+<a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI chat completion compatible API</a>
+by changing the `endpoint` configuration parameter. 
 
 Vespa assumes that any required API key is sent as an HTTP header,
 `X-LLM-API-KEY`.  However, if you have set up a [secret
