@@ -153,14 +153,14 @@ for an updated list of configuration parameters.
 Some important points are worth considering here. First is the context window,
 given by the `contextSize` parameter, which is the size (in number of tokens)
 that the model uses to generate the next token. In general, larger context
-windows are required in [RAG application](llms-rag.html) to hold the context
+windows are required in [RAG applications](llms-rag.html) to hold the context
 from the retrieval stage.  Models are trained with a certain context length,
 but this context length can typically be increased up to 4x without much loss
 in text generation quality.
 
 The size of the context window has a direct impact on memory use. For instance,
 a typical 7B model such as Mistral 7B, with a size of 7 billion parameters will
-use around 14Gbb memory when using FP16 precision, and 7Gb with 8-bit
+use around 14Gb memory when using FP16 precision, and 7Gb with 8-bit
 quantization. Assuming we use a 8-bit quantization:
 
 - A context window of `4096` will use 7.3Gb for the model, 512Mb for the context
@@ -214,7 +214,7 @@ with the query:
   setting in the model configuration.
 - `temperature`: the temperature setting of the model, typically between `0.0`
   and `1.0`.
-- `repeatpenaly`: the penalty for repeating tokens.
+- `repeatpenalty`: the penalty for repeating tokens.
 - `topk` and `topp`: the probability of token sampling. Lower values tend to
   produce more coherent and focused text, while higher values introduce more
   diversity and creativity but potentially more errors or incoherence.
@@ -223,7 +223,7 @@ The most significant here are `npredict` which will stop the token generation
 process after a certain number of tokens has been generated. Some models can
 for certain prompts enter a loop where an infinite number of tokens are
 generated.  This is clearly not beneficial situation, so this number should be
-set to a high enough value so all tokens for a response can be generated, nut
+set to a high enough value so all tokens for a response can be generated, but
 low enough to stop the model from generating tokens infinitely.
 
 
