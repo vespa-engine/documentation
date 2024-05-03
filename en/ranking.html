@@ -4,124 +4,117 @@ title: "Ranking"
 redirect_from:
 - /documentation/ranking.html
 ---
+<p>
+  Vespa ranks documents retrieved by a query by performing computations or inference that produces a score for each document. 
+  The documents are sorted in descending order by this score, and highest ranking documents are returned to the user. Ranking
+  is useful in search and recommendation systems, where the goal is to present the most relevant results to the user.
+</p>
+<p>
+  Ranking in Vespa is configured using 
+  declerative <a href="ranking-expressions-features.html">ranking expressions</a>, 
+  These expressions vary from basic mathematical operations with <a href="reference/rank-features.html">rank features</a> to
+  more complex tensor <a href="tensor-examples.html">tensor expressions</a> or 
+  machine-learned models. These ranking expressions are configured in <a href="#rank-profiles">rank profiles</a> within document <a href="schemas.html">schemas</a>.
+</p>
 
-<p><i>Ranking</i> is where Vespa does computing, or <i>inference</i> over documents retrieved by a query. The goal is to order (rank)
-  the documents retrieved. </p>
+<h2 id="matching-versus-ranking">Retrieval versus ranking</h2>
+<p>To understand the difference between retrieval (matching) and ranking, consider the 
+  following text-search oriented Vespa query example,
+  expressed in JSON POST format using Vespa's <a href="query-language.html">query language</a>:</p>
+<pre>
+  {
+    "yql": "select * from doc where text contains \"vespa\"",
+    "ranking": {
+      "profile": "my-rank-profile"
+    },
+    "inputs": {
+      "query(user_context)": [0.1, 0.2, 0.3]
+    }
+  }
+  </pre>
+<p>
+  The <code>yql</code> part of the query specifies the retrieval part, which retrieves documents that contain the word "vespa".
+  The <code>ranking</code> part specifies the ranking profile to use when <strong>ranking</strong> the retrieved documents. 
+  This profile defines how to compute the score for each document retrieved by the query.
+</p>
 
-<p>The computations are expressed in functions called
-<a href="ranking-expressions-features.html">ranking expressions</a>,
-bundled into <a href="#rank-profiles">rank profiles</a> defined in <a href="schemas.html">schemas</a>.
-These can range from simple math expressions combining some <a href="reference/rank-features.html">rank features</a>,
-to <a href="tensor-examples.html">tensor expressions</a> or large machine-learned <a href="onnx.html">Onnx models</a>.
+<pre>
+  rank-profile my-rank-profile inherits default {
+    inputs {
+      query(user_context) tensor&lt;float&gt;(x[3])
+    }
+    first-phase {
+      expression: bm25(text) + sum(query(user_context) * attribute(document_context))
+    }
+  }
+</pre>
+<p>
+  The <code>first-phase</code> part of the rank profile specifies the ranking expression to use when scoring
+  the retrieved documents. In this example, the expression is a combination of the <a href="reference/bm25.html">BM25</a> 
+  text matching feature and a dot product between the query and document context tensors using 
+  Vespa <a href="tensor-user-guide.html#ranking-with-tensors">tensor computations</a>. </p>
 
+<p>
+  Since the query matched against the <em>text</em> field, Vespa can calculate text matching 
+  rank features, such as <a href="reference/bm25.html">bm25</a>. 
+</p>
 
-<h2 id="two-phase-ranking">Two-phase ranking</h2>
+<p>
+  The <code>query(user_context)</code> tensor is another feature that is passed with the query request, but does
+  not match against any field in the document. Instead, it is used to compute a score based on the dot product
+  with the <code>document_context</code> attribute. This is an example of how Vespa can use additional
+  features in ranking, even if they do not match against any field in the document.
+</p>
 
-<p>Rank profiles can define two <i>phases</i> that are evaluated locally on content nodes, which means that
-no data needs to be transferred to container nodes to make inferences over data:</p>
+<h2 id="phased ranking">Phased ranking</h2>
+
+<p>Rank profiles can define multiple <a href="phased-ranking.html">ranking phases</a>, where you can define different ranking expressions
+  that are applied in sequence. This is useful for separating the ranking logic into multiple steps
+  where the first phase is executed for all retrieved documents and the second-phase is executed for the top-scoring
+  documents from the first-phase. This can be used to direct more computation towards the most promising candidate documents.
 
 <pre>
 schema myapp {
 
     rank-profile my-rank-profile {
 
-        num-threads-per-search:4
-
         first-phase {
             expression {
-                attribute(quality) * freshness(timestamp)
+                attribute(quality) * freshness(timestamp) + bm25(title)
             }
         }
-
         second-phase {
             expression: sum(onnx(my_onnx_model))
             rerank-count: 50
         }
-
-    }
-}
-</pre>
-
-<p>The first phase is executed for all matching documents while the second is executed for the
-top-scoring <i>rerank-count</i> documents per content node as scored by the first-phase function. 
-
-This is useful to direct more computation towards the most promising candidate documents, see
-<a href="phased-ranking.html">phased ranking</a>.</p>
-
-<h2 id="global-phase-ranking">Global-phase ranking</h2>
-<p>It's also possible to define an additional phase that runs on the
-stateless container nodes after merging hits from the content nodes.
-Please read the <a href="phased-ranking.html#global-phase">global-phase as part of phased ranking</a>
-documentation for more details.
-This can be more efficient use of CPU (especially with many content nodes)
-and can be used instead of second-phase, or in addition to a moderately
-expensive second-phase as in the example below. This phase also supports GPU acceleration. 
-</p>
-
-<pre>
-schema myapp {
-    rank-profile my-rank-profile {
-        first-phase {
-            expression: attribute(quality) * freshness(timestamp)
-        }
-        second-phase {
-            expression {
-                my_combination_of(fieldMatch(title), bm25(abstract), attribute(quality), freshness(timestamp))
-            }
-        }
         global-phase {
-            expression: sum(onnx(my_onnx_model))
-            rerank-count: 100
-        }
+          expression: sum(onnx(my_larger_onnx_model))
+          rerank-count: 20
+      }
+
     }
 }
 </pre>
 
 <h2 id="machine-learned-model-inference">Machine-Learned model inference</h2>
 
-<p>Vespa supports ML models in these formats:</p>
+<p>To achieve better ranking accuracy, most organizations turn to machine learned ranking. 
+  Vespa supports importing ML models in these formats:</p>
 
 <ul>
-    <li><a href="onnx.html">ONNX</a></li>
+    <li><a href="onnx.html">ONNX</a>, allowing importing models from popular ML frameworks like Tensorflow,PyTorch and scikit-learn.</li>
     <li><a href="xgboost.html">XGBoost</a></li>
     <li><a href="lightgbm.html">LightGBM</a></li>
 </ul>
 
-<p>As these are exposed as rank features, it is possible to rank using a <em>model ensemble</em>.
-Deploy multiple model instances and write a ranking expression that combines the results:</p>
-
-<pre>
-schema myapp {
-
-    onnx-model my_model_1 {
-        ...
-    }
-    onnx-model my_model_2 {
-        ...
-    }
-
-    rank-profile my-rank-profile {
-    ...
-        second-phase {
-            expression: max( sum(onnx(my_model_1), sum(onnx(my_model_2) )
-        }
-    }
-}
-</pre>
+<p>As these are exposed as rank features, it is possible to rank documents using a <em>model ensemble</em>, or unify 
+  models from different frameworks in a single rank-profile. 
+  Models are deployed in <a href="application-packages.html">application packages</a> or downloaded from urls.
+</p>
 
 <!-- ToDo: Not exclusive list, we can represent lots of model, logistic regression etc. Also mention PyTorch through ONNX. -->
 
-
-<h2 id="model-training-and-deployment">Model Training and Deployment</h2>
-
-<p>Models are deployed in <a href="application-packages.html">application packages</a>.
-Read more on how to automate training, deployment and re-training in a closed loop using
-<a href="https://cloud.vespa.ai/">Vespa Cloud</a>.</p>
-
-
-
 <h2 id="rank-profiles">Rank profiles</h2>
-
 <p>Ranking expressions are defined in <a href="reference/schema-reference.html#rank-profile">rank profiles</a> -
 either inside the schema or equivalently in their own files in the
 <a href="reference/application-packages-reference.html">application package</a>, named
@@ -145,108 +138,8 @@ query.getRanking().setProfile("my-rank-profile");
 </pre>
 
 <p>If no profile is specified in the query, the one called <code>default</code> is used.
-This profile is available also if not defined explicitly.</p>
+This profile is available also if not defined explicitly. The default rank-profile uses <a href="nativerank.html">nativeRank</a>
+which is a text-scoring only feature. Another built-in rank profile <code>unranked</code> is also always available.
+Specifying this boosts serving performance in queries which do not need ranking because ordering is not important or
+<a href="reference/sorting.html">explicit field sorting</a> is used.</p>
 
-<p>Another special rank profile called <code>unranked</code> is also always available.
-Specifying this boosts performance in queries which do not need ranking because random order is fine or
-<a href="reference/sorting.html">explicit sorting</a> is used.</p>
-
-<h2 id="text-ranking">Text ranking</h2>
-<p>
-  The default ranking is the first-phase function <code>nativeRank</code>,
-  that is a function returning the value of the <a href="nativerank.html">nativeRank rank feature</a>,
-  and no second-phase. This default text scoring feature only considers how well a query matches
-  the searched field/fieldset. 
-<p>
-  The overall ranking expression might contain other ranking dimensions than just text match,
-  like freshness, the quality of the document, or any other property of the document or query.
-  </p>
-</p>
-<p>
-  A simple alternative to <code>nativeRank</code> for text scoring is using the
-  <a href="reference/bm25.html">BM25</a> feature. 
-</p>
-<p>
-  Another text matching feature is <code>fieldMatch(field)</code> <a href="reference/string-segment-match.html">string segment match</a>.
-  This feature combines the more basic fieldMatch sub-features in a reasonable way but has a 
-  high computional cost compared to <code>nativeRank</code> and <code>BM25</code> and is only 
-  suitable for <code>second-phase</code> evaluation.
-</p>
-
-<h3 id="weight-significance-and-connectedness">Weight, significance and connectedness</h3>
-<p>
-  Modify the values of the match features from the query
-  by sending <em>weight</em>, <em>significance</em> and <em>connectedness</em> with the query:
-</p>
-<table class="table">
-<thead>
-  <tr>
-    <th>Feature input</th><th>Description</th>
-  </tr>
-</thead>
-  <tbody>
-<tr><th>Weight</th><td>
-  <p>
-    Set query term <a href="reference/query-language-reference.html#weight">weight</a>.
-    Example: <code>... where (title contains ({weight:200}"heads") AND title contains "tails")</code>
-    specifies that <code>heads</code> is twice as important for the final rank score than <code>tails</code>
-    (the default weight is 100).
-  </p>
-  <p>
-    The term weight is used in several text scoring features, including <a href="reference/rank-features.html#fieldMatch(name).weight">
-    fieldMatch(<em>name</em>).weight</a> and <a href="reference/nativerank.html">nativeRank</a>. Note that the term weight
-    is not applicable for all text scoring features, for example <a href="reference/bm25.html">bm25</a> does not use the term weigth. 
-  </p>
-  <p>
-    Configure static field weights in the <a href="reference/schema-reference.html#weight">schema</a>.
-  </p>
-</td>
-</tr><tr><th>Significance</th><td>
-  <p>
-    Significance is an indication of how rare a term is in the corpus of the language,
-    used by a number of text matching <a href="reference/rank-features.html">rank features</a>.
-    This can be set explicitly for each term in
-    <a href="reference/query-language-reference.html#significance">the query</a>,
-    or by calling item.setSignificance() in a <a href="searcher-development.html">Searcher</a>.
-  </p>
-  <p>
-    With <em>indexed search</em>, default significance values are calculated automatically during indexing.
-    However, unless the indexed corpus is representative of the word frequencies in the user's language,
-    relevance can be improved by passing significances derived from a representative corpus.
-    Relative significance is accessible in ranking through the
-    <a href="reference/rank-features.html#fieldMatch(name).significance">
-        fieldMatch(<em>name</em>).significance</a> feature.
-    Weight and significance are also averaged into
-    <a href="reference/rank-features.html#fieldMatch(name).importance">
-        fieldMatch(<em>name</em>).importance</a> for convenience.
-  </p>
-  <p>
-    <em>Streaming search</em> does not compute term significance, queries should pass this with the query terms.
-    <a href="streaming-search.html#differences-in-streaming-search">Read more</a>.
-  </p>
-</td>
-</tr><tr><th>Connectedness</th><td>
-  <p>
-    Signify the degree of connection between adjacent terms in the query -
-    set query term <a href="reference/query-language-reference.html#connectivity">connectivity</a> to another term.
-  </p>
-  <p>
-    For example, the query <code>new york newspaper</code> should have a higher connectedness
-    between the terms "new" and "york" than between "york" and "newspaper" to rank documents higher
-    if they contain "new york" as a phrase.
-  </p>
-  <p>
-    Term connectedness is taken into account by
-    <a href="reference/rank-features.html#fieldMatch(name).proximity">
-        fieldMatch(<em>name</em>).proximity</a>,
-    which is also an important contribution to
-    <a href="reference/rank-features.html#fieldMatch(name)">fieldMatch(<em>name</em>)</a>.
-    Connectedness is a normalized value which is 0.1 by default.
-    It must be set by a custom Searcher,
-    looking up connectivity information from somewhere - there is no query syntax for it.
-  </p>
-</td>
-    <!-- ToDo: Use connectivity and id query annotations to do this? -->
-</tr>
-</tbody>
-</table>

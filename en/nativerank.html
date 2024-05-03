@@ -7,7 +7,7 @@ redirect_from:
 
 <p>
   The <em>nativeRank</em> text match score is a reasonably good text
-  rank score which is computed at an acceptable performance by Vespa.
+  feature score which is computed at an acceptable performance by Vespa.
   It computes a normalized rank score
   which tries to capture how well query terms matched the set of searched index fields.
 </p>
@@ -16,54 +16,100 @@ redirect_from:
   three other matching features: <em>nativeFieldMatch</em>, <em>nativeProximity</em>
   and <em>nativeAttributeMatch</em>,
   see <a href="reference/nativerank.html"> the nativeRank reference for details</a>.
+</p>
+<p>
   Ranking signals that might be useful,
   like freshness (the age of the document compared to the time of the query)
   or any other document or query features,
   are <span style="text-decoration: underline;">not</span> a part of the <em>nativeRank</em> calculation.
   These need to be added to the final ranking function depending on application specifics.
 </p>
-<p>
-  The <em>nativeRank</em> is a pure text match ranking function
-  and should be used in combination with application specific features
-  to produce the final rank score.
-</p>
 
 
 
-<h2 id="ranking-expressions-and-nativerank">Ranking expressions and nativeRank</h2>
+<h3 id="weight-significance-and-connectedness">Weight, significance and connectedness</h3>
 <p>
-  Vespa allows the final rank score number to be calculated by a configured mathematical expression
-  called <a href="reference/ranking-expressions.html">ranking expression</a>.
-  Ranking expressions looks like straightforward mathematical expressions.
-  They support the usual mathematical operators and functions,
-  allowing the user to configure any rank function,
-  including usage of the <em>nativeRank</em> text matching feature.
+  Modify the values of the match features from the query
+  by sending <em>weight</em>, <em>significance</em> and <em>connectedness</em> with the query:
 </p>
-<p>
-  The primitive values which are combined by ranking expressions are called <strong>rank features</strong>.
-  The rank features are numbers which say something about the query,
-  the document or how well the query matched this particular document.
-  The query features can be sent as query parameters or set in searchers.
-  The document features are the attributes (indexing:attribute) specified in the schema,
-  and the match features are calculated by Vespa from the index during matching.
-  The <em>nativeRank</em> feature is one example of a built-in match feature,
-  which only concerns the query/document matching.
-</p>
-<p>
-  The final rank score should also utilize other signals that are application specific,
-  for instance document age (freshness), quality of the document
-  (number of in-links in a web context, maybe ratings and reviews in social applications)
-  and user personalization (user age, gender etc.).
-  See the <a href="reference/rank-features.html">rank feature list</a>
-  for details about built-in rank-features in Vespa.
-</p>
-
+<table class="table">
+<thead>
+  <tr>
+    <th>Feature input</th><th>Description</th>
+  </tr>
+</thead>
+  <tbody>
+<tr><th>Weight</th><td>
+  <p>
+    Set query term <a href="reference/query-language-reference.html#weight">weight</a>.
+    Example: <code>... where (title contains ({weight:200}"heads") AND title contains "tails")</code>
+    specifies that <code>heads</code> is twice as important for the final rank score than <code>tails</code>
+    (the default weight is 100).
+  </p>
+  <p>
+    The term weight is used in several text scoring features, including <a href="reference/rank-features.html#fieldMatch(name).weight">
+    fieldMatch(<em>name</em>).weight</a> and <a href="reference/nativerank.html">nativeRank</a>. Note that the term weight
+    is not applicable for all text scoring features, for example <a href="reference/bm25.html">bm25</a> does not use the term weigth. 
+  </p>
+  <p>
+    Configure static field weights in the <a href="reference/schema-reference.html#weight">schema</a>.
+  </p>
+</td>
+</tr><tr><th>Significance</th><td>
+  <p>
+    Significance is an indication of how rare a term is in the corpus of the language,
+    used by a number of text matching <a href="reference/rank-features.html">rank features</a>.
+    This can be set explicitly for each term in
+    <a href="reference/query-language-reference.html#significance">the query</a>,
+    or by calling item.setSignificance() in a <a href="searcher-development.html">Searcher</a>.
+  </p>
+  <p>
+    With <em>indexed search</em>, default significance values are calculated automatically during indexing.
+    However, unless the indexed corpus is representative of the word frequencies in the user's language,
+    relevance can be improved by passing significances derived from a representative corpus.
+    Relative significance is accessible in ranking through the
+    <a href="reference/rank-features.html#fieldMatch(name).significance">
+        fieldMatch(<em>name</em>).significance</a> feature.
+    Weight and significance are also averaged into
+    <a href="reference/rank-features.html#fieldMatch(name).importance">
+        fieldMatch(<em>name</em>).importance</a> for convenience.
+  </p>
+  <p>
+    <em>Streaming search</em> does not compute term significance, queries should pass this with the query terms.
+    <a href="streaming-search.html#differences-in-streaming-search">Read more</a>.
+  </p>
+</td>
+</tr><tr><th>Connectedness</th><td>
+  <p>
+    Signify the degree of connection between adjacent terms in the query -
+    set query term <a href="reference/query-language-reference.html#connectivity">connectivity</a> to another term.
+  </p>
+  <p>
+    For example, the query <code>new york newspaper</code> should have a higher connectedness
+    between the terms "new" and "york" than between "york" and "newspaper" to rank documents higher
+    if they contain "new york" as a phrase.
+  </p>
+  <p>
+    Term connectedness is taken into account by
+    <a href="reference/rank-features.html#fieldMatch(name).proximity">
+        fieldMatch(<em>name</em>).proximity</a>,
+    which is also an important contribution to
+    <a href="reference/rank-features.html#fieldMatch(name)">fieldMatch(<em>name</em>)</a>.
+    Connectedness is a normalized value which is 0.1 by default.
+    It must be set by a custom Searcher,
+    looking up connectivity information from somewhere - there is no query syntax for it.
+  </p>
+</td>
+    <!-- ToDo: Use connectivity and id query annotations to do this? -->
+</tr>
+</tbody>
+</table>
 
 
 <h2 id="using-nativeRank">Using nativeRank</h2>
 <p>
   In this section we describe a blog search application that uses
-  <em>nativeRank</em> as the core text matching rank feature,
+  <em>nativeRank</em> as the core text matching rank feature, 
   in combination with other signals that could be important for a blog search type of application:
 </p>
 <pre>
@@ -116,32 +162,6 @@ schema blog {
   <li>The quality of the document, calculated outside of Vespa and
     referenced in a ranking expression by <em>attribute(name)</em>.</li>
 </ul>
-
-
-
-<h2 id="tuning-nativeRank">Tuning nativeRank</h2>
-<p>
-  We tune the index field weight in the rank-profile,
-  this is done by the <a href="reference/schema-reference.html#weight">field weight</a> configuration parameter.
-  We claim that a hit in the title is more relevant than a hit in the body,
-  so we have configured a weight of 200 for the title, and 100 (default) for the body.
-  There are several other <a href="reference/nativerank.html">tuning parameters of the nativeRank feature</a>, like:
-</p>
-<ul>
-  <li>The weight of the 3 nativeRank components that nativeRank consist
-    of: nativeFieldMatch, nativeProximity and nativeAttributeMatch.</li>
-  <li>The shape of the boosting tables for core statistics like term
-    frequency and proximity between terms in the field.</li>
-  <li>Per field configuration supported, can have different term
-    frequency boosting (or any other of the core statistics) for text
-    with different characteristics, e.g. title compared to body.</li>
-  <li>Per field <a href="reference/rank-types.html">rank-types</a> like <code>identity</code>
-    and <code>about</code> which are pre-configured boosting tables for different type of text fields.</li>
-</ul>
-<p>
-  <a href="reference/nativerank.html#configuration-properties">See
-    the comprehensive list of all the configuration properties of nativeRank</a>.
-</p>
 
 
 
