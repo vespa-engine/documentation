@@ -24,8 +24,8 @@ Claude, Vespa can run LLMs within a Vespa application. This avoids sending data
 outside of the application and allows running customized models. For more
 information, please see [Running LLMs locally in Vespa](llms-local.html).
 
-For a quick start, check out the [RAG sample
-app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
+For a quick start, check out the 
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation" data-proofer-ignore>RAG sample app</a>
 which demonstrates using either an external LLM service or a local LLM.
 
 
