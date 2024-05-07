@@ -21,7 +21,7 @@ as the nearest neighbor search in Vespa is expressed as a query operator.
 The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator can be combined with other filters or query terms using the [Vespa query language](query-language.html).
 See many query examples in the [practical guide](nearest-neighbor-search-guide.html#combining-approximate-nearest-neighbor-search-with-query-filters).
 
-* **Multi-vector Indexing** - Since Vespa 8.144.19 multiple vectors per document can be indexed.
+* **Multi-vector Indexing** - {% include version.html version="8.144" %} multiple vectors per document can be indexed.
 In this case documents are retrieved by the closest vector in each document compared to the query vector.
 See the [Multi-vector indexing sample application](https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing)
 for examples.
@@ -158,7 +158,7 @@ Note that when using `pre-filtering` the following query operators are not inclu
 These are instead evaluated after the approximate nearest neighbors are retrieved, more like a `post-filter`.
 This might cause the search to expose fewer hits to ranking than the wanted `targetHits`.
 
-Since Vespa 8.78.45 the `pre-filter` can be evaluated using
+{% include version.html version="8.78" %} The `pre-filter` can be evaluated using
 [multiple threads per query](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking).
 This can be used to reduce query latency for larger vector datasets where the cost of evaluating the `pre-filter` is significant.
 Note that searching the `HNSW` index is always single-threaded per query.
