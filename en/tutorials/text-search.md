@@ -174,8 +174,7 @@ to be able to search multiple fields. String fields grouped using fieldsets shou
 
 Vespa allows creation any number of [rank-profiles](../ranking.html), which are
 named collections of ranking and relevance calculations that one choose at query time.
-Ma
-ny built-in [rank](../reference/rank-features.html) features](../reference/rank-features.html) 
+Many built-in [rank](../reference/rank-features.html) features](../reference/rank-features.html) 
 are available to create highly specialized ranking expressions.
 
 In this tutorial, we define our default _rank-profile_ to be based on `nativeRank`,
