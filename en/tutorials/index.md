@@ -16,14 +16,11 @@ This is the best tutorial to start with:
 6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 
-
-## Models hot swap
-The [Models hot swap tutorial](models-hot-swap.html) builds on the news recommendation tutorial.
-It is a guide on how to manage an application with multiple model versions.
-
-
 ## Text search
 [Text Search](text-search.html) is a set of tutorials:
 1. [Text Search](text-search.html)
 2. [Text Search ML](text-search-ml.html)
-3. [Text Search Semantic](text-search-semantic.html)
+
+## Models hot swap
+The [Models hot swap tutorial](models-hot-swap.html) builds on the news recommendation tutorial.
+It is a guide on how to manage an application with multiple model versions.
