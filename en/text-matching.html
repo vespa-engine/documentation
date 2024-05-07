@@ -7,44 +7,56 @@ redirect_from:
 ---
 
 <!-- ToDo: Rewrite to better intro -->
+
 <p>
-  Refer to the <a href="ranking.html#text-ranking">text ranking</a> introduction for ranking,
-  and review the different <a href="reference/schema-reference.html#match">match modes</a>.
+  This guide demonstrates tokenization, linguistic processing and matching over <a href="reference/schema-reference.html#string">string</a> 
+  fields in Vespa. The guide features examples based on the <a href="vespa-quick-start.html">quick start</a>.
+</p>
+
+<p>
+  Refer to the <a href="ranking.html">ranking</a> introduction for ranking,
+  and review the different <a href="reference/schema-reference.html#match">match modes</a> that Vespa supports per field.
   See the <a href="tutorials/text-search.html">text search</a> and
   <a href="tutorials/text-search-ml.html">text search through ML</a> tutorials.
-  Also relevant is the guide for
-  <a href="semantic-qa-retrieval.html">Semantic Retrieval for Question Answering Applications</a>.
-  Finally, refer to <a href="linguistics.html">Linguistics</a> for details.
+  Finally, refer to <a href="linguistics.html">linguistics</a> for linguistic processing in Vespa. 
 </p>
 <p>Using <a href="#query-trace">query tracing</a> is useful when debugging text matching.</p>
-<p>
-  This guide has examples based on the <a href="vespa-quick-start.html">quick start</a>.
-  Use this, reconfigure the schema field, deploy and stop after the feeding step.
-</p>
-
-
 
 <!-- ToDo: using both index | attribute must be explained here
            It is documented somewhere else, clean up -->
 <h2 id="index-and-attribute">Index and attribute</h2>
-<p>Text search is normally best run using a string field in <em>index</em> mode:</p>
+<p>Vespa string fields can have a mix of settings specified per field, such as the <a href="reference/schema-reference.html#indexing">indexing</a>  and
+  <a href="reference/schema-reference.html#match">match modes</a>. 
+
+<ul>
+  <li>
+  The <em>index</em> for free-text search with default match mode <em>text</em>, integrating with linguistic
+  processing such as <a href="linguistics.html">tokenization and stemming</a>.
+  </li>
+  <li>
+  The <em>attribute</em> indexing is used for 
+  database-style of string matching without linguistic processing and where the exact string contents are matched.
+  </li>
+</ul>
+</p>
+<p>Free-text search is normally solved using a string field in <em>index</em> mode:</p>
 <pre>
 field album type string {
     indexing: summary | index
 }
 </pre>
 
-<p>Below, find details on transformations to the text for text indexing and search.
-Use inspection tools to dump data from a content node,
-and query tracing to understand matching details.</p>
+<p>Below, find details on transformations to the text for text indexing and search using the quick start 
+  sample application as an example.</p>
 
 <p>
   The <em>album</em> field has <a href="reference/schema-reference.html#indexing">index</a> mode.
-  For text fields, this enables the transformations below, and increases query recall.
+  For text fields, this enables transformations of the string field to increase query recall.
 </p>
 
 <p id="tokens-example">
-This is useful for dumping tokens from the index and analyzing linguistic processing. 
+The following is useful for dumping the resulting text tokens after indexing, to understand the transformations. This 
+ coupled with <a href="#query-trace">query tracing</a> can help us understand why a document field doesn't match or match a query.</p>
   
 Add another <a href="document-summaries.html">document summary</a>
 to  <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/schemas/music.sd">schemas/music.sd</a> that contains an extra summary field
@@ -159,13 +171,14 @@ $ vespa query "select * from music where true" summary=my-debug-summary | \
 ["hardwired...to self-destruct"]
 </pre>
 <p>
-The most important observation is that the strings are added <em>as-is</em> to attributes.
-Hence, values are matched in full, including whitespace.
-When searching attributes, both query terms and attribute data are lowercased before matching unless the <code>match</code> setting for the field has been set to <code>cased</code>.
+The most important observation is that the strings are added <em>as-is</em> for attributes and matching considers the full value, including whitespace (no tokenization).
+</p>
+<p>
+The only transformation is lowercasing, both query terms and attribute data are lowercased before matching unless the <code>match</code> 
+setting for the field has been set to <code>cased</code>.
 Read more about the attribute <a href="reference/schema-reference.html#match">word match mode</a>.
 </p>
 <!-- ToDo: Add more match examples for indexed search-->
-
 
 
 <h2 id="prefix-match">Prefix match</h2>
@@ -178,6 +191,7 @@ field album type string {
     indexing: summary | attribute
 }
 </pre>
+<p>Note that regular <em>index</em> fields does not support prefix matching.</p>
 <pre>
 $ vespa query 'select * from music where album contains ({prefix: true}"a hea")'
 </pre>
