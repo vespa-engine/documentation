@@ -692,6 +692,10 @@ Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a disc
 #### How to check Vespa version for a running instance?
 Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa version.
 
+#### Deploy rollback
+See [rollback](/en/application-packages.html#rollback) for options.
+
+
 
 <script type="application/javascript">
   function createTOC() {
