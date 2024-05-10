@@ -135,7 +135,8 @@ schema msmarco {
         summary id {  }
     }
     document-summary url-tokens {
-        summary url {
+        summary url {}
+        summary url-tokens {
             source: url
             tokens
         }
@@ -153,8 +154,7 @@ schema msmarco {
     }
 }
 </pre>
-
-That's a lot going on here, so let us go through it in detail. 
+A lot is going on here; let us go through it in detail. 
 
 #### Document type and fields
 The `document` section contains the fields of the document, their types, and how Vespa should index and [match](reference/schema-reference.html#match) them.
@@ -165,10 +165,8 @@ The [string](../reference/schema-reference.html#string) data type is used to rep
 and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body`
-by including `index: enable-bm25`. 
-
-The only field that is not in the dataset is the `language` field. We hardcode its value 
+Note that we are enabling the usage of [BM25](../reference/bm25.html) for `title`, `body` and `url`.
+by including `index: enable-bm25`. The language field is the only field not in the msmarco dataset. We hardcode its value 
 to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
 text fields. Read more in [linguistics](../linguistics.html).
 
@@ -177,14 +175,14 @@ text fields. Read more in [linguistics](../linguistics.html).
 [Fieldset](../reference/schema-reference.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
 add indexing/storage overhead. String fields grouped using fieldsets must share the same 
 [match](../reference/schema-reference.html#match) and [linguistic processing](../linguistics.html) settings because
-the query processing that searches a field or fieldset only can use *one* type of transformation.
+the query processing that searches a field or fieldset uses *one* type of transformation.
 
-#### Document summaries to control what is returned in the search response
+#### Document summaries to control search response contents
 Next, we define two [document summaries](../document-summaries.html). 
-Document summaries control what fields are available in the [response](../reference/default-result-format.html), we include
-the `url-tokens` document-summary to demonstrate later how we can get visibility into how text is converted into searchable tokens. 
+Document summaries control what fields are available in the [response](../reference/default-result-format.html); we include the `url-tokens` document-summary to 
+demonstrate later how we can get visibility into how text is converted into searchable tokens. 
 
-#### Ranking specification to determine how matches documents are ordered
+#### Ranking to determine matched documents ordering
 You can define many [rank profiles](../ranking.html), 
 named collections of score calculations, and ranking phases.
 
