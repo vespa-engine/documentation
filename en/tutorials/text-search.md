@@ -10,9 +10,9 @@ At the end, you can index text documents in Vespa and search them via text queri
 The application built here will be the foundation for other tutorials,
 such as creating ranking functions based on Machine Learning (ML) models.
 
-The main goal is to set up a text search app based on simple term-match features
+The main goal is to set up a text search app based on simple text scoring features
 such as [BM25](../reference/bm25.html) [^1] and [nativeRank](../reference/nativerank.html). 
-We will cover how to create, deploy, and index documents.
+
 
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li>Python3</li>
@@ -20,8 +20,8 @@ We will cover how to create, deploy, and index documents.
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](../vespa-cli.html),
-it is a binary without any runtime dependencies and is available for Linux, macOS, and Windows.
+This tutorial uses [Vespa-CLI](../vespa-cli.html) to deploy, feed and query Vespa. Below, we use [HomeBrew](https://brew.sh/) to download and install `vespa-cli`, you can also
+download a binary from [GitHub](https://github.com/vespa-engine/vespa/releases) for your OS/CPU architecture. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -30,10 +30,10 @@ $ brew install vespa-cli
 </pre>
 </div>
 
-We acquire the scripts and code to follow this tutorial from the
-[sample-apps repository](https://github.com/vespa-engine/sample-apps).
+We acquire the scripts to follow this tutorial from the
+[sample-apps repository](https://github.com/vespa-engine/sample-apps/tree/master/text-search) via 
+`vespa clone`.
 
-The first step is to clone the `sample-apps` repo from GitHub and move it into the `text-search` directory:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -41,7 +41,8 @@ $ vespa clone text-search text-search && cd text-search
 </pre>
 </div>
 
-The repository contains a fully-fledged Vespa application. 
+The repository contains a fully-fledged Vespa application, but below, we will build
+it all from scratch for educational purposes. 
 
 ## Dataset
 
@@ -50,7 +51,7 @@ MS MARCO is a collection of large-scale datasets released by Microsoft
 with the intent of helping the advance of deep learning research related to search.
 Many tasks are associated with MS MARCO datasets,
 but we want to build an end-to-end search application that returns relevant documents to a text query.
-We have included a small dataset sample for this tutorial under the `ext/`sample` directory, which contains around 1000 documents.
+We have included a small dataset sample for this tutorial under the `ext/sample` directory, which contains around 1000 documents.
 
 The sample data must be converted to Vespa [JSON feed format](../reference/document-json-format.html).
 The following step includes extracting documents, queries and relevance judgments from the sample files:
@@ -83,10 +84,7 @@ along with the document ID relevant to each particular query.
 
 ## Create a Vespa Application Package
 
-A [Vespa application package](../application-packages.html) is a set of configuration files and optional Java components
-that together define the behavior of a Vespa system.
-
-Let us define the minimum set of required files to create our basic text search application,
+A [Vespa application package](../application-packages.html) is a set of configuration files and optional Java components that together define the behavior of a Vespa system. Let us define the minimum set of required files to create our basic text search application,
 : `msmarco.sd` and `services.xml`.
 
 For this tutorial, we will create a new Vespa application rather than using the one in the repository,
@@ -102,43 +100,52 @@ $ mkdir -p app/schemas
 
 ### Schema
 A [schema](../schemas.html) is a document-type configuration; a single vespa application can have multiple schemas with document types.
-
-For this application, we define a document type called `msmarco`.
+For this application, we define a schema `msmarco` which must be saved in a file named `schemas/msmarco.sd`.
 Write the following to `text-search/app/schemas/msmarco.sd`:
 
 <pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
     document msmarco {
+        field language type string {
+            indexing: "en" | set_language 
+        }
         field id type string {
             indexing: attribute | summary
+            match: word
         }
         field title type string {
             indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index
+            match: text
             index: enable-bm25
         }
         field url type string {
             indexing: index | summary
-        }
-        field body type string {
-            indexing: index
             index: enable-bm25
         }
     }
-
-    document-summary minimal {
-        summary id {  }
-    }
-
     fieldset default {
         fields: title, body, url
     }
-
+    document-summary minimal {
+        summary id {  }
+    }
+    document-summary url-tokens {
+        summary url {
+            source: url
+            tokens
+        }
+        from-disk
+    }
     rank-profile default {
         first-phase {
             expression: nativeRank(title, body, url)
         }
     }
-
     rank-profile bm25 inherits default {
         first-phase {
             expression: bm25(title) + bm25(body) + bm25(url)
@@ -147,47 +154,43 @@ schema msmarco {
 }
 </pre>
 
-Here, we define the `msmarco` schema, which includes primarily two things:
-a definition of fields the `msmarco` document type should have,
-and a definition on how Vespa should rank documents given a query.
+That's a lot going on here, so let us go through it in detail. 
 
-The `document` section contains the fields of the document, their types and how Vespa should index them.
+#### Document type and fields
+The `document` section contains the fields of the document, their types, and how Vespa should index and [match](reference/schema-reference.html#match) them.
+
 The field property `indexing` configures the _indexing pipeline_ for a field.
-For more information see [schemas - indexing](../schemas.html#indexing).
-Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title`, `body` and `url`
-by including `index: enable-bm25` in the respective fields.
+For more information, see [schemas - indexing](../schemas.html#indexing).
+The [string](../reference/schema-reference.html#string) data type is used to represent both unstructured and structured texts, 
+and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
+schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Next, the [document summary class](../document-summaries.html) `minimal` is defined.
-Document summaries are used to control what fields are returned in the response for a query.
-The `minimal` summary here only returns the document ID,
-which is useful for speeding up relevance testing as less data needs to be returned.
-The default document summary is defined by which fields are indexed with the `summary` command,
-which in this case are all the fields. 
+Note that we are enabling the usage of [BM25](../reference/bm25.html) for the fields `title` and `body`
+by including `index: enable-bm25`. 
 
-For more information, refer to the [document summaries reference](../reference/schema-reference.html#summary).
-Document summaries can be selected by using 
-the [summary](../reference/query-api-reference.html#presentation.summary) query api parameter.
+The only field that is not in the dataset is the `language` field. We hardcode its value 
+to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
+text fields. Read more in [linguistics](../linguistics.html).
 
-[Fieldsets](../reference/schema-reference.html#fieldset) provide a way to group fields together
-to be able to search multiple fields. String fields grouped using fieldsets should share the same
-[match](../reference/schema-reference.html#match) and [linguistic processing](../linguistics.html) settings. 
+#### Fieldset for matching across multiple fields
 
-Vespa allows creation any number of [rank-profiles](../ranking.html), which are
-named collections of ranking and relevance calculations that one choose at query time.
-Many built-in [rank](../reference/rank-features.html) features](../reference/rank-features.html) 
-are available to create highly specialized ranking expressions.
+[Fieldset](../reference/schema-reference.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
+add indexing/storage overhead. String fields grouped using fieldsets must share the same 
+[match](../reference/schema-reference.html#match) and [linguistic processing](../linguistics.html) settings because
+the query processing that searches a field or fieldset only can use *one* type of transformation.
 
-In this tutorial, we define our default _rank-profile_ to be based on `nativeRank`,
-which is a linear combination of the normalized scores computed by the several term-matching features
-described in the [nativeRank documentation](../reference/nativerank.html).In addition, 
-we created a _bm25 ranking-profile_ to compare with the one based on _nativeRank_.
-[BM25](../reference/bm25.html) is faster to compute than _nativeRank_ while still giving better results than _nativeRank_ in some applications.
+#### Document summaries to control what is returned in the search response
+Next, we define two [document summaries](../document-summaries.html). 
+Document summaries control what fields are available in the [response](../reference/default-result-format.html), we include
+the `url-tokens` document-summary to demonstrate later how we can get visibility into how text is converted into searchable tokens. 
 
-The `first-phase` keyword indicates that the `expression` defined in the _ranking-profile_
-will be computed for every document matching the query. Vespa ranking supports [phased ranking](../phased-ranking.html)
-Rank profiles are selected at run-time by using the [ranking](../reference/query-api-reference.html#ranking.profile)
-query api parameter.
+#### Ranking specification to determine how matches documents are ordered
+You can define many [rank profiles](../ranking.html), 
+named collections of score calculations, and ranking phases.
 
+In this tutorial, we define our `default` to be using [nativeRank](../reference/nativerank.html).
+In addition, we have a `bm25` rank-profile that uses [bm25](../reference/bm25.html). Both are examples of
+text-scoring [rank-features](../reference/rank-features.html) in Vespa.
 
 ### Services Specification
 
@@ -225,18 +228,17 @@ Some notes about the elements above:
 - `<document-api>` sets up the [document endpoint](../reference/document-v1-api-reference.html) for feeding.
 - `<content>` defines how documents are stored and searched
 - `<min-redundancy>` denotes how many copies to keep of each document.
-- `<documents>` assigns the document types in the _schema_ —
+- `<documents>` assigns the document types in the _schema_  to content clusters —
   the content cluster capacity can be increased by adding node elements —
   see [elasticity](../elasticity.html).
   (See also the [reference](../reference/services-content.html) for more on content cluster setup.)
 - `<nodes>` defines the hosts for the content cluster.
 
-
 ## Deploy the application package
 
 Once we have finished writing our application package, we can deploy it.
+We use settings similar to those in the [Vespa quick start guide](../vespa-quick-start.html).
 
-We used similar settings as described in the [vespa quick start guide](../vespa-quick-start.html).
 Start the Vespa container:
 
 <div class="pre-parent">
@@ -247,8 +249,10 @@ $ docker run --detach --name vespa-msmarco --hostname vespa-msmarco \
   vespaengine/vespa
 </pre>
 </div>
+Notice that we publish two ports (:8080) is the data-plane port where we write and query documents, and 19071 is
+the control-plane where we can deploy the application. 
 
-Configure the Vespa CLI to use the local Docker container:
+Configure the Vespa CLI to use the local container:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
@@ -266,7 +270,7 @@ $ vespa status deploy --wait 300
 </pre>
 </div>
 
-Now, deploy the Vespa application that you have created in the `app` directory:
+Now, deploy the Vespa application from the `app` directory:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -290,21 +294,28 @@ $ vespa feed -t http://localhost:8080 ext/vespa.json
 </div>
 
 
-## Run a test query
+## Querying the data
 
-Once the data is indexed, send a query to the search app:
+This section demonstrates various ways to search the data using the [Vespa query language](query-language.html). All
+the examples use the `vespa-cli` client, the tool uses the HTTP api and if you pass `-v`, you will see the `curl` equivalent
+API request. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select title, url, id from msmarco where userQuery()' \
-  'query=what is dad bod' 
+  'yql=select title, url, id from msmarco where userInput(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
 </pre>
 </div>
-This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html).
 
+This query combines YQL [userInput()](../reference/query-language-reference.html#userinput), a robust
+way to combine free text queries from users with application logic. Similar to `set_language` in indexing, we specify
+the language of the query using the [language](../linguistics.html#querying-with-language) API parameter. This ensures
+symmetric linguistic processing of both the query and the document text. Automatic language detection is inaccurate
+for short query strings and might lead to asymmetric processing of queries and document texts. 
 
 Following is a partial output of the query above when using the small dataset sample:
 <pre>{% highlight json%}
@@ -330,22 +341,213 @@ Following is a partial output of the query above when using the small dataset sa
     }
 }
 {% endhighlight %}</pre>
+As shown, 562 documents matched the query out of 996 in the corpus. The `first-phase` ranking expression scores all the matching documents.
 
-As we can see, there were 562 documents that matched the query out of 996 available in the corpus.
-The number of matched documents will be much larger when using the full dataset.
-We can change retrieval mode from the default `weakAnd` to `all`:
+A few important observations:
+
+- We did not specify which fields to search in the query. Vespa will, by default, use a field set or field named `default` when the query terms do not specify a field. In our case:
+
+<pre>
+fieldset default {
+  fields: title, body, url
+}
+</pre>
+- Our query for `what is dad bod` searches across all those three fields. 
+- If we did not specify a `default` fieldset in the schema, the above query would return zero hits as the query did not specify a field.  
+- The hit `relevance` holds the score computed by the rank profile. Vespa uses `default` by default. 
+In our case:
+
+<pre>
+rank-profile default {
+    first-phase {
+        expression: nativeRank(title, body, url)
+    }
+}
+</pre>
+
+We can use query operator annotations for the [userInput](..//reference/query-language-reference.html#userinput) to control various
+matching aspects. The following uses the `defaultIndex` to specify which field (or fieldset) to search.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select title, url, id from msmarco where userQuery()' \
-  'query=what is dad bod' \
-  'type=all'
+  'yql=select title, url, id from msmarco where {defaultIndex:"title"}userInput(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+</pre>
+</div>
+Notice how the query above matches fewer documents `totalCount:116` because we limited the free text query to the title field. We can 
+change the [grammar](../reference/query-language-reference.html#grammar) to specify how the user query text is parsed into a query execution plan.
+In the following example, we use `grammar:"all"` to specify that we only want to retrieve documents where *all* the query terms match the title field.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select title, url, id from msmarco where {defaultIndex:"title", grammar:"all"}userInput(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+</pre>
+</div>
+This query, using `all`, matches only one document. Notice how the relevance of the hit is the same as in the above example. The difference
+between the two types of queries is in the matching specification.
+
+### Boosting by query terms 
+Sometimes, we want to add a query time boost if some field matches a query term; the following uses the [rank](../reference/query-language-reference.html#rank) query operator.
+The rank query operator allows us to retrieve using the first operand, and the remaining operands can only impact ranking. 
+
+It is important to note that the following approach for query time term boosting is in the context of using the `nativeRank` text scoring feature.  
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select title, url, id from msmarco where rank(userInput(@user-query), url contains ({weigth:1000, significance:1.0}"www.answers.com"))' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+</pre>
+</div>
+The above will match the user query against the default fieldset and produce match features for the second operand. It does not
+change the *retrieval* or *matching* as the number of document exposed to ranking is the same as before. The 
+`rank` operator can be used to implement a variety of use case around boosting. 
+
+#### Combine free text with filters
+Now, we can combine the `userInput` with application logic.  We add an application-specific query filter on the `url` field 
+to demonstrate how to combine `userInput` with other query time constraints. 
+We add `ranked:false` to tell Vespa that this
+specific term should not contribute to the relevance calculation and `filter`:true` to ensure that the term is not
+used for [bolding/highlighting or dynamic snippeting](../document-summaries.html#dynamic-snippets).
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select url, id, title from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'user-query=what is dad bod' \
+  'hits=3'
 </pre>
 </div>
 
-Which will retrieve and rank fewer (3) documents because we require that all query terms be matched.  
+Notice that the `relevance` stays the same since we used `ranked:false` for the filter. 
+Let us see what is going on by adding [query tracing](../query-api.html#query-tracing):
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select id, url, title from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'user-query=what is dad bod' \
+  'trace.level=3'
+</pre>
+</div>
+
+We can notice the following in the trace output:
+<pre>
+query=[AND (WEAKAND(100) default:what default:is default:dad default:bod) |url:'huffingtonpost co uk']
+</pre>
+
+Notice that the `userInput` part is converted to a [weakAnd](../using-wand-with-vespa.html) query operator and that this operator is 
+AND'ed with a phrase search ('huffingtonpost co uk') in the `url` field.
+Notice also that punctuation characters (.) are removed as part of the tokenization. Suppose this is a common pattern where we want to filter on specific strings. 
+In that case, we should consider creating a separate field to avoid phrase matching as phrase matching is inherently more expensive than a single token search. 
+
+
+### Debugging token string matching
+Query tracing, combined with a summary using [tokens](../reference/schema-reference.html#tokens) can help debug matching. In this example
+we use `select *` which means we will select all the fields part of the `debug-tokens` document-summary:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="what-is-a-dadbod">
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'trace.level=0' \
+  'summary=debug-tokens'
+</pre>
+</div>
+
+<pre>{% highlight json%}
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 562
+        },
+        "children": [
+            {
+                "id": "index:msmarco/0/59444ddd06537a24953b73e6",
+                "relevance": 0.0,
+                "source": "msmarco",
+                "fields": {
+                    "sddocname": "msmarco",
+                    "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html",
+                    "url-tokens": [
+                        "http",
+                        "www",
+                        "huffingtonpost",
+                        "co",
+                        "uk",
+                        "2015",
+                        "05",
+                        "05",
+                        "what",
+                        "is",
+                        "a",
+                        "dadbod",
+                        "male",
+                        "body",
+                        "n",
+                        "7212072",
+                        "html"
+                    ]
+                }
+            }
+        ]
+
+    }
+}
+{% endhighlight %}</pre>
+This gives us insight into how the input `url` field was tokenized and indexed. Those are the tokens that the query can match. 
+Notice how punctuation characters like `:`, `,`, `.`, `/`, `_` and `-` are removed as part of the text tokenization. 
+
+Observations:
+
+- Relevance is 0.0, because the term uses `ranked:false`. 
+- We cannot match "://" because those are not searchable characters with `match:text`
+- `dadbod` is a token in the url, this cannot match `dad` or `bod` as it is represented as a single token `dadbod`.
+
+Let us do a similar example to demonstrate the impact of linguistic stemming
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="996">
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"https://")' \   
+  'trace.level=0' \
+  'summary=debug-tokens' 'hits=1'
+</pre>
+</div>
+
+
+<pre>
+ "url": "http://www.ourbabynamer.com/meaning-of-Anika.html",
+  "url-tokens": [
+    "http",
+    "www",
+    "ourbabynamer",
+    "com",
+    "meaning",
+    "of",
+    "anika",
+    "html"
+  ]
+</pre>
+Notice that a query for `https` matches `http`, because stemming has removed the s suffix. 
+
 
 ## Compare and evaluate different ranking functions
 
