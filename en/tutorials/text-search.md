@@ -302,7 +302,7 @@ API request.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select title, url, id from msmarco where userInput(@user-query)' \
+  'yql=select * from msmarco where userInput(@user-query)' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -324,18 +324,22 @@ Following is a partial output of the query above when using the small dataset sa
         "fields": {
             "totalCount": 562
         },
-        "children": [
+        "children":[
             {
-                "id": "index:msmarco/0/59444ddd06537a24953b73e6",
-                "relevance": 0.2747543357589305,
+                "id": "id:msmarco:msmarco::D2977840",
+                "relevance": 0.20676669550322158,
                 "source": "msmarco",
                 "fields": {
+                    "sddocname": "msmarco",
+                    "body": "<sep />After The Cut released a piece explaining <hi>what</hi> the  <hi>dad</hi> <hi>bod</hi>  <hi>is</hi> last week  the internet pretty much exploded into debate over the trend  <sep />",
+                    "documentid": "id:msmarco:msmarco::D2977840",
                     "id": "D2977840",
                     "title": "What Is A  Dad Bod   An Insight Into The Latest Male Body Craze To Sweep The Internet",
                     "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html"
                 }
             }
         ]
+
     }
 }
 {% endhighlight %}</pre>
@@ -370,7 +374,7 @@ matching aspects. The following uses the `defaultIndex` to specify which field (
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select title, url, id from msmarco where {defaultIndex:"title"}userInput(@user-query)' \
+  'yql=select * from msmarco where {defaultIndex:"title"}userInput(@user-query)' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -384,7 +388,7 @@ In the following example, we use `grammar:"all"` to specify that we only want to
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select title, url, id from msmarco where {defaultIndex:"title", grammar:"all"}userInput(@user-query)' \
+  'yql=select * from msmarco where {defaultIndex:"title", grammar:"all"}userInput(@user-query)' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -403,14 +407,14 @@ It is important to note that the following approach for query time term boosting
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select title, url, id from msmarco where rank(userInput(@user-query), url contains ({weigth:1000, significance:1.0}"www.answers.com"))' \
+  'yql=select * from msmarco where rank(userInput(@user-query), url contains ({weigth:1000, significance:1.0}"www.answers.com"))' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
 </pre>
 </div>
 The above will match the user query against the default fieldset and produce match features for the second operand. It does not
-change the *retrieval* or *matching* as the number of document exposed to ranking is the same as before. The 
+change the *retrieval* or *matching* as the number of documents exposed to ranking is the same as before. The 
 `rank` operator can be used to implement a variety of use case around boosting. 
 
 #### Combine free text with filters
@@ -424,7 +428,7 @@ used for [bolding/highlighting or dynamic snippeting](../document-summaries.html
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select url, id, title from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'yql=select * from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'user-query=what is dad bod' \
   'hits=3'
 </pre>
@@ -437,7 +441,7 @@ Let us see what is going on by adding [query tracing](../query-api.html#query-tr
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select id, url, title from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'yql=select * from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'user-query=what is dad bod' \
   'trace.level=3'
 </pre>
@@ -455,8 +459,7 @@ In that case, we should consider creating a separate field to avoid phrase match
 
 
 ### Debugging token string matching
-Query tracing, combined with a summary using [tokens](../reference/schema-reference.html#tokens) can help debug matching. In this example
-we use `select *` which means we will select all the fields part of the `debug-tokens` document-summary:
+Query tracing, combined with a summary using [tokens](../reference/schema-reference.html#tokens) can help debug matching. 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="what-is-a-dadbod">
@@ -524,9 +527,8 @@ Let us do a similar example to demonstrate the impact of linguistic stemming
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="996">
 $ vespa query \
-  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"https://")' \   
-  'trace.level=0' \
-  'summary=debug-tokens' 'hits=1'
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"http")' \
+  'summary=debug-tokens'
 </pre>
 </div>
 
@@ -544,10 +546,25 @@ $ vespa query \
     "html"
   ]
 </pre>
-Notice that a query for `https` matches `http`, because stemming has removed the s suffix. 
+Notice that a query for HTTPS matches `http``, because stemming has removed the s suffix from the index and
+at query time, the same stemming is performed. `If we `turn off` stemming on` the query side, searching for `https` directly, we
+end up with 0 results. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="0">
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false,stem:false}"https")' \
+  'summary=debug-tokens'
+</pre>
+</div>
 
 
-## Compare and evaluate different ranking functions
+## Ranking 
+
+
+
+## Compare and evaluate different ranking methods
 
 Vespa supports experimenting with different [rank-profiles](../reference/schema-reference.html#rank-profile).
 For example, we could use the `bm25` rank-profile instead of the `default` rank-profile
