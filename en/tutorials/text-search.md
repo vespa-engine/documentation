@@ -430,7 +430,8 @@ used for [bolding/highlighting or dynamic snippeting](../document-summaries.html
 $ vespa query \
   'yql=select * from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'user-query=what is dad bod' \
-  'hits=3'
+  'hits=3' \
+  'language=en'
 </pre>
 </div>
 
@@ -443,7 +444,8 @@ Let us see what is going on by adding [query tracing](../query-api.html#query-tr
 $ vespa query \
   'yql=select * from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'user-query=what is dad bod' \
-  'trace.level=3'
+  'trace.level=3' \
+  'language=en'
 </pre>
 </div>
 
@@ -466,7 +468,8 @@ Query tracing, combined with a summary using [tokens](../reference/schema-refere
 $ vespa query \
   'yql=select * from msmarco where url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'trace.level=0' \
-  'summary=debug-tokens'
+  'language=en' \
+  'summary=url-tokens'
 </pre>
 </div>
 
@@ -528,7 +531,8 @@ Let us do a similar example to demonstrate the impact of linguistic stemming
 <pre data-test="exec" data-test-assert-contains="996">
 $ vespa query \
   'yql=select * from msmarco where url contains ({filter:true,ranked:false}"http")' \
-  'summary=debug-tokens'
+  'summary=url-tokens' \
+  'language=en'
 </pre>
 </div>
 
