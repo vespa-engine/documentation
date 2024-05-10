@@ -225,7 +225,7 @@ schema company {
 <h2 id="fuzzy-match">Fuzzy match</h2>
 <p>
   Use <a href="reference/query-language-reference.html#fuzzy">fuzzy</a> matching
-  to match in string attributes with configurable edit distance - field configuration:
+  to match in string attributes with configurable edit distance. Field configuration:
 </p>
 <pre>
 field album type string {
@@ -244,6 +244,35 @@ $ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuz
 <p>
   Character <a href="/en/linguistics.html#normalization">normalization</a> is not performed for fuzzy matches.
 </p>
+<h3 id="fuzzy-prefix-match">Fuzzy prefix match</h3>
+<p>
+  By default, <code>fuzzy</code> matches <em>full</em> strings against the query. For use-cases such as
+  type-ahead search this means a user query such as "Ahead Full" will fail to match the document string
+  "A Head Full of Dreams", both when using fuzzy matching (too many characters missing) as well
+  as regular, <em>non-fuzzy</em> prefix matching (prefixes do not exactly match).
+<p>
+<p>
+  Adding <code>prefix:true</code> enables <em>fuzzy prefix</em> semantics. If a string has a <em>prefix</em>
+  that can match the query string within the specified maximum number of edits, it will be considered a match.
+</p>
+<pre>
+$ vespa query 'select * from music where album contains ({maxEditDistance: 1, prefix: true}fuzzy("Ahead Full"))'
+</pre>
+<p>
+  This query will match strings such as "A Head Full of Dreams", "A Head Full of Clouds", "Ahead Full Steam" etc.
+</p>
+<p>
+  Exact prefix locking (<code>prefixLength:n</code>) can be used alongside fuzzy prefix matching to constrain the
+  candidate set to strings that have prefix that <em>exactly</em> matches <em>n</em> characters of the query. Fuzzy prefix
+  matching then applies to the remainder (suffix) of the candidate string. This greatly speeds up dictionary scans
+  since only a subset of the dictionary needs to be considered.
+</p>
+  {% include important.html content="Fuzzy prefix matching often matches many more documents than non-prefix
+  fuzzy matching. For instance, a query such as <code>{maxEditDistance:2,prefix:true}fuzzy(\"XY\")</code> will
+  end up matching <em>every</em> document, since <em>all possible strings</em> can have their prefix transformed to \"XY\"
+  with at most 2 edits. This is the case for all fuzzy prefix queries where the length of the query string is equal to,
+  or lower than, <code>maxEditDistance</code>. This should be taken into consideration when constructing queries
+  based on user input."%}
 <!-- ToDo: Add a note on why fast-search is better here (posting list lookup) -->
 <!-- ToDo: More examples illustrating edit distance / prefix -->
 
