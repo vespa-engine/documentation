@@ -397,6 +397,19 @@ $ vespa query \
 This query, using `all`, matches only one document. Notice how the relevance of the hit is the same as in the above example. The difference
 between the two types of queries is in the matching specification.
 
+We can use `userInput` to build a query that searches multiple fields (or fieldsets):
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select * from msmarco where ({defaultIndex:"title", grammar:"all"}userInput(@user-query)) or ({defaultIndex:"url", grammar:"all"}userInput(@user-query))' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+</pre>
+</div>
+
 ### Boosting by query terms 
 Sometimes, we want to add a query time boost if some field matches a query term; the following uses the [rank](../reference/query-language-reference.html#rank) query operator.
 The rank query operator allows us to retrieve using the first operand, and the remaining operands can only impact ranking. 
@@ -455,9 +468,9 @@ query=[AND (WEAKAND(100) default:what default:is default:dad default:bod) |url:'
 </pre>
 
 Notice that the `userInput` part is converted to a [weakAnd](../using-wand-with-vespa.html) query operator and that this operator is 
-AND'ed with a phrase search ('huffingtonpost co uk') in the `url` field.
-Notice also that punctuation characters (.) are removed as part of the tokenization. Suppose this is a common pattern where we want to filter on specific strings. 
-In that case, we should consider creating a separate field to avoid phrase matching as phrase matching is inherently more expensive than a single token search. 
+AND'ed with a phrase search ('huffingtonpost co uk') in the `url` field. Notice also the field scoping where the query terms are
+prefixed with `default`. Notice also that punctuation characters (.) are removed as part of the tokenization. Suppose this is a common pattern where we want to filter on specific strings. 
+In that case, we should create a separate field to avoid phrase matching, phrase matching is more expensive than a single token search. 
 
 
 ### Debugging token string matching
@@ -550,8 +563,8 @@ $ vespa query \
     "html"
   ]
 </pre>
-Notice that a query for HTTPS matches `http``, because stemming has removed the s suffix from the index and
-at query time, the same stemming is performed. `If we `turn off` stemming on` the query side, searching for `https` directly, we
+Notice that a query for `https` matches `http`, because 'https' on the query is stemmed to `http`.  
+If we `turn off` stemming on` the query side, searching for `https` directly, we
 end up with 0 results. 
 
 <div class="pre-parent">
@@ -559,34 +572,201 @@ end up with 0 results.
 <pre data-test="exec" data-test-assert-contains="0">
 $ vespa query \
   'yql=select * from msmarco where url contains ({filter:true,ranked:false,stem:false}"https")' \
-  'summary=debug-tokens'
+  'summary=debug-tokens' \
+  'language=en'
 </pre>
 </div>
 
+Similarly, if we pass a different language tag, which will not stem https to http, we also get 0 results:
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="0">
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"https")' \
+  'summary=debug-tokens' \
+  'language=de'
+</pre>
+</div>
 
-## Ranking 
+## Ranking
+ The previous section covered free-text search matching, linguistics, and how to combine business logic with 
+ free-text user queries. All the examples used a `default` rank-profile using Vespa's [nativeRank](../nativerank.html) text scoring feature.
 
+ With free-text search, we can use other text scoring functions, like [BM25](../reference/bm25.html). All the matching 
+ capabilities (or limitations) still apply, we can use fieldsets or fields; the difference is in the text scoring function where BM25
+ is different from nativeRank.
 
+ <div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select * from msmarco where userInput(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en' \
+  'ranking=bm25'
+</pre>
+</div> 
 
-## Compare and evaluate different ranking methods
+While the `nativeRank` text score is normalized to the range 0 to 1, BM25 is unbounded, as demonstrated above. When 
+querying (matching), we can ask Vespa to compute both features in the same query. 
 
-Vespa supports experimenting with different [rank-profiles](../reference/schema-reference.html#rank-profile).
-For example, we could use the `bm25` rank-profile instead of the `default` rank-profile
-by including the `ranking` parameter in the query:
+Modify the schema and add a new rank-profile `combined`:
+
+<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
+schema msmarco {
+    document msmarco {
+        field language type string {
+            indexing: "en" | set_language 
+        }
+        field id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index
+            match: text
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, body, url
+    }
+    document-summary minimal {
+        summary id {  }
+    }
+    document-summary url-tokens {
+        summary url {}
+        summary url-tokens {
+            source: url
+            tokens
+        }
+        from-disk
+    }
+    rank-profile default {
+        first-phase {
+            expression: nativeRank(title, body, url)
+        }
+    }
+    rank-profile bm25 inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url)
+        }
+    }
+
+    rank-profile combined inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url) + nativeRank(title) + nativeRank(body) + nativeRank(url)
+        }
+        match-features { 
+          bm25(title)
+          bm25(body)
+          bm25(url)
+          nativeRank(title)
+          nativeRank(body)
+          nativeRank(url)
+        }
+    }
+}
+</pre>
+
+Then, re-deploy the Vespa application from the `app` directory:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa deploy --wait 300 app
+</pre>
+</div>
+
+Adding or removing rank profiles is a live-change as it only impacts how we score documents, not how we index or match
+them.
+
+Run a query with the new rank-profile:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select title, url, id from msmarco where userQuery()' \
-  'query=what is dad bod' \
-  'ranking=bm25' 
+  'yql=select * from msmarco where userInput(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en' \
+  'ranking=combined'
 </pre>
-</div>
+</div> 
 
+Which will produce a result like this:
+
+<pre>{% highlight json%}
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 562
+        },
+        "children": [
+          {
+                "id": "id:msmarco:msmarco::D2977840",
+                "relevance": 25.482783473796484,
+                "source": "msmarco",
+                "fields": {
+                    "matchfeatures": {
+                        "bm25(body)": 19.51565699523739,
+                        "bm25(title)": 4.978933753876959,
+                        "bm25(url)": 0.3678926381724701,
+                        "nativeRank(body)": 0.3010929113058281,
+                        "nativeRank(title)": 0.24814575272673867,
+                        "nativeRank(url)": 0.07106142247709807
+                    },
+                    "sddocname": "msmarco",
+                    "documentid": "id:msmarco:msmarco::D2977840",
+                    "id": "D2977840",
+                    "title": "What Is A  Dad Bod   An Insight Into The Latest Male Body Craze To Sweep The Internet",
+                    "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html"
+                }
+            }
+        ]
+
+    }
+}
+{% endhighlight %}</pre>
+Notice that `matchfeatures` field that is added to the hit when using `match-features` in the rank-profile. Here, we have all the computed features from the matched document, and the final `relevance` score is the sum of these features (In this case).
+This query and ranking example demonstrates that for a single query searching a set of fields via fieldset, 
+we can compute different types of text scoring features and use combinations. 
+
+Now consider the following where we limit matching to the title field:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select * from msmarco where {defaultIndex:"title"}userInput(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en' \
+  'ranking=combined'
+</pre>
+</div> 
+
+Now, we do not get features for `body` or `url`, because they were not matched by the query.  
+
+## Next steps
+Check out the [Improving Text Search through ML](text-search-ml.html).
 
 ## Cleanup
-Stop and remove the Docker container and data:
+If do not want to proceed with the [Improving Text Search through ML](text-search-ml.html) guide, you can 
+stop and remove the container (and data):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -594,10 +774,6 @@ Stop and remove the Docker container and data:
 $ docker rm -f vespa-msmarco
 </pre>
 </div>
-
-
-## Next steps
-Check out the [Improving Text Search through ML](text-search-ml.html).
 
 
 [^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.
