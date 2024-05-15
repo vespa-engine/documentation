@@ -23,7 +23,7 @@ This tutorial uses [Vespa-CLI](../vespa-cli.html) to deploy, feed and query Vesp
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ pip3 install vespacli ir_datasets
+$ pip3 install --ignore-installed vespacli ir_datasets
 </pre>
 </div>
 
