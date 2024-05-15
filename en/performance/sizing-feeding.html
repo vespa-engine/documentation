@@ -8,98 +8,100 @@ redirect_from:
 <p>
   Vespa is optimized to sustain a high feed load while serving -
   also during planned and unplanned changes to the instance.
-  Vespa supports feed rates at memory speed,
-  this guide goes through how to configure, test and size the application
-  for optimal feed performance.
+  This guide provides an overview of how to optimize feed performance and also understand bottlenecks.
 </p>
 <p>
-  Read <a href="../reads-and-writes.html">reads and writes</a> first.
-  This has an overview of Vespa, where the key takeaway is the <em>stateless container cluster</em>
-  and the <em>stateful content cluster</em>.
-  The processing of documents PUT to Vespa is run in the <em>container</em> cluster,
-  and includes both Vespa-internal processing like <a href="../linguistics.html#tokenization">tokenization</a>
-  and application custom code in <a href="../document-processing.html">document processing</a>.
-  The stateless cluster is primarily CPU bound,
-  read <a href="/en/operations-selfhosted/routing.html#multiple-container-clusters">indexing</a>
-  for how to separate search and write to different container clusters.
-  Other than that, make sure the container cluster has enough memory to avoid excessive GC -
-  the <a href="container-tuning.html">heap</a> must be big enough.
-  Allocate enough CPU for the indexing load.
+  The <a href="../reads-and-writes.html">reads and writes</a> guide has an overview of the Vespa architecture and relevant
+  APIs for feeding and searching. One key takeaway is that Vespa is split into two main service types:
+  <ul>
+    <li>Stateless container cluster(s)</li>
+    <li>Stateful content cluster(s)</li>
+  </ul> 
 </p>
 <p>
-  All operations are written and synced to the <a href="../proton.html#transaction-log">transaction log</a>
-  on each content node.
-  This is sequential (not random) IO but might impact overall feed performance if running on NAS attached storage
-  where the sync operation has a much higher cost than on local attached storage (e.g. SSD).
-  See <a href="../reference/services-content.html#sync-transactionlog">sync-transactionlog</a>.
+  The stateless container cluster is responsible for processing all document operations to Vespa.
+  The stateful content cluster is responsible for writing and syncing all document operations (persisting state and managing data structures).
+  </p><p>
+  Generally, Vespa cannot sustain a higher write rate than the underlaying storage can handle (MB/s and IOPS). To understand
+  resource utilization it is critical that resource usage like CPU, memory, disk and network are monitored. Only this way can
+  a system be sized correctly and bottlenecks identified. 
+</p>
+
+
+<h2 id="stateless-container-cluster">Stateless container cluster</h2>
+  The processing of all document operations to Vespa are routed through the stateless <em>container</em> cluster. 
+  Processing includes both Vespa processing like <a href="../linguistics.html">linguistic processing</a>
+  and custom <a href="../document-processing.html">document processing</a>. The 
+  stateless container cluster is also responsible for <a href="embedding.html">embedding</a> inference. Embedding
+  inference can be compute-resource intensive, depending on number of <em>embed</em> calls and the size of the embedding model. 
+  See <a href="../embedding.html#embedder-performance">embedding performance</a>. 
+</p>
+<p>
+  The stateless cluster is compute (CPU/GPU util) bound and processing rates should scale linearly with the number of nodes and the number of V-CPU's in the cluster as 
+  long as the client can deliver enough operations over the network.
 </p><p>
-  The remainder of this document concerns how to configure the application
-  to optimize feed performance on the content node.
+  See <a href="/en/operations-selfhosted/routing.html#multiple-container-clusters">multiple container clusters</a>
+  for how to separate search and write to different container clusters. Isolated container clusters
+  are useful for high load scenarios where the container cluster is compute bound and where there is concurrent search and write load 
+  and where we want to avoid write operations to impact search queries due to compute-related resource contention.
+</p><p>
+  The stateless container cluster is implemented in Java (JVM), ensure enough memory allocated for heap to avoid excessive JVM garbage collection.
+  See <a href="container-tuning.html">stateless container tuning</a> for tuning options. The default max heap size is 1.5GB in self-hosted deployments
+  unless overridden. 
 </p>
 
 
-<h2 id="content-node">Content node</h2>
+<h2 id="stateful-content-cluster">Stateful content cluster</h2>
 <p>
-  Each content node runs the <em>vespa-proton-bin</em> process.
-  The following illustrates the components involved during feeding,
-  see <a href="../proton.html">proton</a> for details.
+  <strong>All feed operations</strong> to Vespa are <strong>written and synced</strong> to the <a href="../proton.html#transaction-log">transaction log</a> on 
+  the content node(s). This include both writing new documents and updating existing documents. 
+  The Vespa transaction log is a write-ahead log (WAL) that ensures durability of the data. A reply is only sent back to the client 
+  when the operation is written sucessfully to the transaction log and applied (visible in search/get). 
 </p>
-<img src="/assets/img/proton-feed.svg" alt="Proton feed overview" width="930px" height="auto"/>
 <p>
-  As there are multiple components and data structures involved,
-  this guide starts with the simplest examples and then adds optimizations and complexity.
+  The write pattern is append and sequential (not random) IO. Note that Vespa cannot sustain a higher write rate than 
+  the underlaying storage can handle.  Feeding might be impacted severly if the content nodes are using network attached storage
+  where the sync operation (for durability) has a much higher cost than on local attached storage (e.g. SSD).
+  See <a href="../reference/services-content.html#sync-transactionlog">sync-transactionlog</a>.
 </p>
 
-
-<h2 id="document-store">Document store</h2>
+<h3 id="document-store">Document store</h3>
 <p>
   Documents are written to the <a href="../proton.html#document-store">document store</a> in all
   <a href="../reference/services-content.html#document">indexing modes</a> -
-  this is where the copy of the PUT document is persisted.
-  See <em>Summary Manager + Document store</em> in illustration above.
+  this is where the copy of the document is persisted.
 </p>
 <p>
-  PUT-ing documents to the document store can be thought of as appending to files using sequential IO,
-  expecting a high write rate, using little memory and CPU. Each PUT is one write (simplified).
-  Writing a new version of a document (PUT a document that already exists) is the same as non-existent -
-  the in-memory mapping from document id to data file position is updated to point to the
-  latest version in both cases.
-</p>
-<p>
-  A partial UPDATE to a document incurs a read from the document store to get the current fields.
-  Then the new field values are applied and the new version or the document is written.
-  Hence, like a PUT with an extra read.
+  Adding new documents to the document store is append-only with a sequential IO pattern.
+  Writing a new version of a document (PUT a document that already exists) is the same as for a 
+  document id that does not exist. The in-memory mapping from 
+  document id to summary data file position is updated to point to the latest version in both cases. The 
+  summary files are <a href="../proton.html#defragmentation">defragmented</a> to remove old versions of documents.
 </p>
 
-
-<h2 id="attribute">Attribute</h2>
+<h3 id="attribute-store">Attribute store</h3>
 <p>
-  To real-time update fields in high volume, use <a href="../attributes.html">attribute</a> fields.
-  See <em>Attribute Manager + Attributes</em> in illustration above.
+  Fields that are defined with the <a href="../attributes.html">attribute</a> property are in-memory fields that
+  supports in-place updates with higher <a href="../partial-updates.html">partial update</a> throughput than fields that are indexed
+  with `index` property (avoiding read-apply-write pattern). 
+  The attribute store is a memory-only data structure that is regularly persisted to disk in the <a href="../proton.html#attribute">attribute store</a>.
 </p>
 <pre>
 schema ticker {
     document ticker {
-        field price type float {
+        field volume type int {
             indexing: summary | attribute
         }
+    }
+}
 </pre>
 <p>
-  Attribute fields are not stored in the document store, so there is no IO (except sequential flushing).
-  This enables application to write at memory speed to Vespa - a 10k update rate per node is possible.
   See <a href="../partial-updates.html">partial updates</a> for details.
 </p>
-<p>
-  Some applications have a limited set of documents,
-  with a high change-rate to fields in the documents
-  (e.g. stock prices - number of stocks is almost fixed, prices changes constantly).
-  Such applications are easily write bound.
-</p>
 
-
-<h3 id="redundancy-settings">Redundancy settings</h3>
+<h4 id="redundancy-settings">Redundancy settings</h4>
 <p>
-To achieve memory-only updates,
+To achieve memory-only updates (plus transaction log writing),
 make sure all attributes to update are <a href="../proton.html#sub-databases">ready</a>,
 meaning the content node has loaded the attribute field into memory:
 </p>
@@ -117,33 +119,12 @@ meaning the content node has loaded the attribute field into memory:
 </ul>
 
 
-<h3 id="debugging-performance">Debugging performance</h3>
-<p>
-  When debugging update performance, it is useful to know if an update hits the
-  <a href="../proton.html#document-store">document store</a> or not.
-  Enable <em>spam</em> log level and look for <em>SummaryAdapter::put</em> - then do an update:
-</p>
-<pre>
-$ <a href="/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-logctl">vespa-logctl</a> searchnode:proton.server.summaryadapter spam=on
-.proton.server.summaryadapter    ON  ON  ON  ON  ON  ON OFF  ON
 
-$ <a href="/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-logfmt">vespa-logfmt</a> -l all -f | grep 'SummaryAdapter::put'
-[2019-10-10 12:16:47.339] SPAM    : searchnode       proton.proton.server.summaryadapter	summaryadapter.cpp:45 SummaryAdapter::put(serialnum = '12', lid = 1, stream size = '199')
-</pre>
-<p>
-  Existence of such log messages indicates that the update was accessing the document store.
-</p>
-<!-- ToDo: when we have log for get and remove as well, add to documentation
-https://github.com/vespa-engine/vespa/blob/master/searchcore/src/vespa/searchcore/proton/server/summaryadapter.cpp#L75
--->
-
-
-<h2 id="index">Index</h2>
+<h3 id="index">Index</h3>
 <p>
   Changes to index fields are written to the <a href="#document-store">document store</a>
-  and the <a href="../proton.html#index">index</a>. See <em>Index Manager + Index</em> in illustration above.
+  and the <a href="../proton.html#index">index</a>. 
   Note that an UPDATE operation requires a read-modify-write to the document store and limits throughput.
-  Changes to the index based on the updated field value are memory only operations, but use CPU to update the index.
   Refer to <a href="../partial-updates.html">partial updates</a> for more details.
 </p>
 <pre>
@@ -152,13 +133,18 @@ schema music {
         field artist type string {
             indexing: summary | index
         }
+    }
+}
 </pre>
 
 
-<h2 id="thread-pools">Thread pools</h2>
+<h3 id="content-node-thread-pools">Content Node Thread pools</h3>
 <p>
 Several thread pools are involved when handling write operations on a content node.
-These are summarized in the following table.
+These are summarized in the following table. Not all mutating operations can be handled in parallel and tracking
+these metrics can help identifiy bottlenecks. For example, if you notice that feed throughput is not increasing beyond 
+a certain CPU utilization, it might be that one of the thread pools is saturated.
+
 Metrics are available for each thread pool, see
 <a href="../reference/vespa-set-metrics-reference.html#searchnode-metrics">searchnode metrics</a>
 for details.
@@ -382,7 +368,8 @@ See <a href="#bottlenecks">bottlenecks</a> for details.
 </pre>
 <p>
   If the <a href="../proton.html#document-store">document store</a>
-  is accessed when evaluating the condition, performance drops.
+  is accessed when evaluating the condition, performance drops significantly because you get random access instead of 
+  just appending to the persisted data structures. 
   Conditions should be evaluated using attribute values for high performance -
   in the example above, <em>myField</em> should be an attribute.
 </p>
@@ -461,7 +448,7 @@ See <a href="#bottlenecks">bottlenecks</a> for details.
 </p>
 <ol>
   <li>Use <a href="../vespa-cli.html">vespa feed</a>.</li>
-  <li>Test using one content node to find its capacity.</li>
+  <li>Test using one content node to find its capacity and where the bottlnecks are (resource utilization metrics) and Vespa metrics</li>
   <li>Test feeding performance by adding feeder instances.
     Make sure network and CPU (content and container node) usage increases, until saturation.</li>
   <li>See troubleshooting at end to make sure there are no errors.</li>
