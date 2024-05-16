@@ -26,7 +26,7 @@ This tutorial uses [Vespa-CLI](../vespa-cli.html) to deploy, feed, and query Ves
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ pip3 install --ignore-installed vespacli ir_datasets
+$ pip3 install --ignore-installed vespacli ir_datasets ir_measures
 </pre>
 </div>
 
@@ -422,7 +422,8 @@ rank-profile bm25 {
     }
 </pre>
 
-So, in this case, `relevance` is the sum of the two BM25 scores. The retrieved document looks relevant, we can look at the judgement for this query `PLAIN-2`:
+So, in this case, `relevance` is the sum of the two BM25 scores. The retrieved document looks relevant; we can look at the graded judgment for this query `PLAIN-2`. The
+following exports the query relevance judgments and we grep for the query id that we are interested in:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -431,8 +432,8 @@ $ ir_datasets export beir/nfcorpus/test qrels |grep "PLAIN-2 "
 </pre>
 </div>
 
-This lists documents that have been judged for the query `PLAIN-2`. Notice line two, the MED-10 document is judged as very relevant with the grade 2 for the query PLAIN-2. 
-This dataset has graded relevance judgments where a grade of 1 is less relevant than 2. Our task is to develop a ranking model that ranks all the highly relevant documents (grade 2) before the ones with grade 1. 
+This lists documents judged for the query `PLAIN-2`. Notice line two, the MED-10 document is judged as very relevant with the grade 2 for the query PLAIN-2. 
+This dataset has graded relevance judgments where a grade of 1 is less relevant than 2. 
 
 <pre>
 PLAIN-2 0 MED-2427 2
@@ -469,7 +470,7 @@ input tensor `query(e)` that was defined in the `semantic` rank-profile.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="MED-10">
+<pre data-test="exec" data-test-assert-contains="MED-2429">
 $ vespa query \
   'yql=select * from doc where {targetHits:10}nearestNeighbor(embedding,e)' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
@@ -479,7 +480,7 @@ $ vespa query \
 </pre>
 </div>
 
-This query returns the following, also in this case, we got more hits exposed to ranking than our target.
+This query returns the following response:
 
 <pre>{% highlight json %}
 {
@@ -519,8 +520,64 @@ The result of this vector-based search differed from the previous sparse keyword
 ## Evaluate ranking accuracy 
 Now, we looked at two ways to retrieve and rank the results. Now,  we need to evaluate all 323 test queries, and then we can compare their effectiveness. 
 
+For this we write a small script that combines ir_datasets with ir_measures. Save this to `evaluate_ranking.py`
+
+<div class="pre-parent">
+<button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="file" data-path="evaluate_ranking.py">
+import requests
+import ir_measures
+import ir_datasets
+from ir_measures import nDCG, P, R
 
 
+def parse_response(response, qid):
+    run = []
+    hits = response['root'].get('children',[])
+    for hit in hits:
+      id = hit['fields']['doc_id']
+      relevance = hit['relevance']
+      run.append(ir_measures.ScoredDoc(qid, id, relevance))
+    return run
+
+def search(query,qid, ranking, hits=10, language="en"):    
+    query_request = {
+        'yql': 'select doc_id from doc where ({targetHits:10}userInput(@user-query))',
+        'user-query': query, 
+        'ranking': ranking,
+        'hits' : hits, 
+        'language': language
+    }
+    response = requests.post("http://localhost:8080/search/", json=query_request)
+    if response.ok:
+        return parse_response(response.json(), qid)
+    else:
+      print("Search request failed with response " + str(response.json()))
+      return []
+
+def main():
+  dataset = ir_datasets.load("beir/nfcorpus/test")
+  runs = []
+  for query in dataset.queries_iter():
+    qid = query.query_id
+    query_text = query.text
+    run = search(query_text,qid, "bm25", hits=100)
+    runs.extend(run)
+  metric = ir_measures.calc_aggregate([nDCG@10, P@10, R@100], dataset.qrels, runs)
+  print(metric)
+if __name__ == "__main__":
+    main()
+</pre>
+</div>
+
+Then execute the script, which runs the queries and calculates three IR-related metrics 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
+$ python3 evaluate_ranking.py
+</pre>
+</div>
 
 ## Hybrid 
 
