@@ -292,6 +292,13 @@ $ vespa feed -t http://localhost:8080 vespa-docs.jsonl
 </div>
 
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="after">
+$ docker rm -f vespa-hybrid
+</pre>
+</div>
+
 
 
 [^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.
