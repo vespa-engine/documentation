@@ -10,7 +10,7 @@ The main goal is to set up a text search app that combines simple text scoring f
 such as [BM25](../reference/bm25.html) [^1] with vector search in combination with text-embedding models. We 
 demonstrate obtaining the text embeddings within Vespa using Vespa's [embedder](https://docs.vespa.ai/en/embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
-text embedding model. We can also recommend following the [text-search](text-search.html) tutorial first. 
+text embedding model. 
 
 For demonstration purposes, we use the small IR dataset that is part of the [BEIR](https://github.com/beir-cellar/beir) benchmark: [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/). The BEIR version has 2590 train queries, 323 test queries, and 3633 documents. In these experiments
 we only use the test queries to evaluate various hybrid search techniques. Later tutorials will demonstrate how to use the train split to learn how to rank documents. 
@@ -126,7 +126,7 @@ schema doc {
     }
     
     field embedding type tensor&lt;bfloat16&gt;(v[384]) {
-      indexing: input title . " " . input text | embed | attribute
+      indexing: input title." ".input text | embed | attribute
       attribute {
         distance-metric: angular
       }
@@ -344,7 +344,8 @@ Here, `PLAIN-2` is the query id of the first test query. We'll use this test que
 
 ### Sparse search using keywords with bm25 scoring
 The following query uses [weakAnd](../using-wand-with-vespa.html) and where `targetHits` is a hint 
-of how many documents we want to expose to configurable [ranking phases](../phased-ranking.html). 
+of how many documents we want to expose to configurable [ranking phases](../phased-ranking.html). Refer
+to [text search tutorial](text-search.html#querying-the-data) for more on querying with `userInput`. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -513,10 +514,15 @@ This query returns the following, also in this case, we got more hits exposed to
     }
 }{% endhighlight %}</pre>
 
-The result of this vector based search differed from the previous sparse keyword search, with a different document ranked at the top. This top-ranking document, labeled as 'MED-2429', is also considered highly relevant based on the graded judgments.
+The result of this vector-based search differed from the previous sparse keyword search, with a different document ranked at the top. This top-ranking document, labeled as 'MED-2429', is also considered highly relevant based on the graded judgments.
 
 ## Evaluate ranking accuracy 
+Now, we looked at two ways to retrieve and rank the results. Now,  we need to evaluate all 323 test queries, and then we can compare their effectiveness. 
 
+
+
+
+## Hybrid 
 
 
 
