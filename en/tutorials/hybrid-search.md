@@ -7,13 +7,13 @@ redirect_from:
 
 This tutorial will guide you through setting up a hybrid text search application. 
 The main goal is to set up a text search app that combines simple text scoring features
-such as [BM25](../reference/bm25.html) [^1] with vector search in combination with text-embedding models. We 
-demonstrate obtaining the text embeddings within Vespa using Vespa's [embedder](https://docs.vespa.ai/en/embedding.html#huggingface-embedder)
+such as [BM25](../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
+We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](https://docs.vespa.ai/en/embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
 text embedding model. 
 
-For demonstration purposes, we use the small IR dataset that is part of the [BEIR](https://github.com/beir-cellar/beir) benchmark: [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/). The BEIR version has 2590 train queries, 323 test queries, and 3633 documents. In these experiments
-we only use the test queries to evaluate various hybrid search techniques. Later tutorials will demonstrate how to use the train split to learn how to rank documents. 
+For demonstration purposes, we use the small IR dataset that is part of the [BEIR](https://github.com/beir-cellar/beir) benchmark: [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/). The BEIR version of this dataset has 2590 train queries, 323 test queries, and 3633 documents. In these experiments
+we only use the test queries. Later tutorials will demonstrate how to use the train split to learn how to rank documents. 
 
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li>Python3</li>
@@ -55,7 +55,7 @@ accuracy. We will create a small script that converts the above output to Vespa 
 
 <div class="pre-parent">
 <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="convert.py">
+<pre data-test="file" data-path="convert.py">{% highlight python %}
 import sys
 import json
 
@@ -68,8 +68,7 @@ for line in sys.stdin:
       **doc
     }
   }
-  print(json.dumps(vespa_doc))
-</pre>
+  print(json.dumps(vespa_doc)){% endhighlight %}</pre>
 </div>
 
 
@@ -100,6 +99,8 @@ A [schema](../schemas.html) is a document-type configuration; a single vespa app
 For this application, we define a schema `doc` which must be saved in a file named `schemas/doc.sd` in the app directory.
 Write the following to `app/schemas/doc.sd`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="app/schemas/doc.sd">
 schema doc {
     document doc {
@@ -148,6 +149,7 @@ schema doc {
     }
 }
 </pre>
+</div>
 A lot is happening here; let us go through it in detail. 
 
 #### Document type and fields
@@ -159,7 +161,7 @@ The [string](../reference/schema-reference.html#string) data type represents bot
 and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Note that we are enabling the usage of [BM25](../reference/bm25.html) for `title` and `text`.
+Note that we are enabling [BM25](../reference/bm25.html) for `title` and `text`.
 by including `index: enable-bm25`. The language field is the only field not in the NFCorpus dataset. 
 We hardcode its value to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
 text fields. Read more in [linguistics](../linguistics.html).
@@ -171,15 +173,32 @@ add indexing/storage overhead. String fields grouped using fieldsets must share 
 [match](../reference/schema-reference.html#match) and [linguistic processing](../linguistics.html) settings because
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
+#### Embedding inference
+Our `embedding` field is a [tensor](../tensor-user-guide.html) with a single dense dimension of 384 values. 
+
+```
+field embedding type tensor<bfloat16>(v[384]) {
+      indexing: input title." ".input text | embed arctic | attribute
+      attribute {
+        distance-metric: angular
+      }
+    }
+```
+The `indexing` expression creates the input to the `embed` inference call (in our example the concatenation of the title and the text field). Since
+the dataset is small, we do not specify `index` which would build [HNSW](../approximate-nn-hnsw.html) datastructures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
+trained with cosine similarity, which maps to Vespa's `angular` [distance-metric](../reference/schema-reference.html#distance-metric) for 
+nearestNeighbor search. 
 
 #### Ranking to determine matched documents ordering
 You can define many [rank profiles](../ranking.html), 
 named collections of score calculations, and ranking phases.
 
-In this basic starting point, we have a `bm25` rank-profile that uses [bm25](../reference/bm25.html). We sum the two field-level BM25 scores
-using a Vespa [ranking expression](../ranking-expressions-features.html). This example uses a single [ranking phase](../phased-ranking.html).
+In this starting point, we have two simple rank-profile's:
+- a `bm25` rank-profile that uses [bm25](../reference/bm25.html). We sum the two field-level BM25 scores
+using a Vespa [ranking expression](../ranking-expressions-features.html). 
+- a `semantic` rank-profile which is used in combination Vespa's nearestNeighbor query operator (vector search).
 
-Then we have a `semantic` rank-profile which is used in combination with nearestNeighbor query operator (vector search).
+Both profiles specify a single [ranking phase](../phased-ranking.html).
 
 ### Services Specification
 
@@ -187,35 +206,38 @@ The [services.xml](../reference/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `app/services.xml`:
 
-<pre data-test="file" data-path="app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="file" data-path="app/services.xml">{% highlight xml%}
+<services version="1.0">
 
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search /&gt;
-        &lt;document-processing /&gt;
-        &lt;document-api /&gt;
-        &lt;component id=&quot;arctic&quot; type=&quot;hugging-face-embedder&quot;&gt;
-          &lt;transformer-model url=&quot;https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/resolve/main/onnx/model_quantized.onnx&quot;/&gt;
-          &lt;tokenizer-model url=&quot;https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/raw/main/tokenizer.json&quot;/&gt;
-          &lt;pooling-strategy&gt;cls&lt;/pooling-strategy&gt;
-          &lt;prepend&gt;
-            &lt;query&gt;Represent this sentence for searching relevant passages: &lt;/query&gt;
-          &lt;/prepend&gt;
-      &lt;/component&gt;
-    &lt;/container&gt;
+    <container id="default" version="1.0">
+        <search />
+        <document-processing />
+        <document-api />
+        <component id="arctic" type="hugging-face-embedder">
+          <transformer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/resolve/main/onnx/model_quantized.onnx"/>
+          <tokenizer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/raw/main/tokenizer.json"/>
+          <pooling-strategy>cls</pooling-strategy>
+          <prepend>
+            <query>Represent this sentence for searching relevant passages: </query>
+          </prepend>
+      </component>
+    </container>
 
-    &lt;content id="content" version="1.0"&gt;
-        &lt;min-redundancy&gt;1&lt;/min-redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="doc" mode="index" /&gt;
-        &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node distribution-key="0" hostalias="node1" /&gt;
-        &lt;/nodes&gt;
-    &lt;/content&gt;
-&lt;/services&gt;
+    <content id="content" version="1.0">
+        <min-redundancy>1</min-redundancy>
+        <documents>
+            <document type="doc" mode="index" />
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1" />
+        </nodes>
+    </content>
+</services>
+{% endhighlight %}
 </pre>
+</div>
 
 Some notes about the elements above:
 
@@ -249,7 +271,7 @@ $ docker run --detach --name vespa-hybrid --hostname vespa-container \
 </div>
 
 Notice that we publish two ports: 8080 is the data-plane where we write and query documents, and 19071 is
-the control-plane where we can deploy the application. 
+the control-plane where we can deploy the application. Note that the data-plane port is inactive before deploying the application. 
 
 Configure the Vespa CLI to use the local container:
 <div class="pre-parent">
@@ -259,7 +281,7 @@ $ vespa config set target local
 </pre>
 </div>
 
-Starting the container can take a short while.  Make sure
+Starting the container can take a short while. Make sure
 that the configuration service is running by using `vespa status`. 
 
 <div class="pre-parent">
@@ -281,9 +303,8 @@ $ vespa deploy --wait 300 app
 
 ## Feed the data
 
-The data fed to Vespa must match the document type in the schema. This steps also performs embed inference inside Vespa 
+The data fed to Vespa must match the document type in the schema. This step performs embed inference inside Vespa 
 using the snowflake arctic embedding model. Remember the `component` definition in `services.xml` and the `embed` call in the schema.
-
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -292,7 +313,7 @@ $ vespa feed -t http://localhost:8080 vespa-docs.jsonl
 </pre>
 </div>
 
-On an M1 we expect output like the following:
+On an M1, we expect output like the following:
 
 <pre>{% highlight json%}
 {
@@ -321,13 +342,13 @@ On an M1 we expect output like the following:
 
 Notice:
 
-- `feeder.ok.rate` which is the throughput (including embedding inference). See [embedder-performance](../embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
-- `http.response.code.counts` matches with `feeder.ok.count` - The dataset has 3633 documents. The `429` are harmless and is Vespa asking the client
-to slow down feed speed because all resources are occupied.
+- `feeder.ok.rate` which is the throughput (Note that this step includes embedding inference). See [embedder-performance](../embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
+- `http.response.code.counts` matches with `feeder.ok.count` - The dataset has 3633 documents. The `429` are harmless. Vespa asks the client
+to slow down the feed speed because of resource contention.
 
 
 ## Sample queries 
-We can now run a few sample queries to demonstrate various ways to perform searches over this data using Vespa query language.
+We can now run a few sample queries to demonstrate various ways to perform searches over this data using the [Vespa query language](../query-language.html).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -342,7 +363,7 @@ PLAIN-2	Do Cholesterol Statin Drugs Cause Breast Cancer?
 
 Here, `PLAIN-2` is the query id of the first test query. We'll use this test query to demonstrate querying Vespa.
 
-### Sparse search using keywords with bm25 scoring
+### Lexical search with BM25 scoring
 The following query uses [weakAnd](../using-wand-with-vespa.html) and where `targetHits` is a hint 
 of how many documents we want to expose to configurable [ranking phases](../phased-ranking.html). Refer
 to [text search tutorial](text-search.html#querying-the-data) for more on querying with `userInput`. 
@@ -360,6 +381,7 @@ $ vespa query \
 </div>
 
 Notice that we choose `ranking` to specify which rank profile to rank the documents retrieved by the query. 
+This query returns the following [JSON result response](../reference/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -412,7 +434,7 @@ $ vespa query \
 </pre>
 </div>
 
-The bm25 profile calculates the relevance score:
+The bm25 profile calculates the relevance score ( "relevance": 25.5..)
 
 <pre>
 rank-profile bm25 {
@@ -422,8 +444,7 @@ rank-profile bm25 {
     }
 </pre>
 
-So, in this case, `relevance` is the sum of the two BM25 scores. The retrieved document looks relevant; we can look at the graded judgment for this query `PLAIN-2`. The
-following exports the query relevance judgments and we grep for the query id that we are interested in:
+So, in this case, `relevance` is the sum of the two BM25 scores. The retrieved document looks relevant; we can look at the graded judgment for this query `PLAIN-2`. The following exports the query relevance judgments (we grep for the query id that we are interested in):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -432,7 +453,7 @@ $ ir_datasets export beir/nfcorpus/test qrels |grep "PLAIN-2 "
 </pre>
 </div>
 
-This lists documents judged for the query `PLAIN-2`. Notice line two, the MED-10 document is judged as very relevant with the grade 2 for the query PLAIN-2. 
+The following is the output from the above command. Notice line two, the `MED-10` document retrieved above, is judged as very relevant with the grade 2 for the query PLAIN-2. 
 This dataset has graded relevance judgments where a grade of 1 is less relevant than 2. 
 
 <pre>
@@ -462,11 +483,11 @@ PLAIN-2 0 MED-4829 1
 PLAIN-2 0 MED-4830 1
 </pre>
 
-### Dense search using vector search
+### Dense search using text embedding
 
 Now, we turn to embedding-based retrieval, where we embed the query text using the configured text-embedding model and perform
-an exact nearestNeighbor search. We use [embed query](.//embedding.html#embedding-a-query-text) to produce the
-input tensor `query(e)` that was defined in the `semantic` rank-profile. 
+an exact `nearestNeighbor` search. We use [embed query](.//embedding.html#embedding-a-query-text) to produce the
+input tensor `query(e)`, defined in the `semantic` rank-profile in the schema.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -480,7 +501,7 @@ $ vespa query \
 </pre>
 </div>
 
-This query returns the following response:
+This query returns the following [JSON result response](../reference/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -515,63 +536,86 @@ This query returns the following response:
     }
 }{% endhighlight %}</pre>
 
-The result of this vector-based search differed from the previous sparse keyword search, with a different document ranked at the top. This top-ranking document, labeled as 'MED-2429', is also considered highly relevant based on the graded judgments.
+The result of this vector-based search differed from the previous sparse keyword search, with a different relevant document @1. 
 
 ## Evaluate ranking accuracy 
-Now, we looked at two ways to retrieve and rank the results. Now,  we need to evaluate all 323 test queries, and then we can compare their effectiveness. 
+The previous section demonstrated how to combine the Vespa query language with rank-profile's 
+to implement two different retrieval and ranking strategies.
 
-For this we write a small script that combines ir_datasets with ir_measures. Save this to `evaluate_ranking.py`
+In the following section we evaluate all 323 test queries with both models to compare their overall effectiveness, measured using [nDCG@10](https://en.wikipedia.org/wiki/Discounted_cumulative_gain).`nDCG@10` is the official evaluation metric of the BEIR benchmark and is an appropriate metric for test sets with graded relevance judgments. 
+
+For this evaluation task, we need to write a small script. The following script iterates over the queries in the test set, executes the query against the Vespa instance, and reads 
+the response from Vespa. It then evaluates and prints the metric. 
 
 <div class="pre-parent">
 <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="evaluate_ranking.py">
+{% highlight python %}
 import requests
-import ir_measures
 import ir_datasets
-from ir_measures import nDCG, P, R
+from ir_measures import calc_aggregate, nDCG, ScoredDoc
+from enum import Enum
+from typing import List
 
+class RModel(Enum):
+    SPARSE = 1
+    DENSE = 2
+    HYBRID = 3
 
-def parse_response(response, qid):
-    run = []
+def parse_vespa_response(response:dict, qid:str) -> List[ScoredDoc]:
+    result = []
     hits = response['root'].get('children',[])
     for hit in hits:
-      id = hit['fields']['doc_id']
+      doc_id = hit['fields']['doc_id']
       relevance = hit['relevance']
-      run.append(ir_measures.ScoredDoc(qid, id, relevance))
-    return run
+      result.append(ScoredDoc(qid, doc_id, relevance))
+    return result
 
-def search(query,qid, ranking, hits=10, language="en"):    
+def search(query:str, qid:str, ranking:str, 
+           hits=10, language="en", mode=RModel.SPARSE) -> List[ScoredDoc]:
+    yql = "select doc_id from doc where ({targetHits:100}userInput(@user-query))"
+    if mode == RModel.DENSE:
+        yql = "select doc_id from doc where ({targetHits:10}nearestNeighbor(embedding, e))"
     query_request = {
-        'yql': 'select doc_id from doc where ({targetHits:10}userInput(@user-query))',
+        'yql': yql,
         'user-query': query, 
-        'ranking': ranking,
+        'ranking.profile': ranking,
         'hits' : hits, 
         'language': language
     }
+    if mode == RModel.DENSE:
+        query_request['input.query(e)'] = "embed(@user-query)"
+
     response = requests.post("http://localhost:8080/search/", json=query_request)
     if response.ok:
-        return parse_response(response.json(), qid)
+        return parse_vespa_response(response.json(), qid)
     else:
       print("Search request failed with response " + str(response.json()))
       return []
 
 def main():
   dataset = ir_datasets.load("beir/nfcorpus/test")
-  runs = []
+  sparse_results = []
+  dense_results = []
+  metrics = [nDCG@10]
   for query in dataset.queries_iter():
     qid = query.query_id
     query_text = query.text
-    run = search(query_text,qid, "bm25", hits=100)
-    runs.extend(run)
-  metric = ir_measures.calc_aggregate([nDCG@10, P@10, R@100], dataset.qrels, runs)
-  print(metric)
+    sparse_results.extend(search(query_text, qid, "bm25", mode=RModel.SPARSE))
+    dense_results.extend(search(query_text, qid, "semantic", mode=RModel.DENSE))
+
+  sparse_metrics = calc_aggregate(metrics, dataset.qrels, sparse_results)
+  dense_metrics = calc_aggregate(metrics, dataset.qrels, dense_results)
+
+  print("Sparse BM25: nDCG@10 {:.4f}".format(sparse_metrics[nDCG@10]))
+  print("Dense Semantic: nDCG@10 {:.4f}".format(dense_metrics[nDCG@10]))
+  
+
 if __name__ == "__main__":
-    main()
-</pre>
+    main(){% endhighlight %}</pre>
 </div>
 
-Then execute the script, which runs the queries and calculates three IR-related metrics 
-
+Then execute the script:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
@@ -579,20 +623,41 @@ $ python3 evaluate_ranking.py
 </pre>
 </div>
 
-## Hybrid 
+The script will produce the following output:
 
+<pre>
+Sparse BM25: nDCG@10 0.3195
+Dense Semantic: nDCG@10 0.3077
+</pre>
+
+This is the *average* `nDCG@10` score across all the 327 test queries for both methods. In a real-life scenario, we would also 
+weight the query frequency (The set here has unique queries). You can also experiment beyond a single metric and modify the
+script to calculate more [measures](https://ir-measur.es/en/latest/measures.html), for example, including precision with 
+a relevance label cutoff of 2: 
+
+<pre>
+metrics = [nDCG@10, P(rel=2)@10]
+</pre>
+
+## Hybrid Search & Ranking
+
+We demonstrated and evaluated two independent retrieval and ranking strategies in the previous sections. Now, we want to explore hybrid search techniques
+where we combine:
+
+- traditional lexical keyword matching with an unsupervised text scoring method (BM25) for two fields 
+- vector search using a supervised method (text embedding) for one field (a dense vector representation of a concatenation of the title and the text ).
+
+First, we need to express how we will combine the `userInput` with `nearestNeighbor` in the Vespa query language so that we can *retrieve* using either of the methods.
 
 
 ## Cleanup
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="after">
-$ docker rm -f vespa-hybrid
-</pre>
-</div>
-
-
+  <pre data-test="after">
+  $ docker rm -f vespa-hybrid
+  </pre>
+  </div>
 
 [^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.
 
