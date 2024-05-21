@@ -692,6 +692,7 @@ $ (cd src/main/application && zip -r - .) | \
                   <li>Optional start time of reindexing.</li>
                   <li>Optional end time of reindexing.</li>
                   <li>Optional progress of reindexing, from 0 to 1.</li>
+                  <li>Pseudo-speed of reindexing.</li>
                 </ul>
               </li>
             </ul>
@@ -712,12 +713,14 @@ $ (cd src/main/application && zip -r - .) | \
                     "readyMillis": 1607937250998,
                     "startedMillis": 1607940060012,
                     "state": "running",
+                    "speed": 1.0,
                     "progress": 0.04013824462890625
                 },
                 "test_result": {
                     "readyMillis": 1607688477294,
                     "startedMillis": 1607690520026,
                     "endedMillis": 1607709294236,
+                    "speed": 0.1,
                     "state": "successful"
                 },
                 "test_run": {
@@ -737,6 +740,7 @@ $ (cd src/main/application && zip -r - .) | \
   Triggers <a href="../operations/reindexing.html">reindexing</a> of specified document types in
   specified clusters of an application.
   Reindexing starts with the next redeployment of the application.
+  To stop an ongoing reindexing, see <a href="update-reindexing">updating reindexing</a> below. 
   All document types in all clusters are reindexed unless restricted, using parameters as specified:
 </p>
 <table class="table">
@@ -762,13 +766,13 @@ $ (cd src/main/application && zip -r - .) | \
           <tr>
             <td>indexedOnly</td>
             <td>Boolean: whether to trigger reindexing only for document types with indexing
-              mode <em>index</em> and at least one with field the indexing statement
+              mode <em>index</em> and at least one field with the indexing statement
               <code>index</code>. Default is <code>false</code>.
             </td>
           </tr>
           <tr>
             <td>speed</td>
-            <td>Number (0-10], default 1: Relative indexing speed -
+            <td>Number (0–10], default 1: Indexing pseudo speed -
               balance speed vs. resource use. Example: speed=0.1</td>
           </tr>
         </tbody>
@@ -788,10 +792,78 @@ $ (cd src/main/application && zip -r - .) | \
   </tbody>
 </table>
 <p>Example:</p>
-<p><code>POST /application/v2/tenant/default/application/default/environment/default/region/default/instance/default/reindex?clusterId=foo,bar&amp;documentType=moo,baz&indexedOnly=true</code></p>
+<p><code>POST /application/v2/tenant/default/application/default/environment/default/region/default/instance/default/reindex?clusterId=foo,bar&amp;documentType=moo,baz&amp;indexedOnly=true</code></p>
 <pre>{% highlight json %}
 {
     "message": "Reindexing document types [moo, baz] in 'foo', [moo] in 'bar' of application default.default"
+}
+{% endhighlight %}</pre>
+
+
+
+<h2 id="update-reindexing">PUT /application/v2/tenant/default/application/default/environment/default/region/default/instance/default/reindex</h2>
+<p>
+  Modifies <a href="../operations/reindexing.html">reindexing</a> of specified document types in
+  specified clusters of an application.
+  Specifically, this can be used to alter the pseudo-speed of the reindexing, optionally halting it by specifying
+  a speed of <code>0</code>; reindexing for the specified types will remain dormant until either speed is increased again,
+  or a new reindexing is triggered (see <a href="#reindex">trigger reindexing</a>).
+  Speed changes become effective with the next redeployment of the application.
+  Reindexing for all document types in all clusters are affected if no other parameters are specified:
+</p>
+<table class="table">
+  <thead>
+  </thead><tbody>
+    <tr><th>Parameters</th>
+      <td>
+      <table class="table">
+        <thead>
+          <tr><th>Name</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>clusterId</td>
+            <td>A comma-separated list of content clusters to limit the changes to.
+              Reindexing for all clusters are modified if this is not present.</td>
+          </tr>
+          <tr>
+            <td>documentType</td>
+            <td>A comma-separated list of document types to limit the changes to.
+              Reindexing for all document types are modified if this is not present.</td>
+          </tr>
+          <tr>
+            <td>indexedOnly</td>
+            <td>Boolean: whether to modify reindexing only for document types with indexing
+              mode <em>index</em> and at least one field with the indexing statement
+              <code>index</code>. Default is <code>false</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>speed</td>
+            <td>Number [0–10], required: Indexing pseudo speed -
+              balance speed vs. resource use. Example: speed=0.1</td>
+          </tr>
+        </tbody>
+      </table>
+      </td>
+    </tr>
+    <tr><th>Request body</th>
+      <td>
+        N/A
+      </td>
+    </tr>
+    <tr><th>Response</th>
+      <td>
+        A human-readable message indicating what reindexing was modified.
+      </td>
+    </tr>
+  </tbody>
+</table>
+<p>Example:</p>
+<p><code>PUT /application/v2/tenant/default/application/default/environment/default/region/default/instance/default/reindex?clusterId=foo,bar&amp;documentType=moo,baz&amp;speed=0.618</code></p>
+<pre>{% highlight json %}
+{
+    "message": "Set reindexing speed to '0.618' for document types [moo, baz] in 'foo', [moo] in 'bar' of application default.default"
 }
 {% endhighlight %}</pre>
 
