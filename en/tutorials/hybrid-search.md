@@ -630,8 +630,8 @@ Sparse BM25: nDCG@10 0.3195
 Dense Semantic: nDCG@10 0.3077
 </pre>
 
-This is the *average* `nDCG@10` score across all the 327 test queries for both methods. In a real-life scenario, we would also 
-weight the query frequency (The set here has unique queries). You can also experiment beyond a single metric and modify the
+This is the *average* `nDCG@10` score across all the 327 test queries for both methods. In a real-word scenario, we would also 
+weigh the query frequency (The set here has unique queries). You can also experiment beyond a single metric and modify the
 script to calculate more [measures](https://ir-measur.es/en/latest/measures.html), for example, including precision with 
 a relevance label cutoff of 2: 
 
@@ -644,11 +644,159 @@ metrics = [nDCG@10, P(rel=2)@10]
 We demonstrated and evaluated two independent retrieval and ranking strategies in the previous sections. Now, we want to explore hybrid search techniques
 where we combine:
 
-- traditional lexical keyword matching with an unsupervised text scoring method (BM25) for two fields 
-- vector search using a supervised method (text embedding) for one field (a dense vector representation of a concatenation of the title and the text ).
+- traditional lexical keyword matching with a text scoring method (BM25) 
+- embedding-based search using a generic text embedding model 
 
-First, we need to express how we will combine the `userInput` with `nearestNeighbor` in the Vespa query language so that we can *retrieve* using either of the methods.
+With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../ranking.html). In the Vespa ranking phases, we can express arbitrary
+scoring complexity with the full power of the Vespa [ranking](../ranking.html) framework. Meanwhile, top-k retrieval relies on simple built-in functions associated with Vespa's top-k query operators.  
+These operators aim to avoid scoring all documents in the collection for a query by using a simplistic scoring function to identify the top-k documents.
 
+These top-k query operators use `index` structures to accelerate the query evaluation, avoiding scoring all documents using heuristics. In the context of hybrid text
+search, the following Vespa top-k query operators are relevant: 
+
+- YQL `{targetHits:k}nearestNeighbor()` for dense representations (text embeddings) using 
+a configured [distance-metric](reference/schema-reference.html#distance-metric) as the scoring function. 
+- YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../using-wand-with-vespa.html) for sparse representations
+
+
+We can combine these using boolean query operators like AND/OR/RANK to express a hybrid search query. Then, there is a wild number of
+ways that we can combine various signals in [ranking](../ranking.html). 
+
+
+### Define our first simple hybrid rank profile
+
+First, we can add our first simple hybrid rank profile that combines the dense and sparse components using multiplication to 
+combine them into a single score. 
+
+<pre>
+closeness(field, embedding) * (1 + bm25(title) + bm25(text))
+</pre>
+
+- the `closeness(field, embeddding)` rank-feature returns a score in the range 0 to 1 inclusive
+- Any of the per-field BM25 scores are in the range of 0 to infinity 
+
+We add a bias constant (1) to avoid the overall score becoming 0 if the document does not match any query terms, 
+as the BM25 scores would be 0. We also add `match-features` to be able to debug each of the scores. 
+
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="file" data-path="app/schemas/doc.sd">
+schema doc {
+    document doc {
+        field language type string {
+            indexing: "en" | set_language 
+        }
+        field doc_id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field text type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, text
+    }
+    
+    field embedding type tensor&lt;bfloat16&gt;(v[384]) {
+      indexing: input title." ".input text | embed | attribute
+      attribute {
+        distance-metric: angular
+      }
+    }
+  
+    rank-profile hybrid {
+        inputs {
+          query(e) tensor&lt;bfloat16&gt;(v[384])
+        }
+        first-phase {
+            expression: closeness(field, embedding) * (1 + (bm25(title) + bm25(text)))
+        }
+        match-features: bm25(title) bm25(text) closeness(field, embedding)
+    }
+}
+</pre>
+</div>
+
+Now, re-deploy the Vespa application from the `app` directory:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Success">
+$ vespa deploy --wait 300 app
+</pre>
+</div>
+
+After that, we can start experimenting with how to express hybrid queries using the Vespa query language. 
+
+### Hybrid query examples
+
+#### Hybrid query with OR operator
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="MED-10">
+$ vespa query \
+  'yql=select * from doc where ({targetHits:10}userInput(@user-query)) or ({targetHits:10}nearestNeighbor(embedding,e))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+</pre>
+</div>
+With this query, we express that we want to retrieve the top 10 documents that match the query using either the sparse or dense representation. Then, in the ranking phase, we determine how we score the retrieved documents, using the `hybrid` rank-profile.
+
+The query returns the following [JSON result response](../reference/default-result-format.html):
+
+<pre>{% highlight json %}
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 105
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 3633,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:doc:doc::MED-10",
+                "relevance": 15.898915593367988,
+                "source": "content",
+                "fields": {
+                    "matchfeatures": {
+                        "bm25(text)": 17.35556767018612,
+                        "bm25(title)": 8.166249756144769,
+                        "closeness(field,embedding)": 0.5994655395517325
+                    },
+                    "sddocname": "doc",
+                    "documentid": "id:doc:doc::MED-10",
+                    "doc_id": "MED-10",
+                    "title": "Statin Use and Breast Cancer Survival: A Nationwide Cohort Study from Finland",
+                    "text": "Recent studies have suggested that statins, an established drug group in the prevention of cardiovascular mortality, could delay or prevent breast cancer recurrence but the effect on disease-specific mortality remains unclear. We evaluated risk of breast cancer death among statin users in a population-based cohort of breast cancer patients. The study cohort included all newly diagnosed breast cancer patients in Finland during 1995–2003 (31,236 cases), identified from the Finnish Cancer Registry. Information on statin use before and after the diagnosis was obtained from a national prescription database. We used the Cox proportional hazards regression method to estimate mortality among statin users with statin use as time-dependent variable. A total of 4,151 participants had used statins. During the median follow-up of 3.25 years after the diagnosis (range 0.08–9.0 years) 6,011 participants died, of which 3,619 (60.2%) was due to breast cancer. After adjustment for age, tumor characteristics, and treatment selection, both post-diagnostic and pre-diagnostic statin use were associated with lowered risk of breast cancer death (HR 0.46, 95% CI 0.38–0.55 and HR 0.54, 95% CI 0.44–0.67, respectively). The risk decrease by post-diagnostic statin use was likely affected by healthy adherer bias; that is, the greater likelihood of dying cancer patients to discontinue statin use as the association was not clearly dose-dependent and observed already at low-dose/short-term use. The dose- and time-dependence of the survival benefit among pre-diagnostic statin users suggests a possible causal effect that should be evaluated further in a clinical trial testing statins’ effect on survival in breast cancer patients."
+                }
+            }
+        ]
+    }
+}{% endhighlight %}</pre>
+
+What is going on here is that we are combining the two top-k query operators using a boolean OR. The `totalCount` is the number of documents retrieved into
+configurable ranking.  The `relevance` is the hybrid score (assigned by the rank-profile `hybrid`). Notice that the `matchfeatures` field shows the individual scores.
 
 ## Cleanup
 
