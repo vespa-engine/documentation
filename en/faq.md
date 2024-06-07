@@ -393,6 +393,9 @@ $ vespa query 'select * from music where true' \
   rankproperty.random.match.seed=2
 ```
 
+#### Some of the query results have too many hits from the same source, how to create a diverse result set?
+See [result diversity](/en/result-diversity.md) for strategies on how to create result sets from different sources.
+
 
 {:.faq-section}
 ### Feeding
