@@ -105,7 +105,8 @@ Higher value of `max-links-per-node` impacts memory usage, higher values means h
 ![Accuracy](https://blog.vespa.ai/assets/2022-01-27-billion-scale-knn-part-two/ann.png)
 
 Higher `max-links-per-node` and `neighbors-to-explore-at-insert` improves the quality of the graph and
-recall accuracy. The lower combination reaches about 70% recall@10, while the higher combination reaches
+recall accuracy. As the search-time parameter [hnsw.exploreAdditionalHits](reference/query-language-reference.html#hnsw-exploreadditionalhits) 
+is increased, the lower combination reaches about 70% recall@10, while the higher combination reaches
 about 92% recall@10. The improvement in accuracy needs to be weighted against the impact on indexing performance and
 memory usage. 
 
