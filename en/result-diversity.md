@@ -9,7 +9,7 @@ The score is computed per document, independently of other documents’ scores
 (except when using certain features in global-phase).
 
 This greedy approach gives the best overall result when documents are sufficiently dissimilar,
-but if no it might look like this:
+but if not it might look like this:
 
 ![Result diversity example](/assets/img/diversity-1.png)
 
