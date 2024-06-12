@@ -50,8 +50,6 @@ For an introduction, see [Appendix A: setting up with a self-signed Certificate 
 which gives step-by-step instructions on setting up certificates that can be used internally for a
 single Vespa application.
 
-This feature is supported from Vespa 7.441.3.
-
 In order to enable TLS, some extra files must be present on every node in your Vespa application:
 * A file containing the X.509 certificates of all trusted Certificate Authorities in PEM format.
 * A file containing the X.509 certificate chain that will be used by Vespa processes on the node. This is in standard PEM format.
@@ -114,7 +112,7 @@ Set the environment variable, for example by appending to
 
 <pre>{% highlight sh %}
 override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
-{% endhighlight %} </pre>
+{% endhighlight %}</pre>
 
 All file paths must be absolute. If a Vespa process cannot load one or more files, it will fail to start up.
 
