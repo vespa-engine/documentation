@@ -549,8 +549,7 @@ the response from Vespa. It then evaluates and prints the metric.
 
 <div class="pre-parent">
 <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="evaluate_ranking.py">
-{% highlight python %}
+<pre data-test="file" data-path="evaluate_ranking.py">{% highlight python %}
 import requests
 import ir_datasets
 from ir_measures import calc_aggregate, nDCG, ScoredDoc
@@ -576,6 +575,8 @@ def search(query:str, qid:str, ranking:str,
     yql = "select doc_id from doc where ({targetHits:100}userInput(@user-query))"
     if mode == RModel.DENSE:
         yql = "select doc_id from doc where ({targetHits:10}nearestNeighbor(embedding, e))"
+    elif mode == RModel.HYBRID:
+        yql = "select doc_id from doc where ({targetHits:100}userInput(@user-query)) OR ({targetHits:10}nearestNeighbor(embedding, e))"
     query_request = {
         'yql': yql,
         'user-query': query, 
@@ -583,7 +584,7 @@ def search(query:str, qid:str, ranking:str,
         'hits' : hits, 
         'language': language
     }
-    if mode == RModel.DENSE:
+    if mode == RModel.DENSE or mode == RModel.HYBRID:
         query_request['input.query(e)'] = "embed(@user-query)"
 
     response = requests.post("http://localhost:8080/search/", json=query_request)
@@ -594,22 +595,28 @@ def search(query:str, qid:str, ranking:str,
       return []
 
 def main():
+  import argparse
+  parser = argparse.ArgumentParser(description='Evaluate ranking models')
+  parser.add_argument('--ranking', type=str, required=True, help='Vespa ranking profile')
+  parser.add_argument('--mode', type=str, default="sparse", help='retrieval mode, valid values are sparse, dense, hybrid')
+  args = parser.parse_args()
+  mode = RModel.HYBRID
+  if args.mode == "sparse":
+    mode = RModel.SPARSE
+  elif args.mode == "dense":
+    mode = RModel.DENSE
+     
+
   dataset = ir_datasets.load("beir/nfcorpus/test")
-  sparse_results = []
-  dense_results = []
+  results = []
   metrics = [nDCG@10]
   for query in dataset.queries_iter():
     qid = query.query_id
     query_text = query.text
-    sparse_results.extend(search(query_text, qid, "bm25", mode=RModel.SPARSE))
-    dense_results.extend(search(query_text, qid, "semantic", mode=RModel.DENSE))
-
-  sparse_metrics = calc_aggregate(metrics, dataset.qrels, sparse_results)
-  dense_metrics = calc_aggregate(metrics, dataset.qrels, dense_results)
-
-  print("Sparse BM25: nDCG@10 {:.4f}".format(sparse_metrics[nDCG@10]))
-  print("Dense Semantic: nDCG@10 {:.4f}".format(dense_metrics[nDCG@10]))
-  
+    results.extend(search(query_text, qid, args.ranking, mode=mode))
+    
+  metrics = calc_aggregate(metrics, dataset.qrels, results)
+  print("Ranking metric NDCG@10 for rank profile {}: {:.4f}".format(args.ranking, metrics[nDCG@10]))
 
 if __name__ == "__main__":
     main(){% endhighlight %}</pre>
@@ -619,21 +626,31 @@ Then execute the script:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
-$ python3 evaluate_ranking.py
+$ python3 evaluate_ranking.py --ranking bm25 --mode sparse
 </pre>
 </div>
 
 The script will produce the following output:
 
 <pre>
-Sparse BM25: nDCG@10 0.3195
-Dense Semantic: nDCG@10 0.3077
+Ranking metric NDCG@10 for rank profile bm25: 0.3195
 </pre>
 
-This is the *average* `nDCG@10` score across all the 327 test queries for both methods. In a real-word scenario, we would also 
-weigh the query frequency (The set here has unique queries). You can also experiment beyond a single metric and modify the
-script to calculate more [measures](https://ir-measur.es/en/latest/measures.html), for example, including precision with 
-a relevance label cutoff of 2: 
+Now, we can evaluate the dense model using the same script:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
+$ python3 evaluate_ranking.py --ranking semantic --mode dense
+</pre>
+</div>
+
+<pre>
+Ranking metric NDCG@10 for rank profile semantic: 0.3077
+</pre>
+Note that the _average_ `nDCG@10` score is computed across all the 327 test queries. 
+You can also experiment beyond a single metric and modify the script to calculate 
+more [measures](https://ir-measur.es/en/latest/measures.html), for example, including precision with a relevance label cutoff of 2: 
 
 <pre>
 metrics = [nDCG@10, P(rel=2)@10]
@@ -641,11 +658,12 @@ metrics = [nDCG@10, P(rel=2)@10]
 
 ## Hybrid Search & Ranking
 
-We demonstrated and evaluated two independent retrieval and ranking strategies in the previous sections. Now, we want to explore hybrid search techniques
+We demonstrated and evaluated two independent retrieval and ranking strategies in the previous sections. 
+Now, we want to explore hybrid search techniques
 where we combine:
 
 - traditional lexical keyword matching with a text scoring method (BM25) 
-- embedding-based search using a generic text embedding model 
+- embedding-based search using a text embedding model 
 
 With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../ranking.html). In the Vespa ranking phases, we can express arbitrary
 scoring complexity with the full power of the Vespa [ranking](../ranking.html) framework. Meanwhile, top-k retrieval relies on simple built-in functions associated with Vespa's top-k query operators.  
@@ -738,8 +756,12 @@ $ vespa deploy --wait 300 app
 After that, we can start experimenting with how to express hybrid queries using the Vespa query language. 
 
 ### Hybrid query examples
+The following demonstrates combining the two top-k query operators using the Vespa query language. In a later section, we will show
+how to combine the two retrieval strategies using the Vespa ranking framework. This section focuses on the retrieval part
+that exposes matched documents to the ranking phase(s).
 
 #### Hybrid query with OR operator
+The following query exposes documents to ranking that match the query using *either (OR)* the sparse or dense representation. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -753,7 +775,8 @@ $ vespa query \
   'ranking=hybrid'
 </pre>
 </div>
-With this query, we express that we want to retrieve the top 10 documents that match the query using either the sparse or dense representation. Then, in the ranking phase, we determine how we score the retrieved documents, using the `hybrid` rank-profile.
+The documents retrieved into ranking is scored by the `hybrid` rank-profile. Note that both top-k query operators might expose more than
+the the `targetHits` setting. 
 
 The query returns the following [JSON result response](../reference/default-result-format.html):
 
@@ -795,8 +818,217 @@ The query returns the following [JSON result response](../reference/default-resu
     }
 }{% endhighlight %}</pre>
 
-What is going on here is that we are combining the two top-k query operators using a boolean OR. The `totalCount` is the number of documents retrieved into
-configurable ranking.  The `relevance` is the hybrid score (assigned by the rank-profile `hybrid`). Notice that the `matchfeatures` field shows the individual scores.
+What is going on here is that we are combining the two top-k query operators using a boolean OR. The `totalCount` is the number of documents retrieved into ranking (About 100, which is higher than 10 + 10). The `relevance` is the score assigned by `hybrid` rank-profile. Notice that the `matchfeatures` field shows the individual scores.
+
+#### Hybrid query with AND operator
+The following combines the two top-k operators using AND, meaning that the retrieved documents must match the sparse and dense top-k representations. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="MED-10">
+$ vespa query \
+  'yql=select * from doc where ({targetHits:10}userInput(@user-query)) and ({targetHits:10}nearestNeighbor(embedding,e))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+</pre>
+</div>
+
+#### Hybrid query with rank query operator
+The following combines the two top-k operators using the `rank` query operator, which allows us to retrieve only the first
+operand of the rank operator, but where the remaining operands allow computing query, document interaction (match) features 
+that can be used in ranking phases. This 
+query is meaningful because we can use the match features in the ranking expressions but retrieve only by the dense representation. This
+is usually the most resource-effective way (fastest) to combine the two representations.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="MED-10">
+$ vespa query \
+  'yql=select * from doc where rank(({targetHits:10}nearestNeighbor(embedding,e)), ({targetHits:10}userInput(@user-query)))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+</pre>
+</div>
+We can also invert the order of the operands to the `rank` query operator that retrieves by the sparse representation 
+but uses the dense representation to compute match features for ranking.
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="MED-10">
+$ vespa query \
+  'yql=select * from doc where rank(({targetHits:10}userInput(@user-query)),({targetHits:10}nearestNeighbor(embedding,e)))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+</pre>
+</div>
+
+This way of performing hybrid retrieval allows retrieving only by the sparse representation and uses the dense representation to compute match features for ranking. 
+
+## Hybrid ranking
+
+In the previous section, we demonstrated combining the two top-k query operators using boolean operators. This section will show combining the two retrieval strategies using the Vespa ranking framework.
+
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="0.32">
+$ python3 evaluate_ranking.py --ranking hybrid --mode hybrid
+</pre>
+</div>
+
+Which outputs
+
+<pre>
+Ranking metric NDCG@10 for rank profile hybrid: 0.3275
+</pre>
+
+The `nDCG@10` score is higher than the individual models. 
+
+Now, we can experiment with more complex ranking expressions that combine the two retrieval strategies. 
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="file" data-path="app/schemas/doc.sd">
+schema doc {
+    document doc {
+        field language type string {
+            indexing: "en" | set_language 
+        }
+        field doc_id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field text type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, text
+    }
+    
+    field embedding type tensor&lt;bfloat16&gt;(v[384]) {
+      indexing: input title." ".input text | embed | attribute
+      attribute {
+        distance-metric: angular
+      }
+    }
+  
+    rank-profile hybrid {
+        inputs {
+          query(e) tensor&lt;bfloat16&gt;(v[384])
+        }
+        first-phase {
+            expression: closeness(field, embedding) * (1 + (bm25(title) + bm25(text)))
+        }
+        match-features: bm25(title) bm25(text) closeness(field, embedding)
+    }
+
+    rank-profile hybrid-normalize-bm25-with-atan inherits hybrid {
+        
+        function scale(val) {
+            expression: 2*atan(val/8)/(3.14159)
+        }
+        function normalized_bm25() {
+            expression: scale(bm25(title) + bm25(text)) 
+        }
+        function cosine() {
+            expression: cos(distance(field, embedding))
+        }
+        first-phase {
+            expression: normalized_bm25 + cosine
+        }
+        match-features {
+            normalized_bm25 
+            cosine 
+            bm25(title)
+            bm25(text)
+        }
+    }
+
+    rank-profile hybrid-rrf inherits hybrid-normalize-bm25-with-atan{
+
+        function bm25_score() {
+            expression: bm25(title) + bm25(text)
+        }
+        global-phase {
+            rerank-count: 100
+            expression: reciprocal_rank(bm25_score) + reciprocal_rank(cosine)
+        }
+        match-features: bm25(title) bm25(text) bm25_score cosine
+    }
+
+    rank-profile hybrid-linear-normalize inherits hybrid-normalize-bm25-with-atan{
+
+        function bm25_score() {
+            expression: bm25(title) + bm25(text)
+        }
+        global-phase {
+            rerank-count: 100
+            expression: normalize_linear(bm25_score) + normalize_linear(cosine)
+        }
+        match-features: bm25(title) bm25(text) bm25_score cosine
+    }
+}  
+</pre>
+</div>
+
+Now, re-deploy the Vespa application from the `app` directory:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Success">
+$ vespa deploy --wait 300 app
+</pre>
+</div>
+
+
+Then, we can evaluate the new hybrid profiles using the script:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="0.33">
+$ python3 evaluate_ranking.py --ranking hybrid-normalize-bm25-with-atan --mode hybrid
+</pre>
+</div>
+
+<pre>
+Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3386
+</pre>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="0.31">
+$ python3 evaluate_ranking.py --ranking hybrid-rrf --mode hybrid
+</pre>
+</div>
+
+<pre>
+Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3176
+</pre>
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="0.33">
+$ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
+</pre>
+</div>
+
 
 ## Cleanup
 
