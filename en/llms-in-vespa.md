@@ -24,7 +24,7 @@ Claude, Vespa can run LLMs within a Vespa application. This avoids sending data
 outside of the application and allows running customized models. For more
 information, please see [Running LLMs locally in Vespa](llms-local.html).
 
-For a quick start, check out the 
+For a quick start, check out the
 <a href="https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation" data-proofer-ignore>RAG sample app</a>
 which demonstrates using either an external LLM service or a local LLM.
 
@@ -70,9 +70,9 @@ define a component in your application's
 This sets up a client component that can be used in a
 [searcher](glossary.html#searcher) or a [document
 processor](glossary.html#document-processor). By default, this particular
-client connects to the OpenAI service, but can be used against any 
+client connects to the OpenAI service, but can be used against any
 <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI chat completion compatible API</a>
-by changing the `endpoint` configuration parameter. 
+by changing the `endpoint` configuration parameter.
 
 Vespa assumes that any required API key is sent as an HTTP header,
 `X-LLM-API-KEY`.  However, if you have set up a [secret
@@ -357,10 +357,10 @@ and using the results to generate a response.
 Please refer to [RAG in Vespa](llms-rag.html) for more details.
 
 
-### Creating you own searchers in Java
+### Creating your own searchers in Java
 
-The above example uses the very simple `LLMSearcher`
-[class](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/ai/vespa/llm/search/LLMSearcher.java).
+The above example uses the `LLMSearcher`
+[class](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/ai/vespa/search/llm/LLMSearcher.java).
 You can easily create your own LLM searcher in Java by either specifically
 [injecting](jdisc/injecting-components.html) the connection component, or
 subclassing the `LLMSearcher`. Please refer to [Searcher
