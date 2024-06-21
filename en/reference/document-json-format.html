@@ -223,7 +223,7 @@ Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshootin
         <strong>Mixed tensors short form:</strong>
         If the tensor has a single sparse dimension: A map where the key is the value of that dimension and the value
         is a nested array containing the values of the dense subspace within that key.<br/>
-        If the tensor has multiple sparse dimensions: An array where the elements consist of a map with the keys
+        If the tensor has multiple sparse dimensions: An array nested in a "blocks" element where the elements consist of a map with the keys
         "address" and "values", where "address" is a map with the sparse dimensions and their values (as in cells),
         and "values" is a nested array containing the values of the dense subspace within that address.
       </p>
@@ -236,29 +236,64 @@ Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshootin
 {% endhighlight %}</pre>
       <p>Example - multiple sparse dimensions:</p>
       <pre>{% highlight json %}
-"tensorfield": [
+"tensorfield": {
+  "blocks": [
     {"address":{"x":"x1","y":"y2"},"values":[2.0,3.0]},
     {"address":{"x":"x2","y":"y2"},"values":[4.0,5.0]}
+  ]
 ]
 {% endhighlight %}</pre>
       <p>
-        The values can optionally be nested in an object under the key "blocks".
         This is how tensor values are returned <a href="document-v1-api-reference.html#format.tensors">by default</a>,
         along with another key "type" containing the tensor type.
       </p>
 
       <p id="tensor-hex-dump">
-        <strong>Short form for indexed tensors representing binary data</strong>
-        (with <code>int8</code> cell value type):
-        May use a string with a hex dump of the cell values:
+        <strong>Cell values as binary data</strong>
+        For dense and mixed tensors it's possible to fill the cell values directly from binary data
+        sent in as a string of hexadecimal digits.  The simplest possible case is if you have a
+        vector with <code>int8</code> cell value type:
       </p>
       <pre>{% highlight json %}
-"tensorfield": "FF00118022FE"
+"tensorfield": {
+    "values": "FF00118022FE"
+}
 {% endhighlight %}</pre>
-      <p>can be used to represent the value <code>tensor&lt;int8&gt;(x[6]):[-1,0,17,-128,34,-2]</code>.</p>
-      <p>The string object can optionally be nested in an object under the key "values".</p>
-
+      <p>This can be used to represent the value <code>tensor&lt;int8&gt;(x[6]):[-1,0,17,-128,34,-2]</code>.</p>
       <p>
+        For other cell types, it's possible to take the bits of the floating-point value,
+        intepreted directly as an unsigned integer of appropriate width (16, 32, or 64 bits)
+        and use the hex dump (respectively 4, 8, or 16 hex digits per cell) in a string.
+        For "float" cells (32-bit IEE754 floating-point) a simple snippet for converting
+        a cell could look like this:
+      </p>
+      <pre>{% highlight python %}
+import struct
+def float_to_hex(f: float):
+    return format(struct.unpack('=I', struct.pack('=f', f))[0], '08X')
+{% endhighlight %}</pre>
+      <p>
+        As an advanced combination example, if you have a tensor with type
+        <code>tensor&lt;float&gt;(tag{},x[3])</code>
+        this input could be used, shown with corresponding output:
+      </p>
+      <pre>{% highlight json %}
+"mixedtensor": {
+    "foo": "3DE38E393E638E393EAAAAAB",
+    "bar": "3EE38E393F0E38E43F2AAAAB",
+    "baz": "3F471C723F638E393F800000"
+}
+"mixedtensor":{
+  "type":"tensor<float>(tag{},x[3])",
+  "blocks":{
+    "foo":[0.1111111119389534,0.2222222238779068,0.3333333432674408],
+    "bar":[0.4444444477558136,0.5555555820465088,0.6666666865348816],
+    "baz":[0.7777777910232544,0.8888888955116272,1.0]
+  }
+}
+{% endhighlight %}</pre>
+
+      <p id="tensor-verbose-form">
         <strong>Verbose:</strong> <a href="../tensor-user-guide.html">Tensor</a> fields
         may be represented as an array of cells:
       </p>
