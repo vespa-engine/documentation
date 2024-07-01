@@ -1,0 +1,103 @@
+---
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+title: "Using Significance Model"
+redirect_from:
+- /documentation/reference/significance.html
+---
+<p>
+The
+<a href="reference/rank-features.html#significance">significance model feature</a>
+implements the <a href="https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Inverse_document_frequency">inverse document frequency</a> query term for tokens based on an existing or user defined significance model. A siginficance model is a mapping from query terms to a floating point value. The significance model(s) are either provided by Vespa or can be generated using the Vespa-CLI command <a href="../operations-selfhosted/vespa-cmdline-tools.html#vespa-significance"><em>vespa-significance</em></a>. 
+
+ <h2>Background</h2>
+<p>The <a href="reference/bm25.html">bm25</a> and <a href="nativerank.html">native</a> rank features uses the <a href="nativerank.html#weight-significance-and-connectedness">significance value</a> of each query term searching an index field when calculating the score of a document. There are short commings with these ranking features, to name a few, the bm25 rank feature suffers from the following limitations:
+</p>
+
+<ul>
+  <li>The significance values will typically be different across content nodes, as they contain a different subset of the document corpus. This might lead to inconsistent ranking order between content nodes.</li>
+  <li>When using bm25 in <a href="../streaming-search.html" >streaming search</a> no significance values are available at all, as we don’t build an inverted index where the IDF values can be extracted from</li>
+</ul>
+
+<p>By explicitly using a Vespa or user defined significance model, these rank features calculations can be overridden</p>
+
+<h2 id="example">Example</h2>
+<p>
+In the following example, we show how to reference a significance model in the <code>service.xml</code>. 
+Note that the field must be enabled for usage with the bm25 feature
+by setting the <em>use-model</em> flag in the
+<a href="schema-reference.html#index">significance</a> rank-profile 
+section of the field definition.
+</p>
+<p>
+  A significance component is comprised of one or multiple significance models, for one or multiple languages. It uses these models' document frquencies to calculate the inverse document frequency (IDF) of terms in a query.
+</p>
+
+<p>
+<pre>{% highlight xml %}
+<container version="1.0">
+    <search>
+        <significance>  	
+            <model model-id="wikimedia"/>
+            <model url="https://some/uri/bibel-multilingual.json" />
+            <model path="models/reddit-norge.no.json.zst" />
+        </significance>
+    </search>
+</container>
+{% endhighlight %}</pre>  
+</p>
+
+Note that it is possible to specify multiple significance models in the <code>service.xml</code> file.
+
+<p>
+<pre>
+schema example {
+  document example {
+    field content type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+  }
+  rank-profile default {
+    significance {
+      use-model: true
+    }
+  }
+}
+</pre>
+</p>
+<h2 id="significance-file-format">Significance Model File format</h2>
+
+<p>
+  The significance model file is a JSON file with the following format:
+<pre>{% highlight json %}
+{
+  "version": 1,
+  "id": "wikipedia",
+  "description": "Some optional description",
+  "languages": {
+    "en": {
+      "description": "Some optional description for English model", 
+      "document-count": 1000,
+      "document-frequencies": {
+        "and": 500,
+        "car": 100,
+        ...
+      }
+    },
+    "no": {
+      "description": "Some optional description for Norwegian model", 
+      "document-count": 800,
+      "document-frequencies": {
+        "bil": 80,
+        "og": 400,
+        ...
+      }
+    }
+  }
+}{% endhighlight %}</pre>
+</p>
+<p>
+Each file contains a map of languages and their document frequencies. The document frequencies are the number of documents in the corpus that contain the term. The document count is the total number of documents in the corpus.
+
+</p>
+    
