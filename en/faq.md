@@ -807,3 +807,7 @@ see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree
 #### How to display vespa.log?
 Use [vespa-logfmt](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
 If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.
+
+#### How to fix encoding problems in document text?
+See [encoding troubleshooting](/en/troubleshooting-encoding.html)
+for how to handle and remove control characters from the document feed.
