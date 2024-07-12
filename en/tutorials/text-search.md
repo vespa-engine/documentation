@@ -420,7 +420,7 @@ It is important to note that the following approach for query time term boosting
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where rank(userInput(@user-query), url contains ({weight:1000, significance:1.0}"www.answers.com"))' \
+  'yql=select * from msmarco where rank(userInput(@user-query), url contains ({weight:1000, significance:1.0}"huffingtonpost.co.uk"))' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
