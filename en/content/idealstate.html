@@ -247,13 +247,13 @@ Properties:
   Having one node with more buckets than the rest is thus damaging,
   while having one node with fewer buckets than the rest is just fine.
 </p><p>
-  Example: There are 4 nodes distributing 18 units. The node with the most units have 6.
+  Example: There are 4 nodes distributing 18 units. The node with the most units has 6.
   Distribution waste is <code>100% * (4 * 6 - 18) / (4 * 6) = 25%</code>.
 </p><p>
   Below we have calculated waste based on number of nodes and the amount of
   buckets to distribute between them.
   Bits refer to distribution bits used.
-  A distribution bit count of 16 indicates that there will be 2^16 buckets.
+  A distribution bit count of 16 indicates that there will be 2<sup>16</sup> buckets.
 </p><p>
   The calculations assume all buckets have the same size. This is normally close
   to true as documents are randomly assigned to buckets.
@@ -1444,8 +1444,47 @@ Properties:
   especially with many nodes and many distribution bits,
   currently only a couple of profiles are available for you to configure.
 </p>
+<p>
+  <strong>Vespa Cloud note:</strong> Vespa Cloud locks distribution bit count to 16.
+  This is because Vespa Cloud offers auto-scaling of nodes, and such a scaling decision
+  should not implicitly lead to a full redistribution of data by crossing a distribution bit
+  node count boundary. 16 bits strikes a good balance of low skew and high performance for
+  most production deployments.
+</p>
 
-<h4 id="strict-mode-default-for-memfile-persistence-provider">Strict mode (Default for memfile persistence provider)</h4>
+<h4 id="loose-mode-default">Loose mode (default)</h4>
+<p>
+  The loose mode allows for more waste, allowing the amount of nodes to
+  change considerably without altering the distribution bit counts.
+</p>
+<table class="table">
+<tr>
+  <th>Node count</th>
+  <td>1-4</td>
+  <td>5-199</td>
+  <td>200-&gt;</td>
+</tr>
+<tr>
+  <th>Distribution bit count</th>
+  <td>8</td>
+  <td>16</td>
+  <td>24</td>
+</tr>
+<tr>
+  <th>Max calculated waste *)</th>
+  <td><nobr>3.03 %</nobr></td>
+  <td><nobr>7.17 %</nobr></td>
+  <td><nobr>?</nobr></td>
+</tr>
+<tr>
+  <th>Minimum buckets/node **)</th>
+  <td>256 - 64</td>
+  <td>13108 - 329</td>
+  <td>83886 -</td>
+</tr>
+</table>
+
+<h4 id="strict-mode-not-default">Strict mode (not default)</h4>
 <p>
   The strict mode attempts to keep the waste below 1.0 %.
   When it needs to increase the bit count it increases the bit count significantly
@@ -1508,36 +1547,62 @@ Properties:
   and rather let bucket size split buckets, as that leaves more freedom to users.
 </p>
 
-<h4 id="loose-mode-default-for-search-provider">Loose mode (Default for search provider)</h4>
+<h2 id="qa">Q/A</h2>
 <p>
-  The loose mode allows for more waste, allowing the amount of nodes to
-  change considerably without altering the distribution bit counts.
-  A transition between 4 and 5 nodes are kept,
-  to enable creating tests that crosses the line without using too many nodes.
+  <strong>Q: I have a cluster with multiple groups, with the same number of nodes (more than one) in
+  each group. Why does the first node in the first group store a slightly different number of documents
+  than the first node in the second group (and so on)?</strong>
 </p>
-<table class="table">
-<tr>
-  <th>Node count</th>
-  <td>1-4</td>
-  <td>5-199</td>
-  <td>200-&gt;</td>
-</tr>
-<tr>
-  <th>Distribution bit count</th>
-  <td>8</td>
-  <td>16</td>
-  <td>24</td>
-</tr>
-<tr>
-  <th>Max calculated waste *)</th>
-  <td><nobr>3.03 %</nobr></td>
-  <td><nobr>7.17 %</nobr></td>
-  <td><nobr>?</nobr></td>
-</tr>
-<tr>
-  <th>Minimum buckets/node **)</th>
-  <td>256 - 64</td>
-  <td>13108 - 329</td>
-  <td>83886 -</td>
-</tr>
-</table>
+<p>
+  A: This is both expected and intentional—to see why we must look at how the ideal state algorithm works.
+</p>
+<p>
+  As previously outlined, the ideal state algorithm requires 3 distinct inputs:
+</p>
+<ol>
+  <li>The ID of the bucket to be replicated across content nodes.</li>
+  <li>The set of all nodes (i.e. unique distribution keys) in the cluster <em>across</em> all groups,
+       and their current availability state (Down, Up, Maintenance etc.).</li>
+  <li>The cluster topology and replication configuration. The topology includes knowledge of all groups.</li>
+</ol>
+<p>
+  From this the algorithm returns a deterministic, ordered sequence of nodes (i.e. distribution keys)
+  across all configured groups. The ordering of nodes is given by their individual pseudo-random node
+  <em>score</em>, where higher scoring nodes are considered more <em>ideal</em> for storing replicas
+  for a given bucket. The set of nodes in this sequence respects the constraints given by the configured
+  group topology and replication level.
+</p>
+<p>
+  When computing node scores within a group, the <em>absolute</em> distribution keys are used rather
+  than a node's <em>relative</em> ordering within the group. This means the individual node scores—and
+  consequently the distribution of bucket replicas—within one group is different (with a very high
+  probability) from all other groups.
+</p>
+<p>
+  What the ideal state algorithm ensures is that there exists a deterministic, configurable number of replicas
+  per bucket within each group and that they are evenly distributed across each group's nodes—the exact mapping
+  can be considered an unspecified "implementation detail".
+</p>
+<p>
+  The rationale for using absolute distribution keys rather than relative ordering is closely related to
+  the earlier discussion about why <a href="#a-simple-example-modulo">modulo distribution</a> is a poor
+  choice. Let \(N_g \gt 1\) be the number of nodes in a given group:
+</p>
+<ul>
+  <li>
+    A relative ordering means that removing—or just reordering—a single node from the configuration can
+    potentially lead to a full redistribution of all data within that group, not just \( \frac{1}{N_g} \)
+    of the data. Imagine for instance moving a node from being first in the group to being the last.
+  </li>
+  <li>
+    If we require nodes with the same relative index in each group to store the same data set (i.e.
+    a row-column strategy), this immediately suffers in failure scenarios even when just a single node
+    becomes unavailable.
+    Data coverage in the group remains reduced until the node is replaced, as no other nodes can take over
+    responsibility for the data. This is because removing the node leads to the problem in the previous point,
+    where a disproportionally large amount of data must be moved due to the relative ordering changing.
+    With the ideal state algorithm, the remaining nodes in the group will transparently assume ownership
+    of the data, with each node receiving an expected \( \frac{1}{N_g - 1} \) of the unavailable node's buckets.
+  </li>
+</ul>
+
