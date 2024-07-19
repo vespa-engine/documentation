@@ -126,6 +126,9 @@ When reconciling replicas, the newest available version of a document will
 "win" and become visible. This version may be a remove (tombstone). Tombstones
 are replicated in the same way as regular documents.
 
+Reconciliation happens the document level, not at the field level. I.e. there
+is no merging of individual fields across different versions.
+
 If a test-and-set operation updates at least one replica, it will eventually
 become visible on the other replicas.
 
@@ -139,3 +142,71 @@ If not, there is a risk of resurrecting previously removed documents.
 Vespa does not currently detect or handle this scenario automatically.
 
 See the documentation on [data-retention-vs-size](/en/operations-selfhosted/admin-procedures.html#data-retention-vs-size).
+
+### Q/A
+
+#### How does Vespa perform read-repair for Get-operations, and how many replicas are consulted?
+
+When the distributor process that is responsible for a particular data bucket receives
+a Get operation, it checks its locally cached replica metadata state for inconsistencies.
+
+If all replicas have consistent metadata, the operation is routed to a single replica—preferably
+located on the same host as the distributor, if present. This is the normal case when
+the bucket replicas are in sync.
+
+If there is at least one replica metadata mismatch, the distributor automatically initiates
+a read-repair process:
+
+ 1. The distributor splits the bucket replicas into subsets based on their metadata,
+    where all replicas in each subset have the same metadata. It then sends a lightweight
+    metadata-only Get to one replica in each subset. The core assumption is that all
+    these replicas have the same set of document versions, and that it suffices to
+    consult one replica in the set. If a metadata read fails, the distributor will
+    automatically fail over to another replica in the subset.
+ 2. It then sends one full Get to a node in the replica set that returned the _highest_
+    timestamp.
+
+This means that if you have 100 replicas and 1 has different metadata from the remaining
+99, only 2 nodes in total will be initially queried, and only 1 will receive the actual
+(full) Get read.
+
+Similar algorithms are used by other operations that may trigger read/write-repair.
+
+#### Since Vespa performs read-repair when inconsistencies are detected, does this mean replies are strongly consistent?
+
+Unfortunately not. Vespa does not offer any cross-document transactions, so in
+this case strong consistency implies single-object _linearizability_ (as opposed to
+_strict serializability_ across multiple objects). Linearizability requires the ability
+to reach a majority consensus amongst a particular known and stable configuration of
+replicas (side note: replica sets can be reconfigured in strongly consistent algorithms
+like Raft and Paxos, but such a reconfiguration must also be threaded through the
+consensus machinery).
+
+The active replica set for a given data bucket (and thus the documents it logically
+contains) is ephemeral and dynamic based on the nodes that are currently available in
+the cluster (as seen from the cluster controller). This precludes having a stable set
+of replicas that can be used for reaching majority decisions.
+
+See also [Vespa and CAP](#vespa-and-cap).
+
+#### In what kind of scenario might Vespa return a stale version of a document?
+
+Stale document versions may be returned when all replicas containing the most recent
+document version have become unavailable.
+
+Example scenario (for simplicity—but without loss of generality—assuming redundancy 1) in
+a cluster with two nodes {A, B}:
+
+ 1. Document X is stored in a replica on node A with timestamp 100.
+ 2. Node A goes down; node B takes over ownership.
+ 3. A write request is received for document X; it is stored on node B with timestamp
+    200 and ACKed to the client.
+ 4. Node B goes down.
+ 5. Node A comes back up.
+ 6. A read request arrives for document X. The only visible replica is on node A, which
+    ends up serving the request.
+ 7. The document version at timestamp 100 is returned to the client.
+
+Since the write at `t=200` _happens-after_ the write at `t=100`, returning the version at
+`t=100` violates linearizability.
+
