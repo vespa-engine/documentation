@@ -330,12 +330,17 @@ Pass [ranking.profile=unranked](reference/query-api-reference.html#ranking.profi
 to make the query less expensive to run.
 If an _estimate_ is good enough, use [hitcountestimate=true](reference/query-api-reference.html#hitcountestimate).
 
-#### Must all fields in a fieldset have the same type?
-Yes - a deployment warning with _This may lead to recall and ranking issues_ can be emitted if not.
-This warning comes whenever fields with different kinds of tokenization are put in the same
+#### Must all fields in a fieldset have compatible type and matching settings?
+Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted 
+when fields with conflicting tokenization are put in the same
 [fieldset](reference/schema-reference.html#fieldset).
-This is because a given piece of text searching one fieldset is tokenized just once,
+This is because a given query item searching one fieldset is tokenized just once,
 so there's no right choice of tokenization in this case.
+If you have user input that you want to apply to multiple fields with different tokenization,
+include the userInput multiple times in the query:
+```
+select * from sources * where ({defaultIndex: 'fieldsetOrField1'}userInput(@query)) or ({defaultIndex: 'fieldsetOrField2'}userInput(@query))
+```
 More details on [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues).
 
 #### How is the query timeout computed?
