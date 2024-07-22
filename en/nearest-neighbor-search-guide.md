@@ -569,7 +569,7 @@ $ vespa deploy --wait 300 app
 
 ## Index the dataset
 
-Feed the dataset. During indexing, Vespa will invoke the embedding model (which is relatively computionally expensive), 
+Feed the dataset. During indexing, Vespa will invoke the embedding model (which is relatively computationally expensive), 
 so feeding and indexing this dataset takes about 180 seconds on a M1 laptop (535 inserts/s).
 
 <div class="pre-parent">
@@ -1132,7 +1132,7 @@ $ vespa query \
 </pre>
 </div>
 
-This query example restricts the earch to tracks by `Bonnie Tyler` with `popularity > 20`.
+This query example restricts the search to tracks by `Bonnie Tyler` with `popularity > 20`.
 
 ### Strict filters and distant neighbors 
 When combining nearest neighbor search with strict filters which matches less than 5 percentage of the total number of documents, 
@@ -2049,7 +2049,7 @@ that are tagged with the `rock` tag, so roughly 8%.
 
 Auto adjusting `targetHits` upwards for post-filtering is not always what you want, because it is slower than just retrieving
 from the HNSW index without constraints. We can change the 
-`targetHits` adjustement factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](reference/query-api-reference.html#ranking.matching) parameter.
+`targetHits` adjustment factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](reference/query-api-reference.html#ranking.matching) parameter.
 In this case, we set it to 1, which disables adjusting the `targetHits` upwards. 
 
 <div class="pre-parent">
