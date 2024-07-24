@@ -9,7 +9,7 @@ redirect_from:
 based text ranking models are generally more effective than [text embedding](embedding.html) models
 as they take both the query and the document as input with full cross-attention between all the query and document tokens. 
 
-The downside of cross-encoder models is the computional complexity. This document is a guide
+The downside of cross-encoder models is the computational complexity. This document is a guide
 on how to export cross-encoder Transformer based models from [huggingface](https://huggingface.co/), 
 and how to configure them for use in Vespa. 
 
@@ -151,7 +151,7 @@ rank-profile bert-ranker inherits default {
     }
 }</pre>
 
-The example above limits the sequence lenght to `256` using the built-in 
+The example above limits the sequence length to `256` using the built-in 
 [convenience functions](reference/rank-features.html#tokenInputIds(length,%20input_1,%20input_2,%20...)) 
 for generating token sequence input to Transformer models. Note that `tokenInputIds` uses 101 as start of sequence
 and 102 as padding. This is only compatible with BERT-based tokenizers. See section on [performance](#performance)
@@ -208,7 +208,7 @@ tensor that we defined in the ranking profile.
 }{% endhighlight %}</pre>
 
 The retriever (query + first-phase ranking) can be anything, including 
-[nearest neighbor search](nearest-neighbor-search.html) a.k.a. dense retrival using bi-encoders.
+[nearest neighbor search](nearest-neighbor-search.html) a.k.a. dense retrieval using bi-encoders.
 
 ## Performance
 There are three major scaling dimensions:
