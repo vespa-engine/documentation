@@ -151,7 +151,7 @@ $ vespa query \
 Here, we first pass along the API key to the OpenAI API. You need to provide your
 own OpenAI key for this. The `searchChain` parameter selects the `llm` chain set
 up in `services.xml`. Finally, the `prompt` parameter determines what is sent to
-the lanaguage model.
+the language model.
 
 Note that if the `prompt` query parameter is not provided, the `LLMSearcher` will
 try to use the `query` query parameter.
