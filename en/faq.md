@@ -494,7 +494,7 @@ but your vectors are not normalized, and the solution is normally to switch to
 [distance-metric: angular](reference/schema-reference.html#angular)
 or use
 [distance-metric: dotproduct](reference/schema-reference.html#dotproduct)
-(available from Vespa version 8.170.18).
+(available from {% include version.html version="8.170.18" %}).
 
 With non-normalized vectors, you often get negative distances, and those are capped to 0,
 leading to closeness 1.0.
