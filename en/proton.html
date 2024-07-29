@@ -28,18 +28,108 @@ redirect_from:
 <p>
 When the node starts up it first needs to get an overview of what documents and buckets it has.
 Once metadata for all buckets are known, the content nodes transitions from down to up state.
-As the distributors wants quick access to bucket metadata,
-it keeps an in-memory bucket database to efficiently serve these requests.
-</p><p>
-It implements elasticity support in terms of the SPI.
-Operations are ordered according to priority,
-and only one operation per bucket can be in-flight at a time.
-Below bucket management is the persistence engine,
-which implements the SPI in terms of Vespa search.
-The persistence engine reads the document type from the document id,
-and dispatches requests to the correct document database.
+As the distributors wants quick access to bucket metadata, it maintains an in-memory bucket
+database to efficiently serve these requests.
+The state of the bucket database can always be reconstructed from the durably persisted
+search node state, but this is expensive and therefore only happens at process startup time.
+</p>
+<p>
+This database is considered the source of truth for the state of the node's bucket metadata
+for the duration of the process' lifetime. As incoming operations mutate the state of the
+documents on the node, it is critical that the database is always kept in sync with these changes.
 </p>
 
+<h3 id="persistence-threads-and-operation-dispatching">Persistence threads and operation dispatching</h3>
+<p>
+A content node has a pool of <em>persistence threads</em> that is created at startup
+and remains fixed in size for the lifetime of the process. It is the responsibility of the
+persistence threads to schedule incoming write and read operations received by the content
+node, dispatch these to the search core, and to ensure the bucket database remains in sync
+with changes caused by write operations.
+</p>
+<p>
+Unless explicitly configured, the size of the thread pool is automatically set based on the
+number of CPU cores available.
+</p>
+<p>
+Persistence threads are backed by a <em>persistence queue</em>. Read/write-operations received
+by the RPC subsystem are pushed onto this queue. The queue is operation deadline-aware; if
+an operation has exceeded its deadline while enqueued, it is immediately failed back to
+the sender without being executed. This avoids a particular failure scenario where a heavily
+loaded node spends increasingly more and more time processing already doomed operations,
+due to not being able to drain its queue quickly enough.
+</p>
+<p>
+All operations bound for a particular data bucket (such as Puts, Gets etc.) execute in the
+context of a <em>bucket lock</em>. Locks are <em>shared</em> for reads and <em>exclusive</em> for writes.
+This means that multiple read operations can execute in parallel for the same bucket, but
+only one write operation can execute for a bucket at any given time (and no reads can be
+started concurrently with existing writes for a bucket, and vice versa). Note that some of
+these locking restrictions can be relaxed when it's safe to do so—see
+<a href="#performance-optimizations">performance optimizations</a> for details.
+</p>
+<p>
+If a persistence thread tries to pop an operation from the queue and sees that the bucket it's
+bound for is already locked, it will leave the operation in place in the queue and try the next
+operation(s) instead. This means that although the queue acts as a FIFO for client operations
+towards a <em>single</em> bucket, this is not the case across <em>multiple</em> buckets.
+</p>
+<h4 id="write-operations">Write operations</h4>
+<p>
+Write operations are dispatched as <em>asynchronous</em>—i.e. non-blocking—tasks to the search core.
+This increases parallelism by freeing up persistence threads to handle other operations, and a deeper
+pipeline enables the search core to optimize transaction log synchronization and batching of data
+structure updates.
+</p>
+<p>
+Since a deeper pipeline comes at the potential cost of increased latency when many operations are in
+flight, the maximum number of concurrent asynchronous operations is bounded by an adaptive persistence
+throttling mechanism. The throttler will dynamically scale the window of concurrency until it reaches a
+saturation point where further increasing the window size also results in increased operation latencies.
+When the number of in-flight operations hits the current maximum, persistence threads will not
+dispatch any more writes until the number goes down. Reads can still be processed during this time.
+</p>
+<p>
+An asynchronous write-task holds on to the exclusive bucket lock for the duration of its lifetime.
+Once the search core completes the write, the bucket database is updated with the new metadata
+state of the bucket (which reflects the side-effects of the write) prior to releasing the lock.
+An operation reply is then generated and sent back via the RPC subsystem.
+</p>
+<h4 id="read-operations">Read operations</h4>
+<p>
+Read operations are always evaluated <em>synchronously</em>—i.e. blocking—by persistence threads.
+To avoid having potentially expensive maintenance read operations (such as those used for
+<a href="content/consistency.html#replica-reconciliation">replica reconciliation</a>) block client
+operations for prolonged amounts of time, a subset of the persistence threads are <em>not</em> allowed
+to process such maintenance operations.
+</p>
+<p>
+Note that the condition evaluation step of a test-and-set write is considered a <em>read</em> sub-operation
+and is therefore done synchronously. Since it's part of a write operation, it happens atomically in
+the context of the exclusive lock of the higher-level operation.
+</p>
+<h4 id="performance-optimizations">Performance optimizations</h4>
+<p>
+To reduce thread context switches, some write operations may bypass the persistence thread queues
+and be directly asynchronously dispatched to the search core from the RPC thread the operation
+was received at.
+Such operations must still successfully acquire the appropriate exclusive bucket lock—if the
+lock cannot be immediately acquired the operation is pushed onto the persistence queue instead.
+</p>
+<p>
+To reduce lock contention and thread wakeups, smaller numbers of persistence threads are grouped
+together in <em>stripes</em> that share a dedicated per-stripe persistence queue.
+Operations are routed deterministically to a particular stripe based on their bucket ID, meaning
+that stripes operate on non-overlapping parts of the bucket space. Together, the many stripes and
+queues form one higher level <em>logical</em> queue that covers the entire bucket space.
+</p>
+<p>
+If the queue contains multiple <em>non-conflicting</em> write operations to the same bucket, these
+may be dispatched in parallel in the context of the <em>same</em> write lock. This avoids having
+to wait for an entire lock-execute-unlock roundtrip prior to dispatching the next write for the
+same bucket. An example of conflicting writes is multiple Puts to the same document ID.
+The maximum number of operations dispatched in parallel is implementation-defined.
+</p>
 
 <h3 id="document-database">Document database</h3>
 <p>
@@ -248,7 +338,10 @@ Notes:
   <li>chunk size - <em>maxsize</em>.
     Smaller chunks give less wasted IO bytes but more IO operations.</li>
   <li>bucket size - <em>bucket-splitting</em>.
-    Larger buckets give less buckets and better locality to nodes and files.</li>
+    Larger buckets give less buckets and better locality to nodes and files, but
+    incur more overhead during content layer bucket maintenance operations.
+    Overhead can be treated as linear in both CPU, memory and network usage
+    with the bucket size.</li>
 </ul>
 
 
@@ -704,9 +797,9 @@ Metrics are available at the <a href="operations/metrics.html">Metrics API</a>.
 
 <h2 id="queries">Queries</h2>
 <p>
-  Queries has a separate pathway through the system.
-  It does not use the distributor, nor has it anything to do with the SPI.
-  It is orthogonal to the elasticity set up by the storage and retrieval described above.
+  Queries have a separate pathway through the system.
+  They do not use the distributor, nor do they go through the content node persistence threads.
+  They are orthogonal to the elasticity set up by the storage and retrieval described above.
   How queries move through the system:
 </p>
 <img src="/assets/img/proton-query.svg" width="510px" height="auto" alt="Queries" />
