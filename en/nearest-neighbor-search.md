@@ -115,7 +115,7 @@ Note that the document schema can have multiple tensor fields storing vectors,
 and the query can have multiple `nearestNeighbor` operators searching different tensor fields.
 
 Support for using the `nearestNeighbor` operator with a mixed tensor with multiple vectors per document
-is available in Vespa 8.144.19.
+is available in {% include version.html version="8.144.19" %}.
 
 To learn how Vespa can create the vectors for you, see [embedding](embedding.html).
 
