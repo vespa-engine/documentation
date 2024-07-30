@@ -399,12 +399,11 @@ In this case, it simply ranks documents based on how close they are in the CLIP 
 
 ## Using Nearest Neighbor from a Searcher Component
 As with all query operators in Vespa, one can build the query tree programmatically
-in a custom [searcher component](searcher-development.html). 
-
-See the
-[RetrievalModelSearcher](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/src/main/java/ai/vespa/examples/searcher/RetrievalModelSearcher.java)
-in the [MS Marco sample application](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking)
-for an example of how the NearestNeighborItem is used.
+in a custom [searcher component](searcher-development.html).
+See
+[Centroids](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-image-search/src/main/java/ai/vespa/examples/Centroids.java)
+in [Billion-Scale Image Search](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search)
+for an example of how the `NearestNeighborItem` is used.
 
 
 ## Using binary embeddings with hamming distance

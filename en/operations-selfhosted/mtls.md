@@ -77,9 +77,9 @@ Key and certificate files should only be writable by administrator users." %}
 ## Configuring Vespa TLS
 On any node running Vespa software, TLS is controlled via a single environment variable.
 This variable contains an absolute path pointing to a JSON configuration file:
-<pre>{% highlight sh %}
+```shell
 VESPA_TLS_CONFIG_FILE=/absolute/path/to/my-tls-config.json
-{% endhighlight%}</pre>
+```
 
 This environment variable must be set to a valid file path before any Vespa services are started on the node.
 All nodes in your Vespa application must have a TLS config file pointing to the certificates that are trusted by the other nodes.
@@ -97,7 +97,7 @@ Vespa command-line tools will automatically pick up the required configuration a
 ### Writing a TLS configuration file
 The simplest possible configuration file only needs to know the certificates to trust and the certificate/key pair that identifies the node itself.
 Example:
-<pre>{% highlight json %}
+```json
 {
   "files": {
     "ca-certificates": "/absolute/path/to/ca-certs.pem",
@@ -105,14 +105,14 @@ Example:
     "private-key": "/absolute/path/to/private-key.pem"
   }
 }
-{% endhighlight %}</pre>
+```
 
 Set the environment variable, for example by appending to
 [conf/vespa/default-env.txt](/en/operations-selfhosted/files-processes-and-ports.html#environment-variables):
 
-<pre>{% highlight sh %}
+```shell
 override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
-{% endhighlight %}</pre>
+```
 
 All file paths must be absolute. If a Vespa process cannot load one or more files, it will fail to start up.
 
@@ -143,7 +143,7 @@ Any monitoring instance in any us-east region must be able to access our cluster
 
 Our TLS config file implementing these rules may look like this:
 
-<pre>{% highlight json %}
+```json
 {
   "files": {
     "ca-certificates": "/absolute/path/to/ca-certs.pem",
@@ -166,7 +166,7 @@ Our TLS config file implementing these rules may look like this:
     }
   ]
 }
-{% endhighlight %}</pre>
+```
 
 See the [reference documentation](/en/reference/mtls.html#peer-authorization-rules) for details on syntax and semantics.
 
@@ -243,19 +243,19 @@ The [openssl s_client](https://www.openssl.org/docs/man1.1.1/man1/openssl-s_clie
 Connect to a Vespa service, e.g a configserver on port 19071 or a container on port 8080, and verify that `openssl s_client`
 successfully completes the TLS handshake.
 
-<pre>{% highlight sh %}
+```shell
 $ openssl s_client -connect <hostname>:<port> \
   -CAfile /absolute/path/to/ca-certs.pem \
   -key /absolute/path/to/private-key.pem \
   -cert /absolute/path/to/host-cert.pem
-{% endhighlight %}</pre>
+```
 
 Further, you should verify that servers require clients to authenticate by omitting `-key`/`-cert` from above command.
 The `s_client` tool should print an error during handshake and exit immediately.
-<pre>{% highlight sh %}
+```shell
 $ openssl s_client -connect <hostname>:<port> \
   -CAfile /absolute/path/to/ca-certs.pem
-{% endhighlight %}</pre>
+```
 
 ## FAQ
 * **Q: Should TLS be used even if I have a latency-sensitive real-time search application?**
@@ -321,14 +321,14 @@ OS versions or cryptographic libraries may not support these (see
 In the latter case, RSA keys offer the highest level of backwards compatibility.
 
 (Recommended) either create an Elliptic Curve private key:
-<pre>{% highlight sh %}
+```shell
 $ openssl ecparam -name prime256v1 -genkey -noout -out root-ca.key
-{% endhighlight %}</pre>
+```
 
 **OR:** create an RSA private key:
-<pre>{% highlight sh %}
+```shell
 $ openssl genrsa -out root-ca.key 2048
-{% endhighlight %}</pre>
+```
 
 The root CA private key is stored in `root-ca.key`. This key is used to sign certificates and the
 file MUST therefore be kept secret! If it is compromised, an attacker can create any number of
@@ -338,14 +338,14 @@ We'll now create our CA X.509 certificate, self-signed with the private key. Sub
 given in `-subj` with whatever is appropriate for you; it's not really important for our
 simple usage.
 
-<pre>{% highlight sh %}
+```shell
 $ openssl req -new -x509 -nodes \
     -key root-ca.key \
     -out root-ca.pem \
     -subj '/C=US/L=California/O=ACME/OU=ACME test root CA' \
     -sha256 \
     -days 3650
-{% endhighlight %}</pre>
+```
 
 Copy the resulting `root-ca.pem` file to your Vespa node(s) and point the `"ca-certificates"`
 field in the TLS config file to its absolute file path on the node.
@@ -363,23 +363,23 @@ for (possibly less secure) options that do not require doing this step per host.
 Just like our CA our host needs its own private cryptographic key.
 
 If we're using Elliptic Curve keys:
-<pre>{% highlight sh %}
+```shell
 $ openssl ecparam -name prime256v1 -genkey -noout -out host.key
-{% endhighlight %}</pre>
+```
 
 **OR:** if we're using RSA keys:
-<pre>{% highlight sh %}
+```shell
 $ openssl genrsa -out host.key 2048
-{% endhighlight %}</pre>
+```
 
 As part of creating the certificate we'll first create a [Certificate Signing Request (CSR)](https://en.wikipedia.org/wiki/Certificate_signing_request).
 Again, you can substitute the information in `-subj` with something more appropriate for you.
-<pre>{% highlight sh %}
+```shell
 $ openssl req -new \
     -key host.key -out host.csr \
     -subj '/C=US/L=California/OU=ACME/O=My Vespa App' \
     -sha256
-{% endhighlight %}</pre>
+```
 
 #### Sign host certificate
 
@@ -396,7 +396,7 @@ to add certain X.509 extensions to the certificate that specifies exactly what t
 be used for.
 
 Below, substitute `myhost.example.com` with the hostname of your Vespa node.
-<pre>{% highlight sh %}
+```shell
 $ cat > cert-exts.cnf << EOF
 [host_cert_extensions]
 basicConstraints       = critical, CA:FALSE
@@ -408,12 +408,12 @@ subjectAltName         = @host_sans
 [host_sans]
 DNS.1 = myhost.example.com
 EOF
-{% endhighlight %}</pre>
+```
 
 We can now use our existing CA key and certificate to sign the host's CSR, additionally
 providing the above file of certificate extensions to OpenSSL.
 
-<pre>{% highlight sh %}
+```shell
 $ openssl x509 -req \
     -in host.csr \
     -CA root-ca.pem \
@@ -424,7 +424,7 @@ $ openssl x509 -req \
     -extensions host_cert_extensions \
     -days 3650 \
     -sha256
-{% endhighlight %}</pre>
+```
 
 This creates an X.509 certificate in PEM format for the host, valid for 3650 days from the
 time of signing.
@@ -433,7 +433,7 @@ We can inspect the certificate using the `openssl x509` command. Here's some exa
 for a certificate using EC keys. Your output will look different since the serial
 number, dates and key information etc. will differ.
 
-<pre>{% highlight sh %}
+```shell
 $ openssl x509 -in host.pem -text -noout
 Certificate:
     Data:
@@ -476,7 +476,7 @@ Certificate:
          ad:d2:47:58:1c:17:c7:5a:5f:f0:f4:9c:67:e9:6a:44:21:8e:
          08:02:20:23:9c:99:42:1b:91:29:26:f7:83:58:d1:09:65:38:
          c1:18:e8:0d:55:3a:57:f6:e0:c6:5b:72:57:e4:d9:6a:d8
-{% endhighlight %}</pre>
+```
 
 Copy `host.key` and `host.pem` to your Vespa host and point the `"private-key"` and
 `"certificates"` TLS config fields to their respective absolute paths. The CSR and

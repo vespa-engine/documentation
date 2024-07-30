@@ -90,7 +90,7 @@ Using the `OpenAI` client, you can connect to any OpenAI-compatible API.
 Currently, this is the only client for external services that Vespa provides.
 
 Vespa also has the option of running custom LLMs locally. Please refer to
-[running LLMs in your application](llms-local.md) for more information.
+[running LLMs in your application](llms-local.html) for more information.
 
 
 ### Using LLMs
