@@ -157,7 +157,8 @@ schema msmarco {
 A lot is going on here; let us go through it in detail. 
 
 #### Document type and fields
-The `document` section contains the fields of the document, their types, and how Vespa should index and [match](reference/schema-reference.html#match) them.
+The `document` section contains the fields of the document, their types,
+and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../schemas.html#indexing).
@@ -294,7 +295,7 @@ $ vespa feed -t http://localhost:8080 ext/vespa.json
 
 ## Querying the data
 
-This section demonstrates various ways to search the data using the [Vespa query language](query-language.html). All
+This section demonstrates various ways to search the data using the [Vespa query language](/en/query-language.html). All
 the examples use the `vespa-cli` client, the tool uses the HTTP api and if you pass `-v`, you will see the `curl` equivalent
 API request. 
 

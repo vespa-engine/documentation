@@ -151,7 +151,8 @@ schema doc {
 A lot is happening here; let us go through it in detail. 
 
 #### Document type and fields
-The `document` section contains the fields of the document, their types, and how Vespa should index and [match](reference/schema-reference.html#match) them.
+The `document` section contains the fields of the document, their types,
+and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../schemas.html#indexing).
