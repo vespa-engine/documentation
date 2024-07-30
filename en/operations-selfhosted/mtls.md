@@ -316,8 +316,7 @@ To create our own root CA for our Vespa installation we'll first create its [_pr
 We have two choices of what kind of key to create; either based on [RSA](https://en.wikipedia.org/wiki/RSA_(cryptosystem))
 or [Elliptic Curve (EC)](https://en.wikipedia.org/wiki/Elliptic-curve_cryptography)
 cryptography. EC keys are faster to process than RSA-based keys and take up less space, but older
-OS versions or cryptographic libraries may not support these (see
-[Application deployment fails with `SEC_ERROR_BAD_KEY`](#application-deployment-fails-with-sec_error_bad_key)).
+OS versions or cryptographic libraries may not support these.
 In the latter case, RSA keys offer the highest level of backwards compatibility.
 
 (Recommended) either create an Elliptic Curve private key:
