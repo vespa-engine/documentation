@@ -1851,3 +1851,73 @@ but it gives more information that may be used as a forecast.
 Summing this across more, different users may then be used to forecast
 the total of future impressions for the advertisement.
 </p>
+
+
+<h3 id="aggregating-over-all-documents">Aggregating over all documents</h3>
+<p>
+  Grouping is useful to analyse data.
+  To aggregate over the full document set, create <em>one</em> group (which will have <em>all</em> documents)
+  by using a constant (here 1) - example:
+</p>
+<pre>
+$ vespa query 'select rating from restaurant where true | all(group(1) each(output(avg(rating))))' \
+  hits=0 \
+  ranking=unranked
+</pre>
+<p>Make sure all documents have a value for the given field, if not, NaN is used and the final result is also NaN:</p>
+<pre>{% highlight json %}
+{
+    "id": "group:long:1",
+    "relevance": 0.0,
+    "value": "1",
+    "fields": {
+        "avg(rating)": "NaN"
+    }
+}
+{% endhighlight %}</pre>
+
+
+<h3 id="count-fields-with-nan">Count fields with NaN</h3>
+<p>
+  Count number of documents missing a value for an attribute field (actually, unset or less than 0).
+  Set a higher query timeout just in case.
+  Example <em>rating</em> field:
+</p>
+<pre>
+$ vespa query \
+  'select rating from restaurant where true | all( group(predefined(rating, bucket[-inf, 0>, bucket[0, inf>)) each(output(count())) )' \
+  hits=0 \
+  ranking=unranked \
+  timeout=60s
+</pre>
+<p>Example output, counting 2 documents with <code>-inf</code> in <em>rating</em>:</p>
+<pre>{% highlight json %}
+"children": [
+    {
+        "id": "group:long_bucket:-9223372036854775808:0",
+        "relevance": 0.0,
+        "limits": {
+            "from": "-9223372036854775808",
+            "to": "0"
+        },
+        "fields": {
+            "count()": 2
+        }
+    },
+    {
+        "id": "group:long_bucket:0:9223372036854775807",
+        "relevance": 0.0,
+        "limits": {
+            "from": "0",
+            "to": "9223372036854775807"
+        },
+        "fields": {
+            "count()": 8
+        }
+    }
+]
+{% endhighlight %}</pre>
+<p>
+  See <a href="visiting.html#analyzing-field-values">analyzing field values</a>
+  for how to export ids of documents meeting given criteria from the full corpus.
+</p>
