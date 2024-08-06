@@ -184,6 +184,114 @@ Refer to javadoc for more details:
 
 
 
+<h2 id="pin-results-example">Pin results example</h2>
+<p>
+  To pin a result to a fixed position, use a tiered ranking function.
+  This means, define a range in ranking scores for the pinned queries, and rank the organic results below.
+  (It is <em>possible</em> to mix organic/pinned, to keep the example below simple, these are separate ranges)
+</p>
+<p>
+  First, define the key for the query - the key is the ID used to pin results.
+  How to define the key is user defined,
+  a simple way is to hash the query string, like:
+</p>
+<pre>
+$ md5 -q -s "65 inch tv set"
+</pre>
+<p>
+  As a document can be pinned for multiple queries,
+  use a <a href="/en/reference/schema-reference.html#weightedset">weightedset</a>
+  to store multiple key/position entries:
+</p>
+<pre>
+field pinned_query_position type weightedset&lt;string&gt; {
+    indexing: index | summary
+}
+</pre>
+<p>
+  In this set, we will map from key to a value -
+  the value (<em>elementWeight</em>) will be used in a ranking profile for position.
+  In this example, the "organic" ranking is a closeness function:
+</p>
+<pre>
+rank-profile semantic_pin inherits default {
+    inputs {
+        query(query_embedding) tensor&lt;float&gt;(x[384])
+    }
+
+    function pin_topten(fieldname) {
+        expression {
+            if (elementCompleteness(fieldname).elementWeight > 0,
+                11-elementCompleteness(fieldname).elementWeight, 0)
+        }
+    }
+
+    first-phase {
+        expression {
+            # restrict the "organic" ranking contribution to [0-1>, add top ten contributions
+            min(closeness(field, doc_embedding), 0.99999) +
+            pin_topten(pinned_query_position)
+        }
+    }
+
+    match-features {
+        # Use match-features to easily debug ranking
+        closeness(field, doc_embedding)
+        elementCompleteness(pinned_query_position).elementWeight
+    }
+}
+</pre>
+<p>
+  In short, we cap the organic range to 0-1, and add more to the ranking the higher the pinned position (11-pos).
+  Add an OR-term that adds the rank contribution from matching in the weighted set <code>pinned_query_position</code>:
+</p>
+<pre>
+$ vespa query 'select * from items where true
+    or rank (pinned_query_position contains "af6f44472a1d3b00d40d04309067b739")' \
+  ranking=semantic_pin
+</pre>
+<p>Above, a <code>true</code> statement is used for simplicity, replace this with the real query.</p>
+<p>
+  A sample document, with query keys and positions -
+  here, a document is pinned for two queries:
+</p>
+<pre>{% highlight json%}
+[
+    {
+        "put": "id:mynamespace:items::1",
+        "fields": {
+            "pinned_query_position": {
+                "af6f44472a1d3b00d40d04309067b739": 1,
+                "fe5e6fc6358aa1c59b8838852040bfb4": 2
+            }
+        }
+    }
+]
+{% endhighlight %}</pre>
+<p>Snippet from a sample query result:</p>
+<pre>{% highlight json %}
+{
+    "id": "id:mynamespace:items::1",
+    "relevance": 10.0,
+    "source": "items",
+    "fields": {
+        "matchfeatures": {
+            "closeness(field,doc_embedding)": 0.0,
+            "elementCompleteness(pinned_query_position).elementWeight": 1.0
+        },
+        "sddocname": "items",
+        "documentid": "id:mynamespace:items::1",
+        "pinned_query_position": {
+            "fe5e6fc6358aa1c59b8838852040bfb4": 2,
+            "af6f44472a1d3b00d40d04309067b739": 1
+        }
+    }
+}
+{% endhighlight %}</pre>
+<p>Observe how a pinned result for position 1 gets a 10 relevance (rank) score.</p>
+
+
+
 <h2 id="raw-scores-and-query-item-labeling">Raw scores and query item labeling</h2>
 <p>
 Vespa ranking is flexible and relatively decoupled from document matching.
