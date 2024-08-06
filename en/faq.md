@@ -157,6 +157,10 @@ of a double. This can happen in two cases:
 -Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this. 
 - Surfacing low scoring hits using [grouping](grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](reference/schema-reference.html#keep-rank-count).
 
+#### How to pin query results?
+To hard-code documents to positions in the result set,
+see the [pin results example](/en/multivalue-query-operators.html#pin-results-example).
+
 
 {:.faq-section}
 ### Documents
