@@ -1,0 +1,56 @@
+name: "Setup Vespa CLI and dependencies"
+description: "Install Vespa CLI and dependencies"
+
+inputs:
+  # The version of the Vespa CLI to install.
+  vespa-cli-version:
+    description: "The version of the Vespa CLI to install."
+    required: true
+    default: "latest"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Select CLI version
+      shell: bash
+      id: vespa-cli-version
+      run: |
+        if [ "${{ inputs.vespa-cli-version }}" == "latest" ]; then
+          VESPA_CLI_VERSION=$(curl -fsSL https://api.github.com/repos/vespa-engine/vespa/releases/latest | grep -Po '"tag_name": "v\K.*?(?=")')
+        else
+          VESPA_CLI_VERSION="${{ inputs.vespa-cli-version }}"
+        fi
+
+        echo "version=${VESPA_CLI_VERSION}" >> "$GITHUB_OUTPUT"
+
+    # - name: Install dnf dependencies
+    #   shell: bash
+    #   run: |
+    #     dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+    #     dnf -y install docker-ce protobuf-compiler protobuf-devel python3 python3-pip --nobest
+
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.1
+        bundler-cache: true
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: "temurin"
+        java-version: "17"
+
+    - name: Install python dependencies
+      shell: bash
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -qqq -r test/requirements.txt --user
+        python3 -m pip install -qqq pytest nbmake --user
+
+    - name: Install Vespa CLI
+      shell: bash
+      env:
+        VESPA_CLI_VERSION: ${{ steps.vespa-cli-version.outputs.version }}
+      run: |
+        curl -fsSL https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz | tar -zxf - -C /opt && \
+        ln -sf /opt/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa /usr/local/bin/
