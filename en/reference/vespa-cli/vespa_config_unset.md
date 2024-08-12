@@ -26,6 +26,7 @@ $ vespa config unset target
 
 # Stop overriding application option in local config
 $ vespa config unset --local application
+
 ```
 
 ### Options

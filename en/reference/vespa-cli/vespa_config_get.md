@@ -26,6 +26,7 @@ vespa config get [option-name] [flags]
 $ vespa config get
 $ vespa config get target
 $ vespa config get --local
+
 ```
 
 ### Options
