@@ -1,0 +1,59 @@
+name: Auto-update versions
+#
+#  Takes care of updating the Vespa version in the documentation.
+#
+
+on:
+  workflow_dispatch: # Allow manual triggering of the workflow
+
+  schedule:
+    - cron: "0 0 * * *"
+
+  repository_dispatch:
+    types: [update-vespa-version]
+
+  # For testing purposes
+  push:
+    branches: [auto-update-versions]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    # This ensures that options "pipefail" and "errexit" are set for all steps.
+    # Ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#defaultsrunshell
+    shell: bash
+
+jobs:
+  update-vespa-version:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xq
+
+      - name: Get Latest Vespa version
+        run: |
+          VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
+           xq -x '/metadata/versioning/latest')
+
+          echo "Vespa version: $VESPA_VERSION"
+
+          sed -i'' "s/\(vespa_version:\) \"[0-9\.]*\"/\1 \"${VESPA_VERSION}\"/" _config.yml
+          git diff
+
+          # Check if there are changes to commit.
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Updating Vespa version in documentation to ${VESPA_VERSION}" >> $GITHUB_STEP_SUMMARY
+            git config --global user.email "bot+actions@vespa.ai"
+            git config --global user.name "${{ github.actor}}"
+            git commit -m "Update Vespa-version to ${VESPA_VERSION} - MERGEOK" _config.yml
+            git pull --rebase
+            git push
+          fi
