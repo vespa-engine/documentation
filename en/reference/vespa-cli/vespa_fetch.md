@@ -1,38 +1,37 @@
 ---
-title: vespa config get
+title: vespa fetch
 render_with_liquid: false
 ---
 
-## vespa config get
+## vespa fetch
 
-Show given configuration option, or all configuration options
+Download a deployed application package
 
 ### Synopsis
 
-Show given configuration option, or all configuration options.
+Download a deployed application package.
 
-By default this command prints the effective configuration for the current
-application, i.e. it takes into account any local configuration located in
-[working-directory]/.vespa.
-
+This command can be used to download an already deployed Vespa application
+package. The package is written as a ZIP file to the given path, or current
+directory if no path is given.
 
 ```
-vespa config get [option-name] [flags]
+vespa fetch [path] [flags]
 ```
 
 ### Examples
 
 ```
-$ vespa config get
-$ vespa config get target
-$ vespa config get --local
+$ vespa fetch
+$ vespa fetch mydir/
+$ vespa fetch -t cloud mycloudapp.zip
+
 ```
 
 ### Options
 
 ```
-  -h, --help    help for get
-  -l, --local   Show only local configuration, if any
+  -h, --help   help for fetch
 ```
 
 ### Options inherited from parent commands
@@ -49,5 +48,5 @@ $ vespa config get --local
 
 ### SEE ALSO
 
-* [vespa config](vespa_config.html)	 - Manage persistent values for global flags
+* [vespa](vespa.html)	 - The command-line tool for Vespa.ai
 
