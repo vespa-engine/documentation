@@ -31,9 +31,10 @@ $ vespa curl -- -v --data-urlencode "yql=select * from music where album contain
 ### Options
 
 ```
-  -n, --dry-run    Print the curl command that would be executed
-  -h, --help       help for curl
-  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
+  -n, --dry-run          Print the curl command that would be executed
+  -h, --help             help for curl
+  -s, --service string   Which service to query. Must be "deploy" or "container" (default "container")
+  -w, --wait int         Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands

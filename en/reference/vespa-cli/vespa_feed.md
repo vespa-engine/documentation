@@ -34,7 +34,7 @@ in a JSON format:
 - http.request.MBps: Request throughput measured in MB/s. This is the raw
   operation throughput, and not the network throughput,
   I.e. using compression does not affect this number.
-- http.exception.count: Same as feeder.error.count. Present for compatiblity
+- http.exception.count: Same as feeder.error.count. Present for compatibility
   with vespa-feed-client.
 - http.response.count: Number of HTTP responses received.
 - http.response.bytes: Number of bytes received.
@@ -60,10 +60,9 @@ $ cat docs.jsonl | vespa feed -
 ### Options
 
 ```
-      --compression string       Whether to compress the document data when sending the HTTP request. Default is "auto", which compresses large documents. Must be "auto", "gzip" or "none" (default "auto")
+      --compression string       Compression mode to use. Default is "auto" which compresses large documents. Must be "auto", "gzip" or "none" (default "auto")
       --connections int          The number of connections to use (default 8)
       --deadline int             Exit if this number of seconds elapse without any successful operations. 0 to disable (default 0)
-      --header strings           Add a header to all HTTP requests, on the format 'Header: Value'. This can be specified multiple times
   -h, --help                     help for feed
       --progress int             Print stats summary at given interval, in seconds. 0 to disable (default 0)
       --route string             Target Vespa route for feed operations (default "default")

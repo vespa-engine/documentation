@@ -11,9 +11,8 @@ Create a new developer key for headless authentication with Vespa Cloud control 
 
 Create a new developer key for headless authentication with Vespa Cloud control plane
 
-A developer key is a tenant-wide secret, intended for headless communication
-with the Vespa Cloud control plane. For example when deploying from a continuous
-integration system.
+A developer key is intended for headless communication with the Vespa Cloud
+control plane. For example when deploying from a continuous integration system.
 
 The developer key will be stored in the Vespa CLI home directory
 (see 'vespa help config'). Other commands will then automatically load the developer
@@ -34,7 +33,7 @@ Note that when overriding the developer key through environment variables,
 that key will always be used. It's not possible to specify a tenant-specific
 key through the environment.
 
-See [https://cloud.vespa.ai/en/security/guide](https://cloud.vespa.ai/en/security/guide) for more details about developer keys.
+Read more in [https://cloud.vespa.ai/en/security/guide](https://cloud.vespa.ai/en/security/guide)
 
 ```
 vespa auth api-key [flags]
