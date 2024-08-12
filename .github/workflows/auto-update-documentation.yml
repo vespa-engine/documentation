@@ -40,6 +40,8 @@ jobs:
           sudo apt-get install -y xq
 
       - name: Get Latest Vespa version
+        env:
+          ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
         run: |
           VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
            xq -x '/metadata/versioning/latest')
@@ -54,9 +56,15 @@ jobs:
             echo "Updating Vespa version in documentation to ${VESPA_VERSION}" >> $GITHUB_STEP_SUMMARY
             git config --global user.email "bot+actions@vespa.ai"
             git config --global user.name "${{ github.actor}}"
-            git commit -m "Update Vespa-version to ${VESPA_VERSION} - MERGEOK" _config.yml
+
+            git add _config.yml
+            git commit -m "Update Vespa-version to ${VESPA_VERSION}. MERGEOK"
             git pull --rebase
-            git push
+
+            # Only push if the event is a push and the branch is the default branch.
+            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
+              git push
+            fi
           fi
 
   update-vespa-cli-doc:
@@ -67,6 +75,7 @@ jobs:
 
     env:
       VESPA_CLI_DOC_DIR: en/reference/vespa-cli
+      ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -95,13 +104,69 @@ jobs:
           git diff
 
           # Check if there are changes to commit.
-          if [[ -n "$(git status --porcelain)" ]]; then
+          if [[ -n "$(git status --short)" ]]; then
             echo "Updating Vespa CLI reference documentation" >> $GITHUB_STEP_SUMMARY
             git config --global user.email "bot+actions@vespa.ai"
             git config --global user.name "${{ github.actor}}"
 
             git add vespa*.md
-            git commit -m "Update Vespa-CLI reference doc MERGEOK"
+            git commit -m "Update 'Vespa-CLI' reference documentation. MERGEOK"
             git pull --rebase
-            git push
+
+            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
+              git push
+            fi
+          fi
+
+  update-metric-reference:
+    #
+    # This job updates the Vespa metric reference documentation.
+    # Ref https://github.com/vespa-engine/vespa/blob/master/metrics/src/main/java/ai/vespa/metrics/docs/MetricDocumentation.java
+    #
+    runs-on: ubuntu-24.04 # Use Ubuntu 24.04 for the xq dependency
+
+    env:
+      ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup xq
+        run: |
+          sudo apt-get install -y xq
+
+      - name: Get Latest Vespa version
+        id: vespa-metadata
+        run: |
+          VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
+           xq -x '/metadata/versioning/latest')
+          echo "Using version: $VESPA_VERSION"
+          echo "version=$VESPA_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update to latest
+        env:
+          VESPA_VERSION: ${{ steps.vespa-metadata.outputs.version }}
+        run: |
+          curl -SsLo metrics.jar "https://repo1.maven.org/maven2/com/yahoo/vespa/metrics/${VESPA_VERSION}/metrics-${VESPA_VERSION}.jar"
+          java -cp metrics.jar ai.vespa.metrics.docs.DocumentationGenerator en/reference
+
+          git diff
+
+          if [[ -n "$(git status --short en/reference/*-metrics-reference.html)" ]]; then
+            echo "Updating metric reference" >> $GITHUB_STEP_SUMMARY
+            git config --global user.email "bot+actions@vespa.ai"
+            git config --global user.name "${{ github.actor}}"
+
+            git add en/reference/*-metrics-reference.html
+            git commit -m "Update 'Metric' reference documentation. MERGEOK"
+            git pull --rebase
+
+            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
+              git push
+            fi
           fi
