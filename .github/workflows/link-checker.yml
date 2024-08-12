@@ -1,66 +1,28 @@
-name: Link Checker
+name: Link checker
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "2 0 * * *"
-
-  # START Temporary for testing.
-  pull_request:
-    branches: [main]
   push:
-    branches: ["link-checker-workflow-configuration"]
-  # END Temporary for testing.
-
-defaults:
-  run:
-    # Specify to ensure "pipefail and errexit" are set.
-    # Ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#defaultsrunshell
-    shell: bash
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    - cron: "00 3 * * 1-5"
 
 jobs:
-  link-checker-documentation:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: 3.1
-          bundler-cache: true
-
-      - name: check links
-        env:
-          LANG: "C.UTF-8"
-        run: |
-          bundle exec jekyll build
-          #
-          # Remove the redirect-files before link-check
-          find _site/en _site/documentation -name \*.html | \
-            xargs grep -l "Click here if you are not redirected." | xargs rm
-          #
-          # htmlproofer does not check links inside <code>-elements
-          find _site -name \*.html | xargs sed -i.orig 's/<code[^>]*>//g; s/<\/code>//g; s/<pre[^>]*>//g; s/<\/pre>//g;'
-          find _site -name \*.orig | xargs rm
-          #
-          bundle exec htmlproofer \
-            --assume-extension .html \
-            --no-enforce-https \
-            --no-check-external-hash \
-            --allow-missing-href \
-            --ignore-files '/playground/index.html/' \
-            --ignore-urls '\
-              /localhost:8080/,\
-              /docs.vespa.ai/playground/,\
-              /javadoc.io.*#/,\
-              /readthedocs.io.*#/,\
-              /linux.die.net/,\
-              /arxiv.org/,\
-              /hub.docker.com/r/,\
-              /platform.openai.com/' \
-            --typhoeus '{"connecttimeout": 10, "timeout": 30, "accept_encoding": "zstd,br,gzip,deflate"}' \
-            --hydra '{"max_concurrency": 1}' \
-            --swap-urls '(https\://github.com.*/master/.*)#.*:\1,(https\://github.com.*/main/.*)#.*:\1' \
-            _site
+  test:
+    uses: vespa-engine/gh-actions-workflows/.github/workflows/jekyll-link-checker.yml@v1
+    with:
+      ignore-files: |-
+        /playground/index.html/
+      ignore-urls: |-
+        /localhost:8080/
+        /docs.vespa.ai/playground/
+        /javadoc.io.*#/
+        /readthedocs.io.*#/
+        /linux.die.net/
+        /arxiv.org/
+        /hub.docker.com/r/
+        /platform.openai.com/
