@@ -22,15 +22,19 @@ vespa query query-parameters [flags]
 
 ```
 $ vespa query "yql=select * from music where album contains 'head'" hits=5
+$ vespa query --format=plain "yql=select * from music where album contains 'head'" hits=5
+$ vespa query --header="X-First-Name: Joe" "yql=select * from music where album contains 'head'" hits=5
 ```
 
 ### Options
 
 ```
-  -h, --help          help for query
-  -T, --timeout int   Timeout for the query in seconds (default 10)
-  -v, --verbose       Print the equivalent curl command for the query
-  -w, --wait int      Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
+      --format string    Output format. Must be 'human' (human-readable) or 'plain' (no formatting) (default "human")
+      --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
+  -h, --help             help for query
+  -T, --timeout int      Timeout for the query in seconds (default 10)
+  -v, --verbose          Print the equivalent curl command for the query
+  -w, --wait int         Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
