@@ -24,12 +24,19 @@ defaults:
     # Ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#defaultsrunshell
     shell: bash
 
+# Limit concurrency to better handle commit and push operations.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
   update-vespa-version:
     #
     # This job updates the Vespa version in the documentation.
     #
     runs-on: ubuntu-24.04
+
+    concurrency:
+      group: docs-update
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +46,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xq
 
-      - name: Get Latest Vespa version
+      - name: Update Vespa version
+        id: update-docs
         env:
           ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
         run: |
@@ -47,25 +55,21 @@ jobs:
            xq -x '/metadata/versioning/latest')
 
           echo "Vespa version: $VESPA_VERSION"
+          echo "version=$VESPA_VERSION" >> $GITHUB_OUTPUT
 
+          # Update the Vespa version in the documentation configuration file.
           sed -i'' "s/\(vespa_version:\) \"[0-9\.]*\"/\1 \"${VESPA_VERSION}\"/" _config.yml
+
           git diff
+          echo "has-changes=$(git status --short | wc -l)" >> $GITHUB_OUTPUT
 
-          # Check if there are changes to commit.
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "Updating Vespa version in documentation to ${VESPA_VERSION}" >> $GITHUB_STEP_SUMMARY
-            git config --global user.email "bot+actions@vespa.ai"
-            git config --global user.name "${{ github.actor}}"
-
-            git add _config.yml
-            git commit -m "Update Vespa-version to ${VESPA_VERSION}. MERGEOK"
-            git pull --rebase
-
-            # Only push if the event is a push and the branch is the default branch.
-            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
-              git push
-            fi
-          fi
+      - name: Commit changes
+        if: ${{ steps.update-docs.outputs.has-changes != '0' }}
+        uses: ./.github/actions/commit-updated-docs
+        with:
+          commit-message: "Update Vespa version to ${{ steps.vespa-metadata.outputs.version }}."
+          files: _config.yml
+          push: ${{ env.ENABLE_PUSH == 'true' }}
 
   update-vespa-cli-doc:
     #
@@ -77,6 +81,9 @@ jobs:
       VESPA_CLI_DOC_DIR: en/reference/vespa-cli
       ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
 
+    concurrency:
+      group: docs-update
+
     steps:
       - uses: actions/checkout@v4
 
@@ -84,6 +91,7 @@ jobs:
         uses: vespa-engine/setup-vespa-cli-action@v1
 
       - name: Generate Vespa CLI Documentation
+        id: update-docs
         working-directory: ${{ env.VESPA_CLI_DOC_DIR }}
         run: |
           vespa gendoc .
@@ -102,21 +110,15 @@ jobs:
           sed -i'' 's#\(https://[a-z.]*vespa.ai/[^[:space:]]*\)#[\1](\1)#g' *.md
 
           git diff
+          echo "has-changes=$(git status --short | wc -l)" >> $GITHUB_OUTPUT
 
-          # Check if there are changes to commit.
-          if [[ -n "$(git status --short)" ]]; then
-            echo "Updating Vespa CLI reference documentation" >> $GITHUB_STEP_SUMMARY
-            git config --global user.email "bot+actions@vespa.ai"
-            git config --global user.name "${{ github.actor}}"
-
-            git add vespa*.md
-            git commit -m "Update 'Vespa-CLI' reference documentation. MERGEOK"
-            git pull --rebase
-
-            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
-              git push
-            fi
-          fi
+      - name: Commit changes
+        if: ${{ steps.update-docs.outputs.has-changes != '0' }}
+        uses: ./.github/actions/commit-updated-docs
+        with:
+          commit-message: "Update 'Vespa-CLI' reference documentation."
+          files: _config.yml
+          push: ${{ env.ENABLE_PUSH == 'true' }}
 
   update-metric-reference:
     #
@@ -127,6 +129,9 @@ jobs:
 
     env:
       ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
+
+    concurrency:
+      group: docs-update
 
     steps:
       - uses: actions/checkout@v4
@@ -148,7 +153,8 @@ jobs:
           echo "Using version: $VESPA_VERSION"
           echo "version=$VESPA_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Update to latest
+      - name: Update Metric Reference
+        id: update-docs
         env:
           VESPA_VERSION: ${{ steps.vespa-metadata.outputs.version }}
         run: |
@@ -157,16 +163,10 @@ jobs:
 
           git diff
 
-          if [[ -n "$(git status --short en/reference/*-metrics-reference.html)" ]]; then
-            echo "Updating metric reference" >> $GITHUB_STEP_SUMMARY
-            git config --global user.email "bot+actions@vespa.ai"
-            git config --global user.name "${{ github.actor}}"
-
-            git add en/reference/*-metrics-reference.html
-            git commit -m "Update 'Metric' reference documentation. MERGEOK"
-            git pull --rebase
-
-            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
-              git push
-            fi
-          fi
+      - name: Commit changes
+        if: ${{ steps.update-docs.outputs.has-changes != '0' }}
+        uses: ./.github/actions/commit-updated-docs
+        with:
+          commit-message: "Update 'Metric' reference documentation."
+          files: "en/reference/*-metrics-reference.html"
+          push: ${{ env.ENABLE_PUSH == 'true' }}
