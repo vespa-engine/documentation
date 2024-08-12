@@ -1,0 +1,172 @@
+name: Autoupdate Documentation
+#
+#  Takes care of updating the Vespa documentation.
+#
+
+on:
+  workflow_dispatch: # Allow manual triggering of the workflow
+
+  schedule:
+    - cron: "0 0 * * *"
+
+  repository_dispatch:
+    types:
+      - update-vespa-version
+      - update-vespa-cli-doc
+
+permissions:
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    # This ensures that options "pipefail" and "errexit" are set for all steps.
+    # Ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#defaultsrunshell
+    shell: bash
+
+jobs:
+  update-vespa-version:
+    #
+    # This job updates the Vespa version in the documentation.
+    #
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xq
+
+      - name: Get Latest Vespa version
+        env:
+          ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
+        run: |
+          VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
+           xq -x '/metadata/versioning/latest')
+
+          echo "Vespa version: $VESPA_VERSION"
+
+          sed -i'' "s/\(vespa_version:\) \"[0-9\.]*\"/\1 \"${VESPA_VERSION}\"/" _config.yml
+          git diff
+
+          # Check if there are changes to commit.
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Updating Vespa version in documentation to ${VESPA_VERSION}" >> $GITHUB_STEP_SUMMARY
+            git config --global user.email "bot+actions@vespa.ai"
+            git config --global user.name "${{ github.actor}}"
+
+            git add _config.yml
+            git commit -m "Update Vespa-version to ${VESPA_VERSION}. MERGEOK"
+            git pull --rebase
+
+            # Only push if the event is a push and the branch is the default branch.
+            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
+              git push
+            fi
+          fi
+
+  update-vespa-cli-doc:
+    #
+    # This job updates the Vespa CLI documentation.
+    #
+    runs-on: ubuntu-latest
+
+    env:
+      VESPA_CLI_DOC_DIR: en/reference/vespa-cli
+      ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vespa CLI
+        uses: vespa-engine/setup-vespa-cli-action@v1
+
+      - name: Generate Vespa CLI Documentation
+        working-directory: ${{ env.VESPA_CLI_DOC_DIR }}
+        run: |
+          vespa gendoc .
+
+          for f in $(git status --short . | awk '{print $2}'); do
+            title=${f//.md/}
+            title=${title//.\//}
+            title=${title//_/ }
+            (echo -e "---\ntitle: $title\nrender_with_liquid: false\n---\n"; cat ${f}) > ${f}.new
+            mv ${f}.new ${f};
+          done
+
+          # ensure linka are to .html
+          sed -i'' 's/\(vespa.*\).md)/\1.html)/' *.md
+          # create links
+          sed -i'' 's#\(https://[a-z.]*vespa.ai/[^[:space:]]*\)#[\1](\1)#g' *.md
+
+          git diff
+
+          # Check if there are changes to commit.
+          if [[ -n "$(git status --short)" ]]; then
+            echo "Updating Vespa CLI reference documentation" >> $GITHUB_STEP_SUMMARY
+            git config --global user.email "bot+actions@vespa.ai"
+            git config --global user.name "${{ github.actor}}"
+
+            git add vespa*.md
+            git commit -m "Update 'Vespa-CLI' reference documentation. MERGEOK"
+            git pull --rebase
+
+            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
+              git push
+            fi
+          fi
+
+  update-metric-reference:
+    #
+    # This job updates the Vespa metric reference documentation.
+    # Ref https://github.com/vespa-engine/vespa/blob/master/metrics/src/main/java/ai/vespa/metrics/docs/MetricDocumentation.java
+    #
+    runs-on: ubuntu-24.04 # Use Ubuntu 24.04 for the xq dependency
+
+    env:
+      ENABLE_PUSH: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup xq
+        run: |
+          sudo apt-get install -y xq
+
+      - name: Get Latest Vespa version
+        id: vespa-metadata
+        run: |
+          VESPA_VERSION=$(curl -sSL https://repo1.maven.org/maven2/com/yahoo/vespa/parent/maven-metadata.xml | \
+           xq -x '/metadata/versioning/latest')
+          echo "Using version: $VESPA_VERSION"
+          echo "version=$VESPA_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update to latest
+        env:
+          VESPA_VERSION: ${{ steps.vespa-metadata.outputs.version }}
+        run: |
+          curl -SsLo metrics.jar "https://repo1.maven.org/maven2/com/yahoo/vespa/metrics/${VESPA_VERSION}/metrics-${VESPA_VERSION}.jar"
+          java -cp metrics.jar ai.vespa.metrics.docs.DocumentationGenerator en/reference
+
+          git diff
+
+          if [[ -n "$(git status --short en/reference/*-metrics-reference.html)" ]]; then
+            echo "Updating metric reference" >> $GITHUB_STEP_SUMMARY
+            git config --global user.email "bot+actions@vespa.ai"
+            git config --global user.name "${{ github.actor}}"
+
+            git add en/reference/*-metrics-reference.html
+            git commit -m "Update 'Metric' reference documentation. MERGEOK"
+            git pull --rebase
+
+            if [[ "${{ env.ENABLE_PUSH }}" == "true" ]]; then
+              git push
+            fi
+          fi
