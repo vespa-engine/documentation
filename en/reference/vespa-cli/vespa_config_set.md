@@ -27,8 +27,7 @@ $ vespa config set application my-tenant.my-application.my-instance
 $ vespa config set instance other-instance
 
 # Set an option in local configuration, for the current application only
-$ vespa config set --local wait 600
-
+$ vespa config set --local zone perf.us-north-1
 ```
 
 ### Options

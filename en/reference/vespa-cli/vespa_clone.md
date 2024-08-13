@@ -9,14 +9,13 @@ Create files and directory structure from a Vespa sample application
 
 ### Synopsis
 
-Create files and directory structure from a Vespa sample application
-from a sample application.
+Create files and directory structure from a Vespa sample application.
 
 Sample applications are downloaded from
 https://github.com/vespa-engine/sample-apps.
 
 By default sample applications are cached in the user's cache directory. This
-directory can be overridden by setting the VESPA_CLI_CACHE_DIR environment
+directory can be overriden by setting the VESPA_CLI_CACHE_DIR environment
 variable.
 
 ```
