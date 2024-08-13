@@ -20,8 +20,9 @@ $ vespa status deploy
 ### Options
 
 ```
-  -h, --help       help for deploy
-  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
+      --format string   Output format. Must be 'human' (human-readable text) or 'plain' (cluster URL only) (default "human")
+  -h, --help            help for deploy
+  -w, --wait int        Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
