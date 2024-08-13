@@ -1879,9 +1879,10 @@ $ vespa query 'select rating from restaurant where true | all(group(1) each(outp
 
 <h3 id="count-fields-with-nan">Count fields with NaN</h3>
 <p>
-  Count number of documents missing a value for an attribute field (actually, unset or less than 0).
+  Count number of documents missing a value for an <a href="/en/attributes.html">attribute</a> field
+  (actually, in this example, unset or less than 0, see the bucket expression below).
   Set a higher query timeout just in case.
-  Example <em>rating</em> field:
+  Example, analyzing a field called <em>rating</em>:
 </p>
 <pre>
 $ vespa query \
@@ -1921,3 +1922,46 @@ $ vespa query \
   See <a href="visiting.html#analyzing-field-values">analyzing field values</a>
   for how to export ids of documents meeting given criteria from the full corpus.
 </p>
+
+
+<h3 id="list-fields-with-nan">List fields with NaN</h3>
+<p>
+  This is similar to the counting of NaN above,
+  but instead of aggregating the count, for each hit,
+  print a <a href="/en/reference/schema-reference.html#document-summary">document summary</a>:
+</p>
+<pre>
+$ vespa query \
+  'select rating from restaurant where true |
+    all( group(predefined(rating, bucket[-inf, 0>, bucket[0, inf>))
+         order(max(rating))
+         max(1)
+         each( max(100) each(output(summary(name_only)))) )' \
+  hits=0 \
+  ranking=unranked \
+  timeout=60s
+</pre>
+<p>Notes:</p>
+<ul>
+  <li>
+    We are only interested in the first group,
+    so order by <code>max(rating)</code> and use <code>max(1)</code> to get only the first
+  </li>
+  <li>
+    Uses <code>max(100)</code> in order to limit result set sizes.
+    Read more about <a href="/en/reference/query-api-reference.html#grouping.defaultmaxhits">grouping.defaultmaxhits</a>.
+  </li>
+  <li>
+    Results can grow large when listing all fields.
+    To limit to the information required, define a summary class like the below::
+<pre>
+document-summary name_only {
+    summary name {}
+}
+</pre>
+    In the query, use the class name in <code>each(output(summary(name_only)))</code>.
+  </li>
+  <li>
+    Use the <a href="#pagination">continuation token</a> to iterate over the result set.
+  </li>
+</ul>

@@ -383,8 +383,9 @@ No, there is no index or attribute data structure that allows efficient searchin
 an array field has a certain number of elements or items.  
 
 #### Is it possible to query for fields with NaN/no value set/null/none
-No, there is no efficient way to query for not having a value. The [visiting](visiting.html) API
-using document selections does support it, but is a linear scan over all documents.
+The [visiting](visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
+If the field is an _attribute_ one can query using grouping to identify Nan Values,
+see count and list [fields with NaN](/en/grouping.html#count-fields-with-nan).
 
 #### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
 See the [random.match](reference/rank-features.html#random.match) rank feature - example:
