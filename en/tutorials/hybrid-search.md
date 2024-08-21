@@ -486,7 +486,7 @@ PLAIN-2 0 MED-4830 1
 ### Dense search using text embedding
 
 Now, we turn to embedding-based retrieval, where we embed the query text using the configured text-embedding model and perform
-an exact `nearestNeighbor` search. We use [embed query](.//embedding.html#embedding-a-query-text) to produce the
+an exact `nearestNeighbor` search. We use [embed query](../embedding.html#embedding-a-query-text) to produce the
 input tensor `query(e)`, defined in the `semantic` rank-profile in the schema.
 
 <div class="pre-parent">
@@ -673,7 +673,7 @@ These top-k query operators use `index` structures to accelerate the query evalu
 search, the following Vespa top-k query operators are relevant: 
 
 - YQL `{targetHits:k}nearestNeighbor()` for dense representations (text embeddings) using 
-a configured [distance-metric](reference/schema-reference.html#distance-metric) as the scoring function. 
+a configured [distance-metric](../reference/schema-reference.html#distance-metric) as the scoring function. 
 - YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../using-wand-with-vespa.html) for sparse representations
 
 
@@ -835,13 +835,16 @@ $ vespa query \
   'ranking=hybrid'
 </pre>
 </div>
+This means that the retrieved documents must match both the sparse and dense representations. For the sparse keyword query matching, the `weakAnd` operator is used by default
+and it requires that at least one term in the query matches the document (fieldset searched).
 
 #### Hybrid query with rank query operator
-The following combines the two top-k operators using the `rank` query operator, which allows us to retrieve only the first
-operand of the rank operator, but where the remaining operands allow computing query, document interaction (match) features 
-that can be used in ranking phases. This 
-query is meaningful because we can use the match features in the ranking expressions but retrieve only by the dense representation. This
-is usually the most resource-effective way (fastest) to combine the two representations.
+The following combines the two top-k operators using the [rank](../reference/query-language-reference.html#rank) query operator, which allows us to retrieve 
+using only the first operand of the rank operator, but where the remaining operands allow computing (match) features 
+that can be used in ranking phases. 
+
+This query is meaningful because we can use the computed features in the ranking expressions but retrieve only by the dense representation. This
+is usually the most resource-effective way to combine the two representations.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -856,7 +859,7 @@ $ vespa query \
 </pre>
 </div>
 We can also invert the order of the operands to the `rank` query operator that retrieves by the sparse representation 
-but uses the dense representation to compute match features for ranking.
+but uses the dense representation to compute features for ranking.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -871,7 +874,7 @@ $ vespa query \
 </pre>
 </div>
 
-This way of performing hybrid retrieval allows retrieving only by the sparse representation and uses the dense representation to compute match features for ranking. 
+This way of performing hybrid retrieval allows retrieving only by the sparse representation and uses the dense representation to compute features for ranking. 
 
 ## Hybrid ranking
 
