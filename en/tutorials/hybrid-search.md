@@ -939,6 +939,12 @@ schema doc {
         match-features: bm25(title) bm25(text) closeness(field, embedding)
     }
 
+    rank-profile hybrid-sum inherits hybrid {
+        first-phase {
+            expression: closeness(field, embedding) + ((bm25(title) + bm25(text)))
+        }
+    }
+
     rank-profile hybrid-normalize-bm25-with-atan inherits hybrid {
         
         function scale(val) {
@@ -1002,6 +1008,18 @@ Then, we can evaluate the new hybrid profiles using the script:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="0.32">
+$ python3 evaluate_ranking.py --ranking hybrid-sum --mode hybrid
+</pre>
+</div>
+
+<pre>
+Ranking metric NDCG@10 for rank profile hybrid-sum: 0.3232
+</pre>
+
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="0.33">
 $ python3 evaluate_ranking.py --ranking hybrid-normalize-bm25-with-atan --mode hybrid
 </pre>
@@ -1029,6 +1047,13 @@ $ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
 </pre>
 </div>
 
+<pre>
+Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3356
+</pre>
+
+### Summary
+
+In this tutorial, we demonstrated combining two retrieval strategies using the Vespa query language and ranking framework. We showed how to express hybrid queries using the Vespa query language and how to combine the two retrieval strategies using the Vespa ranking framework. We also showed how to evaluate the effectiveness of the hybrid ranking model using one of the datasets that are a part of the BEIR benchmark.
 
 ## Cleanup
 
