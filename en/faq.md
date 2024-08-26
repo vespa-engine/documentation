@@ -406,6 +406,14 @@ $ vespa query 'select * from music where true' \
 #### Some of the query results have too many hits from the same source, how to create a diverse result set?
 See [result diversity](/en/result-diversity.html) for strategies on how to create result sets from different sources.
 
+#### How to find most distant neighbor in a embedding field called clip_query_embedding?
+If you want to search for the most dissimilar items,
+you can with angular distance multiply your `clip_query_embedding` by the scalar -1.
+Then you are searching for the points that are closest to the point
+which is the farthest away from your `clip_query_embedding`.
+
+Also see a [pyvespa example](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
+
 
 {:.faq-section}
 ### Feeding
