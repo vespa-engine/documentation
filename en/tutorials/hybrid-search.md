@@ -5,15 +5,20 @@ redirect_from:
 - /documentation/tutorials/hybrid-search.html
 ---
 
-This tutorial will guide you through setting up a hybrid text search application. 
+
+Hybrid search combines different retrieval methods to improve search quality. This tutorial distinguishes between two core components of search:
+
+* **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../reference/bm25.html) excel at this, as do modern, embedding-based [vector search](../vector-search.html) approaches.  
+* **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../ranking.html) enables complex scoring mechanisms.
+
+This tutorial demonstrates building a hybrid search application with Vespa that leverages the strengths of both lexical and embedding-based approaches.
+ We'll use the [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/) dataset from the [BEIR](https://github.com/beir-cellar/beir) benchmark and explore various hybrid search techniques using Vespa's query language and ranking features. 
+
 The main goal is to set up a text search app that combines simple text scoring features
 such as [BM25](../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
 We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](https://docs.vespa.ai/en/embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
-text embedding model. 
-
-For demonstration purposes, we use the small IR dataset that is part of the [BEIR](https://github.com/beir-cellar/beir) benchmark: [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/). The BEIR version of this dataset has 2590 train queries, 323 test queries, and 3633 documents. In these experiments
-we only use the test queries. Later tutorials will demonstrate how to use the train split to learn how to rank documents. 
+text embedding model. It is a small model that is fast to run and has a small memory footprint. 
 
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li>Python3</li>
@@ -22,11 +27,11 @@ we only use the test queries. Later tutorials will demonstrate how to use the tr
 ## Installing vespa-cli and ir_datasets
 
 This tutorial uses [Vespa-CLI](../vespa-cli.html) to deploy, feed, and query Vespa. We also use 
-[ir-datasets](https://ir-datasets.com/) to obtain the dataset.
+[ir-datasets](https://ir-datasets.com/) to obtain the NFCorpus relevance dataset.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ pip3 install --ignore-installed vespacli ir_datasets ir_measures
+$ pip3 install --ignore-installed vespacli ir_datasets ir_measures requests
 </pre>
 </div>
 
@@ -45,13 +50,13 @@ Which outputs:
 {"doc_id": "MED-10", "text": "Recent studies have suggested that statins, an established drug group in the prevention of cardiovascular mortality, could delay or prevent breast cancer recurrence but the effect on disease-specific mortality remains unclear. We evaluated risk of breast cancer death among statin users in a population-based cohort of breast cancer patients. The study cohort included all newly diagnosed breast cancer patients in Finland during 1995\u20132003 (31,236 cases), identified from the Finnish Cancer Registry. Information on statin use before and after the diagnosis was obtained from a national prescription database. We used the Cox proportional hazards regression method to estimate mortality among statin users with statin use as time-dependent variable. A total of 4,151 participants had used statins. During the median follow-up of 3.25 years after the diagnosis (range 0.08\u20139.0 years) 6,011 participants died, of which 3,619 (60.2%) was due to breast cancer. After adjustment for age, tumor characteristics, and treatment selection, both post-diagnostic and pre-diagnostic statin use were associated with lowered risk of breast cancer death (HR 0.46, 95% CI 0.38\u20130.55 and HR 0.54, 95% CI 0.44\u20130.67, respectively). The risk decrease by post-diagnostic statin use was likely affected by healthy adherer bias; that is, the greater likelihood of dying cancer patients to discontinue statin use as the association was not clearly dose-dependent and observed already at low-dose/short-term use. The dose- and time-dependence of the survival benefit among pre-diagnostic statin users suggests a possible causal effect that should be evaluated further in a clinical trial testing statins\u2019 effect on survival in breast cancer patients.", "title": "Statin Use and Breast Cancer Survival: A Nationwide Cohort Study from Finland", "url": "http://www.ncbi.nlm.nih.gov/pubmed/25329299"}
 {% endhighlight %}</pre>
 
-The NFCorpus documents have four fields
+The NFCorpus documents have four fields:
 
 - The `doc_id` and `url` 
 - The `text` and the `title` 
 
 We are interested in the title and the text, and we want to be able to search across these two fields. We also need to store the `doc_id` to evaluate [ranking](../ranking.html)
-accuracy. We will create a small script that converts the above output to Vespa JSON feed format. Create a `convert.py` file:
+accuracy. We will create a small script that converts the above output to [Vespa JSON document](../reference/document-json-format.html) format. Create a `convert.py` file:
 
 <div class="pre-parent">
 <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -72,7 +77,8 @@ for line in sys.stdin:
 </div>
 
 
-Then we can export the documents using ir_datasets and pipe it to the `convert.py` script:
+With this script, we convert the document dump to Vespa JSON format. Use
+the following command to convert the entire dataset to Vespa JSON format:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -81,6 +87,7 @@ $ ir_datasets export beir/nfcorpus docs --format jsonl | python3 convert.py > ve
 </pre>
 </div> 
 
+Now, we will create the Vespa application package and schema to index the documents.
 
 ## Create a Vespa Application Package
 
@@ -96,7 +103,8 @@ $ mkdir -p app/schemas
 
 ### Schema
 A [schema](../schemas.html) is a document-type configuration; a single vespa application can have multiple schemas with document types.
-For this application, we define a schema `doc` which must be saved in a file named `schemas/doc.sd` in the app directory.
+For this application, we define a schema `doc`, which must be saved in a file named `schemas/doc.sd` in the application package directory.
+
 Write the following to `app/schemas/doc.sd`:
 
 <div class="pre-parent">
@@ -162,7 +170,7 @@ and there are significant differences between [index and attribute](../text-matc
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
 Note that we are enabling [BM25](../reference/bm25.html) for `title` and `text`.
-by including `index: enable-bm25`. The language field is the only field not in the NFCorpus dataset. 
+by including `index: enable-bm25`. The language field is the only field that is not the NFCorpus dataset. 
 We hardcode its value to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
 text fields. Read more in [linguistics](../linguistics.html).
 
@@ -174,7 +182,7 @@ add indexing/storage overhead. String fields grouped using fieldsets must share 
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
 #### Embedding inference
-Our `embedding` field is a [tensor](../tensor-user-guide.html) with a single dense dimension of 384 values. 
+Our `embedding` vector field is of [tensor](../tensor-user-guide.html) type with a single named dimension (`v`) of 384 values. 
 
 ```
 field embedding type tensor<bfloat16>(v[384]) {
@@ -230,9 +238,6 @@ Write the following to `app/services.xml`:
         <documents>
             <document type="doc" mode="index" />
         </documents>
-        <nodes>
-            <node distribution-key="0" hostalias="node1" />
-        </nodes>
     </content>
 </services>
 {% endhighlight %}
@@ -245,14 +250,11 @@ Some notes about the elements above:
 - `<search>` sets up the [query endpoint](../query-api.html).  The default port is 8080.
 - `<document-api>` sets up the [document endpoint](../reference/document-v1-api-reference.html) for feeding.
 - `component` with type `hugging-face-embedder` configures the embedder in the application package. This include where to fetch the model files from, the prepend
-instructions, and the pooling strategy. 
+instructions, and the pooling strategy. See [huggingface-embedder](../embedding.html#huggingface-embedder) for details and other embedders supported.
 - `<content>` defines how documents are stored and searched
 - `<min-redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_  to content clusters —
-  the content cluster capacity can be increased by adding node elements —
-  see [elasticity](../elasticity.html).
-  (See also the [reference](../reference/services-content.html) for more on content cluster setup.)
-- `<nodes>` defines the hosts for the content cluster.
+  
 
 ## Deploy the application package
 
@@ -353,7 +355,7 @@ We can now run a few sample queries to demonstrate various ways to perform searc
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="PLAIN-2">
-$ ir_datasets export beir/nfcorpus/test queries | head -1
+$ ir_datasets export beir/nfcorpus/test queries --fields query_id text |head -1
 </pre>
 </div> 
 
@@ -364,6 +366,7 @@ PLAIN-2	Do Cholesterol Statin Drugs Cause Breast Cancer?
 Here, `PLAIN-2` is the query id of the first test query. We'll use this test query to demonstrate querying Vespa.
 
 ### Lexical search with BM25 scoring
+
 The following query uses [weakAnd](../using-wand-with-vespa.html) and where `targetHits` is a hint 
 of how many documents we want to expose to configurable [ranking phases](../phased-ranking.html). Refer
 to [text search tutorial](text-search.html#querying-the-data) for more on querying with `userInput`. 
@@ -419,8 +422,9 @@ This query returns the following [JSON result response](../reference/default-res
 {% endhighlight %}</pre>
 
 The query retrieves and ranks `MED-10` as the most relevant document—notice the `totalCount` which is the number of documents that were retrieved for ranking
-phases. In this case, we exposed 65 documents, it is higher than our target, but also much fewer than the total number of documents that match any query terms like below, changing the 
-grammar from the default `weakAnd` to `any` matches 1780, or almost 50% of the indexed documents. 
+phases. In this case, we exposed 65 documents to first-phase ranking, it is higher than our target, but also fewer than the total number of documents that match any query terms. 
+
+In the example below, we change the grammar from the default `weakAnd` to `any`, and the query matches 1780, or almost 50% of the indexed documents. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -434,7 +438,7 @@ $ vespa query \
 </pre>
 </div>
 
-The bm25 profile calculates the relevance score ( "relevance": 25.5..)
+The bm25 rank profile calculates the relevance score ( "relevance": 25.5..), this was configured in the schema as:
 
 <pre>
 rank-profile bm25 {
@@ -453,8 +457,8 @@ $ ir_datasets export beir/nfcorpus/test qrels |grep "PLAIN-2 "
 </pre>
 </div>
 
-The following is the output from the above command. Notice line two, the `MED-10` document retrieved above, is judged as very relevant with the grade 2 for the query PLAIN-2. 
-This dataset has graded relevance judgments where a grade of 1 is less relevant than 2. 
+The following is the output from the above command. Notice line two, the `MED-10` document retrieved above, is judged as very relevant with the grade 2 (perfect) for the query_id PLAIN-2. 
+This dataset has graded relevance judgments where a grade of 1 is less relevant than 2. Documents retrieved by the system without a relevance judgment are assumed to be irrelevant (grade 0). 
 
 <pre>
 PLAIN-2 0 MED-2427 2
@@ -536,16 +540,34 @@ This query returns the following [JSON result response](../reference/default-res
     }
 }{% endhighlight %}</pre>
 
-The result of this vector-based search differed from the previous sparse keyword search, with a different relevant document @1. 
+The result of this vector-based search differed from the previous sparse keyword search, with a different relevant document at position 1. In this case, 
+the relevance score is 0.606 and calculated by the `closeness` function in the `semantic` rank-profile.
+
+```
+rank-profile semantic {
+        inputs {
+          query(e) tensor<bfloat16>(v[384])
+        }
+        first-phase {
+            expression: closeness(field, embedding)
+        }
+    }
+```
+
+Where [closeness(field, embedding)](../reference/rank-features.html#attribute-match-features-normalized) is a ranking feature that calculates the cosine similarity between the query and the document embedding. This returns the inverted of the distance between the two vectors. Small distance = higher closeness. This because Vespa sorts results in descending order of relevance. 
+Descending order means the largest will appear at the top of the ranked list.
+
+Note that similarity scores of embedding vectors are often optimized via contrastive or ranking losses, which make them difficult to interpret. 
 
 ## Evaluate ranking accuracy 
-The previous section demonstrated how to combine the Vespa query language with rank-profile's 
+
+The previous section demonstrated how to combine the Vespa query language with rank profiles to
 to implement two different retrieval and ranking strategies.
 
-In the following section we evaluate all 323 test queries with both models to compare their overall effectiveness, measured using [nDCG@10](https://en.wikipedia.org/wiki/Discounted_cumulative_gain).`nDCG@10` is the official evaluation metric of the BEIR benchmark and is an appropriate metric for test sets with graded relevance judgments. 
+In the following section we evaluate all 323 test queries with both models to compare their overall effectiveness, measured using [nDCG@10](https://en.wikipedia.org/wiki/Discounted_cumulative_gain). `nDCG@10` is the official evaluation metric of the BEIR benchmark and is an appropriate metric for test sets with graded relevance judgments. 
 
 For this evaluation task, we need to write a small script. The following script iterates over the queries in the test set, executes the query against the Vespa instance, and reads 
-the response from Vespa. It then evaluates and prints the metric. 
+the response from Vespa. It then evaluates and prints the metric. The overall effectiveness is measured using the average of each query `nDCG@10` metric. 
 
 <div class="pre-parent">
 <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -659,15 +681,16 @@ metrics = [nDCG@10, P(rel=2)@10]
 ## Hybrid Search & Ranking
 
 We demonstrated and evaluated two independent retrieval and ranking strategies in the previous sections. 
-Now, we want to explore hybrid search techniques
-where we combine:
+Now, we want to explore hybrid search techniques where we combine:
 
 - traditional lexical keyword matching with a text scoring method (BM25) 
 - embedding-based search using a text embedding model 
 
-With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../ranking.html). In the Vespa ranking phases, we can express arbitrary
-scoring complexity with the full power of the Vespa [ranking](../ranking.html) framework. Meanwhile, top-k retrieval relies on simple built-in functions associated with Vespa's top-k query operators.  
-These operators aim to avoid scoring all documents in the collection for a query by using a simplistic scoring function to identify the top-k documents.
+With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../ranking.html). 
+
+In the Vespa ranking phases, we can express arbitrary scoring complexity with the full power of the Vespa [ranking](../ranking.html) framework. 
+Meanwhile, top-k retrieval relies on simple built-in functions associated with Vespa's top-k query operators.  
+These top-k operators aim to avoid scoring all documents in the collection for a query by using a simplistic scoring function to identify the top-k documents.
 
 These top-k query operators use `index` structures to accelerate the query evaluation, avoiding scoring all documents using heuristics. In the context of hybrid text
 search, the following Vespa top-k query operators are relevant: 
@@ -677,7 +700,7 @@ a configured [distance-metric](../reference/schema-reference.html#distance-metri
 - YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../using-wand-with-vespa.html) for sparse representations
 
 
-We can combine these using boolean query operators like AND/OR/RANK to express a hybrid search query. Then, there is a wild number of
+We can combine these operators using boolean query operators like AND/OR/RANK to express a hybrid search query. Then, there is a wild number of
 ways that we can combine various signals in [ranking](../ranking.html). 
 
 
@@ -690,7 +713,7 @@ combine them into a single score.
 closeness(field, embedding) * (1 + bm25(title) + bm25(text))
 </pre>
 
-- the `closeness(field, embeddding)` rank-feature returns a score in the range 0 to 1 inclusive
+- the [closeness(field, embedding)](../reference/rank-features.html#attribute-match-features-normalized) rank-feature returns a normalized score in the range 0 to 1 inclusive
 - Any of the per-field BM25 scores are in the range of 0 to infinity 
 
 We add a bias constant (1) to avoid the overall score becoming 0 if the document does not match any query terms, 
@@ -757,10 +780,10 @@ After that, we can start experimenting with how to express hybrid queries using 
 
 ### Hybrid query examples
 The following demonstrates combining the two top-k query operators using the Vespa query language. In a later section, we will show
-how to combine the two retrieval strategies using the Vespa ranking framework. This section focuses on the retrieval part
-that exposes matched documents to the ranking phase(s).
+how to combine the two retrieval strategies using the Vespa ranking framework. This section focuses on the top-k retrieval part
+that exposes matched documents to the Vespa [ranking](../ranking.html) phase(s).
 
-#### Hybrid query with OR operator
+#### Hybrid query using the OR operator
 The following query exposes documents to ranking that match the query using *either (OR)* the sparse or dense representation. 
 
 <div class="pre-parent">
@@ -778,7 +801,7 @@ $ vespa query \
 The documents retrieved into ranking is scored by the `hybrid` rank-profile. Note that both top-k query operators might expose more than
 the the `targetHits` setting. 
 
-The query returns the following [JSON result response](../reference/default-result-format.html):
+The above query returns the following [JSON result response](../reference/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -818,10 +841,13 @@ The query returns the following [JSON result response](../reference/default-resu
     }
 }{% endhighlight %}</pre>
 
-What is going on here is that we are combining the two top-k query operators using a boolean OR. The `totalCount` is the number of documents retrieved into ranking (About 100, which is higher than 10 + 10). The `relevance` is the score assigned by `hybrid` rank-profile. Notice that the `matchfeatures` field shows the individual scores.
+What is going on here is that we are combining the two top-k query operators using a boolean OR (disjunection). 
+The `totalCount` is the number of documents retrieved into ranking (About 100, which is higher than 10 + 10). 
+The `relevance` is the score assigned by `hybrid` rank-profile. Notice that the `matchfeatures` field shows all the feature scores. This is
+useful for debugging and understanding the ranking behavior, also for feature logging.
 
 #### Hybrid query with AND operator
-The following combines the two top-k operators using AND, meaning that the retrieved documents must match the sparse and dense top-k representations. 
+The following combines the two top-k operators using AND, meaning that the retrieved documents must match both the sparse and dense top-k operators. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -859,7 +885,8 @@ $ vespa query \
 </pre>
 </div>
 We can also invert the order of the operands to the `rank` query operator that retrieves by the sparse representation 
-but uses the dense representation to compute features for ranking.
+but uses the dense representation to compute features for ranking. This is very useful in cases where we do not want
+to build HNSW indexes (adds memory and slows down indexing), but still be able to use semantic signals in ranking phases.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -874,11 +901,15 @@ $ vespa query \
 </pre>
 </div>
 
-This way of performing hybrid retrieval allows retrieving only by the sparse representation and uses the dense representation to compute features for ranking. 
+This way of performing hybrid retrieval allows retrieving only by the sparse representation and uses the dense vector 
+representation to compute features for ranking. 
 
 ## Hybrid ranking
 
-In the previous section, we demonstrated combining the two top-k query operators using boolean operators. This section will show combining the two retrieval strategies using the Vespa ranking framework.
+In the previous section, we demonstrated combining the two top-k query operators using boolean query operators. 
+
+This section will show combining the two retrieval strategies using the Vespa ranking framework. We can first start evaluating
+the effectiveness of the hybrid rank profile that combines the two retrieval strategies.
 
 
 <div class="pre-parent">
@@ -894,9 +925,10 @@ Which outputs
 Ranking metric NDCG@10 for rank profile hybrid: 0.3275
 </pre>
 
-The `nDCG@10` score is higher than the individual models. 
+The `nDCG@10` score is slightly higher than the profiles that only use one of the ranking strategies.  
 
-Now, we can experiment with more complex ranking expressions that combine the two retrieval strategies. 
+Now, we can experiment with more complex ranking expressions that combine the two retrieval strategies. W
+e add a few more rank profiles to the schema that combine the two retrieval strategies in different ways. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1006,8 +1038,21 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
+Let us break down the new rank profiles:
 
-Then, we can evaluate the new hybrid profiles using the script:
+- `hybrid-sum` combines the two retrieval strategies using addition. This is a simple way to combine the two strategies. But since the BM25 scores are not normalized (unbound) 
+and the closeness score is normalized (0-1), the BM25 scores will dominate the closeness score.
+- `hybrid-normalize-bm25-with-atan` combines the two strategies using a normalized BM25 score and the cosine similarity. The BM25 scores are normalized using the `atan` function.
+- `hybrid-rrf` combines the two strategies using the reciprocal rank feature. This is a way to combine the two strategies using a reciprocal rank feature.
+- `hybrid-linear-normalize` combines the two strategies using a linear normalization function. This is a way to combine the two strategies using a linear normalization function.
+
+The two last profiles are using `global-phase` to rerank the top 100 documents using the reciprocal rank and linear normalization functions. This can only be done in the global phase
+as it requires access to all the documents that are retrieved into ranking and in a multi-node setup, this requires communication between the nodes and knowledge of
+the score distribution across all the nodes. In addition, each ranking phase can only order the documents by a single score. 
+
+### Evaluate the new rank profiles
+
+Adding new rank-profiles is a hot change. Once we have deployed the application, we can evaluate the new hybrid profiles using the script:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1054,9 +1099,20 @@ $ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
 Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3356
 </pre>
 
+On this particular dataset, the `hybrid-normalize-bm25-with-atan` rank profile performs the best, but the difference is small. This also demonstrates that hybrid search 
+and ranking is a complex problem and that the effectiveness of the hybrid model depends on the dataset and the retrieval strategies. 
+
+These results (which is the best) might not
+transfer to your specific retrieval use case and dataset, so it is important to evaluate the effectiveness of a hybrid model on your specific dataset and having
+your own relevance judgments. 
+
+See [Improving retrieval with LLM-as-a-judge](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/) for more information on how to collect relevance judgments for your dataset.
+
 ### Summary
 
-In this tutorial, we demonstrated combining two retrieval strategies using the Vespa query language and ranking framework. We showed how to express hybrid queries using the Vespa query language and how to combine the two retrieval strategies using the Vespa ranking framework. We also showed how to evaluate the effectiveness of the hybrid ranking model using one of the datasets that are a part of the BEIR benchmark.
+In this tutorial, we demonstrated combining two retrieval strategies using the Vespa query language and how to expression hybriding ranking using the Vespa ranking framework. 
+
+We showed how to express hybrid queries using the Vespa query language and how to combine the two retrieval strategies using the Vespa ranking framework. We also showed how to evaluate the effectiveness of the hybrid ranking model using one of the datasets that are a part of the BEIR benchmark. We hope this tutorial has given you a good understanding of how to combine different retrieval strategies using Vespa, and that there is not a single silver bullet for all retrieval problems.
 
 ## Cleanup
 
