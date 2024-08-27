@@ -321,33 +321,32 @@ On an M1, we expect output like the following:
 <pre>{% highlight json%}
 {
   "feeder.operation.count": 3633,
-  "feeder.seconds": 39.723,
+  "feeder.seconds": 148.515,
   "feeder.ok.count": 3633,
-  "feeder.ok.rate": 91.459,
+  "feeder.ok.rate": 24.462,
   "feeder.error.count": 0,
   "feeder.inflight.count": 0,
-  "http.request.count": 13157,
-  "http.request.bytes": 21102792,
-  "http.request.MBps": 0.531,
+  "http.request.count": 3633,
+  "http.request.bytes": 2985517,
+  "http.request.MBps": 0.020,
   "http.exception.count": 0,
-  "http.response.count": 13157,
-  "http.response.bytes": 1532828,
-  "http.response.MBps": 0.039,
-  "http.response.error.count": 9524,
-  "http.response.latency.millis.min": 0,
-  "http.response.latency.millis.avg": 1220,
-  "http.response.latency.millis.max": 13703,
+  "http.response.count": 3633,
+  "http.response.bytes": 348320,
+  "http.response.MBps": 0.002,
+  "http.response.error.count": 0,
+  "http.response.latency.millis.min": 316,
+  "http.response.latency.millis.avg": 787,
+  "http.response.latency.millis.max": 1704,
   "http.response.code.counts": {
-    "200": 3633,
-    "429": 9524
+    "200": 3633
   }
 }{% endhighlight %}</pre>
 
 Notice:
 
 - `feeder.ok.rate` which is the throughput (Note that this step includes embedding inference). See [embedder-performance](../embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
-- `http.response.code.counts` matches with `feeder.ok.count` - The dataset has 3633 documents. The `429` are harmless. Vespa asks the client
-to slow down the feed speed because of resource contention.
+- `http.response.code.counts` matches with `feeder.ok.count` - The dataset has 3633 documents. Note that if you observe any `429` responses, these are 
+harmless. Vespa asks the client to slow down the feed speed because of resource contention.
 
 
 ## Sample queries 
@@ -356,7 +355,7 @@ We can now run a few sample queries to demonstrate various ways to perform searc
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="PLAIN-2">
-$ ir_datasets export beir/nfcorpus/test queries --fields query_id text |head -1
+$ ir_datasets export beir/nfcorpus/test queries --fields query_id text | 2> /dev/null | head -1
 </pre>
 </div> 
 
@@ -393,7 +392,7 @@ This query returns the following [JSON result response](../reference/default-res
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 65
+            "totalCount": 46
         },
         "coverage": {
             "coverage": 100,
@@ -423,7 +422,7 @@ This query returns the following [JSON result response](../reference/default-res
 {% endhighlight %}</pre>
 
 The query retrieves and ranks `MED-10` as the most relevant document—notice the `totalCount` which is the number of documents that were retrieved for ranking
-phases. In this case, we exposed 65 documents to first-phase ranking, it is higher than our target, but also fewer than the total number of documents that match any query terms. 
+phases. In this case, we exposed about 50 documents to first-phase ranking, it is higher than our target, but also fewer than the total number of documents that match any query terms. 
 
 In the example below, we change the grammar from the default `weakAnd` to `any`, and the query matches 1780, or almost 50% of the indexed documents. 
 
@@ -542,7 +541,7 @@ This query returns the following [JSON result response](../reference/default-res
 }{% endhighlight %}</pre>
 
 The result of this vector-based search differed from the previous sparse keyword search, with a different relevant document at position 1. In this case, 
-the relevance score is 0.606 and calculated by the `closeness` function in the `semantic` rank-profile.
+the relevance score is 0.606 and calculated by the `closeness` function in the `semantic` rank-profile. Note that more documents were retrieved than the `targetHits`.
 
 ```
 rank-profile semantic {
@@ -648,7 +647,7 @@ if __name__ == "__main__":
 Then execute the script:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
+<pre data-test="exec" data-test-assert-contains="bm25: 0.32">
 $ python3 evaluate_ranking.py --ranking bm25 --mode sparse
 </pre>
 </div>
@@ -656,14 +655,14 @@ $ python3 evaluate_ranking.py --ranking bm25 --mode sparse
 The script will produce the following output:
 
 <pre>
-Ranking metric NDCG@10 for rank profile bm25: 0.3195
+Ranking metric NDCG@10 for rank profile bm25: 0.3210 
 </pre>
 
 Now, we can evaluate the dense model using the same script:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
+<pre data-test="exec" data-test-assert-contains="semantic: 0.3">
 $ python3 evaluate_ranking.py --ranking semantic --mode dense
 </pre>
 </div>
