@@ -680,6 +680,8 @@ more [measures](https://ir-measur.es/en/latest/measures.html), for example, incl
 metrics = [nDCG@10, P(rel=2)@10]
 </pre>
 
+Also note that the exact nDCG@10 values may vary slightly between runs. 
+
 ## Hybrid Search & Ranking
 
 We demonstrated and evaluated two independent retrieval and ranking strategies in the previous sections. 
@@ -811,7 +813,7 @@ The above query returns the following [JSON result response](../reference/defaul
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 105
+            "totalCount": 87
         },
         "coverage": {
             "coverage": 100,
@@ -844,7 +846,7 @@ The above query returns the following [JSON result response](../reference/defaul
 }{% endhighlight %}</pre>
 
 What is going on here is that we are combining the two top-k query operators using a boolean OR (disjunection). 
-The `totalCount` is the number of documents retrieved into ranking (About 100, which is higher than 10 + 10). 
+The `totalCount` is the number of documents retrieved into ranking (About 90, which is higher than 10 + 10). 
 The `relevance` is the score assigned by `hybrid` rank-profile. Notice that the `matchfeatures` field shows all the feature scores. This is
 useful for debugging and understanding the ranking behavior, also for feature logging.
 
@@ -924,7 +926,7 @@ $ python3 evaluate_ranking.py --ranking hybrid --mode hybrid
 Which outputs
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid: 0.3275
+Ranking metric NDCG@10 for rank profile hybrid: 0.3287
 </pre>
 
 The `nDCG@10` score is slightly higher than the profiles that only use one of the ranking strategies.  
@@ -1064,7 +1066,7 @@ $ python3 evaluate_ranking.py --ranking hybrid-sum --mode hybrid
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-sum: 0.3232
+Ranking metric NDCG@10 for rank profile hybrid-sum: 0.3244
 </pre>
 
 
@@ -1076,7 +1078,7 @@ $ python3 evaluate_ranking.py --ranking hybrid-normalize-bm25-with-atan --mode h
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3386
+Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3410
 </pre>
 
 <div class="pre-parent">
