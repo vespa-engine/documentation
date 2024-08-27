@@ -316,7 +316,7 @@ $ vespa feed -t http://localhost:8080 vespa-docs.jsonl
 </pre>
 </div>
 
-On an M1, we expect output like the following:
+The output should look like this (rates may vary depending on your machine HW):
 
 <pre>{% highlight json%}
 {
@@ -355,13 +355,15 @@ We can now run a few sample queries to demonstrate various ways to perform searc
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="PLAIN-2">
-$ ir_datasets export beir/nfcorpus/test queries --fields query_id text | 2> /dev/null | head -1
+$ ir_datasets export beir/nfcorpus/test queries --fields query_id text | head -1
 </pre>
 </div> 
 
 <pre>
 PLAIN-2	Do Cholesterol Statin Drugs Cause Breast Cancer?
 </pre>
+
+If you see a pipe related error from the above command, you can safely ignore it.
 
 Here, `PLAIN-2` is the query id of the first test query. We'll use this test query to demonstrate querying Vespa.
 
