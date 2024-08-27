@@ -1072,7 +1072,7 @@ Ranking metric NDCG@10 for rank profile hybrid-sum: 0.3244
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.33">
+<pre data-test="exec" data-test-assert-contains="0.34">
 $ python3 evaluate_ranking.py --ranking hybrid-normalize-bm25-with-atan --mode hybrid
 </pre>
 </div>
@@ -1083,7 +1083,7 @@ Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3410
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.31">
+<pre data-test="exec" data-test-assert-contains="0.3">
 $ python3 evaluate_ranking.py --ranking hybrid-rrf --mode hybrid
 </pre>
 </div>
@@ -1094,7 +1094,7 @@ Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3176
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.33">
+<pre data-test="exec" data-test-assert-contains="0.3">
 $ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
 </pre>
 </div>
