@@ -1083,32 +1083,32 @@ Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3410
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.3">
+<pre data-test="exec" data-test-assert-contains="0.32">
 $ python3 evaluate_ranking.py --ranking hybrid-rrf --mode hybrid
 </pre>
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3176
+Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3207
 </pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.3">
+<pre data-test="exec" data-test-assert-contains="0.33">
 $ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
 </pre>
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3356
+Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3387
 </pre>
 
 On this particular dataset, the `hybrid-normalize-bm25-with-atan` rank profile performs the best, but the difference is small. This also demonstrates that hybrid search 
 and ranking is a complex problem and that the effectiveness of the hybrid model depends on the dataset and the retrieval strategies. 
 
 These results (which is the best) might not
-transfer to your specific retrieval use case and dataset, so it is important to evaluate the effectiveness of a hybrid model on your specific dataset and having
-your own relevance judgments. 
+transfer to your specific retrieval use case and dataset, so it is important to evaluate the effectiveness of a hybrid model on 
+your specific dataset.
 
 See [Improving retrieval with LLM-as-a-judge](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/) for more information on how to collect relevance judgments for your dataset.
 
