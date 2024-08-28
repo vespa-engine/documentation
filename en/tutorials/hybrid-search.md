@@ -225,13 +225,13 @@ Write the following to `app/services.xml`:
         <document-processing />
         <document-api />
         <component id="arctic" type="hugging-face-embedder">
-          <transformer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/resolve/main/onnx/model_quantized.onnx"/>
-          <tokenizer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/raw/main/tokenizer.json"/>
-          <pooling-strategy>cls</pooling-strategy>
-          <prepend>
-            <query>Represent this sentence for searching relevant passages: </query>
-          </prepend>
-      </component>
+            <transformer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/resolve/main/onnx/model_quantized.onnx"/>
+            <tokenizer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/raw/main/tokenizer.json"/>
+            <pooling-strategy>cls</pooling-strategy>
+            <prepend>
+                <query>Represent this sentence for searching relevant passages: </query>
+            </prepend>
+        </component>
     </container>
 
     <content id="content" version="1.0">
