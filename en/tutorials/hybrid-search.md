@@ -135,10 +135,10 @@ schema doc {
     }
     
     field embedding type tensor&lt;bfloat16&gt;(v[384]) {
-      indexing: input title." ".input text | embed | attribute
-      attribute {
-        distance-metric: angular
-      }
+        indexing: input title." ".input text | embed | attribute
+        attribute {
+            distance-metric: angular
+        }
     }
   
     rank-profile bm25 {
@@ -149,7 +149,7 @@ schema doc {
 
     rank-profile semantic {
         inputs {
-          query(e) tensor&lt;bfloat16&gt;(v[384])
+            query(e) tensor&lt;bfloat16&gt;(v[384])
         }
         first-phase {
             expression: closeness(field, embedding)
@@ -170,7 +170,7 @@ The [string](../reference/schema-reference.html#string) data type represents bot
 and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Note that we are enabling [BM25](../reference/bm25.html) for `title` and `text`.
+Note that we are enabling [BM25](../reference/bm25.html) for `title` and `text`
 by including `index: enable-bm25`. The language field is the only field that is not the NFCorpus dataset. 
 We hardcode its value to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
 text fields. Read more in [linguistics](../linguistics.html).
@@ -189,9 +189,9 @@ Our `embedding` vector field is of [tensor](../tensor-user-guide.html) type with
 field embedding type tensor<bfloat16>(v[384]) {
       indexing: input title." ".input text | embed arctic | attribute
       attribute {
-        distance-metric: angular
+          distance-metric: angular
       }
-    }
+}
 ```
 The `indexing` expression creates the input to the `embed` inference call (in our example the concatenation of the title and the text field). Since
 the dataset is small, we do not specify `index` which would build [HNSW](../approximate-nn-hnsw.html) datastructures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
@@ -250,7 +250,7 @@ Some notes about the elements above:
 - `<container>` defines the [container cluster](../jdisc/index.html) for document, query and result processing
 - `<search>` sets up the [query endpoint](../query-api.html).  The default port is 8080.
 - `<document-api>` sets up the [document endpoint](../reference/document-v1-api-reference.html) for feeding.
-- `component` with type `hugging-face-embedder` configures the embedder in the application package. This include where to fetch the model files from, the prepend
+- `component` with type `hugging-face-embedder` configures the embedder in the application package. This includes where to fetch the model files from, the prepend
 instructions, and the pooling strategy. See [huggingface-embedder](../embedding.html#huggingface-embedder) for details and other embedders supported.
 - `<content>` defines how documents are stored and searched
 - `<min-redundancy>` denotes how many copies to keep of each document.
@@ -316,38 +316,37 @@ $ vespa feed -t http://localhost:8080 vespa-docs.jsonl
 </pre>
 </div>
 
-On an M1, we expect output like the following:
+The output should look like this (rates may vary depending on your machine HW):
 
 <pre>{% highlight json%}
 {
   "feeder.operation.count": 3633,
-  "feeder.seconds": 39.723,
+  "feeder.seconds": 148.515,
   "feeder.ok.count": 3633,
-  "feeder.ok.rate": 91.459,
+  "feeder.ok.rate": 24.462,
   "feeder.error.count": 0,
   "feeder.inflight.count": 0,
-  "http.request.count": 13157,
-  "http.request.bytes": 21102792,
-  "http.request.MBps": 0.531,
+  "http.request.count": 3633,
+  "http.request.bytes": 2985517,
+  "http.request.MBps": 0.020,
   "http.exception.count": 0,
-  "http.response.count": 13157,
-  "http.response.bytes": 1532828,
-  "http.response.MBps": 0.039,
-  "http.response.error.count": 9524,
-  "http.response.latency.millis.min": 0,
-  "http.response.latency.millis.avg": 1220,
-  "http.response.latency.millis.max": 13703,
+  "http.response.count": 3633,
+  "http.response.bytes": 348320,
+  "http.response.MBps": 0.002,
+  "http.response.error.count": 0,
+  "http.response.latency.millis.min": 316,
+  "http.response.latency.millis.avg": 787,
+  "http.response.latency.millis.max": 1704,
   "http.response.code.counts": {
-    "200": 3633,
-    "429": 9524
+    "200": 3633
   }
 }{% endhighlight %}</pre>
 
 Notice:
 
 - `feeder.ok.rate` which is the throughput (Note that this step includes embedding inference). See [embedder-performance](../embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
-- `http.response.code.counts` matches with `feeder.ok.count` - The dataset has 3633 documents. The `429` are harmless. Vespa asks the client
-to slow down the feed speed because of resource contention.
+- `http.response.code.counts` matches with `feeder.ok.count` - The dataset has 3633 documents. Note that if you observe any `429` responses, these are 
+harmless. Vespa asks the client to slow down the feed speed because of resource contention.
 
 
 ## Sample queries 
@@ -356,13 +355,15 @@ We can now run a few sample queries to demonstrate various ways to perform searc
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="PLAIN-2">
-$ ir_datasets export beir/nfcorpus/test queries --fields query_id text |head -1
+$ ir_datasets export beir/nfcorpus/test queries --fields query_id text | head -1
 </pre>
 </div> 
 
 <pre>
 PLAIN-2	Do Cholesterol Statin Drugs Cause Breast Cancer?
 </pre>
+
+If you see a pipe related error from the above command, you can safely ignore it.
 
 Here, `PLAIN-2` is the query id of the first test query. We'll use this test query to demonstrate querying Vespa.
 
@@ -393,7 +394,7 @@ This query returns the following [JSON result response](../reference/default-res
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 65
+            "totalCount": 46
         },
         "coverage": {
             "coverage": 100,
@@ -423,7 +424,7 @@ This query returns the following [JSON result response](../reference/default-res
 {% endhighlight %}</pre>
 
 The query retrieves and ranks `MED-10` as the most relevant document—notice the `totalCount` which is the number of documents that were retrieved for ranking
-phases. In this case, we exposed 65 documents to first-phase ranking, it is higher than our target, but also fewer than the total number of documents that match any query terms. 
+phases. In this case, we exposed about 50 documents to first-phase ranking, it is higher than our target, but also fewer than the total number of documents that match any query terms. 
 
 In the example below, we change the grammar from the default `weakAnd` to `any`, and the query matches 1780, or almost 50% of the indexed documents. 
 
@@ -542,7 +543,7 @@ This query returns the following [JSON result response](../reference/default-res
 }{% endhighlight %}</pre>
 
 The result of this vector-based search differed from the previous sparse keyword search, with a different relevant document at position 1. In this case, 
-the relevance score is 0.606 and calculated by the `closeness` function in the `semantic` rank-profile.
+the relevance score is 0.606 and calculated by the `closeness` function in the `semantic` rank-profile. Note that more documents were retrieved than the `targetHits`.
 
 ```
 rank-profile semantic {
@@ -562,7 +563,7 @@ Note that similarity scores of embedding vectors are often optimized via contras
 
 ## Evaluate ranking accuracy 
 
-The previous section demonstrated how to combine the Vespa query language with rank profiles to
+The previous section demonstrated how to combine the Vespa query language with rank profiles
 to implement two different retrieval and ranking strategies.
 
 In the following section we evaluate all 323 test queries with both models to compare their overall effectiveness, measured using [nDCG@10](https://en.wikipedia.org/wiki/Discounted_cumulative_gain). `nDCG@10` is the official evaluation metric of the BEIR benchmark and is an appropriate metric for test sets with graded relevance judgments. 
@@ -648,7 +649,7 @@ if __name__ == "__main__":
 Then execute the script:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
+<pre data-test="exec" data-test-assert-contains="bm25: 0.32">
 $ python3 evaluate_ranking.py --ranking bm25 --mode sparse
 </pre>
 </div>
@@ -656,14 +657,14 @@ $ python3 evaluate_ranking.py --ranking bm25 --mode sparse
 The script will produce the following output:
 
 <pre>
-Ranking metric NDCG@10 for rank profile bm25: 0.3195
+Ranking metric NDCG@10 for rank profile bm25: 0.3210 
 </pre>
 
 Now, we can evaluate the dense model using the same script:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="nDCG@10: 0.3">
+<pre data-test="exec" data-test-assert-contains="semantic: 0.3">
 $ python3 evaluate_ranking.py --ranking semantic --mode dense
 </pre>
 </div>
@@ -678,6 +679,8 @@ more [measures](https://ir-measur.es/en/latest/measures.html), for example, incl
 <pre>
 metrics = [nDCG@10, P(rel=2)@10]
 </pre>
+
+Also note that the exact nDCG@10 values may vary slightly between runs. 
 
 ## Hybrid Search & Ranking
 
@@ -810,7 +813,7 @@ The above query returns the following [JSON result response](../reference/defaul
         "id": "toplevel",
         "relevance": 1.0,
         "fields": {
-            "totalCount": 105
+            "totalCount": 87
         },
         "coverage": {
             "coverage": 100,
@@ -843,7 +846,7 @@ The above query returns the following [JSON result response](../reference/defaul
 }{% endhighlight %}</pre>
 
 What is going on here is that we are combining the two top-k query operators using a boolean OR (disjunection). 
-The `totalCount` is the number of documents retrieved into ranking (About 100, which is higher than 10 + 10). 
+The `totalCount` is the number of documents retrieved into ranking (About 90, which is higher than 10 + 10). 
 The `relevance` is the score assigned by `hybrid` rank-profile. Notice that the `matchfeatures` field shows all the feature scores. This is
 useful for debugging and understanding the ranking behavior, also for feature logging.
 
@@ -923,7 +926,7 @@ $ python3 evaluate_ranking.py --ranking hybrid --mode hybrid
 Which outputs
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid: 0.3275
+Ranking metric NDCG@10 for rank profile hybrid: 0.3287
 </pre>
 
 The `nDCG@10` score is slightly higher than the profiles that only use one of the ranking strategies.  
@@ -1063,30 +1066,30 @@ $ python3 evaluate_ranking.py --ranking hybrid-sum --mode hybrid
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-sum: 0.3232
+Ranking metric NDCG@10 for rank profile hybrid-sum: 0.3244
 </pre>
 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.33">
+<pre data-test="exec" data-test-assert-contains="0.34">
 $ python3 evaluate_ranking.py --ranking hybrid-normalize-bm25-with-atan --mode hybrid
 </pre>
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3386
+Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3410
 </pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.31">
+<pre data-test="exec" data-test-assert-contains="0.32">
 $ python3 evaluate_ranking.py --ranking hybrid-rrf --mode hybrid
 </pre>
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3176
+Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3207
 </pre>
 
 <div class="pre-parent">
@@ -1097,21 +1100,21 @@ $ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3356
+Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3387
 </pre>
 
 On this particular dataset, the `hybrid-normalize-bm25-with-atan` rank profile performs the best, but the difference is small. This also demonstrates that hybrid search 
 and ranking is a complex problem and that the effectiveness of the hybrid model depends on the dataset and the retrieval strategies. 
 
 These results (which is the best) might not
-transfer to your specific retrieval use case and dataset, so it is important to evaluate the effectiveness of a hybrid model on your specific dataset and having
-your own relevance judgments. 
+transfer to your specific retrieval use case and dataset, so it is important to evaluate the effectiveness of a hybrid model on 
+your specific dataset.
 
 See [Improving retrieval with LLM-as-a-judge](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/) for more information on how to collect relevance judgments for your dataset.
 
 ### Summary
 
-In this tutorial, we demonstrated combining two retrieval strategies using the Vespa query language and how to expression hybriding ranking using the Vespa ranking framework. 
+In this tutorial, we demonstrated combining two retrieval strategies using the Vespa query language and how to express hybrid ranking using the Vespa ranking framework.
 
 We showed how to express hybrid queries using the Vespa query language and how to combine the two retrieval strategies using the Vespa ranking framework. We also showed how to evaluate the effectiveness of the hybrid ranking model using one of the datasets that are a part of the BEIR benchmark. We hope this tutorial has given you a good understanding of how to combine different retrieval strategies using Vespa, and that there is not a single silver bullet for all retrieval problems.
 

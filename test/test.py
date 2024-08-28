@@ -14,7 +14,24 @@ import re
 
 from bs4 import BeautifulSoup
 
+from distutils.command import clean
 from pseudo_terminal import PseudoTerminal
+
+
+def remove_liquid_highlight(text):
+  """Removes Liquid highlighting tags from a string.
+
+  Args:
+    text: The string to remove highlighting from.
+
+  Returns:
+    The string with highlighting tags removed.
+  """
+
+  text = re.sub(r'\{%\s*highlight\s*(python|xml|.*?)\s*%\}', '', text)
+  text = re.sub(r'\{%\s*endhighlight\s*%\}', '', text)
+  return text
+
 
 ################################################################################
 # Execution
@@ -83,7 +100,9 @@ def exec_file(cmd, pty):
         if not os.path.isdir(os.path.sep.join(path_array)):
             os.makedirs(os.path.sep.join(path_array))
     with open(str(path), "w") as f:
-        f.write(str(cmd["content"]))
+        data = str(cmd["content"])
+        clean_data = remove_liquid_highlight(data)
+        f.write(clean_data)
 
     print("Wrote " + str(len(cmd["content"])) + " chars to " + path)
 
