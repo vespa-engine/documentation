@@ -135,10 +135,10 @@ schema doc {
     }
     
     field embedding type tensor&lt;bfloat16&gt;(v[384]) {
-      indexing: input title." ".input text | embed | attribute
-      attribute {
-        distance-metric: angular
-      }
+        indexing: input title." ".input text | embed | attribute
+        attribute {
+            distance-metric: angular
+        }
     }
   
     rank-profile bm25 {
@@ -149,7 +149,7 @@ schema doc {
 
     rank-profile semantic {
         inputs {
-          query(e) tensor&lt;bfloat16&gt;(v[384])
+            query(e) tensor&lt;bfloat16&gt;(v[384])
         }
         first-phase {
             expression: closeness(field, embedding)
@@ -170,7 +170,7 @@ The [string](../reference/schema-reference.html#string) data type represents bot
 and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Note that we are enabling [BM25](../reference/bm25.html) for `title` and `text`.
+Note that we are enabling [BM25](../reference/bm25.html) for `title` and `text`
 by including `index: enable-bm25`. The language field is the only field that is not the NFCorpus dataset. 
 We hardcode its value to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
 text fields. Read more in [linguistics](../linguistics.html).
@@ -189,9 +189,9 @@ Our `embedding` vector field is of [tensor](../tensor-user-guide.html) type with
 field embedding type tensor<bfloat16>(v[384]) {
       indexing: input title." ".input text | embed arctic | attribute
       attribute {
-        distance-metric: angular
+          distance-metric: angular
       }
-    }
+}
 ```
 The `indexing` expression creates the input to the `embed` inference call (in our example the concatenation of the title and the text field). Since
 the dataset is small, we do not specify `index` which would build [HNSW](../approximate-nn-hnsw.html) datastructures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
@@ -250,7 +250,7 @@ Some notes about the elements above:
 - `<container>` defines the [container cluster](../jdisc/index.html) for document, query and result processing
 - `<search>` sets up the [query endpoint](../query-api.html).  The default port is 8080.
 - `<document-api>` sets up the [document endpoint](../reference/document-v1-api-reference.html) for feeding.
-- `component` with type `hugging-face-embedder` configures the embedder in the application package. This include where to fetch the model files from, the prepend
+- `component` with type `hugging-face-embedder` configures the embedder in the application package. This includes where to fetch the model files from, the prepend
 instructions, and the pooling strategy. See [huggingface-embedder](../embedding.html#huggingface-embedder) for details and other embedders supported.
 - `<content>` defines how documents are stored and searched
 - `<min-redundancy>` denotes how many copies to keep of each document.
@@ -1114,7 +1114,7 @@ See [Improving retrieval with LLM-as-a-judge](https://blog.vespa.ai/improving-re
 
 ### Summary
 
-In this tutorial, we demonstrated combining two retrieval strategies using the Vespa query language and how to expression hybriding ranking using the Vespa ranking framework. 
+In this tutorial, we demonstrated combining two retrieval strategies using the Vespa query language and how to express hybrid ranking using the Vespa ranking framework.
 
 We showed how to express hybrid queries using the Vespa query language and how to combine the two retrieval strategies using the Vespa ranking framework. We also showed how to evaluate the effectiveness of the hybrid ranking model using one of the datasets that are a part of the BEIR benchmark. We hope this tutorial has given you a good understanding of how to combine different retrieval strategies using Vespa, and that there is not a single silver bullet for all retrieval problems.
 
