@@ -851,7 +851,7 @@ The `relevance` is the score assigned by `hybrid` rank-profile. Notice that the 
 useful for debugging and understanding the ranking behavior, also for feature logging.
 
 #### Hybrid query with AND operator
-The following combines the two top-k operators using AND, meaning that the retrieved documents must match both the sparse and dense top-k operators. 
+The following combines the two top-k operators using AND, meaning that the retrieved documents must match both the sparse and dense top-k operators:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -865,7 +865,7 @@ $ vespa query \
   'ranking=hybrid'
 </pre>
 </div>
-This means that the retrieved documents must match both the sparse and dense representations. For the sparse keyword query matching, the `weakAnd` operator is used by default
+For the sparse keyword query matching, the `weakAnd` operator is used by default
 and it requires that at least one term in the query matches the document (fieldset searched).
 
 #### Hybrid query with rank query operator
