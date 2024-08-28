@@ -563,7 +563,7 @@ Note that similarity scores of embedding vectors are often optimized via contras
 
 ## Evaluate ranking accuracy 
 
-The previous section demonstrated how to combine the Vespa query language with rank profiles to
+The previous section demonstrated how to combine the Vespa query language with rank profiles
 to implement two different retrieval and ranking strategies.
 
 In the following section we evaluate all 323 test queries with both models to compare their overall effectiveness, measured using [nDCG@10](https://en.wikipedia.org/wiki/Discounted_cumulative_gain). `nDCG@10` is the official evaluation metric of the BEIR benchmark and is an appropriate metric for test sets with graded relevance judgments. 
