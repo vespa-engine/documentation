@@ -69,10 +69,28 @@ def vespa_remove(endpoint, doc_ids, namespace, doc_type):
 
 
 def vespa_feed(endpoint, feed, namespace, doc_type):
-    if doc_type == "paragraph" or doc_type == "term" or doc_type == "doc":
-        splits = re.split(r'/|\.', endpoint)
-        app_string = splits[3] + '.' + splits[2]
-        print(subprocess.run(['./vespa', 'feed', '-a', app_string, '-t', endpoint, feed], capture_output=True))
+    if doc_type not in ["paragraph", "term", "doc"]:
+        raise ValueError(":error:Unknown vespa doc_type: {0}".format(doc_type))
+
+    # FIXME: This is not going to work with the new endpoint format!
+    splits = re.split(r'/|\.', endpoint)
+    app_string = splits[3] + '.' + splits[2]
+
+    process = subprocess.run(
+        ['./vespa', 'feed', '-a', app_string, '-t', endpoint, feed], capture_output=True)
+
+    # Print sderr if not empty
+    if process.stderr:
+        print("::group::VespaCLI-Error")
+        print("::error::Errors reported by VespaCLI:")
+        print(process.stderr.decode('utf-8'))
+        print("::endgroup::")
+
+    if process.returncode != 0:
+        print("::error::Errors encountered while feeding Vespa application.")
+        sys.exit(process.returncode)
+
+    return process.stdout.decode('utf-8')
 
 
 def get_docs(index):
@@ -154,17 +172,19 @@ def update_endpoint(endpoint, config):
 
         docids_to_remove = docids_in_index.difference(docids_in_feed)
         if len(docids_to_remove) > 0:
-            print_header("Removing indexed documents not in feed in {0}".format(endpoint_url))
+            print("::group::Removing indexed documents not in feed in {0}".format(endpoint_url))
             for id in docids_to_remove:
                 print("To Remove: {0}".format(id))
             vespa_remove(endpoint_url, docids_to_remove, namespace, doc_type)
             print("{0} documents removed.".format(len(docids_to_remove)))
+            print("::endgroup::")
         else:
             print("No documents to be removed.")
 
         for index in endpoint_indexes:
-            print_header("Feeding {0} to {1}...".format(index, endpoint_url))
+            print("::group::Feeding {0} to {1}".format(index, endpoint_url))
             print(vespa_feed(endpoint_url, index, namespace, doc_type))
+            print("::endgroup::")
 
         print("{0} documents fed.".format(len(docids_in_feed)))
 
