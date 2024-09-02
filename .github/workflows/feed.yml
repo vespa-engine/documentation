@@ -1,86 +1,20 @@
 name: Vespa Documentation Search Feed
+
 on:
   push:
-    branches: [ master ]
-    paths:
-      - '*.md'
-      - '*.html'
-      - '**/*.md'
-      - '**/*.html'
-      - '.github/workflows/feed.yml'
-
-env:
-  DATA_PLANE_PUBLIC_KEY     : ${{ secrets.VESPA_TEAM_DATA_PLANE_PUBLIC_CERT }}
-  DATA_PLANE_PRIVATE_KEY    : ${{ secrets.VESPA_TEAM_DATA_PLANE_PRIVATE_KEY }}
-  VESPA_CLI_DATA_PLANE_CERT : ${{ secrets.VESPA_TEAM_VESPA_CLI_DATA_PLANE_CERT }}
-  VESPA_CLI_DATA_PLANE_KEY  : ${{ secrets.VESPA_TEAM_VESPA_CLI_DATA_PLANE_KEY }}
+    branches:
+      - main
+      - update-vespa-documentation-search-feed-workflow # Temporary branch for testing
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    steps:
+    uses: vespa-engine/gh-actions/.github/workflows/jekyll-feed-to-vespa.yml@fix-jekyll-build
+    with:
+      hook-post-build-script: |
+        echo "Find all JSON files"
+        find . -type f -name '*.json'
+        echo "\n"
+        echo "Find the open_index.json file"
+        find . -type f -name '*open_index*'
 
-    - uses: actions/checkout@v4
-
-    - uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: 3.1
-        bundler-cache: false
-
-    - name: Build site
-      run: |
-        bundle install
-        bundle exec jekyll build -p _plugins-vespafeed
-
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x'
-
-    - name: Install dependencies
-      run: |
-        pip3 install PyYAML mmh3 requests html5lib beautifulsoup4 markdownify tiktoken
-
-    - name: Install Vespa CLI
-      uses: vespa-engine/setup-vespa-cli-action@v1
-
-    - name: Feed docs site
-      run: |
-        # The python scripts below uses the Vespa CLI for feeding / data access.
-        # See https://docs.vespa.ai/en/vespa-cli.html.
-        # The environment variables below have credentials for endpoint access -
-        # use the key/cert files in .vespa and paste their content into GitHub Secrets.
-        # VESPA_CLI_API_KEY must be set and empty as below.
-        export VESPA_CLI_DATA_PLANE_CERT
-        export VESPA_CLI_DATA_PLANE_KEY
-        export VESPA_CLI_API_KEY=
-        ./feed_to_vespa.py _config.yml
-
-    - name: Feed paragraphs site
-      run: |
-        export VESPA_CLI_DATA_PLANE_CERT
-        export VESPA_CLI_DATA_PLANE_KEY
-        export VESPA_CLI_API_KEY=
-        ./feed-split.py open_index.json https://docs.vespa.ai questions.jsonl
-        ./feed_to_vespa.py _paragraphs_config.yml
-
-    - name: Feed suggestions
-      run: |
-        export VESPA_CLI_DATA_PLANE_CERT
-        export VESPA_CLI_DATA_PLANE_KEY
-        export VESPA_CLI_API_KEY=
-        ./feed_to_vespa.py _suggestions_config.yml
-     
-
-    - name: Generate and feed reference suggestions
-      run: |
-        ./generate_suggestions_from_reference.py en/reference/schema-reference.html https://docs.vespa.ai/ open-p > suggestions.jsonl
-        ./generate_suggestions_from_reference.py en/reference/services-admin.html https://docs.vespa.ai/ open-p >> suggestions.jsonl
-        ./generate_suggestions_from_reference.py en/reference/services-container.html https://docs.vespa.ai/ open-p >> suggestions.jsonl
-        ./generate_suggestions_from_reference.py en/reference/services-docproc.html https://docs.vespa.ai/ open-p >> suggestions.jsonl
-        ./generate_suggestions_from_reference.py en/reference/services-processing.html https://docs.vespa.ai/ open-p >> suggestions.jsonl
-        ./generate_suggestions_from_reference.py en/reference/services-search.html https://docs.vespa.ai/ open-p >> suggestions.jsonl
-        ./generate_suggestions_from_reference.py en/reference/services-http.html https://docs.vespa.ai/ open-p >> suggestions.jsonl
-        ./generate_suggestions_from_reference.py en/reference/services-content.html https://docs.vespa.ai/ open-p >> suggestions.jsonl
-        ./convert.py suggestions.jsonl suggestions_reference_index.json 
-        ./feed_to_vespa.py _suggestions_reference_config.yml
+        ls -l /github/workspace/_site/json_indexes/open_index.json
