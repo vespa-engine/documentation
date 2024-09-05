@@ -288,9 +288,9 @@ $ python3 src/python/create_bert_embeddings.py mind
     <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o mind/train/news_embeddings.tsv \
-  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding.tsv
+  https://data.vespa-cloud.com/sample-apps-data/mind_news_embedding.tsv
 $ curl -L -o mind/dev/news_embeddings.tsv \
-  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding_dev.tsv
+  https://data.vespa-cloud.com/sample-apps-data/mind_news_embedding_dev.tsv
 </pre>
   </div>
   </li>
