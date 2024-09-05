@@ -152,7 +152,7 @@ rank-profile bert-ranker inherits default {
 }</pre>
 
 The example above limits the sequence length to `256` using the built-in 
-[convenience functions](reference/rank-features.html#tokenInputIds(length, input, ...)) 
+[convenience functions](reference/rank-features.html#tokenInputIds(length,input,...)) 
 for generating token sequence input to Transformer models. Note that `tokenInputIds` uses 101 as start of sequence
 and 102 as padding. This is only compatible with BERT-based tokenizers. See section on [performance](#performance)
 about sequence length and impact on inference performance.
@@ -161,7 +161,7 @@ about sequence length and impact on inference performance.
 ROBERTA-based models only have two inputs (input_ids and attention_mask). In addition, the default tokenizer
 start of sequence token is 1 and end of sequence is 2. In this case we use the
 `customTokenInputIds` function in `my_input_ids` function. See
-[customTokenInputIds](reference/rank-features.html#customTokenInputIds(startSequenceId, sepSequenceId, length, input, ...)).
+[customTokenInputIds](reference/rank-features.html#customTokenInputIds(startSequenceId,sepSequenceId,length,input,...)).
 
 <pre>
 rank-profile roberta-ranker inherits default {
