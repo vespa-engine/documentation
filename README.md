@@ -136,7 +136,7 @@ File locations below refer to this repo's root.
     1. The generated _open_index.json_ can then be
       [fed to Vespa](https://docs.vespa.ai/en/reference/document-json-format.html)
 
-1. Feed changes to https://console.vespa.oath.cloud/tenant/vespa-team/application/vespacloud-docsearch
+1. Feed changes to https://console.vespa-cloud.com/tenant/vespa-team/application/vespacloud-docsearch
    using [feed_to_vespa.py](feed_to_vespa.py):
     1. Visit all content on the Vespa instance to list all IDs
     1. Determine whether or not to remove documents
