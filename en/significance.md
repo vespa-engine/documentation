@@ -10,7 +10,7 @@ Significance is calculated as inverse document frequency (IDF):
 $$ IDF(t, N) = log(\frac{N}{n_t}) $$
 
 where:
-- $$ N $$ is the total number of documents
+- $$ N $$ is the total number of documents in the collection
 - $$ n_t $$ is the number of documents containing term $$ t $$
 
 Variations of IDF are used in [bm25](reference/bm25.html) and [nativeRank](reference/nativerank.html).
@@ -45,25 +45,38 @@ A global significance model addresses these issues.
 In a *global significance model*, significance values are shared across nodes and don’t change when new documents are added. There are two ways to provide a global model:
 
 1. Include [significance values in a query](#significance-values-in-a-query).
+1. Set [significance values in a searcher](#significance-values-in-a-query).
 2. Specify [models in services.xml](#significance-models-in-servicesxml).
 
 
 ## Significance values in a query
 
-Significance values can be specified in [YQL](https://docs.vespa.ai/en/query-language.html) using the [significance feature](reference/query-language-reference.html#significance), e.g.
+Document frequency and document count can be specified in YQL, e.g.:
+```sql
+select * from example where content contains ({documentFrequency: {frequency: 13, count: 101}}"colors")
+```
 
+Alternatively, significance values can be specified in YQL directly and used instead of computed IDF values, e.g.:
 ```sql
 select * from example where content contains ({significance:0.9}"neurotransmitter")
 ```
 
-Alternatively, a [custom Searcher](https://docs.vespa.ai/en/searcher-development.html#writing-a-searcher) can be used to add document frequency to query terms:
+# Significance values in a searcher
+
+Document frequency and significance values can be also set in a [custom searcher](https://docs.vespa.ai/en/searcher-development.html#writing-a-searcher):
 
 ```java
-private void setIDF(WordItem item, frequency: long, numDocuments: long) {
+private void setDocumentFrequency(WordItem item, long frequency, long numDocuments) {
     var word = item.getWord();
     word.setDocumentFrequency(new DocumentFrequency(frequency, numDocuments));
 }
+
+private void setSignificance(WordItem item, float significance) {
+    var word = item.getWord();
+    word.setSignificance(significance);
+}
 ```
+
 
 ## Significance models in services.xml
 
@@ -151,7 +164,7 @@ The language can be either [explicitly tagged](reference/query-api-reference.htm
 
 The resolution logic is as follows:
 - When language is explicitly tagged
-  - Select the last model specified in [services.xml](#significance-models-in-servicesxml) that has the tagged language.
+  - Select the last specified model that has the tagged language.
     Fail if none are available.
   - If the language is tagged as “un” (unknown), select the model for “un” first, fall back to “en” (english).
     Fail if none are available.
