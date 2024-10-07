@@ -89,7 +89,7 @@ field doc_embedding type tensor&lt;float&gt;(x[384]) {
 }
 </pre>
 
-A tensor type (mixed) with one mapped and one indexed dimension stores multiple vectors per document:
+A tensor type (mixed) with one or more mapped dimensions and one indexed dimension stores multiple vectors per document:
 <pre>
 field doc_embeddings type tensor&lt;float&gt;(m{},x[384]) {
     indexing: attribute
