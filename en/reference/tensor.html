@@ -107,16 +107,23 @@ tensor&lt;double&gt;(key{},x[2])
 </p>
 <ul>
   <li>Tensors in queries,
-    see <a href="../ranking-expressions-features.html#query-feature-types">defining query feature types</a></li>
+    see <a href="../ranking-expressions-features.html#query-feature-types">defining query feature types</a>
+    and <a href="../tensor-user-guide.html#querying-with-tensors">tensor user guide</a>
+  </li>
   <li>Constant tensors in <a href="stateless-model-reference.html">stateless model evaluation</a></li>
   <li>Building tensors using the
     <a href="https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html">
       Java Tensor API</a></li>
 </ul>
-
+<p>
+  The tensor literal form is <em>not</em> a JSON format.
+  When sent inside a JSON format (like when you POST a query),
+  it should be passed as a string.
+</p>
 
 <h3 id="general-literal-form">General literal form</h3>
-<p>The general literal form can represent any tensor and is as follows (EBNF):</p>
+<p>The general literal form is verbose and explicit,
+   can represent any tensor and is as follows (EBNF):</p>
 <pre>
 literal tensor = ( tensor-type-spec ":" )? "{" cells "}" ;
 cells = | cell , { "," cell } ;
@@ -127,7 +134,8 @@ dimension = integer | identifier ;
 label = integer | identifier | 'string' | "string" ;
 identifier = ["A"-"Z","a"-"z","0"-"9","_","@"](["A"-"Z","a"-"z","0"-"9","_","@","$"])*
 </pre>
-<p>If no type spec is included the type is inferred from cells.</p>
+<p>For query inputs, the type should be declared as an input in the ranking profile,
+   so the type spec is usually skipped.</p>
 
 <h4 id="general-literal-form-examples">General literal form examples:</h4>
 <p>An empty tensor:</p>
@@ -155,12 +163,15 @@ tensor(key{}):{ {key:'key.1'}:3.0, {key:'key 2'}:5.0, {key:"key's"}:7.0 }
 <h3 id="indexed-short-form">Indexed short form</h3>
 <p>
   Tensors where all dimensions are indexed can be written as numbers wrapped in square brackets in
-  <em>right dimension adjacent</em> order. This form requires an explicit tensor type.
+  <em>right dimension adjacent</em> order. If the type isn't declared already, this form requires
+  an explicit tensor type.  Note: Dimensions should be alphabetically ordered.
 </p>
 <p>
-  Brackets must either be nested according to the structure of the type, where values in dimensions to the
-  right are closer than dimensions on the left, or alternatively all values may be given (in the same order)
-  as a flat array (the latter not supported in expressions).
+  Brackets must be be nested according to the structure of the
+  type, where values in dimensions to the right are closer than
+  dimensions on the left.  For backwards compatibility (not supported
+  in expressions), cell values may also be given in the same order
+  as a flat array.
 </p>
 
 <h4 id="Indexed-short-form-examples">Indexed short form examples:</h4>
@@ -176,8 +187,7 @@ tensor&lt;float&gt;(x[3]):[3.0, 5.0, 7.0]
 tensor&lt;float&gt;(x[2],y[3]):[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
 </pre>
 <p>
-  The dimension order here is given by the order in which the dimensions are specified,
-  not in the natural (alphabetic) order inherent in the tensor type.
+  Deprecated:
   Since inner brackets can be omitted, the above is equivalent to
 </p>
 <pre>
@@ -186,31 +196,40 @@ tensor&lt;float&gt;(x[2],y[3]):[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
 <h3 id="indexed-hex-form">Binary hex format</h3>
 <p>
-  Tensors representing binary data (indexed tensors with <code>int8</code> cell value type) may be
-  represented using a hexadecimal representation, similar to the corresponding 
+  Tensors representing binary data (indexed tensors with <code>int8</code>
+  cell value type) may be represented using a hexadecimal representation,
+  similar to the corresponding
   <a href="document-json-format.html#tensor-hex-dump">JSON tensor feed format</a>.
+  If the tensor type is declared as
+  <code>tensor&lt;int8&gt;(x[2],y[3])</code> input could be just
+<pre>
+0B22038405FF
+</pre>
+  which would be equivalent to
+<pre>
+[[11, 34, 3], [-124, 5, -1]]
+</pre>
 </p>
 
 <h3 id="mapped-short-form">Mapped short form</h3>
 <p>
-  Tensors with a single mapped dimension can be written by specifying just the label in that implicit dimension
-  instead of a full address map.
-  This form requires a type to be specified.
+  Tensors with a single mapped dimension can be written by specifying
+  just the label in that implicit dimension instead of a full address
+  map.
+  This form requires a type to be declared or explicitly specified.
 </p>
 
 <h4 id="map-short-form-example">Map short form example:</h4>
 <pre>
-tensor&lt;float&gt;(key{}):{ key1:1.0,
-                       key2:2.0 }
+tensor&lt;float&gt;(key{}):{ key1:1.0, key2:2.0 }
 </pre>
-
 
 <h3 id="mixed-short-form">Mixed short form</h3>
 <p>
   Tensors with a single mapped dimension and one or more indexed dimensions
   can be written by specifying the mapped dimension in the map short form
   and the values of each dense subspace on the indexed short form.
-  This form requires a type to be specified.
+  This form requires a type to be known (declared) or specified.
 </p>
 
 <h4 id="mixed-short-form-example">Mixed short form example:</h4>
@@ -218,6 +237,54 @@ tensor&lt;float&gt;(key{}):{ key1:1.0,
 <pre>
 tensor&lt;float&gt;(key{},x[2],y[3]):{ key1:[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
                                  key2:[[1.1, 2.1, 3.1], [4.1, 5.1, 6.1]] }
+</pre>
+
+This may even be combined with a hexadecimal format for the dense subspace:
+<pre>
+tensor&lt;int8&gt;(key{},x[5]):{ key1: 0102030405, key2: fffefdfcfb }
+</pre>
+
+<p>
+  Tensors with a multiple mapped dimensions may use an extended
+  variant of the mixed short form, where labels are nested.
+  Again note that the type should be declared with dimensions
+  in alphabetic order, so the nesting will follow a consistent
+  ordering.
+</p>
+<pre>
+tensor(category{},key{},x[2],y[3]):{
+   cat1:{key1:[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+         key2:[[1.1, 2.1, 3.1], [4.1, 5.1, 6.1]]},
+   cat2:{key1:[[7.3, 8.3, 9.3], [7.0, 8.0, 9.0]],
+         key3:[[7.5, 8.5, 9.5], [7.9, 8.9, 9.9]]}
+}
+</pre>
+the equivalent fully-specified literal form would be
+<pre>
+tensor(category{},key{},x[2],y[3]):{{category:cat1, key:key1, x:0, y:0}: 1.0,
+                                    {category:cat1, key:key1, x:0, y:1}: 2.0,
+                                    {category:cat1, key:key1, x:0, y:2}: 3.0,
+                                    {category:cat1, key:key1, x:1, y:0}: 4.0,
+                                    {category:cat1, key:key1, x:1, y:1}: 5.0,
+                                    {category:cat1, key:key1, x:1, y:2}: 6.0,
+                                    {category:cat1, key:key2, x:0, y:0}: 1.1,
+                                    {category:cat1, key:key2, x:0, y:1}: 2.1,
+                                    {category:cat1, key:key2, x:0, y:2}: 3.1,
+                                    {category:cat1, key:key2, x:1, y:0}: 4.1,
+                                    {category:cat1, key:key2, x:1, y:1}: 5.1,
+                                    {category:cat1, key:key2, x:1, y:2}: 6.1,
+                                    {category:cat2, key:key1, x:0, y:0}: 7.3,
+                                    {category:cat2, key:key1, x:0, y:1}: 8.3,
+                                    {category:cat2, key:key1, x:0, y:2}: 9.3,
+                                    {category:cat2, key:key1, x:1, y:0}: 7.0,
+                                    {category:cat2, key:key1, x:1, y:1}: 8.0,
+                                    {category:cat2, key:key1, x:1, y:2}: 9.0,
+                                    {category:cat2, key:key3, x:0, y:0}: 7.5,
+                                    {category:cat2, key:key3, x:0, y:1}: 8.5,
+                                    {category:cat2, key:key3, x:0, y:2}: 9.5,
+                                    {category:cat2, key:key3, x:1, y:0}: 7.9,
+                                    {category:cat2, key:key3, x:1, y:1}: 8.9,
+                                    {category:cat2, key:key3, x:1, y:2}: 9.9}
 </pre>
 
 <h2 id="tensor-functions">Tensor functions</h2>
