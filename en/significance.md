@@ -5,13 +5,13 @@ title: "Significance Model"
 
 *Significance* is a measure of how rare a term is in a collection of documents.
 Rare terms like "neurotransmitter" are weighted higher during ranking than common terms like "the".
-Significance is calculated as inverse document frequency (IDF):
+Significance is often calculated as inverse document frequency (IDF):
 
 $$ IDF(t, N) = log(\frac{N}{n_t}) $$
 
 where:
 - $$ N $$ is the total number of documents in the collection
-- $$ n_t $$ is the number of documents containing term $$ t $$
+- $$ n_t $$ is the number of documents containing the term $$ t $$
 
 Variations of IDF are used in [bm25](reference/bm25.html) and [nativeRank](reference/nativerank.html).
 
@@ -21,20 +21,21 @@ A local model is node-specific and a global model is shared across nodes.
 
 # Local significance model
 
-For string fields indexed with [bm25](reference/bm25.html) or [nativeRank](reference/nativerank.html),
+For `string` fields indexed with [bm25](reference/bm25.html) or [nativeRank](reference/nativerank.html),
 Vespa creates a local significance model on each content node.
 Each node uses its own local model for the queries it processes.
 
-Nodes can have different significance values for the same query term.
+Different nodes can have different significance values for the same term.
 In large collections, this difference is usually small and doesn’t affect ranking quality.
 
-Ranking becomes non-deterministic in the following situations:
+One issue with the local models is that ranking is non-deterministic in the following cases:
 1. When new documents are added, local models on affected content nodes are updated.
 2. When the content cluster [redistributes documents](elasticity.html) across nodes, e.g. adding, removing nodes for scaling and failure recovery, the models change on the nodes involved.
 3. When using [grouped distribution](elasticity.html#grouped-distribution),
 queries can return different results depending on which group processes them.
 
-Local significance models are not available in [streaming search](streaming-search.html) because inverted indexes are not constructed so IDF values can't be extracted.
+Another issue is that local significance models are not available in [streaming search](streaming-search.html)
+because inverted indexes are not constructed so IDF values can't be extracted.
 All significance values are set to 1, which is the default value for unknown terms.
 The lack of significance values may [substantially degrade the ranking quality](blog/global-significance.html).
 
@@ -80,7 +81,7 @@ private void setSignificance(WordItem item, float significance) {
 
 ## Significance models in services.xml
 
-The `significance` element in [services.xml](reference/services-search.html#significance) specifies one or more models:
+[`significance` element in services.xml](reference/services-search.html#significance) specifies one or more models:
 
 ```xml
 <container version="1.0">
