@@ -5,7 +5,7 @@ title: "Significance Model"
 
 *Significance* is a measure of how rare a term is in a collection of documents.
 Rare terms like "neurotransmitter" are weighted higher during ranking than common terms like "the".
-Significance is often calculated as inverse document frequency (IDF):
+Significance is often calculated as the inverse document frequency (IDF):
 
 $$ IDF(t, N) = log(\frac{N}{n_t}) $$
 
