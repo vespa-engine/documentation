@@ -46,9 +46,8 @@ A global significance model addresses these issues.
 In a *global significance model*, significance values are shared across nodes and don’t change when new documents are added. There are two ways to provide a global model:
 
 1. Include [significance values in a query](#significance-values-in-a-query).
-1. Set [significance values in a searcher](#significance-values-in-a-query).
-2. Specify [models in services.xml](#significance-models-in-servicesxml).
-
+2. Set [significance values in a searcher](#significance-values-in-a-searcher).
+3. Specify [models in services.xml](#significance-models-in-servicesxml).
 
 ## Significance values in a query
 
@@ -62,7 +61,7 @@ Alternatively, significance values can be specified in YQL directly and used ins
 select * from example where content contains ({significance:0.9}"neurotransmitter")
 ```
 
-# Significance values in a searcher
+## Significance values in a searcher
 
 Document frequency and significance values can be also set in a [custom searcher](https://docs.vespa.ai/en/searcher-development.html#writing-a-searcher):
 
