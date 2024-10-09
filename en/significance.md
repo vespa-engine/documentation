@@ -95,8 +95,7 @@ private void setSignificance(WordItem item, float significance) {
 </container>
 ```
 
-Models are identified by `model-id` or by providing `url` or `path` to a model file in the application package.
-The `path` should be relative to the package root.
+Models are either identified by `model-id`, by providing a `url` to an external resource, or by specify a `path` to a model file in the application package
 The order in which the models are specified determines the model precedence, with the last model overriding the previous ones.
 See [model resolution](#model-resolution).
 
