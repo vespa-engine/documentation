@@ -34,7 +34,7 @@ const handleQuery = (query) => {
     document.getElementById("hits").innerHTML = "";
     result.innerHTML = `Searching for '${escapeHtml(query)}' ...`;
     const searchParams = new URLSearchParams({term: query});
-    fetch("https://doc-search.vespa.oath.cloud/search/?" + searchParams.toString())
+    fetch("https://api.search.vespa.ai/search/?" + searchParams.toString())
         .then((res) => res.json())
         .then((res) => { const children = (res.root.children)? res.root.children : [];
           handleSuggestionResults(children.filter(child => child.fields.sddocname === "term"));
@@ -63,7 +63,7 @@ const handleLocationQuery = () => {
       userinput: query,
     });
 
-    fetch("https://doc-search.vespa.oath.cloud/search/?" + searchParams.toString())
+    fetch("https://api.search.vespa.ai/search/?" + searchParams.toString())
         .then((res) => res.json())
         .then((res) => handleResults(res.root.children, escapeHtml(query)))
   }
