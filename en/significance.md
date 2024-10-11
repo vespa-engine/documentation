@@ -152,9 +152,11 @@ The significance model file is a JSON file that contains term document frequenci
 }
 ```
 
-Significance model files can be compressed with [zstandard](https://facebook.github.io/zstd/).
+A significance model file can be compressed with [zstandard](https://facebook.github.io/zstd/)
+when included in the application package or made available via a URL.
 
 Vespa provides a [CLI tool for generating model files](operations-selfhosted/vespa-cmdline-tools.html#vespa-significance) from Vespa documents.
+It is uses the same <a href="../linguistics.html">linguistic module</a> as in query processing to extract tokens and their document frequencies.
 
 ### Model resolution
 
