@@ -86,7 +86,7 @@ private void setSignificance(WordItem item, float significance) {
 <container version="1.0">
     <search>
         <significance>
-            <model model-id="wikimedia"/>
+            <model model-id="significance-en-wikipedia-v1"/>
             <model url="https://some/uri/mymodel.multilingual.json" />
             <model path="models/mymodel.no.json.zst" />
         </significance>
@@ -94,9 +94,10 @@ private void setSignificance(WordItem item, float significance) {
 </container>
 ```
 
-Models are either identified by `model-id`, by providing a `url` to an external resource, or by specify a `path` to a model file in the application package
-The order in which the models are specified determines the model precedence, with the last model overriding the previous ones.
-See [model resolution](#model-resolution).
+Vespa Cloud users have access to [pre-built models](https://cloud.vespa.ai/en/model-hub#significance-models), identified by `model-id`.
+In addition, all users can specify their own models by providing a `url` to an external resource or a `path` to a model file within the application package.
+Vespa provides a [command line tool](operations-selfhosted/vespa-cmdline-tools.html#vespa-significance) to generate [model files](#significance-model-file) from documents.
+The order in which the models are specified determines the model precedence, see [model resolution](#model-resolution) for details.
 
 In addition to adding models in [services.xml](reference/services-search.html#significance),
 the `significance` feature must be enabled in the [`rank-profile` section of the schema](reference/schema-reference.html#significance), e.g.
@@ -119,6 +120,8 @@ schema example {
 ```
 
 The model will be applied to all query terms except those that already have significance values from the query.
+
+Specifying significance models in services.xml is available in Vespa as of version 8.426.8.
 
 ### Significance model file
 
@@ -167,7 +170,7 @@ The resolution logic is as follows:
 - When language is explicitly tagged
   - Select the last specified model that has the tagged language.
     Fail if none are available.
-  - If the language is tagged as “un” (unknown), select the model for “un” first, fall back to “en” (english).
+  - If the language is tagged as “un” (unknown), select the model for “un” first, fall back to “en” (English).
     Fail if none are available.
 - When language is implicitly detected
   - Select the last specified model with the detected language. If not available, try “un” and then “en” languages.
