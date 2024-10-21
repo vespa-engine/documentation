@@ -159,7 +159,7 @@ A significance model file can be compressed with [zstandard](https://facebook.gi
 when included in the application package or made available via a URL.
 
 Vespa provides a [CLI tool for generating model files](operations-selfhosted/vespa-cmdline-tools.html#vespa-significance) from Vespa documents.
-It is uses the same <a href="../linguistics.html">linguistic module</a> as in query processing to extract tokens and their document frequencies.
+It is uses the same <a href="linguistics.html">linguistic module</a> as in query processing to extract tokens and their document frequencies.
 
 ### Model resolution
 
