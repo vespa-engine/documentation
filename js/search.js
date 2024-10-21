@@ -26,6 +26,12 @@ const debounce = (func, timeout = 200) => {
   };
 };
 
+const encode = (params) => {
+  return new URLSearchParams(params)
+    .toString()
+    .replaceAll('+', '%20'); // CloudFront requires that spaces are encoded as %20
+};
+
 
 const handleQuery = (query) => {
   if (query.length > 0) {
@@ -33,8 +39,7 @@ const handleQuery = (query) => {
 
     document.getElementById("hits").innerHTML = "";
     result.innerHTML = `Searching for '${escapeHtml(query)}' ...`;
-    const searchParams = new URLSearchParams({term: query});
-    fetch("https://api.search.vespa.ai/search/?" + searchParams.toString())
+    fetch("https://api.search.vespa.ai/search/?" + encode({term: query}))
         .then((res) => res.json())
         .then((res) => { const children = (res.root.children)? res.root.children : [];
           handleSuggestionResults(children.filter(child => child.fields.sddocname === "term"));
@@ -55,15 +60,15 @@ const handleLocationQuery = () => {
     document.getElementById("searchinput").value = query;
     result.innerHTML = `Searching for '${escapeHtml(query)}' ...`;
 
-    const searchParams = new URLSearchParams({
+    const searchParams = {
       yql: 'select * from doc where {grammar: "weakAnd"}userInput(@userinput)',
       hits: 25,
       ranking: 'documentation',
       locale: 'en-US',
       userinput: query,
-    });
+    };
 
-    fetch("https://api.search.vespa.ai/search/?" + searchParams.toString())
+    fetch("https://api.search.vespa.ai/search/?" + encode(searchParams))
         .then((res) => res.json())
         .then((res) => handleResults(res.root.children, escapeHtml(query)))
   }
