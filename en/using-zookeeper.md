@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Using ZooKeeper"
-redirect_from:
-- /documentation/using-zookeeper.html
 ---
 
 The Vespa container supports [ZooKeeper](https://zookeeper.apache.org/), which

@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News Recommendation Tutorial - parent child and tensor ranking"
-redirect_from:
-- /documentation/tutorials/news-7-recommendation-with-parent-child.html
 ---
 
 

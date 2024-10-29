@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - applications, feeding and querying"
-redirect_from:
-- /documentation/tutorials/news-2-basic-feeding-and-query.html
 ---
 
 
