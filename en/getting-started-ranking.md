@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Getting started with ranking"
-redirect_from:
-- /documentation/getting-started-ranking.html
 ---
 
 Learn how [ranking](ranking.html) works in Vespa by using the open [query API](query-api.html) of

@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Ranking With Transformer Cross-Encoder Models"
-redirect_from:
-- /documentation/cross-encoders.html
 ---
 
 [Cross-Encoder Transformer](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-4/) 

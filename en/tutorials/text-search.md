@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Text Search Tutorial"
-redirect_from:
-- /documentation/tutorials/text-search.html
 ---
 
 This tutorial will guide you through setting up a simple text search application. 

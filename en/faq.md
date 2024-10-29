@@ -2,8 +2,6 @@
 # Copyright Vespa.ai. All rights reserved.
 title: FAQ - frequently asked questions
 style: faq
-redirect_from:
-- /documentation/faq.html
 ---
 
 Refer to [Vespa Support](https://vespa.ai/support) for more support options.

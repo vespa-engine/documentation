@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - embeddings"
-redirect_from:
-- /documentation/tutorials/news-4-embeddings.html
 ---
 
 

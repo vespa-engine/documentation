@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Nearest Neighbor Search"
-redirect_from:
-- /documentation/nearest-neighbor-search.html
 ---
 
 Nearest neighbor search, or vector search, is a technique used

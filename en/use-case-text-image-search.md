@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Use Case - Text-Image Search"
-redirect_from:
-- /documentation/use-case-text-image-search.html
 ---
 
 The [text-image use
