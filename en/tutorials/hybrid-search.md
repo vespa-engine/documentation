@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Hybrid Text Search Tutorial"
-redirect_from:
-- /documentation/tutorials/hybrid-search.html
 ---
 
 

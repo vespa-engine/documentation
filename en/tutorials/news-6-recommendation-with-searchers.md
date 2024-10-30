@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - Searchers"
-redirect_from:
-- /documentation/tutorials/news-6-recommendation-with-searchers.html
 ---
 
 This is the sixth part of the tutorial series for setting up a Vespa

@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Contributing to Vespa"
-redirect_from:
-- /documentation/contributing.html
 ---
 
 Contributions to [Vespa](http://github.com/vespa-engine/vespa)

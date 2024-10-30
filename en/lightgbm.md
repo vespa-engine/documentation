@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Ranking with LightGBM Models"
-redirect_from:
-- /documentation/lightgbm.html
 ---
 
 [LightGBM](https://github.com/microsoft/LightGBM) is a gradient boosting

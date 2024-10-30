@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Ranking with TensorFlow Models"
-redirect_from:
-- /documentation/tensorflow.html
 ---
 
 Vespa can import TensorFlow models converted to the ONNX format. The tutorial 

@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Ranking With ONNX Models"
-redirect_from:
-- /documentation/onnx.html
 ---
 
 Vespa supports advanced ranking models through its tensor API. If your model is in the [ONNX format](https://onnx.ai/), Vespa can import and use the model directly. You can use ONNX models with Vespa [embedder](embedding.html) functionality or in [ranking](ranking.html).

@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Large Language Models in Vespa"
-redirect_from:
-- /documentation/llms-in-vespa.html
 ---
 
 Large Language Models (LLMs) are AI systems that generate human-like text,

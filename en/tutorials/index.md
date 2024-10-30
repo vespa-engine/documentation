@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Tutorials"
-redirect_from:
-- /documentation/tutorials/index.html
 ---
 
 ## News Search and recommendation

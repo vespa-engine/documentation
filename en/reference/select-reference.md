@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Select Reference"
-redirect_from:
-- /documentation/reference/select-reference.html
 ---
 
 

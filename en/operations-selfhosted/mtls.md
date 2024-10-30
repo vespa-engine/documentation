@@ -2,7 +2,6 @@
 # Copyright Vespa.ai. All rights reserved.
 title: "Securing Vespa with mutually authenticated TLS (mTLS)"
 redirect_from:
-- /documentation/mtls.html
 - /en/mtls.html
 ---
 

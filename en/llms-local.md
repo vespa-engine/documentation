@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Running LLMs inside your Vespa application"
-redirect_from:
-- /documentation/llms-local.html
 ---
 
 Please refer to [Large Language Models in Vespa](llms-in-vespa.html) for an

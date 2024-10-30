@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Ranking with XGBoost Models"
-redirect_from:
-- /documentation/xgboost.html
 ---
 
 Vespa supports importing Gradient Boosting Decision Tree (GBDT) models trained with XGBoost. 

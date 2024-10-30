@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - searching"
-redirect_from:
-- /documentation/tutorials/news-3-searching.html
 ---
 
 

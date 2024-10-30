@@ -1,8 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Improving Text Search through ML"
-redirect_from:
-- /documentation/tutorials/text-search-ml.html
 ---
 
 
