@@ -50,8 +50,8 @@ title: "Documents"
 
 <h3 id="id-scheme">id scheme</h3>
 <p>
-  Vespa has defined one scheme, the <em>id scheme</em>:
-  <code>id:&lt;namespace&gt;:&lt;document-type&gt;:&lt;key/value-pairs&gt;:&lt;user-specified&gt;</code>
+  Vespa currently has only one defined scheme, the <em>id scheme</em>:
+  <code>id:&lt;namespace&gt;:&lt;document-type&gt;:&lt;key/value-pair&gt;:&lt;user-specified&gt;</code>
 </p>
 {% include note.html content='
 An example mapping from ID to the URL used in <a href="document-v1-api-guide.html">/document/v1/</a> is from
@@ -70,22 +70,22 @@ Find examples and tools in <a href="document-v1-api-guide.html#document-not-foun
   </tr>
   </thead>
   <tbody>
-  <tr><th>namespace</th><td>Yes</td><td>See <a href="#namespace">below</a>.</td></tr>
+  <tr><th>namespace</th><td>Yes</td><td>Not used by Vespa, see <a href="#namespace">below</a>.</td></tr>
   <tr><th>document-type</th><td>Yes</td><td>Document type as defined in
     <a href="reference/services-content.html#document">services.xml</a> and the
     <a href="reference/schema-reference.html">schema</a>.</td></tr>
-  <tr><th style="white-space:nowrap">key/value-pairs</th><td>Optional</td><td>
+  <tr><th style="white-space:nowrap">key/value-pair</th><td>Optional</td><td>
     Modifiers to the id scheme, used to configure document distribution to
     <a href="content/buckets.html#document-to-bucket-distribution">buckets</a>.
     With no modifiers, the id scheme distributes all documents uniformly.
-    The key/value-pairs field contains a comma-separated list of lexicographically sorted key/value pairs.
+    The key/value-pair field contains one of two possible key/value pairs;
     <strong>n</strong> and <strong>g</strong> are mutually exclusive:
     <table class="table">
       <thead></thead><tbody>
         <tr><th>n=<em>&lt;number&gt;</em></th><td>
-          Number in the range [0,2^63-1]</td></tr>
+          Number in the range [0,2^63-1] - only for testing of abnormal bucket distributions</td></tr>
         <tr style="white-space: nowrap"><th>g=<em>&lt;groupname&gt;</em></th><td>
-          Just like n=, the string is hashed to a number</td></tr>
+          The <em>groupname</em> string is hashed and used to select the storage location</td></tr>
       </tbody>
     </table>
     {% include important.html content='This is only useful for document types with
@@ -99,8 +99,38 @@ Find examples and tools in <a href="document-v1-api-guide.html#document-not-foun
 </tbody>
 </table>
 
+<h3 id="docid-in-results">Document IDs in search results</h3>
+<p>
+  The full Document ID (as a string) will often contain redundant
+  information and be quite long; a typical value may look like
+  "id:mynamespace:mydoctype::user-specified-identifier" where only the
+  last part is useful outside Vespa.  The Document ID is therefore not
+  stored in memory, and it <strong>not always present</strong> in
+  search results.  It is therefore recommended to put your own unique
+  identifier (usually the "user-specified-identifier" above) in a
+  document field, typically named "myid" or "shortid" or similar:
+<pre>
+field shortid type string {
+    indexing: attribute | summary
+}
+</pre>
+  This enables using a
+  <a href="document-summaries.html">document-summary</a> with only
+  in-memory fields while still getting the identifier you actually
+  care about.  If the "user-specified-identifier" is just a simple
+  number you could even use "type int" for this field for minimal
+  memory overhead.
+</p>
 
 <h3 id="namespace">Namespace</h3>
+<p>
+  The namespace is often just a placeholder.  Commonly used values are
+  a short form of the tenant or application name, or the string "ns".
+  One use case for different namespaces is when you have different
+  sources for documents.  For example, synthetic documents used for
+  testing can use namespace "test" so it's easy to detect and remove
+  them if they are present outside the test by mistake.
+</p>
 <p>
   Example - if feeding
 </p>
