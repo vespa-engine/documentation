@@ -24,6 +24,11 @@ to reduce vector transfer cost and make clients simpler:
 <img src="/assets/img/vespa-overview-embeddings-2.svg" alt="Vespa's embedding feature, creating embeddings from text"
   width="890px" height="auto"/>
 
+<p>
+  Adding embeddings to schemas will change the characteristics of an application;
+  Memory usage will grow, and feeding latency might increase.
+  Read more on how to address this in <a href="/en/binarizing-vectors.html">binarizing vectors</a>.
+</p>
 
 <h2 id="configuring-embedders">Configuring embedders</h2>
 
@@ -35,6 +40,10 @@ to reduce vector transfer cost and make clients simpler:
     <component id="hf-embedder" type="hugging-face-embedder">
         <transformer-model path="my-models/model.onnx"/>
         <tokenizer-model path="my-models/tokenizer.json"/>
+        <prepend>
+            <query>query:</query>
+            <document>passage:</document>
+        </prepend>
     </component>
     ...
 </container>
@@ -124,8 +133,8 @@ schema doc {
 
 
 <h2 id="provided-embedders">Provided embedders</h2>
-
 <p>Vespa provides several embedders as part of the platform.</p>
+
 
 <h3 id="huggingface-embedder">Huggingface Embedder</h3>
 
@@ -237,11 +246,11 @@ which are then input to a supplied <a href="https://onnx.ai/">ONNX</a> model on 
 
 <pre>{% highlight xml %}
 <container version="1.0">
-  <component id="myBert" type="bert-embedder">
-    <transformer-model url="https://huggingface.co/intfloat/e5-small-v2/resolve/main/model.onnx"/>
-    <tokenizer-vocab url="https://huggingface.co/intfloat/e5-small-v2/raw/main/vocab.txt"/>
-    <max-tokens>128</max-tokens>
-  </component>
+    <component id="myBert" type="bert-embedder">
+        <transformer-model url="https://huggingface.co/intfloat/e5-small-v2/resolve/main/model.onnx"/>
+        <tokenizer-vocab url="https://huggingface.co/intfloat/e5-small-v2/raw/main/vocab.txt"/>
+        <max-tokens>128</max-tokens>
+    </component>
 </container>
 {% endhighlight %}</pre>
 <ul>
@@ -278,10 +287,10 @@ contextualized embeddings. This produces better quality than reducing all tokens
 <pre>{% highlight xml %}
 <container version="1.0">
     <component id="colbert" type="colbert-embedder">
-      <transformer-model url="https://huggingface.co/colbert-ir/colbertv2.0/resolve/main/model.onnx"/>
-      <tokenizer-model url="https://huggingface.co/colbert-ir/colbertv2.0/raw/main/tokenizer.json"/>
-      <max-query-tokens>32</max-query-tokens>
-      <max-document-tokens>128</max-document-tokens>
+        <transformer-model url="https://huggingface.co/colbert-ir/colbertv2.0/resolve/main/model.onnx"/>
+        <tokenizer-model url="https://huggingface.co/colbert-ir/colbertv2.0/raw/main/tokenizer.json"/>
+        <max-query-tokens>32</max-query-tokens>
+        <max-document-tokens>128</max-document-tokens>
     </component>
 </container>
 {% endhighlight %}</pre>
@@ -326,15 +335,15 @@ the embedder can compress the representation:
 
 <pre>
 schema doc {
-  document doc {
-    field text type string {..}
-  }
-  field colbert_tokens type tensor&lt;float&gt;(token{}, x[128]) {
-    indexing: input text | embed colbert | attribute
-  }
-  field colbert_tokens_compressed type tensor&lt;int8&gt;(token{}, x[16]) {
-    indexing: input text | embed colbert | attribute
-  }
+    document doc {
+        field text type string {..}
+    }
+    field colbert_tokens type tensor&lt;float&gt;(token{}, x[128]) {
+        indexing: input text | embed colbert | attribute
+    }
+    field colbert_tokens_compressed type tensor&lt;int8&gt;(token{}, x[16]) {
+        indexing: input text | embed colbert | attribute
+    }
 }
 </pre>
 
@@ -346,19 +355,19 @@ should divide the original vector size by 8 (128/8 = 16).</p>
 <p>You can also use <code>bfloat16</code> instead of <code>float</code> to reduce storage by 2x compared to <code>float</code>.</p>
 <pre>
 field colbert_tokens type tensor&lt;bfloat16&gt;(token{}, x[128]) {
-  indexing: input text | embed colbert | attribute
+    indexing: input text | embed colbert | attribute
 }
 </pre>
 
 <p>You can also use the ColBERT embedder with an array of strings (representing chunks):</p>
 <pre>
 schema doc {
-  document doc {
-    field chunks type array&lt;string&gt; {..}
-  }
-  field colbert_tokens_compressed type tensor&lt;int8&gt;(chunk{}, token{}, x[16]) {
-    indexing: input text | embed colbert chunk | attribute
-  }
+    document doc {
+        field chunks type array&lt;string&gt; {..}
+    }
+    field colbert_tokens_compressed type tensor&lt;int8&gt;(chunk{}, token{}, x[16]) {
+        indexing: input text | embed colbert chunk | attribute
+    }
 }
 </pre>
 
@@ -374,24 +383,24 @@ where you can e.g. use a document level vector and/or lexical matching.</p>
 <p>To reduce memory footprint, use <a href="attributes.html#paged-attributes">paged attributes</a>.</p>
 
 <h4 id="colbert-ranking">ColBERT ranking</h4>
-
+<p>
 See sample-applications for how to use ColBERT in ranking with variants of the MaxSim similarity operator
 expressed using Vespa tensor computation expressions. See:
-
 <a href="https://github.com/vespa-engine/sample-apps/tree/master/colbert">colbert</a> and
  <a href="https://github.com/vespa-engine/sample-apps/tree/master/colbert-long">colbert-long</a>.
+</p>
+
 
 <h3 id="splade-embedder">SPLADE embedder</h3>
 
 <p>An embedder supporting <a href="https://github.com/naver/splade">SPLADE</a> models. The
 SPLADE embedder maps text to mapped tensor, representing a text as a sparse vector of unique tokens and their weights.</p>
 
-
 <pre>{% highlight xml %}
 <container version="1.0">
     <component id="splade" type="splade-embedder">
-      <transformer-model path="models/splade_model.onnx"/>
-      <tokenizer-model path="models/tokenizer.json"/>
+        <transformer-model path="models/splade_model.onnx"/>
+        <tokenizer-model path="models/tokenizer.json"/>
     </component>
 </container>
 {% endhighlight %}</pre>
@@ -410,33 +419,36 @@ SPLADE embedder maps text to mapped tensor, representing a text as a sparse vect
 <p>See <a href="reference/embedding-reference.html#splade-embedder-reference-config">configuration reference</a> for all
 configuration options and defaults.</p>
 
-<p>The splade token weights are represented as a
-  <a href="tensor-user-guide.html#tensor-concepts">mapped tensor</a>: <code>tensor&lt;float&gt;(token{})</code>. </p>
-  <p>The embedder destination tensor is defined in the <a href="schemas.html">schema</a>.
+<p>
+  The splade token weights are represented as a
+  <a href="tensor-user-guide.html#tensor-concepts">mapped tensor</a>: <code>tensor&lt;float&gt;(token{})</code>.
+</p>
+<p>
+  The embedder destination tensor is defined in the <a href="schemas.html">schema</a>.
   The following demonstrates how to use the SPLADE embedder in the document schema to <a href="#embedding-a-document-field">embed a document field</a>.</p>
-  </p>
+</p>
 
-  <pre>
-  schema doc {
+<pre>
+schema doc {
     document doc {
-      field text type string {..}
+        field text type string {..}
     }
     field splade_tokens type tensor&lt;float&gt;(token{}) {
-      indexing: input text | embed splade | attribute
+        indexing: input text | embed splade | attribute
     }
-  }
-  </pre>
+}
+</pre>
 
 <p>You can also use the SPLADE embedder with an array of strings (representing chunks). Here, also
   using lower tensor cell precision <code>bfloat16</code>:</p>
 <pre>
 schema doc {
-  document doc {
-    field chunks type array&lt;string&gt; {..}
-  }
-  field splade_tokens type tensor&lt;bfloat16&gt;(chunk{}, token{}) {
-    indexing: input text | embed splade chunk | attribute
-  }
+    document doc {
+        field chunks type array&lt;string&gt; {..}
+    }
+    field splade_tokens type tensor&lt;bfloat16&gt;(chunk{}, token{}) {
+        indexing: input text | embed splade chunk | attribute
+    }
 }
 </pre>
 
@@ -446,8 +458,11 @@ telling the splade embedder the name of the tensor dimension to use for the chun
 <p>To reduce memory footprint, use <a href="attributes.html#paged-attributes">paged attributes</a>.</p>
 
 <h4 id="splade-ranking">SPLADE ranking</h4>
-See the splade <a href="https://github.com/vespa-engine/sample-apps/tree/master/splade">splade</a> sample application for how to use SPLADE in ranking. including
-also how to use the SPLADE embedder with an array of strings (representing chunks).
+<p>
+  See the splade <a href="https://github.com/vespa-engine/sample-apps/tree/master/splade">splade</a> sample application for how to use SPLADE in ranking,
+  including also how to use the SPLADE embedder with an array of strings (representing chunks).
+</p>
+
 
 <h2 id="embedder-performance">Embedder performance</h2>
 
@@ -468,6 +483,10 @@ also how to use the SPLADE embedder with an array of strings (representing chunk
 can dramatically improve performance and reduce cost.
 See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>.
 With GPU-accelerated instances, using fp16 models instead of fp32 can increase throughput by as much as 3x compared to fp32.</p>
+<p>
+  Refer to <a href="/en/binarizing-vectors.html">binarizing vectors</a> for how to reduce vector size.
+</p>
+
 
 
 <h2 id="metrics">Metrics</h2>
@@ -477,6 +496,7 @@ These metrics are prefixed with <code>embedder.</code>
 and listed in the <a href="reference/container-metrics-reference.html">Container Metrics</a> reference documentation.
 Third-party embedder implementations may inject the <code>ai.vespa.embedding.Embedder.Runtime</code> component to easily
 emit the same predefined metrics, although emitting custom metrics is perfectly fine.</p>
+
 
 
 <h2 id="sample-applications">Sample applications</h2>
@@ -497,38 +517,61 @@ emit the same predefined metrics, although emitting custom metrics is perfectly 
       how to use the splade-embedder.</li>
 </ul>
 
+
+
 <h2 id="tricks-and-tips">Tricks and tips</h2>
 
 <p>Various tricks that are useful with embedders.</p>
 
-<h3 id="adding a fixed string to a query text">Adding a fixed string to a query text</h3>
 
-<p>If you need to add a standard wrapper or a prefix instruction around the input text you want to embed
-    use parameter substitution to supply the text, as in <code>embed(myEmbedderId, @text)</code>,
-    and let the parameter (<code>text</code> here) be defined in a <a href="query-profiles.html">query profile</a>,
-    which in turn uses <a href="query-profiles.html#value-substitution">value substitution</a>
-    to place another query request supplied text value within it. The following is a concrete example
+<h3 id="adding-a-fixed-string-to-a-query-text">Adding a fixed string to a query text</h3>
+<p>
+  Embedding models might require text to be prepended with a fixed string, e.g.:
+</p>
+<pre>{% highlight xml %}
+<component id="e5" type="hugging-face-embedder">
+    <transformer-model url="https://huggingface.co/intfloat/e5-small-v2/resolve/main/model.onnx"/>
+    <tokenizer-model url="https://huggingface.co/intfloat/e5-small-v2/raw/main/tokenizer.json"/>
+    <prepend>
+        <query>query:</query>
+        <document>passage:</document>
+    </prepend>
+</component>
+{% endhighlight %}</pre>
+<p>
+  The above configuration prepends text in queries and field data.
+  Find a complete example in the <a href="https://github.com/vespa-engine/sample-apps/tree/master/colbert">ColBERT</a>
+  sample application.
+</p>
+<p>
+  An alternative approach is using query profiles to prepend query data.
+  If you need to add a standard wrapper or a prefix instruction around the input text you want to embed
+  use parameter substitution to supply the text, as in <code>embed(myEmbedderId, @text)</code>,
+  and let the parameter (<code>text</code> here) be defined in a <a href="query-profiles.html">query profile</a>,
+  which in turn uses <a href="query-profiles.html#value-substitution">value substitution</a>
+  to place another query request supplied text value within it. The following is a concrete example
   where queries should have a prefix instruction before embedded to vector representation. The following
-  defines a <code>text</code> input field to <code>search/query-profiles/default.xml</code>:</p>
-
-<pre>
-  &lt;query-profile id=&quot;default&quot;&gt;
-      &lt;field name=&quot;text&quot;&gt;Represent this sentence for searching relevant passages: %{user_query}&lt;/field&gt;
-  &lt;/query-profile&gt;
-</pre>
+  defines a <code>text</code> input field to <code>search/query-profiles/default.xml</code>:
+</p>
+<pre>{% highlight xml %}
+<query-profile id="default">
+    <field name="text">"Represent this sentence for searching relevant passages: %{user_query}</field>
+</query-profile>
+{% endhighlight %}</pre>
 
 <p>Then at query request time, we can pass <code>user_query</code> as a request parameter, this parameter is then used to produce
 the <code>text</code> value which then is embedded.</p>
-<pre>
-  {
+<pre>{% highlight json %}
+{
     "yql": "select * from doc where userQuery() or ({targetHits: 100}nearestNeighbor(embedding, e))",
     "input.query(e)": "embed(mxai, @text)",
     "user_query": "space contains many suns"
 }
-</pre>
-
+{% endhighlight %}</pre>
+<p>
 The text that is embedded by the embedder is then:
 <em>Represent this sentence for searching relevant passages: space contains many suns</em>.
+</p>
 
 
 <h3 id="concatenating-input-fields">Concatenating input fields</h3>
