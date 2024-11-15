@@ -1,24 +1,31 @@
 ---
-title: vespa auth
+title: vespa auth show
 render_with_liquid: false
 ---
 
-## vespa auth
+## vespa auth show
 
-Manage Vespa Cloud credentials
+Show authenticated user
 
 ### Synopsis
 
-Manage Vespa Cloud credentials.
+Show which user (if any) is authenticated with "auth login"
+
 
 ```
-vespa auth [flags]
+vespa auth show [flags]
+```
+
+### Examples
+
+```
+$ vespa auth show
 ```
 
 ### Options
 
 ```
-  -h, --help   help for auth
+  -h, --help   help for show
 ```
 
 ### Options inherited from parent commands
@@ -35,10 +42,5 @@ vespa auth [flags]
 
 ### SEE ALSO
 
-* [vespa](vespa.html)	 - The command-line tool for Vespa.ai
-* [vespa auth api-key](vespa_auth_api-key.html)	 - Create a new developer key for headless authentication with Vespa Cloud control plane
-* [vespa auth cert](vespa_auth_cert.html)	 - Create a new self-signed certificate for authentication with Vespa Cloud data plane
-* [vespa auth login](vespa_auth_login.html)	 - Authenticate Vespa CLI with Vespa Cloud control plane. This is preferred over api-key for interactive use
-* [vespa auth logout](vespa_auth_logout.html)	 - Sign out of Vespa Cloud
-* [vespa auth show](vespa_auth_show.html)	 - Show authenticated user
+* [vespa auth](vespa_auth.html)	 - Manage Vespa Cloud credentials
 
