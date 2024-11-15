@@ -29,6 +29,7 @@ $ vespa query --header="X-First-Name: Joe" "yql=select * from music where album 
 ### Options
 
 ```
+      --file string      Read query parameters from the given JSON file and send a POST request, with overrides from arguments
       --format string    Output format. Must be 'human' (human-readable) or 'plain' (no formatting) (default "human")
       --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help             help for query
