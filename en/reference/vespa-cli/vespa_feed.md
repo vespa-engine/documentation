@@ -65,6 +65,7 @@ $ cat docs.jsonl | vespa feed -
       --deadline int             Exit if this number of seconds elapse without any successful operations. 0 to disable (default 0)
       --header strings           Add a header to all HTTP requests, on the format 'Header: Value'. This can be specified multiple times
   -h, --help                     help for feed
+      --inflight int             The target number of inflight requests. 0 to dynamically detect the best value (default 0)
       --progress int             Print stats summary at given interval, in seconds. 0 to disable (default 0)
       --route string             Target Vespa route for feed operations (default "default")
       --speedtest int            Perform a network speed test using given payload, in bytes. 0 to disable (default 0)
