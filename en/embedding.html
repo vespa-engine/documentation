@@ -647,8 +647,83 @@ schema doc {
 
 
 <h2 id="troubleshooting">Troubleshooting</h2>
+<p>This section covers common issues and how to resolve them.</p>
+<h3 id="model-download-failure">Model download failure</h3>
 <p>
   If models fail to download, it will cause the Vespa Container to not start with
   <code>RuntimeException: Not able to create config builder for payload</code> -
   see <a href="/en/jdisc/container-components.html#component-load">example</a>.
+</p>
+<p>
+  This usually means that the model download failed. Check the Vespa log for more details.
+  The most common reasons for download failure are network issues or incorrect URLs.
+</p>
+
+<p>This will also be visible in the Vespa status output as the conntainer will not listen to its port:</p>
+    <pre>
+vespa status -t http://127.0.0.1:8080            
+Container at http://127.0.0.1:8080 is not ready: unhealthy container at http://127.0.0.1:8080/status.html: Get "http://127.0.0.1:8080/status.html": EOF
+Error: services not ready: http://127.0.0.1:8080
+    </pre>
+</p>
+
+<h3 id="shape-mismatch">Tensor Shape mismatch</h3>
+<p>
+    The native embedders expects the output tensors to have a specific shape. If the shape is incorrect, you will see an error message during feeding like:
+</p>
+<pre>
+feed: got status 500 ({"pathId":"..","..","message":"[UNKNOWN(252001) @ tcp/vespa-container:19101/chain.indexing]:
+Processing failed. Error message: java.lang.IllegalArgumentException: Expected 3 output dimensions for output name 'sentence_embedding': [batch, sequence, embedding], got 2 -- See Vespa log for details. "}) for put xx:not retryable
+</pre>
+<p></p>
+This usually means that the exported ONNX model output does not have the expected output tensor shape. For example, the above is 
+for the <a href="hf-embedder">hf-embedder</a> that expects the output shape to be [batch, sequence, embedding]. 
+See <a href="onnx.html#onnx-export">onnx export</a> for how to export models to ONNX format with the correct output shapes and
+<a href="onnx.html#onnx-debug">onnx debug</a> for debugging input and output names. 
+</p>
+
+<h3 id="input-names">Input names</h3>
+<p>The native embedder implementations expects that the ONNX model accepts certain input names. If the names are incorrect, it will cause the Vespa Container to not start and
+    you will see an error message in the vespa log like:</p>
+<pre>
+    WARNING container        Container.com.yahoo.container.di.Container
+    Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: my_input
+</pre>
+<p>This means that the ONNX model accepts"my_input", while our configuration attempted to use "input_ids". The default 
+    input names for the <a href="hf-embedder">hf-embedder</a> are "input_ids", "attention_mask" and "token_type_ids". These are overridable
+    in the configuration. See <a href="reference/embedding-reference.html#huggingface-embedder">reference</a>. Some models does not
+    require token_type_ids. We can specify this in the configuration by setting <code>transformer-token-type-ids</code> to empty
+    like in the following example.</p>
+    <pre>
+{% highlight xml %}
+<component id="hf-embedder" type="hugging-face-embedder">
+    <transformer-model path="my-models/a-model-without-token-types-model.onnx"/>
+    <tokenizer-model path="my-models/tokenizer.json"/>
+    <transformer-token-type-ids/>      
+</component>
+{% endhighlight %}</pre>
+
+
+<h3 id="output-names">Input names</h3>
+<p>The native embedder implementations expects that the ONNX model produces certain output names. It will cause the Vespa Container to not start and
+    you will see an error message in the vespa log like:</p>
+<pre>
+    Model does not contain required output: 'test'. Model contains: last_hidden_state
+</pre>
+<p>This means that the ONNX model produces "last_hidden_state", while our configuration attempted to use "test". The default 
+    output name for the <a href="hf-embedder">hf-embedder</a> is "last_hidden_state". This is overridable
+    in the configuration. See <a href="reference/embedding-reference.html#huggingface-embedder">reference</a>.</p>
+
+<h3 id="EOF">EOF</h3>
+<p>If vespa status shows that the container is healthy, but you get an EOF error during feeding, this means that the stateless container service has 
+    crashed. This could be related to embedder model size and esource constraints like memory allocated to the container and the configured
+    JVM heap size.</p> 
+<pre>
+vespa feed ext/1.json 
+feed: got error "Post "http://127.0.0.1:8080/document/v1/doc/doc/docid/1": unexpected EOF" (no body) for put id:doc:doc::1: giving up after 10 attempts
+</pre>
+<p>This could be related to insufficient memory for the stateless container (JVM). 
+    Check the container logs for OOM errors. See <a href="performance/container-tuning.html#jvm-tuning">jvm-tuning</a> for tuning options. 
+    This could also be caused by too little memory allocated to the docker or podman container. 
+    See <a href="operations-selfhosted/admin-procedures.html#no-endpoint">admin-procedures</a>.
 </p>
