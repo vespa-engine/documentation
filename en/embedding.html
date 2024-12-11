@@ -650,7 +650,7 @@ schema doc {
 <p>This section covers common issues and how to resolve them.</p>
 <h3 id="model-download-failure">Model download failure</h3>
 <p>
-  If models fail to download, it will cause the Vespa Container to not start with
+  If models fail to download, it will cause the Vespa stateless container service to not start with
   <code>RuntimeException: Not able to create config builder for payload</code> -
   see <a href="/en/jdisc/container-components.html#component-load">example</a>.
 </p>
@@ -667,34 +667,40 @@ Error: services not ready: http://127.0.0.1:8080
     </pre>
 </p>
 
-<h3 id="shape-mismatch">Tensor Shape mismatch</h3>
+<h3 id="shape-mismatch">Tensor shape mismatch</h3>
 <p>
-    The native embedders expects the output tensors to have a specific shape. If the shape is incorrect, you will see an error message during feeding like:
+    The native embedder implementations expect that the output tensor has a specific shape. 
+    If the shape is incorrect, you will see an error message during feeding like:
 </p>
 <pre>
 feed: got status 500 ({"pathId":"..","..","message":"[UNKNOWN(252001) @ tcp/vespa-container:19101/chain.indexing]:
 Processing failed. Error message: java.lang.IllegalArgumentException: Expected 3 output dimensions for output name 'sentence_embedding': [batch, sequence, embedding], got 2 -- See Vespa log for details. "}) for put xx:not retryable
 </pre>
-<p></p>
-This usually means that the exported ONNX model output does not have the expected output tensor shape. For example, the above is 
-for the <a href="hf-embedder">hf-embedder</a> that expects the output shape to be [batch, sequence, embedding]. 
+<p>
+This means that the exported ONNX model output tensor does not have the expected shape. For example, the above is 
+logged by the <a href="hf-embedder">hf-embedder</a> that expects the output shape to be [batch, sequence, embedding] (A 3D tensor). This is because the embedder
+implementation performs the <a href="reference/embedding-reference.html#huggingface-embedder">pooling-strategy</a> over the sequence dimension to produce a single embedding vector. 
+Batch size is always 1 for Vespa embeddings.
+</p>
+<p>
 See <a href="onnx.html#onnx-export">onnx export</a> for how to export models to ONNX format with the correct output shapes and
 <a href="onnx.html#onnx-debug">onnx debug</a> for debugging input and output names. 
 </p>
 
 <h3 id="input-names">Input names</h3>
-<p>The native embedder implementations expects that the ONNX model accepts certain input names. If the names are incorrect, it will cause the Vespa Container to not start and
+<p>The native embedder implementations expect that the ONNX model accepts certain input names. If the names are incorrect, it will cause the Vespa container service to not start and
     you will see an error message in the vespa log like:</p>
 <pre>
-    WARNING container        Container.com.yahoo.container.di.Container
-    Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: my_input
+WARNING container        Container.com.yahoo.container.di.Container
+Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: my_input
 </pre>
-<p>This means that the ONNX model accepts"my_input", while our configuration attempted to use "input_ids". The default 
+
+<p>This means that the ONNX model accepts "my_input", while our configuration attempted to use "input_ids". The default 
     input names for the <a href="hf-embedder">hf-embedder</a> are "input_ids", "attention_mask" and "token_type_ids". These are overridable
-    in the configuration. See <a href="reference/embedding-reference.html#huggingface-embedder">reference</a>. Some models does not
-    require token_type_ids. We can specify this in the configuration by setting <code>transformer-token-type-ids</code> to empty
-    like in the following example.</p>
-    <pre>
+    in the configuration (<a href="reference/embedding-reference.html#huggingface-embedder">reference</a>). Some embedding models does not
+    use the "token_type_ids" input. We can specify this in the configuration by setting <code>transformer-token-type-ids</code> to empty, 
+    illustrated by the following example.</p>
+<pre>
 {% highlight xml %}
 <component id="hf-embedder" type="hugging-face-embedder">
     <transformer-model path="my-models/a-model-without-token-types-model.onnx"/>
@@ -703,9 +709,8 @@ See <a href="onnx.html#onnx-export">onnx export</a> for how to export models to 
 </component>
 {% endhighlight %}</pre>
 
-
 <h3 id="output-names">Output names</h3>
-<p>The native embedder implementations expects that the ONNX model produces certain output names. It will cause the Vespa Container to not start and
+<p>The native embedder implementations expect that the ONNX model produces certain output names. It will cause the Vespa stateless container service to not start and
     you will see an error message in the vespa log like:</p>
 <pre>
     Model does not contain required output: 'test'. Model contains: last_hidden_state
@@ -715,15 +720,16 @@ See <a href="onnx.html#onnx-export">onnx export</a> for how to export models to 
     in the configuration. See <a href="reference/embedding-reference.html#huggingface-embedder">reference</a>.</p>
 
 <h3 id="EOF">EOF</h3>
-<p>If vespa status shows that the container is healthy, but you get an EOF error during feeding, this means that the stateless container service has 
-    crashed. This could be related to embedder model size and esource constraints like memory allocated to the container and the configured
-    JVM heap size.</p> 
+<p>If vespa status shows that the container is healthy, but you observe an EOF error during feeding, this means that the stateless container service has 
+    crashed and stopped listening to its port. This could be related to the embedder ONNX model size, docker container memory resource constraints,
+    or the configured JVM heap size of the Vespa stateless container service. 
+</p> 
 <pre>
 vespa feed ext/1.json 
 feed: got error "Post "http://127.0.0.1:8080/document/v1/doc/doc/docid/1": unexpected EOF" (no body) for put id:doc:doc::1: giving up after 10 attempts
 </pre>
 <p>This could be related to insufficient memory for the stateless container (JVM). 
-    Check the container logs for OOM errors. See <a href="performance/container-tuning.html#jvm-tuning">jvm-tuning</a> for tuning options. 
-    This could also be caused by too little memory allocated to the docker or podman container. 
-    See <a href="operations-selfhosted/admin-procedures.html#no-endpoint">admin-procedures</a>.
+    Check the container logs for OOM errors. See <a href="performance/container-tuning.html#jvm-tuning">jvm-tuning</a> for JVM tuning options (The default heap size is 1.5GB).
+    Container crashes could also be caused by too little memory allocated to the docker or podman container, which can cause the linux kernel to kill processes to free memory.
+    See the <a href="operations-selfhosted/docker-containers.html#memory">docker containers memory</a> documentation.
 </p>
