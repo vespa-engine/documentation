@@ -76,7 +76,7 @@ def vespa_feed(endpoint, feed, namespace, doc_type):
     splits = re.split(r'/|\.', endpoint)
     app_string = splits[3] + '.' + splits[2]
 
-    process = subprocess.run(['vespa', 'feed', '-a', app_string, '-t', endpoint, feed], capture_output=True)
+    process = subprocess.run(['vespa', 'feed', '-t', endpoint, feed], capture_output=True)
 
     # Print sderr if not empty
     if process.stderr:
