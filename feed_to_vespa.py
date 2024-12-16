@@ -75,6 +75,7 @@ def vespa_feed(endpoint, feed, namespace, doc_type):
     # FIXME: This is not going to work with the new endpoint format!
     splits = re.split(r'/|\.', endpoint)
     app_string = splits[3] + '.' + splits[2]
+    print("Feeding to app: {0} , endpoint: {1}".format(app_string, endpoint))
 
     process = subprocess.run(['vespa', 'feed', '-a', app_string, '-t', endpoint, feed], capture_output=True)
 
