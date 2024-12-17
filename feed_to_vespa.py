@@ -72,7 +72,6 @@ def vespa_feed(endpoint, feed, namespace, doc_type):
     if doc_type not in ["paragraph", "term", "doc"]:
         raise ValueError(":error:Unknown vespa doc_type: {0}".format(doc_type))
 
-    # FIXME: This is not going to work with the new endpoint format!
     splits = re.split(r'/|\.', endpoint)
     app_string = splits[3] + '.' + splits[2]
     print("Feeding to app: {0} , endpoint: {1}".format(app_string, endpoint))
