@@ -4,17 +4,52 @@ title: "Grouping Information in Results"
 ---
 
 <script>
-function showResult(elem) {
-    openTab(encodeURI("https://api.search.vespa.ai/search/?yql=select * from purchase where true | " +
-        getGrouping(elem)));
+const DEFAULT_GROUPING = "all( group(customer) each(output(sum(price))) )";
+function setGroupingParam(groupingVal) {
+    const currentUrl = new URL(window.location.href);  // Get the current URL
+    const urlParams = new URLSearchParams(currentUrl.search);
+    urlParams.set('grouping', groupingVal);  // Set or update the query parameter
+    currentUrl.search = urlParams.toString();
+    window.history.pushState({}, '', currentUrl);
 }
 
-function getGrouping(elem) {
-    let e = elem.previousSibling;
-    while(e && e.nodeType === Node.TEXT_NODE) {
-        e = e.previousSibling;
+function showResult() {
+    const newGroupingVal = document.getElementById('grouping-query-input').value;
+    // update the current url with the new search parameter
+    if (newGroupingVal !== DEFAULT_GROUPING) {
+    setGroupingParam(newGroupingVal)
     }
-    return e.value;
+    // open tab with results
+    openTab(encodeURI("https://api.search.vespa.ai/search/?yql=select * from purchase where true | " +
+      newGroupingVal));
+}
+
+function onKeyDown(event, elem) {
+  console.log(event, event.key === 'Enter')
+  if (event.key === 'Enter'){
+    console.log('show result', elem)
+    showResult(elem);
+  }
+  if (document.getElementById('grouping-query-input').value !== DEFAULT_GROUPING) {
+    document.getElementById('refresh-btn').classList.remove('hide');
+  } else{
+    document.getElementById('refresh-btn').classList.add('hide');
+  }
+}
+
+function clearGroupingParam() {
+    const currentUrl = new URL(window.location.href);  // Get the current URL
+    const urlParams = new URLSearchParams(currentUrl.search);
+    urlParams.delete('grouping');  // Set or update the query parameter
+    currentUrl.search = urlParams.toString();
+    window.history.pushState({}, '', currentUrl);
+}
+
+function reset(){
+  console.log('reset')
+  document.getElementById('grouping-query-input').value = DEFAULT_GROUPING;
+  document.getElementById('refresh-btn').classList.add('hide');
+  clearGroupingParam();
 }
 
 function openTab(url) {
@@ -25,15 +60,37 @@ function openTab(url) {
     link.click();
     link.remove();
 }
+
+function getQueryParam(name) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(name);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Get the value of the 'grouping' query parameter
+    const groupingValue = getQueryParam('grouping');
+    // If the 'grouping-query-input' element exists, set its value to the query parameter
+    const groupingInput = document.getElementById('grouping-query-input');
+    if (groupingValue !== null) {
+      document.getElementById('refresh-btn').classList.remove('hide');
+      groupingInput.value = groupingValue;
+    } else{
+      document.getElementById('refresh-btn').classList.add('hide');
+    }
+});
 </script>
 <p>
   Try running requests on the
   <a href="https://github.com/vespa-cloud/vespa-documentation-search#feed-grouping-examples">grouping example data</a>:
 </p>
 <div class="vespa-notification vespa-notification-query">
-  <input type="text" value="all( group(customer) each(output(sum(price))) )"
-         style="width: calc(100% - 155px); font-size: 1.6rem; color: #303030; font-family: 'Hind Madurai', sans-serif;"/>
-  <button onclick="showResult(this)" class="button is-solid is-small"
+  <span style="position: relative; width: calc(100% - 155px);">
+    <input type="text" id="grouping-query-input" value="all( group(customer) each(output(sum(price))) )"
+          style="width: calc(100% - 155px); font-size: 1.6rem; color: #303030; font-family: 'Hind Madurai', sans-serif;" onkeydown="onKeyDown(event, this)"/>
+    <button onclick="reset(this)" id="refresh-btn" class="is-solid is-small"
+          style="position: absolute; background-color: transparent; border: none; padding: 5px; right: 10px;"><span class="d-icon d-refresh" style="font-size: 16px;"></span></button>
+  </span>
+  <button onclick="showResult()" class="button is-solid is-small"
           style="width: 150px; font-size: 1.6rem; font-family: 'Hind Madurai', sans-serif;">Run grouping</button>
 </div>
 <br/>
