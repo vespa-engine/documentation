@@ -438,7 +438,7 @@ The training script writes these embeddings to the files
 `mind/user_embeddings.tsv` and `mind/news_embeddings.tsv`.
 
 
-## Mapping from inner-product search to euclidean search
+## Mapping from inner-product search to Euclidean search
 
 These vectors have been trained to maximize the inner product.
 Finding the best news articles given a user vector is called Maximum Inner Product Search - or MIPS.

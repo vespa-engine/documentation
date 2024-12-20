@@ -48,7 +48,7 @@ http://localhost:8080/search/?input=two+people+bicylcing
     search in large collections. Vespa implements a modified HNSW index that
     allows for index building during feeding, so one does not have to build the
     index offline. It also supports additional query filters directly, thus
-    avoiding the sub-optimal filtering after the ANN search.
+    avoiding the suboptimal filtering after the ANN search.
 
 * [Stateless model evaluation](stateless-model-evaluation.html)
 

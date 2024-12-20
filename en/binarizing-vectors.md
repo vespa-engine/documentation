@@ -84,7 +84,7 @@ any number > 0 will map to 1 - this threshold is configurable.
 * `tensor<float>(x[8])` is 8 x sizeof(float) = 8 x 32 bits = 256 bits = 32 bytes
 * `tensor<int8>(x[1])` is 1 x sizeof(int8) = 1 x 8 bits = 8 bits = 1 byte
 
-In other words, a compression factor of 32, which is expected, mapping a 32 bit float into 1 bit.
+In other words, a compression factor of 32, which is expected, mapping a 32-bit float into 1 bit.
 
 As memory usage often is the cost driver for applications, this has huge potential.
 However, there is a loss of precision, so the tradeoff must be evaluated.
@@ -432,7 +432,7 @@ rank-profile app_ranking_bin_full {
 Notes:
 * The first-phase ranking is as the binarized query above.
 * The second-phase ranking is using the full-precision query vector query(q)
-  with a bit-precision vector casted to float for type match.
+  with a bit-precision vector cast to float for type match.
 * Both query vectors must be supplied in the query.
 
 Note the differences when using full values in the query tensor, see the relevance score for the results:
