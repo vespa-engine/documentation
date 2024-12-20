@@ -10,7 +10,7 @@ This documents tells you what you need to know to contribute.
 
 ## Open development
 All work on Vespa happens directly on GitHub,
-using the [Github flow model](https://docs.github.com/en/get-started/quickstart/github-flow).
+using the [GitHub flow model](https://docs.github.com/en/get-started/quickstart/github-flow).
 We release the master branch a few times a week, and you should expect it to almost always work.
 In addition to the [public Screwdriver build](https://cd.screwdriver.cd/pipelines/6386)
 we have a large acceptance and performance test suite which
