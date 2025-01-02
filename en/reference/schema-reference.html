@@ -3017,11 +3017,11 @@ with same dimension of size <em>n</em> for all vectors.
   <a href="ranking-expressions.html#euclidean-distance-t">
   Euclidean_distance helper function</a>:
 </p>
-  <pre>
+<pre>
     function mydistance() {
         expression: euclidean_distance(attribute(myembedding), query(myqueryvector), mydim))
     }
-  </pre>
+</pre>
 
 
 <h3 id="angular">angular</h3>
@@ -3034,21 +3034,21 @@ with same dimension of size <em>n</em> for all vectors.
   To compute the angular distance directly in a ranking expression, use the
   <a href="ranking-expressions.html#cosine-similarity-t">
   cosine_similarity helper function</a>:
-  <pre>
+<pre>
     function angle() {
         expression: acos(cosine_similarity(attribute(myembedding), query(myqueryvector), mydim))
     }
-  </pre>
+</pre>
   Conversely, the cosine similarity can be recovered from the
   <a href="rank-features.html#distance(dimension,name)">distance rank-feature</a>
   when using a nearestNeighbor query operator:
-  <pre>
+<pre>
     rank-profile cosine {
         first-phase {
             expression: cos(distance(field, myembedding))
         }
     }
-  </pre>
+</pre>
   If possible, it's slightly better for performance to normalize both query and document vectors to the same
   L2 norm and use the <code>prenormalized-angular</code> metric instead; but note that returned
   distance and closeness will be different.
@@ -3129,7 +3129,7 @@ with same dimension of size <em>n</em> for all vectors.
   1.0 for a right angle, and 2.0 for vectors with exactly opposite directions.
   Getting the cosine score (or angle) is therefore easy:
 </p>
-  <pre>
+<pre>
     rank-profile cosine {
         first-phase {
           expression: 1.0 - distance(field, embedding)
@@ -3138,17 +3138,17 @@ with same dimension of size <em>n</em> for all vectors.
           expression: acos(1.0 - distance(field, embedding))
         }
     }
-  </pre>
+</pre>
   To compute the cosine similarity directly in a ranking expression
   instead of fetching one already computed in a nearestNeighbor query
   operator, use the
   <a href="ranking-expressions.html#cosine-similarity-t">
   cosine_similarity helper function</a>:
-  <pre>
+<pre>
     function mysimilarity() {
         expression: cosine_similarity(attribute(myembedding), query(myqueryvector), mydim))
     }
-  </pre>
+</pre>
 
 
 <h3 id="geodegrees">geodegrees</h3>
@@ -3262,9 +3262,19 @@ id: [positive integer]
 <p>
 Contained in <a href="#field">field</a> or <a href="#schema">schema</a>.
 Sets index parameters.
-Content in fields with <em>index</em> are <a href="#normalizing">normalized</a> and
-<a href="../linguistics.html#tokenization">tokenized</a> by default.
-This element can be single- or multivalued:
+</p>
+<p>
+  Content in <a href="#string">string</a>-fields with <em>index</em> is <a href="#normalizing">normalized</a> and
+  <a href="../linguistics.html#tokenization">tokenized</a> by default.
+  The field can be single- or multivalued (e.g. <code>array&lt;string&gt;</code>).
+</p>
+<p>
+  For <a href="#tensor">tensor</a>-typed fields, <em>index</em> creates an <a href="#index-hnsw">HNSW</a> index
+  for <a href="/en/nearest-neighbor-search-guide.html">Approximate Nearest Neighbor</a> queries,
+  with a default <a href="#euclidean">euclidean</a> distance metric.
+  The index is built after a <a href="#changes-that-require-restart-but-not-re-feed">content node restart</a> (automated on Vespa Cloud).
+</p>
+<p>Examples:</p>
 <pre>
 index [index-name]: [property]
 </pre>
@@ -3276,8 +3286,12 @@ index [index-name] {
     &hellip;
 }
 </pre>
-If index name is specified it will be used instead of the field name as name of the index.
-{% include deprecated.html content="Deprecated, use a field with the wanted name outside the document instead."%}
+
+{% include deprecated.html content='
+If <code>index-name</code> is specified, it will be used instead of the field name as name of the index.
+This use is deprecated, use a synthetic field with the wanted name outside the <code>document</code> block instead -
+see an <a href="/en/indexing.html#date-indexing">example</a>.'%}
+
 Parameters:
 <table class="table">
   <thead>
@@ -3323,6 +3337,7 @@ Parameters:
     <a href="../proton.html#index">indexes</a>
     for this field that have interleaved features in the document id streams.
     This makes it fast to compute the <em>bm25</em> score.
+    See the <a href="/en/reference/bm25.html">BM25 reference</a> for details and example use.
   </td>
 </tr>
 <tr><td><a href="#index-hnsw">hnsw</a></td>
@@ -3394,13 +3409,19 @@ hnsw {
 </tbody>
 </table>
 <p>
-The <a href="#distance-metric">distance metric</a> specified on the attribute
-is used when building and searching the graph. Example:
+  The <a href="#distance-metric">distance metric</a> specified on the <em>attribute</em>
+  is used when building and searching the graph. Example:
 <pre>
-index {
-    hnsw {
-        max-links-per-node: 16
-        neighbors-to-explore-at-insert: 200
+field text_embedding type tensor&lt;float&gt;(x[384]) {
+    indexing: summary | attribute | index
+    attribute {
+        distance-metric: prenormalized-angular
+    }
+    index {
+        hnsw {
+            max-links-per-node: 24
+            neighbors-to-explore-at-insert: 200
+        }
     }
 }
 </pre>
