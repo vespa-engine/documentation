@@ -19,6 +19,9 @@ More specifically, you will accomplish the following steps in this tutorial.
   and ensure you have a properly built dataset at the end of the process.
 * Illustrate the importance of going beyond pointwise loss functions when dealing with Learning To Rank (LTR) tasks.
 
+[Vespa Product Ranking](https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking)
+is a good resource for Learning To Rank using XGBoost and LightGBM, with linked blog posts.
+
 
 ## Collect rank feature data from Vespa
 
