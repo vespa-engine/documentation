@@ -13,6 +13,9 @@ Writes the document in the given file to Vespa.
 If the document already exists, all its values will be replaced by this document.
 If the document id is specified both as an argument and in the file the argument takes precedence.
 
+If json-file is a single dash ('-'), the document will be read from standard input.
+
+
 ```
 vespa document put [id] json-file [flags]
 ```

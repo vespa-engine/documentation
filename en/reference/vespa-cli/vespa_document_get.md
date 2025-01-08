@@ -5,7 +5,7 @@ render_with_liquid: false
 
 ## vespa document get
 
-Gets a document
+Gets documents
 
 ```
 vespa document get id [flags]
@@ -14,7 +14,7 @@ vespa document get id [flags]
 ### Examples
 
 ```
-$ vespa document get id:mynamespace:music::a-head-full-of-dreams
+$ vespa document get id:mynamespace:music::a-head-full-of-dreams...
 ```
 
 ### Options
