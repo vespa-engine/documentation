@@ -11,7 +11,7 @@ Retrieve and print all documents from Vespa
 
 Retrieve and print all documents from Vespa.
 
-By default prints each document received on its own line (JSONL format).
+By default, prints each document received on its own line (JSONL format).
 
 
 ```

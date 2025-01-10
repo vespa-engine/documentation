@@ -11,7 +11,7 @@ Show given configuration option, or all configuration options
 
 Show given configuration option, or all configuration options.
 
-By default this command prints the effective configuration for the current
+By default, this command prints the effective configuration for the current
 application, i.e. it takes into account any local configuration located in
 [working-directory]/.vespa.
 

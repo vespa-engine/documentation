@@ -26,7 +26,7 @@ If application directory is not specified, it defaults to working directory.
 
 In Vespa Cloud you may override the Vespa runtime version (--version) for your
 deployment. This option should only be used if you have a reason for using a
-specific version. By default Vespa Cloud chooses a suitable version for you.
+specific version. By default, Vespa Cloud chooses a suitable version for you.
 
 
 ```
