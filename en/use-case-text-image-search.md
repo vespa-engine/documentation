@@ -3,11 +3,10 @@
 title: "Use Case - Text-Image Search"
 ---
 
-The [text-image use
-case](https://github.com/vespa-engine/sample-apps/tree/master/text-image-search/) is an example
-of a text-to-image search application. Taking a textual query, such as "two
-people bicycling", it will return images containing two people on bikes. This
-application is built using [CLIP (Contrastive Language-Image
+The [text-image use case](https://github.com/vespa-engine/sample-apps/tree/master/text-image-search/) is an example
+of a text-to-image search application.
+Taking a textual query, such as "two people bicycling", it will return images containing two people on bikes.
+This application is built using [CLIP (Contrastive Language-Image
 Pre-Training)](https://github.com/openai/CLIP) which enables "zero-shot prediction".
 This means that the system can return sensible results for images it hasn't
 seen during training, allowing it to process and index any image. In this
@@ -15,18 +14,9 @@ use case, we use the [Flickr8k](https://github.com/jbrownlee/Datasets/blob/maste
 dataset, which was not used during training of the CLIP model.
 
 
-To start the application, please follow the instructions in the
+To start the application, follow the instructions in the
 [README](https://github.com/vespa-engine/sample-apps/blob/master/text-image-search/README.md).
-
-This sample application can be used in two different ways. The first is by
-using a [Python-based search
-app](https://github.com/vespa-engine/sample-apps/blob/master/text-image-search/src/python/README.md),
-which is suitable for exploration and analysis. The other is a [stand-alone
-Vespa
-application](https://github.com/vespa-engine/sample-apps/blob/master/text-image-search/README.md),
-which is more suitable for production.
-
-After deploying the application, you can ask questions like this:
+After deploying the application, you can ask questions like:
 
 ```
 http://localhost:8080/search/?input=two+people+bicylcing
@@ -34,12 +24,6 @@ http://localhost:8080/search/?input=two+people+bicylcing
 
 ### Highlighted features
 
-* [PyVespa](https://pyvespa.readthedocs.io/en/latest/index.html)
-
-    PyVespa is the official Python API for Vespa. This can be used to easily
-    create, modify, deploy and interact with Vespa instances. The main
-    goal of the library is to allow for faster prototyping and to facilitate
-    Machine Learning experiments for Vespa applications.
 
 * [Approximate nearest neighbors using an HNSW index](approximate-nn-hnsw.html)
 
@@ -73,4 +57,3 @@ http://localhost:8080/search/?input=two+people+bicylcing
     class with data in `services.xml`, and the resulting object is dependency
     injected to the component during construction. This application uses custom
     config to set up the token vocabulary used in tokenization.
-

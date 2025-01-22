@@ -221,7 +221,7 @@ Quantization of model weights can drastically improve serving efficiency on CPU.
 
 ## Examples
 
-The [Transformers](https://github.com/vespa-engine/sample-apps/tree/master/transformers)
+The [MS Marco](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking)
 sample application demonstrates using cross-encoders. 
 
 ## Using cross-encoders with multi-vector indexing
