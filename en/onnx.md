@@ -131,9 +131,8 @@ over multiple files, is currently not supported.
 
 ## Examples
 
-The [transformers](https://github.com/vespa-engine/sample-apps/tree/master/transformers)
-sample application uses a cross-encoder model to
-[re-rank documents](https://github.com/vespa-engine/sample-apps/blob/master/transformers/application/schemas/msmarco.sd).
+The [MS Marco](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking)
+sample application uses a cross-encoder model to re-rank documents.
 The [simple-semantic-search](https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search) sample application
 uses onnx models for embedding inference. [custom-embeddings](https://github.com/vespa-engine/sample-apps/tree/master/custom-embeddings) 
 has an example of a PyTorch model that is exported to onnx format for use in re-ranking. 
