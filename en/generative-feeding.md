@@ -35,7 +35,7 @@ schema passage {
 
 This schema includes two synthetic fields, `names` and `text_spanish`, generated from `text` field during feeding.
 Generators `names_extractor` and `spanish_translator` are ids for text generator components,
-which use an LLM to extract named entities and translate text to spanish.
+which use an LLM and a corresponding prompt to extract named entities and spanish translation.
 They are defined in `services.xml` as follows:
 
 ```xml
@@ -102,23 +102,24 @@ input text | generate names_extractor
 
 Prompts can be specified directly in `service.xml` using `<promptTemplate>` instead of `<promptTemplateFile>`.
 If neither `<promptTemplate>` nor `<promptTemplateFile>` are specified, the default prompt will be set to `{input}`.
-
-## Dynamic prompts
-
-Prompts can constructed prompts from several document fields, e.g.
+Inputs can be constructed from several several fields by concatenating them into one string, e.g.
 
 ```
-input "Translate from " . lang . " to Norwegian: " . text | generate translator | split "\n" | index | summary
+input "Translate from " . lang . " to Norwegian: " . text | generate translator
 ```
 
 In this example `lang` is a field specifying the original language for the `text` filed.
 
+## Generating string arrays
 
+Input of the `generate` expression can be of type `string` or `array<string>`.
+In case of `array<string>`, `generate` will process each `string` in the array independently, 
+making a separate call to a text generator component.
+The output will have `array<string>` type.
 
-
-## Generating array of strings
-
-
+In some use cases, e.g. information extraction, several entities are extracted from the same string.
+It can be achieved by a combination of prompting and `split` expression that takes `string` as input 
+and produces `array<string>` as output. See the prompt and `names` field in the first example.
 
 ## Support for local LLMs
 
@@ -172,9 +173,20 @@ Later when the rest of the application is tests, replace the model with a larger
 
 ## Custom text generators
 
+Application developers can implement their own components that can be used with `generate` indexing expression.
+The component has to implement `com.yahoo.language.process.TextGenerator` interface, e.g.
 
+```java
+import ai.vespa.llm.completion.Prompt;
+import com.yahoo.language.process.TextGenerator;
 
-
-
-Prompts can be also specified directly in `service.xml` by using `<promptTemplate>` tag instead of `<promptTemplateFile>`. 
-If neither `<promptTemplate>` nor `<promptTemplateFile>` are specified, the default prompt is `{input}`.
+public class MyTextGenerator implements TextGenerator {
+    @Override
+    public String generate(Prompt prompt, Context context) {
+        var stringBuilder = new StringBuilder();
+        stringBuilder.append("My ");
+        stringBuilder.append(prompt.asString());
+        return stringBuilder.toString();
+    }
+}
+```
