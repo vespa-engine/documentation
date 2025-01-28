@@ -3,7 +3,8 @@
 title: "Generating text with LLMs"
 ---
 
-Large Language Models (LLMs) enable a wide variety of text processing tasks without coding.
+Large Language Models (LLMs) enable a wide variety of natural language processing tasks 
+such as information extraction, summarization, question answering, translation, sentiment analysis etc.
 Vespa makes it easy to use LLMs at scale with [generate]() indexing expression.
 Consider the following schema:
 
@@ -26,17 +27,17 @@ schema passage {
     }
     
     
-    field text_spanish type string {
-        indexing: input text | generate spanish_translator | index | summary
+    field text_norwegian type string {
+        indexing: input text | generate norwegian_translator | index | summary
         index: enable-bm25
     }
 }
 ```
 
-This schema includes two synthetic fields, `names` and `text_spanish`, generated from `text` field during feeding.
-Generators `names_extractor` and `spanish_translator` are ids for text generator components,
-which use an LLM and a corresponding prompt to extract named entities and spanish translation.
-They are defined in `services.xml` as follows:
+This schema includes two synthetic fields, `names` and `text_norwegian`, generated from `text` field during feeding.
+Generators `names_extractor` and `norwegian_translator` are ids for text generator components,
+which use an LLM to extract named entities and translation.
+These components are specified in `services.xml` as follows:
 
 ```xml
 <container id="container" version="1.0">
@@ -59,18 +60,18 @@ They are defined in `services.xml` as follows:
         </config>
     </component>
 
-    <component id="spanish_translator" class="ai.vespa.llm.generation.LanguageModelTextGenerator">
+    <component id="norwegian_translator" class="ai.vespa.llm.generation.LanguageModelTextGenerator">
         <config name="ai.vespa.llm.generation.language-model-text-generator">
             <providerId>openai</providerId>
-            <promptTemplateFile>files/spanish_translator_prompt.txt</promptTemplateFile>
+            <promptTemplateFile>files/norwegian_translator_prompt.txt</promptTemplateFile>
         </config>
     </component>
     ...
 </container>
 ```
 
-Both `names_extractor` and `spanish_translator` specify `openai` as their `providerId`, 
-referencing OpenAI client component configured to use `gpt-4o-mini` model.
+Both `names_extractor` and `norwegian_translator` specify `openai` as their `providerId`, 
+referencing `OpenAI` client component with `gpt-4o-mini` model.
 See [OpenAI client reference]() for other parameters.
 
 Prompt templates are specified in separate files, e.g. `files/names_extractor_prompt.txt`.
@@ -99,33 +100,35 @@ The `{input}` placeholder in prompts is replaced by the value of the `text` fiel
 ```
 input text | generate names_extractor
 ```
-
-Prompts can be specified directly in `service.xml` using `<promptTemplate>` instead of `<promptTemplateFile>`.
-If neither `<promptTemplate>` nor `<promptTemplateFile>` are specified, the default prompt will be set to `{input}`.
 Inputs can be constructed from several several fields by concatenating them into one string, e.g.
 
 ```
-input "Translate from " . lang . " to Norwegian: " . text | generate translator
+input "Translate from " . language . " to Norwegian: " . text | generate translator
 ```
 
-In this example `lang` is a field specifying the original language for the `text` filed.
+Prompts can be specified directly in `service.xml` using `<promptTemplate>` instead of `<promptTemplateFile>` tag.
+If neither `<promptTemplate>` nor `<promptTemplateFile>` are specified, the default prompt is set to `{input}`.
 
 ## Generating string arrays
 
-Input of the `generate` expression can be of type `string` or `array<string>`.
+Input for `generate` expression can be of type `string` or `array<string>`.
 In case of `array<string>`, `generate` will process each `string` in the array independently, 
-making a separate call to a text generator component.
-The output will have `array<string>` type.
+making a separate call to a text generator component and corresponding LLM.
+The output will be of `array<string>` type.
 
-In some use cases, e.g. information extraction, several entities are extracted from the same string.
+For some use cases, e.g. information extraction, it can be useful to generate multiple strings from one string input.
 It can be achieved by a combination of prompting and `split` expression that takes `string` as input 
-and produces `array<string>` as output. See the prompt and `names` field in the first example.
+and produces `array<string>` as output, e.g.
+
+```
+input text | generate names_extractor | split "\n"
+```
 
 ## Support for local LLMs
 
-Vespa supports [local LLMs](llms-local.md) with `generate`.
-In this case, `providerId` in `LanguageModelTextGenerator` component is set to the `id` of the `LocalLLM` component
-specified in `services.xml` as follows:
+Vespa supports using [local LLMs](llms-local.md) with `generate`.
+In this case, `providerId` in `LanguageModelTextGenerator` component should be set to the `id` of the `LocalLLM` component
+specified in `services.xml`:
 
 ```
 <container>
@@ -149,13 +152,13 @@ specified in `services.xml` as follows:
 Local LLMs run in [container nodes]() and require considerable computational resources depending on the model, 
 context size and number of parallel requests.
 GPU is often needed to achieve acceptable performance in practical use cases.
-Test your application thoroughly to ensure that node size fits your local LLM configuration and workload.
+Test your application thoroughly to ensure that the node size fits your local LLM configuration and workload.
 See [local LLMs](llms-local.md) for details on node sizing and configuration of local LLMs.
 
-Model in `LocalLLM` component is usually specified with `model-id` (Vespa Cloud only) or `url` (both Cloud and OSS).
-During application deployment, LLM files are downloaded into container nodes, 
-which can take long time depending on the model size.
-Therefore we recommended testing deployments with tiny LLMs first, e.g.:
+Model in `LocalLLM` component is usually specified with `model-id` (Vespa Cloud) or `url` (both Vespa Cloud and OSS).
+During application deployment, LLM files are downloaded into container nodes. 
+This can take long time depending on the model size.
+Therefore we recommended testing deployments with small LLMs first, e.g.:
 ```
 <container>
     ...
@@ -168,13 +171,25 @@ Therefore we recommended testing deployments with tiny LLMs first, e.g.:
 </container>
 ```
 
-Tiny models, like the one configure above, don't need a GPU.
-Later when the rest of the application is tests, replace the model with a larger one and add a GPU to your container nodes.
+Small models, like the one configured above, are fast enough without GPU.
+After initial testing, replace the model with a larger one and add a GPU to your container nodes, e.g.
+
+```xml
+<container>
+    ...
+    <nodes count="1">
+        <resources vcpu="4.0" memory="16Gb" architecture="x86_64" storage-type="local" disk="125Gb">
+            <gpu count="1" memory="16.0Gb"/>
+        </resources>
+    </nodes>
+    ...
+</container>
+```
 
 ## Custom text generators
 
-Application developers can implement their own components that can be used with `generate` indexing expression.
-The component has to implement `com.yahoo.language.process.TextGenerator` interface, e.g.
+Application developers can implement custom components that can be used with `generate` expression.
+The component should implement `com.yahoo.language.process.TextGenerator` interface with `generate` method, e.g.
 
 ```java
 import ai.vespa.llm.completion.Prompt;
@@ -190,3 +205,5 @@ public class MyTextGenerator implements TextGenerator {
     }
 }
 ```
+
+This allows integration of arbitrary text processing components. 
