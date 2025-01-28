@@ -52,6 +52,7 @@ vespa [flags]
 * [vespa document](vespa_document.html)	 - Issue a single document operation to Vespa
 * [vespa feed](vespa_feed.html)	 - Feed multiple document operations to Vespa
 * [vespa fetch](vespa_fetch.html)	 - Download a deployed application package
+* [vespa inspect](vespa_inspect.html)	 - Provides insight
 * [vespa log](vespa_log.html)	 - Show the Vespa log
 * [vespa prepare](vespa_prepare.html)	 - Prepare an application package for activation
 * [vespa prod](vespa_prod.html)	 - Deploy an application package to production in Vespa Cloud
