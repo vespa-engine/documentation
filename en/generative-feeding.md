@@ -1,11 +1,12 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: "Generating text with LLMs"
+title: "Generative indexing with LLMs"
 ---
 
 Large Language Models (LLMs) enable a wide variety of natural language processing tasks 
 such as information extraction, summarization, question answering, translation, sentiment analysis etc.
-Vespa makes it easy to use LLMs at scale with [generate]() indexing expression.
+Vespa makes it easy to use LLMs at scale with [generate]() indexing expression without writing code.
+
 Consider the following schema:
 
 ```
@@ -70,7 +71,7 @@ These components are specified in `services.xml` as follows:
 </container>
 ```
 
-Both `names_extractor` and `norwegian_translator` specify `openai` as their `providerId`, 
+Both `names_extractor` and `norwegian_translator` specify `openai` as `providerId`, 
 referencing `OpenAI` client component with `gpt-4o-mini` model.
 See [OpenAI client reference]() for other parameters.
 
@@ -86,7 +87,8 @@ Trondheim, known as Nidaros in ancient times, was founded by the Viking King Ola
 Output:
 Trondheim
 Nidaros
-Olav Tryggvason
+Viking King Olav Tryggvason
+997
 
 Example 2:
 Text: The city quickly grew in prominence and became a bustling trading hub in the following centuries.
@@ -96,11 +98,13 @@ Here is the input text:
 {input}
 ```
 
-The `{input}` placeholder in prompts is replaced by the value of the `text` field as specified by the indexing statement:
+The `{input}` placeholder is replaced with the value of the `text` field as specified by the indexing statement:
+
 ```
 input text | generate names_extractor
 ```
-Inputs can be constructed from several several fields by concatenating them into one string, e.g.
+
+Inputs can be constructed from several fields by concatenating them into one string, e.g.
 
 ```
 input "Translate from " . language . " to Norwegian: " . text | generate translator
@@ -108,13 +112,16 @@ input "Translate from " . language . " to Norwegian: " . text | generate transla
 
 Prompts can be specified directly in `service.xml` using `<promptTemplate>` instead of `<promptTemplateFile>` tag.
 If neither `<promptTemplate>` nor `<promptTemplateFile>` are specified, the default prompt is set to `{input}`.
+See [LanguageModelTextGenerator reference]() for other parameters.
 
 ## Generating string arrays
 
-Input for `generate` expression can be of type `string` or `array<string>`.
-In case of `array<string>`, `generate` will process each `string` in the array independently, 
-making a separate call to a text generator component and corresponding LLM.
-The output will be of `array<string>` type.
+Input for `generate` expression can either have type `string` or `array<string>`.
+When processing a `string` input, `generate` produces a `string` output.
+
+With `array<string>` input, `generate` processes each `string` in the array independently, 
+making a separate call to a text generator component and underlying LLM.
+The output is `array<string>`.
 
 For some use cases, e.g. information extraction, it can be useful to generate multiple strings from one string input.
 It can be achieved by a combination of prompting and `split` expression that takes `string` as input 
@@ -122,6 +129,29 @@ and produces `array<string>` as output, e.g.
 
 ```
 input text | generate names_extractor | split "\n"
+```
+
+The prompt in this case, should explicitly ask to make a list with one item per line:
+
+```
+Output should be a list of names, one name per line.
+Nothing else should be in the output.
+```
+
+It also helps to include examples as part of the prompt, e.g.
+
+```
+Example1:
+Input: 
+Trondheim, known as Nidaros in ancient times, was founded by the Viking King Olav Tryggvason in the year 997.
+Output:
+Trondheim
+Nidaros
+Olav Tryggvason
+
+Example 2:
+Text: The city quickly grew in prominence and became a bustling trading hub in the following centuries.
+Output:
 ```
 
 ## Support for local LLMs
@@ -157,8 +187,8 @@ See [local LLMs](llms-local.md) for details on node sizing and configuration of 
 
 Model in `LocalLLM` component is usually specified with `model-id` (Vespa Cloud) or `url` (both Vespa Cloud and OSS).
 During application deployment, LLM files are downloaded into container nodes. 
-This can take long time depending on the model size.
-Therefore we recommended testing deployments with small LLMs first, e.g.:
+This can take a long time depending on the model size.
+Therefore we recommended testing deployments with smaller LLMs first, e.g.:
 ```
 <container>
     ...
@@ -171,7 +201,7 @@ Therefore we recommended testing deployments with small LLMs first, e.g.:
 </container>
 ```
 
-Small models, like the one configured above, are fast enough without GPU.
+Small models, like the one configured above, are fast enough to be used without GPU.
 After initial testing, replace the model with a larger one and add a GPU to your container nodes, e.g.
 
 ```xml
@@ -186,24 +216,53 @@ After initial testing, replace the model with a larger one and add a GPU to your
 </container>
 ```
 
+Since `generate` is part of the
+
 ## Custom text generators
 
-Application developers can implement custom components that can be used with `generate` expression.
+Application developers can implement custom Java components that can be used with `generate` expression.
+This allows for arbitrary text processing components and integrations as part of the indexing pipeline,
+as an alternative to [custom document processing components](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing).
 The component should implement `com.yahoo.language.process.TextGenerator` interface with `generate` method, e.g.
 
 ```java
-import ai.vespa.llm.completion.Prompt;
-import com.yahoo.language.process.TextGenerator;
-
 public class MyTextGenerator implements TextGenerator {
+    private final MockTextGeneratorConfig config;
+
+    public MyTextGenerator(MyTextGeneratorConfig config) {
+        this.config = config;
+    }
+
     @Override
     public String generate(Prompt prompt, Context context) {
         var stringBuilder = new StringBuilder();
-        stringBuilder.append("My ");
-        stringBuilder.append(prompt.asString());
+
+        for (int i = 0; i < config.repetitions(); i++) {
+            stringBuilder.append(prompt.asString());
+
+            if (i < config.repetitions() - 1) {
+                stringBuilder.append(" ");
+            }
+        }
+
+
         return stringBuilder.toString();
     }
 }
 ```
 
-This allows integration of arbitrary text processing components. 
+
+Configuration for the component is implemented as described [Configuring Java components](https://docs.vespa.ai/en/configuring-components.html).
+The component is referenced in `services.xml` as follows:
+
+```
+<container>
+    ...
+    <component id="mock_gen" class="ai.vespa.test.MockTextGenerator" bundle="generate-text-feed">
+        <config name="ai.vespa.test.mock-text-generator">
+            <repetitions>2</repetitions>
+        </config>
+    </component>
+    ...
+</container>
+```
