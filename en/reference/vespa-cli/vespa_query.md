@@ -29,13 +29,15 @@ $ vespa query --header="X-First-Name: Joe" "yql=select * from music where album 
 ### Options
 
 ```
-      --file string      Read query parameters from the given JSON file and send a POST request, with overrides from arguments
-      --format string    Output format. Must be 'human' (human-readable) or 'plain' (no formatting) (default "human")
-      --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
-  -h, --help             help for query
-  -T, --timeout int      Timeout for the query in seconds (default 10)
-  -v, --verbose          Print the equivalent curl command for the query
-  -w, --wait int         Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
+      --file string           Read query parameters from the given JSON file and send a POST request, with overrides from arguments
+      --format string         Output format. Must be 'human' (human-readable) or 'plain' (no formatting) (default "human")
+      --header strings        Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
+  -h, --help                  help for query
+      --profile               Enable profiling mode (Note: this feature is experimental)
+      --profile-file string   Profiling result file (default "vespa_query_profile_result.json")
+  -T, --timeout int           Timeout for the query in seconds (default 10)
+  -v, --verbose               Print the equivalent curl command for the query
+  -w, --wait int              Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
