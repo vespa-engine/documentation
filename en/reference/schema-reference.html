@@ -148,6 +148,7 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
         <a href="#post-filter-threshold">post-filter-threshold</a>
         <a href="#approximate-threshold">approximate-threshold</a>
         <a href="#target-hits-max-adjustment-factor">target-hits-max-adjustment-factor</a>
+        <a href="#filter-threshold">filter-threshold</a>
         <a href="#rank">rank</a>
         <a href="#rank-type">rank-type</a>
     <a href="#constant">constant</a>
@@ -1659,13 +1660,33 @@ as part of match-and summary-features.</td>
     See <a href="#post-filter-threshold">post-filter-threshold</a> for more details.
   </p>
   <p>
-    This parameter no effect in <a href="../streaming-search.html#differences-in-streaming-search">streaming search</a>.
+    This parameter has no effect in <a href="../streaming-search.html#differences-in-streaming-search">streaming search</a>.
+  </p>
+</td>
+</tr>
+<tr><td>filter-threshold</td>
+  <td>Zero or one</td>
+<td>
+  <p id="filter-threshold">
+    Threshold value (in the range [0.0, 1.0]) deciding when matching in <em>index</em> fields should be treated as filters.
+    This happens for query terms with estimated hit ratios (in the range [0.0, 1.0]) that are above the <em>filter-threshold</em>.
+    Use this to optimize query performance when searching large text <a href="../schemas.html#indexing">index</a> fields,
+    by allowing a per query combination of <a href="#filter">rank: filter</a> and <a href="#normal">rank: normal</a> behavior.
+    This parameter can be overridden per <em>index</em> field, see <a href="#rank-filter-threshold">field-level filter-threshold</a>
+    for a more detailed description with tradeoffs.
+  </p>
+  <p>
+    In testing with various text datasets (e.g. Wikipedia), a <em>filter-threshold</em> setting of 0.05 has shown to be a good starting point.
+    <!-- TODO: link to section in https://docs.vespa.ai/en/performance/feature-tuning.html -->
+  </p>
+  <p>
+    This parameter has no effect in <a href="../streaming-search.html#differences-in-streaming-search">streaming search</a>.
   </p>
 </td>
 </tr>
 <tr><td><a href="#rank">rank</a></td>
   <td>Zero or more</td>
-<td>Specify if the field is used for ranking.</td>
+<td>Specify rank settings of a field in this profile.</td>
 </tr>
 <tr><td><a href="#rank-type">rank-type</a></td>
   <td>Zero or more</td>
@@ -3807,6 +3828,51 @@ The following ranking settings are supported in addition to the default:
   for how to annotate query terms as filters.
 </p>
 
+<h3 id="rank-filter-threshold">filter-threshold</h3>
+<p>
+    Contained in a <a href="#rank-profile">rank-profile</a>.
+    Used to optimize query performance when searching large text <a href="../schemas.html#indexing">index</a> fields,
+    by allowing a per query combination of <a href="#filter">rank: filter</a> and <a href="#normal">rank: normal</a> behavior.
+    See <a href="#filter-threshold">profile-level filter-threshold</a> for how to use the same value for all <em>index</em> fields.
+</p>
+<pre>
+rank [field-name] {
+    filter-threshold: 0.05
+}
+</pre>
+<table class="table">
+    <thead>
+    <tr><th>Setting</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+    <tr><td>filter-threshold</td><td>
+    <p>
+        Threshold value (in the range [0.0, 1.0]) deciding when matching in this <em>index</em> field should be treated as a filter.
+        This happens for query terms with estimated hit ratios (in the range [0.0, 1.0]) that are above the <em>filter-threshold</em>.
+        Then fast bitvector data structures are used, similar to when the field is set to <a href="#filter">rank: filter</a>.
+        This saves CPU and Disk I/O during matching and typically results in faster query evaluation,
+        with the downside being that only a boolean signal is available for ranking (the document being a match or not).
+        <a href="bm25.html">BM25</a> handles this by assuming one occurrence of the query term in the document,
+        and the field length being equal to the average field length.
+    </p>
+    <p>
+        Use this to optimize query performance when searching large text <em>index</em> fields with e.g.
+        the <a href="../using-wand-with-vespa.html#weakand">WeakAND</a> query operator and <a href="bm25.html">BM25</a> ranking.
+        Query terms that are common in the corpus (e.g. stopwords) are treated as filters with faster matching and simplified ranking,
+        while other query terms are handled as usual with full ranking.
+    </p>
+    <p>
+        In testing with various text datasets (e.g. Wikipedia), a <em>filter-threshold</em> setting of 0.05 has shown to be a good starting point.
+        <!-- TODO: link to section in https://docs.vespa.ai/en/performance/feature-tuning.html -->
+    </p>
+    <p>
+        This setting is only relevant for <a href="../schemas.html#indexing">index</a> fields,
+        and cannot be used in combination with <a href="#filter">rank: filter</a>.
+        Has no effect in <a href="../streaming-search.html#differences-in-streaming-search">streaming search</a>.
+    </p>
+    </td></tr>
+    </tbody>
+</table>
 
 
 <h2 id="query-command">query-command</h2>
