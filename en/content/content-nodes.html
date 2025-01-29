@@ -47,7 +47,7 @@ There are three kinds of state: <a href="../reference/cluster-v2.html#state-unit
   <a href="../reference/cluster-v2.html#state-generated">generated state</a> (a.k.a. <em>cluster state</em>).
 </p>
 <p>
-  For new cluster states, the cluster state version is upped,
+  For new cluster states, the cluster state version is incremented,
   and the new cluster state is broadcast to all nodes.
   There is a minimum time between each cluster state change.
   <!-- ToDo ref to config here -->
@@ -122,12 +122,13 @@ There are three kinds of state: <a href="../reference/cluster-v2.html#state-unit
         e.g., distributors and content nodes that are on the same node often stop at the same time.
       </p>
       <p>
-        The version number is upped, and the new cluster state is broadcast.
+        The version number is incremented, and the new cluster state is broadcast.
       </p>
       <p>
         If cluster state version is <a href="../operations-selfhosted/admin-procedures.html#cluster-state">reset</a>,
-        clients to distributors can temporarily fail operations in the transition,
-        but will eventually converge on the new (lower) cluster state version.
+        distributors and content node processes may have to be restarted in order for the system
+        to converge to the new state. Nodes will reject lower cluster state versions to
+        prevent race conditions caused by overlapping cluster controller leadership periods.
       </p>
     </td>
   </tr>
@@ -143,15 +144,15 @@ There are three kinds of state: <a href="../reference/cluster-v2.html#state-unit
 <p>
 Vespa can be configured with one cluster controller.
 Reads and writes will work well in case of cluster controller down,
-but other changes to the cluster (like a content node down) will not be handled.
-It is hence recommended configuring a set of cluster controllers.
+but other changes to the cluster (like a content node going down) will not be handled.
+It is hence recommended to configure a set of cluster controllers.
 </p><p>
 The cluster controller nodes elect a master,
 which does the node polling and cluster state broadcast.
 The other cluster controller nodes only exist to do master election
 and potentially take over if the master dies.
 </p><p>
-All cluster controllers will vote for cluster controller with the lowest index that says it is ready.
+All cluster controllers will vote for the cluster controller with the lowest index that says it is ready.
 If a cluster controller has more than half of the votes, it will be elected master.
 As a majority vote is required,
 the number of cluster controllers should be an odd number of 3 or greater.
@@ -173,7 +174,7 @@ the bucket-to-content-node mapping is kept in memory in the distributor.
 Document count, persisted size and a metadata checksum per bucket is stored as well.
 At distributor (re)start, content nodes are polled for bucket information,
 and return which buckets are owned by this distributor (using the ideal state algorithm).
-There is hence no master / name node.
+There is no centralized bucket directory node.
 Likewise, at any distributor cluster state change,
 content nodes are polled for bucket handover -
 a distributor will then handle a new set of buckets.
@@ -185,11 +186,9 @@ To manage the document set as it grows and nodes change, buckets move between co
 </p><p>
 Document API clients (i.e. container nodes with
 <a href="../reference/services-container.html#document-api">&lt;document-api&gt;</a>)
-do not interface with the cluster controller,
-and do not know the cluster state at startup.
-Clients do not know which distributor to use at startup, and
-a random distributor is therefore used first.
-If the document operation hit the wrong distributor,
+do not communicate directly with the cluster controller, and do not know the cluster state at startup.
+Clients therefore start out by sending requests to a random distributor.
+If the document operation hits the wrong distributor,
 <code>WRONG_DISTRIBUTION</code> is returned, with the current cluster state in the response.
 <code>WRONG_DISTRIBUTION</code> is hence expected and normal at cold start / state change events.
 </p>
@@ -280,12 +279,12 @@ e.g. to remap requests to other buckets after bucket splitting and joining.
 </p>
 <p>
   If the distributor transitions from <code>up</code> to <code>down</code>,
-  other distributors will request metadata from the service layer node to take
+  other distributors will request metadata from the content nodes to take
   over ownership of buckets previously owned by the restarting distributor.
-  Until the distributors have gathered this new metadata from all the service
-  layer nodes, requests for these buckets can not be served, and will fail back to client.
+  Until the distributors have gathered this new metadata from all the content
+  nodes, requests for these buckets can not be served, and will fail back to client.
   When the restarting node comes back up and is marked <code>up</code> in the cluster state again,
-  the additional nodes will dump knowledge of the extra buckets they previously acquired.
+  the additional nodes will discard knowledge of the extra buckets they previously acquired.
 </p>
 <p>
   For requests with timeouts of several seconds,
@@ -295,9 +294,6 @@ e.g. to remap requests to other buckets after bucket splitting and joining.
 </p>
 <p>
   Requests to buckets not owned by the restarting distributor will not be affected.
-  The other distributors will start to do some work though, affecting latency,
-  and distributors will re-fetch metadata for all buckets they own,
-  not just the additional buckets, which may cause some disturbance.
 </p>
 
 
