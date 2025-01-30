@@ -54,6 +54,10 @@ or RHEL 8
     $ podman run -it --rm --name doc -p 4000:4000 -e JEKYLL_ROOTLESS=true \
       -v "$PWD":/srv/jekyll:Z docker.io/jekyll/jekyll jekyll serve
 
+The Jekyll server should normally rebuild HTML files automatically
+when a source files changes. If this does not happen, you can use
+`jekyll serve --force-polling` as a workaround.
+
 The layout is written in [denali.design](https://denali.design/),
 see [_layouts/default.html](_layouts/default.html) for usage.
 Please do not add custom style sheets, as it is harder to maintain.
