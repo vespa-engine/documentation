@@ -151,6 +151,9 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
         <a href="#filter-threshold">filter-threshold</a>
         <a href="#rank">rank</a>
         <a href="#rank-type">rank-type</a>
+        <a href="#weakand">weakand</a>
+            <a href="#weakand-stopword-limit">stopword-limit</a>
+            <a href="#weakand-adjust-target">adjust-target</a>
     <a href="#constant">constant</a>
     <a href="#onnx-model">onnx-model</a>
     <a href="#stemming">stemming</a>
@@ -1691,6 +1694,17 @@ as part of match-and summary-features.</td>
 <tr><td><a href="#rank-type">rank-type</a></td>
   <td>Zero or more</td>
 <td>The rank-type of a field in this profile.</td>
+</tr>
+<tr><td><a href="#weakand">weakand</a></td>
+  <td>Zero or one</td>
+  <td>
+    <p>
+      Tunes the <a href="../using-wand-with-vespa.html#weakand">weakAnd</a> algorithm to automatically
+      exclude terms and documents with expected low query significance based on term frequency
+      statistics present in the document corpus. This makes matching faster at the cost of potentially
+      reduced recall.
+    </p>
+  </td>
 </tr>
 </tbody>
 </table>
@@ -3944,6 +3958,101 @@ The field name can be skipped inside fields. Defined rank types are:
 </p>
 
 
+<h2 id="weakand">weakand</h2>
+<p>
+  Contained in <a href="#rank-profile">rank-profile</a>.
+</p>
+<p>
+  Tunes the <a href="../using-wand-with-vespa.html#weakand">weakAnd</a> algorithm to automatically
+  exclude terms and documents with expected low query significance based on term frequency
+  statistics present in the document corpus. This makes matching faster at the cost of potentially
+  reduced recall.
+</p>
+<pre>
+weakand {
+    [body]
+}
+</pre>
+<p>
+  Note that all term frequency calculations are done using <em>content node-local</em> document
+  statistics (i.e. <a href="../significance.html#global-significance-model">global significance</a>
+  does not have an effect). This means results may differ across different content nodes and/or
+  content node groups.
+</p>
+<p>
+The body of a <code>weakand</code> statement consists of:
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="white-space: nowrap">stopword-limit</a></td>
+      <td>Zero to one</td>
+      <td>
+        <p id="weakand-stopword-limit">
+          A number in the range [0, 1].
+          Represents the maximum normalized document frequency a query term can have in the
+          corpus (i.e. the ratio of all documents where the term occurs at least once) before
+          it's considered a stopword and dropped entirely from being a part of the
+          <code>weakAnd</code> evaluation. This makes matching faster at the cost of
+          producing more hits. Dropped terms are not exposed as part of ranking.
+        </p>
+        <p>
+          Example:
+          <pre>stopword-limit: 0.60</pre>
+          This will drop all query terms that occur in at least 60% of the documents.
+        </p>
+        <p>
+          Using <code>stopword-limit</code> is similar to explicitly removing stop words
+          from the query up front, but has the benefit of dynamically adapting to the
+          actual document corpus and not having to know—or specify—a set of stop-words.
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="white-space: nowrap">adjust-target</td>
+      <td>Zero to one</td>
+      <td>
+        <p id="weakand-adjust-target">
+          A number in the range [0, 1] representing normalized document frequency.
+          Used to derive a per-query document score threshold, where documents scoring
+          lower than the threshold will not be considered as potential hits from the
+          <code>weakAnd</code> operator. The score threshold is selected to be equal to
+          that of the query term whose document frequency is <em>closest</em> to the
+          configured <code>adjust-target</code> value.
+        <p>
+        <p>
+          This can be used to efficiently <em>exclude</em> documents that only match terms that
+          occur very frequently in the document corpus. Such terms are likely to be stop-words
+          that have low semantic value for the query, and excluding documents only containing
+          them is likely to only have a minor impact on recall.
+        </p>
+        <p>
+          This makes overall matching faster by reducing the number of hits produced by
+          the <code>weakAnd</code> operator.
+        </p>
+        <p>
+          Example:
+          <pre>adjust-target: 0.01</pre>
+          This excludes documents that only have terms that occur in more than approximately 1%
+          of the document corpus. The actual threshold is query-specific and based on the query
+          term score whose document frequency is closest to 1%.
+        </p>
+        <p>
+          <code>adjust-target</code> can be used together with <a href="#weakand-stopword-limit">stopword-limit</a>
+          to efficiently prune both terms and documents with low significance when processing queries.
+        </p>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
 
 <h2 id="summary-to">summary-to</h2>
 <p>
@@ -3959,7 +4068,6 @@ summary-to: [summary-name], [summary-name], &hellip;
 Fields with summary will always be part of the default summary regardless of this setting. Use explicit <a href="#document-summary">document-summary</a> instead.
 See also <a href="../document-summaries.html">document summaries</a>.
 </p>
-
 
 
 <h2 id="summary">summary</h2>
