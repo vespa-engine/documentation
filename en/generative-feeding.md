@@ -253,13 +253,13 @@ See the [Generative Feeding sample app]() for complete example of an application
 
 ## Performance and cost considerations
 
-When used with an LLM, each `generate` statement makes a call to LLM for each document. 
-When used with `array<string>` inputs, the number of calls is multiplied by the number of strings in the array.
-Many documents and/or large arrays result in many LLM calls, which significantly reduces feeding throughput and increases latency and costs.
+In most cases, `generate` with LLM will be the bottleneck in the feeding pipeline, 
+significantly reducing feeding throughput, increasing latency and cost.
+Each `generate` statement in a schema will make one (`string` input) or several (`array<string>` input) calls to LLM for each document.
+This can lead to a very large number of calls, so it is important to be aware of the performance and cost implications.
 
 With local LLMs, model configuration and use of GPU have a major impact on performance and cost.
 See [local LLMs](llms-local.md) for more details.
-A separate feeding cluster with GPU nodes that can be scaled independently of other clusters can be a cost-effective solution.
 
-When using remote providers, e.g. OpenAI, consider costs and [rate limits](https://platform.openai.com/docs/guides/rate-limits) for your subscription tier and model.
-Costs can be estimated by multiplying the number of documents, number of `generate` statements, approximate number of tokens in prompts and responses, and the cost per token.
+When using remote providers, e.g. OpenAI, consider [costs](https://openai.com/api/pricing/) 
+and [rate limits](https://platform.openai.com/docs/guides/rate-limits) for your subscription tier and model.
