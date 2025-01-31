@@ -5,8 +5,8 @@ title: "Generative feeding with LLMs"
 
 Large Language Models (LLMs) are capable of many text processing tasks including 
 information extraction, summarization, question answering, translation, sentiment analysis and etc.
-Vespa makes it easy to use LLMs at scale using [generate](reference/indexing-language-reference.html#generate) indexing expression.
-During [document feeding](reads-and-writes.html#feed-flow), it generates text values for synthetic fields based on the content of other fields.
+Vespa makes it easy to use LLMs at scale with [generate](reference/indexing-language-reference.html#generate) indexing expression.
+During [feeding](reads-and-writes.html#feed-flow) it generates text values for synthetic fields based on text values of other fields.
 Consider the following schema as an example:
 
 ```
@@ -35,7 +35,7 @@ schema passage {
 ```
 
 This schema includes two synthetic fields, `names` and `text_norwegian`, generated from `text` field during feeding.
-Generators `names_extractor` and `norwegian_translator` are ids for text generator components,
+Generators `names_extractor` and `norwegian_translator` are ids for text generator components, 
 which use an LLM for named entity recognition and translation.
 These components are specified in `services.xml` as follows:
 
@@ -103,14 +103,14 @@ The `{input}` placeholder is replaced with the value of the `text` field as spec
 input text | generate names_extractor
 ```
 
-The input can be constructed from several fields by concatenating them into one string, e.g.
+The prompt can be constructed from several fields by concatenating them into one string, e.g.
 
 ```
 input "Translate from " . language . " to Norwegian: " . text | generate translator
 ```
 
-Prompts can be specified directly in `service.xml` in `<promptTemplate>` instead of `<promptTemplateFile>`.
-If neither `<promptTemplate>` nor `<promptTemplateFile>` are specified, the default prompt is set to `{input}`.
+Prompt templates can be also specified in `service.xml` with `<promptTemplate>` tag instead of `<promptTemplateFile>`.
+If neither `<promptTemplate>` nor `<promptTemplateFile>` are provided, the default prompt is set to `{input}`.
 See [LanguageModelTextGenerator](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/language-model-text-generator.def) for other parameters.
 
 ## Generating string arrays
@@ -118,9 +118,8 @@ See [LanguageModelTextGenerator](https://github.com/vespa-engine/vespa/blob/mast
 Input for `generate` expression can either have type `string` or `array<string>`.
 When processing a `string` input, `generate` produces a `string` output.
 
-With `array<string>` input, `generate` processes each `string` in the array independently, 
-making a separate call to a text generator component and underlying LLM.
-The output is `array<string>`.
+With `array<string>` input, generate produces `array<string>` output.
+For each `string` in the array it makes a separate call to a text generator component and underlying LLM.
 
 For some use cases, e.g. information extraction, it is useful to generate multiple strings from one string input.
 It can be achieved by a combining a prompt that asks to produce a list as output with [split indexing expression](), which converts a `string` to `array<string>`.
@@ -183,11 +182,11 @@ for details on node sizing and configuration of local LLMs.
 
 The `model` configuration parameter in the `LocalLLM` component can be either set to a known `model-id` for Vespa Cloud, 
 a `url` or a `path` to the model inside the application package.
-Usually LLM files are too large to be include in the application package, so the `model-id` or `url` attribute are used.
+Usually LLM files are too large to be included in the application package, so the `model-id` or `url` attribute are used.
 However, for initial testing we recommend using small LLMs, e.g.
 [Llama-160M-Chat-v1](https://huggingface.co/afrideva/Llama-160M-Chat-v1-GGUF).
 Small LLMs can be part of an application package, avoiding extra time it takes to download larger models during deployment.
-In addition, they are fast enough without GPU, reducing time it take to provision necessary compute resources.
+In addition, they are fast enough without GPU, reducing time it takes to provision necessary compute resources.
 After initial testing, replace it with a larger LLM and add a GPU to your container nodes, e.g.
 
 ```xml
@@ -254,10 +253,11 @@ See the [Generative Feeding sample app]() for complete example of an application
 
 ## Performance and cost considerations
 
-Each `generate` statement makes a call to LLM for each fed document.
-This significantly reduces feeding throughput and increases latency.
+When used with an LLM, each `generate` statement makes a call to LLM for each document. 
+When used with `array<string>` inputs, the number of calls is multiplied by the number of strings in the array.
+Many documents and/or large arrays result in many LLM calls, which significantly reduces feeding throughput and increases latency and costs.
 
-With local LLMs, model configuration and use of GPU have a big impact on performance and cost.
+With local LLMs, model configuration and use of GPU have a major impact on performance and cost.
 See [local LLMs](llms-local.md) for more details.
 A separate feeding cluster with GPU nodes that can be scaled independently of other clusters can be a cost-effective solution.
 
