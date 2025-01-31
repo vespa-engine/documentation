@@ -1,13 +1,13 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: "Generative indexing with LLMs"
+title: "Generative feeding with LLMs"
 ---
 
-Large Language Models (LLMs) enable a wide variety of natural language processing tasks 
-such as information extraction, summarization, question answering, translation, sentiment analysis etc.
-Vespa makes it easy to use LLMs at scale with [generate]() indexing expression without writing code.
-
-Consider the following schema:
+Large Language Models (LLMs) are capable of many text processing tasks including 
+information extraction, summarization, question answering, translation, sentiment analysis and etc.
+Vespa makes it easy to use LLMs at scale using [generate](reference/indexing-language-reference.html#generate) indexing expression.
+During [document feeding](reads-and-writes.html#feed-flow), it generates text values for synthetic fields based on the content of other fields.
+Consider the following schema as an example:
 
 ```
 schema passage {
@@ -27,7 +27,6 @@ schema passage {
         index: enable-bm25
     }
     
-    
     field text_norwegian type string {
         indexing: input text | generate norwegian_translator | index | summary
         index: enable-bm25
@@ -37,7 +36,7 @@ schema passage {
 
 This schema includes two synthetic fields, `names` and `text_norwegian`, generated from `text` field during feeding.
 Generators `names_extractor` and `norwegian_translator` are ids for text generator components,
-which use an LLM to extract named entities and translation.
+which use an LLM for named entity recognition and translation.
 These components are specified in `services.xml` as follows:
 
 ```xml
@@ -72,8 +71,8 @@ These components are specified in `services.xml` as follows:
 ```
 
 Both `names_extractor` and `norwegian_translator` specify `openai` as `providerId`, 
-referencing `OpenAI` client component with `gpt-4o-mini` model.
-See [OpenAI client reference]() for other parameters.
+referencing `OpenAI` client component configured with `gpt-4o-mini` model.
+See [LLM Client config definition](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-client.def) for other parameters.
 
 Prompt templates are specified in separate files, e.g. `files/names_extractor_prompt.txt`.
 ```
@@ -104,15 +103,15 @@ The `{input}` placeholder is replaced with the value of the `text` field as spec
 input text | generate names_extractor
 ```
 
-Inputs can be constructed from several fields by concatenating them into one string, e.g.
+The input can be constructed from several fields by concatenating them into one string, e.g.
 
 ```
 input "Translate from " . language . " to Norwegian: " . text | generate translator
 ```
 
-Prompts can be specified directly in `service.xml` using `<promptTemplate>` instead of `<promptTemplateFile>` tag.
+Prompts can be specified directly in `service.xml` in `<promptTemplate>` instead of `<promptTemplateFile>`.
 If neither `<promptTemplate>` nor `<promptTemplateFile>` are specified, the default prompt is set to `{input}`.
-See [LanguageModelTextGenerator reference]() for other parameters.
+See [LanguageModelTextGenerator](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/language-model-text-generator.def) for other parameters.
 
 ## Generating string arrays
 
@@ -123,43 +122,39 @@ With `array<string>` input, `generate` processes each `string` in the array inde
 making a separate call to a text generator component and underlying LLM.
 The output is `array<string>`.
 
-For some use cases, e.g. information extraction, it can be useful to generate multiple strings from one string input.
-It can be achieved by a combination of prompting and `split` expression that takes `string` as input 
-and produces `array<string>` as output, e.g.
+For some use cases, e.g. information extraction, it is useful to generate multiple strings from one string input.
+It can be achieved by a combining a prompt that asks to produce a list as output with [split indexing expression](), which converts a `string` to `array<string>`.
 
+Example indexing statement:
 ```
-input text | generate names_extractor | split "\n"
+input text | generate names_extractor | split "\n" | for_each { trim } | index | summary
 ```
 
-The prompt in this case, should explicitly ask to make a list with one item per line:
-
+Example prompt:
 ```
 Output should be a list of names, one name per line.
 Nothing else should be in the output.
 ```
 
-It also helps to include examples as part of the prompt, e.g.
-
+It might also help to include examples as part of the prompt, e.g.
 ```
-Example1:
-Input: 
-Trondheim, known as Nidaros in ancient times, was founded by the Viking King Olav Tryggvason in the year 997.
+Example 1
+Input:  Trondheim, known as Nidaros in ancient times, was founded by the Viking King Olav Tryggvason in the year 997.
 Output:
 Trondheim
 Nidaros
 Olav Tryggvason
 
 Example 2:
-Text: The city quickly grew in prominence and became a bustling trading hub in the following centuries.
+Input: The city quickly grew in prominence and became a bustling trading hub in the following centuries.
 Output:
 ```
 
 ## Support for local LLMs
 
 Vespa supports using [local LLMs](llms-local.md) with `generate`.
-In this case, `providerId` in `LanguageModelTextGenerator` component should be set to the `id` of the `LocalLLM` component
-specified in `services.xml`:
-
+In this case, `providerId` in `LanguageModelTextGenerator` component are set to the `id` of the `LocalLLM` component
+specified in `services.xml` as follows:
 ```
 <container>
     ...
@@ -179,30 +174,21 @@ specified in `services.xml`:
 </container>
 ```
 
-Local LLMs run in [container nodes]() and require considerable computational resources depending on the model, 
-context size and number of parallel requests.
-GPU is often needed to achieve acceptable performance in practical use cases.
-Test your application thoroughly to ensure that the node size fits your local LLM configuration and workload.
-See [local LLMs](llms-local.md) for details on node sizing and configuration of local LLMs.
+Local LLMs run in [container nodes](https://docs.vespa.ai/en/jdisc/) and require considerable computational resources 
+depending on the model, context size and number of parallel requests.
+GPU is often needed to achieve acceptable performance for practical use cases.
+Test your application to ensure that the node size fits your local LLM configuration and workload.
+See [local LLMs documentation](llms-local.md) and [LLMs in Vespa blog post](https://blog.vespa.ai/vespa-and-llms/#local-llm-inference) 
+for details on node sizing and configuration of local LLMs.
 
-Model in `LocalLLM` component is usually specified with `model-id` (Vespa Cloud) or `url` (both Vespa Cloud and OSS).
-During application deployment, LLM files are downloaded into container nodes. 
-This can take a long time depending on the model size.
-Therefore we recommended testing deployments with smaller LLMs first, e.g.:
-```
-<container>
-    ...
-    <component id="local_llm" class="ai.vespa.llm.clients.LocalLLM">
-        <config name="ai.vespa.llm.clients.llm-local-client">
-            <model url="https://data.vespa-cloud.com/gguf_models/Llama-160M-Chat-v1.Q6_K.gguf" />
-        </config>
-    </component>
-    ...
-</container>
-```
-
-Small models, like the one configured above, are fast enough to be used without GPU.
-After initial testing, replace the model with a larger one and add a GPU to your container nodes, e.g.
+The `model` configuration parameter in the `LocalLLM` component can be either set to a known `model-id` for Vespa Cloud, 
+a `url` or a `path` to the model inside the application package.
+Usually LLM files are too large to be include in the application package, so the `model-id` or `url` attribute are used.
+However, for initial testing we recommend using small LLMs, e.g.
+[Llama-160M-Chat-v1](https://huggingface.co/afrideva/Llama-160M-Chat-v1-GGUF).
+Small LLMs can be part of an application package, avoiding extra time it takes to download larger models during deployment.
+In addition, they are fast enough without GPU, reducing time it take to provision necessary compute resources.
+After initial testing, replace it with a larger LLM and add a GPU to your container nodes, e.g.
 
 ```xml
 <container>
@@ -216,20 +202,18 @@ After initial testing, replace the model with a larger one and add a GPU to your
 </container>
 ```
 
-Since `generate` is part of the
-
 ## Custom text generators
 
-Application developers can implement custom Java components that can be used with `generate` expression.
-This allows for arbitrary text processing components and integrations as part of the indexing pipeline,
+Application developers can implement custom Java components to be used with `generate` expression.
+This enables arbitrary text processing logic and integrations as part of the indexing pipeline,
 as an alternative to [custom document processing components](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing).
-The component should implement `com.yahoo.language.process.TextGenerator` interface with `generate` method, e.g.
+Custom components compatible with `generate` implement `com.yahoo.language.process.TextGenerator` interface with `generate` method, e.g.
 
 ```java
-public class MyTextGenerator implements TextGenerator {
+public class MockTextGenerator implements TextGenerator {
     private final MockTextGeneratorConfig config;
 
-    public MyTextGenerator(MyTextGeneratorConfig config) {
+    public MockTextGenerator(MockTextGeneratorConfig config) {
         this.config = config;
     }
 
@@ -251,11 +235,10 @@ public class MyTextGenerator implements TextGenerator {
 }
 ```
 
+Configuration of custom components is implemented as described in [Configuring Java components](https://docs.vespa.ai/en/configuring-components.html).
+Components are configured in `services.xml`, e.g.:
 
-Configuration for the component is implemented as described [Configuring Java components](https://docs.vespa.ai/en/configuring-components.html).
-The component is referenced in `services.xml` as follows:
-
-```
+```xml
 <container>
     ...
     <component id="mock_gen" class="ai.vespa.test.MockTextGenerator" bundle="generate-text-feed">
@@ -266,3 +249,17 @@ The component is referenced in `services.xml` as follows:
     ...
 </container>
 ```
+
+See the [Generative Feeding sample app]() for complete example of an application with a custom text generator.
+
+## Performance and cost considerations
+
+Each `generate` statement makes a call to LLM for each fed document.
+This significantly reduces feeding throughput and increases latency.
+
+With local LLMs, model configuration and use of GPU have a big impact on performance and cost.
+See [local LLMs](llms-local.md) for more details.
+A separate feeding cluster with GPU nodes that can be scaled independently of other clusters can be a cost-effective solution.
+
+When using remote providers, e.g. OpenAI, consider costs and [rate limits](https://platform.openai.com/docs/guides/rate-limits) for your subscription tier and model.
+Costs can be estimated by multiplying the number of documents, number of `generate` statements, approximate number of tokens in prompts and responses, and the cost per token.
