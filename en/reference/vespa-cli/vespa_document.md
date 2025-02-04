@@ -55,7 +55,7 @@ $ vespa document src/test/resources/A-Head-Full-of-Dreams.json
 ### SEE ALSO
 
 * [vespa](vespa.html)	 - The command-line tool for Vespa.ai
-* [vespa document get](vespa_document_get.html)	 - Gets documents
+* [vespa document get](vespa_document_get.html)	 - Gets one or more documents
 * [vespa document put](vespa_document_put.html)	 - Writes a document to Vespa
 * [vespa document remove](vespa_document_remove.html)	 - Removes a document from Vespa
 * [vespa document update](vespa_document_update.html)	 - Modifies some fields of an existing document

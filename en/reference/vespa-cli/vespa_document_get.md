@@ -5,16 +5,17 @@ render_with_liquid: false
 
 ## vespa document get
 
-Gets documents
+Gets one or more documents
 
 ```
-vespa document get id [flags]
+vespa document get id(s) [flags]
 ```
 
 ### Examples
 
 ```
-$ vespa document get id:mynamespace:music::a-head-full-of-dreams...
+$ vespa document get id:mynamespace:music::song-1
+$ vespa document get id:mynamespace:music::song-1 id:mynamespace:music::song-2
 ```
 
 ### Options
@@ -23,6 +24,7 @@ $ vespa document get id:mynamespace:music::a-head-full-of-dreams...
       --field-set string   Fields to include when reading document
       --header strings     Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help               help for get
+      --ignore-missing     Do not treat non-existent document as an error
   -T, --timeout int        Timeout for the document request in seconds (default 60)
   -v, --verbose            Print the equivalent curl command for the document operation
   -w, --wait int           Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
