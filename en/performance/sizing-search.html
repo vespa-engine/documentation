@@ -507,7 +507,51 @@ Setting it higher leaves threads unused.
   as it will reduce throughput and efficiency.
 </p>
 
-
+<h2 id="scaling-retrieval-size">Scaling the size of the retrievable unit</h2>
+<p>
+Retrieving units that are too small or too large can have a drastic impact on both the quality and 
+performance of your search. Consider an example where we want to search in PDF files: Creating one
+document per PDF file seems like a logical solution, and with Vespa this is possible - up to a point.
+But as system architects we must consider the potential edge cases: some files may be entire books,
+or long reports with many hundreds or even thousands of pages.
+<p>The current max document size is limited by the max protobuf message size of 2 GB, but we advise
+staying well below this limit, at least < 200MB and ideally < 1MB for even, predictable performance.
+  
+<h3 id="when-documents-are-too-large">When documents are too large</h4>
+If each document is a complete PDF file and some are very large, what problems could we run into?
+<p>
+<b>Usefulness of the result</b> - knowing that there are relevant parts <em>somewhere</em> in
+several hundred pages of text is not very helpful to the user. As of 2025, this is still
+true also if the "user" is an LLM in a RAG or agentic workflow.
+<p>
+We can improve the usefulness by providing <a href="/en/document-summaries.html#dynamic-snippets">dynamic snippets</a>
+or returning per-chunk similarity scores as <a href="/en/ranking-expressions-features.html#accessing-feature-function-values-in-results">feature values<a/>
+to be able to identify the most relevant portions of the returned summary.
+<p>
+<b>Performance</b> - Returning large document values in the query response over HTTP has a significant
+cost, both in CPU time spent in rendering the response, compression, and network transfer time. This
+can easily become the largest contribution to the total end-to-end latency.
+<p>
+Large documents can also contribute to poor performance in indexing and query execution, or greatly
+increase the amount of temporary memory required for complex ranking expressions like multi-dimensional ColBert maxsim.
+As document are processed, indexed, stored and ranked as individual units, working on a few very large documents
+at a time may not offer the system enough opportunity to parallelize and result in poor, uneven utilization
+of resources, and even a small fraction of very-large documents may impact your mean (and especially higher percentile)
+latencies both for processing and query execution.
+  
+<h3 id="too-small-documents">When documents are too small</h4>
+What problems can occur if documents are very small? Consider indexing small fragments of text, like a single sentence or even a word.
+<p>
+<b>Granularity</b> - As the size of text fragments decrease, we are less likely to find good matches for queries as the relevant terms 
+or context is spread across multiple documents. The response may not contain enough information to resolve the user information need,
+or to even judge if it is likely to resolve the need if the source is examined in full. This problem is described both in
+<a href="https://nlp.stanford.edu/IR-book/html/htmledition/choosing-a-document-unit-1.html">traditional information retrieval literature</a>
+and has also been a popular topic in recent years as "chunking" for semantic search.
+<p>
+<b>Overhead</b> - splitting a document into very small pieces means that more resources will be spent on per-document overhead.
+Shared metadata like e.g. the abstract or access permissions of a document will be replicated many times, and updates/deletes to the
+source document or its metadata must fan-out to all the sub-documents, increasing write load. Unlike too-large documents, having a
+fraction of very small documents is fine, what matters for efficiency is that the average size is not too small.
 
 <h2 id="scaling-document-volume-per-node">Scaling document volume per node</h2>
 <p>
