@@ -91,6 +91,120 @@ for optimal performance. See reference <a href="../reference/schema-reference.ht
 </p>
 
 
+<h2 id="tuning-query-performance-for-lexical-search">Tuning query performance for lexical search</h2>
+<p>
+  Lexical search (or keyword-based search) is a method that matches query terms as they appear in indexed documents.
+  It relies on the lexical representation of words rather than their meaning, and is one of the two retrieval methods used in
+  <a href="../tutorials/hybrid-search.html">hybrid search</a>.
+  Lexical search in Vespa is done by querying string (text) <a href="../schemas.html#indexing">index</a> fields,
+  typically using the <a href="../using-wand-with-vespa.html#weakand">weakAnd</a> query operator with <a href="../reference/bm25.html">BM25</a> ranking.
+</p>
+<p>
+  The following schema represents a simple article document with <em>title</em> and <em>content</em> fields, that e.g. can represent Wikipedia articles.
+  A <em>default</em> fieldset is specified such that user queries are matched against both the <em>title</em> and <em>content</em> fields.
+  BM25 ranking combines the scores of both fields in the <em>default</em> rank profile.
+  In addition, the <em>optimized</em> rank profile specifies tuning parameters to improve query performance.
+</p>
+<pre>
+schema article {
+  document article {
+    field title type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+    field content type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+  }
+
+  fieldset default {
+    fields: title, content
+  }
+
+  rank-profile default {
+    first-phase {
+      expression: bm25(title) + bm25(content)
+    }
+  }
+
+  rank-profile optimized inherits default {
+    filter-threshold: 0.05
+    weakand {
+      stopword-limit: 0.6
+      adjust-target: 0.01
+    }
+  }
+}
+</pre>
+<p>
+  The following shows an example question-answer query against a collection of articles documents,
+  using the <em>weakAnd</em> query operator and the <em>optimized</em> rank profile.
+  Question-answer queries are often written in full sentences, and as a consequence,
+  they tend to contain many stopwords that are present in many documents and of less relevance when it comes to ranking.
+  E.g. terms as "the", "in", "are" are typically present in more the 60% of the documents.
+</p>
+<pre>
+{
+  "yql": "select * from article where userQuery()",
+  "ranking.profile": "optimized",
+  "query": "what are the three highest mountains in the world"
+}
+</pre>
+<p>
+  The cost of evaluating such query is mostly linear with the number of matched documents.
+  The <em>AND</em> operator is most effective, but often ends up being too restrictive by not returning enough matches.
+  The <em>OR</em> operator is less restrictive, but has the problem of returning too many matches, and therefore being very costly.
+  The <em>weakAnd</em> operator however is somewhere in between the two.
+</p>
+<p>
+  To find matching documents the query operator uses the posting lists associated with each query term.
+  A posting list is part of the inverted index and contains all occurrences of a term within a collection of documents.
+  It consists of document IDs for documents that contain the term,
+  and additional information such as the positions of the term within those documents (used for ranking purposes).
+  For terms that are common (e.g. stopwords), the posting lists are very large and can be expensive to use during evaluation and ranking.
+  CPU work is required to iterate them and I/O work is required to load portions of them from disk to memory with MMAP.
+  The last part is especially problematic when all posting lists of a disk index cannot fit into physical memory,
+  and the system needs to swap parts of them in and out of memory all the time, leading to high I/O wait times.
+</p>
+<p>
+  In order to improve query performance the following tuning parameters are available,
+  as seen used in the <em>optimized</em> rank profile.
+  These are used to make tradeoffs between performance and quality.
+  <ul>
+    <li>
+      <strong>Use more compact posting lists for common terms</strong>:
+      Setting <a href="../reference/schema-reference.html#filter-threshold">filter-threshold</a> to 0.05
+      ensures that all terms that are estimated to occur in more than 5% of the documents are
+      handled with <a href="../proton.html#index">compact posting lists (bitvectors)</a> instead of the full posting lists.
+      This makes matching faster at the cost of producing less information for BM25 ranking (only a boolean signal is available).
+    </li>
+    <li>
+      <strong>Avoid using large posting lists all together</strong>:
+      Setting <a href="../reference/schema-reference.html#weakand-stopword-limit">stopword-limit</a> to 0.6,
+      ensures that all terms that are estimated to occur in more than 60% of the documents are considered stopwords
+      and dropped entirely from the query, also from ranking.
+    </li>
+    <li>
+      <strong>Reduce the number of hits produces by <em>weakAnd</em></strong>:
+      Setting <a href="../reference/schema-reference.html#weakand-adjust-target">adjust-target</a>
+      ensures that documents that only match terms that occur very frequently in the documents are not considered hits.
+      This also removes the need to calculate <em>first-phase</em> ranking for these documents,
+      which is beneficial if <em>first-phase</em> ranking is more complex and expensive.
+    </li>
+  </ul>
+</p>
+<p>
+  The tuning parameters used in the <em>optimized</em> rank profile have shown to provide a good tradeoff between performance and quality in testing.
+  A Wikipedia dataset with SQuAD (Stanford Question Answering Dataset) queries were used to analyze performance, and trec-covid, msmarco and
+  nfcorpus from the BEIR dataset to analyze quality implications.
+  For instance, the query performance was doubled without any measurable drop in quality with the Wikipedia dataset,
+  using the tuning parameters in the <em>optimized</em> rank profile.
+  <!-- To read more see the following blog post: TODO link -->
+  Note that testing should be conducted on your particular dataset to find the right tradeoff between performance and quality.
+</p>
+
+
 <h2 id="hybrid-taat-daat">Hybrid TAAT and DAAT query evaluation</h2>
 <p>
   Vespa supports <strong>hybrid</strong> query evaluation over inverted indexes,
