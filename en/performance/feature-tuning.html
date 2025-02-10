@@ -6,7 +6,7 @@ title: "Vespa Serving Tuning"
 <p>
   This document describes tuning certain features of an application for high query serving performance,
   the main focus is on content cluster search features;
-  See <a href="container-tuning.html">Container tuning</a> for tuning of container clusters.
+  see <a href="container-tuning.html">Container tuning</a> for tuning of container clusters.
   The <a href="sizing-search.html">search sizing guide</a> is about <em>scaling</em> an application deployment.
 </p>
 
@@ -60,14 +60,14 @@ field timestamp type long {
   would be a linear scan over all documents and thus expensive:
 </p>
 <pre>
-select * from sources * where range(timestamp, 0, 100);
+select * from sources * where range(timestamp, 0, 100)
 </pre>
 <p>
   But if this query term is <em>and</em>-ed with another term that matches fewer documents,
   that term will determine the cost instead, and fast-search won't be necessary, e.g.:
 </p>
 <pre>
-select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000";
+select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000"
 </pre>
 <p>The general rules of thumb for when to use fast-search for an attribute field is:</p>
 <ul>
@@ -107,34 +107,34 @@ for optimal performance. See reference <a href="../reference/schema-reference.ht
 </p>
 <pre>
 schema article {
-  document article {
-    field title type string {
-      indexing: index | summary
-      index: enable-bm25
+    document article {
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field content type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
     }
-    field content type string {
-      indexing: index | summary
-      index: enable-bm25
-    }
-  }
 
-  fieldset default {
-    fields: title, content
-  }
-
-  rank-profile default {
-    first-phase {
-      expression: bm25(title) + bm25(content)
+    fieldset default {
+        fields: title, content
     }
-  }
 
-  rank-profile optimized inherits default {
-    filter-threshold: 0.05
-    weakand {
-      stopword-limit: 0.6
-      adjust-target: 0.01
+    rank-profile default {
+        first-phase {
+            expression: bm25(title) + bm25(content)
+        }
     }
-  }
+
+    rank-profile optimized inherits default {
+        filter-threshold: 0.05
+        weakand {
+            stopword-limit: 0.6
+            adjust-target: 0.01
+        }
+    }
 }
 </pre>
 <p>
@@ -142,15 +142,15 @@ schema article {
   using the <em>weakAnd</em> query operator and the <em>optimized</em> rank profile.
   Question-answer queries are often written in full sentences, and as a consequence,
   they tend to contain many stopwords that are present in many documents and of less relevance when it comes to ranking.
-  E.g., terms as "the", "in", and "are" are typically present in more the 60% of the documents.
+  E.g., terms as "the", "in", and "are" are typically present in more the 60% of the documents:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
   "yql": "select * from article where userQuery()",
   "ranking.profile": "optimized",
   "query": "what are the three highest mountains in the world"
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   The cost of evaluating such a query is primarily linear with the number of matched documents.
   The <em>AND</em> operator is most effective, but often ends up being too restrictive by not returning enough matches.
@@ -261,29 +261,29 @@ schema article {
 </p>
 <pre>
 search news {
-  document news {
-    field title type string {}
-    field body type string{}
-    field popularity type float {}
-    field market type string {
-      rank:filter
-      indexing: attribute
-      attribute: fast-search
+    document news {
+        field title type string {}
+        field body type string{}
+        field popularity type float {}
+        field market type string {
+            rank:filter
+            indexing: attribute
+            attribute: fast-search
+        }
+        field language type string {
+            rank:filter
+            indexing: attribute
+            attribute: fast-search
+        }
     }
-    field language type string {
-      rank:filter
-      indexing: attribute
-      attribute: fast-search
+    fieldset default {
+        fields: title,body
     }
-  }
-  fieldset default {
-    fields: title,body
-  }
-  rank-profile text-and-popularity {
-    first-phase {
-      expression: attribute(popularity) + log10(bm25(title)) + log10(bm25(body))
+    rank-profile text-and-popularity {
+        first-phase {
+            expression: attribute(popularity) + log10(bm25(title)) + log10(bm25(body))
+        }
     }
-  }
 }
 </pre>
 <p>
@@ -295,19 +295,19 @@ search news {
 <p>
   In this query example, there is a language constraint and a market constraint,
   where both language and market are queried with a long list of valid values using OR,
-  meaning that the document should match any of the market constraints and any of the language constraints.
+  meaning that the document should match any of the market constraints and any of the language constraints:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
-  'hits': 10,
-  'ranking.profile': text-and-popularity",
-  'yql': 'select * from sources * where userQuery() and \
-   (language contains "en" or language contains "br") and \
-   (market contains "us" or market contains "eu" or market contains "apac" or market contains ".." ... ..... ..)',
-  'query': 'cat video',
-  'ranking.matching.termwiselimit': 0.1
+    "hits": 10,
+    "ranking.profile": "text-and-popularity",
+    "yql": "select * from sources * where userQuery() and
+      (language contains \"en\" or language contains \"br\") and
+      (market contains \"us\" or market contains \"eu\" or market contains \"apac\" or market contains \"..\" )",
+    "query": "cat video",
+    "ranking.matching.termwiselimit": 0.1
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   The language and the market constraints in the query tree are not used in the
   ranking score, and that part of the query tree could be evaluated using <em>TAAT</em>.
