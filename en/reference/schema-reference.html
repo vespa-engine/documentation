@@ -440,6 +440,7 @@ struct person {
 
 field people type array&lt;person&gt; {
     indexing: summary
+    summary:  matched-elements-only
     struct-field first_name {
         indexing: attribute
         attribute: fast-search
@@ -645,67 +646,72 @@ field bignumber type long {
       <p id="map">
         Use to create a map where each unique key is mapped to a single value.
         Any primitive type can be used as <em>key-type</em> and any primitive type or Vespa struct type as <em>value-type</em>.
-        A map entry is handled as a struct with a <em>key</em> and <em>value</em> field
-        with <em>key-type</em> and <em>value-type</em> as types. Example:
-<pre>
-struct person {
-    field first_name type string {}
-    field last_name type string {}
-}
-field identities type map&lt;string, person&gt; {
-    indexing: summary
-    struct-field key {
-        indexing: attribute
-        attribute: fast-search
-    }
-    struct-field value.first_name {
-        indexing: attribute
-        attribute: fast-search
-    }
-}
-</pre>
-      <p>
-        The entire <em>identities</em> field is part of document summary,
-        and the <a href="#struct-field">struct fields</a>
-        <em>key</em> and <em>value.first_name</em> are defined as attributes, available for searching using the
-        <a href="query-language-reference.html#sameelement">sameElement</a> operator, and
-        <a href="grouping-syntax.html#multivalue-attributes">grouping</a>. The
-        attributes also have <code>fast-search</code>. See
-        <a href="../performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">when to use fast-search</a>.
+        Example of a map of primitive types,
+        where the <em>key</em> and <em>value</em> fields are specified as <em>attributes</em>:
       </p>
-      <p>
-        Note that you can define only a subset of the struct fields as attributes.
-      </p>
-      <p>
-        Use <a href="#matched-elements-only">matched-elements-only</a>
-        to reduce the amount of data that is returned in document summary.
-      </p><p>
-      The next example shows a map of primitive types,
-      where the <em>key</em> and <em>value</em> struct fields are specified as attributes:
 <pre>
 field my_map type map&lt;string, int&gt; {
     indexing: summary
-    struct-field key { indexing: attribute }
+    struct-field key   { indexing: attribute }
     struct-field value { indexing: attribute }
 }
 </pre>
-      The following array of struct example is similar to the above,
-      the difference being that an array can contain the same element multiple times and maintains order.
+      <p>
+        Note that a Vespa map entry is handled as a <em>struct</em>
+        with a <em>key</em> and <em>value</em> field
+        with <em>key-type</em> and <em>value-type</em> as types.
+        This explains the <em>struct-field</em> syntax above.
+        The full <em>my_map</em> field is configured into the document summary.
+      </p>
+      <p>A more complex example is a map of struct:</p>
 <pre>
-struct mystruct {
-    field key type string { }
-    field value type int { }
+struct person {
+    field first_name type string {}
+    field last_name  type string {}
+    field age        type int {}
 }
-field my_array type array&lt;mystruct&gt; {
+
+field identities type map&lt;string, person&gt; {
     indexing: summary
+    summary:  matched-elements-only
     struct-field key {
-        indexing: attribute
+        indexing:  attribute
         attribute: fast-search
-        rank: filter
+    }
+    struct-field value.first_name {
+        indexing:  attribute
+        attribute: fast-search
+    }
+    struct-field value.last_name {
+        indexing:  attribute
+        attribute: fast-search
     }
 }
 </pre>
-      Restrictions:
+      <p>
+        This example illustrates that the struct elements are configured individually -
+        there is no field configuration for <em>age</em> -
+        one can define a subset of the struct fields as attributes.
+      </p>
+      <p>
+        Here, <em>key</em>, <em>value.first_name</em> and <em>value.last_name</em> are defined as attributes.
+        This makes them available for searching and <a href="/en/grouping.html#grouping-over-a-map-field">grouping</a>.
+        A common use case is requiring matches in the same map entry
+        (e.g. match both first and last name for the same person),
+        see the <a href="/en/reference/query-language-reference.html#sameelement">sameElement</a> operator
+        for how to implement this.
+        Use <a href="#matched-elements-only">matched-elements-only</a>
+        to reduce the amount of data in the document summary.
+        </p>
+      <p>
+        <a href="/en/performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">fast-search</a>
+        is used to make query access faster by creating an index structure for lookups.
+      </p>
+      <p>
+        As a map alternative,
+        an <a href="#array">array&lt;struct&gt;</a> can contain the same element multiple times and maintains order.
+      </p>
+      <p>Restrictions:</p>
       <ul>
         <li>Map of struct or primitive types do not support <a href="../ranking.html">ranking features</a>
           and can only be used for matching and filtering.</li>
@@ -4166,8 +4172,8 @@ to: [document-summary-name], [document-summary-name], &hellip;
     but it can also be used when searching directly on a sub struct field.
     Is also supported when the field is <a href=#import-field>imported</a>.
     Is not supported for <a href="#index">index</a> fields in indexed search.
-    Example .sd files from system tests:
   </p>
+  <p>See <a href="#map">example use</a> and example schemas:</p>
   <ul>
     <li><a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/matched_elements_only/indexed/test.sd">
       matched elements only</a></li>
