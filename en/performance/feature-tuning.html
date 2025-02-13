@@ -5,7 +5,7 @@ title: "Vespa Serving Tuning"
 
 <p>
   This document describes tuning certain features of an application for high query serving performance,
-  the main focus is on content cluster search features,
+  the main focus is on content cluster search features;
   see <a href="container-tuning.html">Container tuning</a> for tuning of container clusters.
   The <a href="sizing-search.html">search sizing guide</a> is about <em>scaling</em> an application deployment.
 </p>
@@ -24,8 +24,8 @@ field timestamp type long {
 }
 </pre>
 <p>
-  If both index and attribute is configured for string type fields,
-  Vespa will do search and matching against the index with default match <code>text</code>.
+  If both index and attribute are configured for string-type fields,
+  Vespa will search and match against the index with default match <code>text</code>.
   All numeric type fields and tensor fields are attribute (in-memory) fields in Vespa.
 </p>
 
@@ -46,10 +46,10 @@ field timestamp type long {
 </pre>
 <p>
   When Vespa runs a query with multiple query items, it builds a query execution plan.
-  It tries to optimize the plan so the temporary result set is as small as possible.
-  To do this, query tree items that are restrictive (matching few documents) are evaluated early .
+  It tries to optimize the plan, so the temporary result set is as small as possible.
+  To do this, restrictive query tree items (matching few documents) are evaluated early.
   The query execution plan looks at hit count estimates for each part of the query tree
-  using the index and B-tree dictionaries which track the number of documents a given term occurs in.
+  using the index and B-tree dictionaries, which track the number of documents in which a given term occurs.
 </p>
 <p>
   However, for attribute fields without <a href="../attributes.html#fast-search">fast-search</a>
@@ -60,14 +60,14 @@ field timestamp type long {
   would be a linear scan over all documents and thus expensive:
 </p>
 <pre>
-select * from sources * where range(timestamp, 0, 100);
+select * from sources * where range(timestamp, 0, 100)
 </pre>
 <p>
-  But if this query term is <em>and</em>-ed with another term which matches fewer documents,
+  But if this query term is <em>and</em>-ed with another term that matches fewer documents,
   that term will determine the cost instead, and fast-search won't be necessary, e.g.:
 </p>
 <pre>
-select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000";
+select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000"
 </pre>
 <p>The general rules of thumb for when to use fast-search for an attribute field is:</p>
 <ul>
@@ -100,77 +100,81 @@ for optimal performance. See reference <a href="../reference/schema-reference.ht
   typically using the <a href="../using-wand-with-vespa.html#weakand">weakAnd</a> query operator with <a href="../reference/bm25.html">BM25</a> ranking.
 </p>
 <p>
-  The following schema represents a simple article document with <em>title</em> and <em>content</em> fields, that e.g. can represent Wikipedia articles.
+  The following schema represents a simple article document with <em>title</em> and <em>content</em> fields,
+  that can represent Wikipedia articles as an example.
   A <em>default</em> fieldset is specified such that user queries are matched against both the <em>title</em> and <em>content</em> fields.
   BM25 ranking combines the scores of both fields in the <em>default</em> rank profile.
-  In addition, the <em>optimized</em> rank profile specifies tuning parameters to improve query performance.
+  In addition, the <em>optimized</em> rank profile specifies tuning parameters to improve query performance:
 </p>
 <pre>
 schema article {
-  document article {
-    field title type string {
-      indexing: index | summary
-      index: enable-bm25
+    document article {
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field content type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
     }
-    field content type string {
-      indexing: index | summary
-      index: enable-bm25
-    }
-  }
 
-  fieldset default {
-    fields: title, content
-  }
-
-  rank-profile default {
-    first-phase {
-      expression: bm25(title) + bm25(content)
+    fieldset default {
+        fields: title, content
     }
-  }
 
-  rank-profile optimized inherits default {
-    filter-threshold: 0.05
-    weakand {
-      stopword-limit: 0.6
-      adjust-target: 0.01
+    rank-profile default {
+        first-phase {
+            expression: bm25(title) + bm25(content)
+        }
     }
-  }
+
+    rank-profile optimized inherits default {
+        filter-threshold: 0.05
+        weakand {
+            stopword-limit: 0.6
+            adjust-target: 0.01
+        }
+    }
 }
 </pre>
 <p>
-  The following shows an example question-answer query against a collection of articles documents,
+  The following shows an example question-answer query against a collection of articles,
   using the <em>weakAnd</em> query operator and the <em>optimized</em> rank profile.
   Question-answer queries are often written in full sentences, and as a consequence,
   they tend to contain many stopwords that are present in many documents and of less relevance when it comes to ranking.
-  E.g. terms as "the", "in", "are" are typically present in more the 60% of the documents.
+  E.g., terms as "the", "in", and "are" are typically present in more the 60% of the documents:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
   "yql": "select * from article where userQuery()",
   "ranking.profile": "optimized",
   "query": "what are the three highest mountains in the world"
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
-  The cost of evaluating such query is mostly linear with the number of matched documents.
+  The cost of evaluating such a query is primarily linear with the number of matched documents.
   The <em>AND</em> operator is most effective, but often ends up being too restrictive by not returning enough matches.
-  The <em>OR</em> operator is less restrictive, but has the problem of returning too many matches, and therefore being very costly.
-  The <em>weakAnd</em> operator however is somewhere in between the two.
+  The <em>OR</em> operator is less restrictive, but has the problem of returning too many matches, which is very costly.
+  The <em>weakAnd</em> operator, however, is somewhere in between the two.
 </p>
+
+<h3 id="posting-lists">Posting Lists</h3>
 <p>
-  To find matching documents the query operator uses the posting lists associated with each query term.
+  To find matching documents, the query operator uses the <em>posting lists</em> associated with each query term.
   A posting list is part of the inverted index and contains all occurrences of a term within a collection of documents.
   It consists of document IDs for documents that contain the term,
   and additional information such as the positions of the term within those documents (used for ranking purposes).
-  For terms that are common (e.g. stopwords), the posting lists are very large and can be expensive to use during evaluation and ranking.
-  CPU work is required to iterate them and I/O work is required to load portions of them from disk to memory with MMAP.
+  For common terms (e.g., stopwords), the posting lists are very large and can be expensive to use during evaluation and ranking.
+  CPU work is required to iterate them, and I/O work is required to load portions of them from disk to memory with MMAP.
   The last part is especially problematic when all posting lists of a disk index cannot fit into physical memory,
-  and the system needs to swap parts of them in and out of memory all the time, leading to high I/O wait times.
+  and the system must constantly swap parts of them in and out of memory, leading to high I/O wait times.
 </p>
 <p>
-  In order to improve query performance the following tuning parameters are available,
+  To improve query performance, the following tuning parameters are available,
   as seen used in the <em>optimized</em> rank profile.
   These are used to make tradeoffs between performance and quality.
+</p>
   <ul>
     <li>
       <strong>Use more compact posting lists for common terms</strong>:
@@ -183,7 +187,7 @@ schema article {
       <strong>Avoid using large posting lists all together</strong>:
       Setting <a href="../reference/schema-reference.html#weakand-stopword-limit">stopword-limit</a> to 0.6,
       ensures that all terms that are estimated to occur in more than 60% of the documents are considered stopwords
-      and dropped entirely from the query, also from ranking.
+      and dropped entirely from the query and also from ranking.
     </li>
     <li>
       <strong>Reduce the number of hits produces by <em>weakAnd</em></strong>:
@@ -193,14 +197,21 @@ schema article {
       which is beneficial if <em>first-phase</em> ranking is more complex and expensive.
     </li>
   </ul>
+
+
+<h3 id="performance">Performance</h3>
+<p>
+  The tuning parameters used in the <em>optimized</em> rank profile have been shown to provide a good tradeoff between performance and quality in testing.
+  A Wikipedia dataset with <a href="https://nlp.stanford.edu/pubs/rajpurkar2016squad.pdf">SQuAD</a>
+  (Stanford Question Answering Dataset) queries was used to analyze performance,
+  and <a href="https://ir.nist.gov/trec-covid/">trec-covid</a>,
+  <a href="https://microsoft.github.io/msmarco/">MS MARCO</a> and
+  <a href="https://huggingface.co/datasets/BeIR/nfcorpus">nfcorpus</a> from the BEIR dataset to analyze quality implications.
 </p>
 <p>
-  The tuning parameters used in the <em>optimized</em> rank profile have shown to provide a good tradeoff between performance and quality in testing.
-  A Wikipedia dataset with SQuAD (Stanford Question Answering Dataset) queries were used to analyze performance, and trec-covid, msmarco and
-  nfcorpus from the BEIR dataset to analyze quality implications.
   For instance, the query performance was doubled without any measurable drop in quality with the Wikipedia dataset,
   using the tuning parameters in the <em>optimized</em> rank profile.
-  <!-- To read more see the following blog post: TODO link -->
+  <!-- To read more, see the following blog post: TODO link -->
   Note that testing should be conducted on your particular dataset to find the right tradeoff between performance and quality.
 </p>
 
@@ -209,43 +220,43 @@ schema article {
 <p>
   Vespa supports <strong>hybrid</strong> query evaluation over inverted indexes,
   combining <em>TAAT</em> and <em>DAAT</em> evaluation to combine the best of both query evaluation techniques.
-  Hybrid is not enabled per default and is triggered by a run time query parameter.
+  Hybrid is not enabled per default and is triggered by a run-time query parameter.
 </p>
 <ul>
   <li><strong>TAAT:</strong> <em>Term At A Time</em> scores documents one query term at a time.
-    The entire posting iterator can be read per query term and the score of a document is accumulated.
-    It is CPU cache friendly as posting data is read sequentially without random seeking the posting list iterator.
-    The downside is that <em>TAAT</em> limits the term based ranking function to be a linear sum of term scores.
-    This downside is one reason why most search engines uses <em>DAAT</em>.</li>
+    The entire posting iterator can be read per query term, and the score of a document is accumulated.
+    It is CPU cache friendly as posting data is read sequentially without randomly seeking the posting list iterator.
+    The downside is that <em>TAAT</em> limits the term-based ranking function to be a linear sum of term scores.
+    This downside is one reason why most search engines use <em>DAAT</em>.</li>
   <li><strong>DAAT:</strong> <em>Document At A Time</em> scores documents completely one at a time.
     This requires multiple seeks in the term posting lists,
-    which is CPU cache unfriendly, but allows non-linear ranking functions. </li>
+    which is CPU cache unfriendly but allows non-linear ranking functions.</li>
 </ul>
 <p>
-  Generally Vespa does <em>DAAT</em> (document-at-a-time) query evaluation
+  Generally, Vespa does <em>DAAT</em> (document-at-a-time) query evaluation
   and not <em>TAAT</em> (term-at-a time) for the reason listed above.
 </p>
 <p>
   Ranking (score calculation) and matching (does the document match the query logic)
   is not fully two separate disjunct phases,
-  where one first find matches and in a later phase calculates the ranking score.
+  where one first finds matches and calculates the ranking score in a later phase.
   Matching and <em>first-phase</em> score calculation is interleaved when using <em>DAAT</em>.
 </p>
 <p>
   The <em>first-phase</em> ranking score is assigned to the hit when it satisfies the query constraints.
   At that point, the term iterators are positioned at the document id
   and one can unpack additional data from the term posting lists -
-  e.g. for term proximity scoring used by the <a href="../nativerank.html">nativeRank</a> ranking feature,
+  e.g., for term proximity scoring used by the <a href="../nativerank.html">nativeRank</a> ranking feature,
   which also requires unpacking of positions of the term within the document.
 </p>
 <p>
   The way hybrid query evaluation is done is that <em>TAAT</em> is used for sub-branches
-  of the overall query tree which is not used for term based ranking.
+  of the overall query tree, which is not used for term-based ranking.
 </p>
 <p>
   Using <em>TAAT</em> can speed up query matching significantly (up to 30-50%)
   in cases where the query tree is large and complex,
-  and where only parts of the query tree is used for term based ranking.
+  and where only parts of the query tree are used for term-based ranking.
   Examples of query tree branches that would require <em>DAAT</em>
   is using text ranking features like <a href="../reference/rank-features.html">bm25 or nativeRank</a>.
 
@@ -255,67 +266,67 @@ schema article {
 </p>
 <p>
   For example, for a query where there is a user text query from an end user,
-  one can use <em>userQuery()</em> YQL syntax and combine it with application level constraints.
+  one can use <em>userQuery()</em> YQL syntax and combine it with application-level constraints.
   The application level filter constraints in the query could benefit from using <em>TAAT</em>.
   Given the following document schema:
 </p>
 <pre>
 search news {
-  document news {
-    field title type string {}
-    field body type string{}
-    field popularity type float {}
-    field market type string {
-      rank:filter
-      indexing: attribute
-      attribute: fast-search
+    document news {
+        field title type string {}
+        field body type string{}
+        field popularity type float {}
+        field market type string {
+            rank:filter
+            indexing: attribute
+            attribute: fast-search
+        }
+        field language type string {
+            rank:filter
+            indexing: attribute
+            attribute: fast-search
+        }
     }
-    field language type string {
-      rank:filter
-      indexing: attribute
-      attribute: fast-search
+    fieldset default {
+        fields: title,body
     }
-  }
-  fieldset default {
-    fields: title,body
-  }
-  rank-profile text-and-popularity {
-    first-phase {
-      expression: attribute(popularity) + log10(bm25(title)) + log10(bm25(body))
+    rank-profile text-and-popularity {
+        first-phase {
+            expression: attribute(popularity) + log10(bm25(title)) + log10(bm25(body))
+        }
     }
-  }
 }
 </pre>
 <p>
-  In this case the rank profile only uses two ranking features,
+  In this case, the rank profile only uses two ranking features,
   the popularity attribute and the <a href="../reference/bm25.html">bm25</a> score of the userQuery().
   These are used in the default fieldset containing the title and body.
   Notice how neither <em>market</em> nor <em>language</em> is used in the ranking expression.
 </p>
 <p>
   In this query example, there is a language constraint and a market constraint,
-  where both language and market is queried with a long list of valid values using OR,
-  meaning that the document should match any of the market constraints and any of the language constraints.
+  where both language and market are queried with a long list of valid values using OR,
+  meaning that the document should match any of the market constraints and any of the language constraints:
 </p>
-<pre>
+<pre>{% highlight json %}
 {
-  'hits': 10,
-  'ranking.profile': text-and-popularity",
-  'yql': 'select * from sources * where userQuery() and \
-   (language contains "en" or language contains "br") and \
-   (market contains "us" or market contains "eu" or market contains "apac" or market contains ".." ... ..... ..)',
-  'query': 'cat video',
-  'ranking.matching.termwiselimit': 0.1
+    "hits": 10,
+    "ranking.profile": "text-and-popularity",
+    "yql": "select * from sources * where userQuery() and
+      (language contains \"en\" or language contains \"br\") and
+      (market contains \"us\" or market contains \"eu\" or market contains \"apac\" or market contains \"..\" )",
+    "query": "cat video",
+    "ranking.matching.termwiselimit": 0.1
 }
-</pre>
+{% endhighlight %}</pre>
 <p>
   The language and the market constraints in the query tree are not used in the
-  ranking score and that part of the query tree could be evaluated using <em>TAAT</em>.
+  ranking score, and that part of the query tree could be evaluated using <em>TAAT</em>.
   See also <a href="#multi-lookup-set-filtering">multi lookup set filter</a>
   for how to most efficiently search with large set filters.
 
   The subtree result is then passed as a bit vector into the <em>DAAT</em> query evaluation,
-  which could speed up the overall evaluation significantly.
+  which could significantly speed up the overall evaluation.
 </p>
 <p>
   Enabling hybrid <em>TAAT</em> is done by passing
@@ -325,9 +336,9 @@ search news {
 </p>
 <p>
   One can evaluate if using the hybrid evaluation improves search performance by adding the above parameter.
-  The limit is compared to the hit fraction estimate of the entire query tree,
-  if the hit fraction estimate is higher than the limit,
-  the termwise evaluation is used to evaluate sub-branch of the query.
+  The limit is compared to the hit fraction estimate of the entire query tree.
+  If the hit fraction estimate is higher than the limit,
+  the termwise evaluation is used to evaluate the sub-branch of the query.
 </p>
 
 
@@ -351,7 +362,7 @@ search news {
 </p>
 <p>
   To avoid this, change the mode to <a href="../reference/schema-reference.html#word">match: word</a> to
-  treat the entire uuid as <i>one</i> token/word:
+  treat the entire uuid as <em>one</em> token/word:
 </p>
 <pre>
 field uuid type string {
@@ -363,7 +374,7 @@ field uuid type string {
 <p>
   In addition, configure the <code>uuid</code> as a
   <a href="../reference/schema-reference.html#rank">rank: filter</a> field -
-  the field will then be represented as efficient as possible during search and ranking.
+  the field will then be represented as efficiently as possible during search and ranking.
   The <code>rank:filter</code> behavior can also be triggered at query time on a per-query item basis
   by the <code>com.yahoo.prelude.query.Item.setRanked()</code>
   in a <a href="../searcher-development.html">custom searcher</a>.
@@ -373,7 +384,7 @@ field uuid type string {
 
 <h2 id="parent-child-and-search-performance">Parent child and search performance</h2>
 <p>
-  When searching imported attribute fields (with <code>fast-search</code>) from parent document types
+  When searching imported attribute fields (with <code>fast-search</code>) from parent document types,
   there is an additional indirection that can be reduced significantly
   if the imported field is defined with <code>rank:filter</code>
   and <a href="../reference/services-content.html#visibility-delay">visibility-delay</a> is configured to &gt; 0.
@@ -388,9 +399,9 @@ field uuid type string {
   Vespa <a href="sizing-search.html">scales</a> with the number of hits the query retrieves per node/search thread,
   and which needs to be evaluated by the first-phase ranking function.
   Read more on <a href="../phased-ranking.html">phased ranking</a>.
-  Using phased ranking enables spending more resources during a second phase ranking step than in the first-phase.
-  The first-phase should be focused on getting decent recall (retrieve relevant documents in the top k),
-  while second phase is used to tune precision.
+  Phased ranking enables using more resources during the second phase ranking step than in the first phase.
+  The first phase should focus on getting decent recall (retrieving relevant documents in the top k),
+  while the second phase should tune precision.
 </p>
 <p>
   For <a href="../nativerank.html">text search</a> applications,
@@ -402,14 +413,14 @@ field uuid type string {
 <h2 id="multi-lookup-set-filtering">Multi Lookup - Set filtering</h2>
 <p>
   Several real-world search use cases are built around limiting or filtering based on a set filter.
-  If the contents of a field in the document matches any of the values in the query set, it should be retrieved.
-  E.g. searching data for a set of users:
+  If the contents of a field in the document match any of the values in the query set, it should be retrieved.
+  E.g., searching data for a set of users:
 </p>
 <pre>
 select * from sources * where user_id = 1 or user_id = 2 or user_id = 3 or user_id = 3 or user_id = 4 or user_id 5 ...
 </pre>
 <p>
-  For OR filters over the same field it is strongly recommended using the
+  For OR filters over the same field, it is strongly recommended to use the
   <a href="../reference/query-language-reference.html#in">in query operator</a> instead.
   It has considerably better performance than plain OR for set filtering:
 </p>
@@ -457,7 +468,7 @@ while <em>hash</em> based would be 1000 lookups times O(1). Still, the <em>btree
 offers more flexibility in terms of <a href="/en/reference/schema-reference.html#match">match</a> settings.
 </p>
 <p>
-  The <code>in</code> query set filtering approach can be used in combination with hybrid <em>TAAT</em>,
+  The <code>in</code> query set filtering approach can be used in combination with hybrid <em>TAAT</em>
   evaluation to further improve performance. See the <a href="#hybrid-taat-daat">hybrid TAAT/DAAT</a> section.
 </p>
 <p>
@@ -467,7 +478,7 @@ offers more flexibility in terms of <a href="/en/reference/schema-reference.html
 {% include note.html content='
 For most use cases, the time spent on dictionary traversal is negligible compared to the time spent on
 query evaluation (matching and ranking). If the query is very selective, for example, using
-vespa as key-value lookup store with ranking support, the dictionary traversal time can be significant.'%}
+vespa as a key-value lookup store with ranking support, the dictionary traversal time can be significant.'%}
 
 <h2 id="document-summaries-hits">Document summaries - hits</h2>
 <p>
@@ -475,7 +486,7 @@ vespa as key-value lookup store with ranking support, the dictionary traversal t
   increasing the <a href="caches-in-vespa.html">summary cache</a> might reduce latency and cost.
 </p><p>
   Using <a href="../document-summaries.html">explicit document summaries</a>,
-  Vespa can support memory-only summary fetching, if all fields referenced in the document summary are
+  Vespa can support memory-only summary fetching if all fields referenced in the document summary are
   <strong>all</strong> defined with <code>attribute</code>. Dedicated in-memory summaries avoid (potential)
   disk read and summary chunk decompression.
   Vespa document summaries are stored using compressed
@@ -487,13 +498,13 @@ vespa as key-value lookup store with ranking support, the dictionary traversal t
 
 <h2 id="boolean-numeric-text-attribute">Boolean, numeric, text attribute</h2>
 <p>
-When selecting attribute field type, considering performance, this is a rule of thumb:
+When using the attribute field type, considering performance, this is a rule of thumb:
 </p>
 <ol>
   <li>Use boolean if a field is a boolean (max two values)</li>
   <li>Use a string attribute if there is a set of values - only unique strings are stored</li>
   <li>Use a numeric attribute for range searches</li>
-  <li>Use a numeric attribute if the data is really numeric, don't replace numeric with string numeric</li>
+  <li>Use a numeric attribute if the data <span style="text-decoration: underline">really</span> is numeric; don't replace numeric with string numeric</li>
 </ol>
 <p>
 Refer to <a href="../attributes.html">attributes</a> for details.
@@ -504,13 +515,13 @@ Refer to <a href="../attributes.html">attributes</a> for details.
 <h2 id="tensor-ranking">Tensor ranking</h2>
 <p>
   The ranking workload can be significant for large tensors -
-  it is important to have an understanding of both the potential memory and computational cost for each query.
+  it is important to understand both the potential memory and computational cost for each query.
 </p>
 
 
 <h3 id="memory">Memory</h3>
 <p>
-  Assume the dot product of two tensors with 1000 values of 8 bytes each as in
+  Assume the dot product of two tensors with 1000 values of 8 bytes each, as in
   <code>tensor&lt;double&gt;(x[1000])</code>.
   With one query tensor and one document tensor,
   the dot product is <code>sum(query(tensor1) * attribute(tensor2))</code>.
@@ -556,7 +567,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
 </p>
 <p>
   The blog post series on <a href="https://blog.vespa.ai/building-billion-scale-vector-search/">
-  Building Billion-Scale Vector Search</a> is a good read on this.
+  Building Billion-Scale Vector Search</a> is a good read.
 </p>
 
 
@@ -573,7 +584,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
     <th>double</th>
     <td>
       <p id="double">
-        The 64-bit floating-point <code>double</code> format is the default tensor cell type.
+        The default tensor cell type is the 64-bit floating-point <code>double</code> format.
         It gives the best precision at the cost of high memory usage and somewhat slower calculations.
         Using a smaller value type increases performance, trading off precision,
         so consider changing to one of the cell types below before scaling the application.
@@ -586,7 +597,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
       <p id="float">
         The 32-bit floating-point format <code>float</code> should usually be used for all tensors
         when scaling for production.
-        Note that some frameworks like tensorflow prefers 32-bit floats.
+        Note that some frameworks like TensorFlow prefer 32-bit floats.
         A vector with 1000 dimensions,
         <code>tensor&lt;float&gt;(x[1000])</code> uses approximately 4K memory per tensor value.
       </p>
@@ -596,7 +607,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
     <th>bfloat16</th>
     <td>
       <p id="bfloat16">
-        This type has the range as a normal 32-bit float but only 8 bits of precision,
+        This type has the range as a normal 32-bit float but only 8 bits of precision
         and can be thought of as a "float with lossy compression" -
         see <a href="https://en.wikipedia.org/wiki/Bfloat16_floating-point_format">Wikipedia</a>.
         If memory (or memory bandwidth) is a concern,
@@ -607,11 +618,11 @@ Refer to <a href="../attributes.html">attributes</a> for details.
         When doing calculations, <code>bfloat16</code> will act as if it was a 32-bit float,
         but the smaller size comes with a potential computational overhead.
         In most cases, the <code>bfloat16</code> needs conversion to a 32-bit float
-        before the actual calculation can take place, adding an extra conversion step.
+        before the actual calculation can occur, adding an extra conversion step.
       </p>
       <p>
         In some cases, having tensors with <code>bfloat16</code> cells might bypass some built-in optimizations
-        (like matrix multiplication) that will be hardware accelerated only if the cells are the same type.
+        (like matrix multiplication) that will be hardware-accelerated only if the cells are of the same type.
         To avoid this,
         use the <a href="../reference/ranking-expressions.html#cell_cast">cell_cast</a> tensor operation
         to make sure the cells are of the right type before doing the more expensive operations.
@@ -622,11 +633,11 @@ Refer to <a href="../attributes.html">attributes</a> for details.
     <th>int8</th>
     <td>
       <p id="int8">
-        If using machine-learning to generate a model with data quantization,
+        If using machine learning to generate a model with data quantization,
         one can target the <code>int8</code> cell value type,
-        which is a signed integer with range from -128 to +127 only.
+        which is a signed integer with a range from -128 to +127 only.
         This is also treated like a "float with limited range and lossy compression" by the Vespa tensor framework,
-        and gives results as if it was a 32-bit float when any calculation is done.
+        and gives results as if it were a 32-bit float when any calculation is done.
         This type is also suitable when representing boolean values (0 or 1).
       </p>
       {% include note.html content='If the input for an <code>int8</code> cell is not directly representable,
@@ -665,7 +676,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
       <p id="inner-product">
         <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IWMmz5AFmUBWZQA2KU1HXQx9ViNME04zawp8aPJ6TlhzR3YGRgAqe2tw1EjDBNjCBwsk6whIVKhoAFdaAGMKzOdIPgaAW2Fc2xlQmkKdFCkQbSA">
         Playground example</a>.
-        The dimension name and size is the same in both tensors - this is an inner product, with a scalar result.
+        The dimension name and size are the same in both tensors - this is an inner product with a scalar result.
       </p>
     </td>
   </tr>
@@ -679,7 +690,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
         <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IWMmz5AFmUBWZQA2KU1HXQx9ViNME04zawp8aPJ6TlhzR3YGRgAqe2tw1EjDBNjCBwsk6whIVKhoAFdaAGMKzOdIPgaAW2Fc2xlQmkKdFCkQbSA">
         Playground example</a>.
         The dimension size is the same in both tensors, but dimensions have different names -&gt;
-        this is an outer product, the result is a two-dimensional tensor.
+        this is an outer product; the result is a two-dimensional tensor.
       </p>
     </td>
   </tr>
@@ -692,7 +703,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
       <p id="undefined">
         <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IWMQrZ8gCzKArFKajroY+qxGmCacZtYU+JHk9Jyw5o7sDIwAVPbWoajhhnHRhA4WCdYQkMlQ0ACutADGZenOkHx1ALbC2bYywTT5OihSINpAA">
         Playground example</a>.
-        Two tensors in same dimension, but with different length -&gt; undefined.
+        Two tensors in the same dimension but with different lengths -&gt; undefined.
       </p>
     </td>
   </tr>
@@ -706,7 +717,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
         <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IcICeiFbPkAWZQBWKU1HXQx9ViNME04zawp8aPJ6TlhzR3YGRgAqe2tw1EjDBNjCBwsk6whIVKhoAFdaAGMKzOdIPgaAW2Fc2xlQmkKdFCkQbSA">
         Playground example</a>.
         Two tensors with different names and dimensions -&gt;
-        this is an outer product, the result is a two-dimensional tensor.
+        this is an outer product; the result is a two-dimensional tensor.
       </p>
     </td>
   </tr>
@@ -788,7 +799,7 @@ Refer to <a href="../attributes.html">attributes</a> for details.
 <p>
   Using a mapped dimension to select an indexed tensor can be considered a
   <a href="../tensor-examples.html#using-a-tensor-as-a-lookup-structure">mapped lookup</a>.
-  This is similar to creating a slice, but optimized into a single <code>MappedLookup</code> -
+  This is similar to creating a slice but optimized into a single <code>MappedLookup</code> -
   see <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gFssATAgGwH0BLFksmpCIJIAFwK0AzlgBOACkY8WwAL4BKOMEYAmOAEYAdAAYVkARBUCVpDNXK4GRG4MppzdBszbtJ-GpmEocSlZBSVVYgAPRABmAF0NLT04RAAWY2IwAFYMsAA2YzjMnRSAdlyADlyATkLTd0sMawE7TAcRJ3cKfFbyehFJAFdGBVYOJTAAKjAvDklipTU-f0IGIZHZrl4pmbGfBd4lhqtnCF6odtXTzFdziEh+qEl2bgBjTpXVkVHvSUnNxZaJRwHT1fyNVDNWxdS5CZbkW7ue6PJgAQxwOAILE47CwWAA1oMcJwZFjBu94YJApBSSxyQQfnN-nslMR1sRFIczOCrCg4iAVEA">
   Tensor Playground</a> example.
 </p>
