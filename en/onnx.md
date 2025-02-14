@@ -133,8 +133,9 @@ over multiple files, is currently not supported.
 
 The [MS Marco](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking)
 sample application uses a cross-encoder model to re-rank documents.
-The [simple-semantic-search](https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search) sample application
-uses onnx models for embedding inference. [custom-embeddings](https://github.com/vespa-engine/sample-apps/tree/master/custom-embeddings) 
+The [model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting) example
+uses onnx models for embedding inference.
+[custom-embeddings](https://github.com/vespa-engine/sample-apps/tree/master/custom-embeddings)
 has an example of a PyTorch model that is exported to onnx format for use in re-ranking. 
 
 
@@ -144,8 +145,8 @@ has an example of a PyTorch model that is exported to onnx format for use in re-
 <p>Transformer-based models have named inputs and outputs that must be compatible
 with the input and output names used by the <a href="embedding.html">embedder</a>.</p>
 
-<p>The <a href="https://github.com/vespa-engine/sample-apps/tree/master/simple-semantic-search#model-exporting">simple-semantic-search</a>
-sample app includes two scripts to export models and vocabulary files using the default expected input and output names
+<p>The <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting">model-exporting</a>
+example includes two scripts to export models and vocabulary files using the default expected input and output names
 for embedders using ONNX models. The input and output names to the embedder are tunable via the  <code>transformer-</code>
 parameters in the <a href="reference/embedding-reference.html">config of the embedder in question</a>.</p>
 

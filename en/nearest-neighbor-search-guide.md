@@ -525,9 +525,9 @@ The final step is to download embedding model files
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o app/model/e5-small-v2-int8.onnx \
-    https://github.com/vespa-engine/sample-apps/raw/master/simple-semantic-search/model/e5-small-v2-int8.onnx 
+    https://github.com/vespa-engine/sample-apps/raw/master/examples/model-exporting/model/e5-small-v2-int8.onnx
 $ curl -L -o app/model/tokenizer.json \
-    https://github.com/vespa-engine/sample-apps/raw/master/simple-semantic-search/model/tokenizer.json 
+    https://github.com/vespa-engine/sample-apps/raw/master/examples/model-exporting/model/tokenizer.json
 </pre>
 </div>
 
