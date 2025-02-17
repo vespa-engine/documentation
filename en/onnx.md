@@ -144,20 +144,7 @@ uses onnx models for embedding inference.
 has an example of a PyTorch model that is exported to onnx format for use in re-ranking. 
 
 
-
-## Exporting HF models to ONNX format
-
-Transformer-based models have named inputs and outputs that must be compatible
-with the input and output names used by the [embedder](/en/embedding.html).
-
-The [model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting)
-example includes two scripts to export models and vocabulary files using the default expected input and output names
-for embedders using ONNX models.
-The input and output names to the embedder are tunable via the `transformer-`parameters in the
-[config of the embedder in question](/en/reference/embedding-reference.html).
-
-
-### Using Optimum to export models to onnx format
+### Using Optimum to export models to ONNX format
 
 We can highly recommend using the [Optimum](https://huggingface.co/docs/optimum/index) library
 for exporting models hosted on Huggingface model hub.
@@ -199,6 +186,18 @@ if the model is larger than 2GB, the model is split over multiple files, and thi
 
 See [cross-encoders](/en/cross-encoders.html#exporting-cross-encoder-models) documentation for examples on how to
 export cross-encoder re-rankers using the Optimum library.
+
+
+## Using Auto Classes to export HF models to ONNX format
+
+Transformer-based models have named inputs and outputs that must be compatible
+with the input and output names used by the [embedder](/en/embedding.html).
+
+The [model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting)
+example includes two scripts to export models and vocabulary files using the default expected input and output names
+for embedders using ONNX models.
+The input and output names to the embedder are tunable via the `transformer-`parameters in the
+[config of the embedder in question](/en/reference/embedding-reference.html).
 
 
 ### Debugging ONNX models
