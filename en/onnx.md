@@ -159,7 +159,7 @@ $ optimum-cli export onnx --library transformers --task feature-extraction -m BA
 The exported files in `model-output-dir`: `model.onnx` and `tokenizer.json` imported directly
 into the Vespa [huggingface-embedder](embedding.html#huggingface-embedder).
 
-See also [debugging onnx](#onnx-debug).
+Refer to [debugging onnx](#debugging-onnx-models).
 
 In many cases, there are also onnx checkpoints available,
 for example [mixedbread-ai/mxbai-embed-large-v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/tree/main),
@@ -188,7 +188,7 @@ See [cross-encoders](/en/cross-encoders.html#exporting-cross-encoder-models) doc
 export cross-encoder re-rankers using the Optimum library.
 
 
-## Using Auto Classes to export HF models to ONNX format
+### Using Auto Classes to export HF models to ONNX format
 
 Transformer-based models have named inputs and outputs that must be compatible
 with the input and output names used by the [embedder](/en/embedding.html).
