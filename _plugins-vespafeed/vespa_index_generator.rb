@@ -1,4 +1,4 @@
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 
 require 'json'
 require 'nokogiri'
@@ -12,11 +12,26 @@ module Jekyll
         def generate(site)
             namespace = site.config["search"]["namespace"]
             operations = []
+            puts "::debug::VespaIndexGenerator is processing pages"
+
+            if site.pages.empty?
+                # Drop out with an error
+                puts "::error::No pages found!"
+                return false
+            end
+
+            puts "::debug::Pages found: #{site.pages.size}"
             site.pages.each do |page|
-                next if page.path.start_with?("css/") ||
-                        page.url.start_with?("/redirects.json") ||
-                        is_empty(page)
-                if page.data["index"]
+                # Skip pages that should not be indexed
+                next if (
+                    page.path.start_with?("css/") ||
+                    page.url.start_with?("/redirects.json") ||
+                    page.url.start_with?("/search.html") ||
+                    is_empty(page)
+                )
+
+                if page.data["index"] == true
+                    puts "::debug::Processing page: #{page.url}"
                     url = page.url
                     url += 'index.html' if url[-1, 1] == '/'
                     text = extract_text(page)
@@ -35,11 +50,16 @@ module Jekyll
                     fields[:outlinks] = outlinks if !outlinks.empty?
                     fields[:headers]  = headers  if !headers.empty?
                     fields[:keywords] = keywords if !keywords.empty?
-                    operations.push({:put => "id:" + namespace + ":doc::" + namespace + url,
-                                     :fields => fields})
+                    operations.push({
+                        :put => "id:" + namespace + ":doc::" + namespace + url,
+                        :fields => fields
+                    })
+                else
+                    puts "::debug::Page not indexed: #{page.url}, index flag: #{page.data['index']}"
                 end
             end
             json = JSON.pretty_generate(operations)
+            puts "::debug::Writing index file: #{namespace}_index.json"
             File.open(namespace + "_index.json", "w") { |f| f.write(json) }
         end
 

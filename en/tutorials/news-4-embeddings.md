@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - embeddings"
-redirect_from:
-- /documentation/tutorials/news-4-embeddings.html
 ---
 
 
@@ -288,9 +286,9 @@ $ python3 src/python/create_bert_embeddings.py mind
     <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o mind/train/news_embeddings.tsv \
-  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding.tsv
+  https://data.vespa-cloud.com/sample-apps-data/mind_news_embedding.tsv
 $ curl -L -o mind/dev/news_embeddings.tsv \
-  https://data.vespa.oath.cloud/sample-apps-data/mind_news_embedding_dev.tsv
+  https://data.vespa-cloud.com/sample-apps-data/mind_news_embedding_dev.tsv
 </pre>
   </div>
   </li>
@@ -440,7 +438,7 @@ The training script writes these embeddings to the files
 `mind/user_embeddings.tsv` and `mind/news_embeddings.tsv`.
 
 
-## Mapping from inner-product search to euclidean search
+## Mapping from inner-product search to Euclidean search
 
 These vectors have been trained to maximize the inner product.
 Finding the best news articles given a user vector is called Maximum Inner Product Search - or MIPS.

@@ -20,14 +20,15 @@ $ vespa status deploy
 ### Options
 
 ```
-  -h, --help       help for deploy
-  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
+      --format string   Output format. Must be 'human' (human-readable text) or 'plain' (cluster URL only) (default "human")
+  -h, --help            help for deploy
+  -w, --wait int        Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use (cloud only)
+  -a, --application string   The application to use (cloud only). Format "tenant.application.instance" - instance is optional
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
   -i, --instance string      The instance of the application to use (cloud only)

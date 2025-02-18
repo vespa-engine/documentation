@@ -1,0 +1,44 @@
+name: Verify Guides
+
+on:
+  workflow_call:
+    inputs:
+      test-config-path:
+        description: |
+          The path to the test configuration file, relative to the repository root.
+
+          Example: `test/_test_config.yml`
+        type: string
+        required: true
+
+defaults:
+  run:
+    # Specify to ensure "pipefail and errexit" are set.
+    # Ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#defaultsrunshell
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      LANG: "C.UTF-8"
+    steps:
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install-deps
+        with:
+          vespa-cli-version: latest
+
+      - name: build-site
+        run: |
+          bundle exec jekyll build
+
+      - name: check-queries
+        run: |
+          ./test/test_queries.py _site
+
+      - name: run-tests
+        run: |
+          ./test/test.py -c ./test/_test_config.yml -w $GITHUB_WORKSPACE

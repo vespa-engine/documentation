@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Use Case - shopping"
-redirect_from:
-- /documentation/use-case-shopping.html
 ---
 
 The [e-commerce, or shopping, use case](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping)

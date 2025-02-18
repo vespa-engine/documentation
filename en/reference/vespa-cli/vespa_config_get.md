@@ -11,7 +11,7 @@ Show given configuration option, or all configuration options
 
 Show given configuration option, or all configuration options.
 
-By default this command prints the effective configuration for the current
+By default, this command prints the effective configuration for the current
 application, i.e. it takes into account any local configuration located in
 [working-directory]/.vespa.
 
@@ -26,7 +26,6 @@ vespa config get [option-name] [flags]
 $ vespa config get
 $ vespa config get target
 $ vespa config get --local
-
 ```
 
 ### Options
@@ -39,7 +38,7 @@ $ vespa config get --local
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use (cloud only)
+  -a, --application string   The application to use (cloud only). Format "tenant.application.instance" - instance is optional
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
   -i, --instance string      The instance of the application to use (cloud only)

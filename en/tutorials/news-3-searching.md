@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - searching"
-redirect_from:
-- /documentation/tutorials/news-3-searching.html
 ---
 
 

@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Improving Text Search through ML"
-redirect_from:
-- /documentation/tutorials/text-search-ml.html
 ---
 
 
@@ -20,6 +18,9 @@ More specifically, you will accomplish the following steps in this tutorial.
 * Propose sanity-checks to help you detect bugs in your data collection logic
   and ensure you have a properly built dataset at the end of the process.
 * Illustrate the importance of going beyond pointwise loss functions when dealing with Learning To Rank (LTR) tasks.
+
+[Vespa Product Ranking](https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking)
+is a good resource for Learning To Rank using XGBoost and LightGBM, with linked blog posts.
 
 
 ## Collect rank feature data from Vespa

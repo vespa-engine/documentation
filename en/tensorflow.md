@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Ranking with TensorFlow Models"
-redirect_from:
-- /documentation/tensorflow.html
 ---
 
 Vespa can import TensorFlow models converted to the ONNX format. The tutorial 

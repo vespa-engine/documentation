@@ -1,8 +1,7 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Indexing Language Reference"
 redirect_from:
-- /documentation/reference/advanced-indexing-language.html
 - /en/reference/advanced-indexing-language.html
 ---
 
@@ -21,9 +20,9 @@ other (except when using variables).
 
 
 
-<h2 id="script">Indexing script</h2>
+<h2 id="indexing-script">Indexing script</h2>
 <p>
-An indexing script is a sequence of <a href="#statement">indexing
+An indexing script is a sequence of <a href="#indexing-statement">indexing
 statements</a> separated by a semicolon (<code>;</code>). A script is
 executed statement-by-statement, in order, one document at a time.
 </p><p>
@@ -49,9 +48,9 @@ executing a statement.
 
 
 
-<h2 id="statement">Indexing statement</h2>
+<h2 id="indexing-statement">Indexing statement</h2>
 <p>
-An indexing statement is a sequence of <a href="#expression">indexing
+An indexing statement is a sequence of <a href="#indexing-expression">indexing
 expressions</a> separated by a pipe (<code>|</code>).
 A statement is executed expression-by-expression, in order.
 </p><p>
@@ -71,17 +70,17 @@ current execution value into the attribute "year".
 
 
 
-<h2 id="expression">Indexing expression</h2>
+<h2 id="indexing-expression">Indexing expression</h2>
 
 
-<h3 id="primitive">Primitives</h3>
+<h3 id="primitives">Primitives</h3>
 
 <p>
 A string, numeric literal and true/false can be used as an expression to explicitly
   set the execution value. Examples: <code>"foo"</code>, <code>69</code>, <code>true</code>).
 </p>
 
-<h3 id="output">Outputs</h3>
+<h3 id="outputs">Outputs</h3>
 <p>
 An output expression is an expression that writes the current execution
 value to a document field. These expressions also double as the indicator
@@ -123,12 +122,12 @@ index</code> is <strong>illegal</strong> and will not deploy).
 </table>
 
 
-<h3 id="arithmetic">Arithmetics</h3>
+<h3 id="arithmetics">Arithmetics</h3>
 <p>
 Indexing statements can contain any combination of arithmetic operations,
 as long as the operands are numeric values. In case you need to convert
 from string to numeric, or convert from one numeric type to another,
-use the applicable <a href="#converter">converter</a> expression.
+use the applicable <a href="#converters">converter</a> expression.
 The supported arithmetic operators are:
 </p>
 <table class="table">
@@ -201,12 +200,9 @@ The supported arithmetic operators are:
 </p>
 
 
+<h3 id="converters">Converters</h3>
 
-<h3 id="converter">Converters</h3>
-
-<p>There are several expressions that allow you to convert from one data type to another.
-These are often used within a <code>for_each</code> to convert
-e.g. an array of strings to an array of integers.</p>
+<p>These expressions let you convert from one data type to another.</p>
 
 <table class="table">
   <thead>
@@ -217,21 +213,64 @@ e.g. an array of strings to an array of integers.</p>
     <th>Description</th>
   </tr>
   </thead><tbody>
-  <tr>
-    <td><code>embed</code></td>
-    <td>String</td>
-    <td>A tensor of the type of the receiving field</td>
-    <td><p id="embed">Invokes an <a href="../embedding.html">embedder</a> to convert a text to a point in a tensor space.
-        Arguments are given space separated, as in <code>embed colbert chunk</code>.
-        The first argument is the id of the embedder, and can be omitted when only one is configured.
-        Any additional arguments are passed to the embedder implementation.</p></td>
-  </tr>
-  <tr>
-    <td><code>hash</code></td>
-    <td>String</td>
-    <td>Any string</td>
-    <td><p id="hash">Converts the input to a hash value (using SipHash).
+<tr>
+  <td><code>binarize [threshold]</code></td>
+  <td>Any tensor</td>
+  <td>Any tensor</td>
+  <td>
+    <p id="binarize">
+      Replaces all values in a tensor by 0 or 1.
+      This takes an optional argument specifying the threshold a value needs to be larger than to be
+      replaced by 1 instead of 0. The default threshold is 0.
+      This is useful to create a suitable input to <a href="#pack_bits">pack_bits</a>.
+    </p>
+  </td>
+</tr>
+<tr>
+  <td><code>embed [id]</code></td>
+  <td>String</td>
+  <td>A tensor</td>
+  <td><p id="embed">Invokes an <a href="../embedding.html">embedder</a> to convert a text to one or more vector embeddings.
+      The type of the output tensor is what is required by the following expression (as supported by the specific embedder).
+      Arguments are given space separated, as in <code>embed colbert chunk</code>.
+      The first argument is the id of the embedder, and can be omitted when only one is configured.
+      Any additional arguments are passed to the embedder implementation.</p></td>
+</tr>
+<tr>
+  <td><code>hash</code></td>
+  <td>String</td>
+  <td>int or long</td>
+  <td><p id="hash">Converts the input to a hash value (using SipHash).
       The hash will be int or long depending on the target field.</p></td>
+</tr>
+<tr>
+    <td><code>pack_bits</code></td>
+    <td>A tensor</td>
+    <td>A tensor</td>
+    <td>
+      <p id="pack_bits">
+        Packs the values of a binary tensor into bytes with 1 bit per value in big-endian order.
+      </p>
+      <p>
+        The input tensor must:
+      <ul>
+        <li>Only have values that are 0 or 1</li>
+        <li>Have a single dense dimension</li>
+      </ul>
+      <p>It can have any value type and any number of sparse dimensions.</p>
+      <p>The output tensor will have:</p>
+      <ul>
+        <li><code>int8</code> as the value type.</li>
+        <li>The dense dimension size divided by 8 (rounded upwards to integer).</li>
+        <li>The same sparse dimensions as before.</li>
+      </ul>
+      <p>
+      The resulting tensor can be unpacked during ranking using
+      <a href="ranking-expressions.html#unpack-bits">unpack_bits</a>.
+      A tensor can be converted to binary form suitable as input to this by the
+      <a href="#binarize">binarize function</a>.
+      </p>
+    </td>
   </tr>
   <tr>
     <td><code>to_array</code></td>
@@ -346,24 +385,24 @@ e.g. an array of strings to an array of integers.</p>
     <td>
       <p id="to_epoch_second">
       Converts an ISO-8601 instant formatted String to Unix epoch (or Unix time or POSIX time or Unix timestamp) which
-      is the number of seconds elapsed since January 1, 1970 UTC. The converter uses
+      is the number of seconds elapsed since January 1, 1970, UTC. The converter uses
       <a href="https://docs.oracle.com/en/java/javase/20/docs/api/java.base/java/time/Instant.html#parse(java.lang.CharSequence)">
         java.time.Instant.parse
       </a> to parse the input string value. This will throw a DateTimeParseException if the input cannot be parsed. Examples:
+      </p>
       <ul>
         <li><code>2023-12-24T17:00:43.000Z</code> is converted to <code>1703437243L</code></li>
         <li><code>2023-12-24T17:00:43Z</code> is converted to <code>1703437243L</code></li>
         <li><code>2023-12-24T17:00:43.431Z</code> is converted to <code>1703437243L</code></li>
         <li><code>2023-12-24T17:00:43.431+00:00</code> is converted to <code>1703437243L</code></li>
     </ul>
-    </p>
     </td>
   </tr>
   </tbody>
 </table>
 
 
-<h3 id="other">Other expressions</h3>
+<h3 id="other-expressions">Other expressions</h3>
 <p>
 The following are the unclassified expressions available:
 </p>
@@ -375,8 +414,10 @@ The following are the unclassified expressions available:
   </thead><tbody>
   <tr>
     <td><code>_</code></td>
-    <td><p id="_">Returns the current execution value. This is useful e.g to prepend some other value to the current execution value,
-                  see <a href="/en/indexing.html#execution-value-example">this example</a>.
+    <td><p id="_">
+      Returns the current execution value.
+      This is useful, e.g., to prepend some other value to the current execution value,
+      see <a href="/en/indexing.html#execution-value-example">this example</a>.
     </p></td>
   </tr>
   <tr>
@@ -541,9 +582,9 @@ The following are the unclassified expressions available:
     <td><code>random [ &lt;max&gt; ]</code></td>
     <td>
       <p id="random">
-      Returns a random integer value.
-      Lowest value is 0 and the highest value is determined either by the argument or,
-      if no argument is given, the execution value.
+        Returns a random integer value.
+        Lowest value is 0 and the highest value is determined either by the argument or,
+        if no argument is given, the execution value.
       </p>
     </td>
   </tr>

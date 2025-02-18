@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Documents"
-redirect_from:
-- /documentation/documents.html
 ---
 
 <p>
@@ -13,7 +11,7 @@ redirect_from:
   defined in the <a href="schemas.html">schema</a>.
 </p><p>
   When configuring clusters, a <a href="reference/services-content.html#documents">documents</a>
-  element set what document types a cluster is to store.
+  element sets what document types a cluster is to store.
   This configuration is used to configure the garbage collector if it is enabled.
   Additionally, it is used to define default routes for documents sent into the application.
   By default, a document will be sent to all clusters having the document type defined.
@@ -52,8 +50,8 @@ redirect_from:
 
 <h3 id="id-scheme">id scheme</h3>
 <p>
-  Vespa has defined one scheme, the <em>id scheme</em>:
-  <code>id:&lt;namespace&gt;:&lt;document-type&gt;:&lt;key/value-pairs&gt;:&lt;user-specified&gt;</code>
+  Vespa currently has only one defined scheme, the <em>id scheme</em>:
+  <code>id:&lt;namespace&gt;:&lt;document-type&gt;:&lt;key/value-pair&gt;:&lt;user-specified&gt;</code>
 </p>
 {% include note.html content='
 An example mapping from ID to the URL used in <a href="document-v1-api-guide.html">/document/v1/</a> is from
@@ -72,22 +70,22 @@ Find examples and tools in <a href="document-v1-api-guide.html#document-not-foun
   </tr>
   </thead>
   <tbody>
-  <tr><th>namespace</th><td>Yes</td><td>See <a href="#namespace">below</a>.</td></tr>
+  <tr><th>namespace</th><td>Yes</td><td>Not used by Vespa, see <a href="#namespace">below</a>.</td></tr>
   <tr><th>document-type</th><td>Yes</td><td>Document type as defined in
     <a href="reference/services-content.html#document">services.xml</a> and the
     <a href="reference/schema-reference.html">schema</a>.</td></tr>
-  <tr><th style="white-space:nowrap">key/value-pairs</th><td>Optional</td><td>
+  <tr><th style="white-space:nowrap">key/value-pair</th><td>Optional</td><td>
     Modifiers to the id scheme, used to configure document distribution to
     <a href="content/buckets.html#document-to-bucket-distribution">buckets</a>.
     With no modifiers, the id scheme distributes all documents uniformly.
-    The key/value-pairs field contains a comma-separated list of lexicographically sorted key/value pairs.
+    The key/value-pair field contains one of two possible key/value pairs;
     <strong>n</strong> and <strong>g</strong> are mutually exclusive:
     <table class="table">
       <thead></thead><tbody>
         <tr><th>n=<em>&lt;number&gt;</em></th><td>
-          Number in the range [0,2^63-1]</td></tr>
+          Number in the range [0,2^63-1] - only for testing of abnormal bucket distributions</td></tr>
         <tr style="white-space: nowrap"><th>g=<em>&lt;groupname&gt;</em></th><td>
-          Just like n=, the string is hashed to a number</td></tr>
+          The <em>groupname</em> string is hashed and used to select the storage location</td></tr>
       </tbody>
     </table>
     {% include important.html content='This is only useful for document types with
@@ -101,8 +99,42 @@ Find examples and tools in <a href="document-v1-api-guide.html#document-not-foun
 </tbody>
 </table>
 
+<h3 id="docid-in-results">Document IDs in search results</h3>
+<p>
+  The full Document ID (as a string) will often contain redundant
+  information and be quite long; a typical value may look like
+  "id:mynamespace:mydoctype::user-specified-identifier" where only the
+  last part is useful outside Vespa.  The Document ID is therefore not
+  stored in memory, and it <strong>not always present</strong> in
+  <a href="reference/default-result-format.html#id">search results</a>.
+  It is therefore recommended to put your own unique identifier
+  (usually the "user-specified-identifier" above) in a document field,
+  typically named "myid" or "shortid" or similar:
+</p>
+<pre>
+field shortid type string {
+    indexing: attribute | summary
+}
+</pre>
+<p>
+  This enables using a
+  <a href="document-summaries.html">document-summary</a> with only
+  in-memory fields while still getting the identifier you actually
+  care about.  If the "user-specified-identifier" is just a simple
+  number you could even use "type int" for this field for minimal
+  memory overhead.
+</p>
 
 <h3 id="namespace">Namespace</h3>
+<p>
+  The namespace in document ids is useful when you have multiple
+  document collections that you want to be sure never end up with the
+  same document id. It has no function in Vespa beyond this, and can
+  just be set to any short constant value like for example "doc".
+  Consider also letting synthetic documents used for
+  testing use namespace "test" so it's easy to detect and remove
+  them if they are present outside the test by mistake.
+</p>
 <p>
   Example - if feeding
 </p>
@@ -215,7 +247,8 @@ music:title,artist
     <document type="music" selection="music.timestamp &gt; now() - 86400" />
 </documents>
 {% endhighlight %}</pre>
-<p>The <em>timestamp</em>-field must have values in seconds since EPOCH:</p>
+<p>Note: The <code>selection</code> expression says which documents to <em>keep</em>, not which ones to delete.
+  The <em>timestamp</em> field must have a value in seconds since EPOCH:</p>
 <pre>
 field timestamp type long {
     indexing: attribute
@@ -226,8 +259,9 @@ field timestamp type long {
 </pre>
 <p>
   When <code>garbage-collection="true"</code>, Vespa iterates over the document space to purge expired documents.
-  Vespa will invoke the configured GC selection for each stored document at most once every
+  Vespa will invoke the configured GC selection for each stored document once every
   <a href="reference/services-content.html#documents.selection">garbage-collection-interval</a> seconds.
+  It is unspecified when a particular document will be processed within the configured interval.
 </p>
   {% include important.html content="This is a best-effort garbage collection feature to conserve CPU and space.
   Use query filters if it is important to exclude documents based on a criterion."%}

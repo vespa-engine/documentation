@@ -12,8 +12,8 @@ function processFilePREs() {
         let elem = elems[i];
         if (elem.getAttribute("data-test") === "file") {
             let html = elem.innerHTML;
-            elem.innerHTML = html.replace(/<!--\?/g, "<?").replace(/\?-->/g, "?>").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            elem.insertAdjacentHTML("beforebegin", "<pre class=\"filepath\">file: " + elem.getAttribute("data-path") + "</pre>");
+            //elem.innerHTML = html.replace(/<!--\?/g, "<?").replace(/\?-->/g, "?>").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            elem.insertAdjacentHTML("afterend", "<div class=\"filepath\">Write to file: " + elem.getAttribute("data-path") + "</div>");
         }
     }
 };

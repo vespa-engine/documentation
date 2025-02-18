@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Ranking With Transformer Cross-Encoder Models"
-redirect_from:
-- /documentation/cross-encoders.html
 ---
 
 [Cross-Encoder Transformer](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-4/) 
@@ -223,7 +221,7 @@ Quantization of model weights can drastically improve serving efficiency on CPU.
 
 ## Examples
 
-The [Transformers](https://github.com/vespa-engine/sample-apps/tree/master/transformers)
+The [MS Marco](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking)
 sample application demonstrates using cross-encoders. 
 
 ## Using cross-encoders with multi-vector indexing

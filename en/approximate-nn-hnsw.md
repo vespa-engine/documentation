@@ -1,9 +1,7 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. 
+# Copyright Vespa.ai. All rights reserved. 
 title: "Approximate Nearest Neighbor Search using HNSW Index"
 keywords: "ann, approximate nearest neighbor"
-redirect_from:
-- /documentation/approximate-nn-hnsw.html
 ---
 
 For an introduction to nearest neighbor search, see [nearest neighbor search](nearest-neighbor-search.html) documentation, 

@@ -5,13 +5,13 @@ render_with_liquid: false
 
 ## vespa visit
 
-Fetch and print all documents from Vespa
+Retrieve and print all documents from Vespa
 
 ### Synopsis
 
-Fetch and print all documents from Vespa.
+Retrieve and print all documents from Vespa.
 
-By default prints each document received on its own line (JSONL format).
+By default, prints each document received on its own line (JSONL format).
 
 
 ```
@@ -36,6 +36,7 @@ $ vespa visit --field-set "[id]" # list document IDs
       --debug-mode               Print debugging output
       --field-set string         Which fieldset to ask for
       --from string              Timestamp to visit from, in seconds
+      --header strings           Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help                     help for visit
       --json-lines               Output documents as JSON lines (default true)
       --make-feed                Output JSON array suitable for vespa-feeder
@@ -44,13 +45,14 @@ $ vespa visit --field-set "[id]" # list document IDs
       --slice-id int             The number of the slice this visit invocation should fetch (default -1)
       --slices int               Split the document corpus into this number of independent slices (default -1)
       --to string                Timestamp to visit up to, in seconds
+  -v, --verbose                  Print the equivalent curl command for the visit operation
   -w, --wait int                 Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use (cloud only)
+  -a, --application string   The application to use (cloud only). Format "tenant.application.instance" - instance is optional
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
   -i, --instance string      The instance of the application to use (cloud only)

@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 
 import os
 import re
@@ -60,7 +60,7 @@ class PseudoTerminal:
         self._pty.close()
 
     def run(self, command, verbose):
-        command_id = random.randint(10e4, 10e5)
+        command_id = random.randint(10000, 100000)
         sentinel = "sentinel-{0}> exit code: ".format(command_id)
         sentinel_pattern = re.compile(sentinel + "(\d+)")
 

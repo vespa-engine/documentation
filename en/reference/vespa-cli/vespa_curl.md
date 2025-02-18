@@ -31,16 +31,15 @@ $ vespa curl -- -v --data-urlencode "yql=select * from music where album contain
 ### Options
 
 ```
-  -n, --dry-run          Print the curl command that would be executed
-  -h, --help             help for curl
-  -s, --service string   Which service to query. Must be "deploy" or "container" (default "container")
-  -w, --wait int         Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
+  -n, --dry-run    Print the curl command that would be executed
+  -h, --help       help for curl
+  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use (cloud only)
+  -a, --application string   The application to use (cloud only). Format "tenant.application.instance" - instance is optional
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
   -i, --instance string      The instance of the application to use (cloud only)

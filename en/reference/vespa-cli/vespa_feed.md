@@ -60,10 +60,12 @@ $ cat docs.jsonl | vespa feed -
 ### Options
 
 ```
-      --compression string       Compression mode to use. Default is "auto" which compresses large documents. Must be "auto", "gzip" or "none" (default "auto")
+      --compression string       Whether to compress the document data when sending the HTTP request. Default is "auto", which compresses large documents. Must be "auto", "gzip" or "none" (default "auto")
       --connections int          The number of connections to use (default 8)
       --deadline int             Exit if this number of seconds elapse without any successful operations. 0 to disable (default 0)
+      --header strings           Add a header to all HTTP requests, on the format 'Header: Value'. This can be specified multiple times
   -h, --help                     help for feed
+      --inflight int             The target number of inflight requests. 0 to dynamically detect the best value (default 0)
       --progress int             Print stats summary at given interval, in seconds. 0 to disable (default 0)
       --route string             Target Vespa route for feed operations (default "default")
       --speedtest int            Perform a network speed test using given payload, in bytes. 0 to disable (default 0)
@@ -77,7 +79,7 @@ $ cat docs.jsonl | vespa feed -
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use (cloud only)
+  -a, --application string   The application to use (cloud only). Format "tenant.application.instance" - instance is optional
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
   -i, --instance string      The instance of the application to use (cloud only)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 import copy
 import json
 import sys
@@ -11,7 +11,7 @@ from xml.sax.saxutils import escape
 import tiktoken
 import urllib.parse
 
-encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+encoding = tiktoken.encoding_for_model("gpt-4o-mini")
 note_pattern = re.compile(r"{%\s*include.*?%}", flags=re.DOTALL)
 highlight_pattern = re.compile(r"{%\s*.*?\s%}", flags=re.DOTALL)
 
@@ -47,9 +47,6 @@ def is_selfhosted_doc(doc):
         return True
     return False
 
-def remove_escape(text):
-    return text.replace("\\_","_")
-
 def create_text_doc(doc, paragraph, paragraph_id, header):
     id = doc['put']
     #id:open:doc::open/en/access-logging.html#
@@ -67,7 +64,7 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
             "path": fields['path'],
             "doc_id": fields['path'],
             "namespace": new_namespace,
-            "content": remove_escape(paragraph),
+            "content": paragraph,
             "content_tokens": n_tokens,
             "base_uri": sys.argv[2],
             "selfhosted": is_selfhosted_doc(doc)
@@ -77,12 +74,13 @@ def create_text_doc(doc, paragraph, paragraph_id, header):
     if header:
         title = fields['title']
         new_title = title + " - " + header
-        new_doc["fields"]["title"] = remove_escape(new_title)
+        new_doc["fields"]["title"] = new_title
 
     if paragraph_id is None:
         paragraph_id = str(random.randint(0,1000))
 
-    new_doc['fields']['path'] = remove_escape(new_doc['fields']['path'] + "#" + paragraph_id.replace("?",""))
+    new_doc['fields']['path'] = new_doc['fields']['path'] + \
+        "#" + paragraph_id.replace("?", "")
     new_doc['put'] = new_doc['put'] + "-" + urllib.parse.quote(paragraph_id)
 
     return new_doc
@@ -102,7 +100,7 @@ def split_text(soup):
             if text:
                 data.append((id, header, text))
                 text = ""
-            header = line.lstrip("#")
+            header = line.lstrip("#").replace("\\", "")
             id = "-".join(header.replace(',', '').split()).lower()
         else:
             text = text + "\n" + line
@@ -225,6 +223,9 @@ def main():
                 paragraph = paragraph.replace("```\nsh","```sh")
                 paragraph = paragraph.replace("```\nraw","```\n")
                 paragraph = paragraph.replace("```\njava","```java\n")
+
+                # Necessary backslashes and quotes will be added when json-serialized.
+                paragraph = paragraph.replace("\\", "")
 
                 paragraph = remove_jekyll(paragraph)
 

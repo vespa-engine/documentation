@@ -1,9 +1,7 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: FAQ - frequently asked questions
 style: faq
-redirect_from:
-- /documentation/faq.html
 ---
 
 Refer to [Vespa Support](https://vespa.ai/support) for more support options.
@@ -156,6 +154,10 @@ of a double. This can happen in two cases:
 - The [ranking](ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
 -Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this. 
 - Surfacing low scoring hits using [grouping](grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](reference/schema-reference.html#keep-rank-count).
+
+#### How to pin query results?
+To hard-code documents to positions in the result set,
+see the [pin results example](/en/multivalue-query-operators.html#pin-results-example).
 
 
 {:.faq-section}
@@ -379,8 +381,9 @@ No, there is no index or attribute data structure that allows efficient searchin
 an array field has a certain number of elements or items.  
 
 #### Is it possible to query for fields with NaN/no value set/null/none
-No, there is no efficient way to query for not having a value. The [visiting](visiting.html) API
-using document selections does support it, but is a linear scan over all documents.
+The [visiting](visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
+If the field is an _attribute_ one can query using grouping to identify Nan Values,
+see count and list [fields with NaN](/en/grouping.html#count-fields-with-nan).
 
 #### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
 See the [random.match](reference/rank-features.html#random.match) rank feature - example:
@@ -400,6 +403,14 @@ $ vespa query 'select * from music where true' \
 
 #### Some of the query results have too many hits from the same source, how to create a diverse result set?
 See [result diversity](/en/result-diversity.html) for strategies on how to create result sets from different sources.
+
+#### How to find most distant neighbor in a embedding field called clip_query_embedding?
+If you want to search for the most dissimilar items,
+you can with angular distance multiply your `clip_query_embedding` by the scalar -1.
+Then you are searching for the points that are closest to the point
+which is the farthest away from your `clip_query_embedding`.
+
+Also see a [pyvespa example](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
 
 
 {:.faq-section}

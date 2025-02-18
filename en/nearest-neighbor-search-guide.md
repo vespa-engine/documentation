@@ -1,5 +1,5 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Vespa nearest neighbor search - a practical guide"
 ---
 
@@ -525,9 +525,9 @@ The final step is to download embedding model files
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
 $ curl -L -o app/model/e5-small-v2-int8.onnx \
-    https://github.com/vespa-engine/sample-apps/raw/master/simple-semantic-search/model/e5-small-v2-int8.onnx 
+    https://github.com/vespa-engine/sample-apps/raw/master/examples/model-exporting/model/e5-small-v2-int8.onnx
 $ curl -L -o app/model/tokenizer.json \
-    https://github.com/vespa-engine/sample-apps/raw/master/simple-semantic-search/model/tokenizer.json 
+    https://github.com/vespa-engine/sample-apps/raw/master/examples/model-exporting/model/tokenizer.json
 </pre>
 </div>
 

@@ -1,4 +1,4 @@
-// Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+// Copyright Vespa.ai. All rights reserved.
 
 contexts = {
     VIEW: "view",
@@ -475,6 +475,7 @@ function clear_all() {
     setup = { "f": [] };
     save_setup();
     clear_results();
+    clear_examples();
     update();
 }
 
@@ -653,7 +654,7 @@ function execute_all() {
     }
     update();
 
-    d3.text("https://doc-search.vespa.oath.cloud/playground/eval", {
+    d3.text("https://api.search.vespa.ai/playground/eval", {
             method: "POST",
             body: "json=" + encodeURIComponent(JSON.stringify(expressions)),
             headers: { "Content-Type": "application/x-www-form-urlencoded" }
@@ -931,6 +932,32 @@ function setup_keybinds() {
     });
 }
 
+function setup_examples() {
+    d3.select("#examples-select").on("change", function (_) { go_to_example(); });
+
+    if (window.location.hash) {
+        var hash = window.location.hash.substring(1);
+        var select = d3.select("#examples-select");
+        var option = select.select(`option[value="${hash}"]`);
+
+        if (!option.empty()) {
+            select.property("value", hash);
+        } else {
+            select.property("value", "");
+        }
+    }
+}
+
+function go_to_example() {
+    var hash = d3.select("#examples-select").property("value");
+    window.location.hash = hash;
+    window.location.reload();
+}
+
+function clear_examples() {
+    d3.select("#examples-select").property("value", "");
+}
+
 function main() {
     setup_commands();
     load_setup();
@@ -938,5 +965,6 @@ function main() {
     execute_all();
     select_frame_by_index(0);
     setup_keybinds();
+    setup_examples();
 }
 

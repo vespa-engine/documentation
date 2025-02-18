@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - recommendations"
-redirect_from:
-- /documentation/tutorials/news-5-recommendation.html
 ---
 
 This is the fifth part of the tutorial series for setting up a Vespa

@@ -22,21 +22,26 @@ vespa query query-parameters [flags]
 
 ```
 $ vespa query "yql=select * from music where album contains 'head'" hits=5
+$ vespa query --format=plain "yql=select * from music where album contains 'head'" hits=5
+$ vespa query --header="X-First-Name: Joe" "yql=select * from music where album contains 'head'" hits=5
 ```
 
 ### Options
 
 ```
-  -h, --help          help for query
-  -T, --timeout int   Timeout for the query in seconds (default 10)
-  -v, --verbose       Print the equivalent curl command for the query
-  -w, --wait int      Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
+      --file string      Read query parameters from the given JSON file and send a POST request, with overrides from arguments
+      --format string    Output format. Must be 'human' (human-readable) or 'plain' (no formatting) (default "human")
+      --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
+  -h, --help             help for query
+  -T, --timeout int      Timeout for the query in seconds (default 10)
+  -v, --verbose          Print the equivalent curl command for the query
+  -w, --wait int         Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use (cloud only)
+  -a, --application string   The application to use (cloud only). Format "tenant.application.instance" - instance is optional
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
   -i, --instance string      The instance of the application to use (cloud only)

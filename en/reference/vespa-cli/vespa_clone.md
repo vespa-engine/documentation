@@ -9,14 +9,13 @@ Create files and directory structure from a Vespa sample application
 
 ### Synopsis
 
-Create files and directory structure from a Vespa sample application
-from a sample application.
+Create files and directory structure from a Vespa sample application.
 
 Sample applications are downloaded from
 https://github.com/vespa-engine/sample-apps.
 
-By default sample applications are cached in the user's cache directory. This
-directory can be overriden by setting the VESPA_CLI_CACHE_DIR environment
+By default, sample applications are cached in the user's cache directory. This
+directory can be overridden by setting the VESPA_CLI_CACHE_DIR environment
 variable.
 
 ```
@@ -40,7 +39,7 @@ $ vespa clone album-recommendation my-app
 ### Options inherited from parent commands
 
 ```
-  -a, --application string   The application to use (cloud only)
+  -a, --application string   The application to use (cloud only). Format "tenant.application.instance" - instance is optional
   -C, --cluster string       The container cluster to use. This is only required for applications with multiple clusters
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
   -i, --instance string      The instance of the application to use (cloud only)

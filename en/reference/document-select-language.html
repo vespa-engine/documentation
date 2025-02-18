@@ -1,8 +1,6 @@
 ---
-# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+# Copyright Vespa.ai. All rights reserved.
 title: "Document Selector Language"
-redirect_from:
-- /documentation/reference/document-select-language.html
 ---
 
 <p>
@@ -15,37 +13,46 @@ which in turn can answer whether a given document is contained within the subset
 
 
 <h2 id="examples">Examples</h2>
-<dl>
-<dt><code>music.author and music.length &lt;= 1000</code>
-<dd>This expression selects all documents with the above two conditions
-    set. The first condition states that the documents should be of type music,
-    and the author field must exist. The second states that the field length
-    must be set, and be less than 1000.
-<dt><code>book.author = "*John*Doe\n" or not book.author</code>
-<dd>This expression selects all documents where either of the subexpressions are
-    true. The first one states that the author field should include the name
-    John Doe, with anything in between or in front. The \n escape is converted
-    to a newline before the field comparison is done. Thus requiring the field
-    to end with Doe and a newline for a match to be true. The second expression
-    selects all books where no author is defined.
-<dt><code>not (music.length &gt; 1000) and (false or music.test)</code>
-<dd>Here is an example of how parentheses are used to group expressions.
-    Also, a constant value false has been used. Note that the <code>(false or music.test)</code>
-    sub-expression could be exchanged
-    with just <code>music.test</code> without altering the result of the
-    selection. The sub-expression within the <code>not</code> clause selects all documents
-    where the size field is above 1000 and the test field is defined. The <code>not</code>
-    clause inverts the selection, thus selecting all documents with size
-    less than or equal to 1000 or the test field undefined.
-</dl>
+<p>Match all documents in the <code>music</code> schema:</p>
+<p><code>music</code></p>
+<p>
+  As applications can have multiple schemas,
+  match document type (schema) and then a specific value in the <code>artistname</code> field:
+</p>
+<p><code>music and music.artistname == "Coldplay"</code></p>
+<p>
+  Below, the first condition states that the documents should be of type music,
+  and the author field must exist.
+  The second states that the field length must be set, and be less than or equal to 1000:
+</p>
+<p><code>music.author and music.length &lt;= 1000</code></p>
+<p>
+  The next expression selects all documents where either of the subexpressions are true.
+  The first one states that the author field should include the name John Doe, with anything in between or in front.
+  The <code>\n</code> escape is converted to a newline before the field comparison is done.
+  Thus requiring the field to end with Doe and a newline for a match to be true.
+  The second expression selects all books where no author is defined:
+</p>
+<p><code>book.author = "*John*Doe\n" or not book.author</code></p>
+<p>
+  Here is an example of how parentheses are used to group expressions.
+  Also, a constant value false has been used. Note that the <code>(false or music.test)</code>
+  sub-expression could be exchanged with just <code>music.test</code> without altering the result of the selection.
+  The sub-expression within the <code>not</code> clause selects all documents
+  where the size field is above 1000 and the test field is defined.
+  The <code>not</code> clause inverts the selection,
+  thus selecting all documents with size less than or equal to 1000 or the test field undefined:
+</p>
+<p><code>not (music.length &gt; 1000) and (false or music.test)</code></p>
 <p>Other examples:</p>
 <ul>
-<li><code>music.version() == 3 and (music.givenname + " " + music.surname).lowercase() = "bruce springsteen"</code></li>
-<li><code>id.user.hash().abs() % 300 % 7 = 1</code></li>
-<li><code>music.wavstream.hash() == music.checksum</code></li>
-<li><code>music.size / music.length &gt; 10</code></li>
-<li><code>music.expire &gt; now() - 7200</code></li>
+  <li><code>music.version() == 3 and (music.givenname + " " + music.surname).lowercase() = "bruce spring*"</code></li>
+  <li><code>id.user.hash().abs() % 300 % 7 = 1</code></li>
+  <li><code>music.wavstream.hash() == music.checksum</code></li>
+  <li><code>music.size / music.length &gt; 10</code></li>
+  <li><code>music.expire &gt; now() - 7200</code></li>
 </ul>
+
 
 
 <h2 id="case-sensitiveness">Case sensitiveness</h2>
@@ -86,7 +93,7 @@ Operators listed in order of precedence:
 </code> since and has higher precedence than or. The expression
   <code>a and (b or c) and d</code> is not
   equivalent to the previous two, since parentheses have been used to force the
-  or expression to be evaluated first.
+  or-expression to be evaluated first.
 </p><p>
   Parentheses can also be used in value calculations.
   Where modulo <code>%</code> has the highest precedence,
@@ -116,8 +123,8 @@ Operators listed in order of precedence:
   </tr>
   <tr>
     <td>Document type</td>
-    <td>A document type can be used as a primitive to select a given type of
-        documents</td>
+    <td>A document type can be used as a primitive to select a given type of documents
+        - <a href="/en/visiting.html#analyzing-field-values">example</a>.</td>
   </tr>
   <tr>
     <td>Document field specification</td>
@@ -247,9 +254,10 @@ One example where this may have <em>unexpected</em> behavior:
   If you only want your cluster to retain recordings from artists that are certifiably cool,
   you might be tempted to write a selection like the following:
 </p>
-<pre>
-&lt;document type="music_recording" selection="music_recording.artist_is_cool == true"&gt;
-</pre>
+<pre>{% highlight xml %}
+<document type="music_recording"
+          selection="music_recording.artist_is_cool == true">
+{% endhighlight %}</pre>
 <p>
 <strong>This won't work as expected</strong>, because this expression is evaluated as part of the feeding pipeline to figure
 out if a cluster should accept a given document. At that point in time, there is no access to the parent document.
@@ -257,9 +265,10 @@ Consequently, the field will return <code>null</code> and the document won't be 
 </p><p>
 Instead, write your expressions to handle the case where the parent document <em>may not exist</em>:
 </p>
-<pre>
-&lt;document type="music_recording" selection="(music_recording.artist_is_cool == null) or (music_recording.artist_is_cool == true)"&gt;
-</pre>
+<pre>{% highlight xml %}
+<document type="music_recording"
+          selection="(music_recording.artist_is_cool == null) or (music_recording.artist_is_cool == true)">
+{% endhighlight %}</pre>
 <p>
 With this selection, we explicitly let a document be accepted into the cluster if its imported field
 is <em>not</em> available. However, if it <em>is</em> available, we allow it to be used for GC.
@@ -326,6 +335,10 @@ The comparison operator compares two values. A value can be any of the following
 		  field set. 'id.user == null' will match all
 		  documents that don't use the <code>n=</code>
                   <a href="../documents.html#id-scheme">document id scheme</a>.
+  </p><p>
+                  Tensor fields can <em>only</em> be compared against null. It's not
+                  possible to write a document selection that uses the <em>contents</em>
+                  of tensor fields—only their presence can be checked.
   </p></td>
 </tr><tr>
   <th>Number</th>
@@ -454,40 +467,40 @@ The following is an example of a 3-level parent-child hierarchy.
 <p>Grandparent schema:</p>
 <pre>
 schema grandparent {
-  document grandparent {
-    field a1 type int {
-      indexing: attribute | summary
+    document grandparent {
+        field a1 type int {
+            indexing: attribute | summary
+        }
     }
-  }
 }
 </pre>
 <p>Parent schema, with reference to grandparent:</p>
 <pre>
 schema parent {
-  document parent {
-    field a2 type int {
-      indexing: attribute | summary
+    document parent {
+        field a2 type int {
+            indexing: attribute | summary
+        }
+        field ref type reference&lt;grandparent&gt; {
+            indexing: attribute | summary
+        }
     }
-    field ref type reference&lt;grandparent&gt; {
-      indexing: attribute | summary
-    }
-  }
-  import field ref.a1 as a1 {}
+    import field ref.a1 as a1 {}
 }
 </pre>
 <p>Child schema, with reference to parent and (transitively) grandparent:</p>
 <pre>
 schema child {
-  document child {
-    field a3 type int {
-      indexing: attribute | summary
+    document child {
+        field a3 type int {
+            indexing: attribute | summary
+        }
+        field ref type reference&lt;parent&gt; {
+            indexing: attribute | summary
+        }
     }
-    field ref type reference&lt;parent&gt; {
-      indexing: attribute | summary
-    }
-  }
-  import field ref.a1 as a1 {}
-  import field ref.a2 as a2 {}
+    import field ref.a1 as a1 {}
+    import field ref.a2 as a2 {}
 }
 </pre>
 <p>Using these in document selection expressions is easy:</p>
