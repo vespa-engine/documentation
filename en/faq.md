@@ -520,7 +520,7 @@ Some embedding models, such as models from sbert.net, claim to output normalized
 Plugins have to run in the JVM - [jython](https://www.jython.org/) might be an alternative,
 however Vespa Team has no experience with it.
 Vespa does not have a language like
-[painless](https://www.elastic.co/guide/en/elasticsearch/reference/master/modules-scripting-painless.html) -
+[painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html) -
 it is more flexible to write application logic in a JVM-supported language, using
 [Searchers](searcher-development.html) and [Document Processors](document-processing.html).
 
