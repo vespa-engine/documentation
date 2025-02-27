@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Securing a Vespa Installation"
+category: oss
 redirect_from:
 - /en/securing-your-vespa-installation.html
 ---
