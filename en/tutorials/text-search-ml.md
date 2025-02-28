@@ -437,15 +437,6 @@ which takes the entire ranked list into consideration when updating the model pa
 To illustrate this, we trained linear models using the [TF-Ranking framework](https://github.com/tensorflow/ranking).
 The framework is built on top of TensorFlow and allow us to specify pointwise, pairwise and listwise loss functions,
 among other things.
-The following script was used to generate the results below
-(just remember to increase the number of training steps when using the script).
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ ./src/python/tfrank.py
-</pre>
-</div>
 
 The two _rank-profile_'s below are obtained by training the linear model with a pointwise (sigmoid cross-entropy)
 and listwise (softmax cross-entropy) loss functions, respectively:
