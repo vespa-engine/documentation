@@ -33,7 +33,6 @@ $ vespa visit --field-set "[id]" # list document IDs
       --bucket-space strings     The "default" or "global" bucket space (default [global,default])
       --chunk-count int          Chunk by count (default 1000)
       --content-cluster string   Which content cluster to visit documents from (default "*")
-      --debug-mode               Print debugging output
       --field-set string         Which fieldset to ask for
       --from string              Timestamp to visit from, in seconds
       --header strings           Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
