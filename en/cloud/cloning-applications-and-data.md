@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Cloning applications and data
+category: cloud
 ---
 
 This is a guide on how to replicate a Vespa application in different environments, with or without data.

@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Migrating to Vespa Cloud"
+category: cloud
 ---
 
 Migrating a Vespa application to Vespa Cloud is straightforward,
