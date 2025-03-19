@@ -1,0 +1,361 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Automated Deployments
+category: cloud
+---
+
+<img src="/assets/img/automated-deployments-overview.png"
+     alt="Picture of an automated deployment" />
+
+<p>Vespa Cloud provides:</p>
+<ul>
+  <li>A <a href="#cd-tests">CD test framework</a> for safe deployments to production zones.</li>
+  <li><a href="#deployment-orchestration">Multi-zone deployments</a> with orchestration and test steps.</li>
+</ul>
+<p>
+  This guide goes through details of an orchestrated deployment.
+  Read / try <a href="production-deployment">production deployment</a> first to have a baseline understanding.
+  The <a href="https://cloud.vespa.ai/en/developer-guide">developer guide</a> is useful for writing tests.
+  Use <a href="#automating-with-github-actions">example GitHub Actions</a> for automation.
+</p>
+
+
+
+<h2 id="cd-tests">CD tests</h2>
+<p>
+  Before deployment in production zones, <a href="#system-tests">system tests</a> and
+  <a href="#staging-tests">staging tests</a> are run.
+  Tests are run in a dedicated and <a href="https://cloud.vespa.ai/en/reference/environments">downsized</a> environment.
+  These tests are optional, see details in the sections below.
+  Status and logs of ongoing tests can be found in the <em>Deployment</em> view in the
+  <a href="https://console.vespa-cloud.com/">Vespa Cloud Console</a>:
+</p>
+<img id="deployment-example" src="/assets/img/deployment-with-system-test.png"
+     alt="Minimal deployment pipeline"/>
+<p>These tests are also run during <a href="#vespa-cloud-upgrades">Vespa Cloud upgrades</a>.</p>
+<p>Find deployable example applications in <a href="https://github.com/vespa-cloud/examples/tree/main/CI-CD">CI-CD</a>.</p>
+
+
+<h3 id="system-tests">System tests</h3>
+<p>
+  When a system test is run, the application is deployed in
+  the <a href="https://cloud.vespa.ai/en/reference/environments#test">test environment</a>.
+  The system test suite is then run against the endpoints of the test deployment.
+  The test deployment is empty when the test execution begins.
+  The application package and Vespa platform version is the same as that to be deployed to production.
+</p>
+<p>
+  A test suite includes at least one
+  <a href="https://docs.vespa.ai/en/testing.html#system-tests">system test</a>.
+  An application can be deployed to a production zone without system tests -
+  this step will then only test that the application starts successfully.
+  See <a href="production-deployment">production deployment</a> for an example without tests.
+</p>
+<p>Read more about <a href="https://docs.vespa.ai/en/testing.html#system-tests">system tests</a>.</p>
+
+
+<h3 id="staging-tests">Staging tests</h3>
+<p>
+  A staging test verifies the transition of a deployment of a new application package -
+  i.e., from application package <code>App<sub>old</sub></code> to <code>App<sub>new</sub></code>.
+  A test suite includes at least one
+  <a href="https://docs.vespa.ai/en/testing.html#staging-tests">staging setup</a>, and
+  <a href="https://docs.vespa.ai/en/testing.html#staging-tests">staging test</a>.
+</p>
+<ol>
+  <li>
+    All production zone deployments are polled for the current versions.
+    As there can be multiple versions already being deployed
+    (i.e. multiple <code>App<sub>old</sub></code>),
+    there can be a series of staging test runs.
+  </li>
+  <li>
+    The application at revision <code>App<sub>old</sub></code> is deployed in the
+    <a href="https://cloud.vespa.ai/en/reference/environments#staging">staging environment</a>.
+  </li>
+  <li>
+    The staging setup test code is run, typically making the cluster reasonably
+    similar to a production cluster.
+  </li>
+  <li>The test deployment is then upgraded to application revision <code>App<sub>new</sub></code>.</li>
+  <li>
+    Finally, the staging test code is run,
+    to verify the deployment works as expected after the upgrade.
+  </li>
+</ol>
+<p>
+  An application can be deployed to a production zone without staging tests -
+  this step will then only test that the application starts successfully before and after the change.
+  See <a href="production-deployment">production deployment</a> for an example without tests.
+</p>
+<p>
+  Read more about <a href="https://docs.vespa.ai/en/testing.html#staging-tests">staging tests</a>.
+</p>
+
+
+<h3 id="disabling-tests">Disabling tests</h3>
+<p>
+  To deploy without testing, remove the test files from the application package.
+  Tests are always run, regardless of <em>deployment.xml</em>.
+</p>
+<p>
+  To temporarily deploy without testing, do a deploy and hit the "Abort" button
+  (see illustration above, hover over the test step in the Console) -
+  this skips the test step and makes the orchestration progress to the next step.
+</p>
+
+
+
+<h2 id="deployment-orchestration">Deployment orchestration</h2>
+<!-- ToDo: Illustration here -->
+<p>
+  The <em>deployment orchestration</em> is flexible.
+  One can configure dependencies between deployments to production zones,
+  production verification tests, and configured delays;
+  by ordering these in parallel and serial blocks of steps:
+</p>
+<img src="/assets/img/automated-deployments-complex.png"
+     width="800px" height="auto" alt="Picture of a complex automated deployment" />
+<p>
+  On a higher level, instances can also depend on each other in the same way.
+  This makes it easy to configure a deployment process
+  which gradually rolls out changes to increasingly larger subsets of production nodes,
+  as confidence grows with successful production verification tests.
+  Refer to <a href="https://cloud.vespa.ai/en/reference/deployment">deployment.xml</a> for details.
+</p>
+<p>
+  Deployments run sequentially by default, but can be configured to
+  <a href="https://cloud.vespa.ai/en/reference/deployment">run in parallel</a>. Inside each zone, Vespa Cloud
+  orchestrates the deployment, such that the change is applied without
+  disruption to read or write traffic against the application. A production
+  deployment in a zone is complete when the new configuration is active on all nodes.
+</p>
+<p>
+  Most changes are instant, making this a quick process.
+  If node restarts are needed, e.g., during platform upgrades,
+  these will happen automatically and safely as part of the deployment.
+  When this is necessary, deployments will take longer to complete.
+</p>
+<p>
+  System and staging tests, if present,
+  must always be successfully run before the application package is deployed to production zones.
+</p>
+
+<h3 id="source-code-repository-integration">Source code repository integration</h3>
+<p>
+  Each new <em>submission</em> is assigned an increasing build number,
+  which can be used to track the roll-out of the new package to the instances and their zones.
+  With the submission, add a source code repository reference for easy integration -
+  this makes it easy to track changes:
+</p>
+<img src="/assets/img/CI-integration.png"
+     alt="Build numbers and source code repository reference" />
+<p>
+  Add the source diff link to the pull request -
+  see example <a href="https://github.com/vespa-cloud/vespa-documentation-search/blob/main/.github/workflows/deploy-vespa-documentation-search.yaml">
+  GitHub Action</a>:
+</p>
+<pre>
+$ vespa prod deploy \
+  --source-url "$(git config --get remote.origin.url | sed 's+git@\(.*\):\(.*\)\.git+https://\1/\2+')/commit/$(git rev-parse HEAD)"
+</pre>
+
+
+<h3 id="block-windows">Block-windows</h3>
+<p>
+  Use block-windows to block deployments during certain windows throughout the week,
+  e.g., avoid rolling out changes during peak hours / during vacations.
+  Hover over the instance (here "default") to find block status -
+  see <a href="https://cloud.vespa.ai/en/reference/deployment#block-change">block-change</a>:
+</p>
+<img src="/assets/img/block-window.png"
+     alt="Application block window" />
+
+
+<h3 id="validation-overrides">Validation overrides</h3>
+<p>
+  Some configuration changes are potentially destructive / change the application behavior -
+  examples are removing fields and changing linguistic processing.
+  These changes are disallowed by default, the deploy-command will fail.
+  To override and force a deploy,
+  use a <a href="https://docs.vespa.ai/en/reference/validation-overrides.html">validation override</a>:
+</p>
+<pre>{% highlight xml %}
+<validation-overrides>
+    <allow until="2023-04-31"
+           comment="Use fewer dimensions">tensor-type-change</allow>
+</validation-overrides>
+{% endhighlight %}</pre>
+
+<h3 id="production-tests">Production tests</h3>
+<p>
+  Production tests are optional and configured in <a href="https://cloud.vespa.ai/en/reference/deployment">deployment.xml</a>.
+  Production tests do not have access to the Vespa endpoints, for security reasons.
+  Dependent steps in the release pipeline will stop if the tests fail,
+  but upgraded regions will remain on the version where the test failed.
+  A production test is hence used to block deployments to subsequent zones
+  and only makes sense in a multi-zone deployment.
+</p>
+<!-- ToDo: point to illustration for make this easier to understand -->
+
+
+<h3 id="deploying-components">Deploying Components</h3>
+<p>
+  Vespa is <a href="https://vespa.ai/releases.html#versions">backwards compatible</a> within major versions,
+  and major versions rarely change.
+  This means that <a href="https://docs.vespa.ai/en/jdisc/container-components.html">Components</a>
+  compiled against an <span style="text-decoration: underline">older</span> version of Vespa APIs
+  can always be run on the same major version.
+  However, if the application package is compiled against a <span style="text-decoration: underline">newer</span> API version,
+  and then deployed to an older runtime version in production,
+  it <span style="text-decoration: underline">might</span> fail.
+  See <a href="production-deployment.html#production-deployment-with-components">vespa:compileVersion</a>
+  for how to solve this.
+</p>
+
+
+
+<h2 id="automating-with-github-actions">Automating with GitHub Actions</h2>
+<p>Auto-deploy production applications using GitHub Actions - examples:</p>
+<ul>
+  <li>
+    <a href="https://github.com/vespa-cloud/vector-search/blob/main/.github/workflows/deploy-vector-search.yaml">deploy-vector-search.yaml</a>
+    deploys an application to a production environment - a good example to start from!
+  </li>
+  <li>
+    <a href="https://github.com/vespa-cloud/examples/blob/main/.github/workflows/deploy.yaml">deploy.yaml</a>
+    deploys an application with basic HTTP tests.
+  </li>
+  <li>
+    <a href="https://github.com/vespa-cloud/vespa-documentation-search/blob/main/.github/workflows/deploy-vespa-documentation-search.yaml">
+      deploy-vespa-documentation-search.yaml</a> deploys an application with Java-tests.
+  </li>
+</ul>
+<p>The automation scripts use an API-KEY to deploy:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa auth api-key
+</pre>
+</div>
+<p>This creates a key, or outputs:</p>
+<pre>
+Error: refusing to overwrite /Users/me/.vespa/mytenant.api-key.pem
+Hint: Use -f to overwrite it
+
+This is your public key:
+-----BEGIN PUBLIC KEY-----
+ABCDEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEB2UFsh8ZjoWNtkrDhyuMyaZQe1ze
+qLB9qquTKUDQTuM2LOr2dawUs02nfSc3UTfC08Lgr/dvnTnHpc0/fY+3Aw==
+-----END PUBLIC KEY-----
+
+Its fingerprint is:
+12:34:56:78:65:30:77:90:30:ab:83:ee:a9:67:68:2c
+
+To use this key in Vespa Cloud click 'Add custom key' at
+https://console.vespa-cloud.com/tenant/mytenant/account/keys
+and paste the entire public key including the BEGIN and END lines.
+</pre>
+<p>
+  This means, if there is a key, it is not overwritten, it is safe to run.
+  Make sure to add the deploy-key to the tenant using the Vespa Cloud Console.
+</p>
+<p>After the deploy-key is added, everything is ready for deployment.</p>
+<p>
+  You can upload or create new Application keys in the console, and store
+  them as a secret in the repository like the GitHub actions example above.
+</p>
+<p>
+  Some services like <a href="https://travis-ci.com">Travis CI</a> do not accept
+  multi-line values for Environment Variables in Settings.
+  A workaround is to use the output of
+</p>
+<pre>
+$ openssl base64 -A -a &lt; mykey.pem &amp;&amp; echo
+</pre>
+<p>
+  in a variable, say <code>VESPA_MYAPP_API_KEY</code>, in Travis Settings.
+  <code>VESPA_MYAPP_API_KEY</code> is exported in the Travis environment, example output:
+</p>
+<pre>
+Setting environment variables from repository settings
+$ export VESPA_MYAPP_API_KEY=[secure]
+</pre>
+<p>
+  Then, before deploying to Vespa Cloud, regenerate the key value:
+</p>
+<pre>
+$ MY_API_KEY=`echo $VESPA_MYAPP_API_KEY | openssl base64 -A -a -d`
+</pre>
+<p>
+  and use <code>${MY_API_KEY}</code> in the deploy command.
+</p>
+
+
+
+<h2 id="vespa-cloud-upgrades">Vespa Cloud upgrades</h2>
+<p>
+  Vespa upgrades follows the same pattern as for new application revisions in <a href="#cd-tests">CD tests</a>,
+  and can be tracked via its version number in the Vespa Cloud Console.
+</p>
+<p>
+  System tests are run the same way as for deploying a new application package.
+</p>
+<p>
+  A staging test verifies the upgrade from application package
+  <code>App<sub>old</sub></code> to <code>App<sub>new</sub></code>,
+  and from Vespa platform version <code>V<sub>old</sub></code> to <code>V<sub>new</sub></code>.
+  The staging test then consists of the following steps:
+</p>
+<ol>
+  <li>
+    All production zone deployments are polled for the current
+    <code>V<sub>old</sub></code> / <code>App<sub>old</sub></code> versions.
+    As there can be multiple versions already being deployed
+    (i.e. multiple <code>V<sub>old</sub></code> / <code>App<sub>old</sub></code>),
+    there can be a series of staging test runs.
+  </li>
+  <li>
+    The application at revision <code>App<sub>old</sub></code> is deployed on platform version <code>V<sub>old</sub></code>,
+    to a zone in the <a href="https://cloud.vespa.ai/en/reference/environments#staging">staging environment</a>.
+  </li>
+  <li>
+    The <em>staging setup</em> test code is run,
+    typically making the cluster reasonably
+    similar to a production cluster.
+  </li>
+  <li>
+    The test deployment is then upgraded to application revision <code>App<sub>new</sub></code>
+    and platform version <code>V<sub>new</sub></code>.
+  </li>
+  <li>
+    Finally, the <em>staging test</em> test code is run,
+    to verify the deployment works as expected after the upgrade.
+  </li>
+</ol>
+<p>
+  Note that one or both of the application revision and platform may be upgraded during the staging test,
+  depending on what upgrade scenario the test is run to verify.
+  These changes are usually kept separate, but in some cases is necessary to allow them to roll out together.
+</p>
+
+
+
+<h2 id="next-steps">Next steps</h2>
+<ul>
+  <li>
+    Read more about <a href="https://docs.vespa.ai/en/testing.html#feature-switches-and-bucket-tests">
+    feature switches and bucket tests</a>.
+  </li>
+  <li>
+    A challenge with continuous deployment can be integration testing across multiple services:
+    Another service depends on this Vespa application for its own integration testing.
+    Use a separate <a href="https://cloud.vespa.ai/en/reference/deployment#instance">application instance</a> for such integration testing.
+  </li>
+  <li>
+    Set up a deployment badge - available from the console's deployment view - example:
+    <img src="https://api-ctl.vespa-cloud.com/badge/v1/vespa-team/vespacloud-docsearch/default"
+         alt="vespa-team.vespacloud-docsearch.default overview" />
+  </li>
+  <li>Set up a <a href="https://cloud.vespa.ai/en/reference/deployment#endpoints-global">global query endpoint</a>.</li>
+</ul>

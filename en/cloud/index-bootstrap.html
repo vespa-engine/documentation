@@ -1,0 +1,197 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Index bootstrap
+category: cloud
+---
+
+
+<p>
+  When bootstrapping an index, one must consider node resource configuration and number of nodes.
+  The strategy is to iterate:
+</p>
+<img src="/assets/img/index-bootstrap.svg" width="465" alt="Growing a Vespa cluster in steps"/>
+<ol>
+  <li>Feed smaller chunks of data</li>
+  <li>Evaluate</li>
+  <li>Deploy new node counts / node resource configuration</li>
+  <li>Wait for data migration to complete</li>
+  <li>Evaluate</li>
+</ol>
+<p>
+  While doing this, ensure the cluster is <strong>never more than 50% full</strong> -
+  this gives headroom to later increase/shrink the index
+  and change schema configuration easily using automatic reindexing.
+  It is easy to downscale resources after the bootstrap,
+  and it saves a lot of time keeping the clusters within limits - hence max 50%.
+</p>
+<p>
+  Review the <a href="https://docs.vespa.ai/en/overview.html">Vespa Overview</a> to understand
+  the different between <em>container</em> and <em>content</em> clusters before continuing.
+</p>
+
+
+
+<h2 id="preparations">Preparations</h2>
+<p>
+  The content node resource configuration should not have ranges for index bootstrap,
+  as autoscaling will interfere with the evaluation in this step.
+  This is a good starting point, <strong>make sure there are no ranges like [2,3]</strong>:
+</p>
+<pre>{% highlight xml %}
+<nodes count="2">
+    <resources vcpu="2.0" memory="8Gb" disk="50Gb" />
+</nodes>
+{% endhighlight %}</pre>
+<p>
+  To evaluate how full the content cluster is, use <a href="monitoring">metrics</a> from content nodes - example:
+</p>
+<!-- ToDo: verify this is the correct metrics -->
+<pre>
+$ curl \
+  --cert data-plane-public-cert.pem \
+  --key  data-plane-private-key.pem \
+  https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud/prometheus/v1/values | \
+  egrep 'disk.util|mem.util' | egrep 'clusterId="content/'
+</pre>
+<p>
+  Once able to get the metrics above, you are ready to bootstrap the index.
+</p>
+
+
+
+<h2 id="bootstrap">Bootstrap</h2>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Step</th><th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><strong>1% feed</strong></td>
+    <td>
+      <p>
+        The purpose of this step is to feed a tiny chunk of the corpus to:
+      </p>
+      <ol>
+        <li>Estimate the memory and disk resource configuration.</li>
+        <li>Estimate the number of nodes required for the 10% step.</li>
+      </ol>
+      <p>
+        Feed a small data set, using <code>vespa feed</code> as in <a href="https://cloud.vespa.ai/en/getting-started">getting started</a>.
+        Observe the util metrics, stop no later than 50% memory/disk util.
+        The resource configuration should be modified so disk is in the 50-80% range of memory.
+        Example: if memory util is 50%, disk util should be 30-45%.
+        The reasoning is that memory is a more expensive component than disk,
+        better over-allocate on disk and just track memory usage.
+      </p>
+      <p>
+        Look at memory util. Say the 1% feed caused a 15% memory util -
+        this means that the 10% feed will take 150%, or 3X more than the 50% max.
+        There are two options, either increase memory/disk or add more nodes.
+        A good rule of thumb at this stage is that the final 100% feed could fit on 4 or more nodes,
+        and there is a 2-node minimum for redundancy.
+        The default configuration at the start of this document is quite small,
+        so a 3X at this stage means triple the disk and memory,
+        and add more nodes in later steps.
+      </p>
+      <p>
+        Deploy changes (if needed).
+        Whenever node count increases or resource configuration is modified, new nodes are added,
+        and data is migrated to new nodes. Example: growing from 2 to 3 nodes means each of the 2 current nodes
+        will migrate 33% of their data to the new node.
+        Read more in <a href="https://docs.vespa.ai/en/elasticity.html">elasticity</a>.
+        It saves time to let the cluster finish data migration before feeding more data.
+        In this step it will be fast as the data volume is small, but nevertheless check the
+        <a href="https://docs.vespa.ai/en/reference/distributor-metrics-reference.html#vds_idealstate_merge_bucket_pending">
+        vds.idealstate.merge_bucket.pending.average</a> metric.
+        Wait for 0 for all nodes - this means data migration is completed:
+      </p>
+<pre>
+$ curl \
+  --cert ~/.vespa/mytenant.myapp.default/data-plane-public-cert.pem \
+  --key  ~/.vespa/mytenant.myapp.default/data-plane-private-key.pem \
+  https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud/prometheus/v1/values?consumer=Vespa | \
+  egrep 'vds_idealstate_merge_bucket_pending_average'
+</pre>
+      <p>
+        At this point, you can validate that both memory and disk util is less than 5%,
+        so the 10% feed will fit.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>10% feed</strong></td>
+    <td>
+      <p>
+        Feed the 10% corpus, still observing util metrics.
+      </p>
+      <p>
+        As the content cluster capacity is increased,
+        it is normal to eventually be CPU bound in the container or content cluster.
+        Grep for <code>cpu_util</code> in metrics (like in the example above) to evaluate.
+      </p>
+      <p>
+        A 10% feed is a great baseline for the full capacity requirements.
+        Fine tune the resource config and number of hosts as needed.
+        If you deploy changes, wait for the
+        <code>vds.idealstate.merge_bucket.pending.average</code> metric to go to zero again.
+        This now takes longer time as nodes are configured larger,
+        it normally completes within a few hours.
+      </p>
+      <p>
+        Again validate memory and disk util is less than 5% before the full feed.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap;"><strong>100% feed</strong></td>
+    <td>
+      <p>
+        Feed the full data set, observing the metrics.
+        You should be able to estimate timing by extrapolation, this is linear at this scale.
+        At feed completion, observe the util metrics for the final fine-tuning.
+      </p>
+      <p>
+        A great exercise at this point is to add a node then reduce a node, and take the time to completion
+        (<code>vds.idealstate.merge_bucket.pending.average</code> to 0).
+        This is useful information when the application is in production,
+        as you know the time to add or shrink capacity in advance.
+      </p>
+      <p>
+        It can be a good idea to reduce node count to get the memory util closer to 70% at this step,
+        to optimize for cost.
+        However, do not spend too much time optimizing in this step, next step is normally
+        <a href="https://docs.vespa.ai/en/performance/sizing-search.html">sizing for query load</a>.
+        This will again possibly alter resource configuration and node counts / topology,
+        but now you have a good grasp at how to easily bootstrap the index for these experiments.
+      </p>
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>
+  Make sure you are able to feed and access documents as the example in <a href="#preparations">preparations</a>.
+  Read <a href="https://cloud.vespa.ai/en/security-model.html">security model</a> for cert/key usage.
+</p>
+<p>
+  Feeding too much will cause a
+  <a href="https://docs.vespa.ai/en/operations/feed-block.html">feed blocked</a> state.
+  Add a node to the full content cluster in services.xml, and wait for data migration to complete -
+  i.e. wait for the <code>vds.idealstate.merge_bucket.pending.average</code> metric to go to zero.
+  It is better to add a node than increasing node resources, as data migration is quicker.
+</p>
+
+
+
+<h2 id="further-reading">Further reading</h2>
+<ul>
+  <li><a href="https://docs.vespa.ai/en/reads-and-writes.html">Reads and Writes</a></li>
+  <li><a href="https://docs.vespa.ai/en/performance/sizing-feeding.html">Vespa Feed Sizing Guide</a></li>
+  <li><a href="https://cloud.vespa.ai/en/benchmarking">Vespa Cloud Benchmarking</a></li>
+  <li><a href="https://cloud.vespa.ai/en/monitoring">Monitoring</a></li>
+</ul>

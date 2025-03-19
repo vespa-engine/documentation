@@ -1,0 +1,399 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Private endpoints
+category: cloud
+---
+
+<p>
+  Vespa Cloud lets you set up private endpoint services on your application clusters,
+  for exclusive access from your own, co-located VPCs with the same cloud provider.
+  This is supported for AWS deployments through AWS's
+  <a href="https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html">
+  PrivateLink</a>, and for GCP deployments through GCP's
+  <a href="https://cloud.google.com/vpc/docs/private-service-connect">
+  Private Service Connect</a>.
+  This guide takes you through the necessary configuration steps, for either
+  <a href="#aws-private-link">AWS PrivateLink</a>,
+  or for <a href="#gcp-private-service-connect">GCP Private Service Connect</a>.
+</p>
+
+{% include note.html content='
+  Private endpoints use mTLS authentication by default, and token-based authentication must be explicitly enabled. 
+  See <a href="#authentication-methods">configuring private endpoint authentication method</a>.
+'%}
+
+<h2 id="aws-private-link">AWS PrivateLink</h2>
+<p>Required information:</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Item</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><strong>Your IAM account number</strong></td>
+    <td>The numeric identifier for your AWS account.</td>
+  </tr>
+  <tr>
+    <td><strong>VPC ID</strong></td>
+    <td>The identifier of your AWS VPC where you wish to connect to the service endpoints from.</td>
+  </tr>
+  <tr>
+    <td><strong>AWS region name</strong></td>
+    <td>The name of the AWS region to connect from. Note that you can only connect to a service in the same region,
+      or, if public endpoints are disabled, in the same AWS availability zone.</td>
+  </tr>
+  </tbody>
+</table>
+<p>Procedure:</p>
+<ol>
+  <li>
+    <p><strong>Configure a private endpoint service on your Vespa Cloud Container cluster</strong></p>
+    <p>
+      Add <code>&lt;endpoint type="private" /&gt;</code>
+      to <a href="https://cloud.vespa.ai/en/reference/deployment#endpoint-private">deployment.xml</a>,
+      allowing access to the container cluster using the designated ARN from your account.
+      The example allows all roles and users under the <code>123123123123</code> account
+      to connect to the endpoint service on the <code>my-container</code> cluster,
+      in each region listed under the <code>&lt;prod&gt;</code> tag.
+    </p>
+    <p>
+      See <a href="https://docs.aws.amazon.com/vpc/latest/privatelink/configure-endpoint-service.html">endpoint service configuration</a>
+      for details on valid ARNs, and more fine-grained access control.
+    </p>
+    <p>
+      The example also shows how to disable the public zone endpoint, by adding the
+      <a href="https://cloud.vespa.ai/en/reference/deployment#endpoint-zone"><code>"zone"</code> type endpoint</a>
+      declaration—this is an optional step, and not required to set up the private service
+    </p>
+<pre>{% highlight xml %}
+<deployment version="1.0">
+    <prod>
+        <region>region-1</region>
+        <region>region-2</region>
+    </prod>
+    <endpoints>
+        <endpoint type="zone" container-id="my-container" enabled="false" />
+        <endpoint type="private" container-id="my-container">
+            <allow with="aws-private-link" arn="arn:aws:iam::123123123123:root" />
+        </endpoint>
+    </endpoints>
+</deployment>
+{% endhighlight %}</pre>
+    <p>
+      Build and deploy the application package, and wait for it to deploy to the indicated regions.
+    </p>
+  </li>
+  <li>
+    <p><strong>Find the service ID of your endpoint services</strong></p>
+    <p>
+      Navigate to the endpoints tab for your application in the Console,
+      and find the service ID for the deployment to wish to connect to.
+      While there, verify that access to connect to the endpoint was granted to the correct ARNs.
+    </p>
+    <img src="/assets/img/vpc-1.png" alt="Service ID for VPC endpoint" />
+  </li>
+  <li>
+    <p><strong>Create the VPC interface endpoint</strong></p>
+    <p>
+      <a href="https://docs.aws.amazon.com/cli/latest/reference/ec2/create-vpc-endpoint.html">Create a VPC endpoint</a>
+      in your VPC. This is your entry point, which forwards connections to your Vespa application through the private network of AWS.
+      For this example, assume your VPC has id
+      <code>vpc-123</code> and resides in the AWS region <code>us-east-1</code>, and that the service ID of your
+      endpoint service, found in the Console, is <code>com.amazonaws.vpce.us-east-1.vpce-svc-321</code>:
+    </p>
+<pre>
+$ aws ec2 create-vpc-endpoint \
+  --region us-east-1 \
+  --vpc-id vpc-123 \
+  --service-name com.amazonaws.vpce.us-east-1.vpce-svc-321 \
+  --vpc-endpoint-type Interface \
+  --private-dns-enabled | jq .
+</pre>
+    <p>
+      Note the value of the <code>VpcEndpointId</code> field, for verification in the below item.
+      This is also where you specify optional security group and subnet IDs; these are omitted here for brevity.
+      If creating the VPC endpoint through the AWS console instead, be sure to check "Enable DNS names"!
+    </p>
+  </li>
+  <li>
+    <p><strong>Verify the VPC endpoint is connected to the Vespa cluster</strong></p>
+    <p>
+      Navigate back to the endpoints tab in the Console, and refresh the page.
+      You should now see a new entry representing the connection between your newly created interface endpoint,
+      and the endpoint service on your container cluster.
+      This is the "CONNECTED ENDPOINTS" in the image above.
+      Verify the ID matches the value of the <code>VpcEndpointId</code> field above.
+      The connection is ready when the state is <code>open</code>.
+    </p>
+  </li>
+  <li>
+    <p><strong>Verify your Vespa cluster is reachable from within your VPC</strong></p>
+    <p>
+      The zone endpoint of the designated container cluster should now resolve through private DNS, for any AWS resource
+      that is allowed to connect to your VPC endpoint.
+      The easiest way to verify this is to run the following Python 3.9 lambda,
+      using your own zone endpoint, from within your VPC:
+    </p>
+<pre>
+from socket import gethostbyname
+from urllib.request import urlopen
+
+def lambda_handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': urlopen('https://badc0ffee.deadbeef.z.vespa-app.cloud/status.html').read(),
+        'ip': gethostbyname('badc0ffee.deadbeef.z.vespa-app.cloud')
+    }
+</pre>
+    <p>Alternatively, run a couple of commands from a host inside the VPC:</p>
+<pre>
+$ host my-container.my-app.my-tenant.region-1.z.vespa-app.cloud
+$ curl https://my-container.my-app.my-tenant.region-1.z.vespa-app.cloud/status.html
+</pre>
+    </p>
+    <p>In both cases, the IP should be in one of the private IP ranges, and the HTTP response from the
+      Vespa container endpoint should be <code>OK</code>.</p>
+  </li>
+</ol>
+
+
+
+<h2 id="gcp-private-service-connect">GCP Private Service Connect</h2>
+<p>Prerequisites:</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Item</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><strong>Enabled GCP APIs</strong></td>
+    <td>The <em>Compute Engine</em>, <em>Service Directory</em> and <em>Cloud DNS</em>
+      APIs must all be enabled in your GCP account:
+<pre>
+$ gcloud services enable compute.googleapis.com
+$ gcloud services enable dns.googleapis.com
+$ gcloud services enable servicedirectory.googleapis.com
+</pre>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Your GCP project name</strong></td>
+    <td>The string identifier for your GCP account, like <em>resonant-diode-123456</em></td>
+  </tr>
+  <tr>
+    <td><strong>VPC network and subnetwork names</strong></td>
+    <td>The name of the network and subnetwork to create your consumer endpoint in.</td>
+  </tr>
+  </tbody>
+</table>
+<p>Procedure:</p>
+<ol>
+  <li>
+    <p><strong>Configure a private endpoint service on your Vespa Cloud Container cluster</strong></p>
+    <p>
+      Add <code>&lt;endpoint type="private"/&gt;</code>
+      to <a href="https://cloud.vespa.ai/en/reference/deployment#endpoint-private">deployment.xml</a>,
+      allowing access to the container cluster from the GCP account with the designated project ID.
+      The example below allows consumer endpoints created under the <code>private-test</code> account
+      to connect to the endpoint service on the <code>my-container</code> cluster,
+      in each region listed under the <code>&lt;prod&gt;</code> tag.
+    </p>
+    <p>
+      The example also shows how to disable the public zone endpoint, by adding the
+      <a href="https://cloud.vespa.ai/en/reference/deployment#endpoint-zone"><code>"zone"</code> type endpoint</a>
+      declaration—this is an optional step, and not required to set up the private service
+    </p>
+<pre>{% highlight xml %}
+<deployment version="1.0">
+    <prod>
+        <region>region-1</region>
+        <region>region-2</region>
+    </prod>
+    <endpoints>
+        <endpoint type="zone" container-id="my-container" enabled="false" />
+        <endpoint type="private" container-id="my-container">
+            <allow with="gcp-service-connect" project="private-test" />
+        </endpoint>
+    </endpoints>
+</deployment>
+{% endhighlight %}</pre>
+    <p>
+      Build and deploy the application package, and wait for it to deploy to the indicated regions.
+    </p>
+  </li>
+  <li>
+    <p><strong>Find the service ID of your endpoint services</strong></p>
+    <p>
+      Navigate to the endpoints tab for your application in the Console,
+      and find the service ID for the deployment to wish to connect to.
+      While there, verify that access to connect to the endpoint was granted to the correct projects.
+    </p>
+    <img src="/assets/img/vpc-2.png" alt="Service ID for VPC endpoint" />
+  </li>
+  <li>
+    <p><strong>Create the service consumer endpoint</strong></p>
+    <p>
+      <a href="https://cloud.google.com/vpc/docs/configure-private-service-connect-services">Create a service consumer endpoint</a>
+      in your VPC. This is your entry point, which forwards connections to your Vespa application through the private network of GCP.
+      In this example the project is named
+      <code>test-project</code>, has a VPC network named
+      <code>test-network</code> that resides in the GCP region <code>us-central1</code>, with a subnet <code>test-subnet</code>
+      to hold the endpoint, behind an address to be named <code>test-address</code>, and the service ID of the
+      endpoint service (found in the Console) is
+      <code>projects/vespa-external/regions/us-central1/serviceAttachments/scsa-xxxxxx</code>.
+      Finally, the endpoint is named <code>badc0ffee</code>, and the service directory namespace is <code>my-tenant-my-app</code>.
+      See the discussion on generated endpoint names in the last item in this guide.
+    </p>
+    <p>Create network (if it does not already exist):</p>
+<pre>
+$ gcloud compute networks create test-network
+</pre>
+    <p>Create subnet (if it does not already exist):</p>
+<pre>
+$ gcloud compute networks subnets create test-subnet \
+    --region=us-central1 \
+    --network=test-network \
+    --range=10.10.0.0/24
+</pre>
+    <p>Create the IP address which will be used for the endpoint, for clients inside your VPC:</p>
+<pre>
+$ gcloud compute addresses create test-address \
+    --region=us-central1 \
+    --subnet=test-subnet
+</pre>
+    <p>Create a forwarding rule for traffic to the above IP, to the service endpoint in Vespa Cloud:</p>
+<pre>
+$ gcloud compute forwarding-rules create badc0ffee \
+    --region=us-central1 \
+    --network=test-network \
+    --address=test-address \
+    --target-service-attachment=projects/vespa-external/regions/us-central1/serviceAttachments/scsa-xxxxxx \
+    --service-directory-registration=projects/test-project/locations/us-central1/namespaces/my-tenant-my-app
+</pre>
+    <p>Note the ID of the created resource, for the verification step below.</p>
+  </li>
+  <li>
+    <p><strong>Verify the VPC endpoint is connected to the Vespa cluster</strong></p>
+    <p>
+      Navigate back to the endpoints tab in the Console, and refresh the page.
+      You should now see a new entry representing the connection between your newly created interface endpoint,
+      and the endpoint service on your container cluster.
+      This is the "CONNECTED ENDPOINTS" in the image above.
+      Verify the ID matches the resource ID of the forwarding rule created above.
+      The connection is ready when the state is <code>open</code>.
+    </p>
+  </li>
+  <li>
+    <p><strong>Verify your Vespa cluster is reachable from within your VPC</strong></p>
+    <p>
+      The generated endpoint name (see last items) of the designated container cluster should now resolve
+      through private DNS inside your VPC.
+      The easiest way to verify this is to launch an instance in your VPC, inside the designated subnet,
+      and run a couple of commands from it:
+    </p>
+<pre>
+$ host badc0ffee.deadbeef.z.vespa-app.cloud
+$ curl https://badc0ffee.deadbeef.z.vespa-app.cloud/status.html
+</pre>
+    <p>
+      The resolved IP address should be that of the address created earlier, and the <code>curl</code> command
+      should simply output <code>OK</code>.
+    </p>
+    <p>
+      If the endpoint fails to resolve, refer to
+      <a href="https://cloud.google.com/vpc/docs/configure-private-service-connect-services#troubleshooting">
+      GCP's troubleshooting documentation</a>.
+    </p>
+  </li>
+  <li>
+  <p><strong>Generated endpoints with Private Service Connect</strong></p>
+    <p>
+      When a consumer endpoint is created with a <em>Service Directory</em> namespace, GCP automatically creates
+      a private DNS record for that endpoint, which must be used instead of the IP address (created above) of the endpoint,
+      as Vespa application containers have web certificates matching specific domain names.
+      Unfortunately, we are unable to set the final endpoint names for the consumer endpoint;
+      for a private endpoint service, we can only set a domain name <em>suffix</em>, and GCP then generates private
+      DNS records matching <em>your endpoint resource name prepended to this suffix</em>.
+      The Service Directory namespace of these endpoints <em>must also be one-to-one</em> with their domain name suffixes,
+      lest the automatic setup fail.
+    </p>
+    <p>
+      The domain name suffix used by Vespa Cloud is
+      <code>[&lt;tenant-and-app-anonymous-id&gt;.].z.vespa-app.cloud</code>. We therefore encourage using the
+      <code>&lt;tenant&gt;-&lt;application&gt;</code> pair as the service directory namespace,
+      as this ensures a one-to-one mapping between suffixes and namespaces, as required by GCP (see above).
+    </p>
+    <p>
+      The Vespa Cloud web certificates (see above) match any direct descendant of the domain suffix we set for your services;
+      thus, any endpoint resource name yields a private DNS record that matches the web certificate, with Service Directory.
+      Moreover, the zone endpoints generated by Vespa Cloud consist of a random, unique cluster-instance-region id.
+      Using this same ID as the GCP endpoint resource name (as in the example) results in identical domain names for
+      the private DNS set up by GCP, and the endpoint names generated by Vespa Cloud, visible in our console. 
+    </p>
+  </li>
+</ol>
+
+<h2 id="authentication-methods">Configuring Private Endpoint Authentication</h2>
+
+<p>
+You can configure private endpoints to use either mTLS or token-based authentication
+with the optional <code>auth-method</code> attribute. If the attribute is not set, mTLS will be used by default.
+The attribute is only allowed with <code>private</code> type endpoints and must
+be either <code>mtls</code> or <code>token</code>.
+</p>
+
+{% include note.html content='
+Only one authentication method can be enabled at the same time.
+Enabling token authentication will disable mTLS authentication for the private endpoint, and vice-versa.
+'%}
+
+<h4>Example with token-based authentication</h4>
+
+<pre>{% highlight xml %}
+<deployment version="1.0">
+    <prod>
+        <region>region-1</region>
+        <region>region-2</region>
+    </prod>
+    <endpoints>
+        <endpoint type="private" auth-method='token'>
+            <allow with="aws-private-link" arn="arn:aws:iam::123123123123:root" />
+        </endpoint>
+    </endpoints>
+</deployment>
+{% endhighlight %}
+</pre>
+
+<h4>Changing authentication method for an existing deployment</h4>
+
+<p>
+If you have an existing deployment with a private endpoint, you must remove any connections and redeploy with a
+<a href="https://docs.vespa.ai/en/reference/validation-overrides.html">validation override</a>
+to modify the authentication method:
+</p>
+
+<ol>
+  <li>
+    Remove the VPC interface endpoint (AWS) or service consumer endpoint (GCP) configured above
+  </li>
+  <li>
+    Change the authentication method for the endpoint in <code>deployment.xml</code>
+  </li>
+  <li>
+    Deploy with the <code>zone-endpoint-change</code> validation override:
+  </li>
+</ol>
+
+<pre>{% highlight xml %}
+<validation-overrides>
+    <allow until="2023-04-31" comment="Change private endpoint authentication">
+        zone-endpoint-change
+    </allow>
+</validation-overrides>
+{% endhighlight %}</pre>
