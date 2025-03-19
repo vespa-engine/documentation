@@ -1,0 +1,331 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Migrating from Elasticsearch
+category: cloud
+---
+
+
+<p>
+  This is a guide for how to move data from Elasticsearch to Vespa.
+  By the end of this guide you will have exported documents from Elasticsearch,
+  generated a deployable Vespa application package and tested this with documents and queries.
+</p>
+{% include pre-req.html extra-reqs='
+<li>
+  Linux, macOS or Windows 10 Pro on x86_64 or arm64,
+  with Podman or <a href="https://docs.docker.com/engine/install/">Docker</a> installed.
+  See <a href="https://docs.vespa.ai/en/operations-selfhosted/docker-containers.html">Docker Containers</a>
+  for system limits and other settings.
+</li>' %}
+<p>
+  To get started, <a href="https://vespa.ai/free-trial/">sign up</a> to get an endpoint to deploy to.
+  Set the <em>tenant name</em> from the signup:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ export TENANT_NAME=vespa-team    # Replace with your tenant name
+</pre>
+</div>
+<p>Alternatively, <a href="#test-with-local-deployment">test with local deployment</a>.</p>
+
+
+
+<h2 id="feed-a-sample-elasticsearch-index">Feed a sample Elasticsearch index</h2>
+<p>
+  This section sets up an index with 1000 sample documents using
+  <a href="https://www.elastic.co/guide/en/elasticsearch/reference/7.9/getting-started-index.html">getting-started-index</a>.
+  Skip this part if you already have an index.
+  Wait for Elasticsearch to start:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ docker network create --driver bridge esnet
+
+$ docker run -d --rm --name esnode --network esnet -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" \
+  docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+
+$ while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:9200)" != "200" ]]; do sleep 1; echo 'waiting ...'; done
+</pre>
+</div>
+<p>Download test data, and feed it to the Elasticsearch instance:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl 'https://raw.githubusercontent.com/elastic/elasticsearch/7.10/docs/src/test/resources/accounts.json' \
+  &gt; accounts.json
+
+$ curl -H "Content-Type:application/json" --data-binary @accounts.json 'localhost:9200/bank/_bulk?pretty&refresh'
+</pre>
+</div>
+<p>Verify that the index has 1000 documents:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="1000">
+$ curl 'localhost:9200/_cat/indices?v'
+</pre>
+</div>
+
+
+
+<h2 id="export-documents-from-elasticsearch">Export documents from Elasticsearch</h2>
+<p>
+  This guide uses <a href="https://github.com/elasticsearch-dump/elasticsearch-dump">ElasticDump</a>
+  to export the index contents and the index mapping.
+  Export the documents and mappings, then delete the Docker network and the Elasticsearch container:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ docker run --rm --name esdump --network esnet -v "$PWD":/dump -w /dump elasticdump/elasticsearch-dump \
+  --input=http://esnode:9200/bank --output=bank_data.json --type=data
+
+$ docker run --rm --name esdump --network esnet -v "$PWD":/dump -w /dump elasticdump/elasticsearch-dump \
+  --input=http://esnode:9200/bank --output=bank_mapping.json --type=mapping
+
+$ docker rm -f esnode &amp;&amp; docker network remove esnet
+</pre>
+</div>
+
+
+
+<h2 id="generate-vespa-documents-and-application-package">Generate Vespa documents and Application Package</h2>
+<p>
+  <a href="https://github.com/vespa-engine/vespa/tree/master/config-model/src/main/python">ES_Vespa_parser.py</a>
+  is provided for conversion of Elasticsearch data and index mappings to Vespa data and configuration.
+  It is a basic script with minimal error checking -
+  it is designed for a simple export, modify this as needed for your application's needs.
+  Generate Vespa documents and configuration:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl 'https://raw.githubusercontent.com/vespa-engine/vespa/master/config-model/src/main/python/ES_Vespa_parser.py' \
+  &gt; ES_Vespa_parser.py
+
+$ python3 ./ES_Vespa_parser.py --application_name bank bank_data.json bank_mapping.json
+</pre>
+</div>
+<p>
+  This generates documents in <em>documents.json</em>
+  (see <a href="https://docs.vespa.ai/en/reference/document-json-format.html">JSON format</a>)
+  where each document has IDs like this <code>id:bank:_doc::1</code>.
+  It also generates a <em>bank</em> folder with an <a href="https://docs.vespa.ai/en/application-packages.html">application package</a>:
+</p>
+<pre>
+/bank
+      │
+      ├── documents.json
+      ├── hosts.xml
+      ├── services.xml
+      └── /schemas
+            └── _doc.sd
+</pre>
+<p>Enter the application package directory:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ cd bank
+</pre>
+</div>
+
+
+
+
+<h2 id="deploy">Deploy</h2>
+<p>
+  Install <a href="https://docs.vespa.ai/en/vespa-cli.html">Vespa CLI</a>.
+  In this example we use <a href="https://brew.sh/">Homebrew</a>,
+  you can also download from <a href="https://github.com/vespa-engine/vespa/releases">GitHub</a>:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ brew install vespa-cli
+</pre>
+</div>
+<p>Configure for Vespa Cloud deployment, log in and add credentials:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa config set target cloud
+$ vespa config set application $TENANT_NAME.myapp.default
+</pre>
+</div>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa auth login
+</pre>
+</div>
+<!-- Override VESPA_CLI_HOME to work around container filesystem limitations and set application used for automatic testing -->
+<!-- $PWD is set to $SD_DIND_SHARE_PATH by screwdriver.yaml - a special Docker-in-Docker path -->
+<pre data-test="exec" style="display:none">
+$ export VESPA_CLI_HOME=$PWD/.vespa TMPDIR=$PWD/.tmp
+$ mkdir -p $TMPDIR
+$ vespa config set target cloud
+$ vespa config set application vespa-team.migration
+$ export VESPA_CLI_API_KEY="$(echo "$VESPA_TEAM_API_KEY" | openssl base64 -A -a -d)"
+</pre>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa auth cert
+</pre>
+</div>
+<p>
+  Also see <a href="getting-started">getting started</a> guide.
+  Deploy the application package:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Success">
+$ vespa deploy --wait 300
+</pre>
+</div>
+<p>Index the documents exported from Elasticsearch:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa feed documents.json
+</pre>
+</div>
+
+
+
+<h2 id="interfacing-with-vespa">Interfacing with Vespa</h2>
+<p>Export all documents:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="amberduke@pyrami.com">
+$ vespa visit
+</pre>
+</div>
+<p>Get a document:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="amberduke@pyrami.com">
+$ vespa document get id:bank:_doc::1
+</pre>
+</div>
+<p>Count documents, find <code>"totalCount":1000</code> in the output:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 1000'>
+$ vespa query 'select * from _doc where true'
+</pre>
+</div>
+<p>Run a simple query against the <em>firstname</em> field:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
+$ vespa query 'select firstname,lastname from _doc where firstname contains "amber"'
+</pre>
+</div>
+
+
+
+<h2 id="next-steps">Next steps</h2>
+<p>Review the differences in document records, Vespa to the right:</p>
+<table>
+  <tr>
+    <td>
+<pre>
+{
+    "_index": "bank",
+    "_type": "_doc",
+    "_id": "1",
+    "_score": 1,
+    "_source": {
+      "account_number": 1,
+      "balance": 39225,
+      "firstname": "Amber",
+      "lastname": "Duke",
+      "age": 32,
+      "gender": "M",
+      "address": "880 Holmes Lane",
+      "employer": "Pyrami",
+      "email": "amberduke@pyrami.com",
+      "city": "Brogan",
+      "state": "IL"
+    }
+}
+</pre>
+    </td>
+    <td>
+<pre>
+{
+
+    "put": "id:bank:_doc::1",
+
+
+    "fields": {
+      "account_number": 1,
+      "balance": 39225,
+      "firstname": "Amber",
+      "lastname": "Duke",
+      "age": 32,
+      "gender": "M",
+      "address": "880 Holmes Lane",
+      "employer": "Pyrami",
+      "email": "amberduke@pyrami.com",
+      "city": "Brogan",
+      "state": "IL"
+    }
+}
+</pre>
+  </td>
+  </tr>
+</table>
+<p>
+  The <a href="https://docs.vespa.ai/en/documents.html#document-ids">id</a> field
+  <code>id:bank:_doc::1</code> is composed of:
+</p>
+<ul>
+  <li>namespace: <code>bank</code></li>
+  <li>schema: <code>_doc</code></li>
+  <li>id: <code>1</code></li>
+</ul>
+<!-- ToDo: namespace is normally only useful in document api (and doc expiry?) use cases -->
+<p>
+  Read more in <a href="https://docs.vespa.ai/en/documents.html">Documents</a> and
+  <a href="https://docs.vespa.ai/en/schemas.html">Schemas</a>.
+  The schema is the key Vespa configuration file where field types
+  and <a href="https://docs.vespa.ai/en/ranking.html">ranking</a> are configured.
+  The schema (found in <code>schemas/_doc.sd</code>) also has
+  <a href="https://docs.vespa.ai/en/schemas.html#indexing">indexing</a> settings, example:
+</p>
+<pre>
+search _doc {
+    document _doc {
+        field account_number type long {
+            indexing: summary | attribute
+        }
+        field address type string {
+            indexing: summary | index
+        }
+        ...
+    }
+}
+</pre>
+<p>
+  These settings impact both performance and how fields are matched.
+  For example, the <em>account_number</em> above is using the <em>attribute</em> keyword,
+  which makes the field available for <a href="https://docs.vespa.ai/en/reference/sorting.html">sorting</a>,
+  <a href="https://docs.vespa.ai/en/ranking.html">ranking</a>, <a href="https://docs.vespa.ai/en/grouping.html">grouping</a>,
+  but which by default does not have data structures for fast search.
+  Read more in <a href="https://docs.vespa.ai/en/attributes.html">attributes</a> and
+  <a href="https://docs.vespa.ai/en/performance/practical-search-performance-guide.html">
+    practical search performance guide</a>.
+</p>
+
+
+
+<h2 id="test-with-local-deployment">Test with local deployment</h2>
+<p>
+  To run the steps above, using a local deployment,
+  follow the steps in the <a href="https://docs.vespa.ai/en/vespa-quick-start.html">quickstart</a>
+  to start a local container running Vespa.
+  Then, deploy the application package from the <em>bank</em> folder.
+</p>
