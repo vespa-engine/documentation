@@ -1,0 +1,248 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Getting Started (without Vespa CLI)
+---
+
+<!-- If you change this also make the same change in getting-started[-java] -->
+
+<p>
+    Follow these steps to deploy an application to the <a href="https://cloud.vespa.ai/en/reference/zones.html">dev zone</a> in the Vespa Cloud.
+    Find more details and tips in the <a href="https://cloud.vespa.ai/en/developer-guide">developer guide</a>,
+    and see <a href="#next-steps">next steps</a> for self-hosted deployment options.
+    Alternative versions of this guide:</p>
+<ul>
+    <li><a href="getting-started">Getting started, with Vespa CLI</a></li>
+    <li><a href="getting-started-java">Getting started, with an app having Java components</a></li>
+    <li><a href="https://pyvespa.readthedocs.io/en/latest/getting-started-pyvespa-cloud.html">Getting started, using pyvespa</a> -
+        for Python developers</li>
+    <li><a href="https://docs.vespa.ai/en/vespa-quick-start.html">Run Vespa locally, using Docker</a>.</li>
+</ul>
+
+<br/>
+
+<div class="vespa-notification vespa-notification-prereqs" role="alert">
+  <p><strong>Prerequisites:</strong></p>
+  <ul>
+    <li>
+      Git - or download the files from
+      <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation">album-recommendation</a>
+    </li>
+    <li>zip - or other tool to create a .zip file</li>
+    <li>curl - or other tool to send HTTP requests with security credentials</li>
+    <li>OpenSSL</li>
+  </ul>
+</div>
+
+<hr />
+
+<ol class="howto">
+
+  <li>
+    <p><strong>Get a sample application:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git &amp;&amp; \
+  cd sample-apps/album-recommendation
+</pre>
+    </div>
+    <p>
+        An <a href="https://cloud.vespa.ai/en/reference/application-package">application package</a> is the full application configuration.
+        See <a href="https://github.com/vespa-engine/sample-apps">sample-apps</a> for other sample apps you can start from instead.
+    </p>
+  </li>
+
+  <li>
+    <p id="create-a-self-signed-certificate"><strong>Create a self-signed certificate:</strong></p>
+    <p>
+      On Unix or Mac, use <code>openssl</code>:
+    </p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ openssl req -x509 -nodes -days 14 -newkey rsa:4096 \
+  -subj "/CN=cloud.vespa.example" \
+  -keyout data-plane-private-key.pem -out data-plane-public-cert.pem
+</pre>
+    </div>
+    <p>
+      On Windows, the certificate has to be created with <a href="https://learn.microsoft.com/en-us/powershell/module/pki/new-selfsignedcertificate">New-SelfSignedCertificate</a> in PowerShell, and
+      then exported to PEM format using <a href="https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil">certutil</a>.
+    </p>
+    <p>
+      Once the certificate has been created, add it to the application package.
+    </p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ mkdir -p security &amp;&amp; \
+  cp data-plane-public-cert.pem security/clients.pem
+</pre>
+    </div>
+    <p>
+      This certificate and key will be used to send requests to Vespa Cloud.
+      See the <a href="https://cloud.vespa.ai/en/security/guide#data-plane">security model</a> for more details.
+    </p>
+  </li>
+
+  <li>
+    <p><strong>Create the application package:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ zip -r application.zip . \
+  -x application.zip "ext/*" README.md .gitignore ".git/*"
+</pre>
+    </div>
+    <p>
+      <code>application.zip</code> is the artifact to be deployed in next steps.
+    </p>
+  </li>
+
+  <li>
+    <p><strong>Create a tenant in the <a href="https://console.vespa-cloud.com/" target="_blank" >Vespa Cloud:</a></strong></p>
+    <p>
+      Create a <em>tenant</em> at
+      <a target="_blank" href="https://console.vespa-cloud.com/">console.vespa-cloud.com</a>
+      (unless you already have one).
+    </p>
+  </li>
+
+  <li>
+    <p><strong>Create and deploy the application:</strong></p>
+    <p>
+      Click <em>Create Application</em>.
+      Use "myapp" as application name, leave the defaults.
+      Make sure <em>Dev</em> is selected, and upload <code>application.zip</code>.
+    </p>
+    <p>
+      The first deployment will take a few minutes while nodes are provisioned.
+      Subsequent deployments on existing nodes will be quicker.
+    </p>
+    <!-- Override VESPA_CLI_HOME to work around container filesystem limitations and set application used for automatic testing -->
+    <!-- $PWD is set to $SD_DIND_SHARE_PATH by screwdriver.yaml - a special Docker-in-Docker path -->
+    <!-- Set API key to use for automatic testing -->
+    <!-- $VESPA_TEAM_API_KEY is a base64-encoded PEM-encoded EC private key in PKCS#8 format. -->
+<pre data-test="exec" style="display:none">
+$ export VESPA_CLI_HOME=$PWD/.vespa TMPDIR=$PWD/.tmp
+$ mkdir -p $TMPDIR
+$ mkdir -p $VESPA_CLI_HOME/vespa-team.album-rec-java.default
+$ vespa config set target cloud
+$ vespa config set application vespa-team.album-rec-java
+$ export VESPA_CLI_API_KEY="$(echo "$VESPA_TEAM_API_KEY" | openssl base64 -A -a -d)"
+$ cp data-plane-public-cert.pem $VESPA_CLI_HOME/vespa-team.album-rec-java.default
+$ cp data-plane-private-key.pem $VESPA_CLI_HOME/vespa-team.album-rec-java.default
+$ vespa deploy --wait 600
+$ export ENDPOINT=https://album-rec-java.vespa-team.aws-us-east-1c.dev.z.vespa-app.cloud/
+</pre>
+  </li>
+
+  <li>
+    <p><strong>Verify the application endpoint:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ ENDPOINT=https://<span class="pre-hilite">name</span>.myapp.<span class="pre-hilite">tenant-name</span>.aws-us-east-1c.dev.z.vespa-app.cloud/
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem $ENDPOINT
+</pre>
+    </div>
+    <p>
+      Find the endpoint in the console output, set it for later use and test it.
+      You can also <a href="https://cloud.vespa.ai/en/security/guide#using-a-browser">do this in a browser</a>.
+      Sample output:
+    </p>
+<pre>
+{
+  "handlers" : [ {
+    "id" : "com.yahoo.search.handler.SearchHandler",
+    "class" : "com.yahoo.search.handler.SearchHandler",
+    "bundle" : "container-search-and-docproc:8.57.18",
+    "serverBindings" : [ "http://*/search/*" ]
+  }
+  ...
+</pre>
+  </li>
+
+  <li>
+    <p><strong>Write documents:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/A-Head-Full-of-Dreams.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/Love-Is-Here-To-Stay.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/love-is-here-to-stay
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/Hardwired...To-Self-Destruct.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/hardwired-to-self-destruct
+</pre>
+    </div>
+    <p>
+      This writes documents using <a href="https://docs.vespa.ai/en/document-v1-api-guide.html">/document/v1</a>.
+    </p>
+  </li>
+
+  <li>
+    <p><strong>Send queries:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>{% raw %}
+curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -X POST -H "Content-Type: application/json" --data '
+  {
+      "yql": "select * from music where true",
+      "ranking": {
+          "profile": "rank_albums",
+          "features": {
+              "query(user_profile)": "{{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+          }
+      }
+  }' \
+  $ENDPOINT/search/
+{% endraw %}</pre>
+    </div>
+    <!-- Test framework is not good at such multiline POST queries, do a GET instead -->
+<pre data-test="exec" style="display:none">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+"$ENDPOINT/search/?ranking=rank_albums&amp;yql=select%20%2A%20from%20music%20where%20true&amp;ranking.features.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D"
+</pre>
+    <p>
+      Query with a user profile to get album recommendations
+      using the <a href="https://docs.vespa.ai/en/query-api.html">Query API</a>.
+    </p>
+  </li>
+</ol>
+
+
+{% include note.html content='Deployments to <code>dev</code> are removed 7 days after you last deployed it.
+You can extend the expiry time in the Vespa Console.
+<a href="https://cloud.vespa.ai/en/reference/environments.html#dev-and-perf">Read more</a>.' %}
+
+
+<h3 id="next-steps">Next steps</h3>
+
+<ul>
+    <li><a href="production-deployment">Set up deployment to production</a>.</li>
+    <li>Follow the <a href="https://blog.vespa.ai/">Vespa Blog</a> for product updates and use cases.</li>
+    <li>Explore the <a href="https://docs.vespa.ai">Vespa documentation</a>.</li>
+</ul>
