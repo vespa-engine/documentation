@@ -1,0 +1,203 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Monitoring
+---
+
+<img src="/assets/img/grafana-metrics.png" alt="Sample Vespa Console dashboard" />
+<p>
+  The Vespa Cloud Console has dashboards for insight into performance metrics,
+  use the "monitoring" tab for the zone deployment.
+</p>
+<p>
+  These metrics can also be pulled into external monitoring tools using the Prometheus metrics API.
+</p>
+
+
+<h2 id="prometheus-metrics-api">Prometheus metrics API</h2>
+<p>
+  Prometheus metrics are found at <code>$ENDPOINT/prometheus/v1/values</code>:
+</p>
+<pre>
+$ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  'https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud/prometheus/v1/values'
+</pre>
+<p>
+  The metrics can be fed into e.g. your Grafana Cloud or self-hosted Grafana instance. 
+  See the <a href="https://docs.vespa.ai/en/monitoring.html">Vespa metrics documentation</a> for more information.
+</p>
+
+
+<h2 id="using-grafana">Using Grafana</h2>
+<p>
+  This section explains how to set up Grafana to consume Vespa metrics using the Prometheus API.
+</p>
+
+
+<h3>1. Prometheus configuration</h3>
+<p>
+  Prometheus is configured using <code>prometheus.yml</code>, find sample config in
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/album-recommendation-monitoring/prometheus">prometheus</a>.
+  See <code>prometheus-cloud.yml</code>,
+  which is designed to be easy to set up with any Vespa Cloud instance.
+  Replace <code>&lt;Endpoint&gt;</code> and <code>&lt;SERVICE_NAME&gt;</code> with the endpoint
+  for the application and the service name, respectively.
+  In addition, the path to the private key and public cert
+  that is used for the data plane to the endpoint need to be provided -
+  refer to  <a href="https://cloud.vespa.ai/en/security-model">security</a>.
+  Then, configure the Prometheus instance to use this configuration file.
+  The Prometheus instance will now start retrieving the metrics from Vespa Cloud.
+  If the Prometheus instance is used for multiple services,
+  append the target configuration for Vespa to scrape_configs.
+</p>
+
+
+<h3>2. Grafana configuration</h3>
+<p>
+  Use the
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/album-recommendation-monitoring/grafana/provisioning">provisioning folder</a>
+  as a baseline for further configuration.
+</p>
+<p>
+  In the provisioning folder there are a few different files that all help for configuring Grafana locally.
+  These work as good examples of default configurations,
+  but the most important is the file named <code>Vespa-Engine-Advanced-Metrics-External.json</code>.
+  This is a default dashboard, based upon the metrics the Vespa team use to monitor performance.
+</p>
+<p>
+  Click the + button on the side and go to import.
+  Upload the file to the Grafana instance.
+  This should automatically load in the dashboard for usage.
+  For now, it will not display any data as no data sources are configured yet.
+</p>
+
+
+<h3>3. Grafana Data Source</h3>
+<p>
+  The Prometheus data source has to be added to the Grafana instance for the visualisation.
+  Click the cog on the left and then "Data Sources".
+  Click "Add data source" and choose Prometheus from the list.
+  Add the URL for the Prometheus instance with appropriate bindings for connecting.
+  The configuration for the bindings will depend on how the Prometheus instance is hosted.
+  Once the configuration details have been entered,
+  click Save &amp; Test at the bottom and ensure that Grafana says "Data source is working".
+</p>
+<p>
+  To verify the data flow,
+  navigate back to the Vespa Metrics dashboard by clicking the dashboard symbol on the left (4 blocks)
+  and clicking manage and then click Vespa Metrics.
+  Data should now appear in the Grafana dashboard.
+  If no data shows up, edit one of the data sets and ensure that it has the right data source selected.
+  The name of the data source the dashboard is expecting might be different from what your data source is named.
+  If there is still no data appearing,
+  it either means that the Vespa instance is not being used
+  or that some part of the configuration is wrong.
+</p>
+
+
+<h2 id="using-aws-cloudwatch">Using AWS Cloudwatch</h2>
+<p>
+  To pull metrics from your Vespa application into AWS Cloudwatch, refer to the
+  <a  href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch">metrics-emitter</a> documentation
+  for how to set up an AWS Lambda.
+</p>
+
+
+<h2 id="alerting">Alerting</h2>
+<p>
+  The <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/vespa-grafana-terraform">Vespa Grafana Terraform template</a>
+  provides a set of dashboards and alerts.
+
+  If you are using a different monitoring service and want to set up an equivalent alert set, you can follow this table:
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Metric name</th>
+        <th>Threshold</th>
+        <th>Dimension aggregation</th>
+      </tr>
+    </thead>
+    <tr>
+      <td>content_proton_resource_usage_disk_average</td>
+      <td>> 0.9</td>
+      <td>max by(applicationId, clusterId, zone)</td>
+    </tr>
+    <tr>
+      <td>content_proton_resource_usage_memory_average</td>
+      <td>> 0.8</td>
+      <td>max by(applicationId, zone, clusterId)</td>
+    </tr>
+    <tr>
+      <td>cpu_util</td>
+      <td>> 90</td>
+      <td>max by(applicationId, zone, clusterId)</td>
+    </tr>
+    <tr>
+      <td>content_proton_resource_usage_feeding_blocked_last</td>
+      <td>>= 1</td>
+      <td>N/A</td>
+    </tr>
+  </table>
+  All metrics are from the <a href="https://docs.vespa.ai/en/operations/metrics.html#metric-sets">default metric set</a>.
+  Metrics are using the naming scheme from the <a href="https://docs.vespa.ai/en/reference/prometheus-v1.html">Prometheus metrics</a> API.
+  Dimension aggregation is optional, but reduces alerting noise - e.g. in the case where an entire cluster goes bad.
+  It is recommended to filter all alerts on zones in the <a href="https://cloud.vespa.ai/en/reference/environments">prod environment</a>.
+</p>
+
+
+<h2 id="prometheus-metrics-sample">Prometheus Metrics Sample</h2>
+<p>
+  Below is a sample request with sample response for prometheus metrics for a minimal application on Vespa Cloud:
+</p>
+<pre>
+$ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  'https://feb749eb.a69b40ae.z.vespa-app.cloud/prometheus/v1/values'
+
+...
+jdisc_thread_pool_work_queue_size_min{threadpool="default-pool",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="logserver-container",clusterId="admin/logserver",hostname="h97490a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_logserver_container",} 0.0 1733139324000
+jdisc_thread_pool_work_queue_size_min{threadpool="default-handler-common",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="logserver-container",clusterId="admin/logserver",hostname="h97490a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_logserver_container",} 0.0 1733139324000
+# HELP content_proton_documentdb_matching_rank_profile_rerank_time_average 
+# TYPE content_proton_documentdb_matching_rank_profile_rerank_time_average untyped
+content_proton_documentdb_matching_rank_profile_rerank_time_average{<span class="pre-hilite">rankProfile="rank_albums"</span>,documenttype="music",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="searchnode",clusterId="content/music",hostname="h104562a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_searchnode",} 0.0 1733139324000
+content_proton_documentdb_matching_rank_profile_rerank_time_average{rankProfile="unranked",documenttype="music",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="searchnode",clusterId="content/music",hostname="h104562a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_searchnode",} 0.0 1733139324000
+content_proton_documentdb_matching_rank_profile_rerank_time_average{rankProfile="default",documenttype="music",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="searchnode",clusterId="content/music",hostname="h104562a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_searchnode",} 0.0 1733139324000
+...
+</pre>
+<p>Relevant labels include:</p>
+<ul>
+  <li>
+    <code>chain</code> This is the name on the search chain in the container that is used for a set of query requests.
+    This is typically used to get separate metrics, such as latency and the number of queries for each chain over time.
+  </li>
+  <li>
+    <code>documenttype</code> This is the name of the document type for which a set of queries are run in the content clusters.
+    This is typically used to get separate content layer metrics, such as latency and the number of queries for each chain over time.
+  </li>
+  <li>
+    <code>groupId</code> This is the id of the cluster group for which the metric measurement is done.
+    This is typically used to get separate metrics aggregates per group in a content cluster.
+    The label is most relevant for metrics from the content clusters running multiple content groups,
+    see <a href="https://docs.vespa.ai/en/elasticity.html">Content Cluster Elasticity</a>.
+    The value is in the format group 0, group 1, group 2, etc.
+  </li>
+  <li>
+    <code>rankProfile</code> This label is present for a subset of metrics from the content clusters,
+    with names starting with <code>content_proton_documentdb_matching_rank_profile_</code>.
+    The label is typically used in cases where you use multiple rank profiles
+    and want to analyse performance differences between the different rank profiles,
+    or to better understand certain types of performance issues and need to narrow down the candidate set.
+  </li>
+  <li>
+    <code>source</code> This is a label applied on container metrics for classifying query failures by the content cluster
+    where the failure was triggered.
+  </li>
+</ul>
+
+<p>
+  How you will use labels to separate different kinds of queries depends on the observability backend you use,
+  but you will typically compute weighted averages for query latency and query volume,
+  and split graphs by the relevant labels to better understand system performance and bottlenecks.
+</p>
+<p>
+  For the container level metrics you use the <code>chain</code> label to differentiate between different query streams,
+  while you use the <code>rankProfile</code> label to do the same in the content level.
+</p>

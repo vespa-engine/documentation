@@ -1,0 +1,134 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Autoscaling
+---
+
+<p>
+Autoscaling lets you adjust the hardware resources allocated to application clusters automatically
+depending on actual usage.
+</p>
+<p>
+You can turn it on by specifying <i>ranges</i> in square brackets for the node and/or node resource values
+in <a href="https://cloud.vespa.ai/en/reference/services#autoscaling-ranges">services.xml</a>. The Vespa Cloud will monitor the resource utilization
+of your clusters and automatically choose the cheapest resource allocation within ranges that produces
+close to optimal utilization.
+</p>
+<p>
+  You can see the status and recent actions of the autoscaler in the <i>Resources</i> view
+  under a deployment in the console.
+</p>
+<p>
+Autoscaling is not considering latency differences achieved by different configurations.
+If your application has certain configurations that produce good throughput but too high latency,
+you should not include these configurations in your autoscaling ranges.
+</p>
+<p>
+Adjusting the allocation of a cluster may happen quickly for stateless container clusters,
+and much more slowly for content clusters with a lot of data. Autoscaling will adjust each cluster
+on the timescale it typically takes to rescale it (including any data redistribution).
+</p>
+
+
+
+<h2 id="When-to-use-autoscaling">When to use autoscaling</h2>
+<p>Autoscaling is useful in a number of scenarios. Some typical ones are:</p>
+<ul>
+<li>
+  You have a new application which you can't benchmark with realistic data and usage,
+  making you unsure what resources to allocate:
+  Set wide ranges for all resource parameters and let the system choose a configuration. Once you gain experience
+  you can consider tightening the configuration space.
+</li>
+<li>
+  You have load that varies quickly during the day, or that may suddenly increase quickly due to some event,
+  and want container cluster resources to quickly adjust to the load:
+  Set a range for the number of nodes and/or vcpu on containers.
+</li>
+<li>
+  Your expect your data volume to grow over time, but you don't want to allocate resources prematurely,
+  nor constantly worry about whether it is time to increase: Configure ranges for content nodes and/or node
+  resources such that the size of the system grows with the data.
+</li>
+</ul>
+
+
+
+<h2 id="resource-tradeoffs">Resource tradeoffs</h2>
+<p>Some other considerations when deciding resources:</p>
+<ul>
+<li>
+  Making changes to resources/nodes is easy and safe, and one of Vespa Cloud's strength.
+  We advise you make controlled changes and observe effect on latencies, data migration and cost.
+  Everything is automated, just deploy a new application package.
+  This is useful learning when later needed during load peaks and capacity requirement changes.
+</li>
+<li>
+  Node resources cannot be chosen freely in all zones, CPU/Memory often comes in increments of x 2.
+  Try to make sure that the resource configuration is a good fit.
+</li>
+<li>
+  CPU is the most expensive component, optimize for this for most applications.
+</li>
+<li>
+  Having few nodes means more overcapacity as Vespa requires that the system will handle
+  one node being down  (or one group, in content clusters having multiple groups).
+  4-5 nodes minimum is a good rule of thumb.
+  Whether 4-5 or 9-10 nodes of half the size is better depends on
+  quicker upgrade cycles vs. smoother resource auto-scale curves.
+  Latencies can be better or worse, depending on static vs dynamic query cost.
+</li>
+<li>
+  Changing a node resource may mean allocating a new node, so it may be faster to scale
+  container nodes by changing the number of nodes.
+</li>
+<li>
+  As a consequence, during resource shortage (say almost full disk),
+  add nodes and keep the rest unchanged.
+</li>
+<li>
+  It is easiest to reason over capacity when changing one thing at a time.
+</li>
+</ul>
+<p>
+It is often safe to follow the <em>suggested resources</em> advice when shown in the console
+and feel free to contact us if you have questions.
+</p>
+
+<!-- ToDo: We can rewrite some of this when enabling shared hosts -->
+
+
+<h2 id="mixed-load">Mixed load</h2>
+<p>
+A Vespa application must handle a combination of reads and writes, from multiple sources.
+User load often resembles a sine-like curve.
+Machine-generated load, like a batch job, can be spiky and abrupt.
+</p>
+<p>
+In the default Vespa configuration, all kinds of load uses _one_ default container cluster.
+Example: An application where daily batch jobs update the corpus at high rate:
+</p>
+<img src="/assets/img/load.png" alt="nodes and resources" width="520px" height="260"/>
+<p>
+Autoscaling scales <i>up</i> much quicker than <i>down</i>, as the probability of a new spike
+is higher after one has been observed.
+In this example, see the rapid cluster growth for the daily load spike -
+followed by a slow decay.
+</p>
+<p>
+The best solution for this case is to slow down the batch job, as it is of short duration.
+It is not always doable to slow down jobs - in these cases, setting up
+<a href="https://docs.vespa.ai/en/operations-selfhosted/routing.html#multiple-container-clusters">multiple container clusters</a>
+can be a smart thing - optimize each cluster for its load characteristics.
+This could be a combination of clusters using autoscale and clusters with a fixed size.
+Autoscaling often works best for the user-generated load,
+whereas the machine-generated load could either be tuned
+or routed to a different cluster in the same Vespa application.
+</p>
+
+
+
+<h2>Related reading</h2>
+<ul>
+<li><a href="https://docs.vespa.ai/en/performance/sizing-feeding.html">Feed sizing</a></li>
+<li><a href="https://docs.vespa.ai/en/performance/sizing-search.html">Query sizing</a></li>
+</ul>

@@ -1,0 +1,370 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Production Deployment
+---
+
+
+<p>
+  Production zones enable serving from various locations,
+  with a <a href="/en/cloud/automated-deployments">CI/CD pipeline</a> for safe deployments.
+  This guide goes through the minimal steps for a production deployment - in short:</p>
+<ul>
+  <li>Configure a production zone in <a href="https://cloud.vespa.ai/en/reference/deployment">deployment.xml</a>.</li>
+  <li>Configure resources for clusters in <a href="https://cloud.vespa.ai/en/reference/services">services.xml</a>.</li>
+  <li>Name the tenant, application, log in.</li>
+  <li>Create or have access to the data-plane cert/key pair.</li>
+  <li>Deploy the application to Vespa Cloud.</li>
+</ul>
+<p>
+  The sample application used in <a href="https://cloud.vespa.ai/en/getting-started">getting started</a> is a good basis for these steps,
+  see <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation">source files</a>.
+</p>
+<p>
+  Read <a href="https://cloud.vespa.ai/en/migrating-to-cloud">migrating to Vespa Cloud</a> first,
+  as a primer on deployment and endpoint usage.
+</p>
+<p>There are alternative ways of deploying at the end of this guide, too.</p>
+
+
+
+<h2 id="deployment-xml">deployment.xml</h2>
+<p>Add a <code>&lt;prod&gt;</code> element to <em>deployment.xml</em>:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>{% highlight xml %}
+<deployment version="1.0">
+    <prod>
+        <region>aws-us-east-1c</region>
+    </prod>
+</deployment>
+{% endhighlight %}</pre>
+</div>
+<p>
+  If <em>deployment.xml</em> does not exist, add it to the application package root (next to <em>services.xml</em>).
+</p>
+{% include note.html content='
+If the application uses <a href="https://cloud.vespa.ai/en/private-endpoints.html">private endpoints</a>,
+add this configuration here, too, and run the setup steps in the guide.'%}
+
+
+<h2 id="services-xml">services.xml</h2>
+<p>
+  Modify <em>services.xml</em> - minimal example:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+  <pre>{% highlight xml %}
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
+
+    <container id="default" version="1.0">
+        <document-api/>
+        <search/>
+        <nodes count="2">
+            <resources vcpu="2" memory="8Gb" disk="100Gb"/>
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="music" mode="index" />
+        </documents>
+        <nodes count="2">
+            <resources vcpu="2" memory="8Gb" disk="100Gb"/>
+        </nodes>
+    </content>
+
+</services>
+{% endhighlight %}</pre>
+</div>
+<p>
+  For production deployments, at least 2 nodes are required for each
+  cluster to ensure availability during maintenance tasks and upgrades.
+  The <code>nodes</code>-section is also where you specify your required <a
+    href="https://cloud.vespa.ai/en/reference/services.html#resources">resources</a>:
+</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>{% highlight xml %}
+        <nodes count="2">
+            <resources vcpu="2" memory="8Gb" disk="100Gb"/>
+        </nodes>
+{% endhighlight %}</pre>
+</div>
+<p>Also note the minimum redundancy requirement of 2:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+  <pre>{% highlight xml %}
+        <min-redundancy>2</min-redundancy>
+{% endhighlight %}</pre>
+</div>
+
+<h2 id="minimum-resources">Minimum resources</h2>
+<p>
+  To help ensure a reliable service, there is a minimum resource requirement for nodes in the production environment.
+  The minimum is currently 0.5 VCPU, 8Gb of memory, and for disk, 2 x memory for stateless nodes, or 3 x memory for content nodes.
+  As the disk resource is normally the least expensive,
+  we recommend it should be allocated generously to ensure it does not limit the use of more expensive cpu and memory resources.
+</p>
+
+<h2 id="application-name">Application name</h2>
+<p>Give the deployment a name and log in:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa config set target cloud
+$ vespa config set application mytenant.myapp
+$ vespa auth login
+</pre>
+</div>
+<p>
+  The tenant name is found in the console, the application is something unique within your organization -
+  see <a href="https://cloud.vespa.ai/en/tenant-apps-instances">tenants, applications and instances</a>.
+</p>
+
+
+
+<h2 id="add-public-certificate">Add public certificate</h2>
+<p>
+  Just as in the <a href="https://cloud.vespa.ai/en/getting-started">getting started</a> guide,
+  the application package needs the public key in the <em>security</em> directory.
+  You might already have a pair, if not generate it:
+</p>
+<pre>
+$ vespa auth cert -f
+Success: Certificate written to security/clients.pem
+Success: Certificate written to /Users/me/.vespa/mytenant.myapp.default/data-plane-public-cert.pem
+Success: Private key written to /Users/me/.vespa/mytenant.myapp.default/data-plane-private-key.pem
+</pre>
+<p>
+  Observe that the files are put in <em>$HOME/.vespa</em>.
+  The content from <em>data-plane-public-cert.pem</em> is copied to <em>security/clients.pem</em>.
+  More details on <a href="https://cloud.vespa.ai/en/security/guide#permissions">data-plane access control permissions</a>.
+</p>
+
+
+
+<h2 id="deploy-the-application">Deploy the application</h2>
+<p>Package the application and deploy it to a production zone:</p>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa prod deploy
+</pre>
+</div>
+<p>Find alternative deployment procedures in the next sections.</p>
+{% include note.html content='
+The <code>vespa prod deploy</code> command to prod zones,
+which uses <a href="https://cloud.vespa.ai/en/reference/deployment">deployment.xml</a>
+differs from the <code>vespa deploy</code> command used for dev/perf zones - see
+<a href="https://cloud.vespa.ai/en/reference/environments">environments</a>.'%}
+
+
+
+<h2 id="endpoints">Endpoints</h2>
+<p>
+  Find the 'zone' endpoint to use under Endpoints in the <a href="https://console.vespa-cloud.com/">console</a>.
+  There is an mTLS endpoint for each zone by default.
+  See <a href="https://cloud.vespa.ai/en/security/guide#configuring-mtls">configuring mTLS</a>
+  for how to use mTLS certificates.
+</p>
+<p>
+  You can also add <a href="https://cloud.vespa.ai/en/security/guide#configure-tokens">access tokens</a>
+  in the console as an alternative to mTLS,
+  and specify <a href="https://cloud.vespa.ai/en/reference/deployment#endpoints-global">global</a>
+  and <a href="https://cloud.vespa.ai/en/reference/deployment#endpoint-private">private</a> endpoints
+  in <em>deployment.xml</em>.
+</p>
+<p>
+  Write data efficiently using the
+  <a href="https://docs.vespa.ai/en/reference/document-v1-api-reference.html">document/v1 API</a> using HTTP/2,
+  or with the <a href="https://docs.vespa.ai/en/vespa-cli.html">Vespa CLI</a>.
+  There is also a <a href="https://docs.vespa.ai/en/vespa-feed-client.html#java-library">Java library</a>.
+</p>
+<p>
+  To feed data from a self-hosted Vespa into a new cloud instances, see the
+  <a href="#feeding-data-from-an-existing-vespa-instance">appendix</a> or
+  <a href="https://cloud.vespa.ai/en/cloning-applications-and-data">cloning applications and data</a>.
+</p>
+
+<p>Also see the <a href="https://cloud.vespa.ai/en/http-best-practices">http best practices documentation</a>.</p>
+
+
+<h2 id="automate-deployments">Automate deployments</h2>
+<p>
+  Use <a href="https://github.com/vespa-cloud/vector-search/blob/main/.github/workflows/deploy-vector-search.yaml">
+  deploy-vector-search.yaml</a> as a starting point,
+  and see <a href="/en/cloud/automated-deployments.html#automating-with-github-actions">Automating with GitHub Actions</a>
+  for more information.
+</p>
+
+
+
+<h2 id="production-deployment-using-console">Production deployment using console</h2>
+<p>
+  Instead of using the <a href="https://docs.vespa.ai/en/vespa-cli.html">Vespa CLI</a>,
+  one can build an application package for production deployment using zip only:
+</p>
+<ul>
+  <li>
+    Create <a href="#deployment-xml">deployment.xml</a>
+    and modify <a href="#services-xml">services.xml</a> as above.
+  </li>
+  <li>Skip the <a href="#application-name">Application name</a> step.</li>
+  <li>
+    Add a public certificate to <em>security/clients.pem</em>.
+    See <a href="https://cloud.vespa.ai/en/getting-started-shell#create-a-self-signed-certificate">creating a self-signed certificate</a>
+    for how to create the key/cert pair, then copy the cert file to <em>security/clients.pem</em>.
+    At this point, the files are ready for deployment.
+  </li>
+  <li>
+    Create a deployable zip-file:
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ zip -r application.zip . \
+  -x application.zip "ext/*" README.md .gitignore ".idea/*"
+</pre>
+    </div>
+  </li>
+  <li>
+    Click <em>Create Application</em> in the <a href="https://console.vespa-cloud.com/">console</a>.
+    Select the <em>PROD</em> tab.
+    Enter a name for the application and drop the <em>application.zip</em> file in the upload section.
+  </li>
+  <li>Click <em>Create and deploy</em> to deploy the application to the production environment.</li>
+</ul>
+
+
+
+<h2 id="production-deployment-with-components">Production deployment with components</h2>
+<p>
+  Deploying an application with <a href="https://docs.vespa.ai/en/jdisc/container-components.html">Components</a>
+  is a little different from above:
+</p>
+<ul>
+  <li>The application package root is at <em>src/main/application</em>.</li>
+  <li>Find the Vespa API version to compile the component.</li>
+  <li>The application package is built into a zip artifact, before deploying it.</li>
+</ul>
+<p>See <a href="https://cloud.vespa.ai/en/getting-started-java.html">Getting started java</a> for prerequisites. Procedure:</p>
+<ol>
+  <li>
+    Use the <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java">
+    album-recommendation-java</a> sample application as a starting point.
+  </li>
+  <li>
+    Make the same changes to <em>src/main/application/deployment.xml</em> and
+    <em>src/main/application/services.xml</em>.
+  </li>
+  <li>
+    Run the same steps for <a href="#application-name">Application name</a> and
+    <a href="#add-public-certificate">Add public certificate</a>.
+  </li>
+  <li>
+    Find the lowest Vespa version of the current deployments (if any) -
+    <a href="/en/cloud/automated-deployments#deploying-components">details</a>:
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ mvn vespa:compileVersion \
+  -Dtenant=mytenant \
+  -Dapplication=myapp
+</pre>
+    </div>
+  </li>
+  <li>
+    Build <em>target/application.zip</em>:
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ mvn -U package -Dvespa.compile.version="$(cat target/vespa.compile.version)"
+</pre>
+    </div>
+  </li>
+  <li>
+    Run the <a href="#deploy-the-application">Deploy the application</a> step.
+    Here, the Vespa CLI command will deploy <em>target/application.zip</em> built in the step above.
+  </li>
+</ol>
+
+
+
+<h2 id="next-steps">Next steps</h2>
+<ul>
+  <li>
+    Vespa Cloud takes responsibility for rolling out application changes
+    to all production zones as well as testing the changes first.
+    You will usually want to set up a job which automatically builds your application package
+    when changes to it are checked in, to get continuous deployment of your application.
+    Read <a href="/en/cloud/automated-deployments">automated deployments</a>
+    for automation, adding CD tests and multi-zone deployments.
+  </li>
+  <li>Once you have experience with load patterns, consider <a href="/en/cloud/autoscaling.html">autoscaling</a>.</li>
+  <li>
+    Set up <a href="monitoring.html">monitoring</a>.
+  </li>
+  <!-- ToDo: link to badge serving -->
+</ul>
+
+
+<h2 id="feeding-data-from-an-existing-vespa-instance">Feeding data from an existing Vespa instance</h2>
+<p>To dump data from an existing Vespa instance, you can use this command with Vespa CLI:</p>
+<pre>
+slices=10
+for slice in $(seq 0 $((slices-1))); do
+    vespa visit \
+        --slices $slices --slice-id $slice \
+        --target [existing Vespa instance endpoint] \
+        | gzip > dump.$slice.gz &
+done
+</pre>
+<p>This dumps all the content to files, but you can also pipe the content directly into 'vespa feed'.</p>
+<p>To feed the data:</p>
+<pre>
+slices=10
+for slice in $(seq 0 $((slices-1))); do
+    zcat dump.$slice.gz | \
+    vespa feed \
+        --application &lt;tenant&gt;.&lt;application&gt;.&lt;instance&gt; \
+        --target [zone endpoint from the Vespa Console] -
+done
+</pre>
+<p>Note that the different slices in these commands can be done in parallel on different machines.</p>
+
+
+
+<h2 id="accessing-a-public-cloud-application-from-another-vpc-on-another-account">Accessing a public cloud application from another VPC on another account</h2>
+<p>
+  A common challenge when deploying on the public cloud, is network connectivity between workloads
+  running in different accounts and VPCs. Within in a team, this is often resolved by setting up
+  VPC peering between VPCs, but this has its challenges when coordinating between many different
+  teams and dynamic workloads. Vespa does not support direct VPC peering.
+</p>
+<p>There are three recommended options:</p>
+<ol>
+<li>
+  <strong>Use your public endpoints, but IPv6 if you can:</strong> The default.
+  There are many advantages to a Zero-Trust approach and accessing your application through the public endpoint.
+  If you use IPv6, you will also avoid some of the network costs associated with IPv4 NATs, etc.
+  For some applications, this option could be cost prohibitive,
+  but one should not assume this is the case for all applications
+  with a moderate amount of data being transferred over the endpoint.
+</li>
+<li>
+  <strong>Use private endpoints via AWS PrivateLink or GCP Private Service Connect:</strong>
+  Vespa allows you to setup private endpoints for exclusive access from your own, co-located VPCs.
+  This requires less administrative overhead than general VPC peering and is also more secure.
+  Refer to <a href="https://cloud.vespa.ai/en/private-endpoints.html">private endpoints</a>.
+</li>
+<li>
+  <strong>Run Vespa workloads in your own account/project (Enclave):</strong>
+  The Vespa Enclave feature allows you to have all your Vespa workloads run in your own account.
+  In this case, you can set up any required peering to open the connection into your application.
+  While generally available, using Vespa Cloud Enclave requires significantly more effort
+  from the application team in terms of operating the service,
+  and is only recommended for larger applications that can justify the additional work
+  from e.g., a security or interoperability perspective.
+  Refer to <a href="https://cloud.vespa.ai/en/enclave/">Vespa Enclave</a>.
+</li>
+</ol>

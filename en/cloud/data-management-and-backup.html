@@ -1,0 +1,245 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Data management and backup
+---
+
+<p>
+  This guide documents how to export data from a Vespa cloud application and how to do mass updates or removals.
+  See <a href="https://cloud.vespa.ai/en/cloning-applications-and-data">cloning applications and data</a>
+  for how to copy documents from one application to another.
+</p>
+<p>
+  Prerequisite: Use the latest version of the <a href="https://docs.vespa.ai/en/vespa-cli.html">vespa</a>
+  command-line client.
+</p>
+
+
+
+<h2 id="export-documents">Export documents</h2>
+<p>
+  To export documents, configure the application to export from,
+  then select zone, container cluster and schema - example:
+</p>
+<pre>
+$ vespa config set application vespa-team.vespacloud-docsearch.default
+
+$ vespa visit --zone prod.aws-us-east-1c --cluster default --selection doc | head
+</pre>
+<p>
+  Some of the parameters above are redundant if unambiguous.
+  Here, the application is set up using a template found in
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">multinode-HA</a>
+  with multiple container clusters.
+  This example <a href="https://docs.vespa.ai/en/content/visiting.html">visit</a>
+  documents from the <code>doc</code> schema.
+</p>
+<p>Use a <a href="https://docs.vespa.ai/en/documents.html#fieldsets">fieldset</a> to export document IDs only:</p>
+<pre>
+$ vespa visit --zone prod.aws-us-east-1c --cluster default --selection doc --field-set '[id]' | head
+</pre>
+<p>
+  As the name implies, fieldsets are useful to select a subset of fields to export.
+  Note that this normally does not speed up the exporting process, as the same amount of data is read from the index.
+  The data transfer out of the Vespa application is smaller with fewer fields.
+</p>
+
+
+
+<h2 id="backup">Backup</h2>
+<p>
+  Use the <em>visit</em> operations above to extract documents for backup.
+</p>
+<p>
+  To back up documents to your own Google Cloud Storage, see
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/google-cloud/cloud-functions#backup---experimental">
+  backup</a> for a Google Cloud Function example.
+</p>
+<!-- ToDo: this is WIP and AWS coming soon. -->
+
+
+
+<h2 id="feed">Feed</h2>
+<p>
+  If a document feed is generated with <code>vespa visit</code> (above),
+  it is already in <a href="https://jsonlines.org/">JSON Lines</a> feed-ready format by default:
+</p>
+<pre>
+$ vespa visit | vespa feed - -t $ENDPOINT
+</pre>
+<p>
+  Find more examples in <a href="https://cloud.vespa.ai/en/cloning-applications-and-data">cloning applications and data</a>.
+</p>
+<p>
+  A document export generated using <a href="https://docs.vespa.ai/en/document-v1-api-guide.html">/document/v1</a>
+  is slightly different from the .jsonl output from <code>vespa visit</code>
+  (e.g., fields like a continuation token are added).
+  Extract the <code>document</code> objects before feeding:
+</p>
+<pre>
+$ gunzip -c docs.gz | <a href="https://stedolan.github.io/jq/">jq</a> '.documents[]' | \
+  vespa feed - -t $ENDPOINT
+</pre>
+
+
+
+<h2 id="delete">Delete</h2>
+<p>
+  To remove all documents in a Vespa deployment—or a selection of them—run a <em>deletion visit</em>.
+  Use the <code>DELETE</code> HTTP method, and fetch only the continuation token from the response:
+</p>
+<pre>
+#!/bin/bash
+
+set -x
+
+# The ENDPOINT must be a regional endpoint, do not use '*.g.vespa-app.cloud/'
+ENDPOINT="https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud"
+NAMESPACE=open
+DOCTYPE=doc
+CLUSTER=documentation
+
+# doc.path =~ "^/old/" -- all documents under the /old/ directory:
+SELECTION='doc.path%3D~%22%5E%2Fold%2F%22'
+
+continuation=""
+
+while
+  token=$( curl -X DELETE -s \
+           --cert data-plane-public-cert.pem \
+           --key data-plane-private-key.pem \
+           "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?selection=${SELECTION}&amp;cluster=${CLUSTER}&amp;${continuation}" \
+           | tee &gt;( jq . &gt; /dev/tty ) | jq -re .continuation )
+do
+  continuation="continuation=${token}"
+done
+</pre>
+<p>
+  Each request will return a response after roughly one minute—change this by specifying <em>timeChunk</em> (default 60).
+</p>
+<p>
+  To purge all documents in a document export (above),
+  generate a feed with <code>remove</code>-entries for each document ID, like:
+</p>
+<pre>
+$ gunzip -c docs.gz | jq '[ .documents[] | {remove: .id} ]' | head
+
+[
+  {
+    "remove": "id:open:doc::open/documentation/schemas.html"
+  },
+  {
+    "remove": "id:open:doc::open/documentation/securing-your-vespa-installation.html"
+  },
+</pre>
+<p>Complete example for a single chunk:</p>
+<pre>
+$ gunzip -c docs.gz | jq '[ .documents[] | {remove: .id} ]' | \
+  vespa feed - -t $ENDPOINT
+</pre>
+
+
+
+<h2 id="update">Update</h2>
+<p>
+  To update all documents in a Vespa deployment—or a selection of them—run an <em>update visit</em>.
+  Use the <code>PUT</code> HTTP method, and specify a partial update in the request body:
+</p>
+<pre>
+#!/bin/bash
+
+set -x
+
+# The ENDPOINT must be a regional endpoint, do not use '*.g.vespa-app.cloud/'
+ENDPOINT="https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud"
+NAMESPACE=open
+DOCTYPE=doc
+CLUSTER=documentation
+
+# doc.inlinks == "some-url" -- the weightedset&lt;string&gt; inlinks has the key "some-url"
+SELECTION='doc.inlinks%3D%3D%22some-url%22'
+
+continuation=""
+
+while
+  token=$( curl -X PUT -s \
+           --cert data-plane-public-cert.pem \
+           --key data-plane-private-key.pem \
+           --data '{ "fields": { "inlinks": { "remove": { "some-url": 0 } } } }' \
+           "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?selection=${SELECTION}&amp;cluster=${CLUSTER}&amp;${continuation}" \
+           | tee &gt;( jq . &gt; /dev/tty ) | jq -re .continuation )
+do
+  continuation="continuation=${token}"
+done
+</pre>
+<p>
+  Each request will return a response after roughly one minute—change this by specifying <em>timeChunk</em> (default 60).
+</p>
+
+
+
+<h2 id="using-document-v1-api">Using /document/v1/ api</h2>
+<p>
+  To get started with a document export, find the <em>namespace</em> and <em>document type</em> by listing a few IDs.
+  Hit the <a href="https://docs.vespa.ai/en/reference/document-v1-api-reference.html">/document/v1/</a> ENDPOINT.
+  Restrict to one CLUSTER, see <a href="https://docs.vespa.ai/en/reference/services-content.html">content clusters</a>:
+</p>
+<pre>
+$ curl \
+  --cert data-plane-public-cert.pem \
+  --key data-plane-private-key.pem \
+  "$ENDPOINT/document/v1/?cluster=$CLUSTER"
+</pre>
+
+<p>For ID export only, use a <a href="https://docs.vespa.ai/en/documents.html#fieldsets">fieldset</a>:</p>
+<pre>
+$ curl \
+  --cert data-plane-public-cert.pem \
+  --key data-plane-private-key.pem \
+  "$ENDPOINT/document/v1/?cluster=$CLUSTER&amp;fieldSet=%5Bid%5D"
+</pre>
+
+<p>From an ID, like <em>id:open:doc::open/documentation/schemas.html</em>, extract</p>
+<ul>
+  <li>NAMESPACE: open</li>
+  <li>DOCTYPE: doc</li>
+</ul>
+
+<p>Example script:</p>
+<pre>
+#!/bin/bash
+
+set -x
+
+# The ENDPOINT must be a regional endpoint, do not use '*.g.vespa-app.cloud/'
+ENDPOINT="https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud"
+NAMESPACE=open
+DOCTYPE=doc
+CLUSTER=documentation
+
+continuation=""
+idx=0
+
+while
+  ((idx+=1))
+  echo "$continuation"
+  printf -v out "%05g" $idx
+  filename=${NAMESPACE}-${DOCTYPE}-${out}.data.gz
+  echo "Fetching data..."
+  token=$( curl -s \
+           --cert data-plane-public-cert.pem \
+           --key data-plane-private-key.pem \
+           "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=1000&amp;concurrency=4&amp;cluster=${CLUSTER}&amp;${continuation}" \
+           | tee &gt;( gzip &gt; ${filename} ) | jq -re .continuation )
+do
+  continuation="continuation=${token}"
+done
+</pre>
+<p>
+  If only a few documents are returned per response, <em>wantedDocumentCount</em> (default 1, max 1024) can be
+  specified for a lower bound on the number of documents per response, if that many documents still remain.
+</p>
+<p>
+  Specifying <em>concurrency</em> (default 1, max 100) increases throughput, at the cost of resource usage.
+  This also increases the number of documents per response, and <em>could</em> lead to excessive memory usage
+  in the HTTP container when many large documents are buffered to be returned in the same response.
+</p>
