@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Architecture for Vespa Cloud Enclave in GCP
+category: cloud
 ---
 
 ### Architecture

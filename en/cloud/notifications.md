@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Notifications
+category: cloud
 ---
 
 Vespa Cloud supports two different categories of notifications. Notifications can be sent

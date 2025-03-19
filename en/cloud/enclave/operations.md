@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Operations and Support for Vespa Cloud Enclave
+category: cloud
 ---
 
 Vespa Cloud Enclave requires that resources provisioned within the VPC are wholly

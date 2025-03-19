@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Getting started with Vespa Cloud Enclave in AWS
+category: cloud
 ---
 
 Vespa Cloud Enclave builds on top of some tooling that it is necessary to become familiar with before getting started.

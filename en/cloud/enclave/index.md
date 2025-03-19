@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Vespa Cloud Enclave
+category: cloud
 ---
 
 ![enclave architecture](/assets/img/enclave-architecture.png)

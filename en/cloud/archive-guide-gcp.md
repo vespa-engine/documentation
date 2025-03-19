@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: GCP Archive guide
+category: cloud
 ---
 
 Vespa Cloud exports log data, heap dumps, and Java Flight Recorder sessions to

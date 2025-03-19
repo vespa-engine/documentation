@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Vespa Cloud Enclave AWS Architecture
+category: cloud
 ---
 
 Each Enclave in the tenant AWS account corresponds to a Vespa Cloud
