@@ -5,7 +5,7 @@ category: cloud
 ---
 
 Each Enclave in the tenant AWS account corresponds to a Vespa Cloud
-[zone](https://cloud.vespa.ai/en/en/reference/zones.html). Inside the tenant AWS account one Enclave is
+[zone](https://cloud.vespa.ai/en/reference/zones.html). Inside the tenant AWS account one Enclave is
 contained within one single
 [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html).
 
