@@ -97,9 +97,10 @@ title: "services.xml - 'content'"
             <a href="#max-concurrent">max-concurrent</a>
         <a href="#dispatch-tuning">dispatch</a>
             <a href="#max-hits-per-partition">max-hits-per-partition</a>
-            <a href="#top-k-probability">top-k-probability</a>
             <a href="#dispatch-policy">dispatch-policy</a>
+            <a href="#prioritize-availability">prioritize-availability</a>
             <a href="#min-active-docs-coverage">min-active-docs-coverage</a>
+            <a href="#top-k-probability">top-k-probability</a>
         <a href="#cluster-controller">cluster-controller</a>
             <a href="#init-progress-time">init-progress-time</a>
             <a href="#transition-time">transition-time</a>
@@ -1621,26 +1622,6 @@ Tune the query dispatch behavior - child elements:
         it suffices to only return a fraction of the request number of hits from each node.
         Note that changing this number will have global ordering impact.
         See <em>top-k-probability</em> below for improving performance with fewer hits.</p></td></tr>
-    <tr><th>top-k-probability</th>
-      <td>optional</td>
-      <td>Double</td>
-      <td>0.9999</td>
-      <td><p id="top-k-probability">
-        Probability that the top K hits will be the globally best.
-        Based on this probability, the dispatcher will fetch enough hits from each node to achieve this.
-        The only way to guarantee a probability of 1.0 is to fetch K hits from each partition.
-        However, by reducing the probability from 1.0 to 0.99999, one can significantly reduce number of hits fetched
-        and save both bandwidth and latency.
-        The number of hits to fetch from each partition is computed as:
-        </p><p><!-- depends on mathjax -->
-        $${q}={\frac{k}{n}}+{qT}({p},{30})&times;{\sqrt{ {k}&times;{\frac{1}{n}}&times;({1}-{\frac{1}{n}}) }}$$
-        </p><p>
-        where qT is a Student's t-distribution.
-        With n=10 partitions, k=200 hits and p=0.99999, only 45 hits per partition is needed,
-        as opposed to 200 when p=1.0.
-        </p><p>
-        Use this option to reduce network and container cpu/memory in clusters with many nodes per group -
-        see <a href="../performance/sizing-search.html">Vespa Serving Scaling Guide</a>.</p></td></tr>
     <tr><th>dispatch-policy</th>
       <td>optional</td>
       <td>best-of-random-2 / adaptive</td>
@@ -1661,6 +1642,20 @@ Tune the query dispatch behavior - child elements:
             <td>measures latency, preferring lower latency groups, selecting group with probability latency/(sum latency over all groups)</td>
           </tr>
         </table>
+    <tr><th style="white-space: nowrap">prioritize-availability</th>
+        <td>optional</td>
+        <td>Boolean</td>
+        <td>true</td>
+        <td>
+            <p id="prioritize-availability">
+                With <a href="../performance/sizing-search.html#data-distribution">grouped distribution</a>:
+                If true, or by default, all groups that are within min-active-docs-coverage of the <b>median</b>
+                of the document count of other groups will be used to service queries. If set to false, only
+                groups within min-active-docs-coverage of the <b>max</b> document count will be used,
+                with the consequence that full coverage is prioritized over availability when
+                multiple groups are lacking content, since the remaining groups may not be able
+                to service the full query load.
+            </p></td></tr>
     <tr><th style="white-space: nowrap">min-active-docs-coverage</th>
       <td>optional</td>
       <td>A float percentage</td>
@@ -1671,7 +1666,27 @@ Tune the query dispatch behavior - child elements:
         The percentage of active documents one needs to have
         compared to average of other groups in order to be active for serving queries.
         Because of measurement timing differences, it is not advisable to tune this above 99 percent.
-        </p>
+        </p></td></tr>
+    <tr><th>top-k-probability</th>
+        <td>optional</td>
+        <td>Double</td>
+        <td>0.9999</td>
+        <td><p id="top-k-probability">
+            Probability that the top K hits will be the globally best.
+            Based on this probability, the dispatcher will fetch enough hits from each node to achieve this.
+            The only way to guarantee a probability of 1.0 is to fetch K hits from each partition.
+            However, by reducing the probability from 1.0 to 0.99999, one can significantly reduce number of hits fetched
+            and save both bandwidth and latency.
+            The number of hits to fetch from each partition is computed as:
+        </p><p><!-- depends on mathjax -->
+            $${q}={\frac{k}{n}}+{qT}({p},{30})&times;{\sqrt{ {k}&times;{\frac{1}{n}}&times;({1}-{\frac{1}{n}}) }}$$
+        </p><p>
+            where qT is a Student's t-distribution.
+            With n=10 partitions, k=200 hits and p=0.99999, only 45 hits per partition is needed,
+            as opposed to 200 when p=1.0.
+        </p><p>
+            Use this option to reduce network and container cpu/memory in clusters with many nodes per group -
+            see <a href="../performance/sizing-search.html">Vespa Serving Scaling Guide</a>.</p></td></tr>
   </tbody>
 </table>
 
