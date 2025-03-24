@@ -10,17 +10,82 @@ Field types are defined in the
 This is a reference for:
 </p>
 <ul>
-  <li>JSON representation of field types in Vespa documents</li>
-  <li>JSON representation of document operations (put, get, remove, update)</li>
-  <li>JSON representation of addressing fields for update, and update operations</li>
+  <li>JSON representation of <a href="#document-operations">document operations</a> (put, get, remove, update)</li>
+  <li>JSON representation of <a href="#field-types">field types</a> in Vespa documents</li>
+  <li>JSON representation of addressing fields for update, and <a href="#update-operations"> update operations</a></li>
 </ul>
 <p>
 Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshooting</a>.
 </p>
 
+<pre class="pre-config">
+<a href="#document-operations">Document operations</a>
+    <a href="#put">Put</a>
+    <a href="#get">Get</a>
+    <a href="#remove">Remove</a>
+    <a href="#update">Update</a>
+      <a href="#test-and-set">Test and set</a>
+      <a href="#create">Create</a>
+<a href="#field-types">Field types</a>
+    <a href="#string">string</a>
+    <a href="#int">int</a>
+    <a href="#long">long</a>
+    <a href="#bool">bool</a>
+    <a href="#byte">byte</a>
+    <a href="#float">float</a>
+    <a href="#double">double</a>
+    <a href="#position">position</a>
+    <a href="#predicate">predicate</a>
+    <a href="#raw">raw</a>
+    <a href="#uri">uri</a>
+    <a href="#array">array</a>
+    <a href="#weightedset">weightedset</a>
+    <a href="#tensor">Tensors</a>
+        <a href="#tensor-short-form-indexed">Indexed tensors short form</a>
+        <a href="#tensor-short-form-mapped">Short form for tensors with a single mapped dimension</a>
+        <a href="#tensor-short-form-mixed">Mixed tensors short form</a>
+        <a href="#tensor-hex-dump">Cell values as binary data (hex dump format)</a>
+        <a href="#tensor-verbose-form">Tensor verbose form</a>
+    <a href="#struct">struct</a>
+    <a href="#map">map</a>
+    <a href="#reference">reference</a>
+  <a href="#empty-fields">Empty fields</a>
+<a href="#update-operations">Update operations</a>
+  <a href="#assign">assign</a>
+    <a href="#single-value-field">Single value field</a>
+    <a href="#tensor-field">Assign tensor</a>
+    <a href="#<struct-field">Assign struct field</a>
+        <a href="#replacing-all-fields-in-a-struct">Replacing entire struct</a>
+        <a href="#individual-struct-fields">Replace individual struct fields</a>
+    <a href="#assign-map-field">Assign map field</a>
+        <a href="#map-to-primitive-value">Map to primitive value</a>
+        <a href="#map-to-struct">Map to struct</a>
+    <a href="#array-field">Arrays</a>
+        <a href="#array-of-primitive-values">Array of primitive values</a>
+        <a href="#array-of-struct">Array of struct</a>
+    <a href="#weighted-set-field">Weighted set field</a>
+    <a href="#clearing-a-field">Clearing a field</a>
+  <a href="#add">add</a>
+    <a href="#add-array-elements">Add array elements</a>
+    <a href="#add-weighted-set">Add to weighted set</a>
+    <a href="#tensor-add">Add to tensor</a>
+  <a href="#composite-remove">Remove elements in composites</a>
+    <a href="#weighted-set-field-remove">Remove from weighted set field</a>
+    <a href="#map-field-remove">Remove from map field</a>
+    <a href="#tensor-remove">Remove from tensor</a>
+  <a href="#arithmetic">Arithmetic</a>
+  <a href="#match">match</a>
+  <a href="#tensor-modify">Tensor modify</a>
+  <a href="#fieldpath">Fieldpath</a>
+</pre>
 
 
 <h2 id="field-types">Field types</h2>
+<p>
+  Unless otherwise noted, these formats are used both for returned
+  values in read operations, and as input in write operations (put
+  operations and field assign update operations).
+</p>
 <table class="table">
   <tr>
     <th>string</th>
@@ -48,7 +113,7 @@ Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshootin
     <td>
       <p id="long"></p>
 <pre>{% highlight json %}
-"age": 42
+"current_time_ms": 1742837807000
 {% endhighlight %}</pre>
     </td>
   </tr><tr>
@@ -98,7 +163,7 @@ Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshootin
   </tr><tr>
     <th>predicate</th>
     <td>
-      <p id="predicate">A <a href="../predicate-fields.html">predicate</a> is a string:</p>
+      <p id="predicate">A <a href="../predicate-fields.html">predicate</a> is represented with a string:</p>
 <pre>{% highlight json %}
 "predicate_field": "gender in [Female] and age in [20..30] and pos in [1..4]"
 {% endhighlight %}</pre>
@@ -182,9 +247,8 @@ Also refer to <a href="../troubleshooting-encoding.html">encoding troubleshootin
       </p>
     </td>
   </tr><tr>
-    <th id="#tensor">tensor</th>
+    <th id="tensor">tensor</th>
     <td>
-      <p id="tensor"></p>
       <p id="tensor-short-form-indexed">
         <strong>Indexed tensors short form:</strong>
         An array where the values are ordered in the standard value order,
@@ -376,7 +440,6 @@ def float_to_hex(f: float):
 </p>
 
 
-
 <h2 id="document-operations">Document operations</h2>
 <p>
 Refer to <a href="../reads-and-writes.html">reads and writes</a> for details - alternatives:
@@ -393,15 +456,15 @@ Refer to <a href="../reads-and-writes.html">reads and writes</a> for details - a
   </li>
 </ul>
 
-
 <h3 id="put">Put</h3>
 <p>
-  The "put" payload has a "put" operation and "fields"
+  The "put" payload has a "put" operation and
+  <a href="#field-types">"fields"</a> containing field values;
   (<a href="../document-v1-api-guide.html#post">/document/v1/ example</a>):
 </p>
 <pre>{% highlight json %}
 {
-    "put": "id:music:music::123",
+    "put": "id:mynamespace:music::123",
     "fields": {
         "title": "Best of Bob Dylan"
     }
@@ -417,8 +480,8 @@ Refer to <a href="../reads-and-writes.html">reads and writes</a> for details - a
 </p>
 <pre>{% highlight json %}
 {
-    "pathId": "/document/v1/music/music/docid/123",
-    "id": "id:music:music::123",
+    "pathId": "/document/v1/mynamespace/music/docid/123",
+    "id": "id:mynamespace:music::123",
     "fields": {
         "title": "Best of Bob Dylan"
     }
@@ -428,24 +491,26 @@ Refer to <a href="../reads-and-writes.html">reads and writes</a> for details - a
 
 <h3 id="remove">Remove</h3>
 <p>
-  The "remove" payload has a "remove" operation
+  The "remove" payload only has a "remove" operation
   (<a href="../document-v1-api-guide.html#delete">/document/v1/ example</a>):
 </p>
 <pre>{% highlight json %}
 {
-    "remove": "id:music:music::123"
+    "remove": "id:mynamespace:music::123"
 }
 {% endhighlight %}</pre>
 
 
 <h3 id="update">Update</h3>
 <p>
-  The "update" payload has an "update" operation and "fields"
+  The "update" payload has an "update" operation and "fields".
+  Note: Each field must contain an <a href="#update-operations">update operation</a>,
+  not just the field value directly;
   (<a href="../document-v1-api-guide.html#put">/document/v1/ example</a>):
 </p>
 <pre>{% highlight json %}
 {
-    "update": "id:music:music::123",
+    "update": "id:mynamespace:music::123",
     "fields": {
         "title": {
             "assign": "The best of Bob Dylan"
@@ -453,10 +518,13 @@ Refer to <a href="../reads-and-writes.html">reads and writes</a> for details - a
     }
 }
 {% endhighlight %}</pre>
+<p>
+  Flags can be added to add a <a href="#test-and-set">test and set</a>
+  condition, or allow the update to <a href="#create">create</a> a new
+  document (a so-called "upsert" operation).
+</p>
 
-
-
-<h2 id="test-and-set">Test and set</h2>
+<h4 id="test-and-set">Test and set</h4>
 <p>
 An optional <em>condition</em> can be added to operations to specify a <em>test and set</em> condition -
 see <a href="../document-v1-api-guide.html#conditional-writes">conditional writes</a>.
@@ -467,7 +535,7 @@ Example: Increment the <em>sales</em> field only if it is already equal to 999
 </p>
 <pre>{% highlight json %}
 {
-    "update": "id:music:music::bob/BestOf",
+    "update": "id:mynamespace:music::bob/BestOf",
     "condition": "music.sales==999",
     "fields": {
         "sales": {
@@ -482,10 +550,9 @@ Example: Increment the <em>sales</em> field only if it is already equal to 999
            and instead return a <em>condition-not-met</em> in the response. -->
 
 
-
-<h2 id="create">create (create if nonexistent)</h2>
+<h4 id="create">create (create if nonexistent)</h4>
 <p>
-<strong>Updates</strong> to nonexistent documents are supported using <em>create</em>.
+<strong>Updates</strong> to nonexistent documents are supported using <em>create</em>;
 (<a href="../document-v1-api-guide.html#create-if-nonexistent">/document/v1/ example</a>):
 </p>
 <pre>{% highlight json %}
@@ -506,7 +573,7 @@ Example: Increment the <em>sales</em> field only if it is already equal to 999
 </p>
 <pre>{% highlight json%}
 {
-    "put": "id:music:music::123",
+    "put": "id:mynamespace:music::123",
     "condition": "music.sales==999",
     "create": true,
     "fields": {
@@ -516,7 +583,20 @@ Example: Increment the <em>sales</em> field only if it is already equal to 999
 {% endhighlight %}</pre>
 
 
-
+<h2 id="update-operations">Update operations</h2>
+<p>
+  The update operations are:
+  <a href="#assign">           <code>assign</code></a>,
+  <a href="#add">              <code>add</code></a>,
+  <a href="#composite-remove"> <code>remove</code></a>,
+  <a href="#arithmetic">       arithmetics</a>
+  <!--                    --> (<code>increment</code>
+  <!--                     --> <code>decrement</code>
+  <!--                     --> <code>multiply</code>
+  <!--                     --> <code>divide</code>),
+  <a href="#match">            <code>match</code></a>,
+  <a href="#tensor-modify">    <code>modify</code></a>
+</p>
 <h2 id="assign">assign</h2>
 <p>
 <code>assign</code> is used to replace the value of a field (or an element of a collection) with a new value.
@@ -525,7 +605,7 @@ as when feeding that field's value in a <code>put</code> operation.
 </p>
 
 
-<h3 id="single-field-value">Single value field</h3>
+<h3 id="single-value-field">Single value field</h3>
 <pre>
 field title type string {
     indexing: summary
@@ -807,7 +887,7 @@ field string_weighted_set type weightedset&lt;string&gt; {
 </pre>
 <pre>{% highlight json %}
 {
-    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "update":"id:mynamespace:weightedsetdoctype::example1",
     "fields": {
         "int_weighted_set{123}": {
             "assign": 123
@@ -891,7 +971,7 @@ field string_weighted_set type weightedset&lt;string&gt; {
 </pre>
 <pre>{% highlight json %}
 {
-    "update":"id:weightedsetdoctype:weightedsetdoctype::example1",
+    "update":"id:mynamespace:weightedsetdoctype::example1",
     "fields": {
         "int_weighted_set": {
             "add": {
@@ -1094,7 +1174,7 @@ field sales type int {
 </pre>
 <pre>{% highlight json %}
 {
-    "update": "id:music:music::https://music.yahoo.com/bobdylan/BestOf",
+    "update": "id:mynamespace:music::https://music.yahoo.com/bobdylan/BestOf",
     "fields": {
         "sales": {
             "increment": 1
@@ -1117,7 +1197,7 @@ field track_popularity type weightedset&lt;string&gt; {
 </pre>
 <pre>{% highlight json %}
 {
-    "update": "id:music:music::https://music.yahoo.com/bobdylan/BestOf",
+    "update": "id:mynamespace:music::https://music.yahoo.com/bobdylan/BestOf",
     "fields": {
         "track_popularity": {
             "match": {
@@ -1131,7 +1211,9 @@ field track_popularity type weightedset&lt;string&gt; {
 <p>
 In other words, for the weighted set "track_popularity",
 <code>match</code> the element "Lay Lady Lay", then <code>increment</code> its weight by 1.
-See the <a href="schema-reference.html#weightedset">reference</a> for how to auto-create keys.
+See the <a href="schema-reference.html#weightedset-properties">weightedset properties</a>
+reference for how to make incrementing a non-existing key trigger auto-create of the key.
+
 </p>
 <p>If the updated field is an array, the <code>element</code> value would be a positive integer.</p>
 {% include note.html content='Only <span style="text-decoration: underline">one</span>
@@ -1238,7 +1320,7 @@ field tensorfield type tensor(x{},y[3]) {
 
 
 
-<h2 id="fieldpath">fieldpath</h2>
+<h2 id="fieldpath">Fieldpath</h2>
 <p>
 Fieldpath is for accessing fields within composite structures -
 for structures that are not part of index or attribute,
