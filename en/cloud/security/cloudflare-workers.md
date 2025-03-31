@@ -1,4 +1,5 @@
 ---
+# Copyright Vespa.ai. All rights reserved.
 title: Using Cloudflare Workers with Vespa Cloud
 category: cloud
 ---

@@ -1,4 +1,5 @@
 ---
+# Copyright Vespa.ai. All rights reserved.
 title: Vespa Cloud Security Whitepaper
 category: cloud
 ---
