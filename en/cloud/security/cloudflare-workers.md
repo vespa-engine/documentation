@@ -4,20 +4,19 @@ title: Using Cloudflare Workers with Vespa Cloud
 category: cloud
 ---
 
-This guide describe how you can access mutal TLS protected Vespa Cloud endpoints using
+This guide describes how you can access mutual TLS protected Vespa Cloud endpoints using
 [Cloudflare Workers](https://workers.cloudflare.com/).
 
 ## Writing and reading from Vespa Cloud Endpoints
 
 Vespa Cloud's endpoints are protected using mutual TLS. 
-This means the client needs to present
-a client TLS certificate that the Vespa application trusts. The application
+This means the client must present a TLS certificate that the Vespa application trusts. The application
 knows which certificate to trust because the certificate is included in the
 Vespa application package. 
 
 ### mTLS Configuration
 
-Mutal TLS certificates can be created using the
+Mutual TLS certificates can be created using the
 [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html):
 
 For example, for tenant `samples` with application `vsearch` and instance `default`:
@@ -57,7 +56,7 @@ Issuer: CN=cloud.vespa.example
 Expires on 3/11/2033
 ```
 
-Notice the `ID` in the output, this is the `certificate_id` of the uploaded mTLS certificate. 
+Notice the `ID` in the output; This is the `certificate_id` of the uploaded mTLS certificate. 
 To use the certificate in the worker code, add an `mtls_certificates` variable to the `wrangler.toml` file
 in the project to bind a name to the certificate id. In this case, bind to `VESPA_CERT`:
 
@@ -81,8 +80,8 @@ Notice that `env` is a variable passed by the Cloudflare worker infrastructure.
 
 ### Worker example
 
-The following worker example forwards POST and GET HTTP requests to the the `/search/` path 
-of the Vespa cloud endpoint. It rejects other paths, or other HTTP methods.
+The following worker example forwards POST and GET HTTP requests to the `/search/` path 
+of the Vespa cloud endpoint. It rejects other paths or other HTTP methods.
 
 ```javascript
 /**
@@ -125,13 +124,13 @@ export default {
 };
 
 ```
-To deploy the above to the wordwide global edge network of Cloudflare, use:
+To deploy the above to the worldwide global edge network of Cloudflare, use:
 
 ```
 $ npx wrangler publish
 ```
 
-To start a local instance use:
+To start a local instance, use:
 
 ```
 $ npx wrangler dev
@@ -150,6 +149,6 @@ $ curl --json '{"yql": "select * from sources * where true"}' https://your-worke
 
 ## Data plane access control permissions
 Vespa Cloud supports having multiple certificates to separate `read` and `write` access.  
-This way, one can upload the read-only certificate to Cloudflare worker to limit write access.
+This way, one can upload the read-only certificate to a Cloudflare worker to limit write access.
 
 See [Data plane access control permissions](guide#permissions).
