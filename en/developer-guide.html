@@ -3,6 +3,76 @@
 title: "Developer Guide"
 ---
 
+<p>
+  See <a href="/en/getting-started.html">getting started</a> to deploy a basic sample application,
+  or its Java variant to deploy an application with custom Java components.
+</p>
+<p>
+  Keep reading for more details on how to develop applications, including basic terminology,
+  tips on using the Vespa Cloud Console, and how to benchmark and size your application.
+  <a href="/en/cloud/automated-deployments.html">Automated deployments</a> makes production deployments safe and simple.
+</p>
+
+
+
+<h2 id="manual-deployments">Manual deployments</h2>
+<p>
+  Developers will typically deploy their application to the <code>dev</code> <a href="https://cloud.vespa.ai/en/reference/zones">zone</a>
+  during development. Each deployment is owned by a <em>tenant</em>, and each specified <em>instance</em> is
+  a separate copy of the application; this lets developers work on independent copies of the same application,
+  or collaborate on a shared one, as they prefer—more details <a href="/en/cloud/tenant-apps-instances.html">here</a>.
+  These values can be set in the Vespa Cloud UI when deploying, or with each of the build and deploy tools,
+  as shown in the respective getting-started guides.
+  Additionally, a deployment may specify a different <a href="https://cloud.vespa.ai/en/reference/zones">zone</a> to deploy to, instead of the
+  default <code>dev</code> zone; see <a href="#performance-testing">performance testing</a> below for how to do this.
+</p>
+
+
+<h3 id="auto-downsizing">Auto downsizing</h3>
+<p>
+  Deployments to <code>dev</code> are downscaled to one small node by default, so that
+  applications can be deployed there without changing <code>services.xml</code>.
+  If you need more resources in the <code>dev</code> application, set <code>nodes</code> or
+  <code>resources</code> explicitly by adding those tags to <code>services.xml</code> with
+  <code>deploy:environment="dev"</code>,
+  see <a href="https://cloud.vespa.ai/en/reference/deployment-variants.html#services.xml-variants">variants in services.xml</a>.
+</p>
+
+
+<h3 id="availability">Availability</h3>
+<p>The <code>dev</code> zone is a sandbox and not for production serving; It has no uptime guarantees.</p>
+<p>
+  An automated Vespa software upgrade can be triggered at any time,
+  and this may lead to some downtime if you have only one node per cluster
+  (as with the default <a href="#auto-downsizing">auto downsizing</a>).
+</p>
+
+
+
+<h2 id="performance-testing">Performance testing</h2>
+<p>
+  In addition to <code>dev</code>, there is also a <code>perf</code> zone for performance testing.
+  Like production zones, this zone honors the resources specified in <code>services.xml</code>—see
+  <a href="https://cloud.vespa.ai/en/reference/services">the reference</a> for how to configure them.
+  Performance and sizing tests can then be extrapolated to a production scenario.
+  In all other ways, this zone works the same way as <code>dev</code>.
+</p>
+<p>To deploy to <code>perf</code> with Vespa CLI:</p>
+<pre>
+--zone perf.aws-us-east-1c
+</pre>
+<p>To deploy to <code>perf</code> with Maven:</p>
+<pre>
+-D environment=perf
+</pre>
+<p>Read more in <a href="/en/cloud/benchmarking.html">benchmarking</a>.</p>
+
+
+
+
+
+
+<h2 id="component-overview">Component overview</h2>
 <img src="/assets/img/vespa-overview.svg" width="825px" height="auto" alt="Vespa Overview" />
 <p>
   Application packages can contain Java components to be run in container clusters.
@@ -100,9 +170,24 @@ Also see <a href="/en/operations-selfhosted/admin-procedures.html#troubleshootin
 {% include important.html content="The debugging procedure only works for endpoints with an open debug port -
 most managed services don't do this for security reasons." %}
 <p>
+  Vespa Cloud does not allow debugging over the <em>Java Debug Wire Protocol (JDWP)</em> due to the protocol's inherent lack of security measures.
+  If you need interactive debugging, deploy your application to a self-hosted Vespa installation (below)
+  and manually <a href="/en/developer-guide.html#debugging-components">add the <em>JDWP</em> agent to JVM options</a>.
+</p>
+<p>
+  You may debug your Java code by requesting either a JVM heap dump or a Java Flight Recorder recording through the
+  <a href="https://console.vespa-cloud.com/">Vespa Cloud Console</a>. Go to your application's cluster overview and select
+  <em>export JVM artifact</em> on any <em>container</em> node. The process will take up to a few minutes.
+  You'll find the steps to download the dump on the Console once it's completed.
+  Extract the files from the downloaded Zstandard-compressed archive, and use the free
+  <a href="https://www.oracle.com/java/technologies/jdk-mission-control.html">JDK Mission Control</a> utility to inspect
+  the dump/recording.
+</p>
+<img src="/assets/img/jvm-dump.png" alt="Generate JVM dump"/>
+<p>
   To debug a <a href="searcher-development.html">Searcher</a> /
   <a href="document-processing.html">Document Processor</a> /
-  <a href="jdisc/container-components.html">Component</a> running in the container,
+  <a href="jdisc/container-components.html">Component</a> running in a self-hosted container,
   set up a remote debugging configuration in the IDEA - IntelliJ example:
 </p>
 <ol>
@@ -121,7 +206,7 @@ most managed services don't do this for security reasons." %}
   </li>
   <li>
     Re-deploy the application, then restart Vespa on the node that runs the container.
-    Make sure the port is published if using a Docker container, e.g.:
+    Make sure the port is published if using a Docker/Podman container, e.g.:
 <pre>
 $ docker run --detach --name vespa --hostname vespa-container \
   --publish 127.0.0.1:8080:8080 --publish 127.0.0.1:19071:19071 <span class="pre-hilite">--publish 127.0.0.1:5005:5005</span> \
@@ -136,3 +221,105 @@ $ docker run --detach --name vespa --hostname vespa-container \
   image-url='/assets/img/video-thumbs/deploying-a-vespa-searcher.png'
   video-url='https://www.youtube.com/embed/dUCLKtNchuE'
   video-title='Debugging a Vespa Searcher' %}
+
+
+
+<h2 id="developing-system-and-staging-tests">Developing system and staging tests</h2>
+<p>
+  When using Vespa Cloud, system and tests are most easily developed using a test deployment in a
+  <code>dev</code> zone to run the tests against.
+  Refer to <a href="/en/testing.html">general testing guide</a>
+  for a discussion of the different test types,
+  and the <a href="/en/reference/testing.html">basic HTTP tests</a> or
+  <a href="/en/reference/testing-java.html">Java JUnit tests</a> reference
+  for how to write the relevant tests.
+</p>
+<p>
+  If using the <a href="/en/vespa-cli.html">Vespa CLI</a> to deploy and run
+  <a href="/en/reference/testing.html">basic HTTP tests</a>,
+  the same commands as in the test reference will just work,
+  provided the CLI is configured to use the <code>cloud</code> target.
+</p>
+
+
+<h3 id="running-java-tests">Running Java tests</h3>
+<p>
+  With Maven, and <a href="/en/reference/testing-java.html">Java Junit tests</a>,
+  some additional configuration is required,
+  to infuse the test runtime on the local machine with API and data plane credentials:
+</p>
+<pre>
+$ mvn test \
+  -D test.categories=system \
+  -D dataPlaneKeyFile=data-plane-private-key.pem -D dataPlaneCertificateFile=data-plane-public-cert.pem \
+  -D apiKey="$API_KEY"
+</pre>
+<p>
+  The <code>apiKey</code> is used to fetch the <em>dev</em> instance's endpoints.
+  The data plane key and certificate pair is used by
+  <a href="https://github.com/vespa-engine/vespa/blob/master/tenant-cd-api/src/main/java/ai/vespa/hosted/cd/Endpoint.java">ai.vespa.hosted.cd.Endpoint</a>
+  to access the application endpoint. See the <a href="https://cloud.vespa.ai/en/reference/vespa-cloud-api">Vespa Cloud API reference</a>
+  for details on configuring Maven invocations. Note that the <code>-D vespa.test.config</code> argument is gone;
+  this configuration is automatically fetched from the Vespa Cloud API—hence the need for the API key.
+</p>
+<p>
+  When running Vespa self-hosted like in the
+  <a href="/en/vespa-quick-start.html">sample application</a>,
+  no authentication is required by default, to either API or container, and specifying a data plane key and certificate
+  will instead cause the test to fail, since the correct SSL context is the Java default in this case.
+</p>
+<p>
+  Make sure the TestRuntime is able to start.
+  As it will init an SSL context, make sure to remove config when running locally, in order to use a default context.
+  Remove properties from <em>pom.xml</em> and IDE debug configuration.
+</p>
+<p>Developers can also set these parameters in the IDE run configuration to debug system tests:</p>
+<pre>
+-D test.categories=system
+-D tenant=my_tenant
+-D application=my_app
+-D instance=my_instance
+-D apiKeyFile=/path/to/myname.mytenant.pem
+-D dataPlaneCertificateFile=data-plane-public-cert.pem
+-D dataPlaneKeyFile=data-plane-private-key.pem
+</pre>
+
+
+<h2 id="tips-and-troubleshooting">Tips and troubleshooting</h2>
+<ul>
+  <li>
+    <p>
+      Vespa Cloud upgrades daily, and applications in <code>dev</code> and <code>perf</code> also have their Vespa platform upgraded.
+      This usually happens at the opposite time of day of when deployments are made to each instance, and takes some minutes.
+      Deployments without redundancy will be unavailable during the upgrade.
+    </p>
+  </li>
+  <li>
+    <p>
+      Failure to deploy, due to authentication (HTTP code 401) or authorization (HTTP code 403),
+      is most often due to wrong configuration of <code>tenant</code> and/or <code>application</code>,
+      when using command line tools to deploy. Ensure the values set with Vespa CLI or in <code>pom.xml</code>
+      match what is configured in the UI. For Maven, also see <a href="https://cloud.vespa.ai/en/reference/vespa-cloud-api">here</a> for details.
+    </p>
+  </li>
+  <li>
+    <p>
+      In case of data plane failure,
+      remember to copy the public certificate to <code>src/main/application/security/clients.pem</code>
+      before building and deploying. This is handled by the Vespa CLI <code>vespa auth cert</code> command.
+    </p>
+  </li>
+  <li>
+    <p>
+      To run Java <a href="/en/reference/testing-java.html">system and staging tests</a> in an IDE,
+      ensure all API and data plane keys and certificates are configured in the IDE as well;
+      not all IDEs pick up all settings from <code>pom.xml</code> correctly:
+    </p>
+    <pre>
+-Dtest.categories=system
+-DapiKeyFile=/path-to/tname.pem
+-DdataPlaneCertificateFile=/path-to/data-plane-public-cert.pem
+-DdataPlaneKeyFile=/path-to/data-plane-private-key.pem
+</pre>
+  </li>
+</ul>
