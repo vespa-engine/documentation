@@ -72,11 +72,13 @@ By default, this particular client connects to the OpenAI service, but can be us
 <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI chat completion compatible API</a>
 by changing the `endpoint` configuration parameter.
 
+### API key configuration
+
 Vespa provides several options to configure the API key used by the client.
 
 1. Using the [Vespa Cloud secret store](https://cloud.vespa.ai/en/security/secret-store.html) to store the API key. This is done by setting the `apiKeySecretName` configuration parameter to the name of the secret in the secret store. This is the recommended way for Vespa Cloud users.
 2. Providing the API key in the `X-LLM-API-KEY` HTTP header of the Vespa query. 
-3. It is also possible to configure the API key in a custom component. For example, [this](TODO: link) system-test shows how to retrieve the API key from a local file deployed with your Vespa application. Please note that this is NOT recommended for production use, as it is less secure than using the secret store.
+3. It is also possible to configure the API key in a custom component. For example, [this](TODO: link) system-test shows how to retrieve the API key from a local file deployed with your Vespa application. Please note that this is NOT recommended for production use, as it is less secure than using the secret store, but it can be modified to suit your needs.
 
 You can set up multiple connections with different settings. For instance, you
 might want to run different LLMs for different tasks. To distinguish between the
