@@ -2676,53 +2676,71 @@ normalizing: [normalizing-type]
 
 <h2 id="dictionary">dictionary</h2>
 <p>
-  Contained in <a href="#field">field</a>,
-  and specifies details of the dictionary used in the inverted index of the field.
-  Applies only to <a href="#attribute">attributes</a> annotated with <code>fast-search</code>.
-  You can specify either <code>btree</code> or <code>hash</code>, or both.
+    Contained in <a href="#field">field</a>,
+    and specifies details of the dictionary used in the inverted index of the field.
+    Applies only to <a href="#attribute">attributes</a> annotated with <code>fast-search</code>.
+    You can specify either <code>btree</code> or <code>hash</code>, or both.
 </p>
-<p>
-  {% include note.html content='
-Note that prefix search for strings and range search for numeric fields will fall back to full scan
-if using <code>hash</code>.
 
-It is primarily intended for use when you have many unique terms with few occurrences (short posting lists),
-where the dictionary lookup cost could be significant. '%}
+<h3>Dictionary Types</h3>
+<p>
+    <strong>btree</strong> (Default): Provides good performance for exact, prefix, and range lookups.
+    Recommended for most use cases. Find more details in <a href="../attributes.html#index-structures">attribute index structures</a>.
 </p>
 
 <p>
-  Normally, <code>btree</code> is your best choice as it offers reasonable performance
-  for both exact, prefix and range type of dictionary lookups.
-  This is also the default.
-  Find more details in <a href="../attributes.html#index-structures">attribute index structures</a>.
+    <strong>hash</strong>: Optimized for fields with high cardinality (many unique values),
+    such as unique ID fields where each posting list contains only one item.
+</p>
+
+<p>
+    {% include note.html content='
+    When using <code>hash</code>, prefix searches for strings and range searches for numeric fields
+    will fall back to full scan. This is primarily beneficial when you have many unique terms with
+    few occurrences each, where dictionary lookup costs would otherwise be significant. '%}
+</p>
+
+<h3>Case Handling for String Fields</h3>
+<p>
+    For string attributes, you can specify how character case is handled:
+</p>
+<ul>
+    <li><strong>uncased</strong> (Default): Case-insensitive - 'bear', 'Bear', and 'BEAR' are treated as identical</li>
+    <li><strong>cased</strong>: Case-sensitive - 'bear', 'Bear', and 'BEAR' are treated as different terms</li>
+</ul>
+<p>
+    This setting is automatically checked against the field's <a href="#match">match:casing</a> setting.
+</p>
+
+<h3>Important Rules for String Fields with Dictionaries</h3>
+<p>
+    <strong>For <code>btree</code> dictionaries</strong>: Both <code>cased</code> and <code>uncased</code> options are supported.
 </p>
 <p>
-  Use <code>hash</code> for fields with high uniqueness (high cardinality),
-  for example an 'id' field which is unique in the corpus where the posting list is always of size 1.
+    <strong>For <code>hash</code> dictionaries</strong>: Only <code>cased</code> is supported for string fields. When using <code>hash</code> dictionaries:
 </p>
-<p>
-  In addition, one can specify <code>uncased</code> or <code>cased</code> dictionary for string attributes,
-  default is <code>uncased</code>.
-  This setting is sanity checked against the field <a href="#match">match:casing</a> setting.
-</p>
-<p>
-  In an <code>uncased</code> dictionary,
-  casing is normalized by lowercasing so that 'bear' equals 'Bear' equals 'BEAR'.
-  In a <code>cased</code> dictionary, they will all be different.
-</p>
-<p>
-  Example of a string field with a cased hash dictionary. Note that for string fields with
-  dictionary type hash, the <code>dictionary</code> block must also include <code>cased</code>.
-</p>
+<ul>
+    <li>You <strong>must</strong> set <code>match: cased</code> on the field</li>
+    <li>You <strong>must</strong> include <code>cased</code> in the dictionary block</li>
+</ul>
+
+<pre>
+dictionary {
+  hash    <!-- Specifies hash dictionary type -->
+  cased   <!-- Required with hash for string fields -->
+}
+</pre>
+
+<h3>Example: Case-Sensitive Hash Dictionary</h3>
 <pre>
 field id_str type string {
       indexing:   summary | attribute
-      attribute:  fast-search
-      match:      cased
+      attribute:  fast-search  <!-- Enables dictionary functionality -->
+      match:      cased        <!-- Required for hash dictionaries with strings -->
       rank:       filter
       dictionary {
-        hash
-        cased
+        hash                   <!-- Use hash dictionary type -->
+        cased                  <!-- Required for hash dictionaries with strings -->
       }
 }
 </pre>
