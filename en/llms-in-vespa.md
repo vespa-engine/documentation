@@ -17,15 +17,14 @@ allows these models to access relevant and up-to-date information beyond their
 training in real-time, enabling Vespa's output to be contextually informed. For
 more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.html).
 
-In addition to using LLM services such as OpenAI's ChatGPT and Anthropic's
-Claude, Vespa can run LLMs within a Vespa application. This avoids sending data
-outside of the application and allows running customized models. For more
-information, please see [Running LLMs locally in Vespa](llms-local.html).
+Vespa supports LLMs in two ways:
+
+1. **External LLM services**: Vespa can connect to any external LLM providers that serves an OpenAI-compatible API. The advantage of configuring this in Vespa compared to doing the API call(s) from your client after responses are returned from Vespa is that you eliminate an extra network hop, which means lower latency for end users. The importance of this is amplified if you want to leverage multiple LLM calls for eg. agentic applications or reranking.
+2. [**Local LLMs**](llms-local.html): Vespa can run LLMs within the Vespa application itself. This allows for customized models and avoids sending data outside  the application. This is particularly useful for applications with strict data privacy requirements or those needing specific model configurations.
 
 For a quick start, check out the
 <a href="https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation" data-proofer-ignore>RAG sample app</a>
 which demonstrates using either an external LLM service or a local LLM.
-
 
 ### Setting up LLM clients in services.xml
 
@@ -65,19 +64,19 @@ define a component in your application's
 </services>
 ```
 
+To see the full list of available configuration parameters, refer to the [llm-client config definition file](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-client.def).
+
 This sets up a client component that can be used in a
-[searcher](glossary.html#searcher) or a [document
-processor](glossary.html#document-processor). By default, this particular
-client connects to the OpenAI service, but can be used against any
+[searcher](glossary.html#searcher) or a [document processor](glossary.html#document-processor).
+By default, this particular client connects to the OpenAI service, but can be used against any
 <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI chat completion compatible API</a>
 by changing the `endpoint` configuration parameter.
 
-Vespa assumes that any required API key is sent as an HTTP header,
-`X-LLM-API-KEY`.  However, if you have set up a [secret
-store](https://cloud.vespa.ai/en/security/secret-store.html) in Vespa Cloud, you
-can supply the name of the secret in the `apiKeySecretName`, and Vespa will
-attempt to retrieve the API key from it for convenience. However, any key sent
-in the HTTP header will have precedence over keys found in the secret store.
+Vespa provides several options to configure the API key used by the client.
+
+1. Using the [Vespa Cloud secret store](https://cloud.vespa.ai/en/security/secret-store.html) to store the API key. This is done by setting the `apiKeySecretName` configuration parameter to the name of the secret in the secret store. This is the recommended way for Vespa Cloud users.
+2. Providing the API key in the `X-LLM-API-KEY` HTTP header of the Vespa query. 
+3. It is also possible to configure the API key in a custom component. For example, [this](TODO: link) system-test shows how to retrieve the API key from a local file deployed with your Vespa application. Please note that this is NOT recommended for production use, as it is less secure than using the secret store.
 
 You can set up multiple connections with different settings. For instance, you
 might want to run different LLMs for different tasks. To distinguish between the
@@ -85,11 +84,11 @@ connections, modify the `id` attribute in the component specification. We will
 see below how this is used to control which LLM is used for which task.
 
 Using the `OpenAI` client, you can connect to any OpenAI-compatible API.
-Currently, this is the only client for external services that Vespa provides.
+This includes, but is not limited to [OpenAI](https://platform.openai.com/docs/overview), [Google Gemini](https://ai.google.dev/), [Anthropic](https://www.anthropic.com/api), [Cohere](https://docs.cohere.com/docs/compatibility-api) and [Together.ai](https://docs.together.ai/docs/openai-api-compatibility)
+You can also host your own OpenAI-compatible server using for example [VLLM](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#quickstart-online) or [llama-cpp-server](https://llama-cpp-python.readthedocs.io/en/latest/server/).
 
-Vespa also has the option of running custom LLMs locally. Please refer to
+As a reminder, Vespa also has the option of running custom LLMs locally. Please refer to
 [running LLMs in your application](llms-local.html) for more information.
-
 
 ### Using LLMs
 
@@ -277,13 +276,12 @@ data: {
 }
 ```
 
-
 ### LLM parameters
 
 The LLM service typically has a set of inference parameters that can be set. This can
 be parameters such as:
 
-- `model` - for OpenAI can be any valid model such as `GPT-3.5-turbo` or `GPT-4`
+- `model` - for OpenAI can be any valid model such as `gpt-4o` or `gpt-4o-mini` etc.
 - `temperature` - for setting the model temperature
 - `maxTokens` - for setting the maximum number of tokens to produce
 
@@ -335,16 +333,6 @@ If you are using different LLM services, you can also distinguish between API
 keys sent along with the query by prepending them as well with the
 `propertyPrefix`.
 
-
-### Query profiles
-
-In all the above you have sent parameters along with each query. It is worth
-mentioning that Vespa supports [query profiles](query-profiles.html), which are
-named collections of search parameters. This frees the client from having to
-manage and send a large number of parameters, and enables the request parameters
-for a use case to be changed without having to change the client.
-
-
 ### Retrieval-Augmented Generation (RAG)
 
 Above we used the `LLMSearcher` to call out to LLMs using a pre-specified
@@ -354,6 +342,90 @@ and using the results to generate a response.
 
 Please refer to [RAG in Vespa](llms-rag.html) for more details.
 
+### Structured output
+
+The `OpenAI` client can also be configured to return [structured output](https://platform.openai.com/docs/guides/structured-outputs). This is configured by providing an `llm.json_schema` in the query.
+
+This can be useful for different cases, such as applying moderation of the output or providing the response in different styles (long, short) and languages.
+
+```json
+{
+    "type": "object",
+    "properties": {
+        "answer-short": {
+            "type": "string"
+        },
+        "answer-short-french": {
+            "type": "string",
+            "description": "exact translation of short answer in French language"
+        },
+        "answer-short-eli5": {
+            "type": "string",
+            "description": "explain the answer like I am 5 years old"
+        },
+        "sources": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "documentid": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "snippet": {
+                        "type": "string"
+                    },
+                    "relevance": {
+                        "type": "number"
+                    }
+                },
+                "required": [
+                    "documentid",
+                    "snippet"
+                ]
+            }
+        }
+    },
+    "required": [
+        "answer-short",
+        "sources"
+    ],
+    "additionalProperties": false
+}
+```
+
+The `json_schema` can be passed with the query using the `llm.json_schema` parameter:
+
+```
+$ vespa query \
+    --timeout 60 \
+    --header="X-LLM-API-KEY:<YOUR_API_KEY>" \
+    query="what was the manhattan project?" \
+    hits=5 \
+    searchChain=openai \
+    format=sse \
+    llm.json_schema="{\"type\":\"object\",\"properties\":{\"answer-short\":{\"type\":\"string\"},\"answer-short-french\":{\"type\":\"string\",\"description\":\"exact translation of short answer in French language\"},\"answer-short-eli5\":{\"type\":\"string\",\"description\":\"explain the answer like I am 5 years old\"}},\"required\":[\"answer-short\",\"answer-short-french\",\"answer-short-eli5\"],\"additionalProperties\":false}" \
+    traceLevel=1
+```
+
+Which for example, using `gpt-4o-mini` returns
+```json
+{
+    "answer-short": "The Manhattan Project was a World War II research and development program that produced the first atomic bombs, led by the United States with help from the UK and Canada, overseen by Major General Leslie Groves and physicist Robert Oppenheimer.",
+    "answer-short-french": "Le Projet Manhattan était un programme de recherche et développement de la Seconde Guerre mondiale qui a produit les premières bombes atomiques, dirigé par les États-Unis avec l'aide du Royaume-Uni et du Canada, sous la supervision du général Leslie Groves et du physicien Robert Oppenheimer.",
+    "answer-short-eli5": "The Manhattan Project was a secret and important project during World War II where scientists worked together to make the first big bombs that could make huge explosions, which changed the world."
+}
+```
+
+### Query profiles
+
+In all the above you have sent parameters along with each query. It is worth
+mentioning that Vespa supports [query profiles](query-profiles.html), which are
+named collections of search parameters. This frees the client from having to
+manage and send a large number of parameters, and enables the request parameters
+for a use case to be changed without having to change the client.
 
 ### Creating your own searchers in Java
 
@@ -361,10 +433,7 @@ The above example uses the `LLMSearcher`
 [class](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/ai/vespa/search/llm/LLMSearcher.java).
 You can easily create your own LLM searcher in Java by either specifically
 [injecting](jdisc/injecting-components.html) the connection component, or
-subclassing the `LLMSearcher`. Please refer to [Searcher
-Development](searcher-development.html) or [Document Processor
-Development](document-processing.html) for more information on creating your own
-components.
+subclassing the `LLMSearcher`. Please refer to [Searcher Development](searcher-development.html) or [Document Processor Development](document-processing.html) for more information on creating your own components.
 
 Note that it should not be necessary to create your own components in Java to
 use this functionality.
@@ -378,6 +447,3 @@ Todo
 
 
 -->
-
-
-
