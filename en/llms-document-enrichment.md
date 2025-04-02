@@ -16,12 +16,8 @@ Examples of enrichment tasks include:
 These tasks are defined through prompts, which can be customized for a particular application.
 Generated fields are indexed and stored as normal fields and can be used for searching without additional latency associated with LLM inference.
 
-[Vespa already offers integrations with LLMs](https://docs.vespa.ai/en/llms-in-vespa.html),
-including support for local models that run within Vespa and a client for external OpenAI-compatible APIs.
-
-## Setting up document enrichment components
-
-### Defining generated fields
+# Setting up document enrichment components
+## Defining generated fields
 
 Enrichments are defined in a schema using a [`generate` indexing expression](reference).
 For example the following schema defines two [synthetic fields](https://docs.vespa.ai/en/operations/reindexing.html) with `generate`:
@@ -62,7 +58,26 @@ Indexing statement `input text | generate questions_generator | summary | index`
 3. Store the output of the generator as summary
 4. Index the output of the generator for lexical search
 
-### Configuring field generators
+Example of a document generated with this schema:
+```json
+{
+    "id": "71",
+    "text": "Barley (Hordeum vulgare L.), a member of the grass family, is a  major cereal grain. It was one of the first cultivated grains and is now grown widely. Barley grain is a staple in Tibetan cuisine and was eaten widely by peasants in Medieval Europe. Barley has also been used as animal fodder, as a source of fermentable material for beer and certain distilled beverages, and as a component of various health foods.",
+    "questions": [
+      "What are the major uses of Barley (Hordeum vulgare L.) in different cultures and regions throughout history?",
+      "How has the cultivation and consumption of Barley (Hordeum vulgare L.) evolved over time, from its initial cultivation to its present-day uses?",
+      "What role has Barley (Hordeum vulgare L.) played in traditional Tibetan cuisine and Medieval European peasant diets?"
+    ],
+    "names": [
+      "Barley",
+      "Hordeum vulgare L.",
+      "Tibetan",
+      "Medieval Europe"
+    ]
+}
+```
+
+## Configuring field generators
 
 A schema can contain multiple generated fields that use one or multiple field generators.
 All field generators should be configured in `services.xml`, e.g.
@@ -91,10 +106,9 @@ All field generators should be configured in `services.xml`, e.g.
 </services>
 ```
 
-All field generators must specify `<providerId>` that references a language model component, 
+All field generators must specify `<providerId>` that references a language model client, 
 which is either a local LLM, an OpenAI client or a custom component.
-Language model components specify parameters such as a model and context size.
-Instructions for configuring these components can be found on [LLMs in Vespa documentation page](https://docs.vespa.ai/en/llms-in-vespa.html).
+See [configuring LLM for document enrichment](#configuring-llm-for-document-enrichment) for details.
 
 In addition to the language model, field generators require a prompt.
 The prompt is constructed from three parts:
@@ -153,61 +167,28 @@ Other values `WARN` and `FAIL` log a warning and throw an exception respectively
 
 Overview of all the field generator parameters is available in the [configuration definition file](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/language-model-field-generator.def).
 
-### Configuring local LLM
+## Configuring LLMs
 
-Local LLM configuration is covered in LLMs(https://docs.vespa.ai/en/llms-in-vespa.html),
+Field generators specify `<providerId>` to reference a language model client 
+to be used for generation, which is either a local LLM, an OpenAI client or a custom component.
 
+Configuration details for local LLM and OpenAI client are covered in [local LLM](llms-local.html)
+and [OpenAI client](llms-openai.html) documentation.
+This section focuses on configuration parameters that are important for document enrichment.
 
+Both local LLM and OpenAI client can be configured with different models.
+For efficient scaling of document enrichment, it is recommended to select the smallest 
+model that delivers acceptable performance for the task at hand.
+In general, larger models produce better results but are more expensive and slower.
 
+Document enrichment tasks such as information extraction, summarization, expansion and classification 
+are often less complex than the problem-solving capabilities targeted by larger models.
+These tasks can be accomplished by smaller, cost-efficient models, 
+such as [Microsoft Phi-3.5-mini](https://huggingface.co/microsoft/Phi-3.5-mini-instruct) for a local model 
+or [GPT-4o mini](https://platform.openai.com/docs/models/gpt-4o-mini) for OpenAI API.
 
+Here is an example of a OpenAI client configured with GPT-4o mini model:
 
-
-
-
-
-
-
-Generators specify `providerId` referring to a local LLM or OpenAI client, which are also defined in `services.xml`.
-Example of a local LLM component: 
-
-```xml
-<services version="1.0">
-    ...
-    <container id="container" version="1.0">
-        ...
-        <!-- Local language model -->
-        <component id="llm" class="ai.vespa.llm.clients.LocalLLM">
-            <config name="ai.vespa.llm.clients.llm-local-client">
-                <!-- Specify LLM by id for Vespa Cloud -->
-                <model model-id="phi-3.5-mini-q4"/>-->
-                <!-- Alternative is to use url, which also works outside Vespa Cloud -->
-                <!-- <model url="https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf"/>-->
-                <!-- Number of tokens an LLM can attend in each inference for all parallel request. -->
-                <contextSize>5000</contextSize>
-                <!-- Requests are processed in parallel using continuous batching.
-                Each request will use 5000 / 5 = 1000 context tokens. -->
-                <parallelRequests>5</parallelRequests>
-                <!--Request context size split between prompt and completion tokens: 500 + 500 = 1000 -->
-                <maxPromptTokens>500</maxPromptTokens>
-                <maxTokens>500</maxTokens>
-                <!-- Documents will be set in a queue to wait until one of the parallel requests is done process. -->
-                <maxQueueSize>3</maxQueueSize>
-                <!-- Both enqueue and queue wait has to be set proportional to max queues size 
-                because the last request will need to wait for all previous ones before starting the processing. -->
-                <maxEnqueueWait>100000</maxEnqueueWait>
-                <maxQueueWait>100000</maxQueueWait>
-                <!-- Context overflow leads to hallucinations, better to skip generation than generating nonsense. -->
-                <contextOverflowPolicy>DISCARD</contextOverflowPolicy>
-            </config>
-        </component>
-        ...
-    </container>
-    ...
-</services>
-```
-See [local LLM parameters documentation](https://docs.vespa.ai/en/llms-in-vespa.html#llm-parameters) for configuration details.
-Example of an OpenAI client component.
- 
 ```xml
 <container version="1.0">
     ...
@@ -226,261 +207,129 @@ Example of an OpenAI client component.
 </services>
 ```
 
-Note that OpenAI client specifies API key secret from a 
-[secret store](https://cloud.vespa.ai/en/security/secret-store.html) in Vespa Cloud.
-See [OpenAI client documentation]() for how to provide secrets outside Vespa Cloud.
+For OpenAI client, model selection influences API cost and latency.
 
-Prompts for an LLM are constructed by combining an input of an indexing statement with a prompt template of a generator.
-For example, consider the following indexing statement for the `questions` field:
-
-```
-input text | generate questions_generator | summary | index
-```
-
-In this case, value of the document field `text` will replace the `{input}` placeholder in the prompt template of `questions_generator`:
+In addition to the model, local LLM client has several other parameters 
+that are important for performance of document enrichment.
+The following configuration is a good starting point:
 
 ```xml
-<promptTemplate>Generate 3 questions relevant for this text: {input}</promptTemplate>
+<services version="1.0">
+    ...
+    <container id="container" version="1.0">
+        ...
+       <component id="llm" class="ai.vespa.llm.clients.LocalLLM">
+            <config name="ai.vespa.llm.clients.llm-local-client">
+                <!-- For Vespa Cloud, specify model by model-id to speed-up deployment -->
+                <model model-id="phi-3.5-mini-q4"/>
+
+                <!-- For self-hosted Vespa and Vespa Cloud, specify model by URL -->
+                <!-- <model url="https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf"/>-->
+                
+                <!-- Number of tokens a LLM can do inference with.
+                This includes prompt and completion tokens for all parallel request.-->
+                <contextSize>5000</contextSize>
+                
+                <!-- Requests are processed in parallel using continuous batching.
+                Each request is allocated 5000 / 5 = 1000 context tokens. -->
+                <parallelRequests>5</parallelRequests>
+                
+                <!--Request context size split between prompt and completion tokens: 500 + 500 = 1000 -->
+                <maxPromptTokens>500</maxPromptTokens>
+                <maxTokens>500</maxTokens>
+                
+                <!-- A waiting line for requests to start processing. 
+                It is reasonable to set it to <= parallelRequests -->
+                <maxQueueSize>3</maxQueueSize>
+                
+                <!-- How long a request can wait until added to the queue, otherwise timeout. 
+                On average, Ca. = number of milliseconds it takes to process all parallel requests. -->
+                <maxEnqueueWait>60000</maxEnqueueWait>
+                
+                <!-- How long a request can wait in the queue until starting processing
+                In the worst case, ca. = number of milliseconds it takes to process all requests in the queue. -->
+                <maxQueueWait>60000</maxQueueWait>
+                
+                <!-- Context overflow occurs when a request uses more context tokens than allocated in contextSize / parallelRequests. 
+                This should not happen if contextSize, parallelRequests, maxPromptTokens, maxTokens are configured correctly.
+                In this case, we want the request to fail so we know if some configuration is wrong.-->
+                <contextOverflowPolicy>FAIL</contextOverflowPolicy>
+            </config>
+        </component>
+        ...
+    </container>
+    ...
+</services>
 ```
 
-Generated fields `questions` and `names` will be indexed and stored as part of the document and can be used for matching and ranking, e.g.
-```
-rank-profile with_question_and_names {
-    first-phase {
-        expression: 0.4 * nativeRank(text) + 0.1 * nativeRank(questions) + 0.5 * nativeRank(names)
-    }
-}
-```
+There are three important aspects of this configuration in addition to the model used.
 
-Example of a retrieved document:
+1. `model`, `contextSize` and `parallelRequests` determine compute resources necessary to run the model.
+2. `contextSize`, `parallelRequests`, `maxPromptTokens` and `maxTokens` 
+   should be configured to avoid context overflow - a situation when context size 
+   is too small to process multiple parallel requests with the given number of prompt and completion tokens.
+3. `maxQueueSize`, `maxEnqueueWait` and `maxQueueWait` are related to managing the queue 
+   used for storing and feeding parallel requests into the LLM runtime.
 
-```json
-{
-    "id": "71",
-    "text": "Barley (Hordeum vulgare L.), a member of the grass family, is a  major cereal grain. It was one of the first cultivated grains and is now grown widely. Barley grain is a staple in Tibetan cuisine and was eaten widely by peasants in Medieval Europe. Barley has also been used as animal fodder, as a source of fermentable material for beer and certain distilled beverages, and as a component of various health foods.",
-    "questions": [
-      "What are the major uses of Barley (Hordeum vulgare L.) in different cultures and regions throughout history?",
-      "How has the cultivation and consumption of Barley (Hordeum vulgare L.) evolved over time, from its initial cultivation to its present-day uses?",
-      "What role has Barley (Hordeum vulgare L.) played in traditional Tibetan cuisine and Medieval European peasant diets?"
-    ],
-    "names": [
-      "Barley",
-      "Hordeum vulgare L.",
-      "Tibetan",
-      "Medieval Europe"
-    ]
-}
-```
+[Local LLMs documentation](llms-local.html) explains how to configure 
+`model`, `contextSize` and `parallelRequests` with respect to the model and compute resources used.
+Memory usage (RAM or GPU VRAM) is especially important to considered when configuring these parameters. 
 
-A complete application that this example is based on is is available in our [sample-apps repository]().
-You can clone and run it in Vespa Cloud or locally.
+To avoid context overflow, set `contextSize`, `parallelRequests`, `maxPromptTokens` and `maxTokens` 
+parameters so that `contextSize / parallelRequests >= maxPromptTokens + maxTokens`.
+Also consider that larger `contextSize` takes longer to process.
 
-# 
+Finally, the queue related parameters are used to balance latency with throughput.
+Values for these parameters heavily depends on underlying compute resources.
+Local LLM configuration presented above is optimized for CPU nodes with 16 cores and 32GB RAM 
+as well as GPU nodes with NVIDIA T4 GPUs 16GB VRAM.
 
-Large Language Models (LLMs) are capable of many text processing tasks including 
-information extraction, summarization, question answering, translation, sentiment analysis and etc.
-Vespa makes it easy to use LLMs at scale with [generate](reference/indexing-language-reference.html#generate) indexing expression.
-During [feeding](reads-and-writes.html#feed-flow) it generates text values for synthetic fields based on text values of other fields.
-Consider the following schema as an example:
+## Configuring compute resources
 
-```
-schema passage {
-    document passage {
-        field id type string {
-            indexing: summary | attribute
-        }
-    
-        field text type string {
-            indexing: summary | index
-            index: enable-bm25
-        }
-    }
-    
-    field names type array<string> {
-        indexing: input text | generate names_extractor | split "\n" | index | summary
-        index: enable-bm25
-    }
-    
-    field text_norwegian type string {
-        indexing: input text | generate norwegian_translator | index | summary
-        index: enable-bm25
-    }
-}
-```
+Configuration of compute resources applies only to local LLMs since OpenAI client uses remote APIs.
+In practice, GPU is highly recommended for running local LLMs, providing order of magnitude speedup compared to CPU.
 
-This schema includes two synthetic fields, `names` and `text_norwegian`, generated from `text` field during feeding.
-Generators `names_extractor` and `norwegian_translator` are ids for text generator components, 
-which use an LLM for named entity recognition and translation.
-These components are specified in `services.xml` as follows:
-
+For Vespa Cloud a reasonable starting configuration is as follows:
 ```xml
-<container id="container" version="1.0">
+<container version="1.0">
     ...
-    <secrets>
-        <openai-api-key vault="sample-apps" name="openai-dev"/>
-    </secrets>
-
-    <component id="openai" class="ai.vespa.llm.clients.OpenAI">
-        <config name = "ai.vespa.llm.clients.llm-client">
-            <apiKeySecretName>openai-api-key</apiKeySecretName>
-            <model>gpt-4o-mini</model>
-        </config>
-    </component>
-    
-    <component id="names_extractor" class="ai.vespa.llm.generation.LanguageModelTextGenerator">
-        <config name="ai.vespa.llm.generation.language-model-text-generator">
-            <providerId>openai</providerId>
-            <promptTemplateFile>files/names_extractor_prompt.txt</promptTemplateFile>
-        </config>
-    </component>
-
-    <component id="norwegian_translator" class="ai.vespa.llm.generation.LanguageModelTextGenerator">
-        <config name="ai.vespa.llm.generation.language-model-text-generator">
-            <providerId>openai</providerId>
-            <promptTemplateFile>files/norwegian_translator_prompt.txt</promptTemplateFile>
-        </config>
-    </component>
+    <container id="container" version="1.0">
+        ...
+        <nodes count="1" deploy:environment="dev">
+            <resources vcpu="8.0" memory="32Gb" architecture="x86_64" storage-type="local" disk="225Gb" >
+                <gpu count="1" memory="16.0Gb" type="T4"/>
+            </resources>
+        </nodes>
+        ...
+    </container>
     ...
-</container>
+</services>
 ```
 
-Both `names_extractor` and `norwegian_translator` specify `openai` as `providerId`, 
-referencing `OpenAI` client component configured with `gpt-4o-mini` model.
-See [LLM Client config definition](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-client.def) for other parameters.
+This will provision a single node with NVIDIA T4 GPUs 16GB VRAM.
+Local model performance scales linearly with the number of nodes, e.g. 
+8 GPU nodes * 1.5 gen/sec per node = 12 docs/sec.
 
-Prompt templates are specified in separate files, e.g. `files/names_extractor_prompt.txt`.
-```
-Your task is to extract names of people, locations and events from text.
-Output should include a list of names, one name per line.
-Nothing else should be in the output.
+## Configuring feeding
 
-Example1:
-Input: 
-Trondheim, known as Nidaros in ancient times, was founded by the Viking King Olav Tryggvason in the year 997.
-Output:
-Trondheim
-Nidaros
-Viking King Olav Tryggvason
-997
+Generated fields introduce considerable latency during feeding.
+High number of parallel requests can lead to timeouts.
+To avoid this, it is recommended to reduce number of connections during feeding.
+A reasonable starting point is to use 1 connection per CPU node or 3 connections per GPU node.
+Example for one GPU node:
 
-Example 2:
-Text: The city quickly grew in prominence and became a bustling trading hub in the following centuries.
-Output:
-
-Here is the input text:
-{input}
+```sh
+vespa feed data/feed_100.json --conections 3
 ```
 
-The `{input}` placeholder is replaced with the value of the `text` field as specified by the indexing statement:
+# Structured output
 
-```
-input text | generate names_extractor
-```
-
-The prompt can be constructed from several fields by concatenating them into one string, e.g.
-
-```
-input "Translate from " . language . " to Norwegian: " . text | generate translator
-```
-
-Prompt templates can be also specified in `service.xml` with `<promptTemplate>` tag instead of `<promptTemplateFile>`.
-If neither `<promptTemplate>` nor `<promptTemplateFile>` are provided, the default prompt is set to `{input}`.
-See [LanguageModelTextGenerator](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/language-model-text-generator.def) for other parameters.
-
-## Generating string arrays
-
-Input for `generate` expression can either have type `string` or `array<string>`.
-When processing a `string` input, `generate` produces a `string` output.
-
-With `array<string>` input, generate produces `array<string>` output.
-For each `string` in the array it makes a separate call to a text generator component and underlying LLM.
-
-For some use cases, e.g. information extraction, it is useful to generate multiple strings from one string input.
-It can be achieved by a combining a prompt that asks to produce a list as output with [split indexing expression](), which converts a `string` to `array<string>`.
-
-Example indexing statement:
-```
-input text | generate names_extractor | split "\n" | for_each { trim } | index | summary
-```
-
-Example prompt:
-```
-Output should be a list of names, one name per line.
-Nothing else should be in the output.
-```
-
-It might also help to include examples as part of the prompt, e.g.
-```
-Example 1
-Input:  Trondheim, known as Nidaros in ancient times, was founded by the Viking King Olav Tryggvason in the year 997.
-Output:
-Trondheim
-Nidaros
-Olav Tryggvason
-
-Example 2:
-Input: The city quickly grew in prominence and became a bustling trading hub in the following centuries.
-Output:
-```
-
-## Support for local LLMs
-
-Vespa supports using [local LLMs](llms-local.md) with `generate`.
-In this case, `providerId` in `LanguageModelTextGenerator` component are set to the `id` of the `LocalLLM` component
-specified in `services.xml` as follows:
-```
-<container>
-    ...
-    <component id="local_llm" class="ai.vespa.llm.clients.LocalLLM">
-        <config name="ai.vespa.llm.clients.llm-local-client">
-            <model model-id="phi-3.5-mini-q4"/>
-        </config>
-    </component>
-    
-    <component id="names_extractor" class="ai.vespa.llm.generation.LanguageModelTextGenerator">
-        <config name="ai.vespa.llm.generation.language-model-text-generator">
-            <providerId>local_llm</providerId>
-            <promptTemplateFile>files/names_extractor_prompt.txt</promptTemplateFile>
-        </config>
-    </component>
-    ...
-</container>
-```
-
-Local LLMs run in [container nodes](https://docs.vespa.ai/en/jdisc/) and require considerable computational resources 
-depending on the model, context size and number of parallel requests.
-GPU is often needed to achieve acceptable performance for practical use cases.
-Test your application to ensure that the node size fits your local LLM configuration and workload.
-See [local LLMs documentation](llms-local.md) and [LLMs in Vespa blog post](https://blog.vespa.ai/vespa-and-llms/#local-llm-inference) 
-for details on node sizing and configuration of local LLMs.
-
-The `model` configuration parameter in the `LocalLLM` component can be either set to a known `model-id` for Vespa Cloud, 
-a `url` or a `path` to the model inside the application package.
-Usually LLM files are too large to be included in the application package, so the `model-id` or `url` attribute are used.
-However, for initial testing we recommend using small LLMs, e.g.
-[Llama-160M-Chat-v1](https://huggingface.co/afrideva/Llama-160M-Chat-v1-GGUF).
-Small LLMs can be part of an application package, avoiding extra time it takes to download larger models during deployment.
-In addition, they are fast enough without GPU, reducing time it takes to provision necessary compute resources.
-After initial testing, replace it with a larger LLM and add a GPU to your container nodes, e.g.
-
-```xml
-<container>
-    ...
-    <nodes count="1">
-        <resources vcpu="4.0" memory="16Gb" architecture="x86_64" storage-type="local" disk="125Gb">
-            <gpu count="1" memory="16.0Gb"/>
-        </resources>
-    </nodes>
-    ...
-</container>
-```
-
-## Custom text generators
+# Custom field generators
 
 Application developers can implement custom Java components to be used with `generate` expression.
 This enables arbitrary text processing logic and integrations as part of the indexing pipeline,
 as an alternative to [custom document processing components](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing).
-Custom components compatible with `generate` implement `com.yahoo.language.process.TextGenerator` interface with `generate` method, e.g.
+Custom components compatible with `generate` implement `com.yahoo.language.process.FieldGenerator` interface with `generate` method, e.g.
 
 ```java
 public class MockTextGenerator implements TextGenerator {
@@ -523,17 +372,3 @@ Components are configured in `services.xml`, e.g.:
 </container>
 ```
 
-See the [Generative Feeding sample app]() for complete example of an application with a custom text generator.
-
-## Performance and cost considerations
-
-In most cases, `generate` with LLM will be the bottleneck in the feeding pipeline, 
-significantly reducing feeding throughput, increasing latency and cost.
-Each `generate` statement in a schema will make one (`string` input) or several (`array<string>` input) calls to LLM for each document.
-This can lead to a very large number of calls, so it is important to be aware of the performance and cost implications.
-
-With local LLMs, model configuration and use of GPU have a major impact on performance and cost.
-See [local LLMs](llms-local.md) for more details.
-
-When using remote providers, e.g. OpenAI, consider [costs](https://openai.com/api/pricing/) 
-and [rate limits](https://platform.openai.com/docs/guides/rate-limits) for your subscription tier and model.
