@@ -17,84 +17,31 @@ allows these models to access relevant and up-to-date information beyond their
 training in real-time, enabling Vespa's output to be contextually informed. For
 more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.html).
 
+The advantage of setting up a client connection to an LLM from within your Vespa application compared to doing the API call(s) from your client after responses are returned from Vespa is that you eliminate an extra network hop, which means lower latency for end users.
+The importance of this is amplified if you want to leverage multiple LLM calls for eg. agentic applications or reranking.
+
 Vespa supports LLMs in two ways:
 
-1. **External LLM services**: Vespa can connect to any external LLM providers that serves an OpenAI-compatible API. The advantage of configuring this in Vespa compared to doing the API call(s) from your client after responses are returned from Vespa is that you eliminate an extra network hop, which means lower latency for end users. The importance of this is amplified if you want to leverage multiple LLM calls for eg. agentic applications or reranking.
+1. [**External LLMs**](llms-external.html): Vespa can connect to any external LLM providers that serves an <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI-compatible API</a>.
+.
 2. [**Local LLMs**](llms-local.html): Vespa can run LLMs within the Vespa application itself. This allows for customized models and avoids sending data outside  the application. This is particularly useful for applications with strict data privacy requirements or those needing specific model configurations.
+
+This document will focus on features that are common to both external and local LLMs. For more information on configuration details for each type, please refer to the respective sections.
 
 For a quick start, check out the
 <a href="https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation" data-proofer-ignore>RAG sample app</a>
-which demonstrates using either an external LLM service or a local LLM.
-
-### Setting up LLM clients in services.xml
-
-{% include note.html content='This feature is available in Vespa versions >= 8.327' %}
-
-Vespa distinguishes between the clients used to connect to LLMs and how these
-clients are used. You can, for instance, set up a single LLM connection to a
-<a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI-compatible API</a>
-and use this connection for both query understanding or retrieval-augmented
-generation (RAG).
-
-![LLM/RAG searcher](../assets/img/llm-rag-searcher.svg)
-
-To set up a connection to an LLM service such as OpenAI's ChatGPT, you need to
-define a component in your application's
-[services.xml](reference/services.html):
-
-```
-<services version="1.0">
-  <container id="default" version="1.0">
-
-    ...
-
-    <component id="openai" class="ai.vespa.llm.clients.OpenAI">
-
-      <!-- Optional configuration: -->
-      <config name="ai.vespa.llm.clients.llm-client">
-        <apiKeySecretName> ... </apiKeySecretName>
-        <endpoint> ... </endpoint>
-      </config>
-
-    </component>
-
-    ...
-
-  </container>
-</services>
-```
-
-To see the full list of available configuration parameters, refer to the [llm-client config definition file](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-client.def).
-
-This sets up a client component that can be used in a
-[searcher](glossary.html#searcher) or a [document processor](glossary.html#document-processor).
-By default, this particular client connects to the OpenAI service, but can be used against any
-<a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI chat completion compatible API</a>
-by changing the `endpoint` configuration parameter.
-
-### API key configuration
-
-Vespa provides several options to configure the API key used by the client.
-
-1. Using the [Vespa Cloud secret store](https://cloud.vespa.ai/en/security/secret-store.html) to store the API key. This is done by setting the `apiKeySecretName` configuration parameter to the name of the secret in the secret store. This is the recommended way for Vespa Cloud users.
-2. Providing the API key in the `X-LLM-API-KEY` HTTP header of the Vespa query. 
-3. It is also possible to configure the API key in a custom component. For example, [this](TODO: link) system-test shows how to retrieve the API key from a local file deployed with your Vespa application. Please note that this is NOT recommended for production use, as it is less secure than using the secret store, but it can be modified to suit your needs.
-
-You can set up multiple connections with different settings. For instance, you
-might want to run different LLMs for different tasks. To distinguish between the
-connections, modify the `id` attribute in the component specification. We will
-see below how this is used to control which LLM is used for which task.
-
-Using the `OpenAI` client, you can connect to any OpenAI-compatible API.
-This includes, but is not limited to [OpenAI](https://platform.openai.com/docs/overview), [Google Gemini](https://ai.google.dev/), [Anthropic](https://www.anthropic.com/api), [Cohere](https://docs.cohere.com/docs/compatibility-api) and [Together.ai](https://docs.together.ai/docs/openai-api-compatibility)
-You can also host your own OpenAI-compatible server using for example [VLLM](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#quickstart-online) or [llama-cpp-server](https://llama-cpp-python.readthedocs.io/en/latest/server/).
-
-As a reminder, Vespa also has the option of running custom LLMs locally. Please refer to
-[running LLMs in your application](llms-local.html) for more information.
+which demonstrates setting up Vespa for RAG, using either an external LLM service or a local LLM.
 
 ### Using LLMs
 
-After setting up the client connections above, you can use them for various
+{% include note.html content='This feature is available in Vespa versions >= 8.327' %}
+
+Vespa distinguishes between the clients used to connect to LLMs and components that uses these
+clients. You can, for instance, set up a single client connection to an LLM, and use this connection for both [document enrichment](TODO) and retrieval-augmented generation (RAG).
+
+![LLM/RAG searcher](../assets/img/llm-rag-searcher.svg)
+
+After adding a client connection to your `services.xml`, you can use the same client for various
 tasks such as retrieval-augmented generation. To do this, you need to set up the
 searchers or document processors that will use them. An example of a simple
 searcher that uses the client component is the `LLMSearcher`, which can be set
@@ -287,7 +234,9 @@ be parameters such as:
 - `temperature` - for setting the model temperature
 - `maxTokens` - for setting the maximum number of tokens to produce
 
-To set these, you pass these along with the query:
+Note that these parameters are common to both [Local LLMs](/en/llms-local.html) and [External LLMs](/en/llms-external.html), but each of them also supports additional inference parameters. See the respective sections for more details on these.
+
+To provide inference parameters, you pass these along with the query:
 
 ```
 $ vespa query \
@@ -419,13 +368,3 @@ subclassing the `LLMSearcher`. Please refer to [Searcher Development](searcher-d
 
 Note that it should not be necessary to create your own components in Java to
 use this functionality.
-
-
-<!--
-
-### Query understanding using LLMs
-
-Todo
-
-
--->
