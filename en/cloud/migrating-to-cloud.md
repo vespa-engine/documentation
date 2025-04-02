@@ -177,7 +177,7 @@ The link will be `https://console.vespa-cloud.com/tenant/mytenant/application/my
 
 ![dev view](/assets/img/free-trial.png)
 
-Refer to [vespa8 release notes](https://cloud.vespa.ai/en/vespa8-release-notes) for troubleshooting
+Refer to [vespa8 release notes](/en/vespa8-release-notes.html) for troubleshooting
 in case the deployments fails, based on a Vespa 7 (or earlier) version.
 
 
