@@ -1,12 +1,12 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: "Select Reference"
+title: "Select Query Reference"
 ---
 
 
-This document describes what the `SELECT` parameter is and gives a few examples on how to use it. Refer to the [Query API](../query-api.html) for how to write POST queries.
+This document describes what the `select` parameter is and gives a few examples on how to use it. Refer to the [Query API](../query-api.html) for how to execute queries with POST.
 
-The parameter is in JSON, and can be used with POST queries. The `SELECT`-parameter is equivalent with YQL, and can be used instead, but not together. Nor can it be used together with the `QUERY`-parameter.
+The query has JSON syntax, and can be used with queries that are executed with HTTP POST. The `select` parameter is equivalent with YQL, and can be used instead of, but not together with YQL. Nor can it be used together with the `query` parameter.
 
 ## Structure
 
@@ -18,9 +18,30 @@ The parameter is in JSON, and can be used with POST queries. The `SELECT`-parame
 }
 ```
 
+Example query searching for the term 'country' in the field 'title':
+
+```
+{
+  'select': {
+    'where': {
+      'contains': ['title', 'country']
+    }
+  }
+}
+```
+
+This query can be executed with `curl`:
+
+```
+curl -H "Content-Type: application/json" \
+    --data "{ 'select': { 'where': { 'contains': ['default', 'country'] } } }" \
+    http://localhost:8080/search/
+```
+
+
 ### Where
 
-In difference from the sql-like syntax in [YQL](../query-language.html), the *where* queries is written in a tree syntax. By combining YQLs functions and arguments, queries equivalent with YQL can be written in JSON.
+Unlike the sql-like syntax in [YQL](../query-language.html), the *where* queries are written in a tree syntax. By combining YQLs functions and arguments, queries equivalent with YQL can be written in JSON.
 
 #### Formal structure
 
@@ -44,14 +65,14 @@ FUNCTION : [
 ]
 ```
 
-YQL is a regular language and is parsed into a query-tree when parsed in Vespa. That tree can also be built
-with the `WHERE`-parameter in JSON. 
+YQL is a regular language and is parsed into a query tree when parsed in Vespa. That tree can also be built
+with the `where` parameter in JSON.
 
-Let's take a look at this yql: `select * from sources * where default contains foo and rank(a contains "A", b contains "B")`, which will create the following query-tree:
+Let's take a look at this yql: `select * from sources * where default contains foo and rank(a contains "A", b contains "B")`, which will create the following query tree:
 
 <img src="/assets/img/querytree.svg" width="737px" height="auto" alt="Example query tree" />
 
-The tree above can be written with the where-parameter, like this:
+The tree above can be written with the 'where' parameter, like this:
 
 ```
 {
@@ -64,13 +85,13 @@ The tree above can be written with the where-parameter, like this:
   ]
 }
 ```
-Which is equivalent with the YQL.
+which is equivalent with the YQL.
 
 
 
 ### Grouping
 
-One or more [grouping statements](../grouping.html), can be set as a JSON array in the `grouping` field.
+One or more [grouping statements](../grouping.html) can be set as a JSON array in the `grouping` field.
 Each array item is a grouping statement represented as JSON where
 - Each grouping function is represented by a JSON object where the name of the function is the field
   name and the value is the function content.
@@ -171,7 +192,7 @@ YQL: `where date >= 10`.
 
 Format of this in JSON:
 
-*Introducing the range-parameter:*
+*Introducing the range parameter:*
 
 ```
 "range" : [
@@ -208,7 +229,7 @@ Format of this in JSON:
 
 
 ##### OR
-YQL: `where title contains 'a' or title contains "b"`.
+YQL: `where title contains 'a' or title contains 'b'`.
 
 Format of this in JSON:
 
@@ -223,7 +244,7 @@ Format of this in JSON:
 
 
 ##### AND
-YQL: `where title contains 'a' and title contains "b"`.
+YQL: `where title contains 'a' and title contains 'b'`.
 
 Format of this in JSON:
 
@@ -238,7 +259,7 @@ Format of this in JSON:
 
 
 ##### AND NOT
-YQL: `where title contains "a" and !(title contains "b")`.
+YQL: `where title contains 'a' and !(title contains 'b')`.
 
 Format of this in JSON:
 
@@ -300,9 +321,7 @@ Format of this in JSON:
 
 ```
 "where" : {
-  "contains" : [ 
-    "phrase" : ["st", "louis", "blues"]
-  ]
+  "contains" : [ "text", { "phrase" : ["st", "louis", "blues"] } ]
 }
 ```
 
