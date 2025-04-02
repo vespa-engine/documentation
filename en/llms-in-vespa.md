@@ -346,9 +346,10 @@ Please refer to [RAG in Vespa](llms-rag.html) for more details.
 
 ### Structured output
 
-The `OpenAI` client can also be configured to return [structured output](https://platform.openai.com/docs/guides/structured-outputs). This is configured by providing an `llm.json_schema` in the query.
+Both the `OpenAI` and  `LocalLLM` clients in Vespa can also be configured to return [structured output](https://platform.openai.com/docs/guides/structured-outputs). This is done by providing an `llm.json_schema` in the query. (Assuming you are using the `LLMSearcher` or `RAGSearcher` with `propertyPrefix=llm`).
 
-This can be useful for different cases, such as applying moderation of the output or providing the response in different styles (long, short) and languages.
+This can be useful for different use cases.
+Examples include applying moderation of the output or providing the response in different styles and/or languages.
 
 ```json
 {
@@ -364,35 +365,12 @@ This can be useful for different cases, such as applying moderation of the outpu
         "answer-short-eli5": {
             "type": "string",
             "description": "explain the answer like I am 5 years old"
-        },
-        "sources": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "documentid": {
-                        "type": "string"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "snippet": {
-                        "type": "string"
-                    },
-                    "relevance": {
-                        "type": "number"
-                    }
-                },
-                "required": [
-                    "documentid",
-                    "snippet"
-                ]
-            }
         }
     },
     "required": [
         "answer-short",
-        "sources"
+        "answer-short-french",
+        "answer-short-eli5"
     ],
     "additionalProperties": false
 }
@@ -420,6 +398,8 @@ Which for example, using `gpt-4o-mini` returns
     "answer-short-eli5": "The Manhattan Project was a secret and important project during World War II where scientists worked together to make the first big bombs that could make huge explosions, which changed the world."
 }
 ```
+
+This can also leveraged for automated [Document Enrichment](TODO) during ingestion. With this approach, the `json_schema` is automatically generated based on the Vespa schema (and your prompt).
 
 ### Query profiles
 
