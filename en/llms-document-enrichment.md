@@ -18,9 +18,13 @@ These tasks are defined through prompts, which can be customized for a particula
 Generated fields are indexed and stored as normal fields and can be used for searching without additional latency associated with LLM inference.
 
 ## Setting up document enrichment components
+
+This section provides guidelines for configuring document enrichment, using the
+[LLM document enrichment sample app](https://github.com/vespa-engine/sample-apps/tree/master/llm-document-enrichment) as an example.
+
 ### Defining generated fields
 
-Enrichments are defined in a schema using a [`generate` indexing expression](reference).
+Enrichments are defined in a schema using a [generate indexing expression](reference/indexing-language-reference.html#generate).
 For example the following schema defines two [synthetic fields](https://docs.vespa.ai/en/operations/reindexing.html) with `generate`:
 
 ```
@@ -304,7 +308,7 @@ A reasonable starting point is to use three connections per GPU node and one con
 Example for one GPU node:
 
 ```sh
-vespa feed data.json --conections 3
+vespa feed data.json --connections 3
 ```
 
 ## Structured output
