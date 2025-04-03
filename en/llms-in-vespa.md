@@ -20,11 +20,12 @@ more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.ht
 The advantage of setting up a client connection to an LLM from within your Vespa application compared to doing the API call(s) from your client after responses are returned from Vespa is that you eliminate an extra network hop, which means lower latency for end users.
 The importance of this is amplified if you want to leverage multiple LLM calls for eg. agentic applications or reranking.
 
-Vespa supports LLMs in two ways:
+Vespa supports LLMs in three ways:
 
 1. [**External LLMs**](llms-external.html): Vespa can connect to any external LLM providers that serves an <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI-compatible API</a>.
 .
 2. [**Local LLMs**](llms-local.html): Vespa can run LLMs within the Vespa application itself. This allows for customized models and avoids sending data outside  the application. This is particularly useful for applications with strict data privacy requirements or those needing specific model configurations.
+3. [**Custom Language Models**](#custom-language-model-components): Vespa can be extended to support any language model, including those not based on OpenAI's API. This allows for flexibility in integrating various LLMs into Vespa applications.
 
 This document will focus on features that are common to both external and local LLMs. For more information on configuration details for each type, please refer to the respective sections.
 
@@ -357,6 +358,70 @@ mentioning that Vespa supports [query profiles](query-profiles.html), which are
 named collections of search parameters. This frees the client from having to
 manage and send a large number of parameters, and enables the request parameters
 for a use case to be changed without having to change the client.
+
+### Custom language model components
+
+Vespa also allows you to create your own language model components. This is useful in cases where you want to use a language model that is not [supported](https://docs.vespa.ai/en/llms-local.html#valid-llm-models) as local LLM through [llama.cpp](https://github.com/ggml-org/llama.cpp), or if you want to use an external LLM service that is incompatible with the OpenAI API.
+
+To create your own language model component, you need to implement the `ai.vespa.llm.LanguageModel` interface.
+Minimal example shown below:
+
+```java
+// Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+package ai.vespa.test;
+
+import ai.vespa.llm.InferenceParameters;
+import ai.vespa.llm.completion.Completion;
+import ai.vespa.llm.completion.Prompt;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
+public class MockLanguageModel implements ai.vespa.llm.LanguageModel {
+    private final MockLanguageModelConfig config;
+
+    public MockLanguageModel(MockLanguageModelConfig config) {
+        this.config = config;
+    }
+
+    @Override
+    public List<Completion> complete(Prompt prompt, InferenceParameters params) {
+        var stringBuilder = new StringBuilder();
+
+        for (int i = 0; i < config.repetitions(); i++) {
+            stringBuilder.append(prompt.asString());
+            
+            if (i < config.repetitions() - 1) {
+                stringBuilder.append(" ");
+            }
+        }
+
+        return List.of(Completion.from(stringBuilder.toString().trim()));
+    }
+
+    @Override
+    public CompletableFuture<Completion.FinishReason> completeAsync(Prompt prompt,
+                                                                    InferenceParameters params,
+                                                                    Consumer<Completion> consumer) {
+        throw new UnsupportedOperationException();
+    }
+}
+```
+
+You can also create a [config definition](https://docs.vespa.ai/en/configuring-components.html#config-definition) that will make your component configurable through the `services.xml` file.
+
+Example of a minimal config definition:
+
+```txt
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+namespace=ai.vespa.test
+package=ai.vespa.test
+
+repetitions int default=1
+```
+
+See also [developer guide](developer-guide.html) for more information on how to create your own components.
 
 ### Creating your own searchers in Java
 
