@@ -3,7 +3,7 @@
 title: "Document enrichment with LLMs"
 ---
 
-Document enrichment enables automatic generation of document field values using large language models (LLMS) or custom code during feeding.
+Document enrichment enables automatic generation of document field values using large language models (LLMs) or custom code during feeding.
 It can be used to transform raw text into a more structured representation or expand it with additional contextual information.
 Examples of enrichment tasks include:
 
@@ -12,12 +12,13 @@ Examples of enrichment tasks include:
 - Generation of relevant keywords, queries, and questions to improve search recall and search suggestions
 - Anonymization to remove personally identifiable information (PII) and reduction of bias in search results
 - Translation of content for multilingual search
+- LLM chunking
 
 These tasks are defined through prompts, which can be customized for a particular application.
 Generated fields are indexed and stored as normal fields and can be used for searching without additional latency associated with LLM inference.
 
-# Setting up document enrichment components
-## Defining generated fields
+## Setting up document enrichment components
+### Defining generated fields
 
 Enrichments are defined in a schema using a [`generate` indexing expression](reference).
 For example the following schema defines two [synthetic fields](https://docs.vespa.ai/en/operations/reindexing.html) with `generate`:
@@ -77,10 +78,10 @@ Example of a document generated with this schema:
 }
 ```
 
-## Configuring field generators
+### Configuring field generators
 
 A schema can contain multiple generated fields that use one or multiple field generators.
-All field generators should be configured in `services.xml`, e.g.
+All used field generators should be configured in `services.xml`, e.g.
 
 ```xml
 <services version="1.0">
@@ -108,14 +109,13 @@ All field generators should be configured in `services.xml`, e.g.
 
 All field generators must specify `<providerId>` that references a language model client, 
 which is either a local LLM, an OpenAI client or a custom component.
-See [configuring LLM for document enrichment](#configuring-llm-for-document-enrichment) for details.
 
 In addition to the language model, field generators require a prompt.
-The prompt is constructed from three parts:
+Prompts are constructed from three parts:
 
-1. Prompt template, which is either specified inline inside `<promptTemplate>` or in a separate file with the path in `<promptTemplateFile>` tags.
-2. Input from the indexing statement, e.g. `input text`.
-3. Output type which is inferred automatically from the type of the field being generated.
+1. Prompt template, specified either inline inside `<promptTemplate>` or in a file within application package with the path in `<promptTemplateFile>`.
+2. Input from the indexing statement, e.g. `input text` where `text` is a document field name.
+3. Output type of the field being generated.
 
 If neither `<promptTemplate>` nor `<promptTemplateFile>` are provided, the default prompt is set to the input part.
 When both are provided, `<promptTemplateFile>` has precedence.
@@ -127,37 +127,19 @@ It is possible to combine several fields into one input by concatenating them in
 input "title: " . title . " text: " . text | generate names_extractor | summary | index
 ```
 
-A prompt template might also contain a `{jsonSchema}` placeholder which will be replaced with a JSON schema based on the type of the field being generated.
-For example, JSON schema generated for `field questions type array<string>` in document `passage` is as follows:
-
-```json
-{
-    "type": "object",
-    "properties": {
-        "passage.questions": {
-            "type": "array",
-            "items": {
-                "type": "string"
-            }
-        }
-    },
-    "required": [
-        "passage.questions"
-    ],
-    "additionalProperties": false
-}
-```
-
-Including a JSON schema in a prompt can help an LLM to generate an output in a specific format.
-Note that by default field generators leverage [structured output with constrained decoding](https://huggingface.co/learn/cookbook/structured_generation#-constrained-decoding)
-to force an LLM to produce outputs that conform to the schema.
-Therefore, including `{jsonSchema}` in the prompt is not required for most use cases.
+A prompt template might also contain a `{jsonSchema}` placeholder which will be replaced with a JSON 
+schema based on the type of the field being generated, see the [structured output section](#structured-output) for details.
+Including a JSON schema in your prompt can help language models generate output in a specific format. 
+However, it's important to understand that field generators already provide the JSON schema 
+as a separate inference parameter to the underlying language model client.
+Both local LLM and OpenAI client utilize [structured output](#structured-output) functionality, 
+which forces LLMs to produce outputs that conform to the schema.
+For this reason, explicitly including `{jsonSchema}` in your prompt template is unnecessary for most use cases.
 
 Structured output can be disabled by specifying `<responseFormatType>TEXT</responseFormatType>`.
 In this case, the generated field must have a `string` type.
 This is useful for very small models (less than a billion parameters) that struggle to generate structured output.
 For most use cases, it is recommended to use structured output even for `string` fields.
-For more information on structured output see the [structured output section](#structured-output).
 
 The last parameter in the field generator configuration is `<invalidResponseFormatPolicy>`, 
 which specifies what to do when the output from the underlying language model can't be converted to the generated field type.
@@ -167,7 +149,7 @@ Other values `WARN` and `FAIL` log a warning and throw an exception respectively
 
 Overview of all the field generator parameters is available in the [configuration definition file](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/language-model-field-generator.def).
 
-## Configuring LLMs
+## Configuring language models
 
 Field generators specify `<providerId>` to reference a language model client 
 to be used for generation, which is either a local LLM, an OpenAI client or a custom component.
@@ -269,33 +251,35 @@ There are three important aspects of this configuration in addition to the model
    should be configured to avoid context overflow - a situation when context size 
    is too small to process multiple parallel requests with the given number of prompt and completion tokens.
 3. `maxQueueSize`, `maxEnqueueWait` and `maxQueueWait` are related to managing the queue 
-   used for storing and feeding parallel requests into the LLM runtime.
+   used for storing and feeding parallel requests into LLM runtime (llama.cpp).
 
 [Local LLMs documentation](llms-local.html) explains how to configure 
 `model`, `contextSize` and `parallelRequests` with respect to the model and compute resources used.
 Memory usage (RAM or GPU VRAM) is especially important to considered when configuring these parameters. 
 
-To avoid context overflow, set `contextSize`, `parallelRequests`, `maxPromptTokens` and `maxTokens` 
+To avoid context overflow, configure `contextSize`, `parallelRequests`, `maxPromptTokens` and `maxTokens` 
 parameters so that `contextSize / parallelRequests >= maxPromptTokens + maxTokens`.
 Also consider that larger `contextSize` takes longer to process.
 
-Finally, the queue related parameters are used to balance latency with throughput.
+The queue related parameters are used to balance latency with throughput.
 Values for these parameters heavily depends on underlying compute resources.
 Local LLM configuration presented above is optimized for CPU nodes with 16 cores and 32GB RAM 
 as well as GPU nodes with NVIDIA T4 GPUs 16GB VRAM.
 
-## Configuring compute resources
+### Configuring compute resources
 
-Configuration of compute resources applies only to local LLMs since OpenAI client uses remote APIs.
-In practice, GPU is highly recommended for running local LLMs, providing order of magnitude speedup compared to CPU.
+Provisioned compute resources only affect local LLM performance, 
+as OpenAI client merely calls a remote API that leverages the service provider's infrastructure.
+In practice, GPU is highly recommended for running local LLMs.
+It provided order of magnitude speedup compared to CPU.
+For Vespa Cloud, a reasonable starting configuration is as follows:
 
-For Vespa Cloud a reasonable starting configuration is as follows:
 ```xml
 <container version="1.0">
     ...
     <container id="container" version="1.0">
         ...
-        <nodes count="1" deploy:environment="dev">
+        <nodes count="1">
             <resources vcpu="8.0" memory="32Gb" architecture="x86_64" storage-type="local" disk="225Gb" >
                 <gpu count="1" memory="16.0Gb" type="T4"/>
             </resources>
@@ -306,69 +290,137 @@ For Vespa Cloud a reasonable starting configuration is as follows:
 </services>
 ```
 
-This will provision a single node with NVIDIA T4 GPUs 16GB VRAM.
-Local model performance scales linearly with the number of nodes, e.g. 
-8 GPU nodes * 1.5 gen/sec per node = 12 docs/sec.
+This configuration provisions a container cluster with a single node containing NVIDIA T4 GPUs 16GB VRAM.
+Local model throughput scales linearly with the number of nodes in the container cluster used for feeding.
+For example with 8 GPU nodes (`<nodes count="8">`) and throughput per node 1.5 generations/second, 
+combined throughput will be close to 12 generations/second.
 
-## Configuring feeding
+### Feeding configuration
 
 Generated fields introduce considerable latency during feeding.
-High number of parallel requests can lead to timeouts.
-To avoid this, it is recommended to reduce number of connections during feeding.
-A reasonable starting point is to use 1 connection per CPU node or 3 connections per GPU node.
+Large number of high-latency parallel requests might lead to timeouts in the document processing pipeline.
+To avoid this, it is recommended to reduce the number of connections during feeding.
+A reasonable starting point is to use three connections per GPU node and one connection per CPU node.
 Example for one GPU node:
 
 ```sh
-vespa feed data/feed_100.json --conections 3
+vespa feed data.json --conections 3
 ```
 
-# Structured output
+## Structured output
 
-# Custom field generators
+Document enrichment generates field values based on the data types defined in a document schema. 
+Both local LLMs and the OpenAI client support structured output, forcing LLMs to produce JSON that conforms to a specified schema. 
+This JSON schema is automatically constructed by a field generator according to the data type of the field being created.
+For example, a JSON schema for `field questions type array<string>` in document `passage` will be as follows:
 
-Application developers can implement custom Java components to be used with `generate` expression.
-This enables arbitrary text processing logic and integrations as part of the indexing pipeline,
-as an alternative to [custom document processing components](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing).
-Custom components compatible with `generate` implement `com.yahoo.language.process.FieldGenerator` interface with `generate` method, e.g.
-
-```java
-public class MockTextGenerator implements TextGenerator {
-    private final MockTextGeneratorConfig config;
-
-    public MockTextGenerator(MockTextGeneratorConfig config) {
-        this.config = config;
-    }
-
-    @Override
-    public String generate(Prompt prompt, Context context) {
-        var stringBuilder = new StringBuilder();
-
-        for (int i = 0; i < config.repetitions(); i++) {
-            stringBuilder.append(prompt.asString());
-
-            if (i < config.repetitions() - 1) {
-                stringBuilder.append(" ");
+```json
+{
+    "type": "object",
+    "properties": {
+        "passage.questions": {
+            "type": "array",
+            "items": {
+                "type": "string"
             }
         }
-
-
-        return stringBuilder.toString();
-    }
+    },
+    "required": [
+        "passage.questions"
+    ],
+    "additionalProperties": false
 }
 ```
 
-Configuration of custom components is implemented as described in [Configuring Java components](https://docs.vespa.ai/en/configuring-components.html).
-Components are configured in `services.xml`, e.g.:
+Constructed schemas for different data types correspond to the 
+[document JSON format](https://docs.vespa.ai/en/reference/document-json-format.html#) used for feeding.
+The following field types are supported:
+- string
+- bool
+- int
+- long
+- byte
+- float
+- float16
+- double
+- array of types mentioned above 
 
+## Custom field generator
+
+As usual with Vespa, existing functionality can be extended by developing [custom application components](https://docs.vespa.ai/en/developer-guide.html).
+A custom generator component can be used to implement application-specific logic to construct prompts, transform and validate LLM inputs and output,
+combine outputs of several LLMs or use other sources such a knowledge graph.
+
+A custom field generator compatible with `generate` should implement `com.yahoo.language.process.FieldGenerator` 
+interface with `generate` method that returns a field value. 
+Here is toy example of a custom field generator:
+
+```java
+package ai.vespa.test;
+
+import ai.vespa.llm.completion.Prompt;
+import com.yahoo.document.datatypes.FieldValue;
+import com.yahoo.document.datatypes.StringFieldValue;
+import com.yahoo.language.process.FieldGenerator;
+
+public class MockFieldGenerator implements FieldGenerator {
+   private final MockFieldGeneratorConfig config;
+
+   public MockFieldGenerator(MockFieldGeneratorConfig config) {
+      this.config = config;
+   }
+
+   @Override
+   public FieldValue generate(Prompt prompt, Context context) {
+      var stringBuilder = new StringBuilder();
+
+      for (int i = 0; i < config.repetitions(); i++) {
+         stringBuilder.append(prompt.asString());
+
+         if (i < config.repetitions() - 1) {
+            stringBuilder.append(" ");
+         }
+      }
+
+
+      return new StringFieldValue(stringBuilder.toString());
+   }
+}
+```
+
+The config definition for this component looks as follows:
+```
+namespace=ai.vespa.test
+package=ai.vespa.test
+
+repetitions int default=1
+```
+
+To be used with `generate` indexing expression this component should be added to `services.xml`:
 ```xml
 <container>
-    ...
-    <component id="mock_gen" class="ai.vespa.test.MockTextGenerator" bundle="generate-text-feed">
-        <config name="ai.vespa.test.mock-text-generator">
-            <repetitions>2</repetitions>
-        </config>
-    </component>
-    ...
+   ...
+   <component id="mock_generator" class="ai.vespa.test.MockFieldGenerator" bundle="mock_field_generator_app">
+      <config name="ai.vespa.test.mock-field-generator">
+         <repetitions>2</repetitions>
+      </config>
+   </component>
+   ...
 </container>
 ```
 
+The last step is to use it in a document schema, e.g.:
+```
+schema passage {
+    document passage {
+        field text type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+    }
+    
+    field mock_text type string {
+        indexing: input text | generate mock_generator | summary
+    }
+}
+```
