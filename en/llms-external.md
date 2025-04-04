@@ -75,7 +75,9 @@ parameters.
 
 The OpenAI-client also has the following inference parameters that can be sent along
 with the query:
-- 
+- model
+- maxTokens
+- temperature
 
 ### Connecting to other OpenAI-compatible providers
 
