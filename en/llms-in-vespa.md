@@ -38,7 +38,7 @@ which demonstrates setting up Vespa for RAG, using either an external LLM servic
 {% include note.html content='This feature is available in Vespa versions >= 8.327' %}
 
 Vespa distinguishes between the clients used to connect to LLMs and components that uses these
-clients. You can, for instance, set up a single client connection to an LLM, and use this connection for both [document enrichment](/en/llms-document-enrichment.html) and retrieval-augmented generation (RAG).
+clients. You can, for instance, set up a single client connection to an LLM, and use this connection for both [document enrichment](llms-document-enrichment.html) and retrieval-augmented generation (RAG).
 
 ![LLM/RAG searcher](../assets/img/llm-rag-searcher.svg)
 
@@ -349,7 +349,7 @@ Which for example, using `gpt-4o-mini` returns
 }
 ```
 
-This can also leveraged for automated [Document Enrichment](/en/llms-document-enrichment.html) during ingestion. With this approach, the `json_schema` is automatically generated based on the Vespa schema (and your prompt).
+This can also leveraged for automated [Document Enrichment](llms-document-enrichment.html) during ingestion. With this approach, the `json_schema` is automatically generated based on the Vespa schema (and your prompt).
 
 ### Query profiles
 
