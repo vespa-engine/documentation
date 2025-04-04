@@ -76,7 +76,6 @@ By default, this particular client connects to the OpenAI service, but can be us
 <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI chat completion compatible API</a>
 by changing the `endpoint` configuration parameter.
 
-This includes, but is not limited to [OpenAI](https://platform.openai.com/docs/overview), [Google Gemini](https://ai.google.dev/), [Anthropic](https://www.anthropic.com/api), [Cohere](https://docs.cohere.com/docs/compatibility-api) and [Together.ai](https://docs.together.ai/docs/openai-api-compatibility)
 You can also host your own OpenAI-compatible server using for example [VLLM](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#quickstart-online) or [llama-cpp-server](https://llama-cpp-python.readthedocs.io/en/latest/server/).
 
 ### FAQ
