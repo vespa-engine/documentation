@@ -75,7 +75,58 @@ parameters.
 
 The OpenAI-client also has the following inference parameters that can be sent along
 with the query:
-- 
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Parameter (Vespa)</th>
+      <th>Parameter (OpenAI)</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>maxTokens</code></td>
+      <td><code>max_completion_tokens</code></td>
+      <td>Maximum number of tokens that can be generated in the chat completion.</td>
+    </tr>
+    <tr>
+      <td><code>temperature</code></td>
+      <td><code>temperature</code></td>
+      <td>Number between 0 and 2. Higher values like 0.8 make output more random, while lower values like 0.2 make it more focused and deterministic.</td>
+    </tr>
+    <tr>
+      <td><code>topP</code></td>
+      <td><code>top_p</code></td>
+      <td>An alternative to temperature sampling. Model considers tokens with top_p probability mass (0-1). Value of 0.1 means only tokens comprising top 10% probability are considered.</td>
+    </tr>
+    <tr>
+      <td><code>seed</code></td>
+      <td><code>seed</code></td>
+      <td>If specified, the system will attempt to sample deterministically, so repeated requests with the same seed should return similar results. Determinism is not guaranteed.</td>
+    </tr>
+    <tr>
+      <td><code>npredict</code></td>
+      <td><code>n</code></td>
+      <td>How many chat completion choices to generate for each input message. Note that you will be charged based on the number of generated tokens across all choices.</td>
+    </tr>
+    <tr>
+      <td><code>frequencypenalty</code></td>
+      <td><code>frequency_penalty</code></td>
+      <td>Number between -2.0 and 2.0. Positive values penalize new tokens based on their frequency in the text so far, decreasing the likelihood of repetition. Negative values encourage repetition.</td>
+    </tr>
+    <tr>
+      <td><code>presencepenalty</code></td>
+      <td><code>presence_penalty</code></td>
+      <td>Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics. Negative values encourage repeating content from the prompt.</td>
+    </tr>
+  </tbody>
+</table>
+
+Any parameter sent with the query will override configuration specified for the client component in `services.xml`.
+
+Note that if you are not using OpenAI's API, the parameters may be handled differently than the descriptions above.
+
 
 ### Connecting to other OpenAI-compatible providers
 
