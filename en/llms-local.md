@@ -147,7 +147,7 @@ The most significant model configuration parameters are:
   to fit prompt and completion tokens for all parallel requests. 
   The default is `NONE`, which allows new tokens to overwrite older ones. 
   This may result in lower quality completions and performance issues.
-  `DISARD` ignores the request silently, returning without generating any tokens.
+  `DISCARD` ignores the request silently, returning without generating any tokens.
   `FAIL` raises and error.
   
 Please refer to the [local LLM client configuration

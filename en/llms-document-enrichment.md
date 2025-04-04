@@ -159,7 +159,7 @@ Field generators specify `<providerId>` to reference a language model client
 to be used for generation, which is either a local LLM, an OpenAI client or a custom component.
 
 Configuration details for local LLM and OpenAI client are covered in [local LLM](llms-local.html)
-and [OpenAI client](llms-openai.html) documentation.
+and [OpenAI client](llms-external.html) documentation.
 This section focuses on configuration parameters that are important for document enrichment.
 
 Both local LLM and OpenAI client can be configured with different models.
@@ -348,6 +348,15 @@ The following field types are supported:
 - float16
 - double
 - array of types mentioned above 
+
+Types that are not supported:
+- map
+- struct
+- weightset
+- tensors
+- references
+- predicate
+- position
 
 ## Custom field generator
 
