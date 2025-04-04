@@ -9,36 +9,40 @@ Vespa, LLMs can enhance search relevance, create dynamic content based on search
 results, and understand natural language by integrating into Vespa's processing
 chain structure, which handles querying and data ingestion. This allows Vespa to
 apply LLMs' deep linguistic and semantic capabilities across different stages,
-improving tasks from query comprehension to summarization and response
-generation.
+improving tasks such as document enrichment, query comprehension, summarization and question-answering.
 
 Vespa is ideally suited for retrieval-augmented generation (RAG). This technique
 allows these models to access relevant and up-to-date information beyond their
 training in real-time, enabling Vespa's output to be contextually informed. For
 more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.html).
 
-The advantage of setting up a client connection to an LLM from within your Vespa application compared to doing the API call(s) from your client after responses are returned from Vespa is that you eliminate an extra network hop, which means lower latency for end users.
+The advantage of setting up a client connection to an LLM from within your Vespa application compared to doing the API call(s) 
+from your client after responses are returned from Vespa is that you eliminate an extra network hop, which means lower latency for end users.
 The importance of this is amplified if you want to leverage multiple LLM calls for eg. agentic applications or reranking.
 
 Vespa supports LLMs in three ways:
 
-1. [**External LLMs**](llms-external.html): Vespa can connect to any external LLM providers that serves an <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI-compatible API</a>.
-.
-2. [**Local LLMs**](llms-local.html): Vespa can run LLMs within the Vespa application itself. This allows for customized models and avoids sending data outside  the application. This is particularly useful for applications with strict data privacy requirements or those needing specific model configurations.
-3. [**Custom Language Models**](#custom-language-model-components): Vespa can be extended to support any language model, including those not based on OpenAI's API. This allows for flexibility in integrating various LLMs into Vespa applications.
+1. [**External LLMs**](llms-external.html): Vespa can connect to any external LLM provider that serves an 
+<a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI-compatible API</a>.
+2. [**Local LLMs**](llms-local.html): Vespa can run LLMs within the Vespa application itself. 
+This allows for customized models and avoids sending data outside the application. 
+This is particularly useful for applications with strict data privacy requirements or those needing specific model configurations.
+3. [**Custom language models**](#custom-language-model-components): Vespa can be extended to support any language model, 
+4. including those not based on OpenAI's API. This allows for flexibility in integrating various LLMs into Vespa applications.
 
-This document will focus on features that are common to both external and local LLMs. For more information on configuration details for each type, please refer to the respective sections.
+This document will focus on features that are common to both external and local LLMs. 
+For more information on configuration details for each type, please refer to the respective sections.
 
-For a quick start, check out the
-<a href="https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation" data-proofer-ignore>RAG sample app</a>
+For a quick start, check out the [RAG sample app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation),
 which demonstrates setting up Vespa for RAG, using either an external LLM service or a local LLM.
 
 ### Using LLMs
 
 {% include note.html content='This feature is available in Vespa versions >= 8.327' %}
 
-Vespa distinguishes between the clients used to connect to LLMs and components that uses these
-clients. You can, for instance, set up a single client connection to an LLM, and use this connection for both [document enrichment](llms-document-enrichment.html) and retrieval-augmented generation (RAG).
+Vespa distinguishes between the clients used to connect to LLMs and components that uses these clients. 
+You can, for instance, set up a single client connection to an LLM, and use this connection 
+for both [document enrichment](llms-document-enrichment.html) and retrieval-augmented generation (RAG).
 
 ![LLM/RAG searcher](../assets/img/llm-rag-searcher.svg)
 
@@ -361,7 +365,9 @@ for a use case to be changed without having to change the client.
 
 ### Custom language model components
 
-Vespa also allows you to create your own language model components. This is useful in cases where you want to use a language model that is not [supported](https://docs.vespa.ai/en/llms-local.html#valid-llm-models) as local LLM through [llama.cpp](https://github.com/ggml-org/llama.cpp), or if you want to use an external LLM service that is incompatible with the OpenAI API.
+Vespa also allows you to create your own language model components. 
+This is useful in cases where you want to use a language model that is not [supported](https://docs.vespa.ai/en/llms-local.html#valid-llm-models) as local LLM through [llama.cpp](https://github.com/ggml-org/llama.cpp), 
+or if you want to use an external LLM service that is incompatible with the OpenAI API.
 
 To create your own language model component, you need to implement the `ai.vespa.llm.LanguageModel` interface.
 Minimal example shown below:
