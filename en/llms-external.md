@@ -6,7 +6,9 @@ title: "External LLMs in Vespa"
 Please refer to [Large Language Models in Vespa](llms-in-vespa.html) for an
 introduction to using LLMs in Vespa.
 
-Vespa supports connecting to external LLMs from a client within your Vespa application.
+Vespa provides a client for integration with OpenAI compatible APIs.
+This includes, but is not limited to [OpenAI](https://platform.openai.com/docs/overview), [Google Gemini](https://ai.google.dev/), [Anthropic](https://www.anthropic.com/api), [Cohere](https://docs.cohere.com/docs/compatibility-api) and [Together.ai](https://docs.together.ai/docs/openai-api-compatibility).
+You can also host your own OpenAI-compatible server using for example [VLLM](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#quickstart-online) or [llama-cpp-server](https://llama-cpp-python.readthedocs.io/en/latest/server/).
 
 {% include note.html content='Note that this is currently a Beta feature so changes can be expected.' %}
 
