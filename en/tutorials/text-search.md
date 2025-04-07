@@ -131,7 +131,7 @@ schema msmarco {
     document-summary minimal {
         summary id {  }
     }
-    document-summary url-tokens {
+    document-summary debug-tokens {
         summary url {}
         summary url-tokens {
             source: url
@@ -177,7 +177,7 @@ the query processing that searches a field or fieldset uses *one* type of transf
 
 #### Document summaries to control search response contents
 Next, we define two [document summaries](../document-summaries.html). 
-Document summaries control what fields are available in the [response](../reference/default-result-format.html); we include the `url-tokens` document-summary to 
+Document summaries control what fields are available in the [response](../reference/default-result-format.html); we include the `debug-tokens` document-summary to 
 demonstrate later how we can get visibility into how text is converted into searchable tokens. 
 
 #### Ranking to determine matched documents ordering
@@ -642,7 +642,7 @@ schema msmarco {
     document-summary minimal {
         summary id {  }
     }
-    document-summary url-tokens {
+    document-summary debug-tokens {
         summary url {}
         summary url-tokens {
             source: url
