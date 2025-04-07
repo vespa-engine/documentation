@@ -57,12 +57,12 @@ The following step includes extracting documents, queries and relevance judgment
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ ./bin/convert-msmarco.sh
+$ ./scripts/convert-msmarco.sh
 </pre>
 </div>
 
 
-After running the script, we end up with a file `ext/vespa.json` containing lines such as the one below:
+After running the script, we end up with a file `dataset/documents.jsonl` containing lines such as the one below:
 
 <pre>{% highlight json%}
 {
@@ -73,8 +73,7 @@ After running the script, we end up with a file `ext/vespa.json` containing line
         "title": "The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation",
         "body": "Science   Mathematics Physics The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation ... "
     }
-}
-{% endhighlight %}</pre>
+}{% endhighlight %}</pre>
 
 In addition to `vespa.json` we also have a `test-queries.tsv` file containing a list of the sampled queries
 along with the document ID relevant to each particular query.
@@ -286,7 +285,7 @@ already has data in the appropriate format expected by Vespa:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa feed -t http://localhost:8080 ext/vespa.json
+$ vespa feed -t http://localhost:8080 dataset/documents.jsonl
 </pre>
 </div>
 
@@ -481,7 +480,7 @@ $ vespa query \
   'yql=select * from msmarco where url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'trace.level=0' \
   'language=en' \
-  'summary=url-tokens'
+  'summary=debug-tokens'
 </pre>
 </div>
 
@@ -543,7 +542,7 @@ Let us do a similar example to demonstrate the impact of linguistic stemming
 <pre data-test="exec" data-test-assert-contains="996">
 $ vespa query \
   'yql=select * from msmarco where url contains ({filter:true,ranked:false}"http")' \
-  'summary=url-tokens' \
+  'summary=debug-tokens' \
   'language=en'
 </pre>
 </div>
