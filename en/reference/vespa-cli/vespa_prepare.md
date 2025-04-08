@@ -14,7 +14,8 @@ vespa prepare [application-directory-or-file] [flags]
 ### Options
 
 ```
-  -h, --help   help for prepare
+  -h, --help       help for prepare
+  -w, --wait int   Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
 ### Options inherited from parent commands
