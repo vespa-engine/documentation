@@ -3,7 +3,7 @@
 title: "Sorting Reference"
 ---
 
-<p>
+<p id="sortspec">
 A sorting specification in a query consists of one or more
 sorting expressions. Each sorting expression is an optional sort order
 followed by an attribute name or a function over an attribute.
@@ -16,11 +16,19 @@ of equal values for the previous expression.
 </p>
 <pre>
 Sorting       ::= SortExpr ( ' ' SortExpr )*
-SortExpr      ::= [SortOrder] SortObject
+SortExpr      ::= [SortOrder] ( SortObject | MissingExpr )
+MissingExpr   ::= MISSING '(' SortObject ',' MissingPolicy ')'
+MissingPolicy ::= FIRST |
+                  LAST |
+                  AS ',' MissingValue
 SortObject    ::= SortAttribute | Function
 Function      ::= LOWERCASE '(' SortAttribute ')' |
                   RAW '(' SortAttribute ')' |
                   UCA '(' SortAttribute [ ',' Locale [ ',' Strength] ] ')'
+MISSING       ::= 'missing'
+FIRST         ::= 'first'
+LAST          ::= 'last'
+AS            ::= 'as'
 LOWERCASE     ::= 'lowercase'
 UCA           ::= 'uca'
 RAW           ::= 'raw'
@@ -28,6 +36,13 @@ Locale        ::= An identifier following <a href="https://www.unicode.org/repor
 Strength      :: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | 'QUATERNARY' | 'IDENTICAL'
 SortOrder     ::= '+' | '-'
 SortAttribute ::= ID | ID.key | ID.value            /* A valid attribute name, with key/value appended for maps */
+MissingValue  ::= QuotedString | Token
+Token         ::= TokenChar*
+TokenChar     ::= any non Delimiter
+QuotedString  ::= '"' ( StringChar | '\' QuotedChar )* '"'
+StringChar    ::= any non QuotedChar
+Delimiter     ::= ' ' | ',' | '(' | ')' | QuotedChar
+QuotedChar    ::= '\' | '"'
 </pre>
 <p>
 See <a href="../geo-search.html">Geo search</a> for sorting by distance.
@@ -82,8 +97,7 @@ When sorting on a multivalue attribute (<a href="schema-reference.html#map">map<
   <a href="schema-reference.html#array">array</a>, or <a href="schema-reference.html#weightedset">weightedset</a>) one of
 the values for the document is selected to be used for
 sorting. Ascending sort order uses the lowest value while descending
-sort order uses the highest value. A document without any values is
-after all documents with values, regardless of sort order.
+sort order uses the highest value. See the <a href="#missing">missing policies</a> section for how a document without values in the attribute is treated.
 </p>
 
 
@@ -134,7 +148,60 @@ Without this additional sort expression, the order within each equal group is no
 '%}
 </p>
 
+<h2 id="missing">Missing policies</h2>
 
+<p>
+  A document might not have a value in the attribute. One of the following missing policies will then be applied:
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Policy</th>
+      <th>Example</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>default</td>
+      <td><code>+attr</code></td>
+      <td>
+	<p>
+	  If the sort order is ascending and the attribute is single-valued then the document is sorted before any documents with values in the attribute. If the attribute is multi-valued or the sort order is descending then the document is sorted after any documents with values in the attribute.
+	</p>
+      </td>
+    </tr>
+    <tr>
+      <td>first</td>
+      <td><code>+missing(attr,first)</code></td>
+      <td>
+	<p>
+	  The document is sorted before any documents with values in the attribute.
+	</p>
+      </td>
+    </tr>
+    <tr>
+      <td>last</td>
+      <td><code>+missing(attr,last)</code></td>
+      <td>
+	<p>
+	  The document is sorted after any documents with values in the attribute.
+	</p>
+      </td>
+    </tr>
+    <tr>
+      <td>as</td>
+      <td><code>+missing(attr,as,42)</code></td>
+      <td>
+	<p>The document is sorted as if it had the missing value specified in the <a href="#sortspec">sorting specification</a>. If the missing value cannot be converted to the attribute data type then an error is reported (query is aborted for indexed search, parts of the sort spec is ignored for streaming search).
+	</p>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+Note that missing policies can be combined with other functions ,e.g.
+<code>+missing(lowercase(attr),as,"nothing here")</code>.
 
 <h2 id="limitations">Limitations</h2>
 
