@@ -20,7 +20,7 @@ Generated fields are indexed and stored as normal fields and can be used for sea
 ## Setting up document enrichment components
 
 This section provides guidelines for configuring document enrichment, using the
-[LLM document enrichment sample app](https://github.com/vespa-engine/sample-apps/tree/master/llm-document-enrichment) as an example.
+[LLM document enrichment sample app](https://github.com/vespa-engine/sample-apps/tree/master/field-generator) as an example.
 
 ### Defining generated fields
 
