@@ -21,11 +21,13 @@ vespa document remove id | json-file [flags]
 ```
 $ vespa document remove src/test/resources/A-Head-Full-of-Dreams-Remove.json
 $ vespa document remove id:mynamespace:music::a-head-full-of-dreams
+$ vespa document --data '{"remove": "id:mynamespace:music::a-head-full-of-dreams"}'
 ```
 
 ### Options
 
 ```
+  -d, --data string      Document data to use instead of reading from file or stdin
       --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help             help for remove
   -T, --timeout int      Timeout for the document request in seconds (default 60)
@@ -48,4 +50,3 @@ $ vespa document remove id:mynamespace:music::a-head-full-of-dreams
 ### SEE ALSO
 
 * [vespa document](vespa_document.html)	 - Issue a single document operation to Vespa
-

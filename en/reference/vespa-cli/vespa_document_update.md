@@ -21,11 +21,13 @@ vespa document update [id] json-file [flags]
 ```
 $ vespa document update src/test/resources/A-Head-Full-of-Dreams-Update.json
 $ vespa document update id:mynamespace:music::a-head-full-of-dreams src/test/resources/A-Head-Full-of-Dreams.json
+$ vespa document --data '{"update": "id:mynamespace:music::a-head-full-of-dreams", "fields": {"title": {"assign": "The best of Bob Dylan"}}}'
 ```
 
 ### Options
 
 ```
+  -d, --data string      Document data to use instead of reading from file or stdin
       --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help             help for update
   -T, --timeout int      Timeout for the document request in seconds (default 60)
@@ -48,4 +50,3 @@ $ vespa document update id:mynamespace:music::a-head-full-of-dreams src/test/res
 ### SEE ALSO
 
 * [vespa document](vespa_document.html)	 - Issue a single document operation to Vespa
-

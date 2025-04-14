@@ -25,11 +25,13 @@ vespa document put [id] json-file [flags]
 ```
 $ vespa document put src/test/resources/A-Head-Full-of-Dreams.json
 $ vespa document put id:mynamespace:music::a-head-full-of-dreams src/test/resources/A-Head-Full-of-Dreams.json
+$ vespa document --data '{"put": "id:mynamespace:music::a-head-full-of-dreams","fields":{"album":"A Head Full of Dreams","artist":"Coldplay","year":2018,"category_scores":{"pop":1,"rock":0.2,"jazz":0}}}'
 ```
 
 ### Options
 
 ```
+  -d, --data string      Document data to use instead of reading from file or stdin
       --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help             help for put
   -T, --timeout int      Timeout for the document request in seconds (default 60)
@@ -52,4 +54,3 @@ $ vespa document put id:mynamespace:music::a-head-full-of-dreams src/test/resour
 ### SEE ALSO
 
 * [vespa document](vespa_document.html)	 - Issue a single document operation to Vespa
-
