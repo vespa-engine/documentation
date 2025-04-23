@@ -21,6 +21,7 @@ $ vespa document get id:mynamespace:music::song-1 id:mynamespace:music::song-2
 ### Options
 
 ```
+  -d, --data string        Document data to use instead of reading from file or stdin
       --field-set string   Fields to include when reading document
       --header strings     Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help               help for get
