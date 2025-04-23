@@ -14,6 +14,7 @@ If the document already exists, all its values will be replaced by this document
 If the document id is specified both as an argument and in the file the argument takes precedence.
 
 If json-file is a single dash ('-'), the document will be read from standard input.
+Alternatively, you can use the --data parameter to provide the document data directly.
 
 
 ```
@@ -25,11 +26,13 @@ vespa document put [id] json-file [flags]
 ```
 $ vespa document put src/test/resources/A-Head-Full-of-Dreams.json
 $ vespa document put id:mynamespace:music::a-head-full-of-dreams src/test/resources/A-Head-Full-of-Dreams.json
+$ vespa document put id:mynamespace:music::a-head-full-of-dreams --data '{"fields":{"title":"My Title","artist":"My Artist"}}'
 ```
 
 ### Options
 
 ```
+  -d, --data string      Document data to use instead of reading from file or stdin
       --header strings   Add a header to the HTTP request, on the format 'Header: Value'. This can be specified multiple times
   -h, --help             help for put
   -T, --timeout int      Timeout for the document request in seconds (default 60)
