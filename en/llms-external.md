@@ -25,25 +25,25 @@ To set up a connection to an LLM service such as OpenAI's ChatGPT, you need to
 define a component in your application's
 [services.xml](reference/services.html):
 
-```
+```xml
 <services version="1.0">
-  <container id="default" version="1.0">
+    <container id="default" version="1.0">
 
-    ...
+        ...
 
-    <component id="openai" class="ai.vespa.llm.clients.OpenAI">
+        <component id="openai" class="ai.vespa.llm.clients.OpenAI">
 
-      <!-- Optional configuration: -->
-      <config name="ai.vespa.llm.clients.llm-client">
-        <apiKeySecretName> ... </apiKeySecretName>
-        <endpoint> ... </endpoint>
-      </config>
+            <!-- Optional configuration: -->
+            <config name="ai.vespa.llm.clients.llm-client">
+                <apiKeySecretName> ... </apiKeySecretName>
+                <endpoint> ... </endpoint>
+            </config>
 
-    </component>
+        </component>
 
-    ...
+        ...
 
-  </container>
+    </container>
 </services>
 ```
 
