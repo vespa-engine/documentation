@@ -44,21 +44,21 @@ To set up the required inference engine for running your model, you need to
 define a `LocalLLM` component in your application's
 [services.xml](reference/services.html):
 
-```
+```xml
 <services version="1.0">
-  <container id="default" version="1.0">
+    <container id="default" version="1.0">
 
-    ...
+        ...
 
-    <component id="local" class="ai.vespa.llm.clients.LocalLLM">
-      <config name="ai.vespa.llm.clients.llm-local-client">
-          <model url="..." />
-      </config>
-    </component>
+        <component id="local" class="ai.vespa.llm.clients.LocalLLM">
+            <config name="ai.vespa.llm.clients.llm-local-client">
+                <model url="..." />
+            </config>
+        </component>
 
-    ...
+        ...
 
-  </container>
+    </container>
 </services>
 ```
 
@@ -243,22 +243,22 @@ to offload the entire model to the GPU if it is available, but by using the
 `gpuLayers` parameter one can experiment with offloading parts of the model to
 GPU.
 
-```
+```xml
 <services version="1.0">
-  <container id="default" version="1.0">
+    <container id="default" version="1.0">
 
-    <!-- Sets up the inference on a mistral 7B model -->
-    <component id="local" class="ai.vespa.llm.clients.LocalLLM">
-      <config name="ai.vespa.llm.clients.llm-local-client">
-          <model url="url/to/mistral-7B-8bit" />
-          <parallelRequests>10</parallelRequests>
-          <contextSize>40960</contextSize>
-          <useGpu>true</useGpu> <!-- default is true -->
-          <gpuLayers>100</gpuLayers>
-      </config>
-    </component>
+        <!-- Sets up the inference on a mistral 7B model -->
+        <component id="local" class="ai.vespa.llm.clients.LocalLLM">
+            <config name="ai.vespa.llm.clients.llm-local-client">
+                <model url="url/to/mistral-7B-8bit" />
+                <parallelRequests>10</parallelRequests>
+                <contextSize>40960</contextSize>
+                <useGpu>true</useGpu> <!-- default is true -->
+                <gpuLayers>100</gpuLayers>
+            </config>
+        </component>
 
-  </container>
+    </container>
 </services>
 
 ```
