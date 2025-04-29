@@ -30,8 +30,8 @@ $(window).on('load', function() {
 
       let $li = $('<li></li>');
       $li.append('<strong>' + featureName + '</strong>');
-      $li.append('<div><strong>Default:</strong> ' + defaultValue + '</div>');
-      $li.append('<div><strong>Description:</strong> ' + description + '</div>');
+      $li.append('<div>Default: ' + defaultValue + '</div>');
+      $li.append('<div> ' + description + '</div>');
 
       $list.append($li);
     }
