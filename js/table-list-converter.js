@@ -1,3 +1,4 @@
+/* Table to list converter wit JQuery */
 $(window).on('load', function() {
   let $table = $('#rank-feature-table');
   let $list = $('<ul id="feature-list"></ul>');
