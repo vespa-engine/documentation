@@ -1,11 +1,13 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "services.xml"
+category: oss,cloud
 ---
 
 <p>
 <em>services.xml</em> is the primary configuration file in an
 <a href="../application-packages.html">application package</a>. Elements:
+</p>
 <pre class="pre-config">
 <a href="#services">services [version]</a>
   <a href="services-container.html">container [version]</a>
@@ -13,9 +15,6 @@ title: "services.xml"
   <a href="services-admin.html">admin     [version]</a>
   <a href="/en/operations-selfhosted/routing.html#routing-services">routing   [version]</a>
 </pre>
-Nodes/hosts referred to in <em>services.xml</em> must be defined in
-<a href="hosts.html">hosts.xml</a> using <em>hostalias</em>.
-<p>
 
 
 
@@ -36,34 +35,318 @@ Optional subelements (one or more of <em>container</em>, <em>content</em>
 or <em>service</em> is required):
 </p>
 <ul>
-  <li><a href="services-admin.html"><code>admin</code></a></li>
-  <li><a href="services-content.html"><code>content</code></a></li>
-  <li><a href="services-container.html"><code>container</code></a></li>
-  <li><a href="/en/operations-selfhosted/routing.html#routing-services"><code>routing</code></a></li>
+  <li><a href="services-admin.html">admin</a></li>
+  <li><a href="services-content.html">content</a></li>
+  <li><a href="services-container.html">container</a></li>
+  <li><a href="/en/operations-selfhosted/routing.html#routing-services">routing</a></li>
 </ul>
-<p>Example:</p>
-<pre>
-&lt;?xml version="1.0" encoding="utf-8" ?&gt;
-&lt;services version="1.0"&gt;
-  &lt;container version="1.0" id="container"&gt;
-    &lt;search/&gt;
-    &lt;document-api/&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias="node0"/&gt;
-    &lt;/nodes&gt;
-  &lt;/container&gt;
-  &lt;content id="music" version="1.0"&gt;
-    &lt;redundancy&gt;2&lt;/redundancy&gt;
-    &lt;nodes&gt;
-      &lt;node hostalias="node0"/&gt;
-      &lt;node hostalias="node1"/&gt;
-    &lt;/nodes&gt;
-    &lt;documents&gt;
-      &lt;document type="music"/&gt;
-    &lt;/documents&gt;
-  &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+<p>Example Vespa Cloud:</p>
+<pre>{% highlight xml %}
+<services version="1.0">
+    <container version="1.0" id="queryfeedendpoint">
+        <search/>
+        <document-api/>
+        <nodes count="2">
+            <resources vcpu="4" memory="16Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+    <content id="music" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <nodes count="2">
+            <resources vcpu="8" memory="64Gb" disk="200Gb"/>
+        </nodes>
+        <documents>
+            <document type="music"/>
+        </documents>
+    </content>
+</services>
+{% endhighlight %}</pre>
+<p>Example Vespa OSS:</p>
+<pre>{% highlight xml %}
+<services version="1.0">
+    <container version="1.0" id="queryfeedendpoint">
+        <search/>
+        <document-api/>
+        <nodes>
+            <node hostalias="node0"/>
+        </nodes>
+    </container>
+    <content id="music" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <nodes>
+            <node hostalias="node0"/>
+            <node hostalias="node1"/>
+        </nodes>
+        <documents>
+            <document type="music"/>
+        </documents>
+    </content>
+</services>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="nodes">nodes</h2>
+<p>
+  The <em>nodes</em> element and its attributes/content/children configures the number of nodes used in a cluster.
+  <em>nodes</em> is a child element of <a href="/en/reference/services-container.html">container</a> and
+  <a href="/en/reference/services-content.html">content</a>.
+  It is different in Vespa Cloud and Vespa OSS:
+</p>
+<ul>
+  <li>
+    Vespa Cloud <em>nodes</em> are specified by the <em>count</em> attribute
+    and a <a href="#resources">resource</a> child element.
+    <em>count</em> is an integer or range (see below), and is the number of nodes of the cluster.
+  </li>
+  <li>
+    Vespa OSS <em>nodes</em> have <em>node</em> child elements,
+    see <a href="/en/reference/services-content.html#node">content node</a> and
+    <a href="/en/reference/services-container.html#node">container node</a>.
+    A node referred to in <em>services.xml</em> must be defined in
+    <a href="hosts.html">hosts.xml</a> using <em>hostalias</em>.
+  </li>
+</ul>
+<table class="table">
+    <thead>
+    <tr>
+        <th>Attribute</th>
+        <th>type</th>
+        <th>Default</th>
+        <th>Description</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td><strong>count</strong></td>
+        <td>integer or range</td>
+        <td></td>
+        <td>Vespa Cloud: The number of nodes of the cluster.</td>
+    </tr>
+    <tr>
+        <td><strong>exclusive</strong></td>
+        <td>boolean</td>
+        <td>false</td>
+        <td>
+            Optional. Vespa Cloud: If true these nodes will never be placed on shared hosts even when this would otherwise be allowed
+            (which is only for content nodes in some environments).
+            When nodes are allocated exclusively, the resources must match the resources of the host exactly.
+        </td>
+    </tr>
+    <tr>
+        <td><strong>groups</strong></td>
+        <td>integer or range</td>
+        <td></td>
+        <td>
+          Vespa Cloud content nodes only, optional: Integer or range.
+          Sets the number of groups into which content nodes should be divided.
+          Each group will have an equal share of the nodes and redundancy copies of the corpus,
+          and each query will be routed to just one group -
+          see <a href="/en/elasticity.html#grouped-distribution">grouped distribution</a>.
+          This allows <a href="/en/performance/sizing-examples.html">scaling</a>
+          to a higher query load than within a single group.
+        </td>
+    </tr>
+    <tr>
+        <td><strong>group-size</strong></td>
+        <td>integer or range</td>
+        <td></td>
+        <td>
+          Vespa Cloud content nodes only, optional: Integer or range where either value can be skipped (replaced by an empty string) to create a one-sided limit. If this is set, the group sizes used will always be within these limits (inclusive).
+        </td>
+    </tr>
+    </tbody>
+</table>
+<p>
+  If neither <em>groups</em> nor <em>group-size</em> is set, all nodes will always be placed in a single group.
+  Read more in <a href="/en/cloud/topology-and-resizing.html">topology</a>.
+</p>
+<p>
+  The attributes above specified as a range will be autoscaled by the system.
+  Ranges are expressed by the syntax <code>[lower-limit, upper-limit]</code>; Both limits are inclusive.
+</p>
+<p>
+  When a new cluster (or application) is deployed it will initially be configured with the minimal resources given by the ranges.
+  When autoscaling is turned on for an existing cluster (by configuring a range),
+  it will continue unchanged until autoscaling determines that a change is beneficial.
+  Examples:
+</p>
+<pre>{% highlight xml %}
+<nodes count="[2, 4]">
+    <resources vcpu="2" memory="16Gb" disk="300Gb"/>
+</nodes>
+{% endhighlight %}</pre>
+<pre>{% highlight xml %}
+<nodes count="[10, 15]" groups="[2, 3]" group-size="5">
+    <resources vcpu="2" memory="16Gb" disk="300Gb"/>
+</nodes>
+{% endhighlight %}</pre>
+<p>
+  Read the <a href="/en/cloud/autoscaling.html">autoscaling guide</a> to learn more.
+</p>
+<p>
+  See <a href="/en/cloud/index-bootstrap.html">index bootstrap</a> for how to set node count in a step-by-step procedure,
+  estimating settings by feeding smaller subsets at a time.
+  Note that autoscaling of content clusters involves data redistribution and normally does not speed up bootstrapping.
+</p>
+
+
+
+<h2 id="resources">resources</h2>
+<p>
+  Contained in the <a href="#nodes">nodes</a> element, specifies the resources available on each node.
+  This element is used in Vespa Cloud configuration only.
+  The resources must match a node flavor at
+  <a href="https://cloud.vespa.ai/en/reference/aws-flavors.html">AWS</a>,
+  <a href="https://cloud.vespa.ai/en/reference/gcp-flavors.html">GCP</a>, or both,
+  depending on which zones you are deploying to.
+  Exception: If you use remote disk, you can specify any number lower than the max size.
+</p>
+<p>Any element not specified will be assigned a default value.</p>
+<p>
+    <strong>Subelements:</strong> <a href="#gpu">gpu</a>
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>type</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>vcpu</b></td>
+      <td>float or range</td>
+      <td>2</td>
+      <td>CPU, virtual threads</td>
+    </tr>
+    <tr>
+      <td><b>memory</b></td>
+      <td>float or range, each followed by a byte unit, such as "Gb"</td>
+      <td>16 - content nodes<br>8 - container nodes</td>
+      <td>Memory</td>
+    </tr>
+    <tr>
+      <td><b>disk</b></td>
+      <td>float or range, each followed by a byte unit, such as "Gb"</td>
+      <td>300 - content nodes<br />50 - container nodes</td>
+      <td>
+        Disk space. To fit core dumps/heap dumps, the disk space should be larger than 3 x memory size for content nodes,
+        2 x memory size for container nodes.
+      </td>
+    </tr>
+    <tr>
+      <td><b>storage-type</b> (optional)
+      <td>string (enum)</td>
+      <td><code>any</code></td>
+      <td>
+        The type of storage to use.
+        This is useful to specify local storage when network storage provides insufficient io operations or too noisy io performance:
+        <ul>
+          <li><code>local</code>: Node-local storage is required.</li>
+          <li><code>remote</code>: Network storage must be used.</li>
+          <li><code>any</code>: Both remote or local storage may be used.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><b>disk-speed</b> (optional)
+      <td>string (enum)</td>
+      <td><code>fast</code></td>
+      <td>The required disk speed category:
+        <ul>
+          <li><code>fast</code>: SSD-like disk speed is required</li>
+          <li><code>slow</code>: This is sized for spinning disk speed</li>
+          <li><code>any</code>Performance does not depend on disk speed (often suitable for container clusters).</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><strong>architecture</strong> (optional)</td>
+      <td>string (enum)</td>
+      <td><code>any</code></td>
+      <td>Node CPU architecture:
+        <ul class="table">
+          <li><code>x86_64</code></li>
+          <li><code>arm64</code></li>
+          <li><code>any</code>: Use any of the available architectures.</li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<p>
+  A resource specified as a range will be autoscaled by the system.
+  Ranges are expressed by the syntax <code>[lower-limit, upper-limit]</code>; Both limits are inclusive.
+</p>
+<p>
+  When a new cluster (or application) is deployed it will initially be configured with the minimal resources given by the ranges.
+  When autoscaling is turned on for an existing cluster (by configuring a range),
+  it will continue unchanged until autoscaling determines that a change is beneficial.
+  Example:
+</p>
+<pre>{% highlight xml %}
+<nodes count="2">
+    <resources vcpu="[2, 4]" memory="16Gb" disk="300Gb"/>
+</nodes>
+{% endhighlight %}</pre>
+<p>
+  See <a href="/en/cloud/index-bootstrap.html">index bootstrap</a> for how to set resources in a step-by-step procedure,
+  estimating settings by feeding smaller subsets at a time.
+  Note that autoscaling of content clusters involves data redistribution and normally does not speed up bootstrapping.
+</p>
+<p>
+  You can use ranges on any combination of resource attributes -
+  read the <a href="/en/cloud/autoscaling.html">autoscaling guide</a> to learn more.
+</p>
+
+
+
+<h2 id="gpu">gpu</h2>
+<p>Declares GPU resources to provision. Limitations:</p>
+<ul>
+  <li>Available in AWS zones only</li>
+  <li>Valid for container clusters only</li>
+  <li>
+    Only one <em>resources</em> and <em>gpu</em> configuration is supported, see example below.
+    The example configuration will provision a node with a NVIDIA T4 GPU.
+  </li>
+</ul>
+<p><strong>Subelements:</strong> None</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Attribute</th><th>type</th><th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>count</b></td>
+      <td>integer</td>
+      <td>Number of GPUs</td>
+    </tr>
+    <tr>
+      <td><b>memory</b></td>
+      <td>integer, followed by a byte unit, such as "Gb"</td>
+      <td>
+        Amount of memory per GPU. Total amount of GPU memory available is this
+        number multiplied by <code>count</code>.
+      </td>
+    </tr>
+  </tbody>
+</table>
+<p id="gpu-example">Example:</p>
+<pre>{% highlight xml %}
+<nodes count="2">
+    <resources vcpu="4" memory="16Gb" disk="125Gb">
+        <gpu count="1" memory="16Gb"/>
+    </resources>
+</nodes>
+{% endhighlight %}</pre>
+
+
 
 <h2 id="generic-config">Generic configuration using &lt;config&gt;</h2>
 <p>
@@ -77,18 +360,15 @@ or ones that are part of the <a href="config-files.html">application package</a>
 complete example on generic configuration see the
 <a href="config-files.html#generic-configuration-in-services-xml">application package</a> reference.
 </p>
-<pre>
-&lt;container id="default" version="1.0"&gt;
-  &lt;handler id="com.yahoo.vespatest.ConfiguredHandler"&gt;
-<span class="pre-hilite">    &lt;config name="vespatest.response"&gt;
-      &lt;response&gt;configured string&lt;/response&gt;
-    &lt;/config&gt;</span>
-  &lt;/handler&gt;
-  &lt;nodes&gt;
-    &lt;node hostalias="node0"/&gt;
-  &lt;/nodes&gt;
-&lt;/container&gt;
-</pre>
+<pre>{% highlight xml %}
+<container id="default" version="1.0">
+    <handler id="com.yahoo.vespatest.ConfiguredHandler">
+        <config name="vespatest.response">
+            <response>configured string</response>
+        </config>
+    </handler>
+</container>
+{% endhighlight %}</pre>
 
 
 
