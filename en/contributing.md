@@ -6,13 +6,13 @@ title: "Contributing to Vespa"
 Contributions to [Vespa](http://github.com/vespa-engine/vespa)
 and the [Vespa documentation](http://github.com/vespa-engine/documentation)
 are welcome.
-This documents tells you what you need to know to contribute.
+This document tells you what you need to know to contribute.
 
 ## Open development
 All work on Vespa happens directly on GitHub,
 using the [GitHub flow model](https://docs.github.com/en/get-started/quickstart/github-flow).
 We release the master branch a few times a week, and you should expect it to almost always work.
-In addition to the [public Screwdriver build](https://cd.screwdriver.cd/pipelines/6386)
+In addition to the [builds seen on factory.vespa.ai](https://factory.vespa.ai)
 we have a large acceptance and performance test suite which
 is also run continuously.
 
@@ -23,10 +23,7 @@ where you are making the change (the OWNERS have a special responsibility for
 ensuring the long-term integrity of a portion of the code).
 If you want to become a committer/OWNER making some quality contributions is the way to start.
 
-We require all pull request checks to pass. If you have done changes involving the config model,
-OSGi bundles or dependency injection, we also require that the pull request is created with
-<strong>[run-systemtest]</strong> in the title. This will execute an extended test suite as
-part of the checks.
+We require all pull request checks to pass.
 
 ## Versioning
 Vespa uses semantic versioning - see [vespa versions](https://vespa.ai/releases#versions).
