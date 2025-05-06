@@ -1,0 +1,917 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: deployment.xml
+category: cloud
+---
+
+<p><em>deployment.xml</em> controls how an application is deployed.</p>
+
+<p>
+  <em>deployment.xml</em> is placed in the root of the <a href="/en/application-packages.html">application package</a>
+  and specifies which environments and regions the application is deployed to during
+  <a href="/en/cloud/automated-deployments.html">automated application deployment</a>, as which application instances.
+</p>
+<p>
+  Deployment progresses through the <code>test</code> and <code>staging</code>
+  environments to the <code>prod</code> environments listed in <em>deployment.xml</em>.
+</p>
+<p>Simple example:</p>
+<pre>{% highlight xml %}
+<deployment version="1.0">
+    <prod>
+        <region>aws-us-east-1c</region>
+        <region>aws-us-west-2a</region>
+    </prod>
+</deployment>
+{% endhighlight %}</pre>
+<p>More complex example:</p>
+<pre>{% highlight xml %}
+<deployment version="1.0">
+    <instance id="beta">
+        <prod>
+            <region>aws-us-east-1c</region>
+        </prod>
+    </instance>
+    <instance id="default">
+        <block-change revision="false"
+                      days="mon,wed-fri"
+                      hours="16-23"
+                      time-zone="UTC" />
+        <prod>
+            <region>aws-us-east-1c</region>
+            <delay hours="3" minutes="7" seconds="13" />
+            <parallel>
+                <region>aws-us-west-1c</region>
+                <steps>
+                    <region>aws-eu-west-1a</region>
+                    <delay hours="3" />
+                    <test>aws-us-west-2a</test>
+                </steps>
+            </parallel>
+        </prod>
+        <endpoints>
+            <endpoint container-id="my-container-service">
+                <region>aws-us-east-1c</region>
+            </endpoint>
+        </endpoints>
+    </instance>
+    <endpoints>
+        <endpoint id="my-weighted-endpoint"
+                  container-id="my-container-service"
+                  region="aws-us-east-1c">
+          <instance weight="1">beta</instance>
+        </endpoint>
+    </endpoints>
+</deployment>
+{% endhighlight %}</pre>
+<p>
+  Some of the elements can be declared <em>either</em> under the <code>&lt;deployment&gt;</code> root,
+  <strong>or</strong>, if one or more <code>&lt;instance&gt;</code> tags are listed, under these. These
+  have a bold <strong>or</strong> when listing where they may be present.
+</p>
+
+
+
+<h2 id="deployment">deployment</h2>
+<p>The root element.</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>version</td>
+    <td>Yes</td>
+    <td>1.0</td>
+  </tr><tr>
+    <td>major-version</td>
+    <td>No</td>
+    <td>The major version number this application is valid for.</td>
+  </tr>
+  <tr>
+    <td>cloud-account</td>
+    <td>No</td>
+    <td>Account to deploy to with <a href="/en/enclave">Enclave</a>.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="instance">instance</h2>
+<p>
+In <code>&lt;deployment&gt;</code> or <code>&lt;parallel&gt;</code> (which must be a direct descendant of the root).
+An instance of the application; several of these may be simultaneously deployed in the same zone.
+If no <code>&lt;instance&gt;</code> is specified, all children of the root are implicitly children of
+an <code>&lt;instance&gt;</code> with <code>id="default"</code>, as in the simple example at the top.
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>id</td>
+    <td>Yes</td>
+    <td>The unique name of the instance.</td>
+  </tr>
+  <tr>
+    <td>tags</td>
+    <td>No</td>
+    <td>Space-separated tags which can be referenced to make <a href="deployment-variants.html">deployment variants</a>.</td>
+  </tr>
+  <tr>
+    <td>cloud-account</td>
+    <td>No</td>
+    <td>Account to deploy to with <a href="/en/enclave">Enclave</a>. Overrides parent's use of cloud-account.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="block-change">block-change</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, <strong>or</strong> <code>&lt;instance&gt;</code>.
+This blocks changes from being deployed to production in the matching time interval.
+Changes are nevertheless tested while blocked.
+</p>
+<p>
+By default, both application revision changes and Vespa platform changes
+(upgrades) are blocked. It is possible to block just one kind of change using
+the <code>revision</code> and <code>version</code> attributes.
+</p>
+<p>
+  Any combination of the attributes below can be specified. Changes on a given
+  date will be blocked if all conditions are met.
+  Invalid <code>&lt;block-change&gt;</code> tags (i.e. that contains conditions
+  that never match an actual date) are rejected by the system.
+</p>
+<p>
+This tag must be placed after any <code>&lt;test&gt;</code> and <code>&lt;staging&gt;</code> tags,
+and before <code>&lt;prod&gt;</code>. It can be declared multiple times.
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>revision
+    <td>No, default <code>true</code>
+    <td>Set to <code>false</code> to allow application revision changes during the block period set by this.
+  </tr><tr>
+    <td>version
+    <td>No, default <code>true</code>
+    <td>Set to <code>false</code> to allow Vespa platform changes during the block period set by this.
+  </tr><tr>
+    <td>days
+    <td>No, default <code>mon-sun</code>
+    <td>A spec of the days this block is effective - a comma-separated list of single days or day intervals
+        where the start and end day are separated by a dash and are inclusive. Each day is identified by its english
+        name or three-letter abbreviation.
+  </tr><tr>
+    <td>hours
+    <td>No, default <code>0-23</code>
+    <td>A spec of the hours this block is effective - a comma-separated list of single hours or hour intervals
+        where the start and end hour are separated by a dash and are inclusive. Each hour is identified by a number
+        in the range 0 to 23.
+  </tr><tr>
+    <td>time-zone
+    <td>No, default UTC
+    <td>The name of the time zone used to interpret the hours attribute.
+        Time zones are full names or short forms, when the latter is unambiguous.
+        See
+        <a href="https://docs.oracle.com/javase/8/docs/api/java/time/ZoneId.html#of-java.lang.String-">ZoneId.of</a>
+        for the full spec of acceptable values.
+  </tr>
+  <tr>
+    <td>from-date
+    <td>No
+    <td>The inclusive starting date of this block (ISO-8601, <code>YYYY-MM-DD</code>).
+  </tr>
+  <tr>
+    <td>to-date
+    <td>No
+    <td>The inclusive ending date of this block (ISO-8601, <code>YYYY-MM-DD</code>).
+  </tr>
+  </tbody>
+</table>
+<p>
+  The below example blocks all changes on weekends, and blocks revisions outside working hours,
+  in the PST time zone:
+</p>
+<pre>{% highlight xml %}
+<block-change days="sat-sun"
+              hours="0-23"
+              time-zone="America/Los_Angeles"/>
+<block-change revision="false"
+              days="mon-fri,sat,sun"
+              hours="0-8,16-23"
+              time-zone="America/Los_Angeles"/>
+{% endhighlight %}</pre>
+<p>The below example blocks:</p>
+  <ul>
+    <li>all changes on Sundays starting on 2022-03-01</li>
+    <li>all changes in the hours 16-23 between 2022-02-10 and 2022-02-15</li>
+    <li>all changes until 2022-01-05</li>
+  </ul>
+<pre>{% highlight xml %}
+<block-change days="sun"
+              from-date="2022-03-01"
+              time-zone="America/Los_Angeles"/>
+<block-change hours="16-23"
+              from-date="2022-02-10"
+              to-date="2022-02-15"
+              time-zone="America/Los_Angeles"/>
+<block-change to-date="2022-01-05"
+              time-zone="America/Los_Angeles"/>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="upgrade">upgrade</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, or <code>&lt;instance&gt;</code>.
+Determines the strategy for upgrading the application, or one of its instances.
+By default, application revision changes and Vespa platform changes are deployed separately.
+The exception is when an upgrade fails; then, the latest application revision is deployed
+together with the upgrade, as these may be necessary to fix the upgrade failure.
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Name</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>rollout</td>
+    <td>No, default <code>separate</code></td>
+    <td>
+      <ul>
+        <li><code>separate</code> is the default. When a revision catches up to a platform upgrade, it stays behind, unless the upgrade alone fails.</li>
+        <li><code>simultaneous</code> favors revision roll-out. When a revision catches up to a platform upgrade, it joins, and then passes the upgrade.</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td>revision-target</td>
+    <td>No, default <code>latest</code></td>
+    <td>
+      <ul>
+        <li><code>latest</code> is the default. When rolling out a new revision to an instance, the latest available revision is chosen.</li>
+        <li><code>next</code> trades speed for smaller changes. When rolling out a new revision to an instance, the next available revision is chosen.</li>
+      </ul>
+      The available revisions for an instance are revisions which are not yet deployed, or revisions which have rolled out in previous instances.
+    </td>
+  </tr>
+  <tr>
+    <td>revision-change</td>
+    <td>No, default <code>when-failing</code></td>
+    <td>
+      <ul>
+        <li><code>always</code> is the most aggressive setting. A new, available revision may always replace the one which is currently rolling out.</li>
+        <li><code>when-failing</code> is the default. A new, available revision may replace the one which is currently rolling out if this is failing.</li>
+        <li><code>when-clear</code> is the most conservative setting. A new, available revision may never replace one which is currently rolling out.</li>
+      </ul>
+      Revision targets will never automatically change inside <a href="#block-change">revision block window</a>,
+      but may be set by manual intervention at any time.
+    </td>
+  </tr>
+  <tr>
+    <td>max-risk</td>
+    <td>No, default <code>0</code></td>
+    <td>
+      May only be used with <code>revision-change="when-clear"</code> and <code>revision-target="next"</code>.
+      The maximum amount of <a href="https://cloud.vespa.ai/en/reference/vespa-cloud-api#submission-properties">risk</a> to roll out per new revision target.
+      The default of <code>0</code> results in the next build always being chosen, while a higher value allows
+      skipping intermediate builds, as long as the cumulative risk does not exceed what is configured here.
+    </td>
+  </tr>
+  <tr>
+    <td>min-risk</td>
+    <td>No, default <code>0</code></td>
+    <td>
+      Must be less than or equal to the configured <code>max-risk</code>.
+      The minimum amount of <a href="https://cloud.vespa.ai/en/reference/vespa-cloud-api#submission-properties">risk</a>
+      to start rolling out a new revision.
+      The default of <code>0</code> results in a new revision rolling out as soon as anything is ready, while a higher
+      value lets the system wait until enough cumulative risk is available. This can be used to avoid blocking a lengthy
+      deployment process with trivial changes.
+    </td>
+  </tr>
+  <tr>
+    <td>max-idle-hours</td>
+    <td>No, default <code>8</code></td>
+    <td>
+      May only be used when <code>min-risk</code> is specified, and greater than <code>0</code>.
+      The maximum number of hours to wait for enough cumulative risk to be available, before rolling out a new revision.
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="test">test</h2>
+<p>Meaning depends on where it is located:</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Parent</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+  <td><code>&lt;deployment&gt;</code> <code>&lt;instance&gt;</code></td>
+  <td>If present, the application is deployed to the <a href="https://cloud.vespa.ai/en/reference/environments.html#test"><code>test</code></a> environment,
+    and system tested there, even if no prod zones are deployed to. Also, when specified, system tests <em>must</em>
+    be present in the application test package.
+    See guides for <a href="/en/cloud/production-deployment">getting to production</a>.<br>
+    If present in an <code>&lt;instance&gt;</code> element, system tests are run for that specific instance before any
+    production deployments of the instance may proceed — otherwise, previous system tests for any instance are acceptable.</td>
+  </tr>
+  <tr>
+  <td><code>&lt;prod&gt;</code> <code>&lt;parallel&gt;</code> <code>&lt;steps&gt;</code></td>
+  <td>If present, production tests are run against the production region with id contained in this element.
+    A test must be <em>after</em> a corresponding <a href="#region">region</a> element.
+    When specified, production tests <em>must</em> be preset in the application test package.
+    See guides for <a href="/en/cloud/production-deployment">getting to production</a>.</td>
+  </tr>
+  </tbody>
+</table>
+
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>cloud-account</td>
+    <td>No</td>
+    <td>For <a href="https://docs.vespa.ai/en/cloud/automated-deployments.html#system-tests">system tests</a> only:
+      account to deploy to with <a href="/en/enclave">Enclave</a>. Overrides parent's use of cloud-account.
+      Cloud account <em>must not</em> be specified for
+      <a href="https://docs.vespa.ai/en/cloud/automated-deployments.html#production-tests">production tests</a>,
+      which always run in the account of the corresponding deployment.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="staging">staging</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, or <code>&lt;instance&gt;</code>.
+If present, the application is deployed to the
+<a href="https://cloud.vespa.ai/en/reference/environments.html#staging"><code>staging</code></a> environment,
+and tested there, even if no prod zones are deployed to.
+If present in an <code>&lt;instance&gt;</code> element, staging tests are run for that specific instance before any
+production deployments of the instance may proceed — otherwise, previous staging tests for any instance are acceptable.
+When specified, staging tests <em>must</em> be preset in the application test package.
+See guides for <a href="/en/cloud/production-deployment.html">getting to production</a>.<br>
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>cloud-account</td>
+    <td>No</td>
+    <td>Account to deploy to with <a href="/en/enclave">Enclave</a>. Overrides parent's use of cloud-account.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="prod">prod</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, <strong>or</strong> in <code>&lt;instance&gt;</code>.
+If present, the application is deployed to the production regions listed inside this element, under the specified instance,
+after deployments and tests in the <code>test</code> and <code>staging</code> environments.
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>cloud-account</td>
+    <td>No</td>
+    <td>Account to deploy to with <a href="/en/enclave">Enclave</a>. Overrides parent's use of cloud-account.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="region">region</h2>
+<p>
+In <code>&lt;prod&gt;</code>, <code>&lt;parallel&gt;</code>, <code>&lt;steps&gt;</code>, or <code>&lt;group&gt;</code>.
+The application is deployed to the production
+<a href="https://cloud.vespa.ai/en/reference/zones.html">region</a> with id contained in this element.
+</p>
+<table class="table">
+<thead>
+<tr>
+<th style="width:150px">Attribute</th>
+<th style="width:100px">Mandatory</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>fraction</td>
+<td>No</td>
+<td>
+Only when this region is inside a group: The fractional membership in the group.
+</td>
+</tr>
+<tr>
+  <td>cloud-account</td>
+  <td>No</td>
+  <td>Account to deploy to with <a href="/en/enclave">Enclave</a>. Overrides parent's use of cloud-account.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+<h2 id="dev">dev</h2>
+<p>
+In <code>&lt;deployment&gt;</code>.
+Optionally used to control deployment settings for the <a href="/en/reference/environments">dev and perf environments</a>.
+This can be used specify a different cloud account, tags, and private endpoints. 
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>tags</td>
+    <td>No</td>
+    <td>Space-separated tags which can be referenced to make <a href="deployment-variants.html">deployment variants</a>.</td>
+  </tr>
+  <tr>
+    <td>cloud-account</td>
+    <td>No</td>
+    <td>Account to deploy to with <a href="/en/enclave">Enclave</a>. Overrides parent's use of cloud-account.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="delay">delay</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, <code>&lt;instance&gt;</code>, <code>&lt;prod&gt;</code>, <code>&lt;parallel&gt;</code>, or <code>&lt;steps&gt;</code>.
+Introduces a delay which must pass after completion of all previous steps, before subsequent steps may proceed.
+This may be useful to allow some grace time to discover errors before deploying a change in additional zones,
+or to gather higher-level metrics for a production deployment for a while, before evaluating these in a production test.
+The maximum total delay for the whole deployment spec is 48 hours.
+The delay is specified by any combination of the <code>hours</code>, <code>minutes</code> and <code>seconds</code> attributes.
+</p>
+
+
+
+<h2 id="parallel">parallel</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, <code>&lt;prod&gt;</code>, or <code>&lt;steps&gt;</code>.
+Runs the contained steps in parallel: instances if in <code>&lt;deployment&gt;</code>,
+or primitive steps (deployments, tests or delays) or a series of these (see <a href="#steps">steps</a>) otherwise.
+Multiple <code>&lt;parallel&gt;</code> elements are permitted. The following example will deploy
+to <code>us-west-1</code> first, then to <code>us-east-3</code> and <code>us-central-1</code>
+simultaneously, and, finally to <code>eu-west-1</code>, once both parallel deployments
+have completed:
+</p>
+<pre>{% highlight xml %}
+<region>us-west-1</region>
+<parallel>
+    <region>us-east-3</region>
+    <region>us-central-1</region>
+</parallel>
+<region>eu-west-1</region>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="steps">steps</h2>
+<p>
+In <code>&lt;parallel&gt;</code>.
+Runs the contained parallel or primitive steps (deployments, tests or delays) serially.
+The following example will in parallel:</p>
+<ol>
+  <li>deploy to <code>us-east-3</code>,</li>
+  <li>deploy to <code>us-west-1</code>, then delay 1 hour, and run tests for <code>us-west-1</code>, and</li>
+  <li>delay for two hours.</li>
+</ol>
+<p>
+Thus, the parallel block is complete when both deployments are complete, tests are successful for
+the second deployment, and at least two hours have passed since the block began executing.
+</p>
+<pre>{% highlight xml %}
+<parallel>
+    <region>us-east-3</region>
+    <steps>
+        <region>us-west-1</region>
+        <delay hours="1" />
+        <test>us-west-1</test>
+    </steps>
+    <delay hours="2" />
+</parallel>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="tester">tester</h2>
+<p>
+In <code>&lt;test&gt;</code>, <code>&lt;staging&gt;</code> and <code>&lt;prod&gt;</code>.
+Specifies container settings for the tester application container, which is used to run
+system, staging and production verification tests.
+</p>
+<p>The allowed elements inside this are <a href="services.html#nodes"><code>&lt;nodes&gt;</code></a>.</p>
+<pre>{% highlight xml %}
+<staging>
+    <tester>
+        <nodes count="1">
+            <resources vcpu="8" memory="32Gb" disk="30Gb" />
+        </nodes>
+    </tester>
+</staging>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="endpoints-global">endpoints (global)</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, without any <code>&lt;instance&gt;</code>
+declared <strong>or</strong> in <code>&lt;instance&gt;</code>: This allows
+<em>global</em> endpoints, via one or
+more <a href="#endpoint-global"><code>&lt;endpoint&gt;</code></a> elements;
+and <a href="#endpoint-zone">zone endpoint</a> and <a href="#endpoint-private">private endpoint</a>
+elements for cloud-native private network configuration.
+</p>
+
+
+
+<h2 id="endpoints-dev">endpoints (dev)</h2>
+<p>
+In <code>&lt;dev&gt;</code>. This allows
+<a href="#endpoint-zone">zone endpoint</a> and <a href="#endpoint-private">private endpoint</a>
+elements for cloud-native private network configuration for
+<a href="https://cloud.vespa.ai/en/reference/environments.html#dev"><code>dev</code> and <code>perf</code></a> deployments.
+</p>
+
+
+
+<h2 id="endpoint-global">endpoint (global)</h2>
+<p>
+In <code>&lt;endpoints&gt;</code> or <code>&lt;group&gt;</code>.
+Specifies a global endpoint for this application.
+Each endpoint will point to the regions that are declared in the endpoint.
+If no regions are specified,
+the endpoint defaults to the regions declared in the <code>&lt;prod&gt;</code> element.
+The following example creates a default endpoint to all regions,
+and a <em>us</em> endpoint pointing only to US regions.
+</p>
+<pre>{% highlight xml %}
+<endpoints>
+    <endpoint container-id="my-container-service"/>
+    <endpoint id="us" container-id="my-container-service">
+        <region>aws-us-east-1c</region>
+        <region>aws-us-west-2a</region>
+    </endpoint>
+</endpoints>
+{% endhighlight %}</pre>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>id</td>
+    <td>No</td>
+    <td>
+      The identifier for the endpoint.  This will be part of the endpoint name that is generated.
+      If not specified, the endpoint will be the default global endpoint for the application.
+    </td>
+  </tr><tr>
+    <td>container-id</td>
+    <td>Yes</td>
+    <td>
+      The id of the <a href="https://docs.vespa.ai/en/reference/services-container.html">container cluster</a>
+      to which requests to the global endpoint is forwarded.
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="endpoint-zone">endpoint (zone)</h2>
+<p>
+In <code>&lt;endpoints&gt;</code> or <code>&lt;group&gt;</code>, with <code>type='zone'</code>.
+Used to disable public zone endpoints. <em>Non-public endpoints can not be used in
+global endpoints, which require that all constituent endpoints are public.</em>
+The example disables the public zone endpoint for the <code>my-container</code>
+container cluster in all regions, except where it is explicitly enabled, in <code>region-1</code>.
+Changing endpoint visibility will make the service unavailable for a short period of time.
+</p>
+<pre>{% highlight xml %}
+<endpoints>
+    <endpoint type='zone' container-id='my-container' enabled='false' />
+    <endpoint type='zone' container-id='my-container' enabled='true'>
+        <region>region-1</region>
+    </endpoint>
+</endpoints>
+{% endhighlight %}</pre>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>type</td>
+    <td>Yes</td>
+    <td>
+      Private endpoints are specified with <code>type='zone'</code>.
+    </td>
+  </tr><tr>
+    <td>container-id</td>
+    <td>Yes</td>
+    <td>
+      The id of the <a href="https://docs.vespa.ai/en/reference/services-container.html">container cluster</a>
+      to disable public endpoints for.
+    </td>
+  </tr><tr>
+    <td>enabled</td>
+    <td>No</td>
+    <td>
+      Whether a public endpoint for this container cluster should be enabled; default <code>true</code>.
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="endpoint-private">endpoint (private)</h2>
+<p>
+In <code>&lt;endpoints&gt;</code> or <code>&lt;group&gt;</code>, with <code>type='private'</code>.
+Specifies a private endpoint service for this application.
+Each service will be launched in the regions that are declared in the endpoint.
+If no regions are specified, the service is launched in all regions declared in the
+<code>&lt;prod&gt;</code> element, that support any of the declared <a href="#allow">access types</a>.
+The following example creates a private endpoint in two specific regions.
+</p>
+<pre>{% highlight xml %}
+<endpoints>
+    <endpoint type='private' container-id='my-container'>
+        <region>aws-us-east-1c</region>
+        <allow with='aws-private-link' arn='arn:aws:iam::123123123123:root' />
+    </endpoint>
+    <endpoint type='private' container-id='my-container'>
+        <region>gcp-us-central1-f</region>
+        <allow with='gcp-service-connect' project='user-project' />
+    </endpoint>
+</endpoints>
+{% endhighlight %}</pre>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>type</td>
+    <td>Yes</td>
+    <td>
+      Private endpoints are specified with <code>type='private'</code>.
+    </td>
+  </tr>
+  <tr>
+    <td>container-id</td>
+    <td>Yes</td>
+    <td>
+      The id of the <a href="https://docs.vespa.ai/en/reference/services-container.html">container cluster</a>
+      to which requests to the private endpoint service is forwarded.
+    </td>
+  </tr>
+  <tr>
+    <td>auth-method</td>
+    <td>No</td>
+    <td>
+      The authentication method to use with this <a href="/en/cloud/private-endpoints.html">private endpoint</a>.
+      <br/>
+      Must be either <code>mtls</code> or <code>token</code>.
+      Defaults to mTLS if not included.
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="allow">allow</h2>
+<p>
+In <code>&lt;endpoint type='private'&gt;</code>.
+Allows a principal identified by the URN to set up a connection to the declared private endpoint service.
+This element must be repeated for each additional URN.
+An endpoint service will only consider allowed URNs of a compatible type, and will only be created if
+at least one compatible access type-and-URN is given:
+</p>
+<ul>
+<li>For AWS deployments, specify <code>aws-private-link</code>, and an <em>ARN</em>.
+<li>For GCP deployments, specify <code>gcp-service-connect</code>, and a <em>project ID</em></li>
+</ul>
+<pre>{% highlight xml %}
+<endpoint type='private' container-id="my-container">
+    <allow with='aws-private-link' arn='arn:aws:iam::123123123123:root' />
+    <allow with='aws-private-link' arn='arn:aws:iam::321321321321:role/my-role' />
+    <allow with='aws-private-link' arn='arn:aws:iam::321321321321:user/my-user' />
+    <allow with='gcp-service-connect' project='my-project' />
+</endpoint>
+{% endhighlight %}</pre>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>with</td>
+    <td>Yes</td>
+    <td>
+      The private endpoint access type; must be <code>aws-private-link</code> or <code>gcp-service-connect</code>.
+    </td>
+  </tr><tr>
+    <td>arn</td>
+    <td>Maybe</td>
+    <td>
+      Must be specified with <code>aws-private-link</code>.
+      See <a href="https://docs.aws.amazon.com/vpc/latest/privatelink/configure-endpoint-service.html">AWS documentation</a>
+      for more details.
+    </td>
+  </tr><tr>
+    <td>project</td>
+    <td>Maybe</td>
+    <td>
+      Must be specified with <code>gcp-service-connect</code>.
+      See <a href="https://cloud.google.com/vpc/docs/configure-private-service-connect-services">GCP documentation</a>
+      for more details.
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="bcp">bcp</h2>
+<p>In <code>&lt;instance&gt;</code> or <code>&lt;deployment&gt;</code>.
+Defines the BCP structure of this instance: Which zones should take over for which others
+during the outage of a zone and how fast they must have the capacity ready.
+Autoscaling uses this information to decide the ideal cpu load of a zone.
+If this element is not defined, it is assumed that all regions covers
+for an equal share of the traffic of all other regions and must have that capacity ready at all times.
+</p>
+<p>If a bcp element is specified at the root, and explicit instances are used, that bcp
+element becomes the default for all instances that does not contain a bcp element themselves.
+If a BCP element contains no group elements it will implicitly define a single group of all the regions
+of the instance in which it is used.
+</p>
+<p>
+  See <a href="https://cloud.vespa.ai/en/reference/bcp-test.html">BCP test</a>
+  for a procedure to verify that your BCP configuration is correct.
+</p>
+<table class="table">
+    <thead>
+    <tr>
+        <th style="width:150px">Attribute</th>
+        <th style="width:100px">Mandatory</th>
+        <th>Values</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>deadline</td>
+        <td>No</td>
+        <td>
+            <p>The max time after a region becomes unreachable until the other regions in its BCP group must be able to handle
+                the traffic of it, given as a number of minutes followed by 'm', 'h' or 'd' (for minutes, hours or days).
+                The default deadline is 0: Regions must at all times have capacity to handle BCP traffic immediately.</p>
+
+            <p>By providing a deadline, autoscaling can avoid the cost
+                of provisioning additional resources for BCP capacity if it predicts that it can grow to handle the traffic
+                faster than the deadline in a given cluster.</p>
+
+            <p>This is the default deadline to be used for all groups that don't specify one themselves.</p>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<p>Example:</p>
+<pre>{% highlight xml %}
+<bcp>
+    <group deadline="15m">
+        <endpoint id="foo" container-id="bar"/>
+        <region>us-east1</region>
+        <region>us-east2</region>
+        <region fraction="0.5">us-central1</region>
+    </group>
+    <group>
+        <region>us-west1</region>
+        <region>us-west2</region>
+        <region fraction="0.5">us-central1</region>
+    </group>
+</bcp>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="group">group</h2>
+<p>In <code>&lt;bcp&gt;</code>. Defines a bcp group:
+A set of regions whose members cover for each other during a regional outage.
+
+<p>Each region in a group will (as allowed, when autoscaling ranges are configured) provision resources
+sufficient to handle that any other single region in the group goes down.
+The traffic of the region is assumed to be rerouted in equal amount to the remaining regions in the group.
+That is, if a group has one member, no resources will be provisioned to handle an outage in that member.
+If a group has two members, each will aim to provision sufficient resources to handle the actual traffic of the other.
+If a group has three members, each will provision to handle half of the traffic observed in the region among the
+two others which receives the most traffic.</p>
+
+<p>A region may have fractional membership in multiple groups, meaning it will handle just that fraction of the
+traffic of the remaining members, and vice versa. A regions total membership among groups must always
+sum to exactly 1.</p>
+
+<p>A group may also define global endpoints for the region members in the group.
+This is exactly the same as defining the endpoint separately and repeating the regions
+of the group under the endpoint. Endpoints under a group cannot contain explicit region sub-elements.</p>
+
+<table class="table">
+<thead>
+<tr>
+<th style="width:150px">Attribute</th>
+<th style="width:100px">Mandatory</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>deadline</td>
+<td>No</td>
+<td>
+<p>The deadline of this BCP group. See deadline on the BCP element.</p>
+</td>
+</tr>
+</tbody>
+</table>

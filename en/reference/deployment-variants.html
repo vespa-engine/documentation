@@ -1,0 +1,166 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Instance, region, cloud and environment variants"
+category: cloud
+---
+
+<p>
+  Sometimes it is useful to create configuration that varies depending on properties of the deployment,
+  for example to set region specific endpoints of services used by <a href="/en/searcher-development.html">Searchers</a>,
+  or use smaller clusters for a "beta" instance.
+</p>
+<p>
+  This is supported both for <a href="#services.xml-variants">services.xml</a> and
+  <a href="#query-profile-variants">query profiles</a>.
+</p>
+
+
+
+<h2 id="services.xml-variants">services.xml variants</h2>
+<p>
+  <a href="services.html">services.xml</a> files support different configuration settings
+  for different <em>tags</em>, <em>instances</em>, <em>environments</em>, <em>clouds</em> and <em>regions</em>.
+  To use this, import the <em>deploy</em> namespace:
+</p>
+<pre>{% highlight xml %}
+<services version="1.0" xmlns:deploy="vespa">
+{% endhighlight %}</pre>
+<p>
+  Deploy directives are used to specify with which tags, and in which instance, environment,
+  cloud and/or region an XML element should be included:
+</p>
+<pre>{% highlight xml %}
+<content version="1.0">
+    <min-redundancy>2</min-redundancy>
+    <documents>
+        <document type="music.sd" mode="index" />
+    </documents>
+    <nodes deploy:environment="dev"
+           count="1" />
+    <nodes deploy:environment="prod"
+           deploy:region="aws-us-east-1c"
+           count="20" />
+    <nodes deploy:cloud="gcp" count="10" />
+    <nodes deploy:environment="prod"
+           deploy:region="aws-ap-northeast-1a"
+           count="40" />
+    <nodes deploy:environment="prod"
+           deploy:region="aws-ap-northeast-1a"
+           deploy:instance="alpha"
+           count="4" />
+    <nodes deploy:tags="myTag1 myTag2" count="8" />
+</content>
+{% endhighlight %}</pre>
+<p>
+  The example above configures a different node count depending on the deployment target.
+  Deploying the application in the <em>dev</em> environment gives:
+</p>
+<pre>{% highlight xml %}
+<content version="1.0">
+    <min-redundancy>2</min-redundancy>
+    <documents>
+        <document type="music.sd" mode="index" />
+    </documents>
+    <nodes count="1" />
+</content>
+{% endhighlight %}</pre>
+<p>Whereas in <em>prod.us-west-1</em> it is:</p>
+<pre>{% highlight xml %}
+<content version="1.0">
+    <min-redundancy>2</min-redundancy>
+    <documents>
+        <document type="music.sd" mode="index" />
+    </documents>
+    <nodes count="60" />
+</content>
+{% endhighlight %}</pre>
+<p>This can be used to modify any config by deployment target.</p>
+<p>The <code>deploy</code> directives have a set of override rules:</p>
+<ul>
+  <li>A directive specifying more conditions will override one specifying fewer.</li>
+  <li>Directives are inherited in child elements.</li>
+  <li>
+    When multiple XML elements with the same name is specified
+    (e.g. when specifying search or docproc chains),
+    the <em>id</em> attribute or the <em>idref</em> attribute of the element
+    is used together with the element name when applying directives.
+  </li>
+</ul>
+<p>
+  Some overrides are applied by default in some environments,
+  see <a href="https://cloud.vespa.ai/en/reference/environments">environments</a>.
+  Any override made explicitly for an environment will override the defaults for it.
+</p>
+
+
+<h3 id="advanced">Specifying multiple targets</h3>
+<p>More than one tag, instance, region or environment can be specified in the attribute, separated by space.</p>
+<p>
+  Note that <em>tags</em> by default only apply in production instances,
+  and are matched whenever the tags of the element and the tags of the instance intersect.
+  To match tags in other environments,
+  an explicit <code>deploy:environment</code> directive for that environment must also match.
+  Use tags if you have a complex instance structure which you want config to vary by.
+</p>
+<p>The namespace can be applied to any element. Example:</p>
+<pre>{% highlight xml %}
+<container id="default" version="1.0" deploy:environment="perf test staging prod">
+    <search>
+        <chain id="default" inherits="vespa">
+            <searcher bundle="basic-application" id="vespa.ai.ExampleSearcher">
+                <config name="example.message">
+                    <message>Hello from application config</message>
+                    <message deploy:region="aws-us-east-1c">Hello from east colo!</message>
+                </config>
+            </searcher>
+        </chain>
+    </search>
+</container>
+{% endhighlight %}</pre>
+<p>
+  Above, the <em>container</em> element is configured for the 4 environments only (it will not apply to <em>dev</em>) -
+  and in region <em>aws-us-east-1c</em>, the config is different.
+</p>
+
+
+
+<h2 id="query-profile-variants">Query profile variants</h2>
+<p>
+  <a href="/en/query-profiles.html">Query profiles</a> support different configuration settings
+  for different <em>instances</em>, <em>environments</em> and <em>regions</em> through
+  <a href="/en/query-profiles.html#query-profile-variants">query profile variants</a>.
+  This allows you to set different query parameters for a query type depending on these deployment attributes.
+</p>
+<p>
+  To use this feature, create a regular query profile variant with any of
+  <code>instance</code>, <code>environment</code> and <code>region</code> as dimension names and
+  let your query profile vary by that. For example:
+</p>
+<pre>{% highlight xml %}
+<query-profile id="default">
+
+    <dimensions>instance, environment, region</dimensions>
+
+    <field name="a">My default value</field>
+
+    <!-- Value for (any deployment of) the beta instance -->
+    <query-profile for="beta">
+        <field name="a">My beta value</field>
+    </query-profile>
+
+    <!-- Value for (any) dev deployment -->
+    <query-profile for="*, dev">
+        <field name="a">My dev value</field>
+    </query-profile>
+
+    <!-- Value for the default instance in prod -->
+    <query-profile for="default, prod">
+        <field name="a">My main instance prod value</field>
+    </query-profile>
+
+</query-profile>
+{% endhighlight %}</pre>
+<p>You can pick and combine these dimensions in any way you want with other dimensions sent as query parameters, e.g:</p>
+<pre>{% highlight xml %}
+    <dimensions>device, instance, usecase</dimensions>
+{% endhighlight %}</pre>
