@@ -1,0 +1,119 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Routing and endpoints"
+category: cloud
+---
+
+<p>
+  Vespa Cloud supports multiple methods of routing requests to an application.
+  This guide describes how these routing methods work, failover, and how to configure them.
+</p>
+<p>
+  By default, each deployment of a Vespa Cloud application will have a zone endpoint.
+  In addition to the default zone endpoint, one can configure global endpoints.
+</p>
+<p>
+  All endpoints for an application are available under the
+  <em>endpoints</em> tab of each deployment in the console.
+</p>
+
+
+
+<h2>Endpoint format</h2>
+<p>Vespa Cloud endpoints are on the format: <code>{random}.{random}.{scope}.vespa-app.cloud</code>.</p>
+
+
+
+<h2>Endpoint scopes</h2>
+
+
+<h3 id="zone-endpoint">Zone endpoint</h3>
+<p>
+  This is the default endpoint for a deployment.
+  Requests through a zone endpoint are sent directly to the zone.
+</p>
+<p>
+  Zone endpoints are created implicitly, one per container cluster declared
+  in <a href="/en/reference/services-container.html">services.xml</a>.
+  Zone endpoints are not configurable.
+</p>
+<p>Zone endpoints have the suffix <code>z.vespa-app.cloud</code></p>
+
+
+<h3 id="global-endpoint">Global endpoint</h3>
+<p>
+  A global endpoint is an endpoint that can route requests to multiple zones.
+  It can be configured in <a href="/en/reference/deployment.html#endpoints-global">deployment.xml</a>.
+  Similar to how a <a href="https://en.wikipedia.org/wiki/Content_delivery_network">CDN</a> works,
+  requests through this endpoint will be routed to the nearest zone based on geo proximity,
+  i.e. the zone that is nearest to the client.
+</p>
+<p>Global endpoints have the suffix <code>g.vespa-app.cloud</code></p>
+{% include important.html content='Global endpoints do not support feeding.
+Feeding must be done through zone endpoints.' %}
+
+
+
+<h2 id="routing-control">Routing control</h2>
+<p>Vespa Cloud has two mechanisms for manually controlling routing of requests to a zone:</p>
+<ul>
+  <li>
+    Removing the <code>&lt;region&gt;</code> element from
+    the relevant <code>&lt;endpoint&gt;</code> elements in
+    <a href="/en/reference/deployment">deployment.xml</a> and deploying a new version of your application.
+  </li>
+  <li>Changing the status through the console.</li>
+</ul>
+<p>
+  This section describes the latter mechanism.
+  Navigate to the relevant deployment of your application in the console.
+  Hovering over the <em>GLOBAL ROUTING</em> badge will display the current status and when it was last changed.
+</p>
+
+
+<h3>Change status</h3>
+<p>
+In case of a production emergency,
+a zone can be manually set out to prevent it from receiving requests:
+</p>
+<ol>
+  <li>
+    Hover over the <em>GLOBAL ROUTING</em> badge for the problematic deployment and click <em>Deactivate</em>.
+  </li>
+  <li>
+    Inspection of the status will now show the status set to <em>OUT</em>.
+    To set the zone back in and have it continue receiving requests:
+    Hover over the <em>GLOBAL ROUTING</em> badge again and click <em>Activate</em>.
+  </li>
+</ol>
+
+
+
+<h3>Behaviour</h3>
+<p>
+  Changing the routing status is independent of the endpoint scope used.
+  You're   technically overriding the routing status the deployment reports to the Vespa
+  Cloud routing infrastructure. This means that a change to routing status
+  affects both <em>zonal endpoints</em> and <em>global endpoints</em>.
+</p>
+<p>
+  Deactivating a deployment disables routing of requests to that deployment
+  through global endpoints until the deployment is activated again.
+  As routing through these endpoints is DNS-based,
+  it may take up between 5 and 15 minutes for all traffic to shift to other deployments.
+</p>
+<p>
+  If all deployments of an endpoint are deactivated, requests are distributed as if all deployments were active.
+  This is because attempting to route traffic according to the original configuration is preferable
+  to discarding all requests.
+</p>
+
+
+
+<h2 id="aws-clients">AWS clients</h2>
+<p>
+  While Vespa Cloud is hosted in AWS, clients that talk to Vespa Cloud
+  from AWS nodes will be treated as any other client from the Internet.
+  This means clients in AWS will generate regular Internet egress traffic
+  even though they are talking to a service in AWS in the same zone.
+</p>
