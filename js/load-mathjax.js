@@ -6,6 +6,15 @@ window.MathJax = {
     //},
     svg: {  // http://docs.mathjax.org/en/latest/options/output/svg.html
         minScale: .5
+    },
+    options: {
+        enableMenu: true,
+        menuOptions: {
+            settings: {
+            zoom: 'Click',    // `Click'
+            zscale: '100%'    // Zoom scaling factor
+            }
+        }
     }
 };
 
