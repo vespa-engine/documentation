@@ -268,7 +268,7 @@ model is too large to fit on the GPU, you can speed up model evaluation by
 offloading parts of the model to the GPU.
 
 To set up GPUs on self-hosted, please refer to [Container GPU
-setup](https://docs.vespa.ai/en/operations-selfhosted/vespa-gpu-container.html)
+setup](/en/operations-selfhosted/vespa-gpu-container.html)
 for more details.
 
 It is very easy to use GPU acceleration on Vespa Cloud. To enable GPU

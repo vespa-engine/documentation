@@ -41,7 +41,7 @@ To remove an instance or a deployment to a region from an application:
     </deployment>
     ```
 
-2.  Add or modify [validation-overrides.xml](https://docs.vespa.ai/en/reference/validation-overrides.html),
+2.  Add or modify [validation-overrides.xml](/en/reference/validation-overrides.html),
     allowing Vespa Cloud to remove production instances:
 
     ```xml

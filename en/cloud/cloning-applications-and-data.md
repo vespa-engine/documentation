@@ -252,7 +252,7 @@ Set the --selection argument to `vespa visit` to select a subset of the document
 ## Cloning - self-hosted to self-hosted
 Creating a copy from one self-hosted application to another.
 Self-hosted means running [Vespa](https://vespa.ai/) on a laptop
-or a [multinode system](https://docs.vespa.ai/en/operations/multinode-systems.html).
+or a [multinode system](/en/operations/multinode-systems.html).
 
 This example sets up a source app and deploys the [application package](https://cloud.vespa.ai/en/developer-guide) -
 use [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)
@@ -302,7 +302,7 @@ $ vespa visit -t http://localhost:8080 | vespa feed - -t http://localhost:8081
 
 **Data copy 5%**
 
-This is an example on how to use a [selection](https://docs.vespa.ai/en/reference/document-select-language.html)
+This is an example on how to use a [selection](/en/reference/document-select-language.html)
 to specify a subset of the documents - here a "random" 5% selection:
 ```
 $ vespa visit -t http://localhost:8080 --selection 'id.hash().abs() % 20 = 0' | \

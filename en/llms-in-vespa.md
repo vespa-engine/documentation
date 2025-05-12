@@ -366,7 +366,7 @@ for a use case to be changed without having to change the client.
 ### Custom language model components
 
 Vespa also allows you to create your own language model components. 
-This is useful in cases where you want to use a language model that is not [supported](https://docs.vespa.ai/en/llms-local.html#valid-llm-models) as local LLM through [llama.cpp](https://github.com/ggml-org/llama.cpp), 
+This is useful in cases where you want to use a language model that is not [supported](/en/llms-local.html#valid-llm-models) as local LLM through [llama.cpp](https://github.com/ggml-org/llama.cpp), 
 or if you want to use an external LLM service that is incompatible with the OpenAI API.
 
 To create your own language model component, you need to implement the `ai.vespa.llm.LanguageModel` interface.
@@ -415,7 +415,7 @@ public class MockLanguageModel implements ai.vespa.llm.LanguageModel {
 }
 ```
 
-You can also create a [config definition](https://docs.vespa.ai/en/configuring-components.html#config-definition) that will make your component configurable through the `services.xml` file.
+You can also create a [config definition](/en/configuring-components.html#config-definition) that will make your component configurable through the `services.xml` file.
 
 Example of a minimal config definition:
 

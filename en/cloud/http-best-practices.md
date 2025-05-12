@@ -36,7 +36,7 @@ for example when new resources are introduced by the [autoscaler](autoscaling.ht
 ## Prefer HTTP/2
 We recommend *HTTP/2* over *HTTP/1.1*. *HTTP/2* multiplexes multiple concurrent requests over a single connection,
 and its binary protocol is more compact and efficient.
-See Vespa's documentation on [HTTP/2](https://docs.vespa.ai/en/performance/http2.html) for more details.
+See Vespa's documentation on [HTTP/2](/en/performance/http2.html) for more details.
 
 ## Be deliberate with timeouts and retries 
 Make sure to configure your clients with sensible timeouts and retry policies.

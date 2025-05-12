@@ -25,7 +25,7 @@ This section provides guidelines for configuring document enrichment, using the
 ### Defining generated fields
 
 Enrichments are defined in a schema using a [generate indexing expression](reference/indexing-language-reference.html#generate).
-For example the following schema defines two [synthetic fields](https://docs.vespa.ai/en/operations/reindexing.html) with `generate`:
+For example the following schema defines two [synthetic fields](/en/operations/reindexing.html) with `generate`:
 
 ```
 schema passage {
@@ -337,7 +337,7 @@ For example, a JSON schema for `field questions type array<string>` in document 
 ```
 
 Constructed schemas for different data types correspond to the 
-[document JSON format](https://docs.vespa.ai/en/reference/document-json-format.html#) used for feeding.
+[document JSON format](/en/reference/document-json-format.html#) used for feeding.
 The following field types are supported:
 - string
 - bool
@@ -360,7 +360,7 @@ Types that are not supported:
 
 ## Custom field generator
 
-As usual with Vespa, existing functionality can be extended by developing [custom application components](https://docs.vespa.ai/en/developer-guide.html).
+As usual with Vespa, existing functionality can be extended by developing [custom application components](/en/developer-guide.html).
 A custom generator component can be used to implement application-specific logic to construct prompts, transform and validate LLM inputs and output,
 combine outputs of several LLMs or use other sources such a knowledge graph.
 

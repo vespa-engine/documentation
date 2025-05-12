@@ -51,7 +51,7 @@ measuring quality loss for each iteration - this procedure it built with that in
 
 
 ## Converters
-Vespa’s built-in indexing language [converters](https://docs.vespa.ai/en/reference/indexing-language-reference.html#converters)
+Vespa’s built-in indexing language [converters](/en/reference/indexing-language-reference.html#converters)
 `binarize` and `pack_bits` let you easily generate binarized vectors.
 Example schema definitions used to generate the vectors in the table above:
 
@@ -313,7 +313,7 @@ $ vespa query \
     'ranking=app_ranking_bin'
 ```
 
-See [tensor-hex-dump](https://docs.vespa.ai/en/reference/document-json-format.html#tensor-hex-dump)
+See [tensor-hex-dump](/en/reference/document-json-format.html#tensor-hex-dump)
 for more information about how to create the int8-typed tensor.
 
 
@@ -327,7 +327,7 @@ Example embeddings:
 | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]         | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]   |                -119 |
 
 
-Use [matchfeatures](https://docs.vespa.ai/en/reference/schema-reference.html#match-features)
+Use [matchfeatures](/en/reference/schema-reference.html#match-features)
 to debug ranking (see ranking profile `app_ranking_bin` below):
 ```json
 "matchfeatures": {
@@ -458,7 +458,7 @@ $ vespa query \
 "relevance": 4.0
 ```
 
-Read the [closeness](https://docs.vespa.ai/en/reference/rank-features.html#closeness(dimension,name)) reference documentation.
+Read the [closeness](/en/reference/rank-features.html#closeness(dimension,name)) reference documentation.
 
 
 ### TargetHits for ANN
@@ -545,7 +545,7 @@ schema doc {
 
 ## Appendix: Binarizing from text input
 To generate the embedding from other data types, like text,
-use the [converters](https://docs.vespa.ai/en/reference/indexing-language-reference.html#converters) - example:
+use the [converters](/en/reference/indexing-language-reference.html#converters) - example:
 
 ```
     field doc_embedding type tensor<int8>(x[1]) {

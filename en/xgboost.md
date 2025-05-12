@@ -29,7 +29,7 @@ Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 
 
 Notice the `split` attribute which represents the Vespa feature name. The `split` feature must resolve to a Vespa
 [rank feature](reference/rank-features.html) defined in the [document schema](schemas.html). The feature can also
-be user defined features (for example using [functions](https://docs.vespa.ai/en/ranking-expressions-features.html#function-snippets)).
+be user defined features (for example using [functions](/en/ranking-expressions-features.html#function-snippets)).
 
 The above model JSON was produced using the XGBoost Python api with a regression objective:
 
@@ -180,8 +180,5 @@ schema xgboost {
   when reading Vespa features for training as Vespa outputs features using `double` precision. 
   If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
 * In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
-  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](https://docs.vespa.ai/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
+  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
   is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
-
-
-
