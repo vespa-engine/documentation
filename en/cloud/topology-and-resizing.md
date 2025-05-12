@@ -10,7 +10,7 @@ This guide goes through various topologies by example, highlighting the most rel
 and discusses operational events like node stop and changing the topology.
 
 Use cases for using a grouped topology is found in the
-[elasticity](https://docs.vespa.ai/en/elasticity.html#grouped-distribution) guide.
+[elasticity](/en/elasticity.html#grouped-distribution) guide.
 E.g., query latency can dictate the maximum number of document per node and hence how many node are needed in a group -
 if query latency is at maximum tolerated for 1M documents,
 6 nodes are needed in a group for a 6M index.
@@ -25,12 +25,12 @@ Content nodes can be deployed in different topologies - example using 6 nodes:
 
 Vespa Cloud requires a redundancy of at least 2.
 In this guide, it is assumed that redundancy, configured as
-[min-redundancy](https://docs.vespa.ai/en/reference/services-content.html#min-redundancy), is set to n=3.
+[min-redundancy](/en/reference/services-content.html#min-redundancy), is set to n=3.
 Redundancy is a function of data availability / criticality and cost, and varies from application to application.
 
 Redundancy is for storing a document replica on a node.
 Not all replicas are searchable -
-read [Proton](https://docs.vespa.ai/en/proton.html) for a detailed understanding of sub-databases.
+read [Proton](/en/proton.html) for a detailed understanding of sub-databases.
 
 
 
@@ -171,7 +171,7 @@ Migrating from one topology to another is easy, as Vespa Cloud will auto-migrate
 
 ## Feeding
 Documents are fed to Vespa Cloud using the
-[&lt;document-api&gt;](https://docs.vespa.ai/en/reference/document-v1-api-reference.html#configuration) endpoint.
+[&lt;document-api&gt;](/en/reference/document-v1-api-reference.html#configuration) endpoint.
 This means, one Vespa Container node forwards document writes to all the replicas, in parallel.
 As all groups have a replica, adding a group will not add feed _latency_ in theory due to the parallelism.
 However, there will be an increase in practise as more nodes means more latency variation,
