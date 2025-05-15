@@ -19,7 +19,7 @@ removing the application. When run non-interactively, the command will refuse
 to remove the application unless the --force option is given.
 
 This command can only be used to remove non-production deployments, in Vespa
-Cloud. See [https://cloud.vespa.ai/en/deleting-applications](https://cloud.vespa.ai/en/deleting-applications) for how to remove
+Cloud. See [https://docs.vespa.ai/en/cloud/deleting-applications.html](https://docs.vespa.ai/en/cloud/deleting-applications.html) for how to remove
 production deployments.
 
 For other systems, destroy the application by removing the
