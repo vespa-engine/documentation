@@ -45,7 +45,7 @@ Note that when overriding key pair through environment variables, that key pair
 will always be used for all applications. It's not possible to specify an
 application-specific key.
 
-See [https://cloud.vespa.ai/en/security/guide](https://cloud.vespa.ai/en/security/guide) for more details.
+See [https://docs.vespa.ai/en/cloud/security/guide.html](https://docs.vespa.ai/en/cloud/security/guide.html) for more details.
 
 ```
 vespa auth cert [flags]
