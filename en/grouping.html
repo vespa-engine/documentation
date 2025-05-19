@@ -12,17 +12,77 @@ function setGroupingParam(groupingVal) {
     currentUrl.search = urlParams.toString();
     window.history.pushState({}, '', currentUrl);
 }
+function flattenFields(node) {
+      if (!node.fields) return node;
+      return {
+        ...node,
+        ...node.fields, // spread fields to top level
+        fields: undefined // optional: remove nested 'fields' key
+      };
+}
 
 function showResult() {
-    const newGroupingVal = document.getElementById('grouping-query-input').value;
-    // update the current url with the new search parameter
-    if (newGroupingVal !== DEFAULT_GROUPING) {
-    setGroupingParam(newGroupingVal)
+  const newGroupingVal = document.getElementById('grouping-query-input').value;
+
+  if (newGroupingVal !== DEFAULT_GROUPING) {
+    setGroupingParam(newGroupingVal);
+  }
+
+  const rawYql = 'select * from purchase where true limit 0 |' + newGroupingVal;
+  const encodedYql = encodeURIComponent(rawYql);
+
+  const vespaUrl = `https://api.search.vespa.ai/search/?yql=${encodedYql}`;
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(vespaUrl)}`;
+
+  // SHOW LOADER
+  document.getElementById('loader').style.display = 'block';
+
+  fetch(proxyUrl)
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    })
+    .then(wrapper => {
+      const jsonData = JSON.parse(wrapper.contents);
+      const tableContainer = document.getElementById('table-container');
+
+
+    let rows = [];
+
+    const customerGroups = jsonData.root.children?.[0].children?.[0].children ?? [];
+
+    const hasHits = customerGroups?.[0]?.children?.[0]?.id?.startsWith('hitlist');
+
+    if (hasHits) {
+      rows = customerGroups.flatMap(group =>
+        group.children?.[0]?.children.map(flattenFields) ?? []
+      );
+    } else {
+      rows = customerGroups.map(flattenFields);
     }
-    // open tab with results
-    openTab(encodeURI("https://api.search.vespa.ai/search/?yql=select * from purchase where true limit 0 | " +
-      newGroupingVal));
+      excludeKeys = ['id', 'documentid','relevance', 'fields', 'source', 'sddocname']
+
+      const table = generateTable(rows, excludeKeys);
+
+      if (table) {
+        const oldTable = tableContainer.querySelector('table');
+        if (oldTable) {
+          tableContainer.replaceChild(table, oldTable);
+        } else {
+          tableContainer.appendChild(table);
+        }
+        table.classList.add('table');
+      } else {
+        tableContainer.innerHTML = '<p>No data available to display.</p>';
+      }
+    })
+    .catch(error => console.error(error))
+    .finally(() => {
+      // HIDE LOADER
+      document.getElementById('loader').style.display = 'none';
+    });
 }
+
 
 function onKeyDown(event, elem) {
   console.log(event, event.key === 'Enter')
@@ -83,17 +143,123 @@ document.addEventListener('DOMContentLoaded', function() {
   Try running requests on the
   <a href="https://github.com/vespa-cloud/vespa-documentation-search#feed-grouping-examples">grouping example data</a>:
 </p>
-<div class="vespa-notification vespa-notification-query">
-  <span style="position: relative; width: calc(100% - 155px);">
-    <input type="text" id="grouping-query-input" value="all( group(customer) each(output(sum(price))) )"
-          style="width: calc(100% - 155px); font-size: 1.6rem; color: #303030; font-family: 'Hind Madurai', sans-serif;" onkeydown="onKeyDown(event, this)"/>
-    <button onclick="reset(this)" id="refresh-btn" class="is-solid is-small"
-          style="position: absolute; background-color: transparent; border: none; padding: 5px; right: 10px;"><span class="d-icon d-refresh" style="font-size: 16px;"></span></button>
-  </span>
-  <button onclick="showResult()" class="button is-solid is-small"
-          style="width: 150px; font-size: 1.6rem; font-family: 'Hind Madurai', sans-serif;">Run grouping</button>
+
+<style>
+/* Container styling */
+.vespa-grouping-interface {
+  font-size: inherit;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* Query bar styling */
+.query-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.query-bar input[type="text"] {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.query-bar input[type="text"]:focus {
+  border-color: #666;
+  outline: none;
+}
+
+.query-bar button {
+  
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#refresh-btn {
+  background-color: transparent;
+  padding: 0.5rem 0.75rem;
+  font-size: 1.5em;
+  color: #555;
+}
+
+#refresh-btn:hover {
+  color: #000;
+}
+
+.query-bar button:not(#refresh-btn) {
+  background-color: #303030;
+  color: #fff;
+}
+
+.query-bar button:not(#refresh-btn):hover {
+  background-color: #505050;
+}
+
+/* Loader */
+.loader {
+  text-align: center;
+  color: #888;
+  margin-bottom: 1rem;
+  width: 100%;
+}
+
+/* Table styling */
+.grouping-table-container {
+  overflow-x: auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  
+}
+
+
+
+@media (max-width: 600px) {
+  .query-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .query-bar button {
+    width: 100%;
+  }
+
+  #refresh-btn {
+    align-self: flex-end;
+  }
+}
+</style>
+<!-- Container -->
+<div class="vespa-grouping-interface">
+  <!-- Query Input -->
+  <div class="query-bar row">
+    <input type="text" id="grouping-query-input"
+      value="all( group(customer) each(output(sum(price))) )"
+      placeholder="Enter grouping query..."
+      onkeydown="onKeyDown(event, this)" />
+    <button id="refresh-btn" onclick="reset(this)" title="Reset Query">
+      &#10227;
+    </button>
+    <button onclick="showResult()">Run Grouping</button>
+  </div>
+
+  <!-- Loader -->
+  <div id="loader" class="loader row" style="display: none;">Loading...</div>
+
+  <!-- Result Table -->
+  <div class="grouping-table-container row" id="table-container">
+    <div class="resizer" id="resizer"></div>
+  </div> 
 </div>
-<br/>
+
 
 <p>
   The Vespa grouping language is a list-processing language
@@ -2113,3 +2279,117 @@ field attributes type map&lt;string, string&gt; {
       each( group(attributes.value) each(output(sum(price))))
     )</a>
 </p>
+
+
+<script>
+
+
+function parseDocuments(response) {
+  if (!response || !response.root || !response.root.children) {
+    console.warn("No root or children in response.");
+    return [];
+  }
+
+  console.log("root.children:", response.root.children);
+
+  return response.root.children.map(doc => parseDocument(doc));
+}
+
+function flattenObject(obj, prefix = '') {
+    let result = {};
+
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            const value = obj[key];
+            const newPrefix = prefix ? `${prefix}.${key}` : key;
+
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                Object.assign(result, flattenObject(value, newPrefix));
+            } else {
+                const finalKey = newPrefix.startsWith('fields.') ? newPrefix.slice(7) : newPrefix;
+                result[finalKey] = value;
+            }
+        }
+    }
+
+    return result;
+}
+
+
+const checkboxes = document.querySelectorAll('input[type="checkbox"][data-col]');
+    const table = document.getElementById('table-conrainer').children;
+
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        const colIndex = parseInt(checkbox.getAttribute('data-col'));
+        const cells = table.querySelectorAll(`tr > *:nth-child(${colIndex + 1})`);
+
+        cells.forEach(cell => {
+          if (checkbox.checked) {
+            cell.classList.remove('hidden');
+          } else {
+            cell.classList.add('hidden');
+          }
+        });
+      });
+    });
+
+
+
+
+function generateTable(data, excludeKeys = []) {
+    if (!data || data.length === 0) return null;
+
+    const isFlat = data.every(item =>
+        Object.values(item).every(value => typeof value !== 'object' || value === null)
+    );
+
+    const shouldIncludeKey = key => !excludeKeys.includes(key);
+
+    const getAllKeys = () => {
+        const keys = new Set();
+        data.forEach(item => {
+            Object.keys(item).forEach(k => {
+                if (shouldIncludeKey(k)) keys.add(k);
+            });
+        });
+        return Array.from(keys);
+    };
+
+    const allKeys = getAllKeys();
+
+    const table = document.createElement('table');
+    const thead = table.createTHead();
+    const headerRow = thead.insertRow();
+
+    allKeys.forEach(key => {
+        const th = document.createElement('th');
+        th.textContent = key;
+        headerRow.appendChild(th);
+    });
+
+    const tbody = table.createTBody();
+    data.forEach(item => {
+        const row = tbody.insertRow();
+        allKeys.forEach(key => {
+            const td = row.insertCell();
+            const value = item[key];
+
+            if (Array.isArray(value)) {
+                const subTable = generateTable(value, excludeKeys);
+                if (subTable) td.appendChild(subTable);
+            } else if (typeof value === 'object' && value !== null) {
+                const subTable = generateTable([value], excludeKeys);
+                if (subTable) td.appendChild(subTable);
+            } else {
+                td.textContent = value !== undefined ? value : '';
+            }
+        });
+    });
+
+    return table;
+}
+
+
+
+</script>
