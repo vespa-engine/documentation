@@ -34,8 +34,6 @@ function showResult() {
   const vespaUrl = `https://api.search.vespa.ai/search/?yql=${encodedYql}`;
   const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(vespaUrl)}`;
 
-  // SHOW LOADER
-  document.getElementById('loader').style.display = 'block';
 
   fetch(proxyUrl)
     .then(response => {
@@ -76,11 +74,7 @@ function showResult() {
         tableContainer.innerHTML = '<p>No data available to display.</p>';
       }
     })
-    .catch(error => console.error(error))
-    .finally(() => {
-      // HIDE LOADER
-      document.getElementById('loader').style.display = 'none';
-    });
+    .catch(error => console.error(error));
 }
 
 
@@ -126,7 +120,93 @@ function getQueryParam(name) {
     return urlParams.get(name);
 }
 
+function executeGrouping(yql, outputContainer) {
+  // Show loader before starting fetch
+  outputContainer.innerHTML = '<div class="loader"></div>';
+
+  const rawYql = 'select * from purchase where true limit 0 |' + yql;
+  const encodedYql = encodeURIComponent(rawYql);
+  const vespaUrl = `https://api.search.vespa.ai/search/?yql=${encodedYql}`;
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(vespaUrl)}`;
+
+  fetch(proxyUrl)
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    })
+    .then(wrapper => {
+      const jsonData = JSON.parse(wrapper.contents);
+      let rows = [];
+      const customerGroups = jsonData.root.children?.[0].children?.[0].children ?? [];
+      const hasHits = customerGroups?.[0]?.children?.[0]?.id?.startsWith('hitlist');
+
+      if (hasHits) {
+        rows = customerGroups.flatMap(group =>
+          group.children?.[0]?.children.map(flattenFields) ?? []
+        );
+      } else {
+        rows = customerGroups.map(flattenFields);
+      }
+
+      const excludeKeys = ['id', 'documentid', 'relevance', 'fields', 'source', 'sddocname'];
+      const table = generateTable(rows, excludeKeys);
+
+      outputContainer.innerHTML = '';
+      if (table) {
+        table.classList.add('table');
+        outputContainer.appendChild(table);
+      } else {
+        outputContainer.innerHTML = '<p>No data available to display.</p>';
+      }
+    })
+    .catch(error => {
+      outputContainer.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+    });
+}
+
+
+function transformPreToExecutableCells() {
+  document.querySelectorAll('pre:not(.no-transform)').forEach(pre => {
+    const fullText = pre.textContent.trim();
+    const splitIndex = fullText.indexOf('|');
+    if (splitIndex === -1) return;
+
+    const yql = fullText.slice(splitIndex + 1).trim();
+
+    const container = document.createElement('div');
+    container.className = 'yql-cell';
+
+    const label = document.createElement('div');
+    label.textContent = 'Executable Grouping Query:';
+    label.className = 'yql-cell-label';
+
+    const textarea = document.createElement('textarea');
+    textarea.value = yql;
+    textarea.className = 'yql-cell-textarea';
+
+    const runButton = document.createElement('button');
+    runButton.textContent = 'Run Grouping';
+    runButton.className = 'button is-small yql-cell-button';
+
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'grouping-table-container';
+
+    runButton.onclick = () => {
+      executeGrouping(textarea.value, resultDiv);
+    };
+
+    // Replace <pre> with this new interactive container
+    pre.replaceWith(container);
+    container.appendChild(label);
+    container.appendChild(textarea);
+    container.appendChild(runButton);
+    container.appendChild(resultDiv);
+  });
+}
+
+
 document.addEventListener('DOMContentLoaded', function() {
+    transformPreToExecutableCells();
     // Get the value of the 'grouping' query parameter
     const groupingValue = getQueryParam('grouping');
     // If the 'grouping-query-input' element exists, set its value to the query parameter
@@ -136,125 +216,27 @@ document.addEventListener('DOMContentLoaded', function() {
       groupingInput.value = groupingValue;
     } else{
       document.getElementById('refresh-btn').classList.add('hide');
+      
     }
 });
+
+
 </script>
-<p>
-  Try running requests on the
-  <a href="https://github.com/vespa-cloud/vespa-documentation-search#feed-grouping-examples">grouping example data</a>:
-</p>
 
-<style>
-/* Container styling */
-.vespa-grouping-interface {
-  font-size: inherit;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-}
+<div class="editor-container">
+  <h2>Grouping Interface</h2>
+  <p>
+    Try running requests on the
+    <a href="https://github.com/vespa-cloud/vespa-documentation-search#feed-grouping-examples">grouping example data</a>:
+  </p>
+  <textarea id="grouping-query-input" onkeydown="onKeyDown(event, this)"
+  placeholder="Write your requests here...">all( group(customer) each(output(sum(price))) )</textarea>
+  <div class="row" style="justify-content: flex-end;">
+    <button class="button is-solid is-small run-button" style="height: 24px; margin: auto 0;"   onclick="showResult()">Run Grouping</button>
+    <button onclick="reset(this)" id="refresh-btn" class="is-solid is-small"
+    style="border: none;"><span class="d-icon d-refresh"></span></button>
 
-/* Query bar styling */
-.query-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.query-bar input[type="text"] {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  transition: border-color 0.2s;
-}
-
-.query-bar input[type="text"]:focus {
-  border-color: #666;
-  outline: none;
-}
-
-.query-bar button {
-  
-  padding: 0.6rem 1.2rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-#refresh-btn {
-  background-color: transparent;
-  padding: 0.5rem 0.75rem;
-  font-size: 1.5em;
-  color: #555;
-}
-
-#refresh-btn:hover {
-  color: #000;
-}
-
-.query-bar button:not(#refresh-btn) {
-  background-color: #303030;
-  color: #fff;
-}
-
-.query-bar button:not(#refresh-btn):hover {
-  background-color: #505050;
-}
-
-/* Loader */
-.loader {
-  text-align: center;
-  color: #888;
-  margin-bottom: 1rem;
-  width: 100%;
-}
-
-/* Table styling */
-.grouping-table-container {
-  overflow-x: auto;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  
-}
-
-
-
-@media (max-width: 600px) {
-  .query-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .query-bar button {
-    width: 100%;
-  }
-
-  #refresh-btn {
-    align-self: flex-end;
-  }
-}
-</style>
-<!-- Container -->
-<div class="vespa-grouping-interface">
-  <!-- Query Input -->
-  <div class="query-bar row">
-    <input type="text" id="grouping-query-input"
-      value="all( group(customer) each(output(sum(price))) )"
-      placeholder="Enter grouping query..."
-      onkeydown="onKeyDown(event, this)" />
-    <button id="refresh-btn" onclick="reset(this)" title="Reset Query">
-      &#10227;
-    </button>
-    <button onclick="showResult()">Run Grouping</button>
   </div>
-
-  <!-- Loader -->
-  <div id="loader" class="loader row" style="display: none;">Loading...</div>
-
-  <!-- Result Table -->
   <div class="grouping-table-container row" id="table-container">
     <div class="resizer" id="resizer"></div>
   </div> 
@@ -501,11 +483,7 @@ Example: <em>Return the total sum of purchases per customer</em> - steps:
 <p>
   Final query, producing the sum of the price of all purchases for each customer:
 </p>
-<p><a class="yql-x">select * from purchase where true limit 0 |
-  all(
-    group(customer)
-    each(output(sum(price)))
-  )</a></p>
+
 <pre>
 /search/?yql=select * from sources * where true limit 0 |
   all( group(customer) each(output(sum(price))) )
@@ -547,45 +525,11 @@ Example: <em>Sum price of purchases <a href="#time-and-date">per date</a>:</em>
 <pre>
 select (&hellip;) | all(group(time.date(date)) each(output(sum(price))))
 </pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th>Sum(price)</th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>2006-09-06</td>
-  <td>$1 000</td>
-  </tr>
-<tr>
-  <td>2006-09-07</td>
-  <td>$3 000</td>
-  </tr>
-<tr>
-  <td>2006-09-08</td>
-  <td>$16 000</td>
-  </tr>
-<tr>
-  <td>2006-09-09</td>
-  <td>$12 300</td>
-  </tr>
-<tr>
-  <td>2006-09-10</td>
-  <td>$22 540</td>
-  </tr>
-<tr>
-  <td>2006-09-11</td>
-  <td>$24 997</td>
-  </tr>
-</tbody>
-</table>
 <p>
 Note: in examples above, <em>all</em> documents are evaluated.
 Modify the query to add filters (and thus cut latency), like (remember to URL encode):
 </p>
-<pre>/search/?yql=select * from sources * where customer contains "smith"</pre>
+<pre class="no-transform">/search/?yql=select * from sources * where customer contains "smith"</pre>
 
 
 
@@ -640,24 +584,6 @@ Ordering will not change after a merge operation.
 select (&hellip;) | all(group(customer) max(2) precision(12) order(-count())
     each(output(sum(price))))
 </pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th>sum(price)</th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>Jones</td>
-  <td>$39 816</td>
-  </tr>
-<tr>
-  <td>Smith</td>
-  <td>$19 484</td>
-  </tr>
-</tbody>
-</table>
 
 
 
@@ -680,142 +606,8 @@ and <code>max</code> to limit the number of hits per group.
 <pre>
 /search/?yql=select * from sources * where true |
              all(group(customer) each(max(3) each(output(summary()))))
-        &amp;ranking=pricerank
 </pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th></th>
-  <th></th>
-  <th></th>
-  <th></th>
-  <th></th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>Brown</td>
-  <td></td>
-  <td></td>
-  <td></td>
-  <td></td>
-  <td></td>
-  </tr>
-<tr class="trx">
-  <td></td>
-  <th class="thx">Date</th>
-  <th class="thx">Price</th>
-  <th class="thx">Tax</th>
-  <th class="thx">Item</th>
-  <th class="thx">Customer</th>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-08 11:00</td>
-  <td>$8 000</td>
-  <td>0.12</td>
-  <td>Head</td>
-  <td>Brown</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-10 10:00</td>
-  <td>$3 770</td>
-  <td>0.12</td>
-  <td>Spring</td>
-  <td>Brown</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-09 11:00</td>
-  <td>$3 400</td>
-  <td>0.24</td>
-  <td>Oil pan</td>
-  <td>Brown</td>
-  </tr>
-<tr>
-  <td>Jones</td>
-  <td></td>
-  <td></td>
-  <td></td>
-  <td></td>
-  <td></td>
-  </tr>
-<tr class="trx">
-  <td></td>
-  <th class="thx">Date</th>
-  <th class="thx">Price</th>
-  <th class="thx">Tax</th>
-  <th class="thx">Item</th>
-  <th class="thx">Customer</th>
-</tr>
-<tr>
-  <td></td>
-  <td>2006-09-11 12:00</td>
-  <td>$9 870</td>
-  <td>0.12</td>
-  <td>Exhaust port</td>
-  <td>Jones</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-10 10:00</td>
-  <td>$8 900</td>
-  <td>0.24</td>
-  <td>Camshaft</td>
-  <td>Jones</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-11 13:00</td>
-  <td>$6 765</td>
-  <td>0.12</td>
-  <td>Crankshaft</td>
-  <td>Jones</td>
-  </tr>
-<tr>
-  <td>Smith</td>
-  <td></td>
-  <td></td>
-  <td></td>
-  <td></td>
-  <td></td>
-  </tr>
-<tr class="trx">
-  <td></td>
-  <th class="thx">Date</th>
-  <th class="thx">Price</th>
-  <th class="thx">Tax</th>
-  <th class="thx">Item</th>
-  <th class="thx">Customer</th>
-</tr>
-<tr>
-  <td></td>
-  <td>2006-09-10 11:00</td>
-  <td>$6 100</td>
-  <td>0.24</td>
-  <td>Spark plug</td>
-  <td>Smith</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-09 12:00</td>
-  <td>$5 500</td>
-  <td>0.12</td>
-  <td>Oil sump</td>
-  <td>Smith</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-11 11:00</td>
-  <td>$2 584</td>
-  <td>0.12</td>
-  <td>Connection rod</td>
-  <td>Smith</td>
-  </tr>
-</tbody>
-</table>
+
 <p>Notes on ordering in the example above:</p>
 <ul>
 <li>
@@ -826,7 +618,7 @@ and <code>max</code> to limit the number of hits per group.
 </li><li>
     To order hits inside groups, use ranking. Add <code>ranking=pricerank</code> to the query
     to use the pricerank <a href="ranking.html">rank profile</a> to rank by price:
-<pre>
+<pre class="no-transform">
 rank-profile pricerank inherits default {
     first-phase {
         expression: attribute(price)
@@ -847,7 +639,7 @@ This limit is compared against the total number of groups and hits that query co
   The following query may return 5 groups and 0 hits.
   It will be rejected when <code>grouping.globalMaxGroups &lt; 5</code>
 </p>
-<pre>
+<pre class="no-transform">
 select (&hellip;) |
   all(group(a) max(5)
     each(output(count())))
@@ -857,7 +649,7 @@ select (&hellip;) |
   The following query may return 5 groups and 35 hits.
   It will be rejected when <code>grouping.globalMaxGroups &lt; 5+5*7</code>.
 </p>
-<pre>
+<pre class="no-transform">
 select (&hellip;) |
   all(group(a) max(5)
     each(output(count()) max(7)
@@ -868,7 +660,7 @@ select (&hellip;) |
   The following query may return 6 groups and 30 hits.
   It will be rejected when <code>grouping.globalMaxGroups &lt; 2*(3+3*5)</code>.
 </p>
-<pre>
+<pre class="no-transform">
 select (&hellip;) |
   all(
     all(group(a) max(3)
@@ -888,7 +680,7 @@ select (&hellip;) |
   <code>defaultMaxGroups=5</code> and <code>defaultMaxHits=7</code>, and both will be rejected when
   <code>globalMaxGroups &lt; 5+5*7</code>.
 </p>
-<pre>
+<pre class="no-transform">
 select (&hellip;) |
   all(group(a) max(5)
     each(output(count()) max(7)
@@ -917,7 +709,7 @@ select (&hellip;) |
   should be overridden in a query profile if some groupings do not use <code>max</code> and the default values are too low.
 </p>
 
-<pre>
+<pre class="no-transform">
   &lt;query-profile id="default"&gt;
     &lt;field name="grouping.defaultMaxGroups"&gt;20&lt;/field&gt;
     &lt;field name="grouping.defaultMaxHits"&gt;100&lt;/field&gt;
@@ -950,112 +742,6 @@ Example: How much each customer has spent per day by grouping on customer, then 
 <pre>
 select (&hellip;) | all(group(customer) each(group(time.date(date)) each(output(sum(price)))))
 </pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th></th>
-  <th></th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>Brown</td>
-  <td></td>
-  <td></td>
-  </tr>
-<tr class="trx">
-  <td></td>
-  <th class="thx">GroupId</th>
-  <th class="thx">Sum(price)</th>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-08</td>
-  <td>$8 000</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-09</td>
-  <td>$3 400</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-10</td>
-  <td>$7 540</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-11</td>
-  <td>$1 597</td>
-  </tr>
-<tr>
-  <td>Jones</td>
-  <td></td>
-  <td></td>
-  </tr>
-<tr class="trx">
-  <td></td>
-  <th class="thx">GroupId</th>
-  <th class="thx">Sum(price)</th>
-</tr>
-<tr>
-  <td></td>
-  <td>2006-09-08</td>
-  <td>$8 000</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-09</td>
-  <td>$2 100</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-10</td>
-  <td>$8 900</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-11</td>
-  <td>$20 816</td>
-  </tr>
-<tr>
-  <td>Smith</td>
-  <td></td>
-  <td></td>
-  </tr>
-<tr class="trx">
-  <td></td>
-  <th class="thx">GroupId</th>
-  <th class="thx">Sum(price)</th>
-</tr>
-<tr>
-  <td></td>
-  <td>2006-09-06</td>
-  <td>$1 000</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-07</td>
-  <td>$3 000</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-09</td>
-  <td>$6 800</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-10</td>
-  <td>$6 100</td>
-  </tr>
-<tr>
-  <td></td>
-  <td>2006-09-11</td>
-  <td>$2 584</td>
-  </tr>
-</tbody>
-</table>
 <p>
 Use this to query for all items on a per-customer basis, displaying the most expensive hit for each customer,
 with subgroups of purchases on a per-date basis.
@@ -1063,7 +749,7 @@ Use the <a href="#hits-per-group">summary</a> clause
 to show hits inside any group at any nesting level.
 Include the sum price for each customer, both as a grand total and broken down on a per-day basis:
 </p>
-<pre>
+<pre class="no-transform">
 /search/?yql=select * from sources * where true limit 0|
              all(group(customer)
                  each(max(1) output(sum(price)) each(output(summary())))
@@ -1673,7 +1359,7 @@ select (&hellip;) | all(group(predefined(tax, bucket[0.0,0.2&gt;, bucket[0.2,0.5
   returned in the grouping result.
   For example, given the result:
 </p>
-<pre>{% highlight json %}
+<pre class="no-transform">{% highlight json %}
 {
     "root": {
         "children": [
@@ -1717,21 +1403,21 @@ select (&hellip;) | all(group(predefined(tax, bucket[0.0,0.2&gt;, bucket[0.2,0.5
 <p>
 reproduce the same result by passing the <em>this</em>-continuation along the original select:
 </p>
-<pre>
+<pre class="no-transform">
 select (&hellip;) | { 'continuations':['BGAAABEBCA'] }all(&hellip;)
 </pre>
 <p>
 To display the next page of customers, pass the <em>this</em>-continuation of the root
 group, and the <em>next</em> continuation of the customer list:
 </p>
-<pre>
+<pre class="no-transform">
 select (&hellip;) | { 'continuations':['BGAAABEBCA', 'BGAAABEBEBC'] }all(&hellip;)
 </pre>
 <p>
   To display the previous page of customers, pass the <em>this</em>-continuation of the root group,
   and the <em>prev</em> continuation of the customer list:
 </p>
-<pre>
+<pre class="no-transform">
 select (&hellip;) | { 'continuations':['BGAAABEBCA', 'BGAAABEABC'] }all(&hellip;)
 </pre>
 <p>
@@ -1771,36 +1457,7 @@ Examples:
 <pre>
 select (&hellip;) | all(group(mod(div(date,mul(60,60)),24)) each(output(sum(price))))
 </pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th>sum(price)</th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>09:00</td>
-  <td>$1 000</td>
-  </tr>
-<tr>
-  <td>10:00</td>
-  <td>$22 367</td>
-  </tr>
-<tr>
-  <td>11:00</td>
-  <td>$23 524</td>
-  </tr>
-<tr>
-  <td>12:00</td>
-  <td>$26 181</td>
-  </tr>
-<tr>
-  <td>13:00</td>
-  <td>$6 765</td>
-  </tr>
-</tbody>
-</table>
+
 <p>
 These types of expressions may also be used inside <code>output</code> operations,
 so instead of simply calculating the sum price of the grouped purchases,
@@ -1809,28 +1466,6 @@ calculate the sum income after taxes per customer:
 <pre>
 select (&hellip;) | all(group(customer) each(output(sum(mul(price,sub(1,tax))))))
 </pre>
-<table class="table">
-<thead>
-<tr>
-  <th>GroupId</th>
-  <th>sum(mul(price,sub(1,tax)))</th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td>Brown</td>
-  <td>$17 193</td>
-  </tr>
-<tr>
-  <td>Jones</td>
-  <td>$32 868</td>
-  </tr>
-<tr>
-  <td>Smith</td>
-  <td>$15 897</td>
-  </tr>
-</tbody>
-</table>
 <p>
 Note that the validity of an expression depends on the current nesting level.
 For, while <code>sum(price)</code> would be a valid expression for a group of hits, <code>price</code> would not.
@@ -2290,7 +1925,6 @@ function parseDocuments(response) {
     return [];
   }
 
-  console.log("root.children:", response.root.children);
 
   return response.root.children.map(doc => parseDocument(doc));
 }
