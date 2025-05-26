@@ -180,7 +180,7 @@ var operations = {
                     if ( ! result.has("show_details") || result.get("show_details") == false) {
                         row.attr("hidden", true);
                     }
-                    row.append("td").attr("class", "label").html("Details");
+                    row.append("td").attr("class", "label").html("Execution Trace");
                     row.append("td").append("textarea").attr("rows", steps.split("\n").length + 2)
                             .attr("class", "debug-info-text").text(primitive +"\n\n" + steps);
 
@@ -268,11 +268,11 @@ function add_save_cancel_field(root) {
     row.append("td").attr("class", "label");
     var cell = row.append("td");
 
-    var saveButton = cell.append("a").attr("href", "#").attr("id", "save-button")
-        .html(icon_check() + " Save and execute (ctrl + enter)")
+    var saveButton = cell.append("a").attr("href", "#").attr("class","header tooltip save-button")
+        .html(icon_check() + " Save and execute (ctrl + enter)" + '<span class="tooltip-text">Save changes and execute expression</span>')
         .on("click", function(event) { execute_selected(); event.preventDefault(); });
-    var cancelButton = cell.append("a").attr("href", "#").attr("id", "cancel-button")
-        .attr("style","margin-left: 80px").html(icon_exit() + " Cancel (escape)")
+    var cancelButton = cell.append("a").attr("href", "#").attr("class","header tooltip cancel-button")
+        .attr("style","margin-left: 80px").html(icon_exit() + " Cancel (escape)" + '<span class="tooltip-text">Cancel editing</span>')
         .on("click", function(event) { document.activeElement.blur(); exit_edit_selected(); event.preventDefault(); });
 
     // Check if we're in an expression context by looking for the expression textarea
@@ -295,12 +295,12 @@ function add_save_cancel_field(root) {
 }
 
 function add_setup_ui_buttons(root) {
-    root.append("a").attr("href", "#").attr("class","header").html(icon_cancel())
+    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_cancel() + '<span class="tooltip-text">Cancel editing</span>')
         .on("click", function(event) { document.activeElement.blur(); exit_edit_selected(); event.preventDefault(); });
 }
 
 function add_result_ui_buttons(root, frame_index) {
-    root.append("a").attr("href", "#").attr("class","header").html(icon_edit())
+    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_edit() + '<span class="tooltip-text">Edit frame</span>')
         .on("click", function(event) { 
             // Only allow edit if not already in edit mode
             if (context !== contexts.EDIT) {
@@ -311,7 +311,7 @@ function add_result_ui_buttons(root, frame_index) {
             event.stopPropagation(); 
             event.preventDefault(); 
         });
-    root.append("a").attr("href", "#").attr("class","header").html(icon_up())
+    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_up() + '<span class="tooltip-text">Move frame up</span>')
         .on("click", function(event) { 
             // Only allow moving frames if not in edit mode
             if (context !== contexts.EDIT) {
@@ -322,7 +322,7 @@ function add_result_ui_buttons(root, frame_index) {
             event.stopPropagation(); 
             event.preventDefault(); 
         });
-    root.append("a").attr("href", "#").attr("class","header").html(icon_down())
+    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_down() + '<span class="tooltip-text">Move frame down</span>')
         .on("click", function(event) { 
             // Only allow moving frames if not in edit mode
             if (context !== contexts.EDIT) {
@@ -333,7 +333,7 @@ function add_result_ui_buttons(root, frame_index) {
             event.stopPropagation(); 
             event.preventDefault(); 
         });
-    root.append("a").attr("href", "#").attr("class","header").html(icon_remove())
+    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_cross() + '<span class="tooltip-text">Remove frame</span>')
         .on("click", function(event) { 
             // Only allow removing frames if not in edit mode
             if (context !== contexts.EDIT) {
@@ -347,7 +347,7 @@ function add_result_ui_buttons(root, frame_index) {
 }
 
 function add_expression_result_ui_buttons(root, frame_index) {
-    root.append("a").attr("href", "#").attr("class","header header-space").html(icon_hierarchy())
+    root.append("a").attr("href", "#").attr("class","header header-space tooltip").html(icon_hierarchy() + '<span class="tooltip-text">Show execution trace</span>')
         .on("click", function(event) { show_details(frame_index); event.stopPropagation(); event.preventDefault(); });
 }
 
@@ -459,8 +459,8 @@ function icon_down() {
     return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(3 3)"><path d="m3.5 7.5 4 4 4-4"/><path d="m7.5.5v11"/><path d="m.5 14.5h14"/></g></svg>';
 }
 
-function icon_remove() {
-    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 7.5 6 6"/><path d="m13.5 7.5-6 6"/></g></svg>';
+function icon_cross() {
+    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(5 5)"><path d="m10.5 10.5-10-10z"/><path d="m10.5.5-10 10"/></g></svg>';
 }
 
 function icon_cancel() {
