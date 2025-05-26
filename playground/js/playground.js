@@ -768,9 +768,12 @@ function find_selected_frame_index() {
 
 function find_frame_index(frame) {
     var result = null;
+    // If frame is a D3 selection, get the DOM element
+    var frameNode = frame.node ? frame.node() : frame;
+
     d3.select("#frames").selectAll(".frame")
         .each(function (d, i) {
-            if (this == frame) {
+            if (this == frameNode) {
                 result = i;
             }
         });
