@@ -234,10 +234,31 @@ function add_save_cancel_field(root) {
     var row = root.select("table").append("tr");
     row.append("td").attr("class", "label");
     var cell = row.append("td");
-    cell.append("a").attr("href", "#").html(icon_check() + " Save and execute (ctrl + enter)")
+
+    var saveButton = cell.append("a").attr("href", "#").attr("id", "save-button")
+        .html(icon_check() + " Save and execute (ctrl + enter)")
         .on("click", function(event) { execute_selected(); event.preventDefault(); });
-    cell.append("a").attr("href", "#").attr("style","margin-left: 80px").html(icon_exit() + " Cancel (escape)")
+    var cancelButton = cell.append("a").attr("href", "#").attr("id", "cancel-button")
+        .attr("style","margin-left: 80px").html(icon_exit() + " Cancel (escape)")
         .on("click", function(event) { document.activeElement.blur(); exit_edit_selected(); event.preventDefault(); });
+
+    // Check if we're in an expression context by looking for the expression textarea
+    var expressionTextarea = root.select(".expression_expression textarea");
+    if (!expressionTextarea.empty()) {
+        // disable save button if expression is empty (causes ugly errors from backend)
+        function updateButtonStates() {
+            var value = get_textarea_field_value(root, "expression_expression");
+            var isEmpty = value === "";
+
+            saveButton.classed("disabled", isEmpty);
+        }
+
+        // Initial check
+        updateButtonStates();
+
+        // Add event listener to check for changes
+        expressionTextarea.on("input", updateButtonStates);
+    }
 }
 
 function add_setup_ui_buttons(root) {
@@ -610,7 +631,39 @@ function move_selected_down() {
     select_frame_by_index(frame_index+1);
 }
 
+// Check if an expression is empty (only contains whitespace)
+function is_expression_empty() {
+    // Only check in edit mode and for expressions
+    if (context !== contexts.EDIT) {
+        return false;
+    }
+
+    var frame = d3.select(selected);
+    if (!frame.empty()) {
+        var data = frame.data();
+        var setup = data[0][0]; // because of zip in update
+        var op = setup["op"];
+
+        // Only check for expressions
+        if (op === "e") {
+            try {
+                var value = get_textarea_field_value(frame, "expression_expression");
+                return value === "";
+            } catch (e) {
+                // If there's an error (e.g., textarea not found), return false
+                return false;
+            }
+        }
+    }
+    return false;
+}
+
 function execute_selected() {
+    // Don't execute if the expression is empty
+    if (is_expression_empty()) {
+        return;
+    }
+
     var frame_index = find_selected_frame_index();
     var frame = d3.select(selected);
     var data = frame.data();
