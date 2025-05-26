@@ -15,6 +15,39 @@ var converter = new showdown.Converter();
 var context = contexts.VIEW;
 
 ///////////////////////////////////////////////////////////////////////////////
+// Notification System
+///////////////////////////////////////////////////////////////////////////////
+
+function show_notification(message, type = 'info', duration = 3000) {
+    // Remove any existing notifications
+    d3.selectAll('.notification').remove();
+    
+    // Create notification element
+    var notification = d3.select('body')
+        .append('div')
+        .attr('class', 'notification ' + type)
+        .style('opacity', '0')
+        .html(message);
+    
+    // Fade in
+    notification
+        .transition()
+        .duration(300)
+        .style('opacity', '1');
+    
+    // Automatically fade out after duration
+    setTimeout(function() {
+        notification
+            .transition()
+            .duration(300)
+            .style('opacity', '0')
+            .on('end', function() {
+                notification.remove();
+            });
+    }, duration);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Operations and UI
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -268,13 +301,49 @@ function add_setup_ui_buttons(root) {
 
 function add_result_ui_buttons(root, frame_index) {
     root.append("a").attr("href", "#").attr("class","header").html(icon_edit())
-        .on("click", function(event) { edit_frame(frame_index); event.stopPropagation(); event.preventDefault(); });
+        .on("click", function(event) { 
+            // Only allow edit if not already in edit mode
+            if (context !== contexts.EDIT) {
+                edit_frame(frame_index); 
+            } else {
+                show_notification("Cannot edit a different frame while in edit mode. Finish editing first.", "warning");
+            }
+            event.stopPropagation(); 
+            event.preventDefault(); 
+        });
     root.append("a").attr("href", "#").attr("class","header").html(icon_up())
-        .on("click", function(event) { move_frame_up(frame_index); event.stopPropagation(); event.preventDefault(); });
+        .on("click", function(event) { 
+            // Only allow moving frames if not in edit mode
+            if (context !== contexts.EDIT) {
+                move_frame_up(frame_index); 
+            } else {
+                show_notification("Cannot move frames while in edit mode. Finish editing first.", "warning");
+            }
+            event.stopPropagation(); 
+            event.preventDefault(); 
+        });
     root.append("a").attr("href", "#").attr("class","header").html(icon_down())
-        .on("click", function(event) { move_frame_down(frame_index); event.stopPropagation(); event.preventDefault(); });
+        .on("click", function(event) { 
+            // Only allow moving frames if not in edit mode
+            if (context !== contexts.EDIT) {
+                move_frame_down(frame_index); 
+            } else {
+                show_notification("Cannot move frames while in edit mode. Finish editing first.", "warning");
+            }
+            event.stopPropagation(); 
+            event.preventDefault(); 
+        });
     root.append("a").attr("href", "#").attr("class","header").html(icon_remove())
-        .on("click", function(event) { remove_frame(frame_index); event.stopPropagation(); event.preventDefault(); });
+        .on("click", function(event) { 
+            // Only allow removing frames if not in edit mode
+            if (context !== contexts.EDIT) {
+                remove_frame(frame_index); 
+            } else {
+                show_notification("Cannot remove frames while in edit mode. Finish editing first.", "warning");
+            }
+            event.stopPropagation(); 
+            event.preventDefault(); 
+        });
 }
 
 function add_expression_result_ui_buttons(root, frame_index) {
@@ -568,7 +637,12 @@ function update() {
     rows.exit().remove();
     var frames = rows.enter()
         .append("div")
-            .on("click", function() { select_frame(this); })
+            .on("click", function() { 
+                // Only allow frame selection when not in edit mode
+                if (context !== contexts.EDIT) {
+                    select_frame(this); 
+                }
+            })
             .attr("class", "frame");
     frames.append("div").attr("class", "frame-header").html("header");
     frames.append("div").attr("class", "frame-content").html("content");
@@ -787,12 +861,16 @@ function is_element_entirely_visible(el) {
 }
 
 function select_frame(frame) {
+    // Don't allow selecting a different frame while in edit mode
+    if (context === contexts.EDIT) {
+        show_notification("Cannot select a different frame while in edit mode. Finish editing first.", "warning");
+        return;
+    }
+    
     if (selected == frame) {
         return;
     }
-    if (context === contexts.EDIT) {
-        exit_edit_selected();
-    }
+    
     if (selected != null) {
         selected.classList.remove("selected");
     }
@@ -806,6 +884,12 @@ function select_frame(frame) {
 }
 
 function select_frame_by_index(i) {
+    // Don't allow selecting a different frame while in edit mode
+    if (context === contexts.EDIT) {
+        show_notification("Cannot select a different frame while in edit mode. Finish editing first.", "warning");
+        return;
+    }
+    
     if (i >= num_frames()) {
         i = num_frames() - 1;
     }
@@ -842,7 +926,10 @@ function edit_selected() {
     var content = frame.select(".frame-content");
 
     operations[op]["setup_ui"](param, frame, header, content, find_frame_index(frame));
-
+    
+    // Add visual indicator for edit mode
+    frame.classed("edit-mode-active", true);
+    
     context = contexts.EDIT;
 }
 
@@ -872,7 +959,10 @@ function exit_edit_selected() {
     var content = frame.select(".frame-content");
 
     operations[op]["result_ui"](result, frame, header, content, find_frame_index(frame));
-
+    
+    // Remove visual indicator for edit mode
+    frame.classed("edit-mode-active", false);
+    
     context = contexts.VIEW;
 }
 
