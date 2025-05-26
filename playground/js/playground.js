@@ -15,7 +15,7 @@ var converter = new showdown.Converter();
 var context = contexts.VIEW;
 
 ///////////////////////////////////////////////////////////////////////////////
-// Notification System
+// Notifications
 ///////////////////////////////////////////////////////////////////////////////
 
 function show_notification(message, type = 'info', duration = 3000) {
@@ -954,6 +954,24 @@ function exit_edit_selected() {
 
     var op = setup["op"];
     var param = setup["p"];
+
+    // Check if this is a new frame that hasn't been executed yet
+    var isNewFrame = result.size === 0;
+    var isEmptyExpression = op === "e" && param["e"] === "";
+    var isEmptyComment = op === "c" && param["t"] === "";
+
+    if (isNewFrame && (isEmptyExpression || isEmptyComment)) {
+        // Nothing was entered, remove the frame
+        var frameIndex = find_frame_index(frame);
+        remove(frameIndex);
+        save_setup();
+        update();
+        // Remove visual indicator for edit mode
+        frame.classed("edit-mode-active", false);
+        context = contexts.VIEW;
+        select_frame_by_index(frameIndex-1);
+        return;
+    }
 
     var header = frame.select(".frame-header");
     var content = frame.select(".frame-content");
