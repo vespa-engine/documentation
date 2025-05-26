@@ -139,51 +139,90 @@ var operations = {
             } else {
                 var data = result.get("result");
                 if (typeof data === "object") {
-                    var table = content.append("table");
-
-                    // expression
-                    if (result.has("e") && result.get("e").length > 0) {
-                        var row = table.append("tr")
-                        row.append("td").attr("class", "label").html("Expression");
-                        row.append("td").attr("class", "code").html(replace_html_code(result.get("e")));
-                    }
-
-                    // type
-                    if (result.has("type") && result.get("type").length > 0) {
-                        var row = table.append("tr")
-                        row.append("td").attr("class", "label").html("Type");
-                        row.append("td").attr("class", "code").html(replace_html_code(result.get("type")));
-                    }
-
-                    // value
-                    var row = table.append("tr");
-                    row.append("td").attr("class", "label").attr("style", "padding-top: 5px").html("Value");
-                    var cell = row.append("td");
+                    // Create a container for all tensor cards
+                    var tensorContainer = content.append("div").attr("class", "tensor-section");
+                    
+                    // Get the values we need
                     var value = data["value"];
                     if (data["type"] !== null && data["type"].includes("tensor")) {
                         value = data["value"]["literal"];
                     }
-                    cell.append("input").attr("value", value).attr("style", "width: 800px").attr("readonly","readonly");
-                    row.append("td").append("a").attr("href", "#").attr("class", "header").html(icon_clipboard_copy())
-                        .on("click", function(event) { copy_to_clipboard(value); event.stopPropagation(); event.preventDefault(); });
+                    
+                    // Expression row
+                    if (result.has("e") && result.get("e").length > 0) {
+                        var expressionRow = tensorContainer.append("div").attr("class", "tensor-row");
+                        expressionRow.append("div").attr("class", "tensor-label").html("Expression:");
+                        var expressionValue = expressionRow.append("div").attr("class", "tensor-value");
+                        expressionValue.html(replace_html_code(result.get("e")));
+                        
+                        // Add copy icon to the right of the field
+                        expressionRow.append("span")
+                            .attr("class", "tensor-clipboard copy-button-align")
+                            .html(icon_clipboard_copy())
+                            .on("click", function() { 
+                                copy_to_clipboard(result.get("e")); 
+                                event.stopPropagation(); 
+                            });
+                    }
+                    
+                    // Type row
+                    if (result.has("type") && result.get("type").length > 0) {
+                        var typeRow = tensorContainer.append("div").attr("class", "tensor-row");
+                        typeRow.append("div").attr("class", "tensor-label").html("Type:");
+                        var typeValue = typeRow.append("div").attr("class", "tensor-value");
+                        typeValue.html(replace_html_code(result.get("type")));
+                        
+                        // Add copy icon to the right of the field
+                        typeRow.append("span")
+                            .attr("class", "tensor-clipboard copy-button-align")
+                            .html(icon_clipboard_copy())
+                            .on("click", function() { 
+                                copy_to_clipboard(result.get("type")); 
+                                event.stopPropagation(); 
+                            });
+                    }
+                    
+                    // Value row
+                    var valueRow = tensorContainer.append("div").attr("class", "tensor-row");
+                    valueRow.append("div").attr("class", "tensor-label").html("Value:");
+                    var valueContent = valueRow.append("div").attr("class", "tensor-value tensor-value-single-line");
 
-                    // graphical view of tensor
-                    row = table.append("tr");
-                    row.append("td").html("");
-                    cell = row.append("td");
-                    draw_table(cell, data);
-
-                    // steps
+                    // Table row - with empty space for label to align with other rows
+                    var tableRow = tensorContainer.append("div").attr("class", "tensor-row");
+                    tableRow.append("div").attr("class", "tensor-label").html("");
+                    var tableContent = tableRow.append("div").attr("style", "margin-top: 4px; width: 100%;");
+                    draw_table(tableContent, data);
+                    
+                    // Add input with value
+                    valueContent.append("pre")
+                        .attr("style", "margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;")
+                        .text(value);
+                    
+                    // Add copy icon to the right of the field
+                    valueRow.append("span")
+                        .attr("class", "tensor-clipboard copy-button-align")
+                        .html(icon_clipboard_copy())
+                        .on("click", function(event) { 
+                            copy_to_clipboard(value); 
+                            event.stopPropagation(); 
+                        });
+                    
+                    // Add execution trace section (previously steps)
                     const primitive = "Primitive representation:\n" + result.get("primitive");
                     const steps = "Steps:\n" + JSON.stringify(JSON.parse(result.get("steps")), null, 2);
-                    row = table.append("tr").attr("id", "steps_" + frame_index);
-                    if ( ! result.has("show_details") || result.get("show_details") == false) {
-                        row.attr("hidden", true);
+                    var debugContainer = content.append("div").attr("class", "debug-info-container").attr("id", "steps_" + frame_index);
+                    
+                    if (!result.has("show_details") || result.get("show_details") == false) {
+                        debugContainer.attr("hidden", true);
                     }
-                    row.append("td").attr("class", "label").html("Execution Trace");
-                    row.append("td").append("textarea").attr("rows", steps.split("\n").length + 2)
-                            .attr("class", "debug-info-text").text(primitive +"\n\n" + steps);
-
+                    
+                    var traceHeader = debugContainer.append("div").attr("class", "tensor-row");
+                    traceHeader.append("div").attr("class", "tensor-label").html("Execution Trace:");
+                    debugContainer.append("textarea")
+                        .attr("rows", steps.split("\n").length + 2)
+                        .attr("class", "debug-info-text")
+                        .attr("style", "width: 100%; margin-top: 4px;")
+                        .text(primitive + "\n\n" + steps);
                 } else {
                     content.html(data);
                 }
