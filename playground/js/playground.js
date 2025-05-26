@@ -416,7 +416,8 @@ function draw_table(element, variable) {
 }
 
 function table_html(element, data, columns) {
-    var table = element.append("table"),
+    var table = element.append("table")
+        .attr("class", "tensor-table"),
         thead = table.append("thead"),
         tbody = table.append("tbody");
 
@@ -440,8 +441,7 @@ function table_html(element, data, columns) {
         })
         .enter()
         .append("td")
-            .classed("data", true)
-            .text(function(d) { return d.value; });
+        .text(function(d) { return d.value; });
 
     return table;
 }
