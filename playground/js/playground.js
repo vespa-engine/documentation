@@ -13,6 +13,7 @@ var variables = new Map();
 var selected = null;
 var converter = new showdown.Converter();
 var context = contexts.VIEW;
+var currentTheme = localStorage.getItem('theme') || 'light';
 
 ///////////////////////////////////////////////////////////////////////////////
 // Notifications
@@ -1161,6 +1162,80 @@ function clear_examples() {
     d3.select("#examples-select").property("value", "");
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Theme Toggle Functionality
+///////////////////////////////////////////////////////////////////////////////
+
+function setTheme(theme) {
+    currentTheme = theme;
+    localStorage.setItem('theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    
+    // Update the theme toggle icon
+    const themeToggle = document.getElementById('toggle-theme-cmd');
+    if (themeToggle) {
+        if (theme === 'dark') {
+            themeToggle.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <span class="tooltip-text">Toggle light mode</span>
+            `;
+        } else {
+            themeToggle.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                </svg>
+                <span class="tooltip-text">Toggle dark mode</span>
+            `;
+        }
+    }
+}
+
+function toggleTheme() {
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    show_notification(`Switched to ${newTheme} mode`, 'info', 2000);
+}
+
+function setupThemeToggle() {
+    const themeToggle = document.getElementById('toggle-theme-cmd');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleTheme();
+        });
+    }
+    
+    // Check if theme is saved in localStorage
+    const savedTheme = localStorage.getItem('theme');
+    
+    if (!savedTheme) {
+        // If no saved preference, check system preference
+        const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        currentTheme = prefersDarkMode ? 'dark' : 'light';
+    }
+    
+    // Apply the theme
+    setTheme(currentTheme);
+    
+    // Listen for system preference changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        // Only change if user hasn't set a preference
+        if (!localStorage.getItem('theme')) {
+            setTheme(e.matches ? 'dark' : 'light');
+        }
+    });
+}
+
 function main() {
     setup_commands();
     load_setup();
@@ -1169,5 +1244,6 @@ function main() {
     select_frame_by_index(0);
     setup_keybinds();
     setup_examples();
+    setupThemeToggle();
 }
 
