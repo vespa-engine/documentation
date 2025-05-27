@@ -345,51 +345,28 @@ function add_setup_ui_buttons(root) {
         .on("click", function(event) { document.activeElement.blur(); exit_edit_selected(); event.preventDefault(); });
 }
 
+function addActionButton(root, iconFn, actionFn, frameIndex, actionName, tooltipText) {
+    root.append("a")
+        .attr("href", "#")
+        .attr("class", "header tooltip")
+        .html(iconFn() + `<span class="tooltip-text">${tooltipText}</span>`)
+        .on("click", function(event) {
+            // Only allow actions if not in edit mode
+            if (context !== contexts.EDIT) {
+                actionFn(frameIndex);
+            } else {
+                show_notification(`Cannot ${actionName} while in edit mode. Finish editing first.`, "warning");
+            }
+            event.stopPropagation();
+            event.preventDefault();
+        });
+}
+
 function add_result_ui_buttons(root, frame_index) {
-    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_edit() + '<span class="tooltip-text">Edit frame</span>')
-        .on("click", function(event) { 
-            // Only allow edit if not already in edit mode
-            if (context !== contexts.EDIT) {
-                edit_frame(frame_index); 
-            } else {
-                show_notification("Cannot edit a different frame while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
-    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_up() + '<span class="tooltip-text">Move frame up</span>')
-        .on("click", function(event) { 
-            // Only allow moving frames if not in edit mode
-            if (context !== contexts.EDIT) {
-                move_frame_up(frame_index); 
-            } else {
-                show_notification("Cannot move frames while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
-    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_down() + '<span class="tooltip-text">Move frame down</span>')
-        .on("click", function(event) { 
-            // Only allow moving frames if not in edit mode
-            if (context !== contexts.EDIT) {
-                move_frame_down(frame_index); 
-            } else {
-                show_notification("Cannot move frames while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
-    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_cross() + '<span class="tooltip-text">Remove frame</span>')
-        .on("click", function(event) { 
-            // Only allow removing frames if not in edit mode
-            if (context !== contexts.EDIT) {
-                remove_frame(frame_index); 
-            } else {
-                show_notification("Cannot remove frames while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
+    addActionButton(root, icon_edit, edit_frame, frame_index, "edit a different frame", "Edit this frame");
+    addActionButton(root, icon_up, move_frame_up, frame_index, "move frames", "Move frame up");
+    addActionButton(root, icon_down, move_frame_down, frame_index, "move frames", "Move frame down");
+    addActionButton(root, icon_cross, remove_frame, frame_index, "remove frames", "Remove this frame");
 }
 
 function add_expression_result_ui_buttons(root, frame_index) {
@@ -1355,4 +1332,3 @@ function main() {
     setup_examples();
     setupThemeToggle();
 }
-
