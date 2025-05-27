@@ -41,6 +41,7 @@ function showResult() {
       return response.json();
     })
     .then(wrapper => {
+    
       const jsonData = JSON.parse(wrapper.contents);
       const tableContainer = document.getElementById('table-container');
 
@@ -121,7 +122,6 @@ function getQueryParam(name) {
 }
 
 function executeGrouping(yql, outputContainer) {
-  // Show loader before starting fetch
   outputContainer.classList.add('loading');
   outputContainer.innerHTML = '<div class="loader"></div>';
 
@@ -137,27 +137,34 @@ function executeGrouping(yql, outputContainer) {
     })
     .then(wrapper => {
       const jsonData = JSON.parse(wrapper.contents);
-      let rows = [];
-      const customerGroups = jsonData.root.children?.[0].children?.[0].children ?? [];
-      const hasHits = customerGroups?.[0]?.children?.[0]?.id?.startsWith('hitlist');
-
-      if (hasHits) {
-        rows = customerGroups.flatMap(group =>
-          group.children?.[0]?.children.map(flattenFields) ?? []
-        );
-      } else {
-        rows = customerGroups.map(flattenFields);
-      }
-
-      const excludeKeys = ['id', 'documentid', 'relevance', 'fields', 'source', 'sddocname'];
-      const table = generateTable(rows, excludeKeys);
-
+      console.log(jsonData);
+      const groupingResponses = jsonData.root.children?.[0]?.children ?? [];
+      console.log(groupingResponses);
       outputContainer.innerHTML = '';
       outputContainer.classList.remove('loading');
-      if (table) {
-        table.classList.add('table');
-        outputContainer.appendChild(table);
-      } else {
+
+      const excludeKeys = ['id', 'documentid', 'relevance', 'fields', 'source', 'sddocname'];
+
+      let anyDataShown = false;
+
+      for (const groupResponse of groupingResponses) {
+        const groups = groupResponse.children ?? [];
+
+        let rows = [];
+        groups.forEach(group => {
+          rows = rows.concat(flattenGroupHierarchy(group));
+        });
+
+        const table = generateTable(rows, excludeKeys);
+
+        if (table) {
+          table.classList.add('table');
+          outputContainer.appendChild(table);
+          anyDataShown = true;
+        }
+      }
+
+      if (!anyDataShown) {
         outputContainer.innerHTML = '<p>No data available to display.</p>';
       }
     })
@@ -641,36 +648,38 @@ This limit is compared against the total number of groups and hits that query co
   The following query may return 5 groups and 0 hits.
   It will be rejected when <code>grouping.globalMaxGroups &lt; 5</code>
 </p>
-<pre class="no-transform">
-select (&hellip;) |
-  all(group(a) max(5)
-    each(output(count())))
+<pre>
+  select (&hellip;) | all(group(item) max(5) each(output(count())))
 </pre>
 
 <p>
   The following query may return 5 groups and 35 hits.
   It will be rejected when <code>grouping.globalMaxGroups &lt; 5+5*7</code>.
 </p>
-<pre class="no-transform">
-select (&hellip;) |
-  all(group(a) max(5)
-    each(output(count()) max(7)
-      each(output(summary()))))
+<pre>
+  select (&hellip;) | all(
+    group(customer) max(5)
+      each(
+        output(count()) max(7)
+          each(output(summary()))
+      )
+  )
 </pre>
 
 <p>
   The following query may return 6 groups and 30 hits.
   It will be rejected when <code>grouping.globalMaxGroups &lt; 2*(3+3*5)</code>.
 </p>
-<pre class="no-transform">
+<pre>
 select (&hellip;) |
-  all(
-    all(group(a) max(3)
+all(
+    all(group(item) max(3)
       each(output(count()) max(5)
         each(output(summary()))))
-    all(group(b) max(3)
+    all(group(customer) max(3)
       each(output(count()) max(5)
         each(output(summary())))))
+
 </pre>
 
 <h3 id="global-limit-combining">Combining with default limits for groups/hits</h3>
@@ -682,16 +691,25 @@ select (&hellip;) |
   <code>defaultMaxGroups=5</code> and <code>defaultMaxHits=7</code>, and both will be rejected when
   <code>globalMaxGroups &lt; 5+5*7</code>.
 </p>
-<pre class="no-transform">
+<pre>
 select (&hellip;) |
-  all(group(a) max(5)
-    each(output(count()) max(7)
-      each(output(summary()))))
-
+all(
+  group(customer) max(5)
+    each(
+      output(count()) max(7)
+        each(output(summary()))
+    )
+)
+</pre>
+<pre>
 select (&hellip;) |
-  all(group(a)
-    each(output(count())
-      each(output(summary()))))
+all(
+  group(customer)
+    each(
+      output(count())
+        each(output(summary()))
+    )
+)
 </pre>
 <p>
   A grouping without <code>max</code> combined with <code>defaultMaxGroups=-1</code>/<code>defaultMaxHits=-1</code>
@@ -1337,8 +1355,15 @@ select (&hellip;) | all(group(fixedwidth(price,1000)) each(each(output(summary()
 </pre>
 <p>Use <code>predefined</code> to configure group sizes individually (the two below are equivalent):</p>
 <pre>
-select (&hellip;) | all(group(predefined(price, bucket(0,1000), bucket(1000,2000), bucket(2000,5000), bucket(5000,inf))) each(each(output(summary()))))
-select (&hellip;) | all(group(predefined(price, bucket[0,1000&gt;, bucket[1000,2000&gt;, bucket[2000,5000&gt;, bucket[5000,inf&gt;)) each(each(output(summary()))))
+select (&hellip;) |
+all(
+  group(predefined(price,
+    bucket(0,1000),
+    bucket(1000,2000),
+    bucket(2000,5000),
+    bucket(5000,inf)))
+  each(each(output(summary())))
+)
 </pre>
 <p>This works with strings as well - put Jones and Smith in the second group:</p>
 <pre>
@@ -1350,7 +1375,16 @@ select (&hellip;) | all(group(predefined(customer, bucket&lt;-inf,"Jones"&gt;, b
 </pre>
 <p>Use decimal numbers in bucket definitions if the expression evaluates to a double or float:</p>
 <pre>
-select (&hellip;) | all(group(predefined(tax, bucket[0.0,0.2&gt;, bucket[0.2,0.5&gt;, bucket[0.5,inf&gt;)) each(each(output(summary()))))
+select (&hellip;) 
+| all(
+  group(predefined(tax,
+      bucket(0.0, 0.2),
+      bucket(0.2, 0.5),
+      bucket(0.5, inf)))
+    each(
+      each(output(summary()))
+    )
+)
 </pre>
 
 <h2 id="pagination">Pagination</h2>
@@ -1521,43 +1555,88 @@ API documentation</a> for the complete reference.
 <p>
 Simple grouping: count the number of documents in each group:
 </p>
-<pre>all( group(a) each(output(count())) )</pre>
+<pre>select * from purchase where true | all( group(customer) each(output(count())) )</pre>
 <p>Two parallel groupings:</p>
-<pre>all( all(group(a) each(output(count())))
-     all(group(b) each(output(count()))) )</pre>
+<pre>select * from purchase where true | all(
+  all(
+      group(customer) each(output(count()))
+  )
+  all(
+      group(item) each(output(count()))
+  )
+)</pre>
 <p>Only the 1000 best hits will be grouped at each content node. Lower accuracy, but higher speed:</p>
-<pre>all( max(1000) all(group(a) each(output(count()))) )</pre>
+<pre>select * from purchase where true limit 0 |
+  all(
+    max(1000)
+    all(
+      group(customer)
+      each(output(count()))
+    )
+  )</pre>
 
 
 
 <h2 id="selecting-groups">Selecting groups</h2>
-<p>Do a modulo 5 operation before selecting the group:</p>
-<pre>all( group(a % 5) each(output(count())) )</pre>
-<p>Do <code>a + b * c</code> before selecting the group:</p>
-<pre>all( group(a + b * c) each(output(count())) )</pre>
+<p>Do a modulo 3 operation before selecting the group:</p>
+<pre>select * from purchase where true limit 0 |
+  all(
+    group(price % 3)
+    each(output(count()))
+  )</pre>
+<p>Do <code>price + tax * price</code> before selecting the group:</p>
+<pre>select * from purchase where true limit 0 | all(
+  group(price + tax * price)
+  each(output(count()))
+)</pre>
 
 
 
 <h2 id="ordering-groups">Ordering groups</h2>
 <p>
 Do a modulo 5 operation before selecting the group -
-the groups are then ordered by their aggregated sum of attribute "b":
+the groups are then ordered by their aggregated sum of attribute "tax":
 </p>
-<pre>all( group(a % 5) order(sum(b)) each(output(count())) )</pre>
+<pre>select * from purchase where true limit 0 | all(
+  group(price % 5)
+  order(sum(tax))
+  each(output(count()))
+)
+</pre>
 <p>
-Do <code>a + b * c</code> before selecting the group.
-Ordering is given by the maximum value of attribute "d" in each group:
+Do <code>price + tax * price</code> before selecting the group.
+Ordering is given by the maximum value of attribute "price" in each group:
 </p>
-<pre>all( group(a + b * c) order(max(d)) each(output(count())) )</pre>
+<pre>select * from purchase where true limit 0 |
+  all(
+    group(price + tax * price)
+    order(max(price))
+    each(output(count()))
+  )
+  </pre>
 <p>
   Take the average relevance of the groups and multiply it with
   the number of groups to get a cumulative count:
 </p>
-<pre>all( group(a) order(avg(relevance()) * count()) each(output(count())) )</pre>
+<pre> select * from purchase where true limit 0 |
+  all(
+  group(customer)
+  order(avg(relevance()) * count())
+  each(output(count()))
+)</pre>
 <p>One can not directly reference an attribute in the order clause, as this:</p>
-<pre>all(group(a) order(attr * count()) each(output(count())) )</pre>
+<pre>select * from purchase where true limit 0 |
+  all(
+  group(customer)
+  order(price * count())
+  each(output(count()))
+)</pre>
 <p>However, one can do this:</p>
-<pre>all(group(a) order(max(attr) * count()) each(output(count())) )</pre>
+<pre>select * from purchase where true limit 0 | all(
+  group(customer)
+  order(max(price) * count())
+  each(output(count()))
+)</pre>
 
 
 
@@ -1565,88 +1644,87 @@ Ordering is given by the maximum value of attribute "d" in each group:
 <p>
 Simple grouping to count the number of documents in each group and return the best hit in each group:
 </p>
-<pre>all( group(a) each(max(1) each(output(summary()))) )</pre>
-<p>Also return the sum of attribute "b":</p>
-<pre>all( group(a) each(max(1) output(count(), sum(b)) each(output(summary()))) )</pre>
+<pre>select * from purchase where true limit 0 | 
+  all(
+  group(customer)
+  each(
+    max(1)
+    each(output(summary()))
+  )
+)</pre>
+<p>Also return the sum of attribute "price":</p>
+<pre>select * from purchase where true limit 0 | 
+  all( group(customer) each(max(1) output(count(), sum(price)) each(output(summary()))) )
+  </pre>
 <p>
   Also, return an XOR of the 64 most significant bits of an MD5
-  over the concatenation of attributes "a", "b" and "c":
+  over the concatenation of attributes "customer", "price" and "tax":
 </p>
-<pre>all(group(a) each(max(1) output(count(), sum(b), xor(md5(cat(a, b, c), 64)))
-                  each(output(summary()))))</pre>
+<pre>select * from purchase where true limit 0 | 
+  all(group(customer) each(max(1) output(count(), sum(price), xor(md5(cat(customer, price, tax), 64))) each(output(summary()))))
+  </pre>
 
 
 
 <h2 id="grouping">Grouping</h2>
 <p>
-  Single-level grouping on "a" attribute, returning at most 5 groups with full hit count as well as the 69 best hits.
+  Single-level grouping on "customer" attribute, returning at most 5 groups with full hit count as well as the 69 best hits.
 </p>
-<pre>all( group(a) max(5) each(max(69) output(count()) each(output(summary()))) )</pre>
-<p>Two level grouping on "a" and "b" attribute:</p>
-<pre>all( group(a) max(5) each(output(count())
-     all(group(b) max(5) each(max(69) output(count())
-         each(output(summary()))))) )</pre>
-<p> Three-level grouping on "a", "b" and "c" attribute:</p>
-<pre>all( group(a) max(5) each(output(count())
-     all(group(b) max(5) each(output(count())
-         all(group(c) max(5) each(max(69) output(count())
-             each(output(summary()))))) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(customer) max(5) each(max(69) output(count()) each(output(summary())))) </pre>
+<p>Two level grouping on "customer" and "item" attribute:</p>
+<pre>select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(group(item) max(5) each(max(69) output(count()) each(output(summary())))))) </pre>
+<p> Three-level grouping on "customer", "item" and "attributes.key(coupon)" attribute:</p>
+<pre>select * from purchase where true limit 0 | all(group(customer) max(1) each(output(count()) all(group(item) max(1) each(output(count()) max(1) all(group(attributes.key) max(1) each(output(count()) each(output(summary()))))))))</pre>
 <p>As above, but also collect best hit in level 2:</p>
-<pre>all( group(a) max(5) each(output(count())
-     all(group(b) max(5) each(output(count())
-         all(max(1) each(output(summary())))
-         all(group(c) max(5) each(max(69) output(count())
-             each(output(summary()))))) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(group(item) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(attributes.key) max(5) each(max(69) output(count()) each(output(summary())))))))) </pre>
 <p>As above, but also collect best hit in level 1:</p>
-<pre>all( group(a) max(5) each(output(count())
-     all(max(1) each(output(summary())))
-     all(group(b) max(5) each(output(count())
-         all(max(1) each(output(summary())))
-         all(group(c) max(5) each(max(69) output(count())
-             each(output(summary()))))) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(item) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(attributes.key) max(5) each(max(69) output(count()) each(output(summary())))))))) </pre>
 <p>As above, but using different document summaries on each level:</p>
-<pre>all( group(a) max(5) each(output(count())
+<!-- VOID OUTPUT --> <pre> select * from purchase where true limit 0 |
+  all( group(customer) max(5) each(output(count())
      all(max(1) each(output(summary(complexsummary))))
-     all(group(b) max(5) each(output(count())
+     all(group(item) max(5) each(output(count())
          all(max(1) each(output(summary(simplesummary))))
-         all(group(c) max(5) each(max(69) output(count())
-             each(output(summary(fastsummary)))))) )</pre>
+         all(group(price) max(5) each(max(69) output(count())
+             each(output(summary(fastsummary)))))) )
+
+</pre>
 <p>Deep grouping with counting and hit collection on all levels:</p>
-<pre>all( group(a) max(5) each(output(count())
+<pre> select * from purchase where true limit 0 |
+  all( group(customer) max(5) each(output(count())
      all(max(1) each(output(summary())))
-     all(group(b) each(output(count())
+     all(group(item) each(output(count())
          all(max(1) each(output(summary())))
-         all(group(c) each(output(count())
-             all(max(1) each(output(summary())))))))) )</pre>
+         all(group(price) each(output(count())
+             all(max(1) each(output(summary())))))))) )
+
+</pre>
 
 
 
 <h2 id="time-and-date">Time and date</h2>
 <p>
-  The field (<code>a</code> below, but can have any name)
+  The field (<code>time</code> below, but can have any name)
   must be a <a href="reference/schema-reference.html#long">long</a>, with second resolution (unix timestamp/epoch).
   See the <a href="reference/grouping-syntax.html#time-expressions">reference</a> for all time-functions.
 </p>
 <p>Group by year:</p>
-<pre>all( group(time.year(a)) each(output(count())) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(time.year(date)) each(output(count()))) </pre>
 <p>Group by year, then by month:</p>
-<pre>all( group(time.year(a)) each(output(count())
-     all(group(time.month(a)) each(output(count())))) )</pre>
-<p>Group by year, then by month, then day, then by hour:</p>
-<pre>all( group(time.year(a)) each(output(count())
-     all(group(time.monthofyear(a)) each(output(count())
-         all(group(time.dayofmonth(a)) each(output(count())
-             all(group(time.hourofday(a)) each(output(count())))))))) )</pre>
-<p>
+<pre>select * from purchase where true limit 0 |
+  all( group(time.year(date)) each(output(count())
+     all(group(time.monthofyear(date)) each(output(count())))) )</pre>
+<!-- DOESN'T WORK  <p>Group by year, then by month, then day, then by hour:</p>
+ <pre>select * from purchase where true limit 0 |
+  all( group(time.year(date)) each(output(count())
+     all(group(time.monthofyear(date)) each(output(count())
+         all(group(time.dayofmonth(date)) each(output(count())
+             all(group(time.hourofday(date)) each(output(count())))))))) )</pre>
+<p> --> 
   Groups <em>today</em>, <em>yesterday</em>, <em>lastweek</em>, and <em>lastmonth</em>
   using <code>predefined</code> aggregator, and groups each day within each of these separately:
 </p>
-<pre>all( group(predefined((now() - a) / (60 * 60 * 24),
-                      bucket(0,1), bucket(1,2), bucket(3,7), bucket(8,31)))
-           each(output(count())
-           all(max(2) each(output(summary())))
-               all(group((now() - a) / (60 * 60 * 24)) each(output(count())
-                   all(max(2) each(output(summary())))))) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(predefined((now() - date) / (60 * 60 * 24), bucket(0,1), bucket(1,2), bucket(3,7), bucket(8,31))) each(output(count()) all(max(2) each(output(summary()))) all(group((now() - date) / (60 * 60 * 24)) each(output(count()) all(max(2) each(output(summary()))))))) </pre>
 
 
 
@@ -1663,17 +1741,17 @@ Simple grouping to count the number of documents in each group and return the be
   Another use case for this aggregator is counting the number of unique instances matching a given expression.
 </p>
 <p>
-  Output an estimate of the number of groups, which is equivalent to the number of unique values for attribute "a":
+  Output an estimate of the number of groups, which is equivalent to the number of unique values for attribute "customer":
 </p>
-<pre>all( group(a) output(count()) )</pre>
-<p>Output an estimate of the number of unique string lengths for the attribute "name":</p>
-<pre>all( group(strlen(name)) output(count()) )</pre>
+<pre>select * from purchase where true limit 0 | all( group(customer) each(output(count())) ) </pre>
+<p>Output an estimate of the number of unique string lengths for the attribute "item":</p>
+<pre>select * from purchase where true limit 0 | all(group(strlen(item)) each(output(count()))) </pre>
 <p>
-  Output the sum of the "b" attribute for each group
+  Output the sum of the "price" attribute for each group
   in addition to the accurate count of the overall number of unique groups
   as the inner each causes all groups to be returned.
 </p>
-<pre>all( group(a) output(count()) each(output(sum(b))) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(customer) output(count()) each(output(sum(price)))) </pre>
 <p>
   The <code>max</code> clause is used to restrict the number of groups returned.
   The query outputs the sum for the 3 best groups.
@@ -1681,12 +1759,12 @@ Simple grouping to count the number of documents in each group and return the be
   The <code>count</code> becomes an estimate here as the number of groups is limited by max,
   while in the above example, it's not limited by max:
 </p>
-<pre>all( group(a) max(3) output(count()) each(output(sum(b))) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(customer) max(3) output(count()) each(output(sum(price)))) </pre>
 <p>
   Output the number of top-level groups, and for the 10 best groups,
-  output the number of unique values for attribute "b":
+  output the number of unique values for attribute "item":
 </p>
-<pre>all( group(a) max(10) output(count()) each(group(b) output(count())) )</pre>
+<pre>select * from purchase where true limit 0 | all(group(customer) max(10) output(count()) each(group(item) output(count()))) </pre>
 
 
 <h2 id="counting-unique-groups-multivalue-fields">Counting unique groups - multivalue fields</h2>
@@ -1707,7 +1785,7 @@ Simple grouping to count the number of documents in each group and return the be
   where you group on a field that is unique for each document (grouping on document id is not supported).
   You may then count the unique groups to determine the unique document count:
 </p>
-<pre>all(group(table) each(group(my_unique_field) output(count())))</pre>
+<pre>select * from purchase where true limit 0 | all(group(customer) each(group(item) output(count()))) </pre>
 
 
 
@@ -1758,9 +1836,7 @@ the total of future impressions for the advertisement.
   by using a constant (here 1) - example:
 </p>
 <pre>
-$ vespa query 'select rating from restaurant where true | all(group(1) each(output(avg(rating))))' \
-  hits=0 \
-  ranking=unranked
+select rating from restaurant where true | all(group(1) each(output(avg(price))))
 </pre>
 <p>Make sure all documents have a value for the given field, if not, NaN is used, and the final result is also NaN:</p>
 <pre>{% highlight json %}
@@ -1781,14 +1857,10 @@ $ vespa query 'select rating from restaurant where true | all(group(1) each(outp
   Count number of documents missing a value for an <a href="/en/attributes.html">attribute</a> field
   (actually, in this example, unset or less than 0, see the bucket expression below).
   Set a higher query timeout, just in case.
-  Example, analyzing a field called <em>rating</em>:
+  Example, analyzing a field called <em>price</em>:
 </p>
 <pre>
-$ vespa query \
-  'select rating from restaurant where true | all( group(predefined(rating, bucket[-inf, 0>, bucket[0, inf>)) each(output(count())) )' \
-  hits=0 \
-  ranking=unranked \
-  timeout=60s
+select rating from restaurant where true | all( group(predefined(price, bucket[-inf, 0>, bucket[0, inf>)) each(output(count())) )
 </pre>
 <p>Example output, counting 2 documents with <code>-inf</code> in <em>rating</em>:</p>
 <pre>{% highlight json %}
@@ -1831,27 +1903,23 @@ $ vespa query \
   print a <a href="/en/reference/schema-reference.html#document-summary">document summary</a>:
 </p>
 <pre>
-$ vespa query \
-  'select rating from restaurant where true |
-    all( group(predefined(rating, bucket[-inf, 0>, bucket[0, inf>))
-         order(max(rating))
-         max(1)
-         each( max(100) each(output(summary(name_only)))) )' \
-  hits=0 \
-  ranking=unranked \
-  timeout=60s
+select rating from restaurant where true |
+    all( group(predefined(price, bucket[-inf, 0>, bucket[0, inf>))
+    order(max(price))
+    max(1)
+    each( max(100) each(output(summary()))) )
 </pre>
 <p>Notes:</p>
 <ul>
   <li>
     We are only interested in the first group,
-    so order by <code>max(rating)</code> and use <code>max(1)</code> to get only the first
+    so order by <code>max(price)</code> and use <code>max(1)</code> to get only the first
   </li>
   <li>
     Uses <code>max(100)</code> in order to limit result set sizes.
     Read more about <a href="/en/reference/query-api-reference.html#grouping.defaultmaxhits">grouping.defaultmaxhits</a>.
   </li>
-  <li>
+  <!--li>
     Results can grow large when listing all fields.
     To limit to the information required, define a summary class like the below:
 <pre>
@@ -1860,7 +1928,7 @@ document-summary name_only {
 }
 </pre>
     In the query, use the class name in <code>each(output(summary(name_only)))</code>.
-  </li>
+  </li-->
   <li>
     Use the <a href="#pagination">continuation token</a> to iterate over the result set.
   </li>
@@ -1900,56 +1968,25 @@ field attributes type map&lt;string, string&gt; {
   Try the link to see the output:
 </p>
 <p>
-  <a class="yql-x">select * from purchase where true limit 0 |
+  <pre>select * from purchase where true limit 0 |
     all(
       group(attributes.key)
       each( group(attributes.value) each(output(count())))
-    )</a>
+    )</pre>
 </p>
 <p>
   A more interesting example is to see the sum per sales rep:
 </p>
 <p>
-  <a class="yql-x">select * from purchase where true limit 0 |
+  <pre>select * from purchase where true limit 0 |
     all(
       group(attributes.key)
       each( group(attributes.value) each(output(sum(price))))
-    )</a>
+    )</pre>
 </p>
 
 
 <script>
-
-
-function parseDocuments(response) {
-  if (!response || !response.root || !response.root.children) {
-    console.warn("No root or children in response.");
-    return [];
-  }
-
-
-  return response.root.children.map(doc => parseDocument(doc));
-}
-
-function flattenObject(obj, prefix = '') {
-    let result = {};
-
-    for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-            const value = obj[key];
-            const newPrefix = prefix ? `${prefix}.${key}` : key;
-
-            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                Object.assign(result, flattenObject(value, newPrefix));
-            } else {
-                const finalKey = newPrefix.startsWith('fields.') ? newPrefix.slice(7) : newPrefix;
-                result[finalKey] = value;
-            }
-        }
-    }
-
-    return result;
-}
 
 
 const checkboxes = document.querySelectorAll('input[type="checkbox"][data-col]');
@@ -1970,7 +2007,28 @@ const checkboxes = document.querySelectorAll('input[type="checkbox"][data-col]')
       });
     });
 
+  function flattenGroupHierarchy(node, path = {}, rows = []) {
+    if (!node) return rows;
 
+    // If it's a group, store its value
+    if (node.value) {
+      const key = node.id.split(':')[1]; // e.g., 'string' or 'time.date(date)'
+      path[key] = node.value;
+    }
+
+    // If it has fields (e.g., sum(price)), create a row
+    if (node.fields) {
+      const row = { ...path, ...node.fields };
+      rows.push(row);
+    }
+
+    // Recursively process children
+    if (node.children) {
+      node.children.forEach(child => flattenGroupHierarchy(child, { ...path }, rows));
+    }
+
+  return rows;
+}
 
 
 function generateTable(data, excludeKeys = []) {
@@ -2025,7 +2083,6 @@ function generateTable(data, excludeKeys = []) {
 
     return table;
 }
-
 
 
 </script>
