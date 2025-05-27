@@ -299,51 +299,25 @@ function add_setup_ui_buttons(root) {
         .on("click", function(event) { document.activeElement.blur(); exit_edit_selected(); event.preventDefault(); });
 }
 
+function addActionButton(root, iconFn, actionFn, frameIndex, actionName) {
+    root.append("a").attr("href", "#").attr("class", "header").html(iconFn())
+        .on("click", function(event) {
+            // Only allow actions if not in edit mode
+            if (context !== contexts.EDIT) {
+                actionFn(frameIndex);
+            } else {
+                show_notification(`Cannot ${actionName} while in edit mode. Finish editing first.`, "warning");
+            }
+            event.stopPropagation();
+            event.preventDefault();
+        });
+}
+
 function add_result_ui_buttons(root, frame_index) {
-    root.append("a").attr("href", "#").attr("class","header").html(icon_edit())
-        .on("click", function(event) { 
-            // Only allow edit if not already in edit mode
-            if (context !== contexts.EDIT) {
-                edit_frame(frame_index); 
-            } else {
-                show_notification("Cannot edit a different frame while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
-    root.append("a").attr("href", "#").attr("class","header").html(icon_up())
-        .on("click", function(event) { 
-            // Only allow moving frames if not in edit mode
-            if (context !== contexts.EDIT) {
-                move_frame_up(frame_index); 
-            } else {
-                show_notification("Cannot move frames while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
-    root.append("a").attr("href", "#").attr("class","header").html(icon_down())
-        .on("click", function(event) { 
-            // Only allow moving frames if not in edit mode
-            if (context !== contexts.EDIT) {
-                move_frame_down(frame_index); 
-            } else {
-                show_notification("Cannot move frames while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
-    root.append("a").attr("href", "#").attr("class","header").html(icon_remove())
-        .on("click", function(event) { 
-            // Only allow removing frames if not in edit mode
-            if (context !== contexts.EDIT) {
-                remove_frame(frame_index); 
-            } else {
-                show_notification("Cannot remove frames while in edit mode. Finish editing first.", "warning");
-            }
-            event.stopPropagation(); 
-            event.preventDefault(); 
-        });
+    addActionButton(root, icon_edit, edit_frame, frame_index, "edit a different frame");
+    addActionButton(root, icon_up, move_frame_up, frame_index, "move frames");
+    addActionButton(root, icon_down, move_frame_down, frame_index, "move frames");
+    addActionButton(root, icon_remove, remove_frame, frame_index, "remove frames");
 }
 
 function add_expression_result_ui_buttons(root, frame_index) {
