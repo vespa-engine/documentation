@@ -735,6 +735,7 @@ function is_expression_empty() {
 function execute_selected() {
     // Don't execute if the expression is empty
     if (is_expression_empty()) {
+        show_notification("Expression is empty. Please enter an expression first.", "warning");
         return;
     }
 
