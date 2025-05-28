@@ -72,7 +72,14 @@ function showResult() {
         }
         table.classList.add('table');
       } else {
-        tableContainer.innerHTML = '<p>No data available to display.</p>';
+        if (jsonData.root.errors) {
+          jsonData.root.errors.forEach((error) => {
+          // Assuming tableContainer is a DOM element, you'd typically use innerHTML, not innerHTML.add.
+          tableContainer.innerHTML = `<div>${error.message}</div>`;
+          });
+        } else {
+          tableContainer.innerHTML = '<p>No data available to display.</p>';
+        }
       }
     })
     .catch(error => console.error(error));
@@ -165,7 +172,14 @@ function executeGrouping(yql, outputContainer) {
       }
 
       if (!anyDataShown) {
-        outputContainer.innerHTML = '<p>No data available to display.</p>';
+        if (jsonData.root.errors) {
+          jsonData.root.errors.forEach((error) => {
+          // Assuming tableContainer is a DOM element, you'd typically use innerHTML, not innerHTML.add.
+          outputContainer.innerHTML += `<p style="color:red;">Error:${error.message}</p>`;
+          });
+        } else {
+          outputContainer.innerHTML = '<p>No data available to display.</p>';
+        }
       }
     })
     .catch(error => {
@@ -1724,49 +1738,24 @@ Simple grouping to count the number of documents in each group and return the be
   Groups <em>today</em>, <em>yesterday</em>, <em>lastweek</em>, and <em>lastmonth</em>
   using <code>predefined</code> aggregator, and groups each day within each of these separately:
 </p>
-<pre>
-all(
-  group(
-    predefined(
-      (now() - date) / (60 * 60 * 24),
+<pre> select * from purchase where true limit 0 |
+  all( 
+    group(
+      predefined((now() - date) / (60 * 60 * 24),
       bucket(0,1),
       bucket(1,2),
       bucket(3,7),
-      bucket(8,31)
-    )
-  )
-  each(
-    output(
-      count()
-    )
-  )
-  all(
-    max(2)
-    each(
-      output(
-        summary()
+      bucket(8,31))
       )
-    )
-  )
-  all(
-    group(
-      (now() - date) / (60 * 60 * 24)
-    )
-    each(
-      output(
-        count()
-      )
-      all(
-        max(2)
-        each(
-          output(
-            summary()
-          )
+    each(output(count())
+      all(max(2) each(output(summary())))
+      all(group((now() - date) / (60 * 60 * 24)) 
+        each(output(count())
+          all(max(2) each(output(summary())))
         )
       )
-    )
+    ) 
   )
-)
 </pre>
 
 
