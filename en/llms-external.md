@@ -36,6 +36,7 @@ define a component in your application's
             <!-- Optional configuration: -->
             <config name="ai.vespa.llm.clients.llm-client">
                 <apiKeySecretName> ... </apiKeySecretName>
+                <!-- endpoint example: https://openai-compatible-api.com/v1/ -->
                 <endpoint> ... </endpoint>
             </config>
 
