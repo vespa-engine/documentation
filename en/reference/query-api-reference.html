@@ -59,7 +59,10 @@ get methods as Java objects from the Query to Searcher components.
     <li><a href="#model.restrict">model.restrict</a> [<em>restrict</em>]</li>
     <li><a href="#model.searchpath">model.searchPath</a> [<em>path</em>]</li>
     <li><a href="#model.sources">model.sources</a> [<em>search, sources</em>]</li>
-   <li><a href="#model.type">model.type</a> [<em>type</em>]</li>
+    <li><a href="#model.type">model.type</a> [<em>type</em>]</li>
+    <li><a href="#model.type.composite">model.type.composite</a> [<em>type</em>]</li>
+    <li><a href="#model.type.tokenization">model.type.tokenization</a> [<em>type</em>]</li>
+    <li><a href="#model.type.syntax">model.type.syntax</a> [<em>type</em>]</li>
   </ul>
 </dd>
 
@@ -504,7 +507,7 @@ These parameters are defined in the <code>native</code> query profile type.
         Also see <a href="../federation.html">federation</a>.
       </p>
       <p>
-        Use <a href="#model.restrict">model.restrict</a> to restrict to schemas.
+        Use <a href="#model.restrict">model.restrict</a> to only search a subset of the schemas in a cluster.
       </p>
     </td>
   </tr>
@@ -515,18 +518,87 @@ These parameters are defined in the <code>native</code> query profile type.
     <td><code>weakAnd</code></td>
     <td>
       <p id="model.type">
-        Selects the query language syntax of the
-        <a href="#model.querystring">model.queryString</a> parameter:
-        <code>all</code>, <code>weakAnd</code>, <code>any</code>, <code>phrase</code>,
-        <code>tokenize</code>, <code>web</code>, <code>linguistics</code>, <code>yql</code> -
-        refer to <a href="simple-query-language-reference.html">simple query language reference</a>.
+        Sets all the model.type parameters (composite, tokenization, and syntax) specifying how to
+        parse a <a href="#model.querystring">model.queryString</a> parameter at once,
+        according to the given table:
+      </p>
+      <table>
+        <tr><th>value      <th>composite<th>tokenization<th>syntax</tr>
+        <tr><td>all        <td>and      <td>internal    <td>simple</tr>
+        <tr><td>any        <td>or       <td>internal    <td>simple</tr>
+        <tr><td>linguistics<td>weakAnd  <td>linguistics <td>none  </tr>
+        <tr><td>phrase     <td>phrase   <td>internal    <td>none  </tr>
+        <tr><td>tokenize   <td>weakAnd  <td>internal    <td>none  </tr>
+        <tr><td>weakAnd    <td>weakAnd  <td>internal    <td>simple</tr>
+        <tr><td>web        <td>and      <td>internal    <td>web   </tr>
+        <tr><td>yql        <td>and      <td>internal    <td>yql   </tr>
+      </table>
+      <p>
         Also see <a href="query-language-reference.html#userinput">YQL grammar</a>.
       </p>
+    </td>
+  </tr>
+  <tr>
+    <th>model.type.composite</th>
+    <td>type</td>
+    <td>String</td>
+    <td><code>As determined by query.type</code></td>
+    <td>
+      <p id="model.type.composite">
+        Sets the Vespa query composite type that will collect parsed terms of the query by default.
+      </p>
+      <table>
+        <tr><td>and    <td>Create an AndItem which only matches if <i>all</i> terms are present.</tr>
+        <tr><td>or     <td>Create an OrItem which matches if <i>any</i> of the terms are present.</tr>
+        <tr><td>phrase <td>Create a PhraseItem which matches if all the terms are present in the given order with no gaps.</tr>
+        <tr><td>weakAnd<td>Create a <a href="https://docs.vespa.ai/en/using-wand-with-vespa.html#weakand">WeakAndItem</a> which has the semantics of <code>or</code> with performance approaching <code>and</code>.</tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <th>model.type.tokenization</th>
+    <td>type</td>
+    <td>String</td>
+    <td><code>As determined by query.type</code></td>
+    <td>
+      <p id="model.type.tokenization">
+        Sets the tokenizer used to split the query string into tokens.
+      </p>
+      <table>
+        <tr><td>internal   <td>Use the tokenizer built into the query parser.</tr>
+        <tr><td>linguistics<td>Pass the full query string as-is to the linguistics component
+                               for tokenization, exactly as on the indexing side, and collect any text and numeric token
+                               returned as-is, with no further stemming or normalization even when specified in the schema.
+                               This is only supported in conjunction
+                               with the <code>none</code> syntax option.
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <th>model.type.syntax</th>
+    <td>type</td>
+    <td>String</td>
+    <td><code>As determined by query.syntax</code></td>
+    <td>
+      <p id="model.type.syntax">
+        Sets the syntax used to interpret the query string. Options:
+      </p>
+      <table>
+        <tr><td>none</td><td>No syntax: Disregard any non-searchable terms</td></tr>
+        <tr><td>simple</td><td>Use the <a href="simple-query-language-reference.html">simple query language</a> suitable for end users.</td></tr>
+        <tr><td>web</td><td>Like the <a href="simple-query-language-reference.html">simple query language</a>, but '+'
+                            in front of a term means "search for this term as-is", and 'a OR b' (capital OR)
+                            means match either a or b.</td></tr>
+        <tr><td>yql</td><td>Parse as a <a href="https://docs.vespa.ai/en/reference/query-language-reference.html">YQL query</a>.</td></tr>
+      </table>
     </td>
   </tr>
   </tbody>
 </table>
 
+public enum Tokenization { internal, linguistics }
+
+public enum Syntax { none, simple, web, yql }
 
 
 <h2 id="ranking">Ranking</h2>
