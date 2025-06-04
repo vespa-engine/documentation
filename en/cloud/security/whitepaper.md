@@ -15,6 +15,8 @@ category: cloud
   }
 </style>
 
+*Last updated: 2025-06-04*
+
 ## Table of Contents
 
 - TOC
