@@ -183,9 +183,8 @@ var operations = {
                             });
                     }
                     
-                    // Check if value should be shown
-                    const expressionText = result.has("e") ? result.get("e") : null;
-                    const shouldShowValue = shouldShowValueField(expressionText, value);
+                    // Check if value should be shown based on the 'same' parameter in the response
+                    const shouldShowValue = data["same"] !== true;
                     
                     if (shouldShowValue) {
                         // Value row - only show if different from expression
@@ -805,7 +804,7 @@ function execute_all() {
     }
     update();
 
-    d3.text("https://api.search.vespa.ai/playground/eval", {
+    d3.text("http://localhost:8080/playground/eval", {
             method: "POST",
             body: "json=" + encodeURIComponent(JSON.stringify(expressions)),
             headers: { "Content-Type": "application/x-www-form-urlencoded" }
@@ -1035,107 +1034,7 @@ function copy_to_clipboard(text) {
     document.body.removeChild(textarea);
 }
 
-/**
- * Determines whether the Value field should be shown based on comparing
- * the expression and the value.
- * 
- * @param {string|null} expressionText - The expression text or null if not available
- * @param {string} value - The value to compare against
- * @returns {boolean} - True if the Value field should be shown, false otherwise
- */
-function shouldShowValueField(expressionText, value) {
-    // If no expression exists, always show the value
-    if (!expressionText) {
-        return true;
-    }
 
-    // Convert values to strings to ensure they can be processed
-    const strExpression = String(expressionText);
-    const strValue = String(value);
-    
-    // Function to normalize a string with floating point numbers
-    function normalizeString(str) {
-        // First remove all whitespace
-        let normalized = str.replace(/\s+/g, '');
-        
-        // Special handling for tensor notation with array values - tensor(...):[[...]]
-        if (normalized.includes('tensor') && normalized.includes('):[[')) {
-            try {
-                // Extract the tensor definition part
-                const tensorDefMatch = normalized.match(/tensor[^:]+/);
-                const tensorDef = tensorDefMatch ? tensorDefMatch[0] : '';
-                
-                // Extract the values part
-                const valuesMatch = normalized.match(/\):(.+)$/);
-                let valuesStr = valuesMatch ? valuesMatch[1] : '';
-                
-                // Process the values to normalize numbers
-                valuesStr = valuesStr.replace(/(\d*)\.?(\d+)0*/g, (match, p1, p2) => {
-                    // Convert to number and back to string to normalize
-                    const num = parseFloat(match);
-                    return num % 1 === 0 ? Math.floor(num).toString() : num.toString();
-                });
-                
-                return tensorDef + '):' + valuesStr;
-            } catch (e) {
-                // If any error occurs during tensor processing, fall back to basic normalization
-                console.log('Error normalizing tensor array:', e);
-            }
-        }
-        
-        // Special handling for tensor notation with labeled values - tensor(...):{label:value,...}
-        if (normalized.includes('tensor') && normalized.match(/\):\{[^\[]+\}$/)) {
-            try {
-                // Extract the tensor definition part
-                const tensorDefMatch = normalized.match(/tensor[^:]+/);
-                const tensorDef = tensorDefMatch ? tensorDefMatch[0] : '';
-                
-                // Extract the values part without the outer braces
-                const valuesMatch = normalized.match(/\):\{(.+)\}$/);
-                let valuesStr = valuesMatch ? valuesMatch[1] : '';
-                
-                // Split by commas to get each label:value pair
-                const pairs = valuesStr.split(',');
-                
-                // Process each pair to normalize labels and values
-                const normalizedPairs = pairs.map(pair => {
-                    // Split by colon
-                    const [label, value] = pair.split(':');
-                    
-                    // Normalize the label - remove quotes if present, then add double quotes
-                    const normalizedLabel = '"' + label.replace(/["']/g, '').trim() + '"';
-                    
-                    // Normalize the value
-                    const num = parseFloat(value);
-                    const normalizedValue = num % 1 === 0 ? Math.floor(num).toString() : num.toString();
-                    
-                    return normalizedLabel + ':' + normalizedValue;
-                });
-                
-                // Sort the pairs alphabetically by label for consistent ordering
-                normalizedPairs.sort();
-                
-                return tensorDef + '):{' + normalizedPairs.join(',') + '}';
-            } catch (e) {
-                // If any error occurs during tensor processing, fall back to basic normalization
-                console.log('Error normalizing labeled tensor:', e);
-            }
-        }
-        
-        // For non-tensor strings or if tensor processing failed, normalize numbers
-        return normalized.replace(/(\d*)\.?(\d+)0*/g, (match, p1, p2) => {
-            const num = parseFloat(match);
-            return num % 1 === 0 ? Math.floor(num).toString() : num.toString();
-        });
-    }
-    
-    // Normalize both strings
-    const normalizedExpression = normalizeString(strExpression);
-    const normalizedValue = normalizeString(strValue);
-    
-    // Compare the normalized strings
-    return normalizedValue !== normalizedExpression;
-}
 
 function setup_keybinds() {
     var previous_keydown = { "key" : null, "ts" : 0 };
