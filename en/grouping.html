@@ -5,6 +5,8 @@ title: "Grouping Information in Results"
 
 <script>
 const DEFAULT_GROUPING = "all( group(customer) each(output(sum(price))) )";
+
+const useLocalHostProxy = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 function setGroupingParam(groupingVal) {
     const currentUrl = new URL(window.location.href);  // Get the current URL
     const urlParams = new URLSearchParams(currentUrl.search);
@@ -21,6 +23,27 @@ function flattenFields(node) {
       };
 }
 
+function getSearchUrl(yql){
+  const encodedYql = encodeURIComponent(yql);
+  const vespaUrl = `https://api.search.vespa.ai/search/?yql=${encodedYql}`
+  if (useLocalHostProxy){
+    // use the local proxy to avoid CORS issues
+    return `https://api.allorigins.win/get?url=${encodeURIComponent(vespaUrl)}`;
+  } 
+  return vespaUrl;
+}
+
+/**
+ * when developing locally, we use a proxy to avoid CORS issues.
+ * this proxy return the response in a different format, so we need to parse it.
+ **/
+function handleProxyRequest(request){
+  if (useLocalHostProxy){
+    return JSON.parse(request.contents);
+  }
+  return request;
+}
+
 function showResult() {
   const newGroupingVal = document.getElementById('grouping-query-input').value;
 
@@ -29,15 +52,13 @@ function showResult() {
   }
 
   const rawYql = 'select * from purchase where true limit 0 |' + newGroupingVal;
-  const encodedYql = encodeURIComponent(rawYql);
-
-  const vespaUrl = `https://api.search.vespa.ai/search/?yql=${encodedYql}`;
-
-  fetch(vespaUrl)
+  fetch(getSearchUrl(rawYql))
     .then(response => {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return response.json();
     })
+    // If using the local proxy, we need to parse the response
+    .then(handleProxyRequest)
     .then(jsonData => {
       const tableContainer = document.getElementById('table-container');
       let rows = [];
@@ -124,14 +145,13 @@ function executeGrouping(yql, outputContainer) {
   outputContainer.innerHTML = '<div class="loader"></div>';
 
   const rawYql = 'select * from purchase where true limit 0 |' + yql;
-  const encodedYql = encodeURIComponent(rawYql);
-  const vespaUrl = `https://api.search.vespa.ai/search/?yql=${encodedYql}`;
-
-  fetch(vespaUrl)
+  fetch(getSearchUrl(rawYql))
     .then(response => {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return response.json();
     })
+    // If using the local proxy, we need to parse the response
+    .then(handleProxyRequest)
     .then(jsonData => {
       const groupingResponses = jsonData.root.children?.[0]?.children ?? [];
       outputContainer.innerHTML = '';
