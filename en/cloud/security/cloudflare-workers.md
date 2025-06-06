@@ -17,7 +17,7 @@ Vespa application package.
 ### mTLS Configuration
 
 Mutual TLS certificates can be created using the
-[Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html):
+[Vespa CLI](/en/vespa-cli.html):
 
 For example, for tenant `samples` with application `vsearch` and instance `default`:
 

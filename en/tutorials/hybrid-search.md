@@ -14,7 +14,7 @@ This tutorial demonstrates building a hybrid search application with Vespa that 
 
 The main goal is to set up a text search app that combines simple text scoring features
 such as [BM25](../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
-We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](https://docs.vespa.ai/en/embedding.html#huggingface-embedder)
+We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](/en/embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
 text embedding model. It is a small model that is fast to run and has a small memory footprint. 
 

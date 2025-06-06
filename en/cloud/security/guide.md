@@ -19,7 +19,7 @@ Data plane is protected using mutual TLS or optionally tokens.
 ### Configuring mTLS
 
 Certificates can be created using the
-[Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html):
+[Vespa CLI](/en/vespa-cli.html):
 
 ```
 $ vespa auth cert --application <tenant>.<app>.<instance>
@@ -324,7 +324,7 @@ Users have two different privilege levels
 ### User access to Control Plane
 
 Outside using the Vespa Console, communicating with the Control Plane is easiest
-with the [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html).
+with the [Vespa CLI](/en/vespa-cli.html).
 
 ```
 $ vespa auth login

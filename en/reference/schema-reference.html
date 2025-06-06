@@ -57,7 +57,6 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
             <a href="#field">field</a>
                 <a href="#match">match</a>
         <a href="#field">field</a><span style="display:none"> <!-- Keep field types here for the doc search direct display, hide for clarity -->
-            <a href="#annotationreference">annotationreference&lt;annotationtype&gt;</a>
             <a href="#array">array&lt;type&gt;</a>
             <a href="#bool">bool</a>
             <a href="#byte">byte</a>
@@ -163,8 +162,6 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
     <a href="#stemming">stemming</a>
     <a href="#document-summary">document-summary</a>
         <a href="#summary">summary</a>
-    <a href="#annotation">annotation</a>
-        <a href="#field">field</a>
     <a href="#import-field">import field</a>
     <a href="#raw-as-base64-in-summary">raw-as-base64-in-summary</a>
 </pre>
@@ -239,11 +236,6 @@ The document type in this must declare that it inherits the document type of the
 <tr><td style="white-space: nowrap"><a href="#document-summary">document-summary</a></td>
   <td>Zero to many</td>
   <td>An explicitly defined document summary</td>
-</tr>
-
-<tr><td><a href="#annotation">annotation</a></td>
-  <td>Zero to many</td>
-  <td>Defines an annotation type</td>
 </tr>
 
 <tr><td><a href="#import-field">import field</a></td>
@@ -331,10 +323,11 @@ struct [name] {
 
 <h2 id="field">field</h2>
 <p>
-Contained in <a href="#schema">schema</a>,
+Contained in
+<a href="#schema">schema</a>,
 <a href="#document">document</a>,
-<a href="#struct">struct</a> or
-<a href="#annotation">annotation</a>.
+or
+<a href="#struct">struct</a>.
 Defines a named value with a type and (optionally) how this field
 should be stored, indexed, searched, presented, and how it should influence ranking.
 </p>
@@ -378,40 +371,6 @@ The <em>type</em> attribute is mandatory - supported types:
   </tr>
   </thead>
   <tbody>
-
-  <tr><th>annotationreference</th>
-    <td>
-      <p id="annotationreference">
-        Use to define a field (inside <a href="#annotation">annotation</a>, or inside e.g. a
-        struct used by a field in an <a href="#annotation">annotation</a>) with a reference to another annotation.
-        Should only be used for fields declared inside <a href="#annotation">annotation</a>,
-        or as a base type by the use of any of the compound types listed above, inside <a href="#annotation">annotation</a>.
-        To define such a field, you must first create an <a href="#annotation">annotation type</a>.
-        The <a href="#annotation">struct</a> must be defined inside the schema.
-        To declare an annotationreference field in an annotation, use the annotation name to identify the field type:
-      </p>
-<pre>
-annotation foo {
-    field baz type annotationreference&lt;bar&gt; { }
-}
-
-annotation bar { }
-</pre>
-      <table class="table">
-        <thead></thead><tbody>
-      <tr>
-        <th style="width:100px">Index</th>
-        <td>N/A</td>
-      </tr><tr>
-        <th>Attribute</th>
-        <td>N/A</td>
-      </tr><tr>
-        <th>Summary</th>
-        <td>N/A</td>
-      </tr>
-      </tbody>
-      </table>
-    </td></tr>
 
   <tr><th>array&lt;type&gt;</th>
     <td>
@@ -1149,8 +1108,7 @@ field tag type weightedset&lt;string&gt; {
 <p>
 The body of a field is optional for <a href="#schema">schema</a>,
 <a href="#document">document</a> and
-<a href="#struct">struct</a>, and <strong>disallowed</strong> for
-<a href="#annotation">annotation</a>. It may contain the following elements:
+<a href="#struct">struct</a>. It may contain the following elements:
 </p>
 <table class="table">
   <thead>
@@ -4130,7 +4088,7 @@ The body of a <code>weakand</code> statement consists of:
       <td>Zero to one</td>
       <td>
         <p id="weakand-allow-drop-all">
-          A boolean value. The default behavior of <code>weakAnd</code> is to always keep at least one term (the least common one) even though 
+          A boolean value. The default behavior of <code>weakAnd</code> is to always keep at least one term (the least common one) even though
           it is considered a stopword. This is to avoid dropping all query terms in order to make sure that some hits are produced.
         </p>
         <p>
@@ -4138,7 +4096,7 @@ The body of a <code>weakand</code> statement consists of:
           will allow removal of all query terms if they are all considered stopwords (i.e., if
           <code>stopword-limit</code> is set and all query terms are above the limit).
         <p>
-          This may be desired (and significantly improve query performance) if <code>weakAnd</code> is used together with another query operator, 
+          This may be desired (and significantly improve query performance) if <code>weakAnd</code> is used together with another query operator,
           e.g. the <a href="/en/nearest-neighbor-search.html#querying-using-nearestneighbor-query-operator">nearestNeighbor</a> operator.
         </p>
         <p>
@@ -4279,6 +4237,27 @@ to: [document-summary-name], [document-summary-name], &hellip;
   </ul>
 </td>
 </tr>
+<tr><td style="white-space: nowrap">select-elements-by</td>
+  <td>Zero to one</td>
+  <td>
+  <p id="select-elements-by">
+    Use a summary feature to control which elements in an
+    <a href="#array">array of primitive</a> or
+    <a href="#array">array of struct</a> field are returned as part of document summary.
+  </p>
+<pre>
+select-elements-by: &lt;summary-feature-name&gt;
+</pre>
+  <p>
+    The summary feature used must be a tensor with a single mapped
+    dimension. An element will be returned if its id is a label along
+    the mapped dimension of this tensor.
+  </p>
+  <ul>
+    <li><a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/chunk_selection/test.sd">search definition example</a></li>
+  </ul>
+</td>
+</tr>
 <tr><td style="white-space: nowrap">tokens</td>
 <td>Zero to one</td>
 <td>
@@ -4366,21 +4345,6 @@ field tag type weightedset&lt;string&gt; {
 </tr>
 </tbody>
 </table>
-
-
-
-<h2 id="annotation">annotation</h2>
-<p>
-Contained in <a href="#schema">schema</a>.
-Defines an annotation type to be used by the <a href="../annotations.html">Annotations API</a>.
-A name of the annotation is mandatory, the body is optional.
-</p>
-<pre>
-annotation [name] {
-    [body]
-}
-</pre>
-
 
 
 <h2 id="import-field">import field</h2>

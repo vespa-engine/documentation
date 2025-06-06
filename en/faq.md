@@ -50,7 +50,7 @@ rank-profile drop-low-score {
 ### Are ranking expressions or functions evaluated lazily
 <p>Rank expressions are not evaluated lazily.  No, this would require lambda arguments.
   Only doubles and tensors are passed between functions.
-  
+
    Example:</p>
 <pre>
 function inline foo(tensor, defaultVal) {
@@ -63,19 +63,19 @@ function bar() {
 </pre>
 
 ### Does Vespa support early termination of matching and ranking?
-Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the rank profile,  or by adding a range query item using *hitLimit* to the query tree, 
-see [capped numeric range search](reference/query-language-reference.html#numeric).  
-Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if there are other restrictive filters in the query, one might end up with 0 hits. 
-The additional filters are applied as a post filtering 
-step over the hits from the capped range query. *match-phase* on the other hand, is safe to use with filters or other query terms, 
-and also supports diversification which the capped range query term does not support.  
+Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the rank profile,  or by adding a range query item using *hitLimit* to the query tree,
+see [capped numeric range search](reference/query-language-reference.html#numeric).
+Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if there are other restrictive filters in the query, one might end up with 0 hits.
+The additional filters are applied as a post filtering
+step over the hits from the capped range query. *match-phase* on the other hand, is safe to use with filters or other query terms,
+and also supports diversification which the capped range query term does not support.
 
 ### What could cause the relevance field to be -Infinity
 The returned [relevance](reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
 of a double. This can happen in two cases:
 
 - The [ranking](ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
--Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this. 
+-Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this.
 - Surfacing low scoring hits using [grouping](grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](reference/schema-reference.html#keep-rank-count).
 
 ### How to pin query results?
@@ -110,7 +110,7 @@ Vespa is not transactional in the traditional sense, it doesn't have strict ACID
 Vespa is designed for high performance use-cases with eventual consistency
 as an acceptable (and to some extent configurable) trade-off.
 
-### Does vespa support wildcard fields? 
+### Does vespa support wildcard fields?
 Wildcard fields are not supported in vespa.
 Workaround would be to use maps to store the wildcard fields.
 Map needs to be defined with <code>indexing: attribute</code> and hence will be stored in memory.
@@ -163,7 +163,7 @@ Groups can be multi-level.
 ### Are filters supported?
 Add filters to the query using [YQL](query-language.html)
 using boolean, numeric and [text matching](text-matching.html). Query terms can be annotated
-as filters, which means that they are not highlighted when bolding results. 
+as filters, which means that they are not highlighted when bolding results.
 
 ### How to query for similar items?
 One way is to describe items using tensors and query for the
@@ -256,7 +256,7 @@ to make the query less expensive to run.
 If an _estimate_ is good enough, use [hitcountestimate=true](reference/query-api-reference.html#hitcountestimate).
 
 ### Must all fields in a fieldset have compatible type and matching settings?
-Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted 
+Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted
 when fields with conflicting tokenization are put in the same
 [fieldset](reference/schema-reference.html#fieldset).
 This is because a given query item searching one fieldset is tokenized just once,
@@ -274,13 +274,13 @@ and the [Query API Reference](reference/query-api-reference.html#timeout).
 
 ### How does backslash escapes work?
 Backslash is used to escape special characters in YQL.
-For example, to query with a literal backslash, which is useful in regexpes, 
+For example, to query with a literal backslash, which is useful in regexpes,
 you need to escape it with another backslash: \\.
 Unescaped backslashes in YQL will lead to "token recognition error at: '\'".
 
-In addition, Vespa CLI unescapes double backslashes to single 
-(while single backslashes are left alone), 
-so if you query with Vespa CLI you need to escape with another backslash: \\\\. 
+In addition, Vespa CLI unescapes double backslashes to single
+(while single backslashes are left alone),
+so if you query with Vespa CLI you need to escape with another backslash: \\\\.
 The same applies to strings in Java.
 
 Also note that both log messages and JSON results escape backslashes, so any \ becomes \\.
@@ -299,9 +299,9 @@ Alternatively, split a single incoming query into two running in parallel in a [
 FutureResult futureResult = new AsyncExecution(settings).search(query);
 FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
 ```
-### Is it possible to query for the number of elements in an array 
-No, there is no index or attribute data structure that allows efficient searching for documents where 
-an array field has a certain number of elements or items.  
+### Is it possible to query for the number of elements in an array
+No, there is no index or attribute data structure that allows efficient searching for documents where
+an array field has a certain number of elements or items.
 
 ### Is it possible to query for fields with NaN/no value set/null/none
 The [visiting](visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
@@ -386,7 +386,7 @@ E.g. integrating NER, word sense disambiguation, specific intent detection.
 Vespa supports these things well:
 - [Query (and result) processing](searcher-development.html)
 - [Document processing](document-processing.html)
-  and [annotations](annotations.html) on document processors working on semantic annotations of text
+  and document processors working on semantic annotations of text
 
 ### Does Vespa support customization of the inverted index?
 E.g. instead of using terms or n-grams as the unit, we might use terms with specific word senses -
@@ -403,7 +403,7 @@ you can also take full control over these things without modifying the platform 
 
 ### Does vespa provide any support for named entity extraction?
 It provides the building blocks but not an out-of-the-box solution.
-We can write a [Searcher](searcher-development.html) to detect query-side entities and rewrite the query, 
+We can write a [Searcher](searcher-development.html) to detect query-side entities and rewrite the query,
 and a [DocProc](document-processing.html) if we want to handle them in some special way on the indexing side.
 
 ### Does vespa provide support for text extraction?
@@ -421,7 +421,7 @@ and have limited text match modes (i.e. `indexing: index` cannot be used).
 
 ### Why is closeness 1 for all my vectors?
 
-If you have added vectors to your documents and queries, and see that the rank feature 
+If you have added vectors to your documents and queries, and see that the rank feature
 closeness(field, yourEmbeddingField) produces 1.0 for all documents, you are likely using
 [distance-metric](reference/schema-reference.html#distance-metric): innerproduct/prenormalized-angular,
 but your vectors are not normalized, and the solution is normally to switch to
@@ -432,7 +432,7 @@ or use
 
 With non-normalized vectors, you often get negative distances, and those are capped to 0,
 leading to closeness 1.0.
-Some embedding models, such as models from sbert.net, claim to output normalized vectors but might not. 
+Some embedding models, such as models from sbert.net, claim to output normalized vectors but might not.
 
 
 
@@ -496,7 +496,7 @@ Some of this is detailed in the [feed sizing guide](performance/sizing-feeding.h
 Yes. The [content node](proton.html) is implemented in C++
 and not memory constrained other than what the operating system does.
 
-### Get request for a document when document is not in sync in all the replica nodes? 
+### Get request for a document when document is not in sync in all the replica nodes?
 If the replicas are in sync the request is only sent to the primary content node.
 Otherwise, it's sent to several nodes, depending on replica metadata.
 Example: if a bucket has 3 replicas A, B, C and A & B both have metadata state X and C has metadata state Y,
@@ -605,7 +605,7 @@ For these reasons, it is not recommended, and not supported.
 Use [visiting](visiting.html) to dump all or a subset of the documents.
 See [data-management-and-backup](https://cloud.vespa.ai/en/data-management-and-backup) for more information.
 
-### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)? 
+### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)?
 Failure response will be given in case the document is not written on some replica nodes.
 
 ### When the doc is not written to some nodes, will the document become available due to replica reconciliation?
@@ -616,7 +616,7 @@ Also try [Multinode testing and observability](https://github.com/vespa-engine/s
 Yes just add a `deleted` attribute, add [fast-search](attributes.html#fast-search) on it
 and create a searcher which adds an `andnot deleted` item to queries.
 
-### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down? 
+### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down?
 You can set a [transition-time](reference/services-content.html#transition-time) in services.xml
 to configure the cluster controller how long a node is to be kept in maintenance mode
 before being automatically marked down.

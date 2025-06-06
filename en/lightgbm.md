@@ -124,7 +124,7 @@ feature names are valid [rank features](reference/rank-features.html).
 Examples are `attribute(field_name)` for a value that should be retrieved from
 a document, `query(name)` for a value that should be retrieved from the query,
 or possibly from other more complex rank features such as `fieldMatch(name)`.
-You can also define [functions](https://docs.vespa.ai/en/ranking-expressions-features.html#function-snippets) (which are valid rank features) with the LightGBM
+You can also define [functions](/en/ranking-expressions-features.html#function-snippets) (which are valid rank features) with the LightGBM
 feature name to perform the mapping. An example:
 
 <pre>
@@ -254,6 +254,6 @@ this model for every document.
   when reading Vespa features for training as Vespa outputs features using `double` precision. 
   If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
 * In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
-  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](https://docs.vespa.ai/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
+  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](/en/reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
   is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
 

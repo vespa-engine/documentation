@@ -27,18 +27,20 @@ To edit documentation, check out and work off the master branch in this reposito
 Documentation is written in HTML or Markdown.
 Use a single Jekyll template [_layouts/default.html](_layouts/default.html) to add header, footer and layout.
 
-Install [bundler](https://bundler.io/), then
+You probably need to get the right Ruby version first, with
+
+    $ brew install rbenv
+    $ rbenv init
+    $ source ~/.zprofile
+    $ rbenv install 3.3.7
+    $ rbenv local 3.3.7
+
+Then you should be able to run:
 
     $ bundle install
     $ bundle exec jekyll serve --incremental --drafts --trace
 
 to set up a local server at localhost:4000 to see the pages as they will look when served.
-If you get strange errors on bundle install try
-
-    $ export PATH=“/usr/local/opt/ruby@2.6/bin:$PATH”
-    $ export LDFLAGS=“-L/usr/local/opt/ruby@2.6/lib”
-    $ export CPPFLAGS=“-I/usr/local/opt/ruby@2.6/include”
-    $ export PKG_CONFIG_PATH=“/usr/local/opt/ruby@2.6/lib/pkgconfig”
 
 The output will highlight rendering/other problems when starting serving.
 

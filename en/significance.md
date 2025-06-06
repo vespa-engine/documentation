@@ -63,7 +63,7 @@ select * from example where content contains ({significance:0.9}"neurotransmitte
 
 ## Significance values in a searcher
 
-Document frequency and significance values can be also set in a [custom searcher](https://docs.vespa.ai/en/searcher-development.html#writing-a-searcher):
+Document frequency and significance values can be also set in a [custom searcher](/en/searcher-development.html#writing-a-searcher):
 
 ```java
 private void setDocumentFrequency(WordItem item, long frequency, long numDocuments) {

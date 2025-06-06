@@ -12,7 +12,7 @@ A handshake also entails multiple network round-trips that certainly degrades re
 A client instance should therefore re-use HTTPS connections if possible for subsequent requests.
 
 Note that some client implementation may not re-use connections by default.
-For instance *Apache HttpClient (Java)* 
+For instance *Apache HttpClient (Java)*
 [will by default not re-use connections when configured with a client X.509 certificate](https://stackoverflow.com/a/13049131/1615280).
 Most programmatic clients require the response content to be fully consumed/read for a connection to be reused.
 
@@ -36,18 +36,25 @@ for example when new resources are introduced by the [autoscaler](autoscaling.ht
 ## Prefer HTTP/2
 We recommend *HTTP/2* over *HTTP/1.1*. *HTTP/2* multiplexes multiple concurrent requests over a single connection,
 and its binary protocol is more compact and efficient.
-See Vespa's documentation on [HTTP/2](https://docs.vespa.ai/en/performance/http2.html) for more details.
+See Vespa's documentation on [HTTP/2](/en/performance/http2.html) for more details.
 
-## Be deliberate with timeouts and retries 
+## Be deliberate with timeouts and retries
 Make sure to configure your clients with sensible timeouts and retry policies.
 Too low timeouts combined with aggressive retries may cause havoc on your Vespa application if latency increases due to overload.
+
+Handle *transient failures* and *partial failures* through a retry strategy with backoff, for instance *capped exponential backoff* with a random *jitter*.
+Consider implementing a [*circuit-breaker*](https://martinfowler.com/bliki/CircuitBreaker.html) for failures persisting over a longer time-span.
 
 Only retry requests on *server errors* - not on *client errors*.
 A client should typically not retry requests after receiving a `400 Bad Request` response,
 or retry a TLS connection after handshake fails with client's X.509 certificate being expired.
 
-Handle *transient failures* and *partial failures* through a retry strategy with backoff, for instance *capped exponential backoff* with a random *jitter*.
-Consider implementing a [*circuit-breaker*](https://martinfowler.com/bliki/CircuitBreaker.html) for failures persisting over a longer time-span.
+Be careful when handling 5xx responses, especially `503 Service Unavailable` and `504 Gateway Timeout`.
+These responses typically indicate an overloaded system, and blindly retrying without backoff will only worsen the situation.
+Clients should reduce overall throughput when receiving such responses.
+
+The same principle applies to `429 Too Many Requests` responses from the [Document v1 API](/en/document-v1-api-guide.html),
+which indicates that the client is exceeding the system's feed capacity. Clients should implement strategies such as reducing the request rate by a specific percentage, introducing exponential backoff, or pausing requests for a short duration before retrying. These adjustments help prevent further overload and allow the system to recover.
 
 For more general advise on retries and timeouts see *Amazon Builder's Library*'s
 [excellent article](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) on the subject.

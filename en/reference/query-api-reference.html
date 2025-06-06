@@ -59,7 +59,10 @@ get methods as Java objects from the Query to Searcher components.
     <li><a href="#model.restrict">model.restrict</a> [<em>restrict</em>]</li>
     <li><a href="#model.searchpath">model.searchPath</a> [<em>path</em>]</li>
     <li><a href="#model.sources">model.sources</a> [<em>search, sources</em>]</li>
-   <li><a href="#model.type">model.type</a> [<em>type</em>]</li>
+    <li><a href="#model.type">model.type</a> [<em>type</em>]</li>
+    <li><a href="#model.type.composite">model.type.composite</a> [<em>type</em>]</li>
+    <li><a href="#model.type.tokenization">model.type.tokenization</a> [<em>type</em>]</li>
+    <li><a href="#model.type.syntax">model.type.syntax</a> [<em>type</em>]</li>
   </ul>
 </dd>
 
@@ -391,8 +394,8 @@ These parameters are defined in the <code>native</code> query profile type.
         never cause more matches than the query.
       </p>
       <p>
-        Consider using query profiles to add filters to the YQL string,
-        <a href="/en/query-profiles.html#example">example</a>.
+        The <a href="#model.querystring">model.queryString</a> must be present for this to have any effect.
+        To add filters to the YQL string, use query profiles. See <a href="/en/query-profiles.html#example">example</a>.
       </p>
     </td>
   </tr>
@@ -504,7 +507,7 @@ These parameters are defined in the <code>native</code> query profile type.
         Also see <a href="../federation.html">federation</a>.
       </p>
       <p>
-        Use <a href="#model.restrict">model.restrict</a> to restrict to schemas.
+        Use <a href="#model.restrict">model.restrict</a> to only search a subset of the schemas in a cluster.
       </p>
     </td>
   </tr>
@@ -515,18 +518,87 @@ These parameters are defined in the <code>native</code> query profile type.
     <td><code>weakAnd</code></td>
     <td>
       <p id="model.type">
-        Selects the query language syntax of the
-        <a href="#model.querystring">model.queryString</a> parameter:
-        <code>all</code>, <code>weakAnd</code>, <code>any</code>, <code>phrase</code>,
-        <code>tokenize</code>, <code>web</code>, <code>linguistics</code>, </code><code>yql</code> -
-        refer to <a href="simple-query-language-reference.html">simple query language reference</a>.
+        Sets all the model.type parameters (composite, tokenization, and syntax) specifying how to
+        parse a <a href="#model.querystring">model.queryString</a> parameter at once,
+        according to the given table:
+      </p>
+      <table>
+        <tr><th>value      <th>composite<th>tokenization<th>syntax</tr>
+        <tr><td>all        <td>and      <td>internal    <td>simple</tr>
+        <tr><td>any        <td>or       <td>internal    <td>simple</tr>
+        <tr><td>linguistics<td>weakAnd  <td>linguistics <td>none  </tr>
+        <tr><td>phrase     <td>phrase   <td>internal    <td>none  </tr>
+        <tr><td>tokenize   <td>weakAnd  <td>internal    <td>none  </tr>
+        <tr><td>weakAnd    <td>weakAnd  <td>internal    <td>simple</tr>
+        <tr><td>web        <td>and      <td>internal    <td>web   </tr>
+        <tr><td>yql        <td>and      <td>internal    <td>yql   </tr>
+      </table>
+      <p>
         Also see <a href="query-language-reference.html#userinput">YQL grammar</a>.
       </p>
+    </td>
+  </tr>
+  <tr>
+    <th>model.type.composite</th>
+    <td>type</td>
+    <td>String</td>
+    <td><code>As determined by query.type</code></td>
+    <td>
+      <p id="model.type.composite">
+        Sets the Vespa query composite type that will collect parsed terms of the query by default.
+      </p>
+      <table>
+        <tr><td>and    <td>Create an AndItem which only matches if <i>all</i> terms are present.</tr>
+        <tr><td>or     <td>Create an OrItem which matches if <i>any</i> of the terms are present.</tr>
+        <tr><td>phrase <td>Create a PhraseItem which matches if all the terms are present in the given order with no gaps.</tr>
+        <tr><td>weakAnd<td>Create a <a href="https://docs.vespa.ai/en/using-wand-with-vespa.html#weakand">WeakAndItem</a> which has the semantics of <code>or</code> with performance approaching <code>and</code>.</tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <th>model.type.tokenization</th>
+    <td>type</td>
+    <td>String</td>
+    <td><code>As determined by query.type</code></td>
+    <td>
+      <p id="model.type.tokenization">
+        Sets the tokenizer used to split the query string into tokens.
+      </p>
+      <table>
+        <tr><td>internal   <td>Use the tokenizer built into the query parser.</tr>
+        <tr><td>linguistics<td>Pass the full query string as-is to the linguistics component
+                               for tokenization, exactly as on the indexing side, and collect any text and numeric token
+                               returned as-is, with no further stemming or normalization even when specified in the schema.
+                               This is only supported in conjunction
+                               with the <code>none</code> syntax option.
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <th>model.type.syntax</th>
+    <td>type</td>
+    <td>String</td>
+    <td><code>As determined by query.syntax</code></td>
+    <td>
+      <p id="model.type.syntax">
+        Sets the syntax used to interpret the query string. Options:
+      </p>
+      <table>
+        <tr><td>none</td><td>No syntax: Disregard any non-searchable terms</td></tr>
+        <tr><td>simple</td><td>Use the <a href="simple-query-language-reference.html">simple query language</a> suitable for end users.</td></tr>
+        <tr><td>web</td><td>Like the <a href="simple-query-language-reference.html">simple query language</a>, but '+'
+                            in front of a term means "search for this term as-is", and 'a OR b' (capital OR)
+                            means match either a or b.</td></tr>
+        <tr><td>yql</td><td>Parse as a <a href="https://docs.vespa.ai/en/reference/query-language-reference.html">YQL query</a>.</td></tr>
+      </table>
     </td>
   </tr>
   </tbody>
 </table>
 
+public enum Tokenization { internal, linguistics }
+
+public enum Syntax { none, simple, web, yql }
 
 
 <h2 id="ranking">Ranking</h2>
@@ -978,12 +1050,12 @@ These parameters are defined in the <code>native</code> query profile type.
     </td>
   </tr>
   <tr>
-    <th>ranking.matching.weakAnd<br/>.stopwordLimit</th>
+    <th>ranking.matching.weakand<br/>.stopwordLimit</th>
     <td></td>
     <td>double [0.0, 1.0]</td>
     <td></td>
     <td>
-      <p id="ranking.matching.weakAnd.stopwordLimit">
+      <p id="ranking.matching.weakand.stopwordLimit">
         Rank profile equivalent: <a href="schema-reference.html#weakand-stopword-limit">weakand stopword-limit</a>
       </p>
       <p>
@@ -995,12 +1067,12 @@ These parameters are defined in the <code>native</code> query profile type.
     </td>
   </tr>
   <tr>
-    <th>ranking.matching.weakAnd<br/>.adjustTarget</th>
+    <th>ranking.matching.weakand<br/>.adjustTarget</th>
     <td></td>
     <td>double [0.0, 1.0]</td>
     <td></td>
     <td>
-      <p id="ranking.matching.weakAnd.adjustTarget">
+      <p id="ranking.matching.weakand.adjustTarget">
         Rank profile equivalent: <a href="schema-reference.html#weakand-adjust-target">weakand adjust-target</a>
       </p>
       <p>
@@ -1013,12 +1085,12 @@ These parameters are defined in the <code>native</code> query profile type.
     </td>
   </tr>
   <tr>
-    <th>ranking.matching.weakAnd<br/>.allowDropAll</th>
+    <th>ranking.matching.weakand<br/>.allowDropAll</th>
     <td></td>
     <td>boolean</td>
     <td>false</td>
     <td>
-      <p id="ranking.matching.weakAnd.allowDropAll">
+      <p id="ranking.matching.weakand.allowDropAll">
         Rank profile equivalent: <a href="schema-reference.html#weakand-allow-drop-all">weakand allow-drop-all</a>
       </p>
       <p>
@@ -1312,6 +1384,18 @@ These parameters are defined in the <code>native</code> query profile type.
           <td>
             Render the tensor content directly.<br/>
             Render the tensor content in the <a href="document-json-format.html#tensor">general verbose form</a>.
+          </td>
+        </tr>
+        <tr>
+          <td><code>hex</code></td>
+          <td>
+            Use <code>short</code> form, and render dense values <a href="tensor.html#indexed-hex-form">hex encoded</a>.<br/>
+          </td>
+        </tr>
+        <tr>
+          <td><code>hex-value</code></td>
+          <td>
+            Use <code>short-value</code> form, and render dense values <a href="tensor.html#indexed-hex-form">hex encoded</a>.<br/>
           </td>
         </tr>
       </table>
@@ -1927,7 +2011,7 @@ Refer to <a href="semantic-rules.html">semantic rules</a>.
 
 
 <h2 id="http-status-codes">HTTP status codes</h2>
-<p>The status code rules are:</p>
+<p>The following rules determine which HTTP status code is returned:</p>
 <ul>
   <li>
     If the Result contains no errors (Result.hits().getError()==null): 200 OK is returned.
@@ -1953,20 +2037,112 @@ Refer to <a href="semantic-rules.html">semantic rules</a>.
     The same as above, but 200 OK is returned by default instead of 500.
   </li>
 </ul>
-<p>WEB SERVICE ERROR CODES:</p>
-<pre>
-200, 301, 302, 307, 400, 401, 403, 404, 405, 406, 408, 428, 429, 431, 500, 501, 502, 511
-</pre>
-<p>HTTP COMPATIBLE ERROR CODES:</p>
-<pre>
-com.yahoo.container.protect.Error.BAD_REQUEST -&gt; Http code 400
-com.yahoo.container.protect.Error.UNAUTHORIZED -&gt; Http code 401
-com.yahoo.container.protect.Error.FORBIDDEN -&gt; Http code 403
-com.yahoo.container.protect.Error.NOT_FOUND -&gt; Http code 404
-com.yahoo.container.protect.Error.INTERNAL_SERVER_ERROR -&gt; Http code 500
-com.yahoo.container.protect.Error.INSUFFICIENT_STORAGE -&gt; Http code 507
-</pre>
-
+<table class="table">
+  <caption>List of possible HTTP status codes and their descriptions.</caption>
+  <thead>
+  <tr>
+    <th>Code</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>200</th>
+    <td>OK</td>
+  </tr>
+  <tr>
+    <th>400</th>
+    <td>Bad Request</td>
+  </tr>
+  <tr>
+    <th>401</th>
+    <td>Unauthorized</td>
+  </tr>
+  <tr>
+    <th>403</th>
+    <td>Forbidden</td>
+  </tr>
+  <tr>
+    <th>404</th>
+    <td>Not Found</td>
+  </tr>
+  <tr>
+    <th>405</th>
+    <td>Method Not Allowed</td>
+  </tr>
+  <tr>
+    <th>408</th>
+    <td>Request Timeout</td>
+  </tr>
+  <tr>
+    <th>428</th>
+    <td>Precondition Required</td>
+  </tr>
+  <tr>
+    <th>431</th>
+    <td>Request Header Fields Too Large</td>
+  </tr>
+  <tr>
+    <th>500</th>
+    <td>Internal Server Error</td>
+  </tr>
+  <tr>
+    <th>502</th>
+    <td>Bad Gateway</td>
+  </tr>
+  <tr>
+    <th>503</th>
+    <td>
+      Service Unavailable; no available search handler threads in the jdisc container to serve the request.
+      See <a href="../performance/container-tuning.html#container-worker-threads">Container Tuning</a> on sizing thread pools.
+    </td>
+  </tr>
+  <tr>
+    <th>504</th>
+    <td>Gateway Timeout</td>
+  </tr>
+  <tr>
+    <th>507</th>
+    <td>Insufficient Storage</td>
+  </tr>
+  </tbody>
+</table>
+<h3>Error code to status code mapping</h3>
+<p>Mapping of internal error codes to HTTP status codes.</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Error Code</th>
+    <th>HTTP Code</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>com.yahoo.container.protect.Error.BAD_REQUEST</th>
+    <td>400</td>
+  </tr>
+  <tr>
+    <th>com.yahoo.container.protect.Error.UNAUTHORIZED</th>
+    <td>401</td>
+  </tr>
+  <tr>
+    <th>com.yahoo.container.protect.Error.FORBIDDEN</th>
+    <td>403</td>
+  </tr>
+  <tr>
+    <th>com.yahoo.container.protect.Error.NOT_FOUND</th>
+    <td>404</td>
+  </tr>
+  <tr>
+    <th>com.yahoo.container.protect.Error.INTERNAL_SERVER_ERROR</th>
+    <td>500</td>
+  </tr>
+  <tr>
+    <th>com.yahoo.container.protect.Error.INSUFFICIENT_STORAGE</th>
+    <td>507</td>
+  </tr>
+  </tbody>
+</table>
 
 <hr/>
 
