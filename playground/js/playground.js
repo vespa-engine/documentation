@@ -13,6 +13,7 @@ var variables = new Map();
 var selected = null;
 var converter = new showdown.Converter();
 var context = contexts.VIEW;
+var currentTheme = localStorage.getItem('theme') || 'light';
 
 ///////////////////////////////////////////////////////////////////////////////
 // Notifications
@@ -139,51 +140,95 @@ var operations = {
             } else {
                 var data = result.get("result");
                 if (typeof data === "object") {
-                    var table = content.append("table");
-
-                    // expression
-                    if (result.has("e") && result.get("e").length > 0) {
-                        var row = table.append("tr")
-                        row.append("td").attr("class", "label").html("Expression");
-                        row.append("td").attr("class", "code").html(replace_html_code(result.get("e")));
-                    }
-
-                    // type
-                    if (result.has("type") && result.get("type").length > 0) {
-                        var row = table.append("tr")
-                        row.append("td").attr("class", "label").html("Type");
-                        row.append("td").attr("class", "code").html(replace_html_code(result.get("type")));
-                    }
-
-                    // value
-                    var row = table.append("tr");
-                    row.append("td").attr("class", "label").attr("style", "padding-top: 5px").html("Value");
-                    var cell = row.append("td");
+                    // Create a container for all tensor cards
+                    var tensorContainer = content.append("div").attr("class", "tensor-section");
+                    
+                    // Get the values we need
                     var value = data["value"];
                     if (data["type"] !== null && data["type"].includes("tensor")) {
                         value = data["value"]["literal"];
                     }
-                    cell.append("input").attr("value", value).attr("style", "width: 800px").attr("readonly","readonly");
-                    row.append("td").append("a").attr("href", "#").attr("class", "header").html(icon_clipboard_copy())
-                        .on("click", function(event) { copy_to_clipboard(value); event.stopPropagation(); event.preventDefault(); });
+                    
+                    // Expression row
+                    if (result.has("e") && result.get("e").length > 0) {
+                        var expressionRow = tensorContainer.append("div").attr("class", "tensor-row");
+                        expressionRow.append("div").attr("class", "tensor-label").html("Expression:");
+                        var expressionValue = expressionRow.append("div").attr("class", "tensor-value");
+                        expressionValue.html(replace_html_code(result.get("e")));
+                        
+                        // Add copy icon to the right of the field
+                        expressionRow.append("span")
+                            .attr("class", "tensor-clipboard copy-button-align")
+                            .html(icon_clipboard_copy())
+                            .on("click", function() { 
+                                copy_to_clipboard(result.get("e")); 
+                                event.stopPropagation(); 
+                            });
+                    }
+                    
+                    // Type row
+                    if (result.has("type") && result.get("type").length > 0) {
+                        var typeRow = tensorContainer.append("div").attr("class", "tensor-row");
+                        typeRow.append("div").attr("class", "tensor-label").html("Type:");
+                        var typeValue = typeRow.append("div").attr("class", "tensor-value");
+                        typeValue.html(replace_html_code(result.get("type")));
+                        
+                        // Add copy icon to the right of the field
+                        typeRow.append("span")
+                            .attr("class", "tensor-clipboard copy-button-align")
+                            .html(icon_clipboard_copy())
+                            .on("click", function() { 
+                                copy_to_clipboard(result.get("type")); 
+                                event.stopPropagation(); 
+                            });
+                    }
+                    
+                    // Check if value should be shown based on the 'same' parameter in the response
+                    const shouldShowValue = data["same"] !== true;
+                    
+                    if (shouldShowValue) {
+                        // Value row - only show if different from expression
+                        var valueRow = tensorContainer.append("div").attr("class", "tensor-row");
+                        valueRow.append("div").attr("class", "tensor-label").html("Value:");
+                        var valueContent = valueRow.append("div").attr("class", "tensor-value tensor-value-single-line");
+                        
+                        // Add input with value
+                        valueContent.append("pre")
+                            .attr("style", "margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;")
+                            .text(value);
+                        
+                        // Add copy icon to the right of the field
+                        valueRow.append("span")
+                            .attr("class", "tensor-clipboard copy-button-align")
+                            .html(icon_clipboard_copy())
+                            .on("click", function(event) { 
+                                copy_to_clipboard(value); 
+                                event.stopPropagation(); 
+                            });
+                    }
 
-                    // graphical view of tensor
-                    row = table.append("tr");
-                    row.append("td").html("");
-                    cell = row.append("td");
-                    draw_table(cell, data);
-
-                    // steps
+                    // Table row - with empty space for label to align with other rows
+                    var tableRow = tensorContainer.append("div").attr("class", "tensor-row");
+                    tableRow.append("div").attr("class", "tensor-label").html("");
+                    var tableContent = tableRow.append("div").attr("style", "margin-top: 4px; width: 100%;");
+                    draw_table(tableContent, data);
+                    
+                    // Add execution trace section (previously steps)
                     const primitive = "Primitive representation:\n" + result.get("primitive");
                     const steps = "Steps:\n" + JSON.stringify(JSON.parse(result.get("steps")), null, 2);
-                    row = table.append("tr").attr("id", "steps_" + frame_index);
-                    if ( ! result.has("show_details") || result.get("show_details") == false) {
-                        row.attr("hidden", true);
+                    var debugContainer = content.append("div").attr("class", "debug-info-container").attr("id", "steps_" + frame_index);
+                    
+                    if (!result.has("show_details") || result.get("show_details") == false) {
+                        debugContainer.attr("hidden", true);
                     }
-                    row.append("td").attr("class", "label").html("Details");
-                    row.append("td").append("textarea").attr("rows", steps.split("\n").length + 2)
-                            .attr("class", "debug-info-text").text(primitive +"\n\n" + steps);
-
+                    
+                    var traceHeader = debugContainer.append("div").attr("class", "tensor-row");
+                    traceHeader.append("div").attr("class", "tensor-label").html("Execution Trace:");
+                    debugContainer.append("textarea")
+                        .attr("rows", steps.split("\n").length + 2)
+                        .attr("class", "debug-info-text")
+                        .attr("style", "width: 100%; margin-top: 4px;")
+                        .text(primitive + "\n\n" + steps);
                 } else {
                     content.html(data);
                 }
@@ -268,11 +313,11 @@ function add_save_cancel_field(root) {
     row.append("td").attr("class", "label");
     var cell = row.append("td");
 
-    var saveButton = cell.append("a").attr("href", "#").attr("id", "save-button")
-        .html(icon_check() + " Save and execute (ctrl + enter)")
+    var saveButton = cell.append("a").attr("href", "#").attr("class","header tooltip save-button")
+        .html(icon_check() + " Save and execute (ctrl + enter)" + '<span class="tooltip-text">Save changes and execute expression</span>')
         .on("click", function(event) { execute_selected(); event.preventDefault(); });
-    var cancelButton = cell.append("a").attr("href", "#").attr("id", "cancel-button")
-        .attr("style","margin-left: 80px").html(icon_exit() + " Cancel (escape)")
+    var cancelButton = cell.append("a").attr("href", "#").attr("class","header tooltip cancel-button")
+        .attr("style","margin-left: 80px").html(icon_exit() + " Cancel (escape)" + '<span class="tooltip-text">Cancel editing</span>')
         .on("click", function(event) { document.activeElement.blur(); exit_edit_selected(); event.preventDefault(); });
 
     // Check if we're in an expression context by looking for the expression textarea
@@ -295,12 +340,15 @@ function add_save_cancel_field(root) {
 }
 
 function add_setup_ui_buttons(root) {
-    root.append("a").attr("href", "#").attr("class","header").html(icon_cancel())
+    root.append("a").attr("href", "#").attr("class","header tooltip").html(icon_cancel() + '<span class="tooltip-text">Cancel editing</span>')
         .on("click", function(event) { document.activeElement.blur(); exit_edit_selected(); event.preventDefault(); });
 }
 
-function addActionButton(root, iconFn, actionFn, frameIndex, actionName) {
-    root.append("a").attr("href", "#").attr("class", "header").html(iconFn())
+function addActionButton(root, iconFn, actionFn, frameIndex, actionName, tooltipText) {
+    root.append("a")
+        .attr("href", "#")
+        .attr("class", "header tooltip")
+        .html(iconFn() + `<span class="tooltip-text">${tooltipText}</span>`)
         .on("click", function(event) {
             // Only allow actions if not in edit mode
             if (context !== contexts.EDIT) {
@@ -314,14 +362,14 @@ function addActionButton(root, iconFn, actionFn, frameIndex, actionName) {
 }
 
 function add_result_ui_buttons(root, frame_index) {
-    addActionButton(root, icon_edit, edit_frame, frame_index, "edit a different frame");
-    addActionButton(root, icon_up, move_frame_up, frame_index, "move frames");
-    addActionButton(root, icon_down, move_frame_down, frame_index, "move frames");
-    addActionButton(root, icon_remove, remove_frame, frame_index, "remove frames");
+    addActionButton(root, icon_edit, edit_frame, frame_index, "edit a different frame", "Edit this frame");
+    addActionButton(root, icon_up, move_frame_up, frame_index, "move frames", "Move frame up");
+    addActionButton(root, icon_down, move_frame_down, frame_index, "move frames", "Move frame down");
+    addActionButton(root, icon_cross, remove_frame, frame_index, "remove frames", "Remove this frame");
 }
 
 function add_expression_result_ui_buttons(root, frame_index) {
-    root.append("a").attr("href", "#").attr("class","header header-space").html(icon_hierarchy())
+    root.append("a").attr("href", "#").attr("class","header header-space tooltip").html(icon_hierarchy() + '<span class="tooltip-text">Show execution trace</span>')
         .on("click", function(event) { show_details(frame_index); event.stopPropagation(); event.preventDefault(); });
 }
 
@@ -390,7 +438,8 @@ function draw_table(element, variable) {
 }
 
 function table_html(element, data, columns) {
-    var table = element.append("table"),
+    var table = element.append("table")
+        .attr("class", "tensor-table"),
         thead = table.append("thead"),
         tbody = table.append("tbody");
 
@@ -414,8 +463,7 @@ function table_html(element, data, columns) {
         })
         .enter()
         .append("td")
-            .classed("data", true)
-            .text(function(d) { return d.value; });
+        .text(function(d) { return d.value; });
 
     return table;
 }
@@ -433,8 +481,8 @@ function icon_down() {
     return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(3 3)"><path d="m3.5 7.5 4 4 4-4"/><path d="m7.5.5v11"/><path d="m.5 14.5h14"/></g></svg>';
 }
 
-function icon_remove() {
-    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 7.5 6 6"/><path d="m13.5 7.5-6 6"/></g></svg>';
+function icon_cross() {
+    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(5 5)"><path d="m10.5 10.5-10-10z"/><path d="m10.5.5-10 10"/></g></svg>';
 }
 
 function icon_cancel() {
@@ -756,7 +804,7 @@ function execute_all() {
     }
     update();
 
-    d3.text("https://api.search.vespa.ai/playground/eval", {
+    d3.text("http://localhost:8080/playground/eval", {
             method: "POST",
             body: "json=" + encodeURIComponent(JSON.stringify(expressions)),
             headers: { "Content-Type": "application/x-www-form-urlencoded" }
@@ -986,6 +1034,8 @@ function copy_to_clipboard(text) {
     document.body.removeChild(textarea);
 }
 
+
+
 function setup_keybinds() {
     var previous_keydown = { "key" : null, "ts" : 0 };
 
@@ -1097,6 +1147,80 @@ function clear_examples() {
     d3.select("#examples-select").property("value", "");
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Theme Toggle Functionality
+///////////////////////////////////////////////////////////////////////////////
+
+function setTheme(theme) {
+    currentTheme = theme;
+    localStorage.setItem('theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    
+    // Update the theme toggle icon
+    const themeToggle = document.getElementById('toggle-theme-cmd');
+    if (themeToggle) {
+        if (theme === 'dark') {
+            themeToggle.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <span class="tooltip-text">Toggle light mode</span>
+            `;
+        } else {
+            themeToggle.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                </svg>
+                <span class="tooltip-text">Toggle dark mode</span>
+            `;
+        }
+    }
+}
+
+function toggleTheme() {
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    show_notification(`Switched to ${newTheme} mode`, 'info', 2000);
+}
+
+function setupThemeToggle() {
+    const themeToggle = document.getElementById('toggle-theme-cmd');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleTheme();
+        });
+    }
+    
+    // Check if theme is saved in localStorage
+    const savedTheme = localStorage.getItem('theme');
+    
+    if (!savedTheme) {
+        // If no saved preference, check system preference
+        const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        currentTheme = prefersDarkMode ? 'dark' : 'light';
+    }
+    
+    // Apply the theme
+    setTheme(currentTheme);
+    
+    // Listen for system preference changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        // Only change if user hasn't set a preference
+        if (!localStorage.getItem('theme')) {
+            setTheme(e.matches ? 'dark' : 'light');
+        }
+    });
+}
+
 function main() {
     setup_commands();
     load_setup();
@@ -1105,5 +1229,5 @@ function main() {
     select_frame_by_index(0);
     setup_keybinds();
     setup_examples();
+    setupThemeToggle();
 }
-
