@@ -44,66 +44,16 @@ function handleProxyRequest(request){
   return request;
 }
 
-function showResult() {
-  const newGroupingVal = document.getElementById('grouping-query-input').value;
-
-  if (newGroupingVal !== DEFAULT_GROUPING) {
-    setGroupingParam(newGroupingVal);
-  }
-
-  const rawYql = 'select * from purchase where true limit 0 |' + newGroupingVal;
-  fetch(getSearchUrl(rawYql))
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return response.json();
-    })
-    // If using the local proxy, we need to parse the response
-    .then(handleProxyRequest)
-    .then(jsonData => {
-      const tableContainer = document.getElementById('table-container');
-      let rows = [];
-
-      const customerGroups = jsonData.root?.children?.[0].children?.[0].children ?? [];
-
-      const hasHits = customerGroups?.[0]?.children?.[0]?.id?.startsWith('hitlist');
-
-      if (hasHits) {
-        rows = customerGroups.flatMap(group =>
-          group.children?.[0]?.children?.map(flattenFields) ?? []
-        );
-      } else {
-        rows = customerGroups.map(flattenFields);
-      }
-      excludeKeys = ['id', 'documentid','relevance', 'fields', 'source', 'sddocname']
-
-      const table = generateTable(rows, excludeKeys);
-
-      if (table) {
-        const oldTable = tableContainer.querySelector('table');
-        if (oldTable) {
-          tableContainer.replaceChild(table, oldTable);
-        } else {
-          tableContainer.appendChild(table);
-        }
-        table.classList.add('table');
-      } else {
-        if (jsonData.root.errors) {
-          jsonData.root.errors.forEach((error) => {
-          // Assuming tableContainer is a DOM element, you'd typically use innerHTML, not innerHTML.add.
-          tableContainer.innerHTML = `<div>${error.message}</div>`;
-          });
-        } else {
-          tableContainer.innerHTML = '<p>No data available to display.</p>';
-        }
-      }
-    })
-    .catch(error => console.error(error));
+function executeGroupingFromTheContainer(container) {
+  const yql = container.querySelector('#grouping-query-input').value;
+  const resultContainer = container.querySelector('#table-container');
+  executeGrouping(yql, resultContainer);
 }
 
 
 function onKeyDown(event, elem) {
   if (event.key === 'Enter'){
-    showResult(elem);
+    executeGroupingFromTheContainer(elem);
   }
   if (document.getElementById('grouping-query-input').value !== DEFAULT_GROUPING) {
     document.getElementById('refresh-btn').classList.remove('hide');
@@ -181,7 +131,7 @@ function executeGrouping(yql, outputContainer) {
       if (!anyDataShown) {
         if (jsonData.root.errors) {
           jsonData.root.errors.forEach((error) => {
-          // Assuming tableContainer is a DOM element, you'd typically use innerHTML, not innerHTML.add.
+          // Output the error
           outputContainer.innerHTML += `<p style="color:red;">Error:${error.message}</p>`;
           });
         } else {
@@ -259,10 +209,10 @@ document.addEventListener('DOMContentLoaded', function() {
     Try running requests on the
     <a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/part-purchases-demo/ext/feed.jsonl">grouping example data</a>:
   </p>
-  <textarea id="grouping-query-input" onkeydown="onKeyDown(event, this)"
+  <textarea id="grouping-query-input" onkeydown="onKeyDown(event, this.parentNode)"
   placeholder="Write your requests here...">all( group(customer) each(output(sum(price))) )</textarea>
   <div class="row" style="justify-content: flex-end;">
-    <button class="button is-solid is-small run-button" style="height: 24px; margin: auto 0;"   onclick="showResult()">Run Grouping</button>
+    <button class="button is-solid is-small run-button" style="height: 24px; margin: auto 0;"   onclick="executeGroupingFromTheContainer(this.parentNode.parentNode)">Run Grouping</button>
     <button onclick="reset(this)" id="refresh-btn" class="is-solid is-small"
     style="border: none;"><span class="d-icon d-refresh"></span></button>
 
