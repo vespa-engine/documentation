@@ -13,7 +13,7 @@ var variables = new Map();
 var selected = null;
 var converter = new showdown.Converter();
 var context = contexts.VIEW;
-var currentTheme = localStorage.getItem('theme') || 'light';
+var currentTheme = localStorage.getItem('theme') || null; // Will be set based on system preference
 
 ///////////////////////////////////////////////////////////////////////////////
 // Notifications
@@ -795,7 +795,7 @@ function execute_all() {
     }
     update();
 
-    d3.text("https://api.search.vespa.ai/playground/eval", {
+    d3.text("http://localhost:8080/playground/eval", {
             method: "POST",
             body: "json=" + encodeURIComponent(JSON.stringify(expressions)),
             headers: { "Content-Type": "application/x-www-form-urlencoded" }
@@ -1142,9 +1142,11 @@ function clear_examples() {
 // Theme Toggle Functionality
 ///////////////////////////////////////////////////////////////////////////////
 
-function setTheme(theme) {
+function setTheme(theme, saveToStorage = true) {
     currentTheme = theme;
-    localStorage.setItem('theme', theme);
+    if (saveToStorage) {
+        localStorage.setItem('theme', theme);
+    }
     document.documentElement.setAttribute('data-theme', theme);
     
     // Update the theme toggle icon
@@ -1178,7 +1180,7 @@ function setTheme(theme) {
 
 function toggleTheme() {
     const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
+    setTheme(newTheme, true); // Save to storage when manually toggled
     show_notification(`Switched to ${newTheme} mode`, 'info', 2000);
 }
 
@@ -1193,21 +1195,24 @@ function setupThemeToggle() {
     
     // Check if theme is saved in localStorage
     const savedTheme = localStorage.getItem('theme');
+    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
-    if (!savedTheme) {
-        // If no saved preference, check system preference
-        const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (savedTheme) {
+        // Use saved preference if it exists
+        currentTheme = savedTheme;
+    } else {
+        // Otherwise use system preference
         currentTheme = prefersDarkMode ? 'dark' : 'light';
     }
     
-    // Apply the theme
-    setTheme(currentTheme);
+    // Apply the theme without saving to localStorage if using system preference
+    setTheme(currentTheme, savedTheme !== null);
     
     // Listen for system preference changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
         // Only change if user hasn't set a preference
         if (!localStorage.getItem('theme')) {
-            setTheme(e.matches ? 'dark' : 'light');
+            setTheme(e.matches ? 'dark' : 'light', false); // Don't save to storage when following system
         }
     });
 }
