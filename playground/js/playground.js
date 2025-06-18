@@ -159,7 +159,7 @@ var operations = {
                         // Add copy icon to the right of the field
                         expressionRow.append("span")
                             .attr("class", "tensor-clipboard copy-button-align")
-                            .html(icon_clipboard_copy())
+                            .html(icon_replicate())
                             .on("click", function() { 
                                 copy_to_clipboard(result.get("e")); 
                                 event.stopPropagation(); 
@@ -172,15 +172,6 @@ var operations = {
                         typeRow.append("div").attr("class", "tensor-label").html("Type:");
                         var typeValue = typeRow.append("div").attr("class", "tensor-value");
                         typeValue.html(replace_html_code(result.get("type")));
-                        
-                        // Add copy icon to the right of the field
-                        typeRow.append("span")
-                            .attr("class", "tensor-clipboard copy-button-align")
-                            .html(icon_clipboard_copy())
-                            .on("click", function() { 
-                                copy_to_clipboard(result.get("type")); 
-                                event.stopPropagation(); 
-                            });
                     }
                     
                     // Check if value should be shown based on the 'same' parameter in the response
@@ -200,7 +191,7 @@ var operations = {
                         // Add copy icon to the right of the field
                         valueRow.append("span")
                             .attr("class", "tensor-clipboard copy-button-align")
-                            .html(icon_clipboard_copy())
+                            .html(icon_replicate())
                             .on("click", function(event) { 
                                 copy_to_clipboard(value); 
                                 event.stopPropagation(); 
@@ -489,8 +480,8 @@ function icon_cancel() {
     return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="matrix(-1 0 0 1 18 3)"><path d="m10.595 10.5 2.905-3-2.905-3"/><path d="m13.5 7.5h-9"/><path d="m10.5.5-8 .00224609c-1.1043501.00087167-1.9994384.89621131-2 2.00056153v9.99438478c.0005616 1.1043502.8956499 1.9996898 2 2.0005615l8 .0022461"/></g></svg>';
 }
 
-function icon_clipboard_copy() {
-    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(4 3)"><path d="m6.5 11.5-3-3 3-3"/><path d="m3.5 8.5h11"/><path d="m12.5 6.5v-4.00491374c0-.51283735-.3860402-.93550867-.8833789-.99327378l-.1190802-.00672622-1.9975409.00491374m-6 0-1.99754087-.00492752c-.51283429-.00124584-.93645365.38375378-.99544161.88094891l-.00701752.11906329v10.99753792c.00061497.5520447.44795562.9996604 1 1.0006148l10 .0061554c.5128356.0008784.9357441-.3848611.993815-.8821612l.006185-.1172316v-2.5"/><path d="m4.5.5h4c.55228475 0 1 .44771525 1 1s-.44771525 1-1 1h-4c-.55228475 0-1-.44771525-1-1s.44771525-1 1-1z"/></g></svg>';
+function icon_replicate() {
+    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(3 3)"><path d="m11.5 9.5v-7c0-1.1045695-.8954305-2-2-2h-7c-1.1045695 0-2 .8954305-2 2v7c0 1.1045695.8954305 2 2 2h7c1.1045695 0 2-.8954305 2-2z"/><path d="m3.5 11.5v1c0 1.1045695.8954305 2 2 2h7c1.1045695 0 2-.8954305 2-2v-7c0-1.1045695-.8954305-2-2-2h-1"/></g></svg>';
 }
 
 function icon_check() {
@@ -506,7 +497,7 @@ function icon_comment() {
 }
 
 function icon_code() {
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(2 3)"><line x1="10.5" x2="6.5" y1=".5" y2="14.5"/><polyline points="7.328 2.672 7.328 8.328 1.672 8.328" transform="rotate(135 4.5 5.5)"/><polyline points="15.328 6.672 15.328 12.328 9.672 12.328" transform="scale(1 -1) rotate(-45 -10.435 0)"/></g></svg>';
+    return '<svg height="21" viewBox="0 0 21 21" width="21" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(2 3)"><line x1="10.5" x2="6.5" y1=".5" y2="14.5"/><polyline points="7.328 2.672 7.328 8.328 1.672 8.328" transform="rotate(135 4.5 5.5)"/><polyline points="15.328 6.672 15.328 12.328 9.672 12.328" transform="scale(1 -1) rotate(-45 -10.435 0)"/></g></svg>';
 }
 
 function icon_hierarchy() {
