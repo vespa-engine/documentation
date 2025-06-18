@@ -256,7 +256,16 @@ For this sample application TODO
 ### Use WeakAND for text matching
 
 RAG queries tend to be long → AND is unsuitable, OR is too expensive.
-Tune WeakAND to trade some accuracy for much lower cost:
+Consider for example a typical query from our eval set:
+
+```json
+{"query_text": "Find the Python script where I implemented the custom attention layer for the 'SynapseCore' module.",}
+```
+
+Terms like 'the', 'I', 'for' is likely very common in the corpus, and would likely not add much value to the weakAnd-operator.
+We recommend tuning weakAnd to trade a tiny bit of accuracy for much lower cost.
+See [blog post](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/) for additional details.
+Below are some sane default values for a large corpus (based on wikipedia-dataset):
 
 <pre>
 rank-profile optimized inherits baseline {
@@ -268,7 +277,6 @@ rank-profile optimized inherits baseline {
 }
 </pre>
 
-WeakAND is the default for user input.
 
 ### Use multiple text fields, consider multiple embeddings
 
@@ -301,12 +309,14 @@ Use a cheaper first-phase function that approximates the learned model:
 * Include a handful of signals (text, vector closeness, metadata).
 * Implement as a simple handwritten function, possibly with learned constants (passed in the query).
 
-Signals should include `nativeRank` or `bm25` — not `fieldMatch`.
+Signals should include [nativeRank](../reference/nativerank.html#nativerank) or [bm25](../reference/bm25.html#ranking-function) — not [fieldMatch](../reference/rank-features.html#field-match-features-normalized).
 
 * **bm25**: cheapest, strong significance, no proximity, not normalized.
 * **nativeRank**: 2 – 3 × costlier, truncated significance, includes proximity, normalized.
 
 Measure quality loss from the cheaper first phase.
+
+
 
 ### Set up automated evals for fast iteration
 
