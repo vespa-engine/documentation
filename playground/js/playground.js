@@ -795,7 +795,7 @@ function execute_all() {
     }
     update();
 
-    d3.text("http://localhost:8080/playground/eval", {
+    d3.text("https://api.search.vespa.ai:8080/playground/eval", {
             method: "POST",
             body: "json=" + encodeURIComponent(JSON.stringify(expressions)),
             headers: { "Content-Type": "application/x-www-form-urlencoded" }
