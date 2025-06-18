@@ -1023,6 +1023,9 @@ function copy_to_clipboard(text) {
     textarea.select();
     document.execCommand('copy');
     document.body.removeChild(textarea);
+    
+    // Show notification when copied to clipboard
+    show_notification("Copied to clipboard", "success", 2000);
 }
 
 
