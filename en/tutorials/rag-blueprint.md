@@ -357,32 +357,246 @@ To know whether your retrieval phase is working well, you need to measure recall
 
 We can use [`VespaMatchEvaluator`](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaMatchEvaluator) from the pyvespa client library to do this.
 
-For this sample application we set up a 
+For this sample application, we set up an evaluation script that compares three different retrieval strategies, let us call them "retrieval arms":
 
-### Use WeakAND for text matching
+1. **Semantic-only**: Uses only vector similarity through `nearestNeighbor` operators
+2. **WeakAnd-only**: Uses only text-based matching with `userQuery` 
+3. **Hybrid**: Combines both approaches with OR logic
 
-RAG queries tend to be long → AND is unsuitable, OR is too expensive.
-Consider for example a typical query from our eval set:
+It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster. 
 
-```json
-{"query_text": "Find the Python script where I implemented the custom attention layer for the 'SynapseCore' module.",}
+The evaluation will output metrics like:
+
+* Recall (percentage of relevant documents matched)
+* Total number of matches per query
+* Query latency statistics
+* Per-query detailed results (when `write_verbose=True`) to identify "offending" queries with regards to recall or performance.
+
+This will be valuable input for tuning each of them.
+
+Run the complete evaluation script from the `eval/` directory to see detailed comparisons between all three retrieval strategies on your dataset.
+
+#### Semantic Query Evaluation
+
+```sql
+select * from doc where 
+({targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+({targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
 ```
 
-Terms like 'the', 'I', 'for' is likely very common in the corpus, and would likely not add much value to the weakAnd-operator.
-We recommend tuning weakAnd to trade a tiny bit of accuracy for much lower cost.
-See [blog post](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/) for additional details.
-Below are some sane default values for a large corpus (based on wikipedia-dataset):
+<style>
+table, th, td { border: 1px solid black; }
+th { width: 120px; }
+</style>
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Match Recall</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Average Recall per Query</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Total Relevant Documents</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>Total Matched Relevant</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>Average Matched per Query</td>
+      <td>100.0000</td>
+    </tr>
+    <tr>
+      <td>Total Queries</td>
+      <td>20</td>
+    </tr>
+    <tr>
+      <td>Search Time Average (s)</td>
+      <td>0.0090</td>
+    </tr>
+    <tr>
+      <td>Search Time Q50 (s)</td>
+      <td>0.0060</td>
+    </tr>
+    <tr>
+      <td>Search Time Q90 (s)</td>
+      <td>0.0193</td>
+    </tr>
+    <tr>
+      <td>Search Time Q95 (s)</td>
+      <td>0.0220</td>
+    </tr>
+  </tbody>
+</table>
 
-<pre>
-rank-profile optimized inherits baseline {
-  filter-threshold: 0.05
-  weakand {
-    stopword-limit: 0.6
-    adjust-target: 0.01
-  }
+#### WeakAnd Query Evaluation
+
+The `userQuery` is just a convenience wrapper for `weakAnd`, see [reference/query-language-reference.html](../reference/query-language-reference.html). The default `targetHits` for `weakAnd` is 100, but it is [overridable](../reference/query-language-reference.html#targethits).
+
+```sql
+select * from doc where userQuery()
+```
+
+<style>
+table {
+  border-collapse: collapse;   /* optional but usually nicer */
+  border: none;                /* no outer border */
 }
-</pre>
+th, td { border: 1px solid black; }
+th { width: 120px; }
+</style>
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Match Recall</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Average Recall per Query</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Total Relevant Documents</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>Total Matched Relevant</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>Average Matched per Query</td>
+      <td>88.7000</td>
+    </tr>
+    <tr>
+      <td>Total Queries</td>
+      <td>20</td>
+    </tr>
+    <tr>
+      <td>Search Time Average (s)</td>
+      <td>0.0071</td>
+    </tr>
+    <tr>
+      <td>Search Time Q50 (s)</td>
+      <td>0.0060</td>
+    </tr>
+    <tr>
+      <td>Search Time Q90 (s)</td>
+      <td>0.0132</td>
+    </tr>
+    <tr>
+      <td>Search Time Q95 (s)</td>
+      <td>0.0171</td>
+    </tr>
+  </tbody>
+</table>
 
+#### Hybrid Query Evaluation
+
+```sql
+select * from doc where 
+({targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+({targetHits:100}nearestNeighbor(chunk_embeddings, embedding)) or
+userQuery()
+```
+
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Match Recall</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Average Recall per Query</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>Total Relevant Documents</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>Total Matched Relevant</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>Average Matched per Query</td>
+      <td>100.0000</td>
+    </tr>
+    <tr>
+      <td>Total Queries</td>
+      <td>20</td>
+    </tr>
+    <tr>
+      <td>Search Time Average (s)</td>
+      <td>0.0076</td>
+    </tr>
+    <tr>
+      <td>Search Time Q50 (s)</td>
+      <td>0.0055</td>
+    </tr>
+    <tr>
+      <td>Search Time Q90 (s)</td>
+      <td>0.0150</td>
+    </tr>
+    <tr>
+      <td>Search Time Q95 (s)</td>
+      <td>0.0201</td>
+    </tr>
+  </tbody>
+</table>
+
+### Tuning the retrieval phase
+
+We can see that all queries match all relevant documents, which is expected, since we use `targetHits:100` in the `nearestNeighbor` operator, and this is also the default for `weakAnd`(and `userQuery`). By setting `targetHits` lower, we can see that recall will drop.
+
+In general, you have these options if you want to increase recall:
+
+1. Increase `targetHits` in your retrieval operators (e.g., `nearestNeighbor`, `weakAnd`).
+2. Improve your embedding model (use a better model or finetune it on your data).
+3. You can also consider tuning HNSW parameters, see [docs on HNSW](../approximate-nn-hnsw.html#using-vespas-approximate-nearest-neighbor-search).
+
+On the other hand, if you want to reduce latency of on of your retrieval "arms", with a small trade-off in recall, you can:
+
+1. Tune `weakAnd` parameters. This has potential to 3x your performance for the `weakAnd`-parameter of your query, see [blog post](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/).
+
+Below are some empirically found default parameters that work well for most use cases:
+
+```txt
+rank-profile optimized inherits baseline {
+    filter-threshold: 0.05
+    weakand {
+      stopword-limit: 0.6
+      adjust-target: 0.01
+    }
+  }
+```
+
+See the [reference](../reference/schema-reference.html#weakand) for more details on the `weakAnd` parameters.
+These can also be set as query parameters.
+
+1. As already [mentioned](#consider-binary-vectors-for-recall), consider binary vectors for your embeddings.
+2. Consider using an embedding model with less dimensions, or using only a subset of the dimensions (e.g., using [Matryoshka embeddings](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/)).
 
 ### Use multiple text fields, consider multiple embeddings
 
@@ -405,24 +619,111 @@ Use more specific operators than WeakAND to match only close occurrences `{near}
 Don’t use this to increase recall — improve your embedding model instead.
 Consider using it to improve precision when needed.
 
-## Configure ranking
+## First-phase ranking
 
-### Use first-phase ranking to reduce cost
+For first-phase ranking, we want to use a cheaper function. 
+Common options include (learned) linear combination of features including text similarity features, vector closeness, and metadata.
 
-GBDT is usually too expensive for all matches.
-Use a cheaper first-phase function that approximates the learned model:
-
-* Include a handful of signals (text, vector closeness, metadata).
-* Implement as a simple handwritten function, possibly with learned constants (passed in the query).
-
-Signals should include [nativeRank](../reference/nativerank.html#nativerank) or [bm25](../reference/bm25.html#ranking-function) — not [fieldMatch](../reference/rank-features.html#field-match-features-normalized).
+Text features should include [nativeRank](../reference/nativerank.html#nativerank) or [bm25](../reference/bm25.html#ranking-function) — not [fieldMatch](../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
 
 * **bm25**: cheapest, strong significance, no proximity, not normalized.
 * **nativeRank**: 2 – 3 × costlier, truncated significance, includes proximity, normalized.
 
-Measure quality loss from the cheaper first phase.
+For our blueprint we collect training data for first-phase ranking using `VespaFeatureCollector` from the pyvespa library. 
+
+These are the features we will include:
+
+```txt
+rank-profile collect-training-data {
+        match-features {
+            bm25(title)
+            bm25(chunks)
+            closeness(title_embedding)
+            closeness(chunk_embeddings)
+            max_chunk_sim_scores
+            max_chunk_text_scores
+            avg_top_3_chunk_sim_scores
+            avg_top_3_chunk_text_scores
+        }
+        inputs {
+            query(embedding) tensor<int8>(x[96])
+        }
+
+        rank chunks {
+            element-gap: 0 # Fixed length chunking should not cause any positional gap between elements
+        }
+        function chunk_text_scores() {
+            expression: elementwise(bm25(chunks),chunk,float)
+        }
+
+        function chunk_dist_scores() {
+            expression: reduce(hamming(query(embedding), attribute(chunk_embeddings)), sum, x)
+        }
+
+        function chunk_sim_scores() {
+            expression: 1/ (1 + chunk_dist_scores())
+        }
+
+        function top_3_chunk_text_scores() {
+            expression: top(3, chunk_text_scores())
+        }
+
+        function top_3_chunk_sim_scores() {
+            expression: top(3, chunk_sim_scores())
+        }
 
 
+        function avg_top_3_chunk_text_scores() {
+            expression: reduce(top_3_chunk_text_scores(), avg, chunk)
+        }
+        function avg_top_3_chunk_sim_scores() {
+            expression: reduce(top_3_chunk_sim_scores(), avg, chunk)
+        }
+        
+        function max_chunk_text_scores() {
+            expression: reduce(chunk_text_scores(), max, chunk)
+        }
+
+        function max_chunk_sim_scores() {
+            expression: reduce(chunk_sim_scores(), max, chunk)
+        }
+
+        first-phase {
+            expression {
+                closeness(title_embedding) +
+                closeness(chunk_embeddings) +
+                bm25(title) + 
+                bm25(chunks) +
+                max_chunk_sim_scores() +
+                max_chunk_text_scores()
+            }
+        }
+
+        second-phase {
+            expression: random
+        }
+
+        
+    }
+```
+
+As you can see, we rely on the `bm25` and `closeness` features for the first-phase ranking, and we also include some chunk-level features to help with the ranking of the chunks.
+
+Running the command below will save a .csv-file with the collected features, which can be used to train a ranking model for the first-phase ranking.
+
+<pre>
+python eval/collect_pyvespa.py --collect_matchfeatures --collector_name matchfeatures-firstphase
+</pre>
+
+Our output file looks like this:
+
+TODO.
+
+We advise to compare quality against second-phase ranking. 
+
+## Second-phase ranking
+
+TODO
 
 ### Set up automated evals for fast iteration
 
