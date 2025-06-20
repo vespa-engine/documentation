@@ -49,59 +49,10 @@ We used `gemini-2.5-pro` to create our queries and relevant document labels. Ple
 
 ## Data modelling
 
-### Picking your searchable unit
+Here is the schema that we will use for our sample application.
 
-When building a RAG application, your first key decision is choosing the "searchable unit." This is the basic block of information your system will search through and return as context to the LLM. For instance, if you have millions of documents, some hundreds of pages long, what should be your searchable unit?
-
-Consider these points when selecting your searchable unit:
-
-* **Too fine-grained (e.g., individual sentences or very small paragraphs):**
-  * Leads to duplication of context and metadata across many small units.
-  * May result in units lacking sufficient context for the LLM to make good selections or generate relevant responses.
-  * Increases overhead for managing many small document units.
-* **Too coarse-grained (e.g., very long chapters or entire large documents):**
-  * Can cause performance issues due to the size of the units being processed.
-  * May lead to some large documents appearing relevant to too many queries, reducing precision.
-  * If you embed the whole document, a too large context will lead to reduced retrieval quality.
-
-We recommend to err on the side of slightly larger units.
-
-* LLMs are increasingly capable of handling larger contexts.
-* In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
-
-With Vespa, it is now possible to return only the top k most relevant chunks of a document, and include and combine both document-level and chunk-level features in ranking. 
-
-### Chunk selection
-
-You may not want to feed every chunk of the top k documents to the LLM.
-
-1. Use all chunks.
-2. Use `matched-elements-only` (lexical match).
-3. Score and select chunks in the container.
-4. Score and select chunks on content-node.
-5. Score and select chunks in your frontend.
-
-Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal.
-Now available: elementwise rank functions and filtering on the content nodes.
-
-You can pick a large document as the searchable unit, while still addressing the potential drawbacks many encounter as follows:
-
-* Pick your (larger) document as your searchable unit.
-* Chunk the text-fields automatically on indexing.
-* Embed each chunk (enabled through Vespa's multivector support)
-* Calculate chunk-level features (e.g. bm25 and embedding similarity) and document-level features. Combine as you want.
-* Limit the actual chunks that are returned to the ones that are actually relevant context for the LLM.
-
-**Conclusion:** It's often better to err on the side of slightly larger units.
-
-* LLMs are increasingly capable of handling larger contexts.
-* In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
-
-Since Vespa version TODO, we added support for automatic [chunking](../reference/indexing-language-reference.html#converters) in the [indexing language](../indexing.html).
-
-Here is our corresponding schema, which defines the searchable unit as a document with a text field, and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
-
-```
+```txt
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 schema doc {
 
     document doc {
@@ -119,14 +70,14 @@ schema doc {
             
         }
 
-        field created_timestamp type int {
+        field created_timestamp type long {
             indexing: attribute | summary
         }
-        field modified_timestamp type int {
+        field modified_timestamp type long {
             indexing: attribute | summary
         }
         
-        field last_opened_timestamp type int {
+        field last_opened_timestamp type long {
             indexing: attribute | summary
         }
         field open_count type int {
@@ -156,18 +107,154 @@ schema doc {
             distance-metric: hamming
         }
     }
+
+    fieldset default {
+        fields: title, chunks
+    }
+
+    document-summary no-chunks {
+        summary id {}
+        summary title {}
+        summary created_timestamp {}
+        summary modified_timestamp {}
+        summary last_opened_timestamp {}
+        summary open_count {}
+        summary favorite {}
+        summary chunks {}
+    }
+
+    document-summary top_3_chunks {
+        from-disk
+        summary chunks_top3 {
+            source: chunks
+            select-elements-by: top_3_chunk_sim_scores #this needs to be added a summary-feature to the rank-profile
+        }
+    }
 }
 ```
 
-Keep reading for a reasoning behind the choices in the schema.
+Keep reading for an explanation and reasoning behind the choices in the schema.
+
+### Picking your searchable unit
+
+When building a RAG application, your first key decision is choosing the "searchable unit." This is the basic block of information your system will search through and return as context to the LLM. For instance, if you have millions of documents, some hundreds of pages long, what should be your searchable unit?
+
+Consider these points when selecting your searchable unit:
+
+* **Too fine-grained (e.g., individual sentences or very small paragraphs):**
+  * Leads to duplication of context and metadata across many small units.
+  * May result in units lacking sufficient context for the LLM to make good selections or generate relevant responses.
+  * Increases overhead for managing many small document units.
+* **Too coarse-grained (e.g., very long chapters or entire large documents):**
+  * Can cause performance issues due to the size of the units being processed.
+  * May lead to some large documents appearing relevant to too many queries, reducing precision.
+  * If you embed the whole document, a too large context will lead to reduced retrieval quality.
+
+We recommend to err on the side of slightly larger units.
+
+* LLMs are increasingly capable of handling larger contexts.
+* In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
+
+With Vespa, it is now possible to return only the top k most relevant chunks of a document, and include and combine both document-level and chunk-level features in ranking. 
+
+### Chunk selection
+
+You may not want to feed every chunk of the top k documents to the LLM.
+
+1. Use all chunks - will lead to a lot of irrelevant context, and potentially performance issues by returning too many chunks.
+2. Score and select chunks in your frontend - fixes irrelevant context, but adds complexity and does not address performance issues.
+3. Score and select chunks in the search-engine - allows you to return only the most relevant chunks. Best of both worlds.
+
+Below, we show how we can score and select the best chunks in Vespa.
+
+Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal.
+Now available: elementwise rank functions and filtering on the content nodes.
+
+You can pick a large document as the searchable unit, while still addressing the potential drawbacks many encounter as follows:
+
+* Pick your (larger) document as your searchable unit.
+* Chunk the text-fields automatically on indexing.
+* Embed each chunk (enabled through Vespa's multivector support)
+* Calculate chunk-level features (e.g. bm25 and embedding similarity) and document-level features. Combine as you want.
+* Limit the actual chunks that are returned to the ones that are actually relevant context for the LLM.
+
+**Conclusion:** It's often better to err on the side of slightly larger units.
+
+* LLMs are increasingly capable of handling larger contexts.
+* In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
+
+Vespa supports automatic [chunking](../reference/indexing-language-reference.html#converters) in the [indexing language](../indexing.html).
+
+Here is the parts of the schema, which defines the searchable unit as a document with a text field, and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
+
+```txt
+field chunks type array<string> {
+    indexing: input text | chunk fixed-length 1024 | summary | index
+    index: enable-bm25
+}
+
+field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
+    indexing: input text | chunk fixed-length 1024 | embed | pack_bits | attribute | index
+    attribute {
+        distance-metric: hamming
+    }
+}
+```
+
+In Vespa, we can specify which chunks to be returned with a summary feature. For this blueprint, we will return the top 3 chunks based on the similarity score of the chunk embeddings, which is calculated in the ranking phase.
+
+Here is how the summary feature is calculated in the rank-profile:
+
+TODO: Should we use top_3_text_scores instead??
+
+```txt
+function chunk_dist_scores() {
+        expression: reduce(hamming(query(embedding), attribute(chunk_embeddings)), sum, x)
+    }
+
+function chunk_sim_scores() {
+        expression: 1/ (1 + chunk_dist_scores())
+    }
+
+function top_3_chunk_sim_scores() {
+        expression: top(3, chunk_sim_scores())
+    }
+
+summary-features {
+        top_3_chunk_sim_scores
+    }
+```
+
+See [ranking expressions](../reference/ranking-expressions.html#non-primitive-functions) for more details on the `top`-function, and other functions available for ranking expressions.
+
+Now, we can use this summary feature in our document summary to return the top 3 chunks of the document, which will be used as context for the LLM. Note that we can also define a document summary that returns all chunks, which might be useful for another use case, such as deep research.
+
+```txt
+document-summary top_3_chunks {
+      from-disk
+      summary chunks_top3 {
+          source: chunks
+          select-elements-by: top_3_chunk_sim_scores #this needs to be added a summary-feature to the rank-profile
+      }
+  }
+```
 
 ### Model metadata and signals as structured fields
+
+We recommend modelling metadata and signals as structured fields in your schema.
+Below are some general recommendations, as well as the implementation in our blueprint schema.
 
 **Metadata** — knowledge about your data:
 
 * Authors, publish time, source, links, category, price, …
 * Usage: filters, ranking, grouping/aggregation
 * Index only metadata that are strong filters
+
+In our blueprint schema, we include these metadata fields to demonstrate these concepts:
+
+* `id` - document identifier 
+* `title` - document name/filename for display and text matching
+* `created_timestamp`, `modified_timestamp` - temporal metadata for filtering and ranking by recency
 
 **Signals** — observations about your data:
 
@@ -176,7 +263,13 @@ Keep reading for a reasoning behind the choices in the schema.
 * Often updated separately via partial updates
 * Multiple teams can add their own signals independently
 
-For instance, num
+In our blueprint schema, we include several of these signals:
+
+* `last_opened_timestamp` - user engagement signal for personalization
+* `open_count` - popularity signal indicating document importance
+* `favorite` - explicit user preference signal, can be used for boosting relevant content
+
+These fields are configured as `attribute | summary` to enable efficient filtering, sorting, and grouping operations while being returned in search results. The timestamp fields allow for temporal filtering (e.g., "recent documents") and recency-based ranking, while usage signals like `open_count` and `favorite` can boost frequently accessed or explicitly marked important documents.
 
 Consider [parent-child](../parent-child.html) relationships for low-cardinality metadata.
 Most large scale RAG application schemas contain at least a hundred structured fields.
@@ -203,6 +296,17 @@ In generic domains, or if you have finetuned an embedding model to your specific
 `rank({targetHits:2000}nearestNeighbor(embeddings_field, query_embedding, userInput(@query))=`.
 Notice that only the first argument of the `rank`-operator will be used to determine if a document is a match, while all arguments are used for calculating rank features. This mean we can do vector only for matching, but still use text-based features such as `bm25` and `nativeRank` for ranking.
 Note that if you do this, it makes sense to increase the number of `targetHits` afor the `nearestNeighbor`-operator. 
+
+For our sample application, we add three different retrieval operators (that are combined with `OR`), one with `weakAnd` for text matching, and two `nearestNeighbor` operators for vector matching, one for the title and one for the chunks. This will allow us to retrieve both relevant documents based on text and vector similarity, while also allowing us to return the most relevant chunks of the documents.
+
+```sql
+select *
+        from doc
+        where userInput(@query) or
+        ({targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+        ({targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
+```
+
 
 ### Choosing your embedding model (and strategy)
 
@@ -243,7 +347,7 @@ field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
 }
 ```
 
-For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`) so that not too many hits are matched. Another option is to enable match-phase limiting, see [docs](). In essence, you restrict the number of matches by specifying an attribute field.
+For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`, optionally combined with filters) so that not too many hits are matched. Another option is to enable match-phase limiting, see [docs](). In essence, you restrict the number of matches by specifying an attribute field.
 
 ### Evaluating recall of the retrieval phase
 
@@ -343,6 +447,9 @@ Use an LLM to help create training data.
 
 ## Structuring your vespa application
 
+This section will provide some recommendations on how to structure your Vespa application package. See also the [application package docs](../application-package.html) for more details on the application package structure.
+Note that this is not mandatory, and it might be simpler to start without query profiles and rank profiles, but as you scale out your application, it will be beneficial to have a well-structured application package.
+
 ### Manage queries in query profiles
 
 Query profiles let you maintain collections of query parameters in one file.
@@ -414,7 +521,7 @@ Note that the `targetHits` parameter set here does not really makes sense until 
 
 ### Separating out rank profiles
 
-Assume you’ll need many ranking models — to bucket-test alternatives continuously and to serve different use cases.
+Assume you’ll need many ranking models — to bucket-test alternatives continuously and to serve different use cases, including data collection for different phases, and the rank profiles to be used in production.
 
 Separate common functions/setup into parent rank profiles and use `.profile` files.
 
