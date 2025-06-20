@@ -12,6 +12,8 @@ There are a lot of RAG tutorials out there, but this one aims to provide a custo
 * Is fast and [production grade](../cloud/production-deployment.html).
 * Let you create RAG applications with state-of-the-art quality.
 
+Warning: This is not a "Deploy RAG in 5 minutes" tutorial (although you _can_ do that by just running the steps in the README of our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)). The focus is rather to provide a blueprint that allow _you_ to build a high-quality RAG application with an evaluation-driven mindset, while being a resource you can go to for making informed choices for your own use case.
+
 We strongly recommend following along this tutorial, by running the steps in the README of our corresponding [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint) or [pyvespa notebook](TODO).
 
 This tutorial will contain more of the reasoning behind the choices and design of the blueprint, as well as pointers to features to consider for customizing to your own application.
@@ -355,7 +357,7 @@ To know whether your retrieval phase is working well, you need to measure recall
 
 We can use [`VespaMatchEvaluator`](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaMatchEvaluator) from the pyvespa client library to do this.
 
-For this sample application TODO
+For this sample application we set up a 
 
 ### Use WeakAND for text matching
 
