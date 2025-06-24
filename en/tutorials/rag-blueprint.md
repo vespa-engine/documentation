@@ -345,6 +345,45 @@ These fields are configured as `attribute | summary` to enable efficient filteri
 Consider [parent-child](../parent-child.html) relationships for low-cardinality metadata.
 Most large scale RAG application schemas contain at least a hundred structured fields.
 
+## LLM-generation with OpenAI-client
+
+Vespa supports both Local LLMs, and any OpenAI-compatible API for LLM generation. For details, see [LLMs in Vespa](../llms-in-vespa.html)
+
+The recommended way of providing an API key is through using the [secret store](../cloud/security/secret-store.html) in Vespa Cloud.
+
+To enable this, you need to create a vault (if you don't have one already) and a secret through the [Vespa Cloud console](https://cloud.vespa.ai/). If your vault is named `sample-apps` and contains a secret with the name `openai-api-key`, you would use the following configuration in your `services.xml` to set up the OpenAI client to use that secret:
+
+```xml
+  <secrets>
+      <openai-api-key vault="sample-apps" name="openai-dev" />
+  </secrets>
+  <!-- Setup the client to OpenAI -->
+  <component id="openai" class="ai.vespa.llm.clients.OpenAI">
+      <config name="ai.vespa.llm.clients.llm-client">
+          <apiKeySecretName>openai-api-key</apiKeySecretName>
+      </config>
+  </component>
+```
+
+Alternatively, for local deployments, you can set the `X-LLM-API-KEY` header in your query to use the OpenAI client for generation.
+
+To test generation using the OpenAI client, post a query that runs the `openai` search chain, with `format=sse`. (Use `format=json` for a streaming json response including both the search hits and the LLM-generated tokens.)
+
+<pre>
+$ vespa query \
+    --timeout 60 \
+    --header="X-LLM-API-KEY:<your-api-key>" \
+    yql='select *
+    from doc
+    where userInput(@query) or
+    ({label:"title_label", targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+    ({label:"chunks_label", targetHits:100}nearestNeighbor(chunk_embeddings, embedding))' \
+    query="Summarize the key architectural decisions documented for SynapseFlow's v0.2 release." \
+    searchChain=openai \
+    format=sse \
+    hits=5
+</pre>
+
 ## Structuring your vespa application
 
 This section will provide some recommendations on how to structure your Vespa application package. See also the [application package docs](../application-package.html) for more details on the application package structure.
@@ -1404,8 +1443,9 @@ The second-phase ranking represents a crucial step in building high-quality RAG 
 
 ## (Optional) Global-phase ranking
 
-We also have the option of configuring [global-phase](../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k (as set by `rerank-count` parameter) documents from the second-phase ranking. 
-Common options for global-phase are cross-encoders or another GBDT model, trained for better separating top ranked documents. For RAG applications, we consider this less important than for search applications where the results are mainly consumed by an human, as LLMs don't care that much about the ordering of the results.
+We also have the option of configuring [global-phase](../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k (as set by `rerank-count` parameter) documents from the second-phase ranking.
+
+Common options for global-phase are [cross-encoders](..cross-encoders.html#) or another GBDT model, trained for better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, we consider this less important than for search applications where the results are mainly consumed by an human, as LLMs don't care that much about the ordering of the results.
 
 ## Further improvements
 
@@ -1417,6 +1457,11 @@ Now, that we have a reasonably good second-phase ranking, we could potentially g
 
 ## Summary
 
+In this tutorial, we have built a complete RAG application using Vespa, starting from a simple retrieval phase with binary vectors and text matching, to a sophisticated two-phase ranking system with GBDT models.
+
+By using the principles demonstrated in this tutorial, you can create high-quality RAG applications that can scale to any dataset size, and any query load.
+
+We hope to have provided a solid foundation for how to think about developing a RAG application with Vespa, and how to iteratively improve it over time.
 
 ## FAQ
 
