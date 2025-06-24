@@ -1452,6 +1452,8 @@ Common options for global-phase are [cross-encoders](..cross-encoders.html#) or 
 Finally, we will sketch out some opportunities for further improvements.
 As you have seen, we started out with only binary relevance labels for a few queries, and trained a model based on the relevant docs and a set of random documents.
 
+As you may have noted, we have not discussed what most people think about when discussing RAG evals, evaluating the "Generation"-step. There are several tools available to do this, for example [ragas](https://docs.ragas.io/en/stable/) and [ARES](https://github.com/stanford-futuredata/ARES). We refer to other sources for details on this, as this tutorial is probably enough to digest as it is. 
+
 This was useful initially, as we had no better way to retrieve the candidate documents.
 Now, that we have a reasonably good second-phase ranking, we could potentially generate a new set of relevance labels for queries that we did not have labels for by having an LLM do relevance judgments of the top k returned hits. This training dataset would likely be even better in separating the top documents.
 
@@ -1465,7 +1467,9 @@ We hope to have provided a solid foundation for how to think about developing a 
 
 ## FAQ
 
+* **Q: Do I need to use an LLM with Vespa?**
+  A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](https://docs.vespa.ai/en/cloud/enclave/enclave.html)
 * **Q: Why do we use binary vectors for the document embeddings?**
-  A: Binary vectors are more efficient to store and compute with, especially for large datasets. They also allow us to use fast approximate nearest neighbor search algorithms like HNSW.
-* **Q: Why do we use float vectors for the query embeddings?**
-  A: Float vectors provide higher precision for the query embeddings, which can improve the quality of
+  A: Binary vectors takes up a lot less memory and are faster to compute distances on, with only a slight reduction in quality. See blog [post](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) for details.
+* **Q: How can you say that Vespa can scale to any data and query load?**
+  A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../elasticity.html) for details. ∂
