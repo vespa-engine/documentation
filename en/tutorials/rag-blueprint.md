@@ -694,10 +694,14 @@ select * from doc where
 ```
 
 <style>
-table, th, td { border: 1px solid black; }
+.metrics {
+  border-collapse: collapse;   /* optional but usually nicer */
+  border: none;                /* no outer border */
+}
+th, td { border: 1px solid black; }
 th { width: 120px; }
 </style>
-<table>
+<table class="metrics">
   <thead>
     <tr>
       <th>Metric</th>
@@ -756,15 +760,7 @@ The `userQuery` is just a convenience wrapper for `weakAnd`, see [reference/quer
 select * from doc where userQuery()
 ```
 
-<style>
-table {
-  border-collapse: collapse;   /* optional but usually nicer */
-  border: none;                /* no outer border */
-}
-th, td { border: 1px solid black; }
-th { width: 120px; }
-</style>
-<table>
+<table class="metrics">
   <thead>
     <tr>
       <th>Metric</th>
@@ -824,7 +820,7 @@ select * from doc where
 userQuery()
 ```
 
-<table>
+<table class="metrics">
   <thead>
     <tr>
       <th>Metric</th>
@@ -1031,20 +1027,25 @@ Our output file looks like this:
 
 <style>
 /* keep the 1-pixel borders */
-table, th, td {
+.features {
+  border: 1px solid black;     /* outer border */
+  border-collapse: collapse;   /* so adjacent borders overlap cleanly */
+  width: 100%;                 /* full width */
+}
+.features th, td {
   border: 1px solid black;
   border-collapse: collapse;   /* so adjacent borders overlap cleanly */
 }
 
 /* width stays the same */
-th { width: 120px; }
+.features th { width: 120px; }
 
 /* add breathing room for header and body cells */
-th, td {
+.features th, td {
   padding: 6px 10px;   /* top-bottom 6 px, left-right 10 px — tweak as you like */
 }
 </style>
-<table>
+<table class="features">
   <thead>
     <tr>
       <th>query_id</th>
@@ -1253,20 +1254,20 @@ We run the evaluation script on a set of unseen test queries, and get the follow
 
 ```json
 {
-    "accuracy@1": 0.0,
-    "accuracy@3": 0.0,
-    "accuracy@5": 0.05,
-    "accuracy@10": 0.3,
-    "precision@10": 0.034999999999999996,
-    "recall@10": 0.1340909090909091,
-    "precision@20": 0.04250000000000001,
-    "recall@20": 0.3886363636363636,
-    "mrr@10": 0.0476984126984127,
-    "ndcg@10": 0.05997203651967424,
-    "map@100": 0.06688634552753898,
-    "searchtime_avg": 0.022150000000000006,
+    "accuracy@1": 0.0000,
+    "accuracy@3": 0.0000,
+    "accuracy@5": 0.0500,
+    "accuracy@10": 0.3000,
+    "precision@10": 0.0350,
+    "recall@10": 0.1341,
+    "precision@20": 0.0425,
+    "recall@20": 0.3886,
+    "mrr@10": 0.0477,
+    "ndcg@10": 0.0600,
+    "map@100": 0.0669,
+    "searchtime_avg": 0.0222,
     "searchtime_q50": 0.0165,
-    "searchtime_q90": 0.05550000000000001,
+    "searchtime_q90": 0.0555,
     "searchtime_q95": 0.0604
 }
 ```
@@ -1395,24 +1396,36 @@ Expected results show significant improvement over first-phase ranking:
 
 ```json
 {
-    "accuracy@1": 0.9,
-    "accuracy@3": 0.95,
-    "accuracy@5": 1.0,
-    "accuracy@10": 1.0,
-    "precision@10": 0.23,
-    "recall@10": 0.93,
-    "precision@20": 0.13,
-    "recall@20": 0.99,
-    "mrr@10": 0.94,
-    "ndcg@10": 0.85,
-    "map@100": 0.78,
-    "searchtime_avg": 0.035
+    "accuracy@1": 0.9000,
+    "accuracy@3": 0.9500,
+    "accuracy@5": 1.0000,
+    "accuracy@10": 1.0000,
+    "precision@10": 0.2350,
+    "recall@10": 0.9402,
+    "precision@20": 0.1275,
+    "recall@20": 0.9909,
+    "mrr@10": 0.9375,
+    "ndcg@10": 0.8586,
+    "map@100": 0.7780,
+    "searchtime_avg": 0.0328,
+    "searchtime_q50": 0.0305,
+    "searchtime_q90": 0.0483,
+    "searchtime_q95": 0.0606
 }
 ```
 
+Let us compare some selected metrics against the first-phase ranking results:
+
+| Metric         | First-phase | Second-phase | Change  |
+| -------------- | ----------- | ------------ | ------- |
+| recall@10      | 0.1341      | 0.9402       | +0.8061 |
+| recall@20      | 0.3886      | 0.9909       | +0.6023 |
+| ndcg@10        | 0.0600      | 0.8586       | +0.7986 |
+| searchtime_avg | 0.0222      | 0.0328       | + 9ms   |
+
 This represents a dramatic improvement over first-phase ranking, with:
 
-* **accuracy@10** improving from 0.3 to 1.0
+* **recall@10** improving from 0.13 to 0.94
 * **recall@20** improving from 0.39 to 0.99
 * **NDCG@10** improving from 0.06 to 0.85
 
