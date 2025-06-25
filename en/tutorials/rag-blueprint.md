@@ -22,11 +22,11 @@ This tutorial will show how we can develop a high-quality RAG application step-b
 6.  [Second-phase ranking](#second-phase-ranking)
 7.  [(Optional) Global-phase reranking](#optional-global-phase-reranking)
 
-All the accompanying code can be found in our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint) repo. You can also deploy the sample app by running this [pyvespa notebook](TODO).
+All the accompanying code can be found in our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint) repo. 
 
 Each step will contain reasoning behind the choices and design of the blueprint, as well as pointers for customizing to your own application.
 
-{% include note.html content="This is not a 'Deploy RAG in 5 minutes' tutorial (although you _can_ do that by just running the steps in the README of our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)). The focus is rather to provide a blueprint that allows _you_ to build a high-quality RAG application with an evaluation-driven mindset, while being a resource you can go to for making informed choices for your own use case." %}
+{% include note.html content="This is not a 'Deploy RAG inYou can also deploy the sample app by running this [pyvespa notebook](TODO). 5 minutes' tutorial (although you _can_ do that by just running the steps in the README of our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)). The focus is rather to provide a blueprint that allows _you_ to build a high-quality RAG application with an evaluation-driven mindset, while being a resource you can go to for making informed choices for your own use case." %}
 
 {% include pre-req.html memory="4 GB" extra-reqs=
 '<li><a href="https://docs.astral.sh/uv/">uv</a> For Python dependency handling</li>' %}
@@ -370,8 +370,8 @@ Alternatively, for local deployments, you can set the `X-LLM-API-KEY` header in 
 
 To test generation using the OpenAI client, post a query that runs the `openai` search chain, with `format=sse`. (Use `format=json` for a streaming json response including both the search hits and the LLM-generated tokens.)
 
-<pre>
-$ vespa query \
+```bash
+vespa query \
     --timeout 60 \
     --header="X-LLM-API-KEY:<your-api-key>" \
     yql='select *
@@ -383,7 +383,7 @@ $ vespa query \
     searchChain=openai \
     format=sse \
     hits=5
-</pre>
+```
 
 ## Structuring your vespa application
 
@@ -505,10 +505,20 @@ To build a great RAG application, assume you’ll need many ranking models. This
 
 Separate common functions/setup into parent rank profiles and use `.profile` files.
 
+## Phased ranking in Vespa
+
+Before we move on, it might be useful to recap Vespa´s [phased ranking](../phased-ranking.html) approach.
+
+Below is a schematic overview of how to think about retrieval and ranking for this RAG blueprint. Since we are developing this as a tutorial using a small toy dataset, the application can be deployed in a single machine, using a single docker container, where only one container node and one container node will run. This is obviously not the case for most real-world RAG applications, so this is cruical to have in mind as you want to scale your application.
+
+<img src="/assets/img/phased-ranking-rag.png">
+
+It is worth noting that parameters such as `targetHits` (match-phase), and `rerank-count` (first and second phase) are applied **per content node**. Also note that the stateless container nodes can also be [scaled independently](../performance/sizing-search.html) to handle increased query load.
+
 ## Configuring match-phase (retrieval)
 
 This section will contain important considerations for the retrieval-phase of a RAG application in Vespa.
-To learn more about the phased ranking approach in Vespa, see the [phased ranking docs](../phased-ranking.html).
+
 The goal of the retrieval phase is to retrieve candidate documents efficiently, and maximize recall, without exposing too many documents to ranking.
 
 ### Vector, text or hybrid recall?
@@ -594,7 +604,7 @@ field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
 
 For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`, optionally combined with filters) so that not too many hits are matched. Another option is to enable match-phase limiting, see [match-phase docs](../reference/schema-reference.html#match-phase). In essence, you restrict the number of matches by specifying an attribute field.
 
-## Consider float-binary for ranking
+### Consider float-binary for ranking
 
 In our blueprint, we choose to index binary vectors of the documents. This does not prevent us from using the float-representation of the query embedding though.
 
@@ -640,10 +650,10 @@ rank-profile collect-training-data {
 Vespa gives you extensive control over [linguistics](../linguistics.html).
 You can decide [match mode](../reference/schema-reference.html#match), stemming, normalization, or control derived tokens.
 
+It is also possible to use more specific operators than [weakAnd](../reference/query-language-reference.html#weakand) to match only close occurrences ([near](../reference/query-language-reference.html#near)/ [onear](../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../query-rewriting.html#equiv)), weight items, set connectivity, and apply [query-rewrite](../query-rewriting.html) rules.
 
-It is also possible to use more specific operators than [weakAnd](../reference/query-language-reference.html#weakand) to match only close occurrences `{near}`, multiple alternatives `{equiv}`, weight items, set connectivity, and apply query-rewrite rules.
+**Don’t use this to increase recall — improve your embedding model instead.**
 
-Don’t use this to increase recall — improve your embedding model instead.
 Consider using it to improve precision when needed.
 
 ### Evaluating recall of the retrieval phase
@@ -902,8 +912,12 @@ It could also be a heuristic handwritten function.
 
 Text features should include [nativeRank](../reference/nativerank.html#nativerank) or [bm25](../reference/bm25.html#ranking-function) — not [fieldMatch](../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
 
+Considerations for deciding whether to choose `bm25` or `nativeRank`:
+
 * **bm25**: cheapest, strong significance, no proximity, not normalized.
 * **nativeRank**: 2 – 3 × costlier, truncated significance, includes proximity, normalized.
+
+For this blueprint, we opted for using `bm25` for first phase, but you could evaluate and compare to see whether the additional cost of using `nativeRank` is justified by increased quality.
 
 ### Collecting training data for first-phase ranking
 
@@ -922,6 +936,8 @@ rank-profile collect-training-data {
             avg_top_3_chunk_text_scores
 
         }
+
+        # Since we need both binary embeddings (for match-phase) and float embeddings (for ranking) we define it as two inputs.
         inputs {
             query(embedding) tensor<int8>(x[96])
             query(float_embedding) tensor<float>(x[768])
@@ -994,7 +1010,7 @@ These are relatively cheap to calculate, and will likely provide good enough ran
 Running the command below will save a .csv-file with the collected features, which can be used to train a ranking model for the first-phase ranking.
 
 <pre>
-python eval/collect_pyvespa.py --collect_matchfeatures 
+python eval/collect_pyvespa.py --collect_matchfeatures
 </pre>
 
 Our output file looks like this:
@@ -1249,7 +1265,6 @@ We can also see that our search time is quite fast, with an average of 22ms. You
 
 The ranking performance is not great, but this is expected for a simple linear model, where it only needs to be good enough to make sure that the most relevant documents are passed to the second-phase ranking, where ranking performance matters a lot more.
 
-
 ## Second-phase ranking
 
 For the second-phase ranking, we can afford to use a more expensive ranking expression, since we will only run it on the top-k documents from the first-phase ranking (defined by the `rerank-count` parameter, which defaults to 10,000 documents).
@@ -1411,7 +1426,6 @@ For RAG applications with LLM generation:
 ```bash
 vespa query \
     --timeout 60 \
-    --header="X-LLM-API-KEY:<your-api-key>" \
     query="what are key points learned for finetuning llms?" \
     queryProfile=rag-with-gbdt
 ```
@@ -1419,6 +1433,7 @@ vespa query \
 ### Best practices for second-phase ranking
 
 **Model complexity considerations:**
+
 * Use more sophisticated models (GBDT, neural networks) that would be too expensive for first-phase
 * Take advantage of the reduced candidate set (typically 100-10,000 documents)
 * Include expensive text features like `nativeProximity` and `fieldMatch`
@@ -1436,6 +1451,7 @@ vespa query \
 * Iteratively improve with user interaction data when available
 
 **Performance monitoring:**
+
 * Monitor latency impact of second-phase ranking
 * Adjust `rerank-count` based on quality vs. performance trade-offs
 * Consider using different models for different query types or use cases
@@ -1473,4 +1489,4 @@ We hope to have provided a solid foundation for how to think about developing a 
 * **Q: Why do we use binary vectors for the document embeddings?**
   A: Binary vectors takes up a lot less memory and are faster to compute distances on, with only a slight reduction in quality. See blog [post](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) for details.
 * **Q: How can you say that Vespa can scale to any data and query load?**
-  A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../elasticity.html) for details. ∂
+  A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../elasticity.html) for details.
