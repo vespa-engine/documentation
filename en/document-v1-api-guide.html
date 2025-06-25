@@ -496,6 +496,48 @@ $ curl -X DELETE \
 
 </ul>
 
+<h2 id="backpressure">Backpressure</h2>
+<p>
+    Vespa returns response code 429 (Too Many Requests) as a backpressure signal whenever client feed throughput exceeds system capacity.
+    Clients should implement retry strategies as described in the <a href="cloud/http-best-practices.html">HTTP best practices</a> document.
+</p>
+<p>
+    The <code>/document/v1</code> API includes a configurable operation queue that by default is tuned to balance latency, throughput and memory.
+    Applications can adjust this balance by overriding the parameters defined in the
+    <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/document-operation-executor.def">document-operation-executor</a>
+    config definition.
+</p>
+<pre>
+&lt;container id="feed" version="1.0"&gt;
+    &lt;document-api/&gt;
+
+    &lt;config name="com.yahoo.document.restapi.document-operation-executor"&gt;
+        &lt;maxThrottled&gt;0&lt;/maxThrottled&gt;
+        &lt;maxThrottledAge&gt;0&lt;/maxThrottledAge&gt;
+        &lt;maxThrottledBytes&gt;0&lt;/maxThrottledBytes&gt;
+    &lt;/config&gt;
+
+&lt;/container&gt;
+</pre>
+<p>
+    To optimize for higher throughput at the cost of increased latency and higher memory usage on the container,
+    increase any of the <code>maxThrottled</code> (queue size), <code>maxThrottledAge</code> (maximum time in queue),
+    and <code>maxThrottledBytes</code> (maximum memory usage) parameters. This allows the container to buffer more operations
+    during temporary spikes in load, reducing the number of 429 responses but potentially increasing request latency.
+</p>
+<p>
+    Set the values to <code>0</code> for the opposite effect, i.e. to optimize for latency.
+</p>
+<p>
+    The effective operation queue configuration is logged when the container starts up, see below example.
+</p>
+<pre>
+INFO    container        Container.com.yahoo.document.restapi.resource.DocumentV1ApiHandler   Operation queue: max-items=0, max-age=0 ms, max-bytes=0 bytes
+</pre>
+<p>
+    You can observe the state of the operation queue through the metrics <code>httpapi_queued_operations</code>,
+    <code>httpapi_queued_bytes</code>, <code>httpapi_queued_age</code> and <code>httpapi_mbus_window_size</code>.
+</p>
 
 <h2 id="using-number-and-group-id-modifiers">Using number and group id modifiers</h2>
 <p>
@@ -530,4 +572,3 @@ $ curl http://localhost:8080/document/v1/namespace/music/group/mygroupname/
     </td>
   </tr>
 </table>
-
