@@ -670,7 +670,9 @@ For this sample application, we set up an evaluation script that compares three 
 2. **WeakAnd-only**: Uses only text-based matching with `userQuery()`.
 3. **Hybrid**: Combines both approaches with OR logic.
 
-It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster. 
+{% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both [filter clauses](../reference/query-language-reference.html#where), [grouping](../grouping), [predicates](../predicate-fields.html), [geosearch](../geo-search) etc. to support your specific use cases." %}
+
+It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster.
 
 The evaluation will output metrics like:
 
@@ -1487,18 +1489,18 @@ Common options for global-phase are [cross-encoders](..cross-encoders.html#) or 
 Finally, we will sketch out some opportunities for further improvements.
 As you have seen, we started out with only binary relevance labels for a few queries, and trained a model based on the relevant docs and a set of random documents.
 
-As you may have noted, we have not discussed what most people think about when discussing RAG evals, evaluating the "Generation"-step. There are several tools available to do this, for example [ragas](https://docs.ragas.io/en/stable/) and [ARES](https://github.com/stanford-futuredata/ARES). We refer to other sources for details on this, as this tutorial is probably enough to digest as it is. 
+As you may have noted, we have not discussed what most people think about when discussing RAG evals, evaluating the "Generation"-step. There are several tools available to do this, for example [ragas](https://docs.ragas.io/en/stable/) and [ARES](https://github.com/stanford-futuredata/ARES). We refer to other sources for details on this, as this tutorial is probably enough to digest as it is.
 
 This was useful initially, as we had no better way to retrieve the candidate documents.
 Now, that we have a reasonably good second-phase ranking, we could potentially generate a new set of relevance labels for queries that we did not have labels for by having an LLM do relevance judgments of the top k returned hits. This training dataset would likely be even better in separating the top documents.
 
 ## Summary
 
-In this tutorial, we have built a complete RAG application using Vespa, starting from a simple retrieval phase with binary vectors and text matching, to a sophisticated two-phase ranking system with GBDT models.
+In this tutorial, we have built a complete RAG application using Vespa, providing our recommendations for how to approach both retrieval phase with binary vectors and text matching, first-phase ranking with a linear combination of relatively cheap features to a more sophisticated second-phase ranking system with more expensive features and a GBDT model.
 
-By using the principles demonstrated in this tutorial, you can create high-quality RAG applications that can scale to any dataset size, and any query load.
+We hope that this tutorial, along with the provided code in our [sample-apps repository](https://github.com/vespa-engine/sample-apps/rag-blueprint), will serve as a useful reference for building your own RAG applications, with an evaluation-driven approach.
 
-We hope to have provided a solid foundation for how to think about developing a RAG application with Vespa, and how to iteratively improve it over time.
+By using the principles demonstrated in this tutorial, you are empowered to build high-quality RAG applications that can scale to any dataset size, and any query load.
 
 ## FAQ
 
