@@ -502,10 +502,35 @@ $ curl -X DELETE \
     Clients should implement retry strategies as described in the <a href="cloud/http-best-practices.html">HTTP best practices</a> document.
 </p>
 <p>
+    Instead of implementing your own retry logic, consider using Vespa's feed clients which automatically handle retries and backpressure.
+    See the <a href="vespa-cli.html#documents">feed command</a> of the Vespa CLI and the <a href="vespa-feed-client.html">vespa-feed-client</a>.
+</p>
+<p>
     The <code>/document/v1</code> API includes a configurable operation queue that by default is tuned to balance latency, throughput and memory.
     Applications can adjust this balance by overriding the parameters defined in the
     <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/document-operation-executor.def">document-operation-executor</a>
     config definition.
+</p>
+<p>
+    To optimize for higher throughput at the cost of increased latency and higher memory usage on the container,
+    increase any of the <code>maxThrottled</code> (maximum queue capacity in number of operations),
+    <code>maxThrottledAge</code> (maximum time in queue in seconds),
+    and <code>maxThrottledBytes</code> (maximum memory usage in bytes) parameters.
+    This allows the container to buffer more operations during temporary spikes in load,
+    reducing the number of 429 responses while increasing request latency.
+    Make sure to increase operation and client timeouts to accommodate for the increased latency.
+</p>
+<p>
+    See the <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/document-operation-executor.def">
+    config definition</a> for a detailed explanation of each parameter.
+</p>
+<p>
+    Set the values to <code>0</code> for the opposite effect, i.e. to optimize for latency.
+    Operations will be dispatched directly,
+    and failed out immediately if the number pending operations exceed the dynamic window size of the document processing pipeline.
+</p>
+<p>
+    <i>Example: overriding the default value of all 3 parameters to <code>0</code>.</i>
 </p>
 <pre>
 &lt;container id="feed" version="1.0"&gt;
@@ -520,23 +545,16 @@ $ curl -X DELETE \
 &lt;/container&gt;
 </pre>
 <p>
-    To optimize for higher throughput at the cost of increased latency and higher memory usage on the container,
-    increase any of the <code>maxThrottled</code> (queue size), <code>maxThrottledAge</code> (maximum time in queue),
-    and <code>maxThrottledBytes</code> (maximum memory usage) parameters. This allows the container to buffer more operations
-    during temporary spikes in load, reducing the number of 429 responses but potentially increasing request latency.
-</p>
-<p>
-    Set the values to <code>0</code> for the opposite effect, i.e. to optimize for latency.
-</p>
-<p>
     The effective operation queue configuration is logged when the container starts up, see below example.
 </p>
 <pre>
-INFO    container        Container.com.yahoo.document.restapi.resource.DocumentV1ApiHandler   Operation queue: max-items=0, max-age=0 ms, max-bytes=0 bytes
+INFO    container        Container.com.yahoo.document.restapi.resource.DocumentV1ApiHandler   Operation queue: max-items=256, max-age=3000 ms, max-bytes=100 MB
 </pre>
 <p>
-    You can observe the state of the operation queue through the metrics <code>httpapi_queued_operations</code>,
-    <code>httpapi_queued_bytes</code>, <code>httpapi_queued_age</code> and <code>httpapi_mbus_window_size</code>.
+    You can observe the state of the operation queue through the metrics
+    <code><a href="reference/container-metrics-reference.html#httpapi_queued_operations">httpapi_queued_operations</a></code>,
+    <code><a href="reference/container-metrics-reference.html#httpapi_queued_bytes">httpapi_queued_bytes</a></code> and
+    <code><a href="reference/container-metrics-reference.html#httpapi_queued_age">httpapi_queued_age</a></code>.
 </p>
 
 <h2 id="using-number-and-group-id-modifiers">Using number and group id modifiers</h2>
