@@ -15,7 +15,7 @@ There are a lot of RAG tutorials out there, but this one aims to provide a custo
 This tutorial will show how we can develop a high-quality RAG application step-by-step by taking you through the following steps:
 
 1.  [Our use case](#our-use-case)
-2.  [Data modelling](#data-modelling)
+2.  [Data modeling](#data-modeling)
 3.  [Structuring your Vespa application](#structuring-your-vespa-application)
 4.  [Configuring match-phase (retrieval)](#configuring-match-phase-retrieval)
 5.  [First-phase ranking](#first-phase-ranking)
@@ -65,7 +65,7 @@ We used `gemini-2.5-pro` to create our queries and relevant document labels. Ple
 We decided to generate some queries that need several documents to provide a good answer, and some that only need one document.
 If these queries are representative of the use case, we will show that they can be a great starting point for creating an (initial) ranking expression that can be used for retrieving and ranking candidate documents. But, it can (and should) also be improved, for example by collecting user interaction data, human labeling and/ or using an LLM to generate relevance feedback following the initial ranking expression.
 
-## Data modelling
+## Data modeling
 
 Here is the schema that we will use for our sample application.
 
@@ -312,7 +312,7 @@ If you have different vector space representations of your document (e.g images)
 
 ### Model metadata and signals as structured fields
 
-We recommend modelling metadata and signals as structured fields in your schema.
+We recommend modeling metadata and signals as structured fields in your schema.
 Below are some general recommendations, as well as the implementation in our blueprint schema.
 
 **Metadata** — knowledge about your data:
