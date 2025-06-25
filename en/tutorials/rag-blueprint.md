@@ -177,18 +177,17 @@ With Vespa, it is now possible to return only the top k most relevant chunks of 
 
 ### Chunk selection
 
-You may not want to feed every chunk of the top k documents to the LLM.
+Assume you have chosen a document as your searchable unit.
+Then your document may containt text index fields of very variable lengths. Consider for example a corpus of web pages. Some might be very long, while the average is well within the recommended size. See [scaling retrieval size](../performance/sizing-search.html#scaling-retrieval-size) for more details.
 
-1. Use all chunks - will lead to a lot of irrelevant context, and potentially performance issues by returning too many chunks.
-2. Score and select chunks in your frontend - fixes irrelevant context, but adds complexity and does not address performance issues.
-3. Score and select chunks in the search-engine - allows you to return only the most relevant chunks. Best of both worlds.
+While we recommend implementing guards against too long documents in your feeding pipeline, you still probably do not want to return every chunk of the top k documents to an LLM for RAG.
 
-Below, we show how we can score and select the best chunks in Vespa.
+In Vespa, we now have a solution for this problem. Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents. 
 
-Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal.
+Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](..reference/rank-features.html#elementwise-bm25)
 Now available: elementwise rank functions and filtering on the content nodes.
 
-You can pick a large document as the searchable unit, while still addressing the potential drawbacks many encounter as follows:
+This allows you to pick a large document as the searchable unit, while still addressing the potential drawbacks many encounter as follows:
 
 * Pick your (larger) document as your searchable unit.
 * Chunk the text-fields automatically on indexing.
@@ -196,14 +195,11 @@ You can pick a large document as the searchable unit, while still addressing the
 * Calculate chunk-level features (e.g. bm25 and embedding similarity) and document-level features. Combine as you want.
 * Limit the actual chunks that are returned to the ones that are actually relevant context for the LLM.
 
-**Conclusion:** It's often better to err on the side of slightly larger units.
+This allows you to index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
 
-* LLMs are increasingly capable of handling larger contexts.
-* In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
+Vespa also supports automatic [chunking](../reference/indexing-language-reference.html#converters) in the [indexing language](../indexing.html).
 
-Vespa supports automatic [chunking](../reference/indexing-language-reference.html#converters) in the [indexing language](../indexing.html).
-
-Here is the parts of the schema, which defines the searchable unit as a document with a text field, and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
+Here are the parts of the schema, which defines the searchable unit as a document with a text field, and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
 
 ```txt
 field chunks type array<string> {
@@ -224,17 +220,22 @@ In Vespa, we can specify which chunks to be returned with a summary feature, see
 Here is how the summary feature is calculated in the rank-profile:
 
 ```txt
+# This function unpack the bits of each dimenrion of the mapped chunk_embeddings attribute tensor
 function chunk_emb_vecs() {
     expression: unpack_bits(attribute(chunk_embeddings))
 }
 
+# This function calculate the dot product between the query embedding vector and the chunk embeddings (both are now float) over the x dimension
 function chunk_dot_prod() {
     expression: reduce(query(float_embedding) * chunk_emb_vecs(), sum, x)
 }
 
+# This function calculate the L2 normalized length of an input tensor
 function vector_norms(t) {
     expression: sqrt(sum(pow(t, 2), x))
 }
+
+# Here we calculate cosine similarity by dividing the dot product by the product of the L2 normalized query embedding and document embeddings
 function chunk_sim_scores() {
     expression: chunk_dot_prod() / (vector_norms(chunk_emb_vecs()) * vector_norms(query(float_embedding)))
 }
@@ -530,6 +531,7 @@ select *
 ```
 
 In generic domains, or if you have finetuned an embedding model to your specific data, _consider_ vector-only:
+
 ```sql
 select *
         from doc
@@ -635,12 +637,11 @@ rank-profile collect-training-data {
 
 ### Use complex linguistics/recall only for precision
 
-TODO: this section needs to be improved, if it should be added...
+Vespa gives you extensive control over [linguistics](../linguistics.html).
+You can decide [match mode](../reference/schema-reference.html#match), stemming, normalization, or control derived tokens.
 
-Vespa gives you extensive control over linguistics: decide match mode, stemming, normalization, or control generated tokens.
 
-…and token-based recall.
-Use more specific operators than WeakAND to match only close occurrences `{near}`, multiple alternatives `{equiv}`, weight items, set connectivity, and apply query-rewrite rules.
+It is also possible to use more specific operators than [weakAnd](../reference/query-language-reference.html#weakand) to match only close occurrences `{near}`, multiple alternatives `{equiv}`, weight items, set connectivity, and apply query-rewrite rules.
 
 Don’t use this to increase recall — improve your embedding model instead.
 Consider using it to improve precision when needed.
