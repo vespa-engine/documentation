@@ -253,6 +253,8 @@ summary-features {
     }
 ```
 
+{% include note.html content="The ranking expression may seem a bit complex, as we have decided to embed each chunk independently, and in addition store the binarized embeddings and need to unpack them to calculate similarity based on the `float`-representations. For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly using the [closeness](../reference/rank-features.html#closeness(name)) convenience function." %}
+
 Note that we want to use the float-representation of the query-embedding, and thus also need to convert the binary embedding of the chunks to float. After that, we can calculate the similarity score between the query embedding and the chunk embeddings using cosine similarity (the dot product, and then normalize it by the norms of the embeddings).
 
 See [ranking expressions](../reference/ranking-expressions.html#non-primitive-functions) for more details on the `top`-function, and other functions available for ranking expressions.
@@ -921,7 +923,16 @@ For this blueprint, we opted for using `bm25` for first phase, but you could eva
 
 ### Collecting training data for first-phase ranking
 
-For our blueprint we collect training data for first-phase ranking using `VespaFeatureCollector` from the pyvespa library. 
+The features we will use for first-phase ranking are not normalized (ie. they have values in different ranges). This means we can't just weight them equally and expect that to be a good proxy for relevance.
+
+Below we will show how we can find (learn) optimal weights (coefficients) for each feature, so that we can combine them into a ranking-expression on the format:
+
+```python
+a * bm25(title) + b * bm25(chunks) + c * max_chunk_sim_scores() + d * max_chunk_text_scores() + e * avg_top_3_chunk_sim_scores() + f * avg_top_3_chunk_text_scores()
+```
+
+The first thing we need to is to collect training data.
+We do this using the [VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) from the pyvespa library.
 
 These are the features we will include:
 
@@ -1003,6 +1014,7 @@ rank-profile collect-training-data {
         }
     }
 ```
+
 
 As you can see, we rely on the `bm25` and different vector similarity features (both document-level and chunk-level) for the first-phase ranking.
 These are relatively cheap to calculate, and will likely provide good enough ranking signals for the first-phase ranking.
@@ -1117,17 +1129,17 @@ As you recall, a first-phase ranking expression must be cheap to evaluate.
 This most often means a heuristic handwritten combination of match features, or a linear model trained on match features.
 
 We will demonstrate how to train a simple Logistic Regression model to predict relevance based on the collected match features.
-The full training script can be found in the TODO. 
+The full training script can be found in the [sample-apps repository](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_logistic_regression.py). 
 
 Some "gotchas" to be aware of:
 
 * We sample an equal number of relevant and random documents for each query, to avoid class imbalance.
-* We make sure that we drop `query_id` and `doc_id` columns.
+* We make sure that we drop `query_id` and `doc_id` columns before training.
 * We apply standard scaling to the features before training the model. We apply the inverse transform to the model coefficients after training, so that we can use them in Vespa.
 * We do 5-fold stratified cross-validation to evaluate the model performance, ensuring that each fold has a balanced number of relevant and random documents.
 * We also make sure to have an unseen set of test queries to evaluate the model on, to avoid overfitting.
 
-Run the training script:
+Run the training [script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_logistic_regression.py)
 
 ```bash
 python eval/train_logistic_regression.py
@@ -1163,7 +1175,7 @@ Intercept                    : -7.798639
 
 Which seems quite good. With such a small dataset however, it is easy to overfit. Let us evaluate on the unseen test queries to see how well the model generalizes.
 
-First, we need to add the coefficients as inputs to a new rank profile in our schema, so that we can use them in Vespa.
+First, we need to add the learned coefficients as inputs to a new rank profile in our schema, so that we can use them in Vespa.
 
 ```txt
 rank-profile learned-linear inherits collect-training-data {
@@ -1197,7 +1209,7 @@ rank-profile learned-linear inherits collect-training-data {
     }
 ```
 
-For simplicity, we will also add the values of the coefficients as query parameters to a new query profile.
+To allow for changing the parameters without redeploying the application, we will also add the values of the coefficients as query parameters to a new query profile.
 
 ```xml
 <query-profile id="hybrid">
@@ -1229,7 +1241,7 @@ For simplicity, we will also add the values of the coefficients as query paramet
 Now we are ready to evaluate our first-phase ranking function.
 We can use the [VespaEvaluator](https://vespa-engine.github.io/pyvespa/evaluating-vespa-application-cloud.html#vespaevaluator) from the [pyvespa](https://vespa-engine.github.io/pyvespa/) library to evaluate the first-phase ranking function.
 
-By running the following command
+Run the following command to run the [evaluation script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/evaluate_ranking.py)
 
 ```
 python eval/evaluate_ranking.py
@@ -1275,7 +1287,7 @@ This is where we can significantly improve ranking quality by using more sophist
 
 For second-phase ranking, we request Vespa's default set of rank features, which includes a comprehensive set of text features. See the [rank features documentation](../reference/rank-features.html) for complete details.
 
-We can collect both match features and rank features by running:
+We can collect both match features and rank features by running the same [script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/collect_pyvespa.py) as we did for first-phase ranking, with  some additional parameters to collect rank features as well:
 
 ```bash
 python eval/collect_pyvespa.py --collect_rankfeatures --collect_matchfeatures --collector_name rankfeatures-secondphase
@@ -1289,7 +1301,7 @@ With the expanded feature set, we can train a Gradient Boosted Decision Tree (GB
 
 Vespa also supports [XGBoost](../xgboost.html) and [ONNX](../onnx.html) models.
 
-To train the model, we run the following command:
+To train the model, run the following command ([link to training script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_lightgbm.py)):
 
 ```bash
 python eval/train_lightgbm.py --input_file eval/output/Vespa-training-data_match_rank_second_phase_20250623_135819.csv
@@ -1363,9 +1375,15 @@ rank-profile second-with-gbdt inherits collect-training-data {
 }
 ```
 
+And redeploy your application:
+
+```bash
+vespa deploy
+```
+
 ### Evaluating second-phase ranking performance
 
-Evaluate the GBDT-powered second-phase ranking on unseen test queries:
+Run the [evaluate_ranking.py](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/evaluate_ranking.py) script to evaluate the GBDT-powered second-phase ranking on unseen test queries:
 
 ```bash
 python evaluate_ranking.py --second_phase
@@ -1442,7 +1460,7 @@ vespa query \
 
 * Combine first-phase scores with additional text and semantic features
 * Use chunk-level aggregations (max, average, top-k) to capture document structure
-* Include metadata signals that require complex computations
+* Include metadata signals
 
 **Training data quality:**
 
