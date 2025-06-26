@@ -581,7 +581,7 @@ For domain-specific applications or less popular languages, you may want to cons
 Another decision to make is which precision you will use for your embeddings.
 See [binarization docs](../binarizing-vectors.html) for an introduction to binarization in Vespa.
 
-For most cases, binary vectors will provide an attractive tradeoff, especially for recall during match-phase.
+For most cases, binary vectors (in Vespa, packed into `int8`-representation) will provide an attractive tradeoff, especially for recall during match-phase.
 Consider these factors to determine whether this holds true for your application:
 
 * Reduces memory-vector cost by 5 – 30 ×
@@ -1517,9 +1517,14 @@ By using the principles demonstrated in this tutorial, you are empowered to buil
 
 ## FAQ
 
+* **Q: Which embedding models can I use with Vespa?**
+  A: Vespa supports a variety of embedding models. For a list of vespa provided models on Vespa Cloud, see [Model hub](../cloud/model-hub.html). See also [embedding reference](../embedding.html#provided-embedders) for how to use embedders. You can also use private models (gated by authentication with Bearer token from Vespa Cloud secret store).
+
 * **Q: Do I need to use an LLM with Vespa?**
   A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](https://docs.vespa.ai/en/cloud/enclave/enclave.html)
+
 * **Q: Why do we use binary vectors for the document embeddings?**
   A: Binary vectors takes up a lot less memory and are faster to compute distances on, with only a slight reduction in quality. See blog [post](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) for details.
+  
 * **Q: How can you say that Vespa can scale to any data and query load?**
   A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../elasticity.html) for details.
