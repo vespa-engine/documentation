@@ -6,13 +6,16 @@ title: "RAG Blueprint"
 Many of our users use Vespa to power large scale RAG Applications.
 
 This blueprint aims to exemplify many of the best practices we have learned while supporting these users.
-There are a lot of RAG tutorials out there, but this one aims to provide a customizable template that:
+
+While many RAG tutorials exist, this blueprint provides a customizable template that:
 
 * Can [(auto)scale](../cloud/autoscaling.html) with your data size and/or query load.
 * Is fast and [production grade](../cloud/production-deployment.html).
-* Let you create RAG applications with state-of-the-art quality.
+* Enables you to build RAG applications with state-of-the-art quality.
 
-This tutorial will show how we can develop a high-quality RAG application step-by-step by taking you through the following steps:
+This tutorial will show how we can develop a _high-quality_ RAG application with an evaluation-driven mindset, while being a resource you can revisit for making informed choices for your own use case.
+
+We will guide you through the following steps:
 
 1.  [Our use case](#our-use-case)
 2.  [Data modeling](#data-modeling)
@@ -26,7 +29,7 @@ All the accompanying code can be found in our [sample app](https://github.com/ve
 
 Each step will contain reasoning behind the choices and design of the blueprint, as well as pointers for customizing to your own application.
 
-{% include note.html content="This is not a 'Deploy RAG inYou can also deploy the sample app by running this [pyvespa notebook](TODO). 5 minutes' tutorial (although you _can_ do that by just running the steps in the README of our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)). The focus is rather to provide a blueprint that allows _you_ to build a high-quality RAG application with an evaluation-driven mindset, while being a resource you can go to for making informed choices for your own use case." %}
+{% include note.html content="This is not a **'Deploy RAG in 5 minutes'** tutorial (although you _can_ technically do that by following the README in our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)). This focus is more about providing you with the insights and tools for you to apply it to your own use case. Therefore we suggest taking your time to look at the code in the sample app, and run the described steps." %}
 
 {% include pre-req.html memory="4 GB" extra-reqs=
 '<li><a href="https://docs.astral.sh/uv/">uv</a> For Python dependency handling</li>' %}
@@ -34,7 +37,7 @@ Each step will contain reasoning behind the choices and design of the blueprint,
 ## Our use case
 
 The sample use case is a document search application, for a user who wants to get answers and insights quickly from a document collection containing company documents, notes, learning material, training logs.
-We wanted a dataset with a bit more structured fields than we could find in the public datasets to make the blueprint more realistic, so we had an LLM generate it for us.
+To make the blueprint more realistic, we required a dataset with more structured fields than are commonly found in public datasets. Therefore, we used a Large Language Model (LLM) to generate a custom one.
 
 It is a toy example, with only 100 documents, but we think it will illustrate the necessary concepts.
 You can also feel confident that the blueprint will provide a starting point that can scale as you want, with minimal changes.
@@ -58,7 +61,7 @@ Below you can see a sample document from the dataset:
 ```
 
 In order to evaluate the quality of the RAG application, we also need a set of representative queries, with annotated relevant documents.
-The most important thing is to have a set of representative queries that cover your expected use case well. More is better, but _some_ eval is always better than none.
+Crucially, you need a set of representative queries that thoroughly cover your expected use case. More is better, but _some_ eval is always better than none.
 
 We used `gemini-2.5-pro` to create our queries and relevant document labels. Please check out our [blog post](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/) to learn more about using LLM-as-a-judge.
 
@@ -168,7 +171,7 @@ Consider these points when selecting your searchable unit:
   * May lead to some large documents appearing relevant to too many queries, reducing precision.
   * If you embed the whole document, a too large context will lead to reduced retrieval quality.
 
-We recommend to err on the side of slightly larger units.
+We recommend erring on the side of using slightly larger units.
 
 * LLMs are increasingly capable of handling larger contexts.
 * In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
@@ -178,7 +181,7 @@ With Vespa, it is now possible to return only the top k most relevant chunks of 
 ### Chunk selection
 
 Assume you have chosen a document as your searchable unit.
-Then your document may containt text index fields of very variable lengths. Consider for example a corpus of web pages. Some might be very long, while the average is well within the recommended size. See [scaling retrieval size](../performance/sizing-search.html#scaling-retrieval-size) for more details.
+Your documents may then contain text index fields of highly variable lengths. Consider for example a corpus of web pages. Some might be very long, while the average is well within the recommended size. See [scaling retrieval size](../performance/sizing-search.html#scaling-retrieval-size) for more details.
 
 While we recommend implementing guards against too long documents in your feeding pipeline, you still probably do not want to return every chunk of the top k documents to an LLM for RAG.
 
@@ -253,7 +256,7 @@ summary-features {
     }
 ```
 
-{% include note.html content="The ranking expression may seem a bit complex, as we have decided to embed each chunk independently, and in addition store the binarized embeddings and need to unpack them to calculate similarity based on the `float`-representations. For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly using the [closeness](../reference/rank-features.html#closeness(name)) convenience function." %}
+{% include note.html content="The ranking expression may seem a bit complex, as we chose to embed each chunk independently, store the embeddings in a binarized format, and then unpack them to calculate similarity based on their float representations. For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly using the [closeness](../reference/rank-features.html#closeness(name)) convenience function." %}
 
 Note that we want to use the float-representation of the query-embedding, and thus also need to convert the binary embedding of the chunks to float. After that, we can calculate the similarity score between the query embedding and the chunk embeddings using cosine similarity (the dot product, and then normalize it by the norms of the embeddings).
 
@@ -313,7 +316,7 @@ Indexing several embedding fields may not be worth the cost for you. Evaluate wh
 
 If you have different vector space representations of your document (e.g images), indexing them separately is likely worth it, as they are likely to provide signals that are complementary to the text-based embeddings.
 
-### Model metadata and signals as structured fields
+### Model Metadata and Signals Using Structured Fields
 
 We recommend modeling metadata and signals as structured fields in your schema.
 Below are some general recommendations, as well as the implementation in our blueprint schema.
@@ -352,7 +355,7 @@ Most large scale RAG application schemas contain at least a hundred structured f
 
 Vespa supports both Local LLMs, and any OpenAI-compatible API for LLM generation. For details, see [LLMs in Vespa](../llms-in-vespa.html)
 
-The recommended way of providing an API key is through using the [secret store](../cloud/security/secret-store.html) in Vespa Cloud.
+The recommended way to provide an API key is by using the [secret store](../cloud/security/secret-store.html) in Vespa Cloud.
 
 To enable this, you need to create a vault (if you don't have one already) and a secret through the [Vespa Cloud console](https://cloud.vespa.ai/). If your vault is named `sample-apps` and contains a secret with the name `openai-api-key`, you would use the following configuration in your `services.xml` to set up the OpenAI client to use that secret:
 
@@ -389,7 +392,7 @@ vespa query \
 
 ## Structuring your vespa application
 
-This section will provide some recommendations on how to structure your Vespa application package. See also the [application package docs](../application-package.html) for more details on the application package structure.
+This section provides recommendations for structuring your Vespa application package. See also the [application package docs](../application-package.html) for more details on the application package structure.
 Note that this is not mandatory, and it might be simpler to start without query profiles and rank profiles, but as you scale out your application, it will be beneficial to have a well-structured application package.
 
 Consider the following structure for our application package:
@@ -515,7 +518,7 @@ Below is a schematic overview of how to think about retrieval and ranking for th
 
 <img src="/assets/img/phased-ranking-rag.png">
 
-It is worth noting that parameters such as `targetHits` (match-phase), and `rerank-count` (first and second phase) are applied **per content node**. Also note that the stateless container nodes can also be [scaled independently](../performance/sizing-search.html) to handle increased query load.
+It is worth noting that parameters such as `targetHits` (for the match phase) and `rerank-count` (for first and second phase) are applied **per content node**. Also note that the stateless container nodes can also be [scaled independently](../performance/sizing-search.html) to handle increased query load.
 
 ## Configuring match-phase (retrieval)
 
@@ -523,7 +526,7 @@ This section will contain important considerations for the retrieval-phase of a 
 
 The goal of the retrieval phase is to retrieve candidate documents efficiently, and maximize recall, without exposing too many documents to ranking.
 
-### Vector, text or hybrid recall?
+### Choosing a Retrieval Strategy: Vector, Text, or Hybrid?
 
 As you could see from the schema, we create and index both a text representation and a vector representation for each chunk of the document. This will allow us to use both text-based features and semantic features for both recall and ranking.
 
@@ -542,7 +545,7 @@ select *
         ({label:"chunks_label", targetHits:1000}nearestNeighbor(chunk_embeddings, embedding))
 ```
 
-In generic domains, or if you have finetuned an embedding model to your specific data, _consider_ vector-only:
+In generic domains, or if you have fine-tuned an embedding model for your specific data, you might consider a vector-only approach:
 
 ```sql
 select *
@@ -881,7 +884,7 @@ In general, you have these options if you want to increase recall:
 2. Improve your embedding model (use a better model or finetune it on your data).
 3. You can also consider tuning HNSW parameters, see [docs on HNSW](../approximate-nn-hnsw.html#using-vespas-approximate-nearest-neighbor-search).
 
-On the other hand, if you want to reduce latency of on of your retrieval "arms", with a small trade-off in recall, you can:
+Conversely, if you want to reduce the latency of one of your retrieval 'arms' at the cost of a small trade-off in recall, you can:
 
 1. Tune `weakAnd` parameters. This has potential to 3x your performance for the `weakAnd`-parameter of your query, see [blog post](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/).
 
@@ -905,7 +908,7 @@ These can also be set as query parameters.
 
 ## First-phase ranking
 
-For first-phase ranking, we want to use a cheaper function, as all matched documents from the retrieval phase will be exposed to first-phase ranking. For most applications, this can be several millions candidate documents.
+For the first-phase ranking, we must use a computationally cheap function, as it is applied to all documents matched in the retrieval phase. For many applications, this can amount to millions of candidate documents.
 
 Common options include (learned) linear combination of features including text similarity features, vector closeness, and metadata.
 It could also be a heuristic handwritten function.
