@@ -366,7 +366,7 @@ To enable this, you need to create a vault (if you don't have one already) and a
   <!-- Setup the client to OpenAI -->
   <component id="openai" class="ai.vespa.llm.clients.OpenAI">
       <config name="ai.vespa.llm.clients.llm-client">
-          <apiKeySecretName>openai-api-key</apiKeySecretName>
+          <apiKeySecretRef>openai-api-key</apiKeySecretRef>
       </config>
   </component>
 ```

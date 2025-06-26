@@ -91,7 +91,7 @@ Set up a RAG search chain that uses an OpenAI API key as secret:
         <!-- configure the OpenAI client to use the secret -->
         <component id="openai" class="ai.vespa.llm.clients.OpenAI">
             <config name="ai.vespa.llm.clients.llm-client">
-                <apiKeySecretName>apiKey</apiKeySecretName>
+                <apiKeySecretRef>apiKey</apiKeySecretRef>
             </config>
         </component>
 
