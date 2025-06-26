@@ -183,7 +183,7 @@ Here is an example of a OpenAI client configured with GPT-4o mini model:
         <!-- OpenAI client -->
         <component id="openai" class="ai.vespa.llm.clients.OpenAI">
             <config name = "ai.vespa.llm.clients.llm-client">
-                <apiKeySecretName>openai-key</apiKeySecretName>
+                <apiKeySecretRef>openai-key</apiKeySecretRef>
                 <model>gpt-4o-mini</model>
             </config>
         </component>
