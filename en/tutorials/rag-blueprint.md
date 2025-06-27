@@ -1514,7 +1514,7 @@ Now, that we have a reasonably good second-phase ranking, we could potentially g
 
 In this tutorial, we have built a complete RAG application using Vespa, providing our recommendations for how to approach both retrieval phase with binary vectors and text matching, first-phase ranking with a linear combination of relatively cheap features to a more sophisticated second-phase ranking system with more expensive features and a GBDT model.
 
-We hope that this tutorial, along with the provided code in our [sample-apps repository](https://github.com/vespa-engine/sample-apps/rag-blueprint), will serve as a useful reference for building your own RAG applications, with an evaluation-driven approach.
+We hope that this tutorial, along with the provided code in our [sample-apps repository](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint), will serve as a useful reference for building your own RAG applications, with an evaluation-driven approach.
 
 By using the principles demonstrated in this tutorial, you are empowered to build high-quality RAG applications that can scale to any dataset size, and any query load.
 
