@@ -23,7 +23,7 @@ We will guide you through the following steps:
 4.  [Configuring match-phase (retrieval)](#configuring-match-phase-retrieval)
 5.  [First-phase ranking](#first-phase-ranking)
 6.  [Second-phase ranking](#second-phase-ranking)
-7.  [(Optional) Global-phase reranking](#optional-global-phase-reranking)
+7.  [(Optional) Global-phase ranking](#optional-global-phase-ranking)
 
 All the accompanying code can be found in our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint) repo. 
 
@@ -187,7 +187,7 @@ While we recommend implementing guards against too long documents in your feedin
 
 In Vespa, we now have a solution for this problem. Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents. 
 
-Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](..reference/rank-features.html#elementwise-bm25)
+Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](/en/reference/rank-features.html#elementwise-bm25)
 Now available: elementwise rank functions and filtering on the content nodes.
 
 This allows you to pick a large document as the searchable unit, while still addressing the potential drawbacks many encounter as follows:
@@ -392,7 +392,7 @@ vespa query \
 
 ## Structuring your vespa application
 
-This section provides recommendations for structuring your Vespa application package. See also the [application package docs](../application-package.html) for more details on the application package structure.
+This section provides recommendations for structuring your Vespa application package. See also the [application package docs](/en/application-packages.html) for more details on the application package structure.
 Note that this is not mandatory, and it might be simpler to start without query profiles and rank profiles, but as you scale out your application, it will be beneficial to have a well-structured application package.
 
 Consider the following structure for our application package:
@@ -516,7 +516,7 @@ Before we move on, it might be useful to recap Vespa´s [phased ranking](../phas
 
 Below is a schematic overview of how to think about retrieval and ranking for this RAG blueprint. Since we are developing this as a tutorial using a small toy dataset, the application can be deployed in a single machine, using a single docker container, where only one container node and one container node will run. This is obviously not the case for most real-world RAG applications, so this is cruical to have in mind as you want to scale your application.
 
-<img src="/assets/img/phased-ranking-rag.png">
+![phased ranking overview](/assets/img/phased-ranking-rag.png)
 
 It is worth noting that parameters such as `targetHits` (for the match phase) and `rerank-count` (for first and second phase) are applied **per content node**. Also note that the stateless container nodes can also be [scaled independently](../performance/sizing-search.html) to handle increased query load.
 
@@ -913,7 +913,7 @@ For the first-phase ranking, we must use a computationally cheap function, as it
 Common options include (learned) linear combination of features including text similarity features, vector closeness, and metadata.
 It could also be a heuristic handwritten function.
 
-Text features should include [nativeRank](../reference/nativerank.html#nativerank) or [bm25](../reference/bm25.html#ranking-function) — not [fieldMatch](../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
+Text features should include [nativeRank](/en/reference/nativerank.html#nativeRank) or [bm25](../reference/bm25.html#ranking-function) — not [fieldMatch](../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
 
 Considerations for deciding whether to choose `bm25` or `nativeRank`:
 
@@ -1498,7 +1498,7 @@ The second-phase ranking represents a crucial step in building high-quality RAG 
 
 We also have the option of configuring [global-phase](../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k (as set by `rerank-count` parameter) documents from the second-phase ranking.
 
-Common options for global-phase are [cross-encoders](..cross-encoders.html#) or another GBDT model, trained for better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, we consider this less important than for search applications where the results are mainly consumed by an human, as LLMs don't care that much about the ordering of the results.
+Common options for global-phase are [cross-encoders](/en/cross-encoders.html) or another GBDT model, trained for better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, we consider this less important than for search applications where the results are mainly consumed by an human, as LLMs don't care that much about the ordering of the results.
 
 ## Further improvements
 
