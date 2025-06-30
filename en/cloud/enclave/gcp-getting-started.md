@@ -69,6 +69,11 @@ update [deployment.xml](/en/reference/deployment.html) to reference the account 
 </deployment>
 ```
 
+Useful resources are [getting started](/en/cloud/getting-started)
+and [migrating to Vespa Cloud](/en/cloud/migrating-to-cloud.html) -
+put _deployment.xml_ next to _services.xml_.
+
+
 ## Next steps
 
 After a successful deployment to the [dev](https://cloud.vespa.ai/en/reference/environments.html#dev) environment,
