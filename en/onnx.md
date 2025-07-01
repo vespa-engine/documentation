@@ -129,8 +129,15 @@ Note that in the above rank profile example, the `onnx` model evaluation
 was evaluated in the first phase. In general, evaluating these types of models are
 more suitable in the `second-phase` or `global-phase` phases.
 See [phased ranking](/en/phased-ranking.html).
-Vespa can only import ONNX models that are self-contained and below 2GB in size (protobuf limitation).
-Models in which data tensors are split over multiple files, is currently not supported.
+
+Models in which data tensors are located in external data files, are only supported when the following conditions are met:
+- The model is used in an embedder, e.g <code>hugging-face-embedder</code> (see [embedding](/en/embedding.html)).
+- The model is referenced using a URL, e.g. <code>url="https://example.com/my-onnx-model/model.onnx"</code>.
+- All external data files are located in the same parent path/directory as the model file,
+  e.g. <code>https://example.com/my-onnx-model/model.onnx_data</code>.
+
+For ranking Vespa supports only ONNX models that are self-contained and below 2GB in size.
+Same restriction applies to models included in the application package.
 
 
 
@@ -181,8 +188,8 @@ Consult the model card for the pooling method used.
 Note the url pattern above.
 The url must point to the actual file, not the model card.
 
-Also, Vespa only supports models that are contained in a single onnx file;
-if the model is larger than 2GB, the model is split over multiple files, and this is currently not supported in Vespa.
+See #[Limitations on Model Size and Complexity](#limitations-on-model-size-and-complexity) for how to use models
+having external data files.
 
 See [cross-encoders](/en/cross-encoders.html#exporting-cross-encoder-models) documentation for examples on how to
 export cross-encoder re-rankers using the Optimum library.
