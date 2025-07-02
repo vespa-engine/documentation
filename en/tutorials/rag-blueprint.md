@@ -29,6 +29,20 @@ All the accompanying code can be found in our [sample app](https://github.com/ve
 
 Each step will contain reasoning behind the choices and design of the blueprint, as well as pointers for customizing to your own application.
 
+Below, you can see a diagram of the indexing (document side), retrieval and ranking of the sample application, which will be explained in more detail in the following sections.
+
+{% include note.html content="The elements in the diagram are clickable, and will lead you to the relevant sections, either of this tutorial or in the Vespa documentation." %}
+
+<object
+  type="image/svg+xml"
+  data="/assets/img/tutorials/rag-blueprint-overview.svg"
+  style="width:100%;max-width:600px;height:auto;max-height:90vh;text-decoration:underline;">
+  <!-- optional fallback content for browsers that can't render SVG -->
+  <p>Your browser can’t display SVG. Try upgrading your browser or using a different one.</p>
+</object>
+
+ [Click to open diagram in full size](/assets/img/tutorials/rag-blueprint-overview.svg)
+
 {% include note.html content="This is not a **'Deploy RAG in 5 minutes'** tutorial (although you _can_ technically do that by following the README in our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)). This focus is more about providing you with the insights and tools for you to apply it to your own use case. Therefore we suggest taking your time to look at the code in the sample app, and run the described steps." %}
 
 {% include pre-req.html memory="4 GB" extra-reqs=
