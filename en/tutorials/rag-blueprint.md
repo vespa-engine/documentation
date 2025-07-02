@@ -1293,11 +1293,9 @@ We run the evaluation script on a set of unseen test queries, and get the follow
 
 For the first phase ranking, we care most about recall, as we just want to make sure that the candidate documents are ranked high enough to be included in the second-phase ranking. (the default number of documents that will be exposed to second-phase is 10 000, but can be controlled by the `rerank-count` parameter).
 
-We can see that our recall@20 is 0.39, which is not very good, but an OK start, and a lot better than random. We could later aim to improve on this by approximating a better function after we have learned one for second-phase ranking.
+We can see that our results are already very good. This is of course due to the fact that we have a small,synthetic dataset. In reality, you should align the metric expectations with your dataset and test queries.
 
 We can also see that our search time is quite fast, with an average of 22ms. You should consider whether this is well within your latency budget, as you want some headroom for second-phase ranking.
-
-The ranking performance is not great, but this is expected for a simple linear model, where it only needs to be good enough to make sure that the most relevant documents are passed to the second-phase ranking, where ranking performance matters a lot more.
 
 ## Second-phase ranking
 
@@ -1411,44 +1409,32 @@ Run the [evaluate_ranking.py](https://github.com/vespa-engine/sample-apps/blob/m
 python evaluate_ranking.py --second_phase
 ```
 
-Expected results show significant improvement over first-phase ranking:
+Expected results should show something like this:
 
 ```json
 {
-    "accuracy@1": 0.9000,
-    "accuracy@3": 0.9500,
-    "accuracy@5": 1.0000,
-    "accuracy@10": 1.0000,
-    "precision@10": 0.2350,
-    "recall@10": 0.9402,
-    "precision@20": 0.1275,
-    "recall@20": 0.9909,
-    "mrr@10": 0.9375,
-    "ndcg@10": 0.8586,
-    "map@100": 0.7780,
-    "searchtime_avg": 0.0328,
-    "searchtime_q50": 0.0305,
-    "searchtime_q90": 0.0483,
-    "searchtime_q95": 0.0606
+  "accuracy@1": 0.9,
+  "accuracy@3": 1.0,
+  "accuracy@5": 1.0,
+  "accuracy@10": 1.0,
+  "precision@10": 0.235,
+  "recall@10": 0.9402,
+  "precision@20": 0.13,
+  "recall@20": 0.9955,
+  "mrr@10": 0.95,
+  "ndcg@10": 0.8782,
+  "map@100": 0.8091,
+  "searchtime_avg": 0.0204,
+  "searchtime_q50": 0.018,
+  "searchtime_q90": 0.0333,
+  "searchtime_q95": 0.0362
 }
 ```
 
-Let us compare some selected metrics against the first-phase ranking results:
+For a larger dataset, we would expect to see significant improvement over first-phase ranking.
+Since our first-phase ranking is already quite good, we can not see this here, but we will leave the comparison code for you to run on a real-world dataset.
 
-| Metric         | First-phase | Second-phase | Change  |
-| -------------- | ----------- | ------------ | ------- |
-| recall@10      | 0.1341      | 0.9402       | +0.8061 |
-| recall@20      | 0.3886      | 0.9909       | +0.6023 |
-| ndcg@10        | 0.0600      | 0.8586       | +0.7986 |
-| searchtime_avg | 0.0222      | 0.0328       | + 9ms   |
-
-This represents a dramatic improvement over first-phase ranking, with:
-
-* **recall@10** improving from 0.13 to 0.94
-* **recall@20** improving from 0.39 to 0.99
-* **NDCG@10** improving from 0.06 to 0.85
-
-The slight increase in search time (from 22ms to 35ms average) is well worth the quality improvement.
+We also observe a slight increase in search time (from 22ms to 35ms average), which is expected due to the additional complexity of the GBDT model.
 
 ### Query profiles with GBDT ranking
 
