@@ -176,7 +176,7 @@ We recommend erring on the side of using slightly larger units.
 * LLMs are increasingly capable of handling larger contexts.
 * In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
 
-With Vespa, it is now possible to return only the top k most relevant chunks of a document, and include and combine both document-level and chunk-level features in ranking. 
+With Vespa, it is now possible to return only the top k most relevant chunks of a document, and include and combine both document-level and chunk-level features in ranking.
 
 ### Chunk selection
 
@@ -185,7 +185,9 @@ Your documents may then contain text index fields of highly variable lengths. Co
 
 While we recommend implementing guards against too long documents in your feeding pipeline, you still probably do not want to return every chunk of the top k documents to an LLM for RAG.
 
-In Vespa, we now have a solution for this problem. Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents. 
+In Vespa, we now have a solution for this problem. Check out our [blog post on layered ranking](https://blog.vespa.ai/introducing-layered-ranking-for-rag-applications/) for an overview of the new features that allow you to do this.
+
+Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents.
 
 Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](/en/reference/rank-features.html#elementwise-bm25)
 Now available: elementwise rank functions and filtering on the content nodes.
@@ -1520,14 +1522,31 @@ By using the principles demonstrated in this tutorial, you are empowered to buil
 
 ## FAQ
 
+* **Q: Why don't you use ColBERT for ranking?**
+  
+  A: We love ColBERT, and it has shown great performance. We do support ColBERT-style models in Vespa. The challenge is the added cost in memory storage, especially for large-scale applications. If you use it, we recommend consider binarizing the vectors to reduce memory usage 32x compared to float. If you want to improve the ranking quality and accept the additional cost, we encourage you to evaluate and try.
+  Here are some resources if you want to learn more about using ColBERT with Vespa:
+
+  * [Announcing ColBERT embedder](https://blog.vespa.ai/announcing-colbert-embedder-in-vespa/#what-is-colbert?)
+  * [Long context ColBERT](https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/)
+  * [Long context ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long/#vespa-sample-applications---long-context-colbert)
+  * [ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert)
+  * [ColBERT embedder reference](https://docs.vespa.ai/en/embedding.html#colbert-embedder)
+  * [ColBERT standalone python example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_Vespa-cloud.html)
+  * [ColBERT standalone long context example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_long_context_Vespa-cloud.html)
+
 * **Q: Which embedding models can I use with Vespa?**
+  
   A: Vespa supports a variety of embedding models. For a list of vespa provided models on Vespa Cloud, see [Model hub](../cloud/model-hub.html). See also [embedding reference](../embedding.html#provided-embedders) for how to use embedders. You can also use private models (gated by authentication with Bearer token from Vespa Cloud secret store).
 
 * **Q: Do I need to use an LLM with Vespa?**
+  
   A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](https://docs.vespa.ai/en/cloud/enclave/enclave.html)
 
 * **Q: Why do we use binary vectors for the document embeddings?**
+  
   A: Binary vectors takes up a lot less memory and are faster to compute distances on, with only a slight reduction in quality. See blog [post](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) for details.
   
 * **Q: How can you say that Vespa can scale to any data and query load?**
+  
   A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../elasticity.html) for details.
