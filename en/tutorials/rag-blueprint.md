@@ -29,6 +29,20 @@ All the accompanying code can be found in our [sample app](https://github.com/ve
 
 Each step will contain reasoning behind the choices and design of the blueprint, as well as pointers for customizing to your own application.
 
+Below, you can see a diagram of the indexing (document side), retrieval and ranking of the sample application, which will be explained in more detail in the following sections.
+
+{% include note.html content="The elements in the diagram are clickable, and will lead you to the relevant sections, either of this tutorial or in the Vespa documentation." %}
+
+<object
+  type="image/svg+xml"
+  data="/assets/img/tutorials/rag-blueprint-overview.svg"
+  style="width:100%;max-width:600px;height:auto;max-height:90vh;text-decoration:underline;">
+  <!-- optional fallback content for browsers that can't render SVG -->
+  <p>Your browser can’t display SVG. Try upgrading your browser or using a different one.</p>
+</object>
+
+ [Click to open diagram in full size](/assets/img/tutorials/rag-blueprint-overview.svg)
+
 {% include note.html content="This is not a **'Deploy RAG in 5 minutes'** tutorial (although you _can_ technically do that by following the README in our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)). This focus is more about providing you with the insights and tools for you to apply it to your own use case. Therefore we suggest taking your time to look at the code in the sample app, and run the described steps." %}
 
 {% include pre-req.html memory="4 GB" extra-reqs=
@@ -176,7 +190,7 @@ We recommend erring on the side of using slightly larger units.
 * LLMs are increasingly capable of handling larger contexts.
 * In Vespa, you can index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
 
-With Vespa, it is now possible to return only the top k most relevant chunks of a document, and include and combine both document-level and chunk-level features in ranking. 
+With Vespa, it is now possible to return only the top k most relevant chunks of a document, and include and combine both document-level and chunk-level features in ranking.
 
 ### Chunk selection
 
@@ -185,7 +199,9 @@ Your documents may then contain text index fields of highly variable lengths. Co
 
 While we recommend implementing guards against too long documents in your feeding pipeline, you still probably do not want to return every chunk of the top k documents to an LLM for RAG.
 
-In Vespa, we now have a solution for this problem. Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents. 
+In Vespa, we now have a solution for this problem. Check out our [blog post on layered ranking](https://blog.vespa.ai/introducing-layered-ranking-for-rag-applications/) for an overview of the new features that allow you to do this.
+
+Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents.
 
 Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](/en/reference/rank-features.html#elementwise-bm25)
 Now available: elementwise rank functions and filtering on the content nodes.
@@ -402,7 +418,8 @@ app
 ├── models
 │   └── lightgbm_model.json
 ├── schemas
-│   ├── doc
+│   └── doc
+│   │   ├-- base-features.profile
 │   │   ├── collect-second-phase.profile
 │   │   ├── collect-training-data.profile
 │   │   ├── learned-linear.profile
@@ -618,7 +635,7 @@ By unpacking the binary document chunk embeddings to their float representations
 Below, you can see how we can do this:
 
 ```txt
-rank-profile collect-training-data {
+rank-profile base-features {
  
         inputs {
             query(embedding) tensor<int8>(x[96])
@@ -936,20 +953,10 @@ The first thing we need to is to collect training data.
 We do this using the [VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) from the pyvespa library.
 
 These are the features we will include:
+(Below, )
 
 ```txt
-rank-profile collect-training-data {
-        match-features {
-            bm25(title)
-            bm25(chunks)
-            max_chunk_sim_scores
-            max_chunk_text_scores
-            avg_top_3_chunk_sim_scores
-            avg_top_3_chunk_text_scores
-
-        }
-
-        # Since we need both binary embeddings (for match-phase) and float embeddings (for ranking) we define it as two inputs.
+rank-profile base-features {
         inputs {
             query(embedding) tensor<int8>(x[96])
             query(float_embedding) tensor<float>(x[768])
@@ -999,6 +1006,19 @@ rank-profile collect-training-data {
         function max_chunk_sim_scores() {
             expression: reduce(chunk_sim_scores(), max, chunk)
         }
+}
+
+rank-profile collect-training-data inherits base-features {
+        match-features {
+            bm25(title)
+            bm25(chunks)
+            max_chunk_sim_scores
+            max_chunk_text_scores
+            avg_top_3_chunk_sim_scores
+            avg_top_3_chunk_text_scores
+
+        }
+
 
         first-phase {
             expression {
@@ -1016,6 +1036,10 @@ rank-profile collect-training-data {
     }
 ```
 
+As you can see, we have defined a `collect-training-data` rank profile that inherits from the `base-features` rank profile.
+This rank profile will collect the match features we defined in the `match-features` section.
+
+The `random` expression in the `second-phase` allows us to collect random hits, and is necessary for our data collection script. See the [docstring of pyvespa class VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) that is used in the script for details.
 
 As you can see, we rely on the `bm25` and different vector similarity features (both document-level and chunk-level) for the first-phase ranking.
 These are relatively cheap to calculate, and will likely provide good enough ranking signals for the first-phase ranking.
@@ -1257,31 +1281,29 @@ We run the evaluation script on a set of unseen test queries, and get the follow
 
 ```json
 {
-    "accuracy@1": 0.0000,
-    "accuracy@3": 0.0000,
-    "accuracy@5": 0.0500,
-    "accuracy@10": 0.3000,
-    "precision@10": 0.0350,
-    "recall@10": 0.1341,
-    "precision@20": 0.0425,
-    "recall@20": 0.3886,
-    "mrr@10": 0.0477,
-    "ndcg@10": 0.0600,
-    "map@100": 0.0669,
-    "searchtime_avg": 0.0222,
+    "accuracy@1": 1.0,
+    "accuracy@3": 1.0,
+    "accuracy@5": 1.0,
+    "accuracy@10": 1.0,
+    "precision@10": 0.235,
+    "recall@10": 0.9405,
+    "precision@20": 0.13,
+    "recall@20": 0.9955,
+    "mrr@10": 1.0,
+    "ndcg@10": 0.8902,
+    "map@100": 0.8197,
+    "searchtime_avg": 0.017,
     "searchtime_q50": 0.0165,
-    "searchtime_q90": 0.0555,
-    "searchtime_q95": 0.0604
+    "searchtime_q90": 0.0251,
+    "searchtime_q95": 0.0267
 }
 ```
 
 For the first phase ranking, we care most about recall, as we just want to make sure that the candidate documents are ranked high enough to be included in the second-phase ranking. (the default number of documents that will be exposed to second-phase is 10 000, but can be controlled by the `rerank-count` parameter).
 
-We can see that our recall@20 is 0.39, which is not very good, but an OK start, and a lot better than random. We could later aim to improve on this by approximating a better function after we have learned one for second-phase ranking.
+We can see that our results are already very good. This is of course due to the fact that we have a small,synthetic dataset. In reality, you should align the metric expectations with your dataset and test queries.
 
 We can also see that our search time is quite fast, with an average of 22ms. You should consider whether this is well within your latency budget, as you want some headroom for second-phase ranking.
-
-The ranking performance is not great, but this is expected for a simple linear model, where it only needs to be good enough to make sure that the most relevant documents are passed to the second-phase ranking, where ranking performance matters a lot more.
 
 ## Second-phase ranking
 
@@ -1395,44 +1417,32 @@ Run the [evaluate_ranking.py](https://github.com/vespa-engine/sample-apps/blob/m
 python evaluate_ranking.py --second_phase
 ```
 
-Expected results show significant improvement over first-phase ranking:
+Expected results should show something like this:
 
 ```json
 {
-    "accuracy@1": 0.9000,
-    "accuracy@3": 0.9500,
-    "accuracy@5": 1.0000,
-    "accuracy@10": 1.0000,
-    "precision@10": 0.2350,
-    "recall@10": 0.9402,
-    "precision@20": 0.1275,
-    "recall@20": 0.9909,
-    "mrr@10": 0.9375,
-    "ndcg@10": 0.8586,
-    "map@100": 0.7780,
-    "searchtime_avg": 0.0328,
-    "searchtime_q50": 0.0305,
-    "searchtime_q90": 0.0483,
-    "searchtime_q95": 0.0606
+  "accuracy@1": 0.9,
+  "accuracy@3": 1.0,
+  "accuracy@5": 1.0,
+  "accuracy@10": 1.0,
+  "precision@10": 0.235,
+  "recall@10": 0.9402,
+  "precision@20": 0.13,
+  "recall@20": 0.9955,
+  "mrr@10": 0.95,
+  "ndcg@10": 0.8782,
+  "map@100": 0.8091,
+  "searchtime_avg": 0.0204,
+  "searchtime_q50": 0.018,
+  "searchtime_q90": 0.0333,
+  "searchtime_q95": 0.0362
 }
 ```
 
-Let us compare some selected metrics against the first-phase ranking results:
+For a larger dataset, we would expect to see significant improvement over first-phase ranking.
+Since our first-phase ranking is already quite good, we can not see this here, but we will leave the comparison code for you to run on a real-world dataset.
 
-| Metric         | First-phase | Second-phase | Change  |
-| -------------- | ----------- | ------------ | ------- |
-| recall@10      | 0.1341      | 0.9402       | +0.8061 |
-| recall@20      | 0.3886      | 0.9909       | +0.6023 |
-| ndcg@10        | 0.0600      | 0.8586       | +0.7986 |
-| searchtime_avg | 0.0222      | 0.0328       | + 9ms   |
-
-This represents a dramatic improvement over first-phase ranking, with:
-
-* **recall@10** improving from 0.13 to 0.94
-* **recall@20** improving from 0.39 to 0.99
-* **NDCG@10** improving from 0.06 to 0.85
-
-The slight increase in search time (from 22ms to 35ms average) is well worth the quality improvement.
+We also observe a slight increase in search time (from 22ms to 35ms average), which is expected due to the additional complexity of the GBDT model.
 
 ### Query profiles with GBDT ranking
 
@@ -1520,14 +1530,31 @@ By using the principles demonstrated in this tutorial, you are empowered to buil
 
 ## FAQ
 
+* **Q: Why don't you use ColBERT for ranking?**
+  
+  A: We love ColBERT, and it has shown great performance. We do support ColBERT-style models in Vespa. The challenge is the added cost in memory storage, especially for large-scale applications. If you use it, we recommend consider binarizing the vectors to reduce memory usage 32x compared to float. If you want to improve the ranking quality and accept the additional cost, we encourage you to evaluate and try.
+  Here are some resources if you want to learn more about using ColBERT with Vespa:
+
+  * [Announcing ColBERT embedder](https://blog.vespa.ai/announcing-colbert-embedder-in-vespa/#what-is-colbert?)
+  * [Long context ColBERT](https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/)
+  * [Long context ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long/#vespa-sample-applications---long-context-colbert)
+  * [ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert)
+  * [ColBERT embedder reference](https://docs.vespa.ai/en/embedding.html#colbert-embedder)
+  * [ColBERT standalone python example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_Vespa-cloud.html)
+  * [ColBERT standalone long context example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_long_context_Vespa-cloud.html)
+
 * **Q: Which embedding models can I use with Vespa?**
+  
   A: Vespa supports a variety of embedding models. For a list of vespa provided models on Vespa Cloud, see [Model hub](../cloud/model-hub.html). See also [embedding reference](../embedding.html#provided-embedders) for how to use embedders. You can also use private models (gated by authentication with Bearer token from Vespa Cloud secret store).
 
 * **Q: Do I need to use an LLM with Vespa?**
+  
   A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](https://docs.vespa.ai/en/cloud/enclave/enclave.html)
 
 * **Q: Why do we use binary vectors for the document embeddings?**
+  
   A: Binary vectors takes up a lot less memory and are faster to compute distances on, with only a slight reduction in quality. See blog [post](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) for details.
   
 * **Q: How can you say that Vespa can scale to any data and query load?**
+  
   A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../elasticity.html) for details.
