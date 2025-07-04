@@ -27,8 +27,7 @@ Vespa supports LLMs in three ways:
 2. [**Local LLMs**](llms-local.html): Vespa can run LLMs within the Vespa application itself. 
 This allows for customized models and avoids sending data outside the application. 
 This is particularly useful for applications with strict data privacy requirements or those needing specific model configurations.
-3. [**Custom language models**](#custom-language-model-components): Vespa can be extended to support any language model, 
-4. including those not based on OpenAI's API. This allows for flexibility in integrating various LLMs into Vespa applications.
+3. [**Custom language models**](#custom-language-model-components): Vespa can be extended to support any language model, including those not based on OpenAI's API. This allows for flexibility in integrating various LLMs into Vespa applications.
 
 This document will focus on features that are common to both external and local LLMs. 
 For more information on configuration details for each type, please refer to the respective sections.
