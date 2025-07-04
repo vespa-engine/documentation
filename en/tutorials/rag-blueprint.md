@@ -418,7 +418,8 @@ app
 ├── models
 │   └── lightgbm_model.json
 ├── schemas
-│   ├── doc
+│   └── doc
+│   │   ├-- base-features.profile
 │   │   ├── collect-second-phase.profile
 │   │   ├── collect-training-data.profile
 │   │   ├── learned-linear.profile
@@ -634,7 +635,7 @@ By unpacking the binary document chunk embeddings to their float representations
 Below, you can see how we can do this:
 
 ```txt
-rank-profile collect-training-data {
+rank-profile base-features {
  
         inputs {
             query(embedding) tensor<int8>(x[96])
@@ -952,20 +953,10 @@ The first thing we need to is to collect training data.
 We do this using the [VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) from the pyvespa library.
 
 These are the features we will include:
+(Below, )
 
 ```txt
-rank-profile collect-training-data {
-        match-features {
-            bm25(title)
-            bm25(chunks)
-            max_chunk_sim_scores
-            max_chunk_text_scores
-            avg_top_3_chunk_sim_scores
-            avg_top_3_chunk_text_scores
-
-        }
-
-        # Since we need both binary embeddings (for match-phase) and float embeddings (for ranking) we define it as two inputs.
+rank-profile base-features {
         inputs {
             query(embedding) tensor<int8>(x[96])
             query(float_embedding) tensor<float>(x[768])
@@ -1015,6 +1006,19 @@ rank-profile collect-training-data {
         function max_chunk_sim_scores() {
             expression: reduce(chunk_sim_scores(), max, chunk)
         }
+}
+
+rank-profile collect-training-data inherits base-features {
+        match-features {
+            bm25(title)
+            bm25(chunks)
+            max_chunk_sim_scores
+            max_chunk_text_scores
+            avg_top_3_chunk_sim_scores
+            avg_top_3_chunk_text_scores
+
+        }
+
 
         first-phase {
             expression {
@@ -1032,6 +1036,10 @@ rank-profile collect-training-data {
     }
 ```
 
+As you can see, we have defined a `collect-training-data` rank profile that inherits from the `base-features` rank profile.
+This rank profile will collect the match features we defined in the `match-features` section.
+
+The `random` expression in the `second-phase` allows us to collect random hits, and is necessary for our data collection script. See the [docstring of pyvespa class VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) that is used in the script for details.
 
 As you can see, we rely on the `bm25` and different vector similarity features (both document-level and chunk-level) for the first-phase ranking.
 These are relatively cheap to calculate, and will likely provide good enough ranking signals for the first-phase ranking.
