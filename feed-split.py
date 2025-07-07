@@ -137,6 +137,8 @@ def table_header_row(row):
 
 def max_cols(tbody):
     max_cols = 0
+    if tbody is None:
+        return max_cols
     for row in tbody.find_all('tr'):
         cols = len(row.find_all(['th', 'td']))
         if cols > max_cols:
