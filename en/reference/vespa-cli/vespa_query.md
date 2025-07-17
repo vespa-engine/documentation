@@ -21,9 +21,10 @@ vespa query query-parameters [flags]
 ### Examples
 
 ```
-$ vespa query "yql=select * from music where album contains 'head'" hits=5
-$ vespa query --format=plain "yql=select * from music where album contains 'head'" hits=5
-$ vespa query --header="X-First-Name: Joe" "yql=select * from music where album contains 'head'" hits=5
+$ vespa query 'yql=select * from music where album contains "head"' hits=5
+$ vespa query --format=plain 'yql=select * from music where album contains "head"' hits=5
+$ vespa query --file q-vector.json
+$ vespa query --header='X-First-Name: Joe' 'yql=select * from music where album contains "head"' hits=5
 ```
 
 ### Options
