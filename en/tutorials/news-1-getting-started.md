@@ -56,6 +56,17 @@ $ brew install vespa-cli
 </pre>
 </div>
 
+For the rest of this tutorial you will be using localhost, so you need to configure your Vespa CLI to connect to localhost
+Run the following to use endpoints on localhost:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa config set target local
+</pre>
+</div>
+
+
 
 ## A minimal Vespa application
 
