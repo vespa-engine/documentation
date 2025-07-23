@@ -13,6 +13,9 @@ Authenticate Vespa CLI with Vespa Cloud control plane. This is preferred over ap
 
 This command runs a browser-based authentication flow for the Vespa Cloud control plane.
 
+Use --file-storage flag to store the refresh token in unencrypted files instead of the system keyring.
+This is useful in SSH/CI/Docker environments where keyring access may not be available.
+
 
 ```
 vespa auth login [flags]
@@ -27,7 +30,8 @@ $ vespa auth login
 ### Options
 
 ```
-  -h, --help   help for login
+      --file-storage   Use file storage (unencrypted) instead of keyring for storing refresh token
+  -h, --help           help for login
 ```
 
 ### Options inherited from parent commands
