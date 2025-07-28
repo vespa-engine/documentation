@@ -1,5 +1,18 @@
 /* Table to list converter wit JQuery */
+
+function scrollToAnchor(hash) {
+  if (hash) {
+    setTimeout(() => {
+      const $target = $(hash);
+      if ($target.length) {
+        $('html, body').scrollTop($target.offset().top);
+      }
+    }, 0);
+  }
+}
+
 $(window).on('load', function() {
+  const anchor = window.location.hash;
   let $table = $('#rank-feature-table');
   let $list = $('<ul id="feature-list"></ul>');
 
@@ -39,33 +52,36 @@ $(window).on('load', function() {
   });
 
   $table.replaceWith($list);
+  scrollToAnchor(anchor);
 });
 
 /* Natve Ranking Tables */
 $(window).on('load', function() {
-    let $table = $('#nativerank-variables-table');
-    let $list = $('<ul id="variable-list"></ul>');
-  
-    $table.find('tbody tr').each(function() {
-      let $row = $(this);
-      let $tds = $row.find('td');
-  
-      if ($tds.length >= 2) {
-        let variable = $tds.eq(0).html().trim(); // Keep HTML (e.g., <em>, <sub>)
-        let description = $tds.eq(1).html().trim(); // Keep inner HTML
-  
-        let $li = $('<li style="margin-bottom: 1em;"></li>');
-        $li.append('<strong>' + variable + '</strong>');
-        $li.append('<div>' + description + '</div>');
-  
-        $list.append($li);
-      }
-    });
-  
-    $table.replaceWith($list);
+  const anchor = window.location.hash;
+  let $table = $('#nativerank-variables-table');
+  let $list = $('<ul id="variable-list"></ul>');
+
+  $table.find('tbody tr').each(function() {
+    let $row = $(this);
+    let $tds = $row.find('td');
+
+    if ($tds.length >= 2) {
+      let variable = $tds.eq(0).html().trim(); // Keep HTML (e.g., <em>, <sub>)
+      let description = $tds.eq(1).html().trim(); // Keep inner HTML
+
+      let $li = $('<li style="margin-bottom: 1em;"></li>');
+      $li.append('<strong>' + variable + '</strong>');
+      $li.append('<div>' + description + '</div>');
+
+      $list.append($li);
+    }
+  });
+  $table.replaceWith($list);
+  scrollToAnchor(anchor);
   });
   
   $(window).on('load', function() {
+    const anchor = window.location.hash;
     let $table = $('#native-rank-parameters-table');
     let $list = $('<ul id="native-rank-parameters-list"></ul>');
   
@@ -98,5 +114,6 @@ $(window).on('load', function() {
     });
   
     $table.replaceWith($list);
+    scrollToAnchor(anchor);
   });
   
