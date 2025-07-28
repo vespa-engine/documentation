@@ -25,7 +25,7 @@ started using Docker on your local machine. Getting started on
 version for [pyvespa](https://github.com/vespa-engine/pyvespa) soon.
 For atomic model updates, see the [Models hot swap](models-hot-swap.html) tutorial.
 
-In this part we will start with a minimal Vespa application to
+In this part, we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.
 In the next part of the tutorial, we'll start developing our application.
 
@@ -38,7 +38,7 @@ In the next part of the tutorial, we'll start developing our application.
 {% include note.html content='4 GB Docker memory is sufficient for the demo dataset in part 2.
 The <span style="text-decoration: underline;">full</span> MIND dataset requires more, use 10 GB.' %}
 
-In upcoming parts of this series, we will have some additional python dependencies -
+In upcoming parts of this series, we will have some additional Python dependencies -
 we use [PyTorch](https://pytorch.org/) to train vector representations for news and users
 and train machine learning models for use in ranking.
 
@@ -47,7 +47,7 @@ and train machine learning models for use in ranking.
 
 This tutorial uses [Vespa-CLI](../vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
-It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
+It is a single binary without any runtime dependencies and is available for Linux, macOS, and Windows.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -56,7 +56,7 @@ $ brew install vespa-cli
 </pre>
 </div>
 
-For the rest of this tutorial you will be using localhost, so you need to configure your Vespa CLI to connect to localhost
+For the rest of this tutorial, you will be using localhost, so you need to configure your Vespa CLI to connect to localhost.
 Run the following to use endpoints on localhost:
 
 <div class="pre-parent">
@@ -71,7 +71,7 @@ $ vespa config set target local
 ## A minimal Vespa application
 
 This tutorial has a [companion sample application](https://github.com/vespa-engine/sample-apps/tree/master/news).
-Throughout the tutorial we will be using support code from this application.
+Throughout the tutorial, we will be using support code from this application.
 Also, the final state of each tutorial can be found in the various `app-...` subdirectories.
 
 Let's start by cloning the sample application:
@@ -94,14 +94,14 @@ for the vespa-cli utility:
 $ vespa clone --help
 </pre>
 </div>
-In the `news` directory there are several pre-configuration applications packages.
+In the `news` directory, several pre-configured application packages are available.
 The `app-1-getting-started` directory contains a minimal Vespa application.
 There are two files there:
 
-- `services.xml` -  defines the services the application consists of
+- `services.xml` -  defines the services that the application consists of
 - `schemas/news.sd` - defines the schema for searchable content. 
 
-We will get back to these files in the next part of the tutorial.
+We will revisit these files in the next part of the tutorial.
 
 
 ## Starting Vespa
@@ -144,15 +144,15 @@ $ vespa deploy --wait 300 app-1-getting-started
 </div>
 
 The command uploads the application and verifies the content.
-If anything is wrong with the application, this step will fail with a failure description,
-otherwise this switches the application to a live status.
+If anything is wrong with the application, this step will fail with a failure description;
+Otherwise, this switches the application to a live status.
 
 Whenever you have a new version of your application, 
 run the same command to deploy the application.
 In most cases, there is no need to restart services.
 Vespa takes care of reconfiguring the system.
 If a restart of services is required in some rare case, however, the output will notify 
-which services needs restart to make the change effective. 
+which services need restart to make the change effective. 
 
 In the upcoming parts of the tutorials, we'll frequently deploy the 
 application changes in this manner. 
@@ -180,14 +180,14 @@ $ vespa document -v doc.json
 
 We can also feed using [Vespa document api](../document-v1-api-guide.html) directly.
 
-Once the feed operation is ack'ed by Vespa, the operation is visible in search.
+Once the feed operation is acknowledged by Vespa, the operation is visible in search.
 
 
 ## Querying Vespa
 
 We can query the endpoint using the vespa-cli's support for performing queries.
 It uses the [Vespa query api](../query-api.html) to query vespa,
-including `-v` in the command we can see the exact endpoint and url request parameters used. 
+including `-v` in the command, we can see the exact endpoint and url request parameters used. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -238,7 +238,7 @@ Well done!
 
 ## Stopping and starting Vespa
 
-Keep Vespa running to continue with next steps in this tutorial set (skip the below).
+Keep Vespa running to continue with the next steps in this tutorial set (skip the below).
 
 To stop Vespa, we can run the following commands:
 
@@ -261,7 +261,7 @@ $ docker exec vespa vespa-start-services
 </div>
 
 If a [restart is required](../reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
-due to change in the application package,
+due to changes in the application package,
 these two steps are what you need to do.
 
 To wipe the index and restart:
