@@ -197,10 +197,13 @@ schema news_model {
             indexing: attribute
         }
     }
-    import field news_ref.title as title {}
+    import field news_ref.news_id as news_id {}
     import field news_ref.language as language {}
 }
 </pre>
+
+{% include important.html content="Only fields with the `attribute` indexing setting can be imported
+(e.g., the `title` field has the `index` setting and cannot be imported)." %}
 
 {% include note.html content="The shared `news` schema neither holds the model vector nor has a model field.
 However, it still has a version field, obtained from a dedicated `news` configuration.
@@ -367,8 +370,8 @@ Luckily, we can achieve the desired "stickiness" by extending the configuration 
 1. Add a region endpoint field to the configuration schema.
 2. In each region's configuration document, store the region's endpoint
    (each region has a separate configuration document, which can hold different values).
-4. When retrieving the version using the global endpoint, also obtain the region endpoint.
-5. Use the region endpoint in follow-up queries instead of the global endpoint.
+3. When retrieving the version using the global endpoint, also obtain the region endpoint.
+4. Use the region endpoint in follow-up queries instead of the global endpoint.
 
 
 
