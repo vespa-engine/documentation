@@ -47,7 +47,7 @@ rank-profile drop-low-score {
 }
 </pre>
 
-### Are ranking expressions or functions evaluated lazily
+### Are ranking expressions or functions evaluated lazily?
 <p>Rank expressions are not evaluated lazily.  No, this would require lambda arguments.
   Only doubles and tensors are passed between functions.
 
@@ -86,10 +86,11 @@ see the [pin results example](/en/multivalue-query-operators.html#pin-results-ex
 {:.faq-section}
 ## Documents
 
-### What limits apply to json document size?
-There is no hard limit, see [field size](/en/schemas.html#field-size).
+### What limits apply to document size?
+There is a [maximum document size](/en/reference/services-content.html#max-document-size) of 128 MiB,
+which is configurable per content cluster in services.xml. See also [field size](/en/schemas.html#field-size).
 
-### Is there any size limitation in multivalued fields?
+### Is there any size limitation for multivalued fields?
 No enforced limit, except resource usage (memory).
 See [field size](/en/schemas.html#field-size).
 
