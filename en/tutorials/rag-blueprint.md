@@ -27,7 +27,7 @@ We will guide you through the following steps:
 
 All the accompanying code can be found in our [sample app](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint) repo. 
 
-Each step will contain reasoning behind the choices and design of the blueprint, as well as pointers for customizing to your own application.
+Each step will contain reasoning behind the choices and design of the blueprint, as well as pointers for customizing your own application.
 
 Below, you can see a diagram of the indexing (document side), retrieval and ranking of the sample application, which will be explained in more detail in the following sections.
 
@@ -239,17 +239,17 @@ In Vespa, we can specify which chunks to be returned with a summary feature, see
 Here is how the summary feature is calculated in the rank-profile:
 
 ```txt
-# This function unpack the bits of each dimenrion of the mapped chunk_embeddings attribute tensor
+# This function unpacks the bits of each dimension of the mapped chunk_embeddings attribute tensor
 function chunk_emb_vecs() {
     expression: unpack_bits(attribute(chunk_embeddings))
 }
 
-# This function calculate the dot product between the query embedding vector and the chunk embeddings (both are now float) over the x dimension
+# This function calculates the dot product between the query embedding vector and the chunk embeddings (both are now float) over the x dimension
 function chunk_dot_prod() {
     expression: reduce(query(float_embedding) * chunk_emb_vecs(), sum, x)
 }
 
-# This function calculate the L2 normalized length of an input tensor
+# This function calculates the L2 normalized length of an input tensor
 function vector_norms(t) {
     expression: sqrt(sum(pow(t, 2), x))
 }
