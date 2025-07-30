@@ -212,9 +212,10 @@ This version is used only for garbage collection of removed documents, as descri
 
 ## Alternatives to using parent documents
 An important note to the previous section is that parent documents are global and replicated to all nodes.
-Therefore, this will not scale to larger corpus.
+Therefore, this will not scale to a larger corpus -
+one cannot store more unique documents than can be stored on a single node.
 
-As an alternative, do not use a parent document.
+As an alternative, do not use parent documents.
 As adding and removing fields is easy in Vespa (just a deploy to activate),
 add a new field for embeddings generated with the new model and populate this for all documents.
 This is easy using [partial updates](/en/partial-updates.html).
