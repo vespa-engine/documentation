@@ -171,6 +171,27 @@ equivalent JSON `grouping`-argument:
 }
 ```
 
+### Example using filter in grouping
+
+```
+{
+  "select" : {
+    "where" : "true",
+    "grouping" : [ {
+      "all" : {
+          "group" : "time.year(release_date)",
+          "filter" {
+              "and": [
+                  "regex": ["\"Metallica\"", "artist"],
+                  "not": { "regex": ["\".*Justice.*\"", "album"] }
+              ],
+          },
+          "each" : { "output" : "count()" }
+      }
+    } ]
+  }
+}
+```
 
 ---
 ### Examples with the different functions
