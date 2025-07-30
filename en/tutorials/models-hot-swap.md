@@ -210,6 +210,20 @@ However, it still has a version field, obtained from a dedicated `news` configur
 This version is used only for garbage collection of removed documents, as described below." %}
 
 
+## Alternatives to using parent documents
+An important note to the previous section is that parent documents are global and replicated to all nodes.
+Therefore, this will not scale to larger corpus.
+
+As an alternative, do not use a parent document.
+As adding and removing fields is easy in Vespa (just a deploy to activate),
+add a new field for embeddings generated with the new model and populate this for all documents.
+This is easy using [partial updates](/en/partial-updates.html).
+Switch queries to using the new field, then update the documents by removing the old embedding value using partial updates,
+or deploy without the old field.
+
+Embedding fields are often generated from text fields,
+read [this guide](/en/binarizing-vectors.html) for inspiration and examples of managing fields and deployments.
+
 
 ## Garbage collection
 
