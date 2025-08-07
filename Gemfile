@@ -33,3 +33,8 @@ gem "webrick"
 # Get the html-proofer to work
 gem 'rake'
 gem 'html-proofer'
+
+# Jekyll plugins group
+group :jekyll_plugins do
+  gem 'reverse_markdown'
+end
