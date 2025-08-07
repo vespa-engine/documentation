@@ -35,6 +35,10 @@ gem 'rake'
 gem 'html-proofer'
 
 # Jekyll plugins group
+
 group :jekyll_plugins do
-  gem 'reverse_markdown'
+  gem "jekyll-feed", "~> 0.12"
+  gem "reverse_markdown"
+  gem "parallel"
+  gem "ruby-progressbar" # <-- Add this line
 end
