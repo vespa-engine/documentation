@@ -5,7 +5,6 @@ require 'fileutils'
 require 'parallel'
 
 Jekyll::Hooks.register :site, :post_write do |site|
-  # --- OPTIMIZATION 1: Prepare data for multi-processing ---
   # Filter HTML pages and gather the necessary data upfront.
   # Complex objects (like Jekyll::Page) don't work well across processes,
   # so we extract the simple data (strings) we need.
@@ -24,7 +23,6 @@ Jekyll::Hooks.register :site, :post_write do |site|
     }
   end
 
-  # --- OPTIMIZATION 2: Pre-create all directories ---
   # Calculate all unique destination directories before the parallel block.
   # This avoids using a slow Mutex for synchronization inside the loop.
   required_dirs = pages_to_process.map do |page_data|
@@ -34,7 +32,6 @@ Jekyll::Hooks.register :site, :post_write do |site|
   FileUtils.mkdir_p(required_dirs)
   Jekyll.logger.info "Markdown Generator:", "Pre-created #{required_dirs.count} directories."
 
-  # --- OPTIMIZATION 3: Use multi-processing instead of multi-threading ---
   # For CPU-bound tasks like HTML parsing, processes are much faster than threads
   # in Ruby due to the Global Interpreter Lock (GIL).
   # We pass site.dest as an argument to make it available in each process.
@@ -61,9 +58,7 @@ Jekyll::Hooks.register :site, :post_write do |site|
   Jekyll.logger.info "Markdown Generator:", "Processing complete."
 end
 
-# --- OPTIMIZATION 4: Faster content processing ---
-# This version finds the first heading with a regex and slices the string,
-# which is much faster than splitting it into an array of lines.
+
 def process_markdown_content(markdown_content)
   # Find the first line that starts with '#' followed by a space
   if (index = markdown_content.index(/^#\s/))
@@ -74,7 +69,6 @@ def process_markdown_content(markdown_content)
   end
 end
 
-# --- OPTIMIZATION 5: Simplified path construction ---
 # Combined the logic for URLs ending in "/" and other paths.
 def construct_markdown_path(site_dest, page_url)
   # Handle the root index page specifically
@@ -84,6 +78,5 @@ def construct_markdown_path(site_dest, page_url)
 
   # For all other URLs (/about/, /page.html), remove the leading slash
   # and append ".md". The path becomes `_site/about/.md` or `_site/page.html.md`.
-  # This matches the behavior of the original script.
   File.join(site_dest, page_url[1..-1] + ".md")
 end
