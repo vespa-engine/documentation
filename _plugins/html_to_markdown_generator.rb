@@ -26,17 +26,17 @@ Jekyll::Hooks.register :site, :post_write do |site|
   # Calculate all unique destination directories before the parallel block.
   # This avoids using a slow Mutex for synchronization inside the loop.
   required_dirs = pages_to_process.map do |page_data|
-    File.dirname(construct_markdown_path(site.dest, page_data[:url]))
-  end.uniq
+    File.dirname(construct_markdown_path(site.source, page_data[:url]))
+  end.uniq.reject { |dir| dir == '.' }
   
-  FileUtils.mkdir_p(required_dirs)
+  FileUtils.mkdir_p(required_dirs) unless required_dirs.empty?
   Jekyll.logger.info "Markdown Generator:", "Pre-created #{required_dirs.count} directories."
 
   # For CPU-bound tasks like HTML parsing, processes are much faster than threads
   # in Ruby due to the Global Interpreter Lock (GIL).
-  # We pass site.dest as an argument to make it available in each process.
+  # We pass site.source as an argument to make it available in each process.
   Parallel.each(pages_to_process, in_processes: Parallel.processor_count, progress: "Generating Markdown") do |page_data|
-    md_path = construct_markdown_path(site.dest, page_data[:url])
+    md_path = construct_markdown_path(site.source, page_data[:url])
     
     # Skip if the markdown file is newer than the HTML file
     next if File.exist?(md_path) && File.mtime(md_path) >= page_data[:html_mtime]
@@ -70,13 +70,21 @@ def process_markdown_content(markdown_content)
 end
 
 # Combined the logic for URLs ending in "/" and other paths.
-def construct_markdown_path(site_dest, page_url)
+def construct_markdown_path(site_source, page_url)
   # Handle the root index page specifically
   if page_url == "/"
-    return File.join(site_dest, "index.html.md")
+    return File.join(site_source, "index.html.md")
   end
 
-  # For all other URLs (/about/, /page.html), remove the leading slash
-  # and append ".md". The path becomes `_site/about/.md` or `_site/page.html.md`.
-  File.join(site_dest, page_url[1..-1] + ".md")
+  # Remove the leading slash
+  path_without_slash = page_url[1..-1]
+  
+  # If the URL ends with "/", it's a directory index page
+  if page_url.end_with?("/")
+    # Convert "/en/tutorials/" to "en/tutorials/index.html.md"
+    File.join(site_source, path_without_slash + "index.html.md")
+  else
+    # For regular pages like "/page.html", convert to "page.html.md"
+    File.join(site_source, path_without_slash + ".md")
+  end
 end
