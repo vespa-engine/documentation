@@ -38,7 +38,5 @@ gem 'html-proofer'
 
 group :jekyll_plugins do
   gem "jekyll-feed", "~> 0.12"
-  gem "reverse_markdown"
-  gem "parallel"
-  gem "ruby-progressbar" # <-- Add this line
+  gem "nokogiri"
 end
