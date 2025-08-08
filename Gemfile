@@ -38,7 +38,6 @@ gem 'html-proofer'
 
 group :jekyll_plugins do
   gem "jekyll-feed", "~> 0.12"
-  gem "reverse_markdown"
-  gem "parallel"
-  gem "ruby-progressbar" # <-- Add this line
+  # Note: reverse_markdown, parallel, and ruby-progressbar removed for GitHub Pages compatibility
+  # The html_to_markdown_generator.rb plugin now uses only nokogiri (built into GitHub Pages)
 end
