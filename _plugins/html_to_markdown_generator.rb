@@ -27,9 +27,9 @@ Jekyll::Hooks.register :site, :post_write do |site|
   # This avoids using a slow Mutex for synchronization inside the loop.
   required_dirs = pages_to_process.map do |page_data|
     File.dirname(construct_markdown_path(site.dest, page_data[:url]))
-  end.uniq
+  end.uniq.reject { |dir| dir == '.' }
   
-  FileUtils.mkdir_p(required_dirs)
+  FileUtils.mkdir_p(required_dirs) unless required_dirs.empty?
   Jekyll.logger.info "Markdown Generator:", "Pre-created #{required_dirs.count} directories."
 
   # For CPU-bound tasks like HTML parsing, processes are much faster than threads
@@ -76,7 +76,15 @@ def construct_markdown_path(site_dest, page_url)
     return File.join(site_dest, "index.html.md")
   end
 
-  # For all other URLs (/about/, /page.html), remove the leading slash
-  # and append ".md". The path becomes `_site/about/.md` or `_site/page.html.md`.
-  File.join(site_dest, page_url[1..-1] + ".md")
+  # Remove the leading slash
+  path_without_slash = page_url[1..-1]
+  
+  # If the URL ends with "/", it's a directory index page
+  if page_url.end_with?("/")
+    # Convert "/en/tutorials/" to "_site/en/tutorials/index.html.md"
+    File.join(site_dest, path_without_slash + "index.html.md")
+  else
+    # For regular pages like "/page.html", convert to "_site/page.html.md"
+    File.join(site_dest, path_without_slash + ".md")
+  end
 end
