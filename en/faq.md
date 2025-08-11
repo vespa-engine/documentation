@@ -152,6 +152,10 @@ There are multiple things that can cause this, see [visiting troubleshooting](vi
 Run a query like `vespa query "select * from sources * where true"` and see the `totalCount` field.
 Alternatively, use metrics or `vespa visit` - see [examples](/en/operations/batch-delete.html#example).
 
+### Can I define a default value for a field?
+
+Not in the field definition, but it's possible to do this with the [choice](/en/indexing.html#choice-example)
+expression in an indexing statement.
 
 
 {:.faq-section}
