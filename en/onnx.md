@@ -130,14 +130,14 @@ was evaluated in the first phase. In general, evaluating these types of models a
 more suitable in the `second-phase` or `global-phase` phases.
 See [phased ranking](/en/phased-ranking.html).
 
-Models in which data tensors are located in external data files, are only supported when the following conditions are met:
-- The model is used in an embedder, e.g <code>hugging-face-embedder</code> (see [embedding](/en/embedding.html)).
+Models in which data tensors are located in external data files, are **only** supported when the following conditions are met:
+- The model is used in an _embedder_, e.g <code>hugging-face-embedder</code> (see [embedding](/en/embedding.html)).
 - The model is referenced using a URL, e.g. <code>url="https://example.com/my-onnx-model/model.onnx"</code>.
 - All external data files are located in the same parent path/directory as the model file,
   e.g. <code>https://example.com/my-onnx-model/model.onnx_data</code>.
 
-For ranking Vespa supports only ONNX models that are self-contained and below 2GB in size.
-Same restriction applies to models included in the application package.
+For _ranking_, Vespa supports only ONNX models that are self-contained (has no external data files) and below 2GB in size.
+The same restriction applies to models included in the application package.
 
 
 
