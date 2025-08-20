@@ -99,16 +99,48 @@ Note that the key source attribute must be single value and have the same data t
 
 <h2 id="filtering-groups">Filtering groups</h2>
 <p>
-When grouping on multivalue attributes, it may be useful to filter
-the groups so that only some specific values are collected.  This can be
-done by adding a filter.  Currently, the only filter implemented is a
-regular expression match, where the input will usually be the same
-expression as in the "group" clause. Example:
-<pre>all( group(my_array) filter(regex("foo.*", my_array)) ...)</pre>
-Here, each value in <em>my_array</em> is considered, but only the
-values that start with a "foo" prefix are collected in groups;
-All others are ignored.
+When grouping on multivalue attributes, it may be useful to filter the groups so
+that only some specific values are collected. This can be done by adding a
+filter. The <code>filter</code> clause expects a filter expression which
+consists of a combination of the expression types that follow.
+</p>
+<h3 id="regex-filter">Regex filter</h3>
+<p>
+Use a regular expression to match a field in each document, and include
+only documents that match in the grouping.  Example:
+<pre>all( group(my_array) filter(regex("foo.*", my_array)) ...)</pre>  Here,
+each value in <em>my_array</em> is considered, but only the values that start
+with a "foo" prefix are collected in groups; All others are ignored.
 See <a href="/en/grouping.html#structured-grouping">example</a>.
+</p>
+<h3 id="logical-predicates-filter">Logical predicates</h3>
+<p>
+ Use <code>not</code> to negate another filter expression. It takes a single
+ sub-filter and matches when the sub-filter does not. Example:
+<pre>all( group(my_field) filter( not regex("bar.*", my_other_field)) ...)</pre>
+Use <code>or</code> to perform a logical disjunction across two
+sub-filters. The combined filter matches if any of the sub-filters evaluate to
+true. Example:
+<pre>all( group(my_field) filter( regex("bar.*", my_field) or regex("baz.*", my_third_field) ) ...)</pre>
+Use <code>and</code> to perform a logical conjunction across two
+sub-filters. The combined filter matches only if all of the sub-filters evaluate
+to true. Example:
+<pre>all( group(my_field) filter( regex("bar.*", my_other_field) and regex("baz.*", my_third_field) ) ...)</pre>
+These logical predicates can be nested to create complex filter conditions.
+Filter expressions follow <em>conventional precedence</em>
+rules: <code>not</code> is evaluated before <code>and</code>,
+and <code>and</code> is evaluated before <code>or</code>. Operators of the same
+precedence are evaluated left-to-right. Use parentheses <code>(...)</code> to
+force a different grouping when needed.
+
+Example:
+<pre>
+all(
+    group(my_field)
+    filter( (regex("bar.*", some_field) or regex("baz.*", other_field)) and not regex(".*foo", some_field))
+    each(...)
+)
+</pre>
 </p>
 
 
@@ -492,6 +524,18 @@ for more examples.
   <tr><td>math.hypot</td><td>Return length of hypotenuse given X and Y sqrt(X^2 + Y^2)</td><td>Double, Double</td><td>Double</td></tr>
 </table>
 
+<h2 id="filters">Filters</h2>
+<table class="table">
+  <tr><td colspan="4"><h3 id="string-filters">String filters</h3></td></tr>
+  <tr class="trx"><th class="thx">Name</th><th class="thx">Description</th><th class="thx">Arguments</th><th class="thx">Result</th></tr>
+  <tr><td>regex</td><td>Matches a field against a regular expression string.</td><td>String, Expression</td><td>Bool</td></tr>
+
+  <tr><td colspan="4"><h3 id="bitwise-expressions">Predicate filters </h3></td></tr>
+  <tr class="trx"><th class="thx">Name</th><th class="thx">Description</th><th class="thx">Arguments</th><th class="thx">Result</th></tr>
+  <tr><td>and</td><td>Logical <code>and</code> between the arguments.</td><td>Filter, Filter</td><td>Bool</td></tr>
+  <tr><td>not</td><td>Logical <code>not</code> on the argument.</td><td>Filter</td><td>Bool</td></tr>
+  <tr><td>or</td><td>Logical <code>or</code> between the arguments.</td><td>Filter, Filter</td><td>Bool</td></tr>
+</table>
 
 
 <h2 id="grouping-language-grammar">Grouping language grammar</h2>
