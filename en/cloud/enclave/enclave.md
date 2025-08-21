@@ -36,3 +36,8 @@ The permissions required are coded into the Terraform modules found at:
 * [terraform-google](https://github.com/vespa-cloud/terraform-google-enclave/tree/main)
 
 Navigate to the _modules_ directory for details.
+
+**How can I configure agents/daemons on Vespa hosts securely?**
+Use terraform to grant Vespa hosts access to necessary secrets, and create an RPM
+that retrieves it and configures your application. See [enclave-examples](https://github.com/vespa-cloud/enclave-examples/tree/main/systemd-secrets)
+for a complete example.
