@@ -396,22 +396,8 @@ $ vespa deploy -z dev.aws-us-east-1c
 
 
 ## Dataplane access
+
 Vespa Cloud users on paid plans have access to Vespa Cloud Support.
-For cases where the Vespa Team needs access to the application's data to provide support,
-grant access using the procedures below.
-
-
-### Dev environment
-The [dev](https://cloud.vespa.ai/en/reference/environments) environment
-is a sandbox for rapid development cycles.
-
-Navigate to the _support_ tab, and ALLOW the Vespa Team dataplane access:
-![Grant dataplane access in dev environment](/assets/img/support-dev.png)
-
-
-### Prod environment
-The [prod](https://cloud.vespa.ai/en/reference/environments) environment hosts production zones.
-
-For a production zone instance,
-navigate to the _support_ tab, and ALLOW the Vespa Team dataplane access:
-![Grant dataplane access in prod environment](/assets/img/support-prod.png)
+For cases where the Vespa Team needs access to the application's data to provide
+support, the Vespa support personnel can request access after an explicit approval
+from the customer in the open support case.
