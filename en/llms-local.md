@@ -139,7 +139,7 @@ The most significant model configuration parameters are:
   default is the number of available cores - 2. Do not set this higher than the
   core count, as this will severely impact performance.
 - `maxTokens`: the maximum number of tokens that will be generated. Default is
-  512.   
+  512.
 - `maxPromptTokens`: the maximum number of tokens in the prompt. If the prompt
   exceeds this number, it will be truncated. 
   Default is -1, which means that the prompt will not be truncated.
