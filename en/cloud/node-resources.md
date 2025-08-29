@@ -52,7 +52,7 @@ It is simplified by using the Resource Suggestions view in the Vespa Console:
 ![Resource Suggestions](/assets/img/resource-suggestions-1.png)
 
 Vespa Cloud tracks usage over time and suggests node configuration
-and [topology](/en/cloud/topology-and-resizing.md) changes based on last week's load.
+and [topology](/en/cloud/topology-and-resizing.html) changes based on last week's load.
 In the example above, observe a suggestion that doubles the memory relative to CPU.
 
 This simplifies _what_ to configure, and one can roll out isolated changes while
