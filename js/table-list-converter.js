@@ -23,11 +23,7 @@ $(window).on('load', function() {
     if ($row.find('td[colspan="3"] h3').length > 0) {
       let headingText = $row.find('h3').text().trim();
       let headingId = $row.find('h3').attr('id') || '';
-
-      let $headingLi = $('<li style="list-style: none; margin-top: 1em;"></li>');
-      $headingLi.append('<h3' + (headingId ? ' id="' + headingId + '"' : '') + '>' + headingText + '</h3>');
-
-      $list.append($headingLi);
+      $list.append('<h3 style="list-style: none; margin-top: 1em;"' + (headingId ? ' id="' + headingId + '"' : '') + '>' + headingText + '</h3>');
       return;
     }
 
@@ -42,12 +38,15 @@ $(window).on('load', function() {
       let defaultValue = $tds.eq(1).text().trim();
       let description = $tds.eq(2).html().trim(); // Keep inner HTML
 
-      let $li = $('<li></li>');
+      let $li = $('<li style="margin-left: 1em"></li>');
       $li.append('<strong>' + featureName + '</strong>');
       $li.append('<div>Default: ' + defaultValue + '</div>');
       $li.append('<div> ' + description + '</div>');
 
       $list.append($li);
+    }
+    else{
+      $list.append('<div>' + $tds.html() + '</div>');
     }
   });
 
