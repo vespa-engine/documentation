@@ -70,12 +70,14 @@ Jekyll::Hooks.register :site, :post_write do |site|
   # Example: /en/reference/index.html.md will be: 
   # section: reference
   # md_path: /en/reference/index.html.md
-  generate_llms_txt(site.dest, pages_to_process)
+  
+  # Pass the site object to generate_llms_txt so we can access the base URL
+  generate_llms_txt(site.dest, pages_to_process, site)
 
   Jekyll.logger.info "Markdown Generator:", "Processing complete."
 end
 
-def generate_llms_txt(site_dest, pages_to_process)
+def generate_llms_txt(site_dest, pages_to_process, site)
   # Write to parent directory of site_dest
   site_parent = File.expand_path("..", site_dest)
   # Path to llms.txt
@@ -89,6 +91,10 @@ def generate_llms_txt(site_dest, pages_to_process)
     Jekyll.logger.Error "Markdown Generator:", "Template file not found at #{template_path}. Cannot generate llms.txt."
     return
   end
+  
+  # Get base URL from site configuration
+  base_url = site.config['url'] || 'https://docs.vespa.ai'
+  
   # Initialize the file with header content
   File.open(llms_path, 'w') do |file|
     # Write template content first
@@ -137,7 +143,9 @@ def generate_llms_txt(site_dest, pages_to_process)
       file.puts "## #{section}\n\n"
       
       valid_pages.each do |page_info|
-        file.puts "- [#{page_info[:title]}](#{page_info[:md_path]})" + (page_info[:description] ? ": #{page_info[:description]}" : "")
+        # Use the base URL from site configuration + original page URL
+        web_url = "#{base_url}#{page_info[:url]}"
+        file.puts "- [#{page_info[:title]}](#{web_url})" + (page_info[:description] ? ": #{page_info[:description]}" : "")
       end
       file.puts "\n"
     end
