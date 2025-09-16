@@ -73,6 +73,7 @@ Jekyll::Hooks.register :site, :post_write do |site|
   
   # Pass the site object to generate_llms_txt so we can access the base URL
   generate_llms_txt(site.dest, pages_to_process, site)
+  generate_llms_full_txt(site.dest, pages_to_process, site)
 
   Jekyll.logger.info "Markdown Generator:", "Processing complete."
 end
@@ -100,36 +101,8 @@ def generate_llms_txt(site_dest, pages_to_process, site)
     # Write template content first
     file.puts template_content
     
-    # Process each markdown file to generate a map of sections to files to content.
-    sections_map = {}
-    
-    pages_to_process.each do |page_data|
-      md_path = construct_markdown_path(site_dest, page_data[:url])
-      
-      # Extract section from URL (directory level below /en)
-      section = extract_section(page_data[:url])
-
-      # Extract title first H1 heading from md_path
-      title_desc = extract_title_and_description(md_path, page_data[:url])
-      
-      # Initialize section array if not exists
-      sections_map[section] ||= []
-      
-      # Add page info to section
-      page_info = {
-        md_path: md_path,
-        title: title_desc[:title],
-        description: title_desc[:description],
-        url: page_data[:url]
-      }
-      
-      # Read content if file exists
-      if File.exist?(md_path)
-        page_info[:content] = File.read(md_path)
-      end
-      
-      sections_map[section] << page_info
-    end
+    # Use shared method to build sections map
+    sections_map = build_sections_map(site_dest, pages_to_process)
     
     # Write each section to the llms.txt file
     sections_map.each do |section, pages|
@@ -154,6 +127,105 @@ def generate_llms_txt(site_dest, pages_to_process, site)
   end
   
   Jekyll.logger.info "Markdown Generator:", "Generated llms.txt with #{pages_to_process.count} pages."
+end
+
+def generate_llms_full_txt(site_dest, pages_to_process, site)
+  site_parent = File.expand_path("..", site_dest)
+  llms_full_path = File.join(site_dest, "llms-full.txt")
+  
+  template_path = File.join(site_parent, "llms-template.md")
+  unless File.exist?(template_path)
+    Jekyll.logger.error "Markdown Generator:", "Template file not found at #{template_path}. Cannot generate llms-full.txt."
+    return
+  end
+  
+  template_content = File.read(template_path)
+  sections_map = build_sections_map(site_dest, pages_to_process)
+  
+  File.open(llms_full_path, 'w') do |file|
+    file.puts template_content
+    
+    sections_map.each do |section, pages|
+      next if section == '404'
+      valid_pages = pages.reject { |page_info| page_info[:title].start_with?("Redirect") }
+      next if valid_pages.empty?
+      
+      file.puts "## #{section}\n\n"
+      
+      valid_pages.each do |page_info|
+        file.puts "### #{page_info[:title]}"
+        file.puts page_info[:description] if page_info[:description]
+        file.puts ""
+        
+        if page_info[:content]
+          # Shift all headings to start at level 4 (####) to maintain hierarchy
+          shifted_content = shift_headings(page_info[:content], 4)
+          file.puts shifted_content
+        end
+        file.puts "\n---\n\n"  # Separator between pages
+      end
+    end
+    
+  end
+  
+  Jekyll.logger.info "Markdown Generator:", "Generated llms-full.txt with full content for #{pages_to_process.count} pages."
+end
+
+def build_sections_map(site_dest, pages_to_process)
+  sections_map = {}
+  
+  pages_to_process.each do |page_data|
+    md_path = construct_markdown_path(site_dest, page_data[:url])
+    section = extract_section(page_data[:url])
+    title_desc = extract_title_and_description(md_path, page_data[:url])
+    
+    sections_map[section] ||= []
+    
+    page_info = {
+      md_path: md_path,
+      title: title_desc[:title],
+      description: title_desc[:description],
+      url: page_data[:url]
+    }
+    
+    # Read content if file exists (for llms-full.txt generation)
+    page_info[:content] = File.read(md_path) if File.exist?(md_path)
+    sections_map[section] << page_info
+  end
+  
+  sections_map
+end
+
+def shift_headings(content, target_min_level)
+  lines = content.split("\n")
+  
+  # Find the minimum heading level in the content
+  min_level = nil
+  lines.each do |line|
+    if match = line.match(/^(#+)\s/)
+      level = match[1].length
+      min_level = level if min_level.nil? || level < min_level
+    end
+  end
+  
+  # If no headings found, return content as-is
+  return content if min_level.nil?
+  
+  # Calculate the shift needed
+  shift = target_min_level - min_level
+  
+  # Apply the shift to all headings
+  lines.map do |line|
+    if match = line.match(/^(#+)(\s.*)$/)
+      current_level = match[1].length
+      new_level = current_level + shift
+      # Ensure we don't go below level 1 or above level 6
+      new_level = [[new_level, 1].max, 6].min
+      "#" * new_level + match[2]
+    else
+      line
+    end
+  end.join("\n")
 end
 
 def extract_title_and_description(md_path, page_url)
