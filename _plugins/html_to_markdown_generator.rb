@@ -132,7 +132,6 @@ end
 def generate_llms_full_txt(site_dest, pages_to_process, site)
   site_parent = File.expand_path("..", site_dest)
   llms_full_path = File.join(site_dest, "llms-full.txt")
-  repo_path = File.join(site_parent, "llms-full.txt")
   
   template_path = File.join(site_parent, "llms-template.md")
   unless File.exist?(template_path)
@@ -167,7 +166,6 @@ def generate_llms_full_txt(site_dest, pages_to_process, site)
       end
     end
     
-    FileUtils.cp(llms_full_path, repo_path)
   end
   
   Jekyll.logger.info "Markdown Generator:", "Generated llms-full.txt with full content for #{pages_to_process.count} pages."
