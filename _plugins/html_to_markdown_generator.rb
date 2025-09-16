@@ -144,7 +144,7 @@ def generate_llms_txt(site_dest, pages_to_process, site)
       
       valid_pages.each do |page_info|
         # Use the base URL from site configuration + original page URL
-        web_url = "#{base_url}#{page_info[:url]}"
+        web_url = "#{base_url}#{page_info[:md_path]}"
         file.puts "- [#{page_info[:title]}](#{web_url})" + (page_info[:description] ? ": #{page_info[:description]}" : "")
       end
       file.puts "\n"
