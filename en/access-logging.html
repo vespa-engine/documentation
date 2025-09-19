@@ -112,6 +112,17 @@ $ <a href="https://stedolan.github.io/jq/">jq</a> '. + {iso8601date:(.time | tod
 For details on the access logging configuration see <a href="reference/services-container.html#accesslog">
 accesslog in the container</a> element in <em>services.xml</em>.
 </p>
+<p>
+Key configuration options include:
+</p>
+<ul>
+  <li><strong>fileNamePattern</strong>: Pattern for log file names with time variable support</li>
+  <li><strong>rotationInterval</strong>: Time-based rotation schedule (minutes since midnight)</li>
+  <li><strong>rotationSize</strong>: Size-based rotation threshold in bytes (0 = disabled)</li>
+  <li><strong>sizeCheckInterval</strong>: How often to check file size in milliseconds</li>
+  <li><strong>rotationScheme</strong>: Either 'sequence' or 'date'</li>
+  <li><strong>compressionFormat</strong>: GZIP or ZSTD compression for rotated files</li>
+</ul>
 
 <h3 id="logging-request-content">Logging Request Content</h3>
 <p>
@@ -186,7 +197,7 @@ The following parts in the file name are expanded:
 <p>
   Apache httpd style log <em>rotation</em> can be configured by setting the <em>rotationScheme</em>.
   There's two alternatives for the rotationScheme, sequence and date.
-  The rotation time is controlled by setting <em>rotationInterval</em>.
+  Rotation can be triggered by time intervals using <em>rotationInterval</em> and/or by file size using <em>rotationSize</em>.
 </p>
 
 
@@ -240,6 +251,46 @@ The following parts in the file name are expanded:
   defined by the two last numbers for the rest of the day.
   E.g. "0 100 240 480 ..." is expanded to "0 100 240 480 720 960 1200"
 </p>
+
+
+<h3 id="size-based-rotation">Size-based rotation</h3>
+<p>
+  In addition to time-based rotation, logs can be rotated when they reach a certain size.
+  This is controlled by setting <em>rotationSize</em> and optionally <em>sizeCheckInterval</em>:
+</p>
+<pre>
+&lt;accesslog type='json'
+           fileNamePattern='logs/vespa/access/JsonAccessLog.&lt;container id&gt;.%Y%m%d%H%M%S'
+           rotationInterval='0 60 ...'
+           rotationSize='536870912'
+           sizeCheckInterval='30000'
+           rotationScheme='date'
+           symlinkName='JsonAccessLog.&lt;container id&gt;' /&gt;
+</pre>
+<p>
+  Configuration parameters for size-based rotation:
+</p>
+<ul>
+  <li><strong>rotationSize</strong>: Maximum file size in bytes before rotation. When set to 0 (default), 
+      size-based rotation is disabled and only time-based rotation is used.</li>
+  <li><strong>sizeCheckInterval</strong>: Interval in milliseconds between file size checks. 
+      Default is 60000 (1 minute). Lower values provide more responsive rotation but may impact performance.</li>
+</ul>
+<p>
+  When both time and size-based rotation are configured, the log file will rotate when either condition is met.
+  For example, with the configuration above, logs will rotate every hour (at 0, 60, 120... minutes past midnight)
+  OR when the file size exceeds 512MB (536870912 bytes), whichever comes first.
+</p>
+<p>
+  To optimize performance, file size is only checked at the specified interval rather than on every write.
+  This means the actual file size may slightly exceed the configured limit before rotation occurs.
+  The size check interval can be adjusted based on your write volume and rotation requirements:
+</p>
+<ul>
+  <li>High-volume applications: Use shorter intervals (10-30 seconds) for more timely rotation</li>
+  <li>Low-volume applications: Use longer intervals (1-5 minutes) to minimize overhead</li>
+  <li>Very large rotation sizes: Longer intervals are acceptable as slight overruns are less significant</li>
+</ul>
 
 
 <h3 id="log-retention">Log retention</h3>
