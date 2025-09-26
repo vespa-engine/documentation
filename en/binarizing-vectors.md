@@ -379,11 +379,11 @@ A binarized version is like:
 rank-profile app_ranking_bin {
     match-features {
         distance(field, doc_embedding_binarized)
-        query(q)
+        query(q_bin)
         attribute(doc_embedding_binarized)
     }
     inputs {
-        query(q) tensor<int8>(x[1])
+        query(q_bin) tensor<int8>(x[1])
     }
     first-phase {
         expression: closeness(field, doc_embedding_binarized)
