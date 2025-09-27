@@ -395,7 +395,7 @@ Query:
 
 ```
 $ vespa query \
-    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q)' \
+    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
     'input.query(q_bin)=[-119]' \
     'ranking=app_ranking_bin'
 ```
