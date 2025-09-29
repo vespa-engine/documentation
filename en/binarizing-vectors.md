@@ -308,8 +308,8 @@ The same query, with a binarized query vector, to the binarized field:
 
 ```
 $ vespa query \
-    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q)' \
-    'input.query(q)=[-119]' \
+    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'input.query(q_bin)=[-119]' \
     'ranking=app_ranking_bin'
 ```
 
@@ -336,7 +336,7 @@ to debug ranking (see ranking profile `app_ranking_bin` below):
     "values": [ 0 ]
     },
     "distance(field,doc_embedding_binarized)": 3.0,
-    "query(q)": {
+    "query(q_bin)": {
         "type": "tensor<int8>(x[1])",
         "values": [ -119 ]
     }
@@ -379,11 +379,11 @@ A binarized version is like:
 rank-profile app_ranking_bin {
     match-features {
         distance(field, doc_embedding_binarized)
-        query(q)
+        query(q_bin)
         attribute(doc_embedding_binarized)
     }
     inputs {
-        query(q) tensor<int8>(x[1])
+        query(q_bin) tensor<int8>(x[1])
     }
     first-phase {
         expression: closeness(field, doc_embedding_binarized)
@@ -395,7 +395,7 @@ Query:
 
 ```
 $ vespa query \
-    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q)' \
+    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
     'input.query(q_bin)=[-119]' \
     'ranking=app_ranking_bin'
 ```
