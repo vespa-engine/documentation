@@ -102,6 +102,12 @@ grant different privileges:
 
 All role memberships are stored in an external identity provider.
 
+#### Control plane audit logs
+All operations against the control plane are persisted in an audit log capturing 
+_timestamp_, _client_, _principal_ (user), _HTTP method_, _resource_ accessed, 
+and _payload_ (for certain requests). As this data can potentially be sensitive, 
+it is available upon request from Vespa Cloud support.
+
 ### Service isolation
 
 <img alt="image" width="100%" src="/assets/img/service-isolation.png" title="Service isolation"/>
