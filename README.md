@@ -35,6 +35,8 @@ You probably need to get the right Ruby version first, with
     $ rbenv install 3.3.7
     $ rbenv local 3.3.7
 
+Prepend /opt/homebrew/opt/ruby/bin to your $PATH, e.g. in your .zshrc.
+
 Then you should be able to run:
 
     $ bundle install
