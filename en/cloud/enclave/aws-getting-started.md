@@ -30,7 +30,9 @@ One account can host all your Vespa applications, there is no need for multiple 
 
 ### 3. Configure AWS Account
 
-The same AWS account used in step two must be prepared for deploying Vespa applications.
+The same AWS account used in step two must be prepared for deploying Vespa applications using either *Terraform* or *Cloudformation*.
+
+#### Terraform
 Use [Terraform](https://www.terraform.io/) to set up the necessary resources using the
 [modules](https://registry.terraform.io/modules/vespa-cloud/enclave/aws/latest) published by the Vespa team.
 
@@ -52,6 +54,12 @@ your applications. In order for your enclave applications to use the new
 features you must re-apply your terraform templates with the latest release.
 The [notification system](/en/cloud/notifications.html)
 will let you know when a new release is available.
+
+#### Cloudformation
+
+Vespa also supports Cloudformation if you prefer the AWS-native solution.
+Download the Cloudformation stacks in our [github repository](https://github.com/vespa-cloud/cloudformation-aws-enclave) and
+refer to the README for stack-specific instructions.
 
 ### 4. Deploy a Vespa application
 
