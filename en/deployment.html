@@ -1,0 +1,129 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Deployment"
+---
+
+<p>In this document we explain various aspects of application deployment in detail.
+Refer to <a href="applications.html#deploy">application deployment</a> for an overview.</p>
+
+
+<h2 id="convergence">Convergence</h2>
+
+<p>After the deployment command has succeeded, the application package will take effect, but this does
+not complete immediately in the distributed system that is your running application;
+it happens through a distributed <i>convergence</i> process that you can track from the command line
+or console.  Refer to the <a href="reference/application-packages-reference.html#deploy">deploy reference</a>
+for detailed steps run when deploying an application.</p>
+
+<p>You can get the status of the last deployment by using the status command:</p>
+
+<pre>{% highlight shell %}
+$ vespa status deployment
+{% endhighlight %}</pre>
+
+
+<h2 id="rollback">Rollback</h2>
+
+<p>To roll back an application package change, deploy again with the previous version to roll back to - one of:</p>
+<ol>
+    <li>With automation: Revert the code in the source code repository, and let the automation roll out the new version.
+    You can speed up the deployment by skipping tests and clicking "deploy now" in the deployment graph in the console.</li>
+    <li>
+        If you have trouble rebui8lding a good package (you should not), you can download a previous package from Vespa Cloud: Use the
+        <a href="https://cloud.vespa.ai/en/automated-deployments.html#source-code-repository-integration">console</a>
+        to pick the good version, download it and deploy again.
+        Hover of the <a href="https://cloud.vespa.ai/en/automated-deployments.html#block-windows">instance</a>
+        (normally called "default") to skip the system and staging test to speed up the deployment, if needed.
+    </li>
+    <li>On self-managed instances, regenerate the good version from source for new deployment,
+        see also the <a href="/en/reference/deploy-rest-api-v2.html#rollback">deploy API</a></li>
+</ol>
+
+
+<h2 id="file-distribution">File distribution</h2>
+
+<p>The application package can have components and other large files.
+When an app is deployed, these files are distributed to the nodes:</p>
+
+<ul>
+    <li>Components (i.e bundles)</li>
+    <li>Files with type <em>path</em> and <em>url</em> in config, see
+        <a href="configuring-components.html#adding-files-to-the-component-configuration">
+            Adding files to the component configuration</a></li>
+    <li>Machine learned models</li>
+    <li><a href="reference/schema-reference.html#constant">Constant tensors</a></li>
+</ul>
+
+<p>When new components or files specified in config are distributed, the container gets a new file reference,
+waits for it to be available and switches to new config when all files are available.</p>
+
+<img src="/assets/img/config-delivery.svg" alt="Nodes get config from a config server cluster"
+     width="795px" height="auto" />
+
+
+<h2 id="deploying-remote-models">Deploying remote models</h2>
+
+<p>Most application packages are stored as source code in a code repository.
+However, some resources are generated or too large to store in a code repository,
+like models or an <a href="/en/operations/tools.html#vespa-makefsa">FSA</a>.</p>
+
+<p>Machine learned models in Vespa,
+are stored in the application package under the <em>models</em> directory.
+This might be inconvenient for some applications,
+for instance for models that are frequently retrained on some remote system.
+Also, models might be too large to fit within the constraints of the version control system.</p>
+
+<p>The solution is to download the models from the remote location during the application package build.
+This is simply implemented by adding a step in <em>pom.xml</em>
+(see <a href="https://github.com/vespa-cloud/cord-19-search/blob/main/pom.xml">example</a>):</p>
+
+<pre>{% highlight xml %}
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>1.4.0</version>
+            <executions>
+                <execution>
+                    <id>download-model</id>
+                    <phase>generate-resources</phase>
+                    <goals>
+                        <goal>exec</goal>
+                    </goals>
+                    <configuration>
+                        <executable>bin/download_models.sh</executable>
+                        <arguments>
+                            <argument>target/application/models</argument>
+                            <argument>MODEL-URL</argument>
+                        </arguments>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+{% endhighlight %}</pre>
+
+<p><em>bin/download_model.sh</em> example:</p>
+<pre>
+#!/bin/bash
+
+DIR="$1"
+URL="$2"
+
+echo "[INFO] Downloading $URL into $DIR"
+
+mkdir -p $DIR
+pushd $DIR
+    curl -O $URL
+popd
+</pre>
+
+<p>Any necessary credentials for authentication and authorization should be added to this script,
+as well as any unpacking of archives (for TensorFlow models for instance).</p>
+
+<p>Also see the <a href="reference/config-files.html#model">model</a> config type to specify resources that
+should be downloaded by container nodes during convergence.</p>
+
+
