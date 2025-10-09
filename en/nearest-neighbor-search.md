@@ -12,14 +12,15 @@ This operator can be combined with other filters or query terms using the
 making it easy to create hybrid solutions that combine modern vector based techniques with
 [traditional information retrieval](text-matching.html).
 
-Also try [pyvespa examples](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
+Also see the [pyvespa examples](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
 
 
 ## Minimal example
+
 A nearest neighbor search has at least these components: a document vector, a query vector,
 a rank profile using `closeness()` and a query with the `nearestNeighbor` operator:
 <pre>
-# Schema definition of the vector in documents
+    # Schema definition of the vector in documents
     document doc {
 
         field <span class="pre-hilite">d_vector</span> type tensor&lt;float&gt;(d[3]) {
@@ -28,9 +29,9 @@ a rank profile using `closeness()` and a query with the `nearestNeighbor` operat
 
     }
 
-# Rank profile definition in schema:
-#  - using the closeness() rank feature
-#  - defining the q_vector type that must match the d_vector type
+    # Rank profile definition in schema:
+    #  - defining the q_vector type that must match the d_vector type
+    #  - using the closeness() rank feature in the ranking expression
     rank-profile rank_docs inherits default {
         inputs {
             query(<span class="pre-hilite">q_vector</span>) tensor&lt;float&gt;(d[3])
@@ -40,13 +41,6 @@ a rank profile using `closeness()` and a query with the `nearestNeighbor` operat
         }
     }
 
-# A query with
-#  - a nearestNeighbor operator with document and query vectors
-#  - selecting the rank_docs rank profile
-$ vespa query 'select * from docs where {targetHits: 3}<span class="pre-hilite">nearestNeighbor</span>(d_vector, q_vector)' \
-  <span class="pre-hilite">ranking=rank_docs</span> \
-  'input.query(q_vector)'='[1,2,3]'
-
 # Documents with vectors
 {
     "put": "id:mynamespace:music::a-head-full-of-dreams",
@@ -54,6 +48,14 @@ $ vespa query 'select * from docs where {targetHits: 3}<span class="pre-hilite">
         "d_vector": [0,1,2]
     }
 }
+
+# A query with
+#  - a nearestNeighbor operator with document and query vectors
+#  - selecting the rank_docs rank profile
+$ vespa query 'select * from docs where {targetHits: 3}<span class="pre-hilite">nearestNeighbor</span>(d_vector, q_vector)' \
+  <span class="pre-hilite">ranking=rank_docs</span> \
+  'input.query(q_vector)'='[1,2,3]'
+
 </pre>
 The `nearestNeighbor` query operator will calculate values
 used by the [closeness()](reference/rank-features.html#closeness(dimension,name)) rank feature.
@@ -282,7 +284,7 @@ combines the popularity with the `closeness(field, image_embeddings)` rank-featu
 
 
 ## Indexing product data
-After deploying the application package with the document schema, one
+After deploying the application package with the document schema, you
 can [index](reads-and-writes.html) the product data using the
 [Vespa JSON feed format](reference/document-json-format.html).
 
