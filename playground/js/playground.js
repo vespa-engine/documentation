@@ -582,6 +582,19 @@ function clear_all() {
     update();
 }
 
+// Command handler for the welcome "Start from scratch" button.
+function start_from_scratch() {
+    // Clear all state, then show the playground UI
+    clear_all();
+    showPlayground();
+}
+
+function get_started() {
+    // Redirect to the static getting-started guide. Clear state first for a clean playground when returning.
+    try { clear_all(); } catch (e) {}
+    window.location.href = '/playground/getting-started.html';
+}
+
 function toggle_show_setup() {
     show_setup = !show_setup;
     d3.select("#setup-container").classed("hidden", !show_setup);
@@ -1131,6 +1144,64 @@ function setup_examples() {
     }
 }
 
+// If examples are rendered as a list of links (.example-item), bind clicks to navigate
+function setup_examples_list() {
+    // delegate handler: bind to container and capture clicks
+    var container = d3.select('.examples-list');
+    if (container.empty()) return;
+
+    container.selectAll('.example-item').on('click', function(event) {
+        // Use d3 to get the clicked element's data-value attribute
+        var el = d3.select(this);
+        var val = el.attr('data-value');
+        if (val) {
+            try { localStorage.setItem('seen_playground_welcome', 'true'); } catch (e) {}
+            window.location.hash = val;
+            window.location.reload();
+        }
+        event.preventDefault();
+    });
+}
+
+// Mark welcome as seen when header links are used so navigating away/around
+// doesn't unexpectedly show the welcome on reload. Exclude the logo link (it
+// intentionally shows welcome).
+function setup_header_link_tracking() {
+    var header = document.getElementById('header-global-commands');
+    if (!header) return;
+    var anchors = header.querySelectorAll('a');
+    anchors.forEach(function(a) {
+        // skip logo anchor
+        if (a.querySelector && a.querySelector('img.logo')) return;
+        a.addEventListener('click', function() {
+            try { localStorage.setItem('seen_playground_welcome', 'true'); } catch (e) {}
+        });
+    });
+}
+
+// Improve hover behavior: add a small delay before closing the dropdown so
+// fast pointer moves from the toggle into the dropdown don't cause it to disappear.
+function setup_examples_hover() {
+    var menu = document.querySelector('.examples-menu');
+    if (!menu) return;
+    var timeout = null;
+
+    function open() {
+        clearTimeout(timeout);
+        menu.classList.add('open');
+    }
+
+    function close() {
+        clearTimeout(timeout);
+        timeout = setTimeout(function() { menu.classList.remove('open'); }, 150);
+    }
+
+    menu.addEventListener('mouseenter', open);
+    menu.addEventListener('focusin', open);
+    menu.addEventListener('mouseleave', close);
+    menu.addEventListener('focusout', close);
+}
+
 function go_to_example() {
     var hash = d3.select("#examples-select").property("value");
     window.location.hash = hash;
@@ -1228,5 +1299,8 @@ function main() {
     select_frame_by_index(0);
     setup_keybinds();
     setup_examples();
+    setup_examples_list();
+    setup_examples_hover();
+    setup_header_link_tracking();
     setupThemeToggle();
 }
