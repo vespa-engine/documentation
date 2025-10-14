@@ -513,6 +513,18 @@ function setup_commands() {
             // outside click (which would immediately save/close the newly created frame).
             if (event.stopPropagation) event.stopPropagation();
             event.preventDefault();
+            // If currently editing, save the current edit first so user text isn't lost
+            if (context === contexts.EDIT) {
+                try {
+                    // If the current edit is an empty expression/comment, just exit
+                    // edit mode to discard it. Otherwise execute (save) it.
+                    if (is_expression_empty()) {
+                        exit_edit_selected();
+                    } else {
+                        execute_selected();
+                    }
+                } catch (e) { /* ignore errors and continue */ }
+            }
             select_frame_by_index(num_frames() - 1);
             new_frame("c");
             return false;
@@ -522,6 +534,16 @@ function setup_commands() {
             // Prevent the global document click handler from treating this as an outside click
             if (event.stopPropagation) event.stopPropagation();
             event.preventDefault();
+            // If currently editing, save the current edit first so user text isn't lost
+            if (context === contexts.EDIT) {
+                try {
+                    if (is_expression_empty()) {
+                        exit_edit_selected();
+                    } else {
+                        execute_selected();
+                    }
+                } catch (e) { /* ignore errors and continue */ }
+            }
             select_frame_by_index(num_frames() - 1);
             new_frame("e");
             return false;
