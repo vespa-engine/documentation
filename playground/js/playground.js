@@ -353,7 +353,6 @@ function addActionButton(root, iconFn, actionFn, frameIndex, actionName, tooltip
 }
 
 function add_result_ui_buttons(root, frame_index) {
-    addActionButton(root, icon_edit, edit_frame, frame_index, "edit a different frame", "Edit this frame");
     addActionButton(root, icon_up, move_frame_up, frame_index, "move frames", "Move frame up");
     addActionButton(root, icon_down, move_frame_down, frame_index, "move frames", "Move frame down");
     addActionButton(root, icon_cross, remove_frame, frame_index, "remove frames", "Remove this frame");
