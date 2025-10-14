@@ -509,15 +509,22 @@ function setup_commands() {
     d3.select("#copy-url-cmd").on("click", function(event) { copy_to_clipboard(window.location); event.preventDefault(); });
     d3.select("#new-comment-cmd").html(icon_comment() + " " + d3.select("#new-comment-cmd").html())
         .on("click", function(event) {
+            // Prevent the global document click handler from seeing this click as an
+            // outside click (which would immediately save/close the newly created frame).
+            if (event.stopPropagation) event.stopPropagation();
+            event.preventDefault();
             select_frame_by_index(num_frames() - 1);
             new_frame("c");
-            event.preventDefault();
+            return false;
         });
     d3.select("#new-expression-cmd").html(icon_code() + " " + d3.select("#new-expression-cmd").html())
         .on("click", function(event) {
+            // Prevent the global document click handler from treating this as an outside click
+            if (event.stopPropagation) event.stopPropagation();
+            event.preventDefault();
             select_frame_by_index(num_frames() - 1);
             new_frame("e");
-            event.preventDefault();
+            return false;
         });
     d3.select("#apply-setup-cmd").html(icon_check() + " " + d3.select("#apply-setup-cmd").html())
         .on("click", function(event) { apply_setup(); event.preventDefault(); });
