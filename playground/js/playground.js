@@ -14,6 +14,8 @@ var selected = null;
 var converter = new showdown.Converter();
 var context = contexts.VIEW;
 var currentTheme = localStorage.getItem('theme') || null; // Will be set based on system preference
+// unique id counter for frames so D3 can track DOM nodes across reorders
+var frame_uid = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Notifications
@@ -60,20 +62,41 @@ var operations = {
         "params" : {
             "t" : ""  // text of comment
         },
-        "setup_ui" : function(param, element, header, content, frame_index) {
-            clear(header);
-            header.append("div").attr("class", "block header-text").html("Edit comment");
-            add_setup_ui_buttons(header.append("div").attr("class", "block right"));
+        "setup_ui" : function(param, element, header, content, frame_index, controls) {
+            // For comments: header is a side icon container; ensure aria-label for accessibility
+            header.attr("aria-label", "Edit comment");
+            // Use controls container for buttons when provided. Clear any existing controls to avoid duplicates.
+            if (controls) {
+                controls.html("");
+                controls.append("div").attr("class", "block right");
+            } else {
+                clear(header);
+                header.append("div").attr("class", "block header-empty").html("");
+            }
+            var buttonArea = controls ? controls.select(".block.right") : header.append("div").attr("class", "block right");
+            add_setup_ui_buttons(buttonArea);
 
             clear(content);
             add_table(content);
             add_textarea_field(content, "Comment", "", 3, 100, param["t"], true);
             add_save_cancel_field(content);
         },
-        "result_ui" : function(result, element, header, content, frame_index) {
-            clear(header);
-            header.append("div").attr("class", "block header-text").html("Comment");
-            add_result_ui_buttons(header.append("div").attr("class", "block right"), frame_index);
+        "result_ui" : function(result, element, header, content, frame_index, controls) {
+            // For comments: header is a side icon container; ensure aria-label for accessibility
+            header.attr("aria-label", "Comment");
+            // Use controls container for buttons when provided. Clear any existing controls to avoid duplicates.
+            if (controls) {
+                controls.html("");
+                controls.append("div").attr("class", "block right");
+            } else {
+                // Ensure header is empty and available as fallback
+                clear(header);
+                header.append("div").attr("class", "block header-empty").html("");
+            }
+
+            // Render result buttons into the controls container if present, otherwise into header
+            var buttonArea = controls ? controls.select(".block.right") : header.append("div").attr("class", "block right");
+            add_result_ui_buttons(buttonArea, frame_index);
 
             clear(content);
             content.html(result.get("t"));
@@ -94,7 +117,7 @@ var operations = {
         },
         "setup_ui" : function(param, element, header, content, frame_index) {
             clear(header);
-            header.append("div").attr("class", "block header-text").html("Edit expression");
+            header.append("div").attr("class", "block").html(icon_code() + '<span class="visually-hidden">Edit expression</span>');
             add_setup_ui_buttons(header.append("div").attr("class", "block right"));
 
             clear(content);
@@ -104,7 +127,9 @@ var operations = {
             add_save_cancel_field(content);
         },
         "result_ui" : function(result, element, header, content, frame_index) {
-            header.html("Expression");
+            // place icon + accessible label
+            clear(header);
+            header.append("div").attr("class", "block").html(icon_code() + '<span class="visually-hidden">Expression</span>');
             clear(content);
             if (result.size == 0) {
                 content.html("Not executed yet...");
@@ -120,7 +145,9 @@ var operations = {
             }
 
             clear(header);
-            header.append("div").attr("class", "block header-text").html(headerLeft);
+            // headerLeft may contain short name and status; show name visibly next to icon
+            var visibleName = headerLeft.replace(/<[^>]*>?/gm, '');
+            header.append("div").attr("class", "block").html(icon_code() + '<span class="frame-name">' + visibleName + '</span>');
             var button_area = header.append("div").attr("class", "block right");
             add_expression_result_ui_buttons(button_area, frame_index);
             add_result_ui_buttons(button_area, frame_index);
@@ -564,6 +591,14 @@ function load_setup() {
         setup = JSON.parse(decompressed);
         d3.select("#setup-content").text(JSON.stringify(setup, null, 2));
         d3.select("#setup-input").attr("value", compressed);
+        // ensure each frame has a stable __id for D3 data joining
+        if (setup && Array.isArray(setup.f)) {
+            setup.f.forEach(function(fr) {
+                if (fr && typeof fr === 'object' && !('__id' in fr)) {
+                    fr.__id = frame_uid++;
+                }
+            });
+        }
     }
 }
 
@@ -663,7 +698,8 @@ function new_frame(operation) {
     var default_params = JSON.stringify(operations[operation]["params"]);
     setup["f"].push({
         "op" : operation,
-        "p" : JSON.parse(default_params)
+        "p" : JSON.parse(default_params),
+        "__id": frame_uid++
     });
     results["f"].push(new Map());
 
@@ -686,7 +722,11 @@ function new_frame(operation) {
 function update() {
     var all_data = d3.zip(setup["f"], results["f"]);
 
-    var rows = d3.select("#frames").selectAll(".frame").data(all_data);
+    // Bind using stable key so DOM nodes follow data items across reorders
+    var rows = d3.select("#frames").selectAll(".frame").data(all_data, function(d) {
+        // d is [setupFrame, resultMap]
+        return d && d[0] && d[0].__id !== undefined ? d[0].__id : null;
+    });
     rows.exit().remove();
     var frames = rows.enter()
         .append("div")
@@ -709,20 +749,67 @@ function update() {
                 if (event && event.preventDefault) event.preventDefault();
             })
             .attr("class", "frame");
-    frames.append("div").attr("class", "frame-header").html("header");
-    frames.append("div").attr("class", "frame-content").html("content");
 
-    d3.select("#frames").selectAll(".frame").data(all_data).each(function (d, i) {
+    // For each entered frame, append header only for expressions; comments get a side icon and controls
+    frames.each(function(d, i) {
+        var el = d3.select(this);
+        var op = d[0]["op"];
+        el.attr('style', 'position: relative;');
+        if (op === 'e') {
+            el.append("div").attr("class", "frame-header").html("header");
+        } else if (op === 'c') {
+            // place a side icon container (left) and a controls container (top-right)
+            el.append("div").attr("class", "frame-side-icon").html("");
+            el.append("div").attr("class", "frame-controls");
+        }
+        el.append("div").attr("class", "frame-content").html("content");
+    });
+
+    // Add type-specific classes to all frames (enter + update) so they can be styled
+    d3.selectAll('#frames .frame').each(function(d, i) {
+        var el = d3.select(this);
+        var data = el.data();
+        if (!data || data.length === 0) return;
+        var op = data[0][0]["op"];
+        el.classed('frame-expression', op === 'e');
+        el.classed('frame-comment', op === 'c');
+    });
+
+    // Use keyed data join here as well so the update pass uses stable keys
+    d3.select("#frames").selectAll(".frame").data(all_data, function(d) {
+        return d && d[0] && d[0].__id !== undefined ? d[0].__id : null;
+    }).each(function (d, i) {
         var element = d3.select(this);
         var op = d[0]["op"];
         var param = d[0]["p"];
         var result = d[1];
 
-        var header = element.select(".frame-header");
         var content = element.select(".frame-content");
-
-        operations[op]["result_ui"](result, element, header, content, i);
+        if (op === 'e') {
+            var header = element.select(".frame-header");
+            operations[op]["result_ui"](result, element, header, content, i);
+        } else if (op === 'c') {
+            var side = element.select(".frame-side-icon");
+            var controls = element.select(".frame-controls");
+            // Pass side as header and controls as extra param
+            operations[op]["result_ui"](result, element, side, content, i, controls);
+        }
      });
+
+    // Ensure DOM order matches data order so elements move with their bound data
+    d3.select('#frames').selectAll('.frame').order();
+    // Debugging output and force reflow to prompt immediate repaint
+    try {
+        var dataOrder = all_data.map(function(d){ return d && d[0] ? d[0].__id : null; });
+        var domOrder = d3.selectAll('#frames .frame').nodes().map(function(n){ return n.getAttribute('data-frame-id'); });
+        console.debug('playground:update dataOrder=', dataOrder, 'domOrder=', domOrder);
+    } catch (e) { /* ignore */ }
+    try {
+        var framesNode = d3.select('#frames').node();
+        // reading offsetHeight forces layout/reflow
+        var _ = framesNode ? framesNode.offsetHeight : null;
+        console.debug('playground:update forced reflow');
+    } catch (e) { /* ignore */ }
 }
 
 function remove_frame(frame_index) {
@@ -900,6 +987,15 @@ function execute_all() {
                 }
             }
             update();
+        })
+        .catch(function(err) {
+            // Network or CORS error — record per-frame error and update UI instead of throwing
+            console.error('playground:execute_all network error', err);
+            for (var i=0; i < setup["f"].length; ++i) {
+                results["f"][i].set("executing", false);
+                results["f"][i].set("error", String(err));
+            }
+            update();
         });
 }
 
@@ -996,10 +1092,15 @@ function edit_selected() {
     var op = setup["op"];
     var param = setup["p"];
 
-    var header = frame.select(".frame-header");
     var content = frame.select(".frame-content");
-
-    operations[op]["setup_ui"](param, frame, header, content, find_frame_index(frame));
+    if (op === 'e') {
+        var header = frame.select(".frame-header");
+        operations[op]["setup_ui"](param, frame, header, content, find_frame_index(frame));
+    } else if (op === 'c') {
+        var side = frame.select(".frame-side-icon");
+        var controls = frame.select(".frame-controls");
+        operations[op]["setup_ui"](param, frame, side, content, find_frame_index(frame), controls);
+    }
     
     // Add visual indicator for edit mode
     frame.classed("edit-mode-active", true);
@@ -1047,10 +1148,15 @@ function exit_edit_selected() {
         return;
     }
 
-    var header = frame.select(".frame-header");
     var content = frame.select(".frame-content");
-
-    operations[op]["result_ui"](result, frame, header, content, find_frame_index(frame));
+    if (op === 'c') {
+        var side = frame.select(".frame-side-icon");
+        var controls = frame.select(".frame-controls");
+        operations[op]["result_ui"](result, frame, side, content, find_frame_index(frame), controls);
+    } else {
+        var header = frame.select(".frame-header");
+        operations[op]["result_ui"](result, frame, header, content, find_frame_index(frame));
+    }
     
     // Remove visual indicator for edit mode
     frame.classed("edit-mode-active", false);
