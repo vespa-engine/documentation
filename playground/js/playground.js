@@ -516,9 +516,8 @@ function setup_commands() {
             // If currently editing, save the current edit first so user text isn't lost
             if (context === contexts.EDIT) {
                 try {
-                    // If the current edit is an empty expression/comment, just exit
-                    // edit mode to discard it. Otherwise execute (save) it.
-                    if (is_expression_empty()) {
+                    // If the current edit is empty, discard it. Otherwise execute (save) it.
+                    if (is_current_edit_empty()) {
                         exit_edit_selected();
                     } else {
                         execute_selected();
@@ -537,7 +536,7 @@ function setup_commands() {
             // If currently editing, save the current edit first so user text isn't lost
             if (context === contexts.EDIT) {
                 try {
-                    if (is_expression_empty()) {
+                    if (is_current_edit_empty()) {
                         exit_edit_selected();
                     } else {
                         execute_selected();
@@ -773,29 +772,37 @@ function move_selected_down() {
 
 // Check if an expression is empty (only contains whitespace)
 function is_expression_empty() {
-    // Only check in edit mode and for expressions
-    if (context !== contexts.EDIT) {
-        return false;
-    }
+    var edit = get_current_edit();
+    return edit !== null && edit.op === 'e' && edit.text === '';
+}
 
+// Check if the current edit (comment or expression) is empty
+function is_current_edit_empty() {
+    var edit = get_current_edit();
+    return edit !== null && edit.text === '';
+}
+
+// Returns current edit info or null: { op: 'e'|'c', text: string }
+function get_current_edit() {
+    if (context !== contexts.EDIT) return null;
     var frame = d3.select(selected);
-    if (!frame.empty()) {
+    if (frame.empty()) return null;
+    try {
         var data = frame.data();
         var setup = data[0][0]; // because of zip in update
         var op = setup["op"];
-
-        // Only check for expressions
-        if (op === "e") {
-            try {
-                var value = get_textarea_field_value(frame, "expression_expression");
-                return value === "";
-            } catch (e) {
-                // If there's an error (e.g., textarea not found), return false
-                return false;
-            }
+        if (op === 'e') {
+            var value = get_textarea_field_value(frame, 'expression_expression');
+            return { op: 'e', text: value };
+        } else if (op === 'c') {
+            var ta = frame.select('textarea');
+            if (ta.empty()) return { op: 'c', text: '' };
+            return { op: 'c', text: ta.property('value').trim() };
         }
+    } catch (e) {
+        return null;
     }
-    return false;
+    return null;
 }
 
 function execute_selected() {
@@ -1345,6 +1352,8 @@ function main() {
     setupThemeToggle();
 
     // Global click handler: when editing a frame, clicking outside should save and exit edit mode
+    // However, if the current edit is empty (comment or expression), warn the user instead
+    // of silently discarding/saving it. Allow clicks on the new-frame buttons to proceed.
     document.addEventListener('click', function(event) {
         if (context !== contexts.EDIT) return;
 
@@ -1359,8 +1368,24 @@ function main() {
             node = node.parentElement;
         }
 
-        // If click was outside the selected frame, save (execute) and exit edit mode
+        // If click was outside the selected frame
         if (!inside) {
+            // If the current edit is empty, show a warning instead of exiting.
+            // Allow clicks on the new comment/expression buttons to proceed.
+            var clickedNewButton = false;
+            try {
+                if (event.target && event.target.closest) {
+                    clickedNewButton = event.target.closest('#new-comment-cmd, #new-expression-cmd') != null;
+                }
+            } catch (e) { /* ignore */ }
+
+            if (is_current_edit_empty() && !clickedNewButton) {
+                show_notification("You're editing an empty frame. Enter text or press Cancel/Escape to discard.", "warning", 3000);
+                event.stopPropagation();
+                event.preventDefault();
+                return;
+            }
+
             // execute_selected saves and exits edit mode (or shows warning if expression empty)
             try {
                 execute_selected();
