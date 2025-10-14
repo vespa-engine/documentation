@@ -133,6 +133,10 @@ also see <a href="../document-v1-api-guide.html#troubleshooting">troubleshooting
         <li><a href="#totimestamp">toTimestamp</a></li>
         <li><a href="#includeRemoves">includeRemoves</a></li>
       </ul>
+      Optional request headers:
+      <ul>
+        <li><a href="#accept">Accept</a> - specify the desired response format.</li>
+      </ul>
     </td>
   </tr>
   <tr>
@@ -611,6 +615,67 @@ also see <a href="../document-v1-api-guide.html#troubleshooting">troubleshooting
 
 
 
+<h2 id="http-request-headers">HTTP request headers</h2>
+
+<table class="table">
+  <thead>
+  <tr>
+    <th>Header</th>
+    <th>Values</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <th>Accept</th>
+    <td>
+      <code>application/json</code> or <code>application/jsonl</code>
+    </td>
+    <td>
+      <p id="accept">
+        The <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept">Accept</a> header
+        lets the client specify to the server what
+        <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types">media (MIME) types</a> it
+        accepts as the response format.
+      </p>
+      <p>
+        All Document V1 API calls support <code>application/json</code> for returning <a href="#json">JSON</a> responses.
+        <a href="#stream">Streaming visiting</a> additionally supports <code>application/jsonl</code> for returning
+        <a href="#json-lines">JSON Lines</a> (JSONL) since Vespa 8.593.
+      </p>
+      <p>
+        To ensure compatibility with older versions, make sure to check the <code>Content-Type</code>
+        <a href="#http-response-headers">HTTP response header</a>. A JSONL response will always have a
+        <code>Content-Type</code> media type of <code>application/jsonl</code>, and JSON wil always have
+        a media type of <code>application/json</code>.
+      </p>
+        Multiple acceptable types can be specified. JSONL will be returned if (and only if)
+        <code>application/jsonl</code> is part of the list <em>and</em> no other media
+        types have a higher preference.
+      </p><p>
+        Examples where JSONL will be returned:
+<pre>
+Accept: application/jsonl
+</pre>
+<pre>
+Accept: application/json;q=0.9, application/jsonl
+</pre>
+        Example where JSON (not JSONL) will be returned, since JSON has a higher preference:
+<pre>
+Accept: application/json;q=0.8, application/jsonl;q=0.5
+</pre>
+      </p><p>
+        For backwards compatibility, if no <code>Accept</code> header is provided
+        (or if no provided media types are acceptable) <code>application/json</code>
+        is assumed.
+      </p>
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+
+
 <h2 id="request-body">Request body</h2>
 <p>
   POST and PUT requests must include a body for single document operations; PUT must
@@ -742,13 +807,41 @@ also see <a href="../document-v1-api-guide.html#troubleshooting">troubleshooting
       </p>
     </td>
   </tr>
+  <tr>
+    <th>Content-Type</th>
+    <th><code>application/json</code> or <code>application/jsonl</code></th>
+    <td>
+      <p id="content-type">
+        The <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types">media type</a>
+        (MIME type) of the response body.
+      </p>
+      <p>
+        Either <code>application/json</code> for <a href="#json">JSON</a> responses or
+        <code>application/jsonl</code> for <a href="#json-lines">JSON Lines</a> (JSONL) responses.
+      <p>
+        The content type may include additional parameters such as <code>charset</code>.
+      </p>
+      <p>
+        Example header:
+<pre>
+Content-Type: application/json; charset=UTF-8
+</pre>
+      </p>
+    </td>
+  </tr>
   </tbody>
 </table>
 
 
-<h2 id="response-format">Response format</h2>
+<h2 id="response-formats">Response formats</h2>
 <p>
-Responses are in JSON format, with the following fields:
+Responses are by default in JSON format. <a href="#stream">Streaming visiting</a>
+supports an optional <a href="#json-lines">JSON Lines</a> (JSONL) response format
+since Vespa 8.593.
+</p>
+<h3 id="json">JSON</h3>
+<p>
+JSON responses have the following fields:
 </p>
 <table class="table">
   <thead>
@@ -813,3 +906,174 @@ A <code>message</code> can be returned for failed operations:
     "message": "<message text>"
 }
 {% endhighlight %}</pre>
+
+<h3 id="json-lines">JSON Lines</h3>
+<p>
+  A JSON Lines (JSONL) response is a stream of newline-separated JSON objects. Each line contains
+  exactly one JSON object, and each JSON object takes up exactly one line. No line breaks are
+  allowed within an object.
+</p>
+<p>
+  JSONL is an optional response format for <a href="#stream">streaming visiting</a>, enabling
+  efficient client-side parsing and fine-grained, continuous tracking of visitor progress.
+  The JSONL response format is currently not supported for any other operations than streaming visiting.
+</p>
+<p>
+  The JSONL response format is enabled by providing a HTTP <a href="#accept">Accept</a> request
+  header that specifies <code>application/jsonl</code> as the preferred response type, and will
+  have a <a href="#content-type">Content-Type</a> of <code>application/jsonl</code> if the server
+  is on a version that supports JSONL visiting. Clients must check the <code>Content-Type</code>
+  header to ensure they are getting the format they expect.
+</p>
+<p>
+  JSONL support requires Vespa 8.593 or newer.
+</p>
+<p>
+Example response body:
+</p>
+<pre>{% highlight json %}
+{"put":"id:ns:music::one","fields":{"foo":"bar"}}
+{"put":"id:ns:music::two","fields":{"foo":"baz"}}
+{"continuation":{"token":"...","percentFinished":40.0}}
+{"put":"id:ns:music::three","fields":{"foo":"zoid"}}
+{"remove":"id:ns:music::four"}
+{"continuation":{"token":"...","percentFinished":50.0}}
+{"continuation":{"token":"...","percentFinished":60.0}}
+{"put":"id:ns:music::five","fields":{"foo":"berg"}}
+{"continuation":{"token":"...","percentFinished":70.0}}
+{"sessionStats":{"documentCount":5}}
+{"continuation":{"percentFinished":100.0}}
+{% endhighlight %}</pre>
+<p>
+  Note that the <code>"..."</code> values are placeholders for (from a client's perspective) opaque
+  string values.
+</p>
+<p>
+<h4 id="jsonl-response-objects">JSONL response objects</h4>
+<p>
+{% include note.html content='
+  To be forwards compatible with future extensions to the response format, ignore unknown objects and fields.'%}
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Object</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr><th>put</th><td>A document <a href="document-json-format.html#put">Put</a> operation in the same
+    format as that accepted by Vespa's JSONL feed API.</td></tr>
+  <tr><th>remove</th><td>A document <a href="document-json-format.html#remove">Remove</a> operation in
+    the same format as that accepted by Vespa's JSONL feed API.
+    Only present if <a href="#includeRemoves">includeRemoves</a> is <code>true</code>.</td></tr>
+  <tr><th>continuation</th><td>
+    <p>A visitor <a href="#continuation">continuation</a>.</p>
+    <p>Possible sub-object fields:</p>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Field name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>token</code></td>
+          <td>
+            <p>An opaque string value representing the current visitor progress through the data space.
+            This value can be provided as part of a subsequent visitor request to continue visiting
+            from where the last request left off. Clients should not attempt to parse the contents
+            of this string, as it's considered an internal implementation detail and may be changed
+            (in a backwards compatible way) without any prior announcement.</p>
+          </td>
+        </tr>
+        <tr>
+          <td><code>percentFinished</code></td>
+          <td>
+            A floating point number between 0 and 100 (inclusive) that gives an approximation of how
+            far the visitor has progressed through the data space.
+          </td>
+        </tr>
+    </table>
+    <p>
+      The last line of a successful request should always be a <code>continuation</code> object.
+    </p>
+    <p>
+      If (and only if) visiting has completed, the last <code>continuation</code> object will have a
+      <code>percentFinished</code> value of <code>100</code> and will <em>not</em> have a <code>token</code> field.
+    </p>
+  </td></tr>
+  <tr><th>message</th><td>
+    <p>
+      A message received from the backend visitor session. Can be used by clients to report
+      problems encountered during visiting.
+    </p>
+    <p>Possible sub-object fields:</p>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Field name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>text</code></td>
+          <td>The actual message, in unstructured text</td>
+        </tr>
+        <tr>
+          <td><code>severity</code></td>
+          <td>The severity of the message. One of <code>info</code>, <code>warning</code> or <code>error</code>.</td>
+        </tr>
+    </table>
+  </td></tr>
+  <tr><th>sessionStats</th><td>
+    <p>Statistics from the backend visitor session.</p>
+    <p>Possible sub-object fields:</p>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Field name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>documentCount</code></td>
+          <td>
+            The number of visited and selected documents. If <a href="#includeRemoves">includeRemoves</a>
+            is <code>true</code>, this also includes the number of returned removes (tombstones).
+          </td>
+        </tr>
+    </table>
+    </td></tr>
+  </tbody>
+</table>
+<p>
+ Note that it's possible for a successful response to contain zero <code>put</code> or <code>remove</code>
+ objects if the <a href="#selection">selection</a> did not match any documents.
+</p>
+
+<h4 id="differences-from-json-response-format">Differences from the JSON format</h4>
+<p>
+  The biggest difference in semantics between the JSON and JSONL response formats is when, and how,
+  <a href="#continuation">continuation</a> objects are returned.
+</p>
+<p>
+  In the JSON format a continuation is included <em>once</em> at the very end of the response object
+  and covers the progress made by the entire request. If the request somehow fails after receiving
+  99% of all documents but prior to receiving the continuation field, the client must retry the
+  entire request from the previously known continuation value. This can result in getting many requested
+  documents twice; once from the incomplete first request and once more from the second request that
+  covers the same part of the data space.
+</p>
+<p>
+  In the JSON Lines format, a contination object is emitted to the stream <em>every time</em> a backend
+  data <a href="../content/buckets.html">bucket</a> has been fully visited, as well as at the end of the
+  response stream. This may happen many times in a response. Each continuation object <em>subsumes</em>
+  the progress of previously emitted continuations, meaning that a client only needs to remember the
+  <em>most recent</em> continuation value it observed in the response. If the request fails prior to
+  completion, the client can specify the most recent continuation in the next request; it will then only
+  receive duplicates for the data buckets that were actively being processed when the request failed.
+</p>
