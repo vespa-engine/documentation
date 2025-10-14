@@ -669,6 +669,18 @@ function update() {
                     select_frame(this); 
                 }
             })
+            .on("dblclick", function(event) {
+                // Double-click to edit the frame (also covers double-tap on some devices)
+                if (context !== contexts.EDIT) {
+                    // Select this frame and enter edit mode
+                    select_frame(this);
+                    // Use edit_selected which operates on the currently selected frame
+                    edit_selected();
+                }
+                // Prevent further propagation so dblclick doesn't trigger other handlers
+                if (event && event.stopPropagation) event.stopPropagation();
+                if (event && event.preventDefault) event.preventDefault();
+            })
             .attr("class", "frame");
     frames.append("div").attr("class", "frame-header").html("header");
     frames.append("div").attr("class", "frame-content").html("content");
@@ -1303,4 +1315,31 @@ function main() {
     setup_examples_hover();
     setup_header_link_tracking();
     setupThemeToggle();
+
+    // Global click handler: when editing a frame, clicking outside should save and exit edit mode
+    document.addEventListener('click', function(event) {
+        if (context !== contexts.EDIT) return;
+
+        // If there's no selected frame, ignore
+        if (!selected) return;
+
+        // Determine if the click target is inside the selected frame
+        var node = event.target;
+        var inside = false;
+        while (node) {
+            if (node === selected) { inside = true; break; }
+            node = node.parentElement;
+        }
+
+        // If click was outside the selected frame, save (execute) and exit edit mode
+        if (!inside) {
+            // execute_selected saves and exits edit mode (or shows warning if expression empty)
+            try {
+                execute_selected();
+            } catch (e) {
+                // Fallback: just exit edit mode if execute fails
+                try { exit_edit_selected(); } catch (e2) {}
+            }
+        }
+    });
 }
