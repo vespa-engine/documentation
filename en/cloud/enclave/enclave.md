@@ -27,7 +27,7 @@ resource costs from your cloud provider in _addition_ to the Vespa Cloud costs.
 * [Architecture and security](/en/cloud/enclave/gcp-architecture)
 
 ## Guides
-* [Log Archive](/en/cloud/enclave/archive)
+* [Log archive](/en/cloud/enclave/archive)
 * [Operations and Support](/en/cloud/enclave/operations)
 
 ## FAQ
