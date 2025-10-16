@@ -18,7 +18,7 @@ or when a virtual machine is deprovisioned from the application.  The consequenc
 that frequency of uploads will depend on the activity of the Vespa application.
 
 ## Directory structure
-The directory structure in the bucket is as follows
+The directory structure in the bucket is as follows:
 
 ```
 <tenant>/<application>/<instance>/<host>/logs/<logtype>/<logfile>
