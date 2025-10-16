@@ -12,12 +12,10 @@ Setting up Vespa Cloud Enclave requires:
    Go through the [AWS tutorial](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) as needed.
 4. Deployment of a Vespa application.
 
-
 ### 1. Vespa Cloud Tenant setup
 
 Register at [Vespa Cloud](https://console.vespa-cloud.com) or use an existing tenant.
 Note that the tenant must be on a [paid plan](https://vespa.ai/pricing/).
-
 
 ### 2. Onboarding
 
@@ -26,14 +24,15 @@ Also include the [AWS account ID](https://docs.aws.amazon.com/accounts/latest/re
 to associate with the tenant.
 
 {% include note.html content='We recommend using a _dedicated_ account for your Vespa Cloud Enclave.
-Resources in this account will be fully managed by Vespa Cloud.' %}
+Vespa Cloud will manage resources in the Enclave VPCs created in the AWS resource provisioning step. Primarily EC2 instances, load balancers and service endpoints.' %}
 
 One account can host all your Vespa applications, there is no need for multiple tenants or accounts.
 
-
 ### 3. Configure AWS Account
 
-The same AWS account used in step two must be prepared for deploying Vespa applications.
+The same AWS account used in step two must be prepared for deploying Vespa applications using either *Terraform* or *Cloudformation*.
+
+#### Terraform
 Use [Terraform](https://www.terraform.io/) to set up the necessary resources using the
 [modules](https://registry.terraform.io/modules/vespa-cloud/enclave/aws/latest) published by the Vespa team.
 
@@ -56,6 +55,11 @@ features you must re-apply your terraform templates with the latest release.
 The [notification system](/en/cloud/notifications.html)
 will let you know when a new release is available.
 
+#### Cloudformation
+
+Vespa also supports Cloudformation if you prefer the AWS-native solution.
+Download the Cloudformation stacks in our [github repository](https://github.com/vespa-cloud/cloudformation-aws-enclave) and
+refer to the README for stack-specific instructions.
 
 ### 4. Deploy a Vespa application
 
@@ -73,7 +77,6 @@ Useful resources are [getting started](/en/cloud/getting-started)
 and [migrating to Vespa Cloud](/en/cloud/migrating-to-cloud.html) -
 put _deployment.xml_ next to _services.xml_.
 
-
 ## Next steps
 
 After a successful deployment to the [dev](https://cloud.vespa.ai/en/reference/environments.html#dev) environment,
@@ -82,7 +85,6 @@ The _dev_ environment is ideal for this, with rapid deployment cycles.
 
 For production serving, deploy to the [prod](https://cloud.vespa.ai/en/reference/environments.html#prod) environment -
 follow the steps in [production deployment](/en/cloud/production-deployment.html).
-
 
 ## Enclave teardown
 

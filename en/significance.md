@@ -22,8 +22,8 @@ A local model is node-specific and a global model is shared across nodes.
 # Local significance model
 
 For `string` fields indexed with [bm25](reference/bm25.html) or [nativeRank](reference/nativerank.html),
-Vespa creates a local significance model on each content node.
-Each node uses its own local model for the queries it processes.
+Vespa creates a local significance model on each content node from the documents it contains.
+For each query term, the document frequency is computed by aggregating the per-field document frequencies across all fields being searched.
 
 Different nodes can have different significance values for the same term.
 In large collections, this difference is usually small and doesn’t affect ranking quality.
