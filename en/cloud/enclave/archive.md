@@ -13,6 +13,10 @@ These storage buckets are used to archive logs from the machines that run Vespa 
 There will be one storage bucket per Vespa Cloud Zone that is configured in the Enclave.
 The name of the bucket will depend on the cloud provider you are setting up the Enclave in.
 
+Files are synchronized to the archive bucket when the file is rotated by the logging system,
+or when a virtual machine is deprovisioned from the application.  The consequence of this is
+that frequency of uploads will depend on the activity of the Vespa application.
+
 ## Directory structure
 The directory structure in the bucket is as follows
 
