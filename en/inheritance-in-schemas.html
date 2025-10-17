@@ -1,0 +1,272 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Inheritance in schemas"
+---
+
+<p>
+Both document types and full schemas can be inherited to make it easy to
+design a structured application package with little duplication.
+Document type inheritance defines a type hierarchy which is also useful for applications that
+<a href="federation.html">federate queries</a>
+as queries can be written to the common supertype.
+This guide covers the different elements in the schema that supports inheritance:
+</p>
+<ol>
+    <li>Schemas</li>
+    <li>Document types</li>
+    <li>Rank profiles</li>
+    <li>Document summaries</li>
+</ol>
+<img src="/assets/img/inheritance-overview.svg" width="600px" height="auto"
+     alt="Schema elements that support inheritance"/>
+
+{% include note.html content="Inheritance is not to be confused with <a href='parent-child.html'>parent/child</a>,
+which is a feature to import field values at query time."%}
+
+
+<h2 id="schema-inheritance">Schema inheritance</h2>
+<p>
+A schema that inherits another gets all the content of the parent schema
+as if it was defined inside the inheriting schema.
+A schema that inherits another must also (explicitly) inherit its document type:
+</p>
+<pre>
+schema books <span class="pre-hilite">inherits items</span> {
+    document books <span class="pre-hilite">inherits items</span>  {
+        field author type string {
+            indexing: summary | index
+        }
+    }
+}
+</pre>
+
+
+<h2 id="document-type-inheritance">Document type inheritance</h2>
+<p>
+A document type can inherit another document type. This will include all fields, also fields declared outside the
+document block in the schema, rank-profiles defined in the super-schema can then be inherited in the schema of this
+document, see <a href="#rank-profile-inheritance">Rank profile inheritance</a> below.
+</p>
+<p>
+Both schemas <em>music</em> and <em>books</em> have the <em>title</em> field through inheritance:
+</p>
+<code>my-app/schemas/items.sd</code>:
+<pre>
+document items {
+    field title type string {
+        indexing: summary | index
+    }
+}
+</pre>
+
+<code>my-app/schemas/books.sd</code>:
+<pre>
+schema books {
+    document books <span class="pre-hilite">inherits items</span> {
+        field author type string {
+            indexing: summary | index
+        }
+    }
+}
+</pre>
+
+<code>my-app/schemas/music.sd</code>:
+<pre>
+schema music {
+    document music <span class="pre-hilite">inherits items</span> {
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+}
+</pre>
+<p>
+This is equivalent to:
+</p>
+<code>my-app/schemas/books.sd</code>:
+<pre>
+schema books {
+    document books {
+        field title type string {
+            indexing: summary | index
+        }
+        field author type string {
+            indexing: summary | index
+        }
+    }
+}
+</pre>
+
+<code>my-app/schemas/music.sd</code>:
+<pre>
+schema music {
+    document music  {
+        field title type string {
+            indexing: summary | index
+        }
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+}
+</pre>
+<p>
+Notes:
+</p>
+<ul>
+    <li>Multiple inheritance and multiple levels of inheritance is supported.</li>
+    <li>Inheriting a document type defined in another content cluster is allowed.</li>
+    <li>Overriding fields defined in supertypes is not allowed.</li>
+    <li><a href="reference/schema-reference.html#import-field">Imported fields</a>
+        defined in supertypes are not inherited.</li>
+</ul>
+
+
+<h2 id="rank-profile-inheritance">Rank profile inheritance</h2>
+<p>
+Where fields define the document types, rank profiles define the computations over the documents.
+Rank profiles can be inherited from rank-profiles defined in the same schema, or defined in another schema when this
+document inherits the document defined in the schema where the rank profile is defined:
+</p>
+
+<code>my-app/schemas/items.sd</code>:
+<pre>
+schema items {
+    document items {
+        field title type string {
+            indexing: summary | index
+        }
+    }
+
+    rank-profile items_ranking_base {
+        function title_score() {
+            expression: fieldLength(title)
+        }
+        first-phase {
+            expression: title_score
+        }
+        summary-features {
+            title_score
+        }
+    }
+}
+</pre>
+
+<code>my-app/schemas/books.sd</code>:
+<pre>
+schema books {
+    document books <span class="pre-hilite">inherits items</span> {
+        field author type string {
+            indexing: summary | index
+        }
+    }
+
+    rank-profile items_ranking <span class="pre-hilite">inherits items_ranking_base</span> {}
+
+    rank-profile items_subschema_ranking <span class="pre-hilite">inherits items_ranking_base</span> {
+        first-phase {
+            expression: title_score + fieldMatch(author)
+        }
+        summary-features <span class="pre-hilite">inherits items_ranking_base</span> {
+            fieldMatch(author)
+        }
+    }
+}
+</pre>
+
+<code>my-app/schemas/music.sd</code>:
+<pre>
+schema music {
+    document music <span class="pre-hilite">inherits items</span> {
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+
+    rank-profile items_ranking <span class="pre-hilite">inherits items_ranking_base</span> {}
+
+    rank-profile items_subschema_ranking <span class="pre-hilite">inherits items_ranking_base</span> {
+        first-phase {
+            expression: title_score + fieldMatch(artist)
+        }
+        summary-features <span class="pre-hilite">inherits items_ranking_base</span> {
+            fieldMatch(artist)
+        }
+    }
+}
+</pre>
+<p>
+<em>items_ranking</em> can be considered the "base" ranking.
+Pro-tip: Set this as the <em>default</em> rank profile
+by modifying the default <a href="query-profiles.html">query profile</a>:
+</p>
+<code>my-app/search/query-profiles/default.xml</code>:
+<pre>
+&lt;query-profile id="default"&gt;
+    &lt;field name="ranking.profile"&gt;items_ranking&lt;/field&gt;
+&lt;/query-profile&gt;
+</pre>
+<p>
+Queries using <em>ranking.profile=default</em> will then use the first-phase ranking defined in <em>items.sd</em>.
+</p>
+<p>
+Another way to inherit behavior is to override the first-phase ranking in the sub-schemas,
+still using functions defined in the super-schema (e.g. <em>title_score</em>).
+</p>
+
+<h3 id="summary-features">Summary features</h3>
+<p>
+<a href="reference/schema-reference.html#summary-features">Summary-features</a> and
+<a href="reference/schema-reference.html#match-features">match-features</a>
+are rank features computed during ranking,
+to be included in <a href="reference/default-result-format.html">results</a>.
+These features can be inherited from parent rank profiles - the
+above example uses <code>inherits</code> to include scores from
+features in super- and sub-schema - example result:
+</p>
+<pre>{% highlight json %}
+"summaryfeatures": {
+    "fieldMatch(author)": 0,
+    "rankingExpression(title_score)": 4
+}
+{% endhighlight %}</pre>
+<p>
+In the examples above, both <em>books</em> and <em>music</em> schemas implement rank profiles
+with same names (e.g. <em>items_subschema_ranking</em>),
+so they can be used in queries spanning both.
+If a query's rank profile can not be found in a given schema,
+Vespa's default rank profile <a href="nativerank.html">nativerank</a> is used.
+</p>
+<p>
+<a href="reference/schema-reference.html#inputs">Inputs</a> to a rank profile are automatically inherited from
+the parent rank profile. If a new inputs block is defined in a child rank profile, those inputs will be
+added cumulatively to those defined in the parent.
+</p>
+
+
+<h2 id="document-summary-inheritance">Document summary inheritance</h2>
+<p>
+<a href="document-summaries.html">Document summaries</a> can inherit others defined in the same
+or an inherited schema.
+</p>
+<code>my-app/schemas/books.sd</code>:
+<pre>
+schema books {
+    document books {
+        field title type string {
+            indexing: summary | index
+        }
+        field author type string {
+            indexing: summary | index
+        }
+    }
+
+    document-summary items_summary_tiny {
+        summary title {}
+    }
+
+    document-summary items_summary_full <span class="pre-hilite">inherits items_summary_tiny</span> {
+        summary author {}
+    }
+}
+</pre>
