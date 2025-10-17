@@ -3,42 +3,43 @@
 title: "Ranking"
 ---
 
-<p>
-  Vespa ranks documents retrieved by a query by performing computations or inference that produces a score for each document. 
-  The documents are sorted in descending order by this score, and highest ranking documents are returned to the user. Ranking
-  is useful in search and recommendation systems, where the goal is to present the most relevant results to the user.
-</p>
-<p>
-  Ranking in Vespa is configured using 
-  declarative <a href="ranking-expressions-features.html">ranking expressions</a>, 
-  These expressions vary from basic mathematical operations with <a href="reference/rank-features.html">rank features</a> to
-  more complex <a href="tensor-examples.html">tensor expressions</a> or 
-  machine-learned models. These ranking expressions are configured in <a href="#rank-profiles">rank profiles</a> within document <a href="schemas.html">schemas</a>.
-</p>
+<p><i>Ranking</i> in Vespa is the computation that is done on matching documents during query execution.
+These are specified as <a href="ranking-expressions-features.html">ranking functions</a> in
+<a href="#rank-profile">rank profiles</a> in the schema.</p>
 
-<h2 id="retrieval-versus-ranking">Retrieval versus ranking</h2>
-<p>To understand the difference between retrieval (matching) and ranking, consider the 
-  following text-search oriented Vespa query example,
-  expressed in JSON POST format using Vespa's <a href="query-language.html">query language</a>:</p>
+<p>The special function named <code>first-phase</code> will determine the initial <i>rank</i> of the matches,
+such that the top k can be selected as response to a query:</p>
+
 <pre>
-  {
-    "yql": "select * from doc where text contains \"vespa\"",
-    "ranking": {
-      "profile": "my-rank-profile"
-    },
-    "inputs": {
-      "query(user_context)": [0.1, 0.2, 0.3]
+  rank-profile my-rank-profile {
+    first-phase {
+      expression: 0.7 * bm25(text) + 0.3 * attribute(popularity)
     }
   }
-  </pre>
-<p>
-  The <code>yql</code> part of the query specifies the retrieval part, which retrieves documents that contain the word "vespa".
-  The <code>ranking</code> part specifies the ranking profile to use when <strong>ranking</strong> the retrieved documents. 
-  This profile defines how to compute the score for each document retrieved by the query.
-</p>
+</pre>
+
+
+<h2 id="ranking-functions-and-features">Ranking functions and features</h2>
+
+<p>The ranking functions can be any mathematical function combining rank features,
+including <a href="https://docs.vespa.ai/en/tensor-user-guide.html#ranking-with-tensors">tensor math</a> and
+<a href="#machine-learned-model-inference">machine-learned models</a>.</p>
+
+<p>The rank features these functions can use are of three categories:</p>
+
+<ul>
+    <li><b>Document features</b>, using <code>attribute(fieldName)</code>: Any document field which has <code>attribute</code> in the indexing statement.</li>
+    <li><b>Query features</b>, aka inputs, using <code>query(name)</code>: Any value sent with the query as an input. When these are tensors
+    (not scalars) they must be declared as an input in the rank profile.
+    <li><b>Match features</b>: A built-in feature which says something about how well a query and document matches, e.g. bm25 or closeness.</li>
+</ul>
+
+<p>Refer to the <a href="reference/rank-features.html">full list of rank features</a>.</p>
+
+<p>Query features (inputs) that are tensors must be declared in the rank profile:</p>
 
 <pre>
-  rank-profile my-rank-profile inherits default {
+  rank-profile my-rank-profile {
     inputs {
       query(user_context) tensor&lt;float&gt;(x[3])
     }
@@ -47,30 +48,38 @@ title: "Ranking"
     }
   }
 </pre>
-<p>
-  The <code>first-phase</code> part of the rank profile specifies the ranking expression to use when scoring
-  the retrieved documents. In this example, the expression is a combination of the <a href="reference/bm25.html">BM25</a> 
-  text matching feature and a dot product between the query and document context tensors using 
-  Vespa <a href="tensor-user-guide.html#ranking-with-tensors">tensor computations</a>. </p>
 
-<p>
-  Since the query matched against the <em>text</em> field, Vespa can calculate text matching 
-  rank features, such as <a href="reference/bm25.html">bm25</a>. 
-</p>
+<p>This is also how the type of query vectors in vector search are declared.</p>
 
-<p>
-  The <code>query(user_context)</code> tensor is another feature that is passed with the query request, but does
-  not match against any field in the document. Instead, it is used to compute a score based on the dot product
-  with the <code>document_context</code> attribute. This is an example of how Vespa can use additional
-  features in ranking, even if they do not match against any field in the document.
-</p>
+
+<h2 id="rank-profiles">Rank profiles</h2>
+
+<p>A schema can have any number of rank profiles specifying computations and ranking
+for different use cases, experiments, and so on. Queries select one using the
+<a href="reference/query-api-reference.html#ranking.profile">ranking.profile</a> parameter
+in requests or a <a href="query-profiles.html">query profile</a>.
+If no profile is specified in the request, the one called <code>default</code> is used, and
+if that isn't specified in the schema, a default one ranking by the <a href="nativerank.html">nativeRank</a>
+feature is used. Another built-in rank profile <code>unranked</code> is also always available.
+Specifying this boosts serving performance in queries which do not need ranking because ordering is not important or
+<a href="reference/sorting.html">explicit field sorting</a> is used.</p>
+
+<p>To avoid very long schema files, rank profiles can also be specified in their own files in the
+application package, named
+<code>schemas/[schema-name]/[profile-name].profile</code>.
+See the <a href="reference/schema-reference.html#rank-profile">schema reference</a> for documentation
+of all the content of rank profiles.
+
+<p>Rank profiles can inherit other profiles to avoid duplication, as in
+<code>rank-profile myProfile inherits default, another</code>.</p>
+
 
 <h2 id="phased-ranking">Phased ranking</h2>
 
-<p>Rank profiles can define multiple <a href="phased-ranking.html">ranking phases</a>, where you can define different ranking expressions
-  that are applied in sequence. This is useful for separating the ranking logic into multiple steps
-  where the first phase is executed for all retrieved documents and the second-phase is executed for the top-scoring
-  documents from the first-phase. This can be used to direct more computation towards the most promising candidate documents.
+<p>In addition to first-phase which specify the initial ranking that will be applied
+on all matching documents during matching, rank profiles can also specify functions
+that will be applied to <i>rerank</i> the top k documents before returning the final result.
+This is useful to direct more computation towards the most promising candidate documents:
 
 <pre>
 schema myapp {
@@ -82,63 +91,85 @@ schema myapp {
                 attribute(quality) * freshness(timestamp) + bm25(title)
             }
         }
+
         second-phase {
-            expression: sum(onnx(my_onnx_model))
-            rerank-count: 50
+            expression: xgboost(my_xgboost_reranker)
+            rerank-count: 1000   # per content node
         }
+
         global-phase {
-          expression: sum(onnx(my_larger_onnx_model))
-          rerank-count: 20
-      }
+          expression: sum(onnx(my_large_onnx_model))
+          rerank-count: 20  # globally
+        }
 
     }
+
 }
 </pre>
 
-<h2 id="machine-learned-model-inference">Machine-Learned model inference</h2>
+<p>The <code>second-phase</code> expression is executed locally on the content node, using local data.
+This is efficient on thousands of candidates. The <code>global-phase</code> expression
+is executed on the global result set after merging, in the container node and is best used for
+any very expensive and high quality final reranking.
+See <a href="phased-ranking.html">phased ranking</a> for details.</p>
 
-<p>To achieve better ranking accuracy, most organizations turn to machine learned ranking. 
-  Vespa supports importing ML models in these formats:</p>
 
-<ul>
-    <li><a href="onnx.html">ONNX</a>, allowing importing models from popular ML frameworks like Tensorflow, PyTorch and scikit-learn.</li>
-    <li><a href="xgboost.html">XGBoost</a></li>
-    <li><a href="lightgbm.html">LightGBM</a></li>
-</ul>
+<h2 id="ranking-functions">Ranking functions</h2>
 
-<p>As these are exposed as rank features, it is possible to rank documents using a <em>model ensemble</em>, or unify 
-  models from different frameworks in a single rank-profile. 
-  Models are deployed in <a href="applications.html">application packages</a> or downloaded from urls.
-</p>
-
-<!-- ToDo: Not exclusive list, we can represent lots of model, logistic regression etc. Also mention PyTorch through ONNX. -->
-
-<h2 id="rank-profiles">Rank profiles</h2>
-<p>Ranking expressions are defined in <a href="reference/schema-reference.html#rank-profile">rank profiles</a> -
-either inside the schema or equivalently in their own files in the
-<a href="reference/application-packages-reference.html">application package</a>, named
-<code>schemas/[schema-name]/[profile-name].profile</code>.</p>
-
-<p>One schema can have any number of rank profiles for implementing e.g. different use cases
-or <a href="testing.html#feature-switches-and-bucket-tests">bucket testing</a> variations.
-If no profile is specified in the schema, the <a href="nativerank.html">default (nativeRank)</a>
-profile is used.</p>
-
-<p>Rank profiles can <em>inherit</em> other profiles. This makes it possible to define complex profiles and variants
-without duplication.</p>
-
-<p>Queries select a rank profile using the
-<a href="reference/query-api-reference.html#ranking.profile">ranking.profile</a> argument
-in requests or a <a href="query-profiles.html">query profiles</a>,
-or equivalently in <a href="searcher-development.html">Searcher</a> code, by</p>
+<p>A rank profile can define any number of functions which can be used in other ranking
+expressions or (when taking no arguments) be returned with results.</p>
 
 <pre>
-query.getRanking().setProfile("my-rank-profile");
+schema myapp {
+
+    rank-profile my-rank-profile {
+
+        function clickProbability() {
+            expression: xgboost('myClickModel')
+        }
+
+        function textRanking(field) {
+            expression: 0.7 * bm25(field) + 0.3 * nativeProximity(field)
+        }
+
+        first-phase {
+            expression {
+                0.1 * clickProbability()
+                0.2 * closeness(embeddingsField) +
+                0.3 * textRanking(titleField) +
+                0.4 * textRanking(bodyField)
+            }
+        }
+
+        summary-features {
+            clickProbability() # Returned with every mathed document
+        }
+
+    }
+
+}
 </pre>
 
-<p>If no profile is specified in the query, the one called <code>default</code> is used.
-This profile is available also if not defined explicitly. The default rank-profile uses <a href="nativerank.html">nativeRank</a>
-which is a text-scoring only feature. Another built-in rank profile <code>unranked</code> is also always available.
-Specifying this boosts serving performance in queries which do not need ranking because ordering is not important or
-<a href="reference/sorting.html">explicit field sorting</a> is used.</p>
+<p>Read more in <a href="ranking-expressions-features.html">ranking expressions and functions</a>.</p>
 
+
+<h2 id="layered-ranking">Layered ranking</h2>
+
+<p>In addition to ranking <i>documents</i>, a rank profile can also rank and select array elements within documents.
+This is most commonly used to select individual chunks within documents in RAG applications, see
+<a href="working-with-chunks.html#layered-ranking-selecting-chunks-to-return">working with chunks</a>.</p>
+
+
+
+<h2 id="machine-learned-model-inference">Machine-Learned model inference</h2>
+
+<p>The best quality is achieved by learning relevance functions using machine learning from a training set.
+Vespa lets you use machine-learned models in these formats in distributed ranking (first-and second phase):</p>
+
+<ul>
+    <li><a href="onnx">ONNX</a>, allowing importing models from ML frameworks like Tensorflow, PyTorch and scikit-learn.</li>
+    <li><a href="xgboost">XGBoost</a></li>
+    <li><a href="lightgbm">LightGBM</a></li>
+</ul>
+
+<p>As these are exposed as rank features, they can be used in ranking expressions exactly like any other rank feature.</p>
