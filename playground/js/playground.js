@@ -794,7 +794,7 @@ function update() {
             // Pass side as header and controls as extra param
             operations[op]["result_ui"](result, element, side, content, i, controls);
         }
-     });
+     }).order();
 
     // Ensure DOM order matches data order so elements move with their bound data
     d3.select('#frames').selectAll('.frame').order();
