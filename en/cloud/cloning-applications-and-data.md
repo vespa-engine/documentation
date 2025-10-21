@@ -13,16 +13,16 @@ Use cases for cloning include:
 * Set up a copy of the application and (some) data in a `prod` environment to experiment with a CI/CD pipeline,
   without touching the current production serving.
 * Onboard a new team member by setting up a copy of the application and test data in a `dev` environment.
-* Clone to a `perf` environment for load testing.
+* Clone to a `dev` environment for load testing.
 
 This guide uses _applications_.
 One can also use _instances_, but that will not work across Vespa major versions on Vespa Cloud -
 refer to [tenant, applications, instances](tenant-apps-instances) for details.
 
-Vespa Cloud has different environments `dev/perf` and `prod`, with different characteristics -
+Vespa Cloud has different environments `dev` and `prod`, with different characteristics -
 [details](https://cloud.vespa.ai/en/reference/environments).
-Clone to `dev/perf` for short-lived experiments/development,
-use `prod` for serving applications with a [CI/CD pipeline](automated-deployments).
+Clone to `dev` for short-lived experiments/development/benchmarking,
+use `prod` for serving applications with a [CI/CD pipeline](automated-deployments.html).
 
 As some steps are similar, it is a good idea to read through all, as details are added only the first time for brevity.
 Examples are based on the
@@ -31,7 +31,7 @@ Examples are based on the
 {% include note.html content='When done, it is easy to tear down resources in Vespa Cloud.
 E.g., _https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deploy_ or
 _https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default_ to find a delete-link.
-Instances in `dev/perf` environments are auto-expired ([details](https://cloud.vespa.ai/en/reference/environments)),
+Instances in `dev` environments are auto-expired ([details](https://cloud.vespa.ai/en/reference/environments)),
 so application cloning is a safe way to work with Vespa.
 Find more information in [deleting applications](deleting-applications).
 '%}
@@ -66,7 +66,7 @@ $ vespa fetch -t http://localhost:19071 && \
 
 **Deploy target application package**
 
-The procedure differs a little whether deploying to dev/perf or prod [environment](https://cloud.vespa.ai/en/reference/environments).
+The procedure differs a little whether deploying to dev or prod [environment](https://cloud.vespa.ai/en/reference/environments).
 The `mvn -U clean package` step is only needed for applications with custom code.
 Configure application name and create data plane credentials:
 <pre>
@@ -86,10 +86,10 @@ If reusing a cert/key pair, drop `-f` and make sure to put the pair in _.vespa_,
 `Error: open /Users/me/.vespa/mytenant.myapp.default/data-plane-public-cert.pem: no such file or directory`
 in the subsequent deploy step.'%}
 Then deploy the application.
-Depending on the use case, deploy to <code>dev</code>/<code>perf</code> or <code>prod</code>:
+Depending on the use case, deploy to <code>dev</code> or <code>prod</code>:
 <ul>
   <li>
-    <code>dev</code>/<code>perf</code>:
+    <code>dev</code>:
 <pre>
 $ vespa deploy
 </pre>
@@ -174,7 +174,7 @@ The application package can also be downloaded from the Vespa Cloud Console:
 <ul>
   <li>
     <p>
-      dev/perf: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default</em>,
+      dev: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default</em>,
       click <em>Application</em> to download:
     </p>
     <img src="/assets/img/app-download-dev.png" alt="Application package download from dev environment" />
@@ -227,11 +227,11 @@ Use the Vespa Cloud Console to get access logs <!-- ToDo: more details -->
 
 ## Cloning - Vespa Cloud to Vespa Cloud
 This is a combination of the procedures above.
-Download the application package from dev/perf or prod,
+Download the application package from dev or prod,
 make note of the source name, like mytenant.myapp.default.
-Then use `vespa deploy` or `vespa prod deploy` as above to deploy to dev/perf or prod.
+Then use `vespa deploy` or `vespa prod deploy` as above to deploy to dev or prod.
 
-If cloning from `dev/perf` to `prod`, pay attention to changes in _deployment.xml_ and _services.xml_
+If cloning from `dev` to `prod`, pay attention to changes in _deployment.xml_ and _services.xml_
 as in [cloning to Vespa Cloud](#cloning---self-hosted-to-vespa-cloud).
 
 **Data copy**
