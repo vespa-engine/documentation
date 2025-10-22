@@ -11,7 +11,10 @@ From our experience, providing the right context to the LLM is essential to get 
 Every page of the documentation is available in markdown format, by changing the URL from `.html` to `.html.md`.
 There is also a link to the markdown version in the top right corner of each page.
 
-This allows you to easily copy/paste relevant documentation pages when working with LLMs on particular topics.
+You can use this in many ways:
+
+- You can copy/paste relevant markdown documentation page(s) into your AI tool of choice when working with LLMs on particular topics.
+- You can use the 
 
 ## llms.txt
 
@@ -21,7 +24,7 @@ See [llmstxt.org](https://llmstxt.org/) for more information about the format.
 
 ### Example usage
 
-The llms.txt file can be downloaded with:
+The [llms.txt](../llms.txt) file can be downloaded with:
 
 ```bash
 curl -O https://docs.vespa.ai/llms.txt
@@ -37,3 +40,5 @@ We also provide [llms-full.txt](../llms-full.txt) which contains the full conten
 For humans, we have [search.vespa.ai](https://search.vespa.ai). LLMs can also use this through the API.
 
 TODO: https://api.search.vespa.ai/search/?query=what%20is%20Vespa&filters=%2Bnamespace%3Aopen-p%20%2Bnamespace%3Acloud-p%20%2Bnamespace%3Avespaapps-p%20%2Bnamespace%3Ablog-p%20%2Bnamespace%3Apyvespa-p%20%2Bnamespace%3Acode-p&queryProfile=llmsearch&hits=1
+
+## Example workflows
