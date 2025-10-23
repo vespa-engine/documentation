@@ -43,7 +43,7 @@ button on the top right.
 ### Access control
 Each vault has an "Access control" section which determines which application
 has access to the secrets in the vault. For each application, you can set up
-which environment - [dev/perf](https://cloud.vespa.ai/en/reference/environments#dev)
+which environment - [dev](https://cloud.vespa.ai/en/reference/environments#dev)
 or [prod](https://cloud.vespa.ai/en/reference/environments#prod) (including test and staging) - the
 application should have access within. 
 
