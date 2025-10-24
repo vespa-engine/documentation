@@ -11,7 +11,7 @@ The query has JSON syntax, and can be used with queries that are executed with H
 ## Structure
 
 
-```
+```json
 "select" : {
   "where" : {...},
   "grouping" : {...}
@@ -20,11 +20,11 @@ The query has JSON syntax, and can be used with queries that are executed with H
 
 Example query searching for the term 'country' in the field 'title':
 
-```
+```json
 {
-  'select': {
-    'where': {
-      'contains': ['title', 'country']
+  "select": {
+    "where": {
+      "contains": ["title", "country"]
     }
   }
 }
@@ -32,7 +32,7 @@ Example query searching for the term 'country' in the field 'title':
 
 This query can be executed with `curl`:
 
-```
+```bash
 curl -H "Content-Type: application/json" \
     --data "{ 'select': { 'where': { 'contains': ['default', 'country'] } } }" \
     http://localhost:8080/search/
@@ -74,7 +74,7 @@ Let's take a look at this yql: `select * from sources * where default contains f
 
 The tree above can be written with the 'where' parameter, like this:
 
-```
+```json
 {
   "and" :  [
     { "contains" : ["default", "foo"] },
@@ -107,7 +107,7 @@ Grouping statement:
 ```
 equivalent JSON `grouping`-argument:
 
-```
+```json
 "grouping" : [
   {
     "all" : {
@@ -129,7 +129,7 @@ all(group(predefined(foo, bucket[1, 2>, bucket[3, 4>)))
 ```
 equivalent JSON `grouping`-argument:
 
-```
+```json
 "grouping" : [ 
   { 
     "all" : { 
@@ -142,10 +142,33 @@ equivalent JSON `grouping`-argument:
 ```
 
 
-### A complete example
+### Complete examples
 
+Query everything (`"where": true`), create one bucket for all documents (`"group": "\"all\""`) and output overall price statistics (`"avg(price)"` and `"sum(price)"`):
 
+```json
+{
+  "select": {
+    "where": true,
+    "grouping": [
+      {
+        "all": {
+          "group": "\"all\"",
+          "each": {
+            "output": [
+              "avg(price)",
+              "sum(price)"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
 ```
+
+A more complex example:
+```json
 {
   "select" : {
     "where" : {
@@ -158,7 +181,7 @@ equivalent JSON `grouping`-argument:
      },
     "grouping" : [ {
       "all" : {
-	      "group" : "time.year(a)",
+        "group" : "time.year(a)",
           "each" : { "output" : "count()" }
       }		
     } ]
@@ -181,7 +204,7 @@ YQL: `where title contains 'a'`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "contains" : [ "title", "a" ]
 }
@@ -194,7 +217,7 @@ Format of this in JSON:
 
 *Introducing the range parameter:*
 
-```
+```json
 "range" : [
   "date",
   { ">=" : 10}
@@ -218,7 +241,7 @@ YQL: `where range(field, 0, 500)`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "range" : [
     "field",
@@ -233,7 +256,7 @@ YQL: `where title contains 'a' or title contains 'b'`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "or" : [
     { "contains" : [ "title", "a" ] },
@@ -248,11 +271,11 @@ YQL: `where title contains 'a' and title contains 'b'`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "and" : [
-    {"contains" : [ "title" : "a" ] },
-  {"contains" : [ "title" : "b" ] }
+    {"contains" : [ "title", "a" ] },
+  {"contains" : [ "title", "b" ] }
   ]
 }
 ```
@@ -263,11 +286,11 @@ YQL: `where title contains 'a' and !(title contains 'b')`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "and_not" : [
-    {"contains" : [ "title" : "a" ] },
-    {"contains" : [ "title" : "b" ] }
+    {"contains" : [ "title", "a" ] },
+    {"contains" : [ "title", "b" ] }
   ]
 }
 ```
@@ -291,7 +314,7 @@ YQL: `where title matches "madonna"`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "matches" : [
     "title",
@@ -303,7 +326,7 @@ Another example:
 
 YQL: `where title matches "mado[n]+a"`
 
-```
+```json
 "where" : {
   "matches" : [
     "title",
@@ -319,7 +342,7 @@ YQL: `where text contains phrase("st", "louis", "blues")`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "contains" : [ "text", { "phrase" : ["st", "louis", "blues"] } ]
 }
@@ -331,7 +354,7 @@ YQL: `where description contains ([ {"distance": 100} ]onear("a", "b"))`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "contains" : [ 
     "description",
@@ -350,7 +373,7 @@ YQL: `where persons contains sameElement(first_name contains 'Joe', last_name co
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "contains" : [
     "persons",
@@ -374,7 +397,7 @@ YQL: `where fieldName contains equiv("A","B")`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "contains" : [
     "fieldName",
@@ -389,7 +412,7 @@ YQL: `where rank(a contains "A", b contains "B")`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "rank" : [
     { "contains" : [ "a", "A" ] },
@@ -407,7 +430,7 @@ YQL: `where wand(description, {"a":1, "b":2}`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "wand" : [ "description", {"a" : 1, "b":2} ]
 }
@@ -419,7 +442,7 @@ YQL: `where [ {"scoreThreshold": 13, "targetHits": 7} ]wand(description, {"a":1,
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "wand" : {
     "children" : [ "description", {"a" : 1, "b":2} ],
@@ -433,7 +456,7 @@ YQL: `where dotProduct(description, {"a":1, "b":2})`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "dotProduct" : [ "description", {"a" : 1, "b":2} ]
 }
@@ -444,7 +467,7 @@ YQL: `where weightedSet(description, {"a":1, "b":2})`.
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "weightedSet" : [ "description", {"a" : 1, "b":2} ]
 }
@@ -455,7 +478,7 @@ YQL: `where {scoreThreshold: 41, "targetHits": 7}weakAnd(a contains "A", b conta
 
 Format of this in JSON:
 
-```
+```json
 "where" : {
   "weakAnd" : {
     "children" : [ { "contains" : ["a", "A"] }, { "contains" : ["b", "B"] } ],
