@@ -11,10 +11,7 @@ From our experience, providing the right context to the LLM is essential to get 
 Every page of the documentation is available in markdown format, by changing the URL from `.html` to `.html.md`.
 There is also a link to the markdown version in the top right corner of each page.
 
-You can use this in many ways:
-
-- You can copy/paste relevant markdown documentation page(s) into your AI tool of choice when working with LLMs on particular topics.
-- You can use the 
+This can for example be used to copy/paste relevant markdown documentation page(s) into your AI tool of choice when working with LLMs on particular topics.
 
 ## llms.txt
 
@@ -33,12 +30,9 @@ curl -O https://docs.vespa.ai/llms.txt
 This file can then be used as an entrypoint when working with LLMs, either through an IDE, CLI or a chat interface.
 If the LLM has a tool available that allows it to fetch the referenced URLs, it can fetch the content of the desired pages as needed.
 
-We also provide [llms-full.txt](../llms-full.txt) which contains the full content of all documentation pages in markdown format, but this file is relatively large (almost 0.5M words as of Sept 2025), and must be used accordingly.
+We also provide [llms-full.txt](../llms-full.txt) which contains the _full_ content of all documentation pages in markdown format. 
+This file is relatively large (almost 0.5M words as of Oct 2025), so use accordingly.
 
-## Search Vespa documentation tool
+## MCP Server
 
-For humans, we have [search.vespa.ai](https://search.vespa.ai). LLMs can also use this through the API.
-
-TODO: https://api.search.vespa.ai/search/?query=what%20is%20Vespa&filters=%2Bnamespace%3Aopen-p%20%2Bnamespace%3Acloud-p%20%2Bnamespace%3Avespaapps-p%20%2Bnamespace%3Ablog-p%20%2Bnamespace%3Apyvespa-p%20%2Bnamespace%3Acode-p&queryProfile=llmsearch&hits=1
-
-## Example workflows
+We don't provide any official MCP server at this time, but will update this page as soon as we do.
