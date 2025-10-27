@@ -101,7 +101,7 @@ $ mkdir -p my-app/schemas
 
 <img src="/assets/img/vespa-overview.svg" width="825px" height="auto" alt="Vespa Overview" />
 
-A Vespa [application package](../application-packages.html) is the
+A Vespa [application package](../applications.html) is the
 set of configuration files and Java plugins that together define the behavior
 of a Vespa system: what functionality to use, the available document types, how
 ranking will be done and how data will be processed during feeding and indexing.

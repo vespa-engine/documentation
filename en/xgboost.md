@@ -93,7 +93,7 @@ you would add it to the application package resulting in a directory structure l
 An application package can have multiple models.
 
 To download models during deployment,
-see [deploying remote models](application-packages.html#deploying-remote-models).
+see [deploying remote models](applications.html#deploying-remote-models).
 
 
 ## Ranking with XGBoost models

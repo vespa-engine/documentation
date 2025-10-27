@@ -33,6 +33,10 @@ Both the idle timeout and max age threshold are aggressive to regularly rebalanc
 This ensures that new container nodes quickly receives traffic from existing client instances,
 for example when new resources are introduced by the [autoscaler](autoscaling.html).
 
+To avoid connection termination issues, clients should either set the `Connection: close` header
+to explicitly close connections after each request, or configure client-side idle timeouts to **30 seconds or less**.
+Doing so proactively closes idle connections before the server does and helps prevent errors caused by server-initiated terminations.
+
 ## Prefer HTTP/2
 We recommend *HTTP/2* over *HTTP/1.1*. *HTTP/2* multiplexes multiple concurrent requests over a single connection,
 and its binary protocol is more compact and efficient.

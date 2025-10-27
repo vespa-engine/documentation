@@ -14,22 +14,31 @@ category: cloud
 
 
 
-<h2 id="set-up-a-perf-instance">Set up a perf instance</h2>
+<h2 id="set-up-a-performance-test-instance">Set up a performance test instance</h2>
 <p>
-  Use an instance in the <a href="https://cloud.vespa.ai/en/reference/environments.html">perf zone</a> for benchmarks.
-  To deploy an instance there, use the <a href="getting-started.html">getting started</a> guide,
-  set the <code>perf</code> zone in the deploy step set:
+  Use an instance in a <a href="/en/cloud/environments.html#dev">dev zone</a> for benchmarks.
+  To deploy an instance there, use the <a href="/en/cloud/getting-started.html">getting started</a> guide,
+  and make sure to specify the resources using a <code>deploy:environment="dev"</code> attribute:
 </p>
+<pre>{% highlight xml %}
+<nodes deploy:environment="dev" count="1">
+    <resources vcpu="8.0"
+               memory="64Gb"
+               disk="474Gb"
+               architecture="arm64"
+               storage-type="local"/>
+</nodes>
+{% endhighlight %}</pre>
 <pre>
-$ vespa deploy -z perf.aws-us-east-1c --wait 600
+$ vespa deploy --wait 600
 </pre>
 <p>Feed documents:</p>
 <pre>
-$ vespa feed -z perf.aws-us-east-1c ext/documents.jsonl
+$ vespa feed ext/documents.jsonl
 </pre>
 <p>Query documents to validate the feed:</p>
 <pre>
-$ vespa query -z perf.aws-us-east-1c "select * from music where true"
+$ vespa query "select * from music where true"
 </pre>
 <p>Query documents using curl:</p>
 <pre>
@@ -38,7 +47,7 @@ $ curl \
   --key  ~/.vespa/mytenant.myapp.default/data-plane-private-key.pem \
   -H "Content-Type: application/json" \
   --data '{"yql" : "select * from music where true"}' \
-  https://myapp.tenant.aws-us-east-1c.perf.z.vespa-app.cloud/search/
+  https://baaae1db.b68ddc0d.z.vespa-app.cloud/search/
 </pre>
 <p>At this point, the instance is ready, with data, and can be queried using data-plane credentials.</p>
 
@@ -53,7 +62,7 @@ $ ls -1 *.pem
 </pre>
 <p>Prepare a query file:</p>
 <pre>
-$ echo "/search/?yql=select+*+from+music+where+true" > query001.txt
+$ echo "/search/?yql=select+*+from+music+where+true" &gt; query001.txt
 </pre>
 <p>
   Test using
@@ -69,7 +78,7 @@ $ docker run -v $(pwd):/files -w /files \
     -T /etc/ssl/certs/ca-bundle.crt \
     -n 1 -q query001.txt -s 1 -c 0 \
     -o output.txt \
-    myapp.mytenant.aws-us-east-1c.perf.z.vespa-app.cloud 443
+    baaae1db.b68ddc0d.z.vespa-app.cloud 443
 </pre>
 <p>
   <code>-o output.txt</code> is useful when validating the test - remove this option when load testing.
@@ -114,9 +123,10 @@ $ docker run -v $(pwd):/files -w /files \
 
 <h2 id="run-queries-inside-data-center">Run queries inside data center</h2>
 <p>
-Next step is to run this from the same location (data center) as the perf zone.
-In this example, an AWS <a href="https://cloud.vespa.ai/en/reference/zones">zone</a>. Deduce the AWS zone from Vespa Cloud zone name.
-Below is an example using a host with Amazon Linux 2023 AMI (HVM) image:
+  Next step is to run this from the same location (data center) as the dev zone.
+  In this example, an AWS <a href="/en/cloud/zones.html">zone</a>.
+  Deduce the AWS zone from Vespa Cloud zone name.
+  Below is an example using a host with Amazon Linux 2023 AMI (HVM) image:
 </p>
 <ol>
   <li>
@@ -151,7 +161,7 @@ $ ssh -i key.pem ec2-user@ec2-xx-xxx-xxx-xxx.compute-1.amazonaws.com
   <li>
     <p>Make a dummy query:</p>
 <pre>
-[ec2-user]$ echo "/search/?yql=select+*+from+music+where+true" > query001.txt
+[ec2-user]$ echo "/search/?yql=select+*+from+music+where+true" &gt; query001.txt
 </pre>
   </li>
   <li>
@@ -164,12 +174,12 @@ $ ssh -i key.pem ec2-user@ec2-xx-xxx-xxx-xxx.compute-1.amazonaws.com
               -K data-plane-private-key.pem \
               -T /etc/ssl/certs/ca-bundle.crt \
               -n 1 -q query001.txt -s 1 -c 0 \
-              myapp.mytenant.aws-us-east-1c.z.vespa-app.cloud 443
+              baaae1db.b68ddc0d.z.vespa-app.cloud 443
 </pre>
   </li>
 </ol>
 <p>
-  At this point, you are able to benchmark using <em>vespa-fbench</em> in the same zone as the Vespa Cloud perf instance.
+  At this point, you are able to benchmark using <em>vespa-fbench</em> in the same zone as the Vespa Cloud dev instance.
 </p>
 
 
@@ -186,11 +196,11 @@ $ ssh -i key.pem ec2-user@ec2-xx-xxx-xxx-xxx.compute-1.amazonaws.com
 $ curl \
     --cert data-plane-public-cert.pem \
     --key data-plane-private-key.pem \
-    https://myapp.mytenant.aws-us-east-1c.perf.z.vespa-app.cloud/prometheus/v1/values
+    https://baaae1db.b68ddc0d.z.vespa-app.cloud/prometheus/v1/values
 </pre>
 <p>Notes:</p>
 <ul>
-  <li>Periodially dump all metrics using <code>consumer=Vespa</code>.</li>
+  <li>Periodically dump all metrics using <code>consumer=Vespa</code>.</li>
   <li>
     Make sure you will not exhaust your serving threads on your container nodes while in production. This can be verified by making 
     sure this expression stays well below 100% (typically below 50%) for the traffic you expect: 
@@ -221,7 +231,7 @@ $ curl \
 $ while true; do curl -s \
     --cert data-plane-public-cert.pem \
     --key data-plane-private-key.pem \
-    https://myapp.mytenant.aws-us-east-1c.perf.z.vespa-app.cloud/prometheus/v1/values?consumer=Vespa | \
+    https://baaae1db.b68ddc0d.z.vespa-app.cloud/prometheus/v1/values?consumer=Vespa | \
     grep idealstate.merge_bucket.pending.average; \
     sleep 10; done
 </pre>
@@ -259,7 +269,7 @@ Vespa experts can usually spot over/under-allocations in CPU, memory and disk sp
 and discuss trade-offs with the application team.
 </p>
 <p>
-Using <a href="automated-deployments">automated deployments</a> applications go live with little risk.
+Using <a href="/en/cloud/automated-deployments.html">automated deployments</a> applications go live with little risk.
 After launch, right-size the application based on true load after using Vespa’s elasticity features
 with automated data migration.
 </p>
@@ -293,7 +303,7 @@ to size the application and find metrics used there. Pro-tips:
   <li>
     The user running benchmarks must have read access to the endpoint -
     if you already have, you can skip this section.
-    Refer to the <a href="https://cloud.vespa.ai/en/security/guide#data-plane">Vespa security guide</a>.
+    Refer to the <a href="https://docs.vespa.ai/en/cloud/security/guide.html">Vespa security guide</a>.
   </li>
-  <li><a href="monitoring">Monitoring</a> is useful to track metrics when benchmarking.</li>
+  <li><a href="/en/cloud/monitoring.html">Monitoring</a> is useful to track metrics when benchmarking.</li>
 </ul>

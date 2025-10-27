@@ -5,772 +5,135 @@ redirect_from:
 - /en/schema-inheritance.html
 ---
 
-<p>
-A schema defines a <a href="documents.html">document type</a> and what we want to compute over it, the
-<a href="reference/schema-reference.html#rank-profile">rank-profiles</a>.
-Schemas are stored in files named the same as the schema, with the ending ".sd" (for schema definition),
-in the <code>schemas/</code> directory of the application package.
-Refer to the <a href="reference/schema-reference.html">schema reference</a>.
-</p>
-<p>
-Document types, rank profiles and document summaries in schemas can be <a href="#schema-inheritance">inherited</a>.
-</p>
-<p>
-  Schema example:
-</p>
-<pre>
-schema music {
-    document music {
+<p>This is an introduction to schemas in Vespa. You can find all the details in the
+<a href="reference/schema-reference.html">schema reference</a>.</p>
 
-        field artist type string {
+<p>A schema defines a type of data and what we want to compute over it.
+An application package can contain multiple schemas for different kinds of data.
+Each content cluster specified in services.xml refers to the schemas that should be stored an indexed
+in that cluster. Schemas can inherit other schemas to avoid repeating common content.</p>
+
+<p>Schemas are placed in files named the same as the schema, with the ending ".sd" (for schema definition),
+in the <code>schemas/</code> directory of the application package.</p>
+
+
+<h2 id="document-fields">Document fields</h2>
+
+<p>A schema contains a document type, which is a named collection of fields:</p>
+
+<pre>
+schema mySchema {
+
+    document mySchema {
+
+        field myField type string {
             indexing: summary | index
         }
 
-        field artistId type string {
-            indexing: summary | attribute
-            match: word
-            rank: filter
-        }
+        ... more fields
 
-        field title type string {
-            indexing: summary | index
-        }
-
-        field album type string {
-            indexing: index
-        }
-
-        field duration type int {
-            indexing: summary
-        }
-
-        field year type int {
-            indexing: summary | attribute
-        }
-
-        field popularity type int {
-            indexing: summary | attribute
-        }
     }
 
-    fieldset default {
-        fields: artist, title, album
-    }
-
-    rank-profile song inherits default {
-        first-phase {
-            expression {
-                nativeRank(artist,title) +
-                if(isNan(attribute(popularity)) == 1, 0, attribute(popularity))
-            }
-        }
-    }
 }
 </pre>
 
-<p>{% include deprecated.html content="Compatibility note: Schemas can be stored in the <code>searchdefinitions/</code>
-directory and use <code>search</code> instead of <code>schema</code> as the top level tag. This is deprecated."%}</p>
+<p>Each field has a type, a way it should be processed and indexed, and optionally other settings.
+The main decision you make is how the field should be used in queries, determined by the <code>indexing</code>
+statement:</p>
 
-
-
-<h2 id="document">document</h2>
-<p>
-  A <a href="documents.html">document</a> is the unit the rank-profile evaluates, and is returned in query results.
-  Documents have fields - reads and writes updates full documents or some fields of documents.
-  Refer to the <a href="reference/schema-reference.html#document">schema reference</a>.
-</p>
-<p>Documents can have relations, field values can be imported from <a href="parent-child.html">parent documents</a>.</p>
-<p>Note that the document id is not a field of the document - add this explicitly if needed.</p>
-
-
-
-<h2 id="field">field</h2>
-<p>A field has a type, see <a href="reference/schema-reference.html#field">field reference</a> for a full list.</p>
-<p>A field contained in a document can be written to, read from and queried - this is the normal field use.
-A field can also be generated (i.e. a <em>synthetic field</em>) -
-in this case, the field definition is <em>outside</em> the document.
-See <a href="operations/reindexing.html">reindexing</a> for examples.</p>
-
-
-<h3 id="multivalue-field">Multivalue field</h3>
-<p>
-A field can be <em>single value</em>, like a string, or <em>multivalue</em>, like an array of strings -
-see the <a href="reference/schema-reference.html#field">field type list</a>.
-Most multivalue fields can be used in <a href="reference/grouping-syntax.html#multivalue-attributes">grouping</a>.
-Accessing attributes in <a href="reference/schema-reference.html#map">maps</a> and
-<a href="reference/schema-reference.html#array">arrays of struct</a> in ranking is not possible.
-</p>
-<p>
-The rank feature <a href="reference/rank-features.html#attribute(name).count">attribute(name).count</a>
-can be used in ranking to <em>rank</em> based on number of elements in a multivalue attribute.
-To <em>filter</em> based on number of elements, create a
-<a href="ranking-expressions-features.html#the-if-function-and-string-equality-tests">strict tiering rank function</a>
-combined with a <a href="reference/schema-reference.html#rank-score-drop-limit">rank-score-drop-limit</a>.
-Then use a <a href="ranking-expressions-features.html#using-query-variables">query variable</a> for number of elements.
-Note that doing this filtering is more expensive to evaluate than just having a separate field for the count.
-</p>
-
-
-<h3 id="field-size">Field size</h3>
-<p>
-  There is no general setting for max field size in terms of size in bytes.
-  Example of fields with potentially large value includes
-  <a href="/en/reference/schema-reference.html#string">string</a>
-  and <a href="/en/reference/schema-reference.html#raw">raw</a> fields.
-  Other large values include multivalue fields with many elements,
-  like an <a href="/en/reference/schema-reference.html#array">array</a>,
-  <a href="/en/reference/schema-reference.html#weightedset">weightedset</a> or
-  <a href="/en/reference/schema-reference.html#tensor">tensor</a>.
-  This is relevant when the field is returned in query responses -
-  large result sets and parallel queries requires the Container with the query endpoint
-  to keep many field instances in memory simultaneously.
-  Use a <a href="/en/document-summaries.html">summary class</a> to tune which fields to return in query responses,
-  and keep result sets smaller using <a href="/en/reference/query-language-reference.html#limit-offset">limit</a>
-  or <a href="/en/reference/query-api-reference.html#hits">hits</a>.
-</p>
-<p>
-  Vespa requires a document to be able to load into memory in serialized form.
-  A document in json format is serialized in the Container hosting the
-  <a href="/en/document-v1-api-guide.html">document-api</a> endpoint,
-  and persisted in the content node <a href="/en/proton.html#document-store">document store</a>.
-</p>
-<p>
-  A text field is capped at <a href="/en/reference/schema-reference.html#max-length">max-length</a>
-  characters when indexing.
-  Increase this to index all terms in large string fields, example:
-</p>
-<pre>
-match {
-    max-length: 15000000
-}
-</pre>
-
-<h2 id="struct">struct</h2>
-
-<p>
-    A <a href="/en/reference/schema-reference.html#struct">struct</a>
-    is contained in a document and groups one or more fields into a composite type that can be accessed like a single field.
-</p>
-
-Example:
-<pre>
-    struct email {
-        field sender type string {}
-        field recipient type string {}
-        field subject type string {}
-        field content type string {}
-    }
-
-    field emails type array&lt;email&gt; {}
-</pre>
-
-<p>
-    In this example the struct is part of an
-    <a href="/en/reference/schema-reference.html#array">array</a>.
-    A struct can also be used in a <a href="/en/reference/schema-reference.html#map">map</a>.
-</p>
-
-<h2 id="struct-field">struct-field</h2>
-
-<p>
-    A <a href="/en/reference/schema-reference.html#struct-field">struct-field</a>
-    defines how a given field in a struct should be indexed and searched.
-</p>
-<p>
-    Note that though a struct-field refers to a field in a struct, the struct-field itself is defined inside a field.
-</p>
-
-<p>
-    Using the <em>email</em> struct defined previously (see <a href="schemas.html#struct">struct</a>),
-    we can define indexing for a specific field, like <em>content</em>:
-</p>
-
-<pre>
-    field emails type array&lt;email&gt; {
-        indexing: summary
-        struct-field content {
-            indexing: attribute
-            attribute: fast-search
-        }
-    }
-</pre>
-
-<p>The equivalent code (including the struct definition) in Pyvespa is as follows:</p>
-<pre>
-    email_struct = Struct(name="email", fields=[
-      Field(name="sender", type="string"),
-      Field(name="recipient", type="string"),
-      Field(name="subject", type="string"),
-      Field(name="content", type="string"),
-    ])
-    emails_field = Field(name="emails",
-                    type="array&lt;email&gt;",
-                    indexing=["summary"],
-                    struct_fields=[StructField(name="content", indexing=["attribute"], attribute=["fast-search"])]
-    )
-    schema = Schema(name="schema", document=Document())
-    schema.add_fields(emails_field)
-    schema.document.add_structs(email_struct)
-</pre>
-
-<h2 id="indexing">indexing</h2>
-<p>
-<a href="reference/schema-reference.html#indexing">indexing</a>
-configures how to process data of a field during indexing - the most important ones are:
-</p>
-<table class="table">
-  <thead></thead><tbody>
-<tr>
-  <td><code>index</code></td><td>
-  For unstructured text: Create a text index for this field.
-  <a href="text-matching.html">Text matching</a> and all text ranking features become available.
-  Indexes are disk backed and do not need to fit in memory.
-  <a href="reference/schema-reference.html#indexing">Reference</a> /
-  <a href="proton.html#index">index details</a></td>
-</tr><tr>
-  <td><code>attribute</code></td><td>
-  For structured data: Keep this field in memory in a forward structure.
-  This makes the field available for grouping, sorting and ranking.
-  Attributes may also be searched by complete match (word or exact),
-  or (for numerical fields) by range.
-  Optionally a B-tree in memory can also be created by adding the fast-search option - this improves
-  performance if the attribute is a strong criterion in queries (i.e. filters out many documents).
-  <a href="reference/schema-reference.html#attribute">Reference</a> /
-  <a href="attributes.html">attribute details</a></td>
-</tr><tr>
-  <td><code>summary</code></td><td>
-  Include this field in the document summary in search result sets.
-  <a href="reference/schema-reference.html#summary">Reference</a> /
-  <a href="document-summaries.html">document summary details</a></td>
-</tr>
-</tbody>
-</table>
-<p>
-  Indexing instructions have pipeline semantics similar to unix shell
-  commands, with data flowing from left to right.
-  They can perform complex transformations on field values,
-  or just send the field value unchanged to the next sections of the index structure.
-  Example: The data is first added to the document summary,
-  then added as an in-memory attribute and finally indexed:
-</p>
-<pre>
-indexing: summary | attribute | index
-</pre>
-{% include important.html content='If <span style="text-decoration: underline">both</span>
-<code>attribute</code> and <code>index</code> is set on a field,
-queries to this field use <code>index</code> mode.
-The normal case for setting both is to run queries (using <code>index</code>) with
-<a href="grouping.html">grouping</a> (that requires <code>attribute</code>).' %}
-
-
-<h3 id="match">match</h3>
-<p>
-The <a href="reference/schema-reference.html#match">match</a> mode configures
-<em>how</em> query items are matched to fields (e.g. exact or prefix matching),
-and is tightly coupled with <em>indexing</em>.
-Find more details in <a href="text-matching.html">text matching</a>.
-</p>
-<p>
-When searching in array or map of struct,
-<a href="reference/query-language-reference.html#sameelement">sameElement()</a> is a useful query operator
-to restrict matches to same struct element
-(e.g. <em>first_name contains 'Joe', last_name contains 'Smith'</em> -
-both must match in the <em>same</em> field value).
-Note that the document summary will not contain which element(s) matched.
-</p>
-
-
-<h3 id="fieldset">fieldset</h3>
-
-<p>A <a href="reference/schema-reference.html#fieldset">fieldset</a> create a group of fields which can be queried as one:
-</p>
-<pre>
-fieldset <span class="pre-hilite">myset</span> {
-    fields: artist, title, album
-}
-</pre>
-<pre>
-$ vespa query "select * from sources * where <span class="pre-hilite">myset</span> contains 'bob' and title contains 'best'"
-</pre>
-
-<p>Each term searching a fieldset is only tokenized once, so all the field in a field set should have compatible types
-and match settings.</p>
-
-<p>If you want to let some user text search multiple fields with different match settings, repeat the
-<a href="/en/reference/query-language-reference.html#userinput">userInput</a> query operator multiple times in the query:
-</p>
-
-<pre>
-select * from sources * where ({defaultIndex: 'fieldsetOrField1'}userInput(@query)) or ({defaultIndex: 'fieldsetOrField2'}userInput(@query))
-</pre>
-
-
-<h3 id="rank-profile">rank-profile</h3>
-
-<p>The <a href="ranking.html#rank-profiles">rank profile</a> defines the computation to be made over
-documents of this type when matching a query.
-Learn more in <a href="getting-started-ranking.html">getting started with ranking</a>.</p>
-
-
-
-<h2 id="plugins">IDE support</h2>
-
-<p>Vespa provides schema editing IDE plugins for VSCode and Jetbrains (IntelliJ, PyCharm etc.), see
-<a href="/en/ide-support">IDE support</a>.</p>
-
-
-<h2 id="schema-modifications">Schema modifications</h2>
-<p>
-Vespa is built for safe schema modifications,
-like adding a field or changing indexing or match modes.
-A new version of the schema is deployed in an <a href="application-packages.html">application package</a>.
-As some changes are potentially destructive (e.g. change a field index settings),
-the <code>deploy</code> command will by default not accept such changes.
-Example output from deploy (change from <em>index</em> to <em>attribute</em>):
-</p>
-<pre>
-Invalid application package: Error loading default.default: indexing-change:
-Document type 'music': Field 'artist' changed:
-remove index aspect,
-  matching: 'text' -> 'word',
-  stemming: 'best' -> 'none', normalizing: 'ACCENT' -> 'LOWERCASE',
-  summary field 'artist' transform: 'none' -> 'attribute',
-  indexing script:
-    '{ input artist | tokenize normalize stem:\"BEST\" | summary artist | index artist; }' ->
-    '{ input artist | summary artist | attribute artist; }'
-To allow this add &lt;allow until='yyyy-mm-dd'&gt;indexing-change&lt;/allow&gt; to validation-overrides.xml
-</pre>
-<p>
-To accept such changes, add a <a href="reference/validation-overrides.html">validation-override</a>:
-</p>
-<pre>{% highlight xml %}
-<validation-overrides>
-    <allow until="2021-08-30">indexing-change</allow>
-</validation-overrides>
-{% endhighlight %}</pre>
-<p>
-By blocking destructive changes, it is safe and easy to automate on an evolving schema.
-Many schema changes are non-destructive and does not require the validation override, like adding a field.
-Read more in <a href="reference/schema-reference.html#modifying-schemas">modifying-schemas</a>.
-</p>
-<p>
-  Refer to procedure to change from
-  <a href="/en/operations-selfhosted/procedure-change-attribute-index.html">attribute to index</a>.
-</p>
-
-
-<h3 id="field-rename">Field rename</h3>
-
-<p>Renaming a field is not directly supported. Options:</p>
-<ol>
-  <li>
-    Drop the field, then refeed data with a partial update for just that field.
-    Change queries, rank-profiles, query profiles and fieldsets to use the new field.
-    This will make the field's data unavailable until fully re-fed.
-  </li>
-  <li>
-    Add the field with the new name, then refeed data with a partial update for that field.
-    Once done, change queries, rank-profiles, query profiles and fieldsets to use the new field.
-    This keeps the data available at all times, but increases storage requirements temporarily.
-  </li>
-</ol>
-<p>Also try using an <a href="/en/reference/schema-reference.html#alias">alias</a>.</p>
-
-
-
-<h2 id="multiple-schemas">Multiple schemas</h2>
-<!-- ToDo: Go over this section once more and restructure a little / clarify doc type / schema  -->
-<p>
-An application can define multiple document types, each in their own schema.
-Multiple schemas can either be mapped to a single content cluster, or one
-can define separate content clusters for schemas to be able to scale differently for the document types.
-A single container cluster can be used to query all the document types in both these configurations.
-</p>
-<p>
-In an application with multiple document types, the query restricts which document types to be used.
-Vespa will by default query all document types and all clusters in parallel,
-and blend results based on score - find details in <a href="federation.html">federation</a>.
-</p>
-<p>
-To limit a query to a subset of the document types,
-set <a href="reference/query-api-reference.html#model.restrict">restrict</a>
-to a comma-separated list of schema names:
-</p>
-<pre>
-$ vespa query 'select * from sources * where title contains "bob"' <span class="pre-hilite">restrict=music,books</span>
-</pre>
-
-
-<h3 id="content-nodes-and-schemas">Content nodes and schemas</h3>
-<p>
-  Schemas can be thought of as tables in a database.
-  Most applications start off with one schema, adding schemas as more content types are needed.
-  Queries can hit one, some, or all schemas,
-  using the <a href="#multiple-schemas">restrict</a> query parameter
-  or selecting in <a href="/en/query-language.html">YQL</a>.
-</p>
-<p>
-  Content nodes can hold multiple schemas:
-</p>
-<pre>{% highlight xml %}
-<content id="musiccluster" version="1.0">
-    <documents>
-        <document type="albums" mode="index" />
-        <document type="lyrics" mode="index" />
-        <document type="tracks" mode="index" />
-    </documents>
-{% endhighlight %}</pre>
-<p>
-  One or more schemas can be deployed in separate content clusters:
-</p>
-<pre>{% highlight xml %}
-<content id="musiccluster" version="1.0">
-    <documents>
-        <document type="albums" mode="index" />
-        <document type="tracks" mode="index" />
-    </documents>
-
-<content id="lyricscluster" version="1.0">
-    <documents>
-        <document type="lyrics" mode="index" />
-    </documents>
-{% endhighlight %}</pre>
-<p>
-  The evolution can be illustrated like:
-</p>
-<img src="/assets/img/schemas-and-content-clusters.svg" alt="Schemas deployed in multiple content clusters"
-     width="570px" height="auto" />
-<p>
-  The optimal mapping from schema to content cluster is application dependent:
-</p>
 <ul>
-  <li>
-    If there are no performance or sizing problems with all schemas in one content cluster,
-    keep this - one cluster is easier to manage than multiple.
-  </li>
-  <li>
-    Data in one schema can dominate the others.
-    In these cases, consider a separate content cluster with a resource specification targeted for the write/query load.
-    The extreme case of this is one content cluster per schema.
-    This is a simple model, too, and enables resource optimization per schema.
-  </li>
-  <li>
-    Applications using <em>both</em> indexed and streaming <a href="/en/reference/services-content.html#document.mode">mode</a>
-    should use <em>separate</em> content clusters for the different modes.
-  </li>
-</ul>
-<p>
-  <a href="/en/performance/sizing-search.html">Sizing search</a> is a good read for how to optimize content clusters.
-</p>
-
-
-<h3 id="content-cluster-mapping">Content cluster mapping</h3>
-<!--
-<p>
-  A schema is mapped to a content cluster in <a href="reference/services.html">services.xml</a>.
-  The content cluster stores and computes over documents in the schema using the rank profile.
-  Applications can map many schemas to one content cluster.
-  Use multiple content clusters if documents of different schemas have different performance characteristics -
-  read more in the <a href="performance/sizing-search.html">serving scaling guide</a>.
-</p>
-<code>my-app/services.xml</code>:
-<pre>
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search /&gt;
-        &lt;document-api /&gt;
-    &lt;/container&gt;
-    &lt;content id="items" version="1.0"&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document <span class="pre-hilite">type="music"</span> mode="index" /&gt;
-            &lt;document <span class="pre-hilite">type="books"</span> mode="index" /&gt;
-        &lt;/documents&gt;
-    &lt;/content&gt;
-&lt;/services&gt;
-</pre>
--->
-<p>
-  To limit a query to a subset of the content clusters,
-  set <a href="reference/query-language-reference.html#from-sources">from sources</a>
-  to a comma-separated list of content cluster ids, e.g.:
-</p>
-<pre>
-$ vespa query 'select * from sources <span class="pre-hilite">items, news</span> where title contains "bob"'
-</pre>
-<p>
-  The request parameter <em>restrict</em> and <em>from sources</em> can be combined
-  to search both a subset of document types and content clusters.
-</p>
-
-
-
-<h2 id="inheritance">Inheritance</h2>
-<p>
-  Both document types and full schemas can be inherited to make it easy to
-  design a structured application package with little duplication.
-  Document type inheritance defines a type hierarchy which is also useful for applications that
-  <a href="federation.html">federate queries</a>
-  as queries can be written to the common supertype.
-  This guide covers the different elements in the schema that supports inheritance:
-</p>
-<ol>
-  <li>Schemas</li>
-  <li>Document types</li>
-  <li>Rank profiles</li>
-  <li>Document summaries</li>
-</ol>
-<img src="/assets/img/inheritance-overview.svg" width="600px" height="auto"
-     alt="Schema elements that support inheritance"/>
-
-{% include note.html content="Inheritance is not to be confused with <a href='parent-child.html'>parent/child</a>,
-which is a feature to import field values at query time."%}
-
-
-<h2 id="schema-inheritance">Schema inheritance</h2>
-<p>
-  A schema that inherits another gets all the content of the parent schema
-  as if it was defined inside the inheriting schema.
-  A schema that inherits another must also (explicitly) inherit its document type:
-</p>
-<pre>
-schema books <span class="pre-hilite">inherits items</span> {
-    document books <span class="pre-hilite">inherits items</span>  {
-        field author type string {
-            indexing: summary | index
-        }
-    }
-}
-</pre>
-
-
-<h2 id="document-type-inheritance">Document type inheritance</h2>
-<p>
-  A document type can inherit another document type. This will include all fields, also fields declared outside the
-  document block in the schema, rank-profiles defined in the super-schema can then be inherited in the schema of this
-  document, see <a href="#rank-profile-inheritance">Rank profile inheritance</a> below.
-</p>
-<p>
-  Both schemas <em>music</em> and <em>books</em> have the <em>title</em> field through inheritance:
-</p>
-<code>my-app/schemas/items.sd</code>:
-<pre>
-document items {
-    field title type string {
-        indexing: summary | index
-    }
-}
-</pre>
-
-<code>my-app/schemas/books.sd</code>:
-<pre>
-schema books {
-    document books <span class="pre-hilite">inherits items</span> {
-        field author type string {
-            indexing: summary | index
-        }
-    }
-}
-</pre>
-
-<code>my-app/schemas/music.sd</code>:
-<pre>
-schema music {
-    document music <span class="pre-hilite">inherits items</span> {
-        field artist type string {
-            indexing: summary | index
-        }
-    }
-}
-</pre>
-<p>
-  This is equivalent to:
-</p>
-<code>my-app/schemas/books.sd</code>:
-<pre>
-schema books {
-    document books {
-        field title type string {
-            indexing: summary | index
-        }
-        field author type string {
-            indexing: summary | index
-        }
-    }
-}
-</pre>
-
-<code>my-app/schemas/music.sd</code>:
-<pre>
-schema music {
-    document music  {
-        field title type string {
-            indexing: summary | index
-        }
-        field artist type string {
-            indexing: summary | index
-        }
-    }
-}
-</pre>
-<p>
-  Notes:
-</p>
-<ul>
-  <li>Multiple inheritance and multiple levels of inheritance is supported.</li>
-  <li>Inheriting a document type defined in another content cluster is allowed.</li>
-  <li>Overriding fields defined in supertypes is not allowed.</li>
-  <li><a href="reference/schema-reference.html#import-field">Imported fields</a>
-    defined in supertypes are not inherited.</li>
+    <li><code>indexing: summary</code>: The field should be available in query responses
+        (<a href="document-summaries.html">document summaries</a>).
+    <li><code>indexing: index</code>: If a string: Create a full-text on-disk index.
+        If a tensor: Create an HNSW vector index (requires <code>attribute</code> in addition).
+    <li><code>indexing: attribute</code>: For any field type: Make the field value available for structured search
+        (exact, range, regexp etc.), ranking, sorting, grouping, and aggregation in the
+        <a href="attributes.html">in-memory column store</a>.
+        Suitable for structured data.
+    <li><code>indexing: attribute</code> and <code>attribute: fast-search</code>: As above, but in addition, create an index
+        over this data to make it an efficient filter. Suitable for structured fields that are used as strong filters in queries.
 </ul>
 
+<p>The indexing statement can contain multiple expressions separated by a pipe character, and these can also preprocess the
+value, so the pipe should be read as passing to the next expression, as on Unix. See the
+<a href="https://docs.vespa.ai/en/reference/schema-reference.html#field">reference</a> for all the types and content of fields.</p>
 
-<h2 id="rank-profile-inheritance">Rank profile inheritance</h2>
-<p>
-  Where fields define the document types, rank profiles define the computations over the documents.
-  Rank profiles can be inherited from rank-profiles defined in the same schema, or defined in another schema when this
-  document inherits the document defined in the schema where the rank profile is defined:
-</p>
+<p>When a schema is defined and added to a content cluster, you can <a href="writing-data.html">write data</a>
+according to it, and <a href="querying.html">query</a> using the attributes and indexed fields in it.
+Indexing always happens automatically in real time.</p>
 
-<code>my-app/schemas/items.sd</code>:
+
+<h2 id="synthetic-fields">Synthetic fields</h2>
+
+<p>The document type in the schema defines the fields that you can put and get (read and write) for that document type.
+However, sometimes you want to take an input field and process it in some way before it is stored/indexed. To do that,
+you can create additional synthetic fields outside the document in the schema:</p>
+
 <pre>
-schema items {
-    document items {
-        field title type string {
+schema mySchema {
+
+    document mySchema {
+
+        field myField type string {
             indexing: summary | index
         }
+
+        ...
+
     }
 
-    rank-profile items_ranking_base {
-        function title_score() {
-            expression: fieldLength(title)
-        }
+    field mySyntheticField type tensor(x[386]) {
+        indexing: input myField | <a href="embedding.html">embed</a> | attribute | index
+    }
+
+}
+</pre>
+
+
+<h2 id="rank-profiles">Rank profiles</h2>
+
+<p>A <i>rank profile</i> specifies what should be computed over the data described by the schema,
+and how the documents of it should be ranked to select the ones to return in a query response:</p>
+
+<pre>
+schema mySchema {
+
+    ...
+
+    rank-profile hybrid {
+
         first-phase {
-            expression: title_score
+            expression: 0.3 * bm25(myText) + 0.5 * closeness(myEmbedding) * 0.2 * attribute(popularity)
         }
-        summary-features {
-            title_score
-        }
+
     }
+
 }
 </pre>
 
-<code>my-app/schemas/books.sd</code>:
-<pre>
-schema books {
-    document books <span class="pre-hilite">inherits items</span> {
-        field author type string {
-            indexing: summary | index
-        }
-    }
-
-    rank-profile items_ranking <span class="pre-hilite">inherits items_ranking_base</span> {}
-
-    rank-profile items_subschema_ranking <span class="pre-hilite">inherits items_ranking_base</span> {
-        first-phase {
-            expression: title_score + fieldMatch(author)
-        }
-        summary-features <span class="pre-hilite">inherits items_ranking_base</span> {
-            fieldMatch(author)
-        }
-    }
-}
-</pre>
-
-<code>my-app/schemas/music.sd</code>:
-<pre>
-schema music {
-    document music <span class="pre-hilite">inherits items</span> {
-        field artist type string {
-            indexing: summary | index
-        }
-    }
-
-    rank-profile items_ranking <span class="pre-hilite">inherits items_ranking_base</span> {}
-
-    rank-profile items_subschema_ranking <span class="pre-hilite">inherits items_ranking_base</span> {
-        first-phase {
-            expression: title_score + fieldMatch(artist)
-        }
-        summary-features <span class="pre-hilite">inherits items_ranking_base</span> {
-            fieldMatch(artist)
-        }
-    }
-}
-</pre>
-<p>
-  <em>items_ranking</em> can be considered the "base" ranking.
-  Pro-tip: Set this as the <em>default</em> rank profile
-  by modifying the default <a href="query-profiles.html">query profile</a>:
-</p>
-<code>my-app/search/query-profiles/default.xml</code>:
-<pre>
-&lt;query-profile id="default"&gt;
-    &lt;field name="ranking.profile"&gt;items_ranking&lt;/field&gt;
-&lt;/query-profile&gt;
-</pre>
-<p>
-  Queries using <em>ranking.profile=default</em> will then use the first-phase ranking defined in <em>items.sd</em>.
-</p>
-<p>
-  Another way to inherit behavior is to override the first-phase ranking in the sub-schemas,
-  still using functions defined in the super-schema (e.g. <em>title_score</em>).
-</p>
-
-<h3 id="summary-features">Summary features</h3>
-<p>
-  <a href="reference/schema-reference.html#summary-features">Summary-features</a> and
-  <a href="reference/schema-reference.html#match-features">match-features</a>
-  are rank features computed during ranking,
-  to be included in <a href="reference/default-result-format.html">results</a>.
-  These features can be inherited from parent rank profiles - the
-  above example uses <code>inherits</code> to include scores from
-  features in super- and sub-schema - example result:
-</p>
-<pre>{% highlight json %}
-"summaryfeatures": {
-    "fieldMatch(author)": 0,
-    "rankingExpression(title_score)": 4
-}
-{% endhighlight %}</pre>
-<p>
-  In the examples above, both <em>books</em> and <em>music</em> schemas implement rank profiles
-  with same names (e.g. <em>items_subschema_ranking</em>),
-  so they can be used in queries spanning both.
-  If a query's rank profile can not be found in a given schema,
-  Vespa's default rank profile <a href="nativerank.html">nativerank</a> is used.
-</p>
-<p>
-  <a href="reference/schema-reference.html#inputs">Inputs</a> to a rank profile are automatically inherited from
-  the parent rank profile. If a new inputs block is defined in a child rank profile, those inputs will be
-  added cumulatively to those defined in the parent.
-</p>
+<p>A schema can have any number of rank profiles for different use cases, experiments and so on,
+and each can have multiple functions that compute some value to be returned or used in ranking.
+In addition to simple math functions like the above these can also be machine-learned models.
+See <a href="ranking.html">ranking</a> for more.</p>
 
 
-<h2 id="document-summary-inheritance">Document summary inheritance</h2>
-<p>
-  <a href="document-summaries.html">Document summaries</a> can inherit others defined in the same
-  or an inherited schema.
-</p>
-<code>my-app/schemas/books.sd</code>:
-<pre>
-schema books {
-    document books {
-        field title type string {
-            indexing: summary | index
-        }
-        field author type string {
-            indexing: summary | index
-        }
-    }
+<h2 id="working-with-schemas">Working with schemas</h2>
 
-    document-summary items_summary_tiny {
-        summary title {}
-    }
+<p>Schemas may become thousands of lines, with inheritance, multiple rank functions calling each other and so on.
+The most efficient way of working with them is to use an IDE and install the Vespa plugin to get syntax highlighting,
+completions and navigation - see <a href="ide-support.html">IDE support</a>.
 
-    document-summary items_summary_full <span class="pre-hilite">inherits items_summary_tiny</span> {
-        summary author {}
-    }
-}
-</pre>
+<p>What happens if you change the schema of a running application?
+
+
+<ul>
+    <li><b>Adding new fields</b>: No problem, the new field will be added and have no value until data is written to it.
+    <li><b>Changing how a field is indexed</b>: This will automatically cause a background reindexing on Vespa Cloud,
+    but in the meantime there may be inconsistency in how the field is used in queries and writes, so in production it
+    is sometimes preferable to create a new field instead.
+    <li><b>Removing a field:</b> Data and indexes are removed for the field.
+    <li><b>Changing the type of a field:</b> Existing data and indexes are removed for the field. For this reason, it is
+    often preferable to add a new field instead, populate it, switch usages to the new field, then remove the old.
+</ul>
+
+<p>You can find the details in <a href="reference/schema-reference.html#modifying-schemas">modifying schemas</a>.</p>

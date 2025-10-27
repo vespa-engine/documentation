@@ -107,6 +107,11 @@ This means, Vespa Cloud applications will migrate to more recent instance types 
 with **zero manual interventions**.
 This keeps the total cost in check, and performance tracking advances in hardware.  
 
+Find a list of supported instance types at
+[AWS](https://cloud.vespa.ai/en/reference/aws-flavors.html),
+[GCP](https://cloud.vespa.ai/en/reference/gcp-flavors.html), and
+[Azure](https://cloud.vespa.ai/en/reference/azure-flavors.html) instance types.
+
 
 
 ## Next reads
