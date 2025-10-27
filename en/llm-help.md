@@ -4,6 +4,7 @@ title: "Getting help from LLMs"
 ---
 
 This page describes some of the ways that you can get help from large language models (LLMs) when developing a Vespa application.
+
 From our experience, providing the right context to the LLM is essential to get good results when asking questions about Vespa.
 
 ## Markdown version of documentation pages
