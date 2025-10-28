@@ -88,11 +88,10 @@ see the [pin results example](/en/multivalue-query-operators.html#pin-results-ex
 
 ### What limits apply to document size?
 There is a [maximum document size](/en/reference/services-content.html#max-document-size) of 128 MiB,
-which is configurable per content cluster in services.xml. See also [field size](/en/schemas.html#field-size).
+which is configurable per content cluster in services.xml.
 
 ### Is there any size limitation for multivalued fields?
 No enforced limit, except resource usage (memory).
-See [field size](/en/schemas.html#field-size).
 
 ### Can a document have lists (key value pairs)?
 E.g. a product is offered in a list of stores with a quantity per store.
@@ -512,7 +511,7 @@ a request will be sent to A and C
 [Attribute](attributes.html) (with or without `fast-search`) is always in memory,
 but does not support tokenized matching.
 It is for structured data.
-[Index](schemas.html#indexing) (where there’s no such thing as fast-search since it is always fast)
+[Index](schemas.html#document-fields) (where there’s no such thing as fast-search since it is always fast)
 is in memory to the extent there is available memory and supports tokenized matching.
 It is for unstructured text.
 
@@ -640,7 +639,7 @@ Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a disc
 Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa version.
 
 ### Deploy rollback
-See [rollback](/en/applications.html#rollback) for options.
+See [rollback](/en/deployment.html#rollback) for options.
 
 
 {:.faq-section}

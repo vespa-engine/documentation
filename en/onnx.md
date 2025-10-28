@@ -24,7 +24,7 @@ you could add it to the application package under a `files` directory, something
 ```
 
 An application package can have multiple onnx models. To download models during deployment,
-see [deploying remote models](/en/applications.html#deploying-remote-models).
+see [deploying remote models](/en/deployment.html#deploying-remote-models).
 
 
 
