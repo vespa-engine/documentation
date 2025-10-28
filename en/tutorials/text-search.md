@@ -233,7 +233,7 @@ Some notes about the elements above:
 ## Deploy the application package
 
 Once we have finished writing our application package, we can deploy it.
-We use settings similar to those in the [Vespa quick start guide](../vespa-quick-start.html).
+We use settings similar to those in the [Vespa quick start guide](../deploy-an-application-local.html).
 
 Start the Vespa container:
 

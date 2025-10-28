@@ -534,7 +534,7 @@ $ curl -L -o app/model/tokenizer.json \
 ## Deploy the application package
 
 The application package can now be deployed to a running Vespa instance.
-See also the [Vespa quick start guide](vespa-quick-start.html).
+See also the [Vespa quick start guide](deploy-an-application-local.html).
 
 Start the Vespa container image using Docker:
 
