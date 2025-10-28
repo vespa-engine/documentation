@@ -34,6 +34,10 @@ gem "webrick"
 gem 'rake'
 gem 'html-proofer'
 
+# Work-around for csv and base64 no longer included in Ruby 3.4.0
+gem "csv"
+gem "base64"
+
 # Jekyll plugins group
 
 group :jekyll_plugins do
