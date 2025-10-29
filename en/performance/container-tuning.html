@@ -20,7 +20,9 @@ title: "Container Tuning"
   Most components including request handlers use the container's <em>default thread pool</em>,
   which is controlled by a shared executor instance.
   Any component can utilize the default pool by injecting an <code>java.util.concurrent.Executor</code> instance.
-  Some built-in components have dedicated thread pools - such as the Jetty server and the search handler.
+  Some built-in components have dedicated thread pools - such as the Jetty server, the
+  <a href="../reference/services-search.html#threadpool">search handler</a> and
+  <a href="../reference/services-docproc.html#threadpool">document-processing</a> chains.
   These thread pools are injected through special wiring in the config model and
   are not easily accessible from other components.
 </p>
@@ -36,8 +38,9 @@ title: "Container Tuning"
 <p>
   The container will pre-start the minimum number of worker threads,
   so even an idle container may report running several hundred threads.
-  The thread pool is pre-started with the number of thread specified in the
-  <a href="../reference/services-search.html#threadpool-threads"><code>threads</code></a> parameter.
+  The <a href="../reference/services-search.html#threadpool">search handler</a> and
+  <a href="../reference/services-docproc.html#threadpool">document processing handler</a>
+  thread pools each pre-start the number of workers set in their configurations.
   Note that tuning the capacity upwards increases the risk of high GC pressure
   as concurrency becomes higher with more in-flight requests.
   The GC pressure is a function of number of in-flight requests, the time it takes to complete the request
@@ -45,9 +48,9 @@ title: "Container Tuning"
   Increasing the queue size will allow the application to handle shorter traffic bursts without rejecting requests,
   although increasing the average latency for those requests that are queued up.
   Large queues will also increase heap consumption in overload situations.
-  Extra threads will be created once the queue is full (when <a href="../reference/services-search.html#threads.boost">
-  <code>boost</code></a> is specified), and are destroyed after an idle timeout.
-  If all threads are occupied, requests are rejected with a 503 response.
+  For some thread pools, extra threads will be created once the queue is full (when
+  <a href="../reference/services-search.html#threads.boost"> <code>boost</code></a> is specified), and are destroyed
+  after an idle timeout. If all threads are occupied, requests are rejected with a 503 response.
 </p>
 <p>
   The effective thread pool configuration and utilization statistics can be observed through the
@@ -90,6 +93,16 @@ reduce the risk of certain deadlock scenarios and improve concurrency for low-re
             <queue>100</queue>
         </threadpool>
     </search>
+
+    <document-processing>
+        <!-- Docproc worker thread pool -->
+        <threadpool>
+            <!-- 4x vcpu permanent workers, e.g. 200 threads on 50 vcpu -->
+            <threads>4</threads>
+            <!-- Queue capacity scales with threads and vcpu -->
+            <queue>25</queue>
+        </threadpool>
+    </document-processing>
 
     <!-- Default thread pool -->
     <config name="container.handler.threadpool">
