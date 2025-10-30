@@ -4,9 +4,9 @@ title: "Tutorials"
 ---
 
 ## News Search and recommendation
-The [News Search Tutorial](news-1-getting-started.html) is a set of articles to explore Vespa features.
+The [News Search Tutorial](news-1-deploy-an-application.html) is a set of articles to explore Vespa features.
 This is the best tutorial to start with:
-1. [Getting started](news-1-getting-started.html)
+1. [Getting started](news-1-deploy-an-application.html)
 2. [A basic news search application](news-2-basic-feeding-and-query.html) - application packages, feeding, query
 3. [News search](news-3-searching.html) - sorting, grouping, and ranking
 4. [Generating embeddings for users and news articles](news-4-embeddings.html)

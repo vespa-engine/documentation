@@ -163,7 +163,7 @@ The `document` section contains the fields of the document, their types,
 and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
-For more information, see [schemas - indexing](../schemas.html#indexing).
+For more information, see [schemas - indexing](../schemas.html#document-fields).
 The [string](../reference/schema-reference.html#string) data type represents both unstructured and structured texts, 
 and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  

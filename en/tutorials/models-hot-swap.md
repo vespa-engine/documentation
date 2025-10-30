@@ -3,7 +3,7 @@
 title: "Models hot swap tutorial"
 ---
 
-This tutorial builds on the [news recommendation tutorial](news-1-getting-started.html).
+This tutorial builds on the [news recommendation tutorial](news-1-deploy-an-application.html).
 It describes ways to manage a real-world Vespa application,
 which is updated on a regular basis while users are performing searches (hot swap).
 It also extends the application to support multiple recommendation models while minimizing data duplication.

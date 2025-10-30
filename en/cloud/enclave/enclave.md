@@ -19,11 +19,11 @@ Vespa Cloud Enclave is available in AWS and GCP. Azure is on the roadmap.
 resource costs from your cloud provider in _addition_ to the Vespa Cloud costs.
 
 ## AWS
-* [Getting started](/en/cloud/enclave/aws-getting-started)
+* [Getting started](/en/cloud/enclave/aws-deploy-an-application.html)
 * [Architecture and security](/en/cloud/enclave/aws-architecture)
 
 ## GCP
-* [Getting started](/en/cloud/enclave/gcp-getting-started)
+* [Getting started](/en/cloud/enclave/gcp-deploy-an-application.html)
 * [Architecture and security](/en/cloud/enclave/gcp-architecture)
 
 ## Guides
