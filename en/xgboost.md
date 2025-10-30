@@ -61,7 +61,8 @@ In the feature mapping example, feature at index 36 maps to
 [fieldMatch(title).completeness](reference/rank-features.html#fieldMatch(name).completeness)
 and index 39 maps to [fieldMatch(title).importance](reference/rank-features.html#fieldMatch(name).importance).
 The feature mapping format is not well described in the XGBoost documentation,
-but the [sample demo for binary classification](https://github.com/dmlc/xgboost/tree/master/demo/CLI/binary_classification) writes:
+<!-- ToDo: the below link needs checking ... -->
+but the [sample demo for binary classification](https://github.com/dmlc/xgboost/tree/master/demo) writes:
 
 Format of ```feature-map.txt: <featureid> <featurename> <q or i or int>\n ```:
   - "Feature id" must be from 0 to number of features, in sorted order.
