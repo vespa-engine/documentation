@@ -1971,36 +1971,131 @@ $ vespa-significance generate --format vstsv --in dumped_term_df.vstsv --out un_
   <tbody>
     <tr>
       <th>-h, --help</th>
-      <td>Help text</td>
+      <td>Show help for the subcommand.</td>
     </tr>
     <tr>
-      <th>-i, --in &lt;input file&gt;</th>
+      <th>-i, --in &lt;FILE&gt;</th>
       <td>
-        JSON Lines (JSONL) file where each line is a <a href="../reference/document-json-format.html">Vespa document in JSON format</a>.
+        Input file. Default format is JSON Lines where each line is a <a href="../reference/document-json-format.html">Vespa document in JSON</a>.
+        Use <code>--format vstsv</code> to read VSTSV files.
       </td>
     </tr><tr>
-      <th>-o, --out &lt;output file&gt;</th>
+      <th>--format &lt;jsonl|vstsv&gt;</th>
+      <td>Input format. Defaults to <code>jsonl</code>.</td>
+    </tr><tr>
+      <th>-o, --out &lt;model.json[.zst]&gt;</th>
       <td>
-        <a href="../significance.html#significance-model-file">Significance model file</a> in JSON format.
+        Output <a href="../significance.html#significance-model-file">significance model</a>. Required for JSONL input; defaults to <code>model.json</code> (or <code>.zst</code> when compression is enabled) for VSTSV input.
       </td>
     </tr><tr>
-      <th> -f, --field &lt;field&gt;</th>
+      <th>-f, --field &lt;field&gt;</th>
       <td>
-        Name of the text field to use for the significance model.
+        JSONL: name of the text field to analyse. Not used when reading VSTSV input.
       </td>
     </tr><tr>
-      <th> -l, --language &lt;language&gt;</th>
+      <th>-l, --language &lt;tag[,tag...]&gt;</th>
       <td>
-          Language of the text field specified as a code, e.g., <code>en</code> for English.
-          It is used by the OpenNLP tokenizer; see supported languages with codes <a href="../linguistics.html#default-languages">here</a>.
+        JSONL: comma-separated ISO language tags. The first tag controls tokenization; additional tags are stored in the model. Required for JSONL, optional for VSTSV (defaults to <code>un</code>).
+        See supported tags in <a href="../linguistics.html#default-languages">linguistics in Vespa</a>.
+      </td>
+    </tr><tr>
+      <th>-zst, --zst-compression &lt;true|false&gt;</th>
+      <td>
+        Enable Zstandard compression of the output. Default <code>false</code>. When <code>true</code>, the output file must end with <code>.zst</code>.
       </td>
     </tr>
+  </tbody>
+</table>
+<h3>vespa-significance export</h3>
+<p>Synopsis: <code>vespa-significance export [options] --field &lt;FIELD&gt;</code></p>
+<p>Example:</p>
+<pre>
+$ vespa-significance export --schema product --field title --out text.vstsv
+</pre>
+<p>
+  Locates an index on the content node and exports term document frequencies from that index using <code>vespa-index-inspect</code>.
+  The output VSTSV file can be passed to <code>generate --format vstsv</code> or merged with other exports.
+  This is available in Vespa as of version 8.597.8.
+</p>
+<p>This command must be executed on a content node.</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Option</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
     <tr>
-      <th> --zst &lt;compression&gt;</th>
+      <th>-h, --help</th>
+      <td>Show help for the subcommand.</td>
+    </tr>
+    <tr>
+      <th>--index-dir &lt;path/to/index&gt;</th>
       <td>
-          If set to <code>true</code> compresses the output file with <a href="https://facebook.github.io/zstd/">zstandard</a>.
-          Default <code>false</code>.
+        Explicit path to the index directory. If omitted, the tool locates the directory using cluster, schema, and node information.
       </td>
+    </tr><tr>
+      <th>--out &lt;FILE.vstsv[.zst]&gt;</th>
+      <td>
+        Output VSTSV file. Defaults to <code>export_<em>FIELD</em>.vstsv</code>. Compression adds <code>.zst</code> automatically.
+      </td>
+    </tr><tr>
+      <th>--field &lt;FIELD&gt;</th>
+      <td>
+        Field to export. Must correspond to a field directory within the selected index.
+      </td>
+    </tr><tr>
+      <th>--cluster &lt;NAME&gt;</th>
+      <td>Content cluster name used when locating the index directory.</td>
+    </tr><tr>
+      <th>--schema &lt;NAME&gt;</th>
+      <td>Schema (document type) name used when locating the index directory.</td>
+    </tr><tr>
+      <th>--node-index &lt;NUMBER&gt;</th>
+      <td>Content node index used when locating the index directory.</td>
+    </tr><tr>
+      <th>-zst, --zst-compression</th>
+      <td>Write the VSTSV output compressed with Zstandard.</td>
+    </tr>
+  </tbody>
+</table>
+<h3>vespa-significance merge</h3>
+<p>Synopsis: <code>vespa-significance merge [options] &lt;input.vstsv[.zst]&gt; [&lt;input2.vstsv[.zst]&gt; ...]</code></p>
+<p>Example:</p>
+<pre>
+$ vespa-significance merge --out merged_title.vstsv export_title_node1.vstsv export_title_node2.vstsv
+</pre>
+<p>
+  Merges multiple VSTSV files and preserves the total document count in the header.
+  Use this to combine exports before generating a model.
+  This is available in Vespa as of version 8.597.8.
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Option</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>-h, --help</th>
+      <td>Show help for the subcommand.</td>
+    </tr>
+    <tr>
+      <th>--out &lt;FILE.vstsv[.zst]&gt;</th>
+      <td>
+        Output VSTSV file. Defaults to <code>merged.vstsv</code>. Compression adds <code>.zst</code> automatically.
+      </td>
+    </tr><tr>
+      <th>--min-keep &lt;NUMBER&gt;</th>
+      <td>
+        Omit rows with document frequency lower than <code>NUMBER</code> when writing the merged output.
+      </td>
+    </tr><tr>
+      <th>-zst, --zst-compression</th>
+      <td>Write the merged VSTSV output compressed with Zstandard.</td>
     </tr>
   </tbody>
 </table>
