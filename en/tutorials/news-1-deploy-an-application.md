@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - getting started on Docker"
+redirect_from:
+- /en/tutorials/news-1-getting-started.html
 ---
 
 
