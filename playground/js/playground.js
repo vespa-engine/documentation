@@ -1309,8 +1309,43 @@ function setup_examples_list() {
         var val = el.attr('data-value');
         if (val) {
             try { localStorage.setItem('seen_playground_welcome', 'true'); } catch (e) {}
-            window.location.hash = val;
-            window.location.reload();
+            // Navigate to the normalized playground base (strip everything after '/playground/')
+            try {
+                var path = window.location.pathname;
+                var marker = '/playground/';
+                var idx = path.indexOf(marker);
+                var base = '/playground/';
+                if (idx !== -1) {
+                    // keep everything up to and including '/playground/' (so any trailing filename is removed)
+                    base = path.substring(0, idx + marker.length);
+                } else {
+                    // fallback to the known base
+                    base = marker;
+                }
+                // Build the new URL using the same origin
+                var newUrl = window.location.origin + base + '#' + val;
+                // If we're already on the normalized base path, changing href to the same
+                // origin+path may not reload. In that case update just the hash and force reload.
+                try {
+                    var currentBaseUrl = window.location.origin + window.location.pathname;
+                    var targetBaseUrl = window.location.origin + base;
+                    if (currentBaseUrl === targetBaseUrl) {
+                        try { window.location.hash = val; } catch (e3) {}
+                        window.location.reload();
+                    } else {
+                        // Navigate to the new URL (changes path and hash)
+                        window.location.href = newUrl;
+                    }
+                } catch (e3) {
+                    // Best-effort fallback
+                    window.location.href = newUrl;
+                }
+            } catch (e) {
+                // Fallback: set hash and reload
+                try { window.location.hash = ''; } catch (e2) {}
+                window.location.hash = val;
+                window.location.reload();
+            }
         }
         event.preventDefault();
     });
@@ -1357,8 +1392,33 @@ function setup_examples_hover() {
 
 function go_to_example() {
     var hash = d3.select("#examples-select").property("value");
-    window.location.hash = hash;
-    window.location.reload();
+    if (!hash) return;
+    // Navigate to the normalized playground base (strip everything after '/playground/')
+    try {
+        var path = window.location.pathname;
+        var marker = '/playground/';
+        var idx = path.indexOf(marker);
+        var base = '/playground/';
+        if (idx !== -1) {
+            base = path.substring(0, idx + marker.length);
+        }
+        var newUrl = window.location.origin + base + '#' + hash;
+        // If we're already on the normalized base path, updating href to the same
+        // origin+path may not reload. Update hash and force reload in that case.
+        var currentBaseUrl = window.location.origin + window.location.pathname;
+        var targetBaseUrl = window.location.origin + base;
+        if (currentBaseUrl === targetBaseUrl) {
+            try { window.location.hash = hash; } catch (e2) {}
+            window.location.reload();
+        } else {
+            window.location.href = newUrl;
+        }
+    } catch (e) {
+        // Fallback
+        try { window.location.hash = ''; } catch (e2) {}
+        window.location.hash = hash;
+        window.location.reload();
+    }
 }
 
 function clear_examples() {
