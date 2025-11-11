@@ -1,14 +1,9 @@
 async function openInChatGPT(markdownPath) {
-    try {
-        const response = await fetch(markdownPath);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const markdown = await response.text();
-        const encoded = encodeURIComponent(markdown);
-        window.open(`https://chatgpt.com/?prompt=${encoded}`, '_blank');
-    } catch (error) {
-        console.error('Error fetching markdown:', error);
-        alert('Could not fetch markdown content. Please try again.');
-    }
+    // Get the full URL to the markdown file
+    const fullUrl = window.location.origin + markdownPath;
+
+    // Create a prompt asking ChatGPT to fetch and analyze the markdown file
+    const prompt = encodeURIComponent(`Please fetch and analyze this Vespa documentation page: ${fullUrl} \n Await further instructions.`);
+
+    window.open(`https://chatgpt.com/?q=${prompt}`, '_blank');
 }
