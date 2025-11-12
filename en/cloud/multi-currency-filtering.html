@@ -98,10 +98,6 @@ schema product {
                 indexing: attribute
             }
         }
-
-        field per_market_price_tensor type tensor<double>(market{}) {
-            indexing: attribute
-        }
     }
 }
 {% endhighlight %}</pre>
@@ -171,7 +167,7 @@ schema product {
 <h4 id="feed-products">Feed Products</h4>
 <p>
   Feed products with their seller currency and per-market prices. Always include a <code>DEFAULT</code> market
-  entry as fallback. The <code>per_market_price_tensor</code> field is optional but currently required for ranking use cases.
+  entry as fallback.
 </p>
 
 <pre>{% highlight json %}
@@ -186,15 +182,7 @@ schema product {
       {"market": "EU", "price": 189.0},
       {"market": "UK", "price": 209.0},
       {"market": "NO", "price": 300.0}
-    ],
-    "per_market_price_tensor": {
-      "cells": [
-        {"address": {"market": "DEFAULT"}, "value": 199.0},
-        {"address": {"market": "EU"}, "value": 189.0},
-        {"address": {"market": "UK"}, "value": 209.0},
-        {"address": {"market": "NO"}, "value": 300.0}
-      ]
-    }
+    ]
   }
 }
 {% endhighlight %}</pre>
@@ -473,6 +461,7 @@ $ vespa feed <(echo '{
 <p>
   When <code>ecommerce.multicurrency.enrich=true</code> is set, the searcher exposes the forex rates
   as a query tensor <code>query(forexRates)</code> that can be used in ranking expressions.
+  You can use <code>tensorFromStructs</code> to convert the <code>per_market_price</code> array to a tensor at ranking time.
 </p>
 
 <pre>{% highlight xml %}
@@ -489,8 +478,12 @@ rank-profile price_ranking {
         expression: sum(query(forexRates){to:'USD'} * from_selector(), from)
     }
 
+    function price_tensor() {
+        expression: tensorFromStructs(attribute(per_market_price), market, price, double)
+    }
+
     function usd_price() {
-        expression: attribute(per_market_price_tensor){market:'DEFAULT'} * usd_rate()
+        expression: price_tensor(){market:'DEFAULT'} * usd_rate()
     }
 
     first-phase {
@@ -498,6 +491,12 @@ rank-profile price_ranking {
     }
 }
 {% endhighlight %}</pre>
+
+<p>
+  The <code>tensorFromStructs</code> function creates a <code>tensor&lt;double&gt;(market{})</code> from the
+  <code>per_market_price</code> array, where <code>market</code> becomes the tensor dimension and
+  <code>price</code> becomes the cell values. This eliminates the need for a separate tensor field in the schema.
+</p>
 
 
 <h2 id="best-practices">Best Practices</h2>
@@ -546,6 +545,7 @@ rank-profile price_ranking {
   <li><a href="/en/use-case-shopping.html">Use Case - Shopping</a></li>
   <li><a href="/en/searcher-development.html">Searcher Development</a></li>
   <li><a href="/en/tensor-user-guide.html">Tensor Guide</a></li>
+  <li><a href="/en/reference/rank-features.html#tensorFromStructs(attribute,key,value,type)">tensorFromStructs - Convert struct arrays to tensors</a></li>
   <li><a href="/en/reference/schema-reference.html#struct-field">Struct Fields in Schemas</a></li>
   <li><a href="/en/operations-selfhosted/routing.html#search-chains">Search Chains</a></li>
 </ul>
