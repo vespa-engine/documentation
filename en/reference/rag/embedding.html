@@ -478,6 +478,206 @@ Add the secret to the container <code>&lt;secrets&gt;</code> and refer to it in 
 
 
 
+<h2 id="voyageai-embedder">VoyageAI Embedder</h2>
+<p>
+  An embedder that uses the <a href="https://www.voyageai.com/">VoyageAI</a> API
+  to generate embeddings. This is an API-based embedder that does not require local model files or ONNX inference.
+  It calls the VoyageAI service to generate high-quality embeddings optimized for semantic search.
+</p>
+<p>
+  The VoyageAI embedder is configured in <a href="services.html">services.xml</a>,
+  within the <code>container</code> tag:
+</p>
+<pre>{% highlight xml %}
+<container id="default" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-3.5</model>
+        <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+    </component>
+</container>
+{% endhighlight %}</pre>
+
+<h3 id="voyageai-secret-management">Secret Management</h3>
+<p>
+  The VoyageAI API key must be stored in Vespa's
+  <a href="/en/cloud/security/secret-store.html">secret store</a> for secure management:
+</p>
+<pre>
+vespa secret add voyage_api_key --value "pa-xxxxx..."
+</pre>
+<p>
+  The <code>api-key-secret-ref</code> parameter references the secret name.
+  Secrets are automatically refreshed when rotated without requiring application restart.
+</p>
+
+<h3 id="voyageai-embedder-reference-config">VoyageAI embedder reference config</h3>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>api-key-secret-ref</td>
+      <td>One</td>
+      <td><strong>Required</strong>. Reference to the secret in Vespa's secret store containing the VoyageAI API key.</td>
+      <td>string</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>model</td>
+      <td>One</td>
+      <td>The VoyageAI model to use. Available models:
+        <ul style="margin: 5px 0;">
+          <li><strong><code>voyage-3.5</code></strong> (1024 dims) - <strong>Latest and best quality</strong>, state-of-the-art (recommended)</li>
+          <li><strong><code>voyage-3.5-lite</code></strong> (512 dims) - <strong>Newest lite model</strong>, excellent quality at lower cost</li>
+          <li><code>voyage-3</code> (1024 dims) - Previous generation, high quality</li>
+          <li><code>voyage-3-lite</code> (512 dims) - Previous generation, cost-efficient</li>
+          <li><code>voyage-code-3</code> (1024 dims) - Code search optimization</li>
+          <li><code>voyage-finance-2</code> (1024 dims) - Financial documents</li>
+          <li><code>voyage-law-2</code> (1024 dims) - Legal documents</li>
+          <li><code>voyage-multilingual-2</code> (1024 dims) - Multilingual support</li>
+        </ul>
+      </td>
+      <td>string</td>
+      <td>voyage-3.5</td>
+    </tr>
+    <tr>
+      <td>endpoint</td>
+      <td>One</td>
+      <td>VoyageAI API endpoint URL. Can be overridden for custom proxies or regional endpoints.</td>
+      <td>string</td>
+      <td>https://api.voyageai.com/v1/embeddings</td>
+    </tr>
+    <tr>
+      <td>timeout</td>
+      <td>One</td>
+      <td>Request timeout in milliseconds. Also serves as the bound for retry attempts - retries stop when total elapsed time would exceed this timeout. Minimum value: 1000ms.</td>
+      <td>numeric</td>
+      <td>30000</td>
+    </tr>
+    <tr>
+      <td>max-retries</td>
+      <td>One</td>
+      <td>Maximum number of retry attempts for failed requests. Used as a safety limit in addition to the timeout-based retry bound.</td>
+      <td>numeric</td>
+      <td>10</td>
+    </tr>
+    <tr>
+      <td>default-input-type</td>
+      <td>One</td>
+      <td>Default input type when auto-detection is disabled. Valid values: <code>query</code> or <code>document</code>. VoyageAI models use different optimizations for queries vs documents.</td>
+      <td>enum</td>
+      <td>document</td>
+    </tr>
+    <tr>
+      <td>auto-detect-input-type</td>
+      <td>One</td>
+      <td>Whether to automatically detect input type based on context. When enabled, uses <code>query</code> type for query-time embeddings and <code>document</code> type for indexing.</td>
+      <td>boolean</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>normalize</td>
+      <td>One</td>
+      <td>Whether to apply L2 normalization to embeddings. When enabled, all embedding vectors are normalized to unit length. Use with <code>prenormalized-angular</code> <a href="schema-reference.html#distance-metric">distance-metric</a> for efficient similarity computation.</td>
+      <td>boolean</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>truncate</td>
+      <td>One</td>
+      <td>Whether to truncate input text exceeding model limits. When enabled, text is automatically truncated. When disabled, requests with too-long text will fail.</td>
+      <td>boolean</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>pool-size</td>
+      <td>One</td>
+      <td>HTTP connection pool size. Higher values improve throughput for concurrent requests but use more resources.</td>
+      <td>numeric</td>
+      <td>5</td>
+    </tr>
+    <tr>
+      <td>cache-size</td>
+      <td>One</td>
+      <td>LRU cache size for storing recent embeddings. Reduces duplicate API calls. Set to 0 to disable caching. Cache key includes text, input type, and embedder ID.</td>
+      <td>numeric</td>
+      <td>1000</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="voyageai-example-configurations">Example Configurations</h3>
+
+<p><strong>Basic configuration (recommended)</strong>:</p>
+<pre>{% highlight xml %}
+<component id="voyage" type="voyage-ai-embedder">
+    <model>voyage-3.5</model>
+    <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+</component>
+{% endhighlight %}</pre>
+
+<p><strong>High-performance configuration</strong>:</p>
+<pre>{% highlight xml %}
+<component id="voyage" type="voyage-ai-embedder">
+    <model>voyage-3.5</model>
+    <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+    <cache-size>10000</cache-size>
+    <pool-size>20</pool-size>
+    <timeout>60000</timeout>
+</component>
+{% endhighlight %}</pre>
+
+<p><strong>Fast and cost-efficient configuration</strong>:</p>
+<pre>{% highlight xml %}
+<component id="voyage-lite" type="voyage-ai-embedder">
+    <model>voyage-3.5-lite</model>
+    <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+    <cache-size>10000</cache-size>
+</component>
+{% endhighlight %}</pre>
+
+<p><strong>Query-optimized configuration</strong>:</p>
+<pre>{% highlight xml %}
+<component id="voyage-query" type="voyage-ai-embedder">
+    <model>voyage-3.5</model>
+    <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+    <default-input-type>query</default-input-type>
+    <auto-detect-input-type>false</auto-detect-input-type>
+    <normalize>true</normalize>
+</component>
+{% endhighlight %}</pre>
+
+<p><strong>Code search configuration</strong>:</p>
+<pre>{% highlight xml %}
+<component id="code-embedder" type="voyage-ai-embedder">
+    <model>voyage-code-3</model>
+    <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+    <normalize>true</normalize>
+</component>
+{% endhighlight %}</pre>
+
+<h3 id="voyageai-cost-optimization">Cost and Performance Optimization</h3>
+<p>The VoyageAI embedder includes several features to reduce API costs and improve performance:</p>
+<ul>
+  <li><strong>Caching</strong>: The LRU cache prevents duplicate API calls for the same text. This is particularly effective for repeated queries or documents.</li>
+  <li><strong>Connection pooling</strong>: HTTP connections are reused to reduce connection overhead and improve throughput.</li>
+  <li><strong>Retry logic</strong>: Automatic retries with fixed 1-second delay handle rate limits and transient errors, bounded by the global timeout.</li>
+  <li><strong>Model selection</strong>: Use <code>voyage-3.5-lite</code> for cost-sensitive applications (512 dimensions vs 1024 dimensions reduces costs while maintaining excellent quality). For best quality, use <code>voyage-3.5</code>.</li>
+</ul>
+
+<p>For detailed performance monitoring, the embedder emits standard Vespa embedder metrics
+  (see <a href="container-metrics-reference.html">Container Metrics</a>).
+  Monitor API usage and costs through the <a href="https://www.voyageai.com/">VoyageAI dashboard</a>.</p>
+
+
+
 <h2 id="huggingface-tokenizer-embedder">Huggingface tokenizer embedder</h2>
   <p>
     The Huggingface tokenizer embedder is configured in <a href="../applications/services/services.html">services.xml</a>,
