@@ -461,42 +461,74 @@ $ vespa feed <(echo '{
 <p>
   When <code>ecommerce.multicurrency.enrich=true</code> is set, the searcher exposes the forex rates
   as a query tensor <code>query(forexRates)</code> that can be used in ranking expressions.
-  You can use <code>tensorFromStructs</code> to convert the <code>per_market_price</code> array to a tensor at ranking time.
+  The ranking profile should implement the same fallback logic as the searcher: check for market-specific prices first,
+  then fall back to the DEFAULT market price, and convert to the buyer's currency.
 </p>
 
 <pre>{% highlight xml %}
 rank-profile price_ranking {
     inputs {
         query(forexRates) tensor<double>(from{}, to{})
+        query(buyer_currency) tensor<double>(to{})
+        query(buyer_market) tensor<double>(market{})
     }
 
     function from_selector() {
         expression: tensorFromLabels(attribute(seller_currency), from)
     }
 
-    function usd_rate() {
-        expression: sum(query(forexRates){to:'USD'} * from_selector(), from)
+    function buyer_rate() {
+        expression: sum(query(forexRates) * from_selector() * query(buyer_currency), from, to)
     }
 
     function price_tensor() {
         expression: tensorFromStructs(attribute(per_market_price), market, price, double)
     }
 
-    function usd_price() {
-        expression: price_tensor(){market:'DEFAULT'} * usd_rate()
+    function market_specific_price() {
+        expression: sum(price_tensor() * query(buyer_market), market)
+    }
+
+    function default_price() {
+        expression: price_tensor(){market:'DEFAULT'}
+    }
+
+    function effective_price_in_seller_currency() {
+        expression: if(market_specific_price() > 0, market_specific_price(), default_price())
+    }
+
+    function effective_price_in_buyer_currency() {
+        expression: effective_price_in_seller_currency() * buyer_rate()
     }
 
     first-phase {
-        expression: -usd_price()  # Rank cheaper products higher
+        expression: -effective_price_in_buyer_currency()
     }
 }
 {% endhighlight %}</pre>
 
 <p>
-  The <code>tensorFromStructs</code> function creates a <code>tensor&lt;double&gt;(market{})</code> from the
-  <code>per_market_price</code> array, where <code>market</code> becomes the tensor dimension and
-  <code>price</code> becomes the cell values. This eliminates the need for a separate tensor field in the schema.
+  This rank profile requires passing one-hot encoded tensors for the buyer's currency and market as query parameters:
 </p>
+<pre>{% highlight sh %}
+$ vespa query \
+    'yql=select * from product where true' \
+    'searchChain=multi-currency-filter' \
+    'ecommerce.multicurrency.enrich=true' \
+    'ranking.features.query(buyer_currency)={% raw %}{{to:NOK}:1}{% endraw %}' \
+    'ranking.features.query(buyer_market)={% raw %}{{market:NO}:1}{% endraw %}'
+{% endhighlight %}</pre>
+
+<p>
+  Key functions:
+</p>
+<ul>
+  <li><code>tensorFromStructs</code> - Converts the <code>per_market_price</code> array to a tensor at ranking time</li>
+  <li><code>market_specific_price()</code> - Extracts price for the requested market if it exists</li>
+  <li><code>default_price()</code> - Gets the DEFAULT market price as fallback</li>
+  <li><code>effective_price_in_seller_currency()</code> - Selects market-specific price or falls back to DEFAULT</li>
+  <li><code>effective_price_in_buyer_currency()</code> - Converts the effective price using forex rates</li>
+</ul>
 
 
 <h2 id="best-practices">Best Practices</h2>
