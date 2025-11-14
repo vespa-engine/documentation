@@ -1,32 +1,77 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: Index bootstrap
+title: Initial batch feed
 category: cloud
+redirect_from:
+- /en/cloud/index-bootstrap.html
 ---
 
+<p>
+  One of the first things you do when creating a Vespa application is deploying it to Vespa Cloud and batch feeding all your data.
+  We assume you have made the first version of the schema file(s) and generated a set of Vespa feed files.
+  You will face some of these questions:
+</p>
+<ul>
+  <li>What is a good resource configuration for the content nodes holding the index?</li>
+  <li>What happens when I change the node resource configuration?</li>
+  <li>How many nodes are required to hold the full index?</li>
+  <li>Is using autoscaling a good idea when batch feeding?</li>
+  <li>How do I know what the feeding bottleneck is?</li>
+  <li>What is the difference between a container and content cluster?</li>
+</ul>
+<p>
+  Review the introduction section of the <a href="/en/overview.html">Vespa overview</a> to understand
+  the different between <em>container</em> and <em>content</em> clusters before continuing.
+</p>
+<p>
+  The first thing to note is that changes to node resources (i.e., instance type)
+  are <a href="/en/cloud/node-resources.html">automated</a>.
+  This makes it easy to just get started feeding, observe, change, and repeat.
+</p>
+<p>
+  The next thing is, changing node resources takes some time to apply,
+  as data and indexes are migrated to the node(s) with the new configuration - more details below.
+  This also means, it is easier to change this with little data and few nodes deployed,
+  like in the 1% step below.
+  Therefore, do an iteration or two to get the disk/memory balance right
+</p>
+<p>
+  Once the node resources configuration is about right, feed more data.
+  This is potentially time consuming.
+  Make sure the bottleneck is the nodes in the content clusters (you should see at least one thread at 100%),
+  It is a good idea to make sure that the <em>container</em> cluster with the feed endpoint is not at 100% CPU,
+  add more nodes if so.
+  <a href="/en/performance/sizing-feeding.html#feed-testing">More details</a>.
+</p>
+<p>
+  Finally, we recommend in this phase to not use <a href="/en/cloud/autoscaling.html">autoscaling</a>.
+  Autoscaling is great for incremental changes, in <em>this</em> case, we feed from zero to full.
+  Best practice is, once you have a rough idea based on the smaller feed batches,
+  allocate 50-100% more content node capacity than your estimate, and feed to full.
+  This will speed up the process with less wall-clock time and no delays due to
+  <a href="/en/operations/feed-block.html">blocked feeding</a>.
+  When the initial feed is done, it is easy to evaluate possible overcapacity and reduce node count.
+</p>
 
+<h2 id="summary">Summary</h2>
 <p>
   When bootstrapping an index, one must consider node resource configuration and number of nodes.
   The strategy is to iterate:
 </p>
 <img src="/assets/img/index-bootstrap.svg" width="465" alt="Growing a Vespa cluster in steps"/>
 <ol>
-  <li>Feed smaller chunks of data</li>
+  <li>Feed smaller datasets</li>
   <li>Evaluate</li>
   <li>Deploy new node counts / node resource configuration</li>
   <li>Wait for data migration to complete</li>
   <li>Evaluate</li>
 </ol>
 <p>
-  While doing this, ensure the cluster is <strong>never more than 50% full</strong> -
+  While doing this, ensure the cluster is <strong>not more than 50% full</strong> -
   this gives headroom to later increase/shrink the index
   and change schema configuration easily using automatic reindexing.
   It is easy to downscale resources after the bootstrap,
   and it saves a lot of time keeping the clusters within limits - hence max 50%.
-</p>
-<p>
-  Review the <a href="/en/overview.html">Vespa Overview</a> to understand
-  the different between <em>container</em> and <em>content</em> clusters before continuing.
 </p>
 
 
@@ -43,19 +88,18 @@ category: cloud
 </nodes>
 {% endhighlight %}</pre>
 <p>
-  To evaluate how full the content cluster is, use <a href="monitoring">metrics</a> from content nodes - example:
+  To evaluate how full the content cluster is,
+  use the "Metrics" view in the Vespa Cloud Console
+  or <a href="monitoring">metrics</a> from content nodes - example:
 </p>
-<!-- ToDo: verify this is the correct metrics -->
 <pre>
 $ curl \
   --cert data-plane-public-cert.pem \
   --key  data-plane-private-key.pem \
-  https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud/prometheus/v1/values | \
+  https://ab1f1234.b68a8765.z.vespa-app.cloud/prometheus/v1/values | \
   egrep 'disk.util|mem.util' | egrep 'clusterId="content/'
 </pre>
-<p>
-  Once able to get the metrics above, you are ready to bootstrap the index.
-</p>
+<p>Once able to see the metrics above, you are ready to bootstrap the index.</p>
 
 
 
@@ -101,9 +145,13 @@ $ curl \
         and data is migrated to new nodes. Example: growing from 2 to 3 nodes means each of the 2 current nodes
         will migrate 33% of their data to the new node.
         Read more in <a href="/en/elasticity.html">elasticity</a>.
-        It saves time to let the cluster finish data migration before feeding more data.
+      </p>
+      <p>
+        It saves time to let the cluster finish data migration before feeding more data,
+        and it lets you observe metrics before next steps.
         In this step it will be fast as the data volume is small, but nevertheless check the
-        <a href="/en/reference/distributor-metrics-reference.html#vds_idealstate_merge_bucket_pending">
+        "Content Buckets Out Of Sync (%), per Cluster" panel in the Vespa Cloud Console Metrics view,
+        or the <a href="/en/reference/distributor-metrics-reference.html#vds_idealstate_merge_bucket_pending">
         vds.idealstate.merge_bucket.pending.average</a> metric.
         Wait for 0 for all nodes - this means data migration is completed:
       </p>
@@ -111,7 +159,7 @@ $ curl \
 $ curl \
   --cert ~/.vespa/mytenant.myapp.default/data-plane-public-cert.pem \
   --key  ~/.vespa/mytenant.myapp.default/data-plane-private-key.pem \
-  https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud/prometheus/v1/values?consumer=Vespa | \
+  https://ab1f1234.b68a8765.z.vespa-app.cloud/prometheus/v1/values?consumer=Vespa | \
   egrep 'vds_idealstate_merge_bucket_pending_average'
 </pre>
       <p>
