@@ -6,6 +6,15 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
 
 ---
 
+<style>
+.subpage h2 {
+    margin-top: 90px;
+}
+.subpage h3 {
+    margin-top: 60px;
+}
+</style>
+
 
 
 {:.faq-section}
@@ -179,7 +188,9 @@ Using [dot products](multivalue-query-operators.html) or [weak and](using-wand-w
 ### Does Vespa support stop-word removal?
 Vespa does not have a stop-word concept inherently.
 See the [sample app](https://github.com/vespa-engine/sample-apps/pull/335/files)
-for how to use [filter terms](reference/query-language-reference.html#annotations).
+for how to use [filter terms](/en/reference/query-language-reference.html#annotations).
+[Tripling the query performance of lexical search](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/)
+it s good blog post on this subject.
 
 ### How to extract more than 400 hits / query and get ALL documents?
 Trying to request more than 400 hits in a query, getting this error:
@@ -304,8 +315,9 @@ FutureResult futureResult = new AsyncExecution(settings).search(query);
 FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
 ```
 ### Is it possible to query for the number of elements in an array
-No, there is no index or attribute data structure that allows efficient searching for documents where
+There is no index or attribute data structure that allows efficient _searching_ for documents where
 an array field has a certain number of elements or items.
+The _grouping language_ has a [size()](/en/reference/grouping-syntax.html#list-expressions) operator that can be used in queries.
 
 ### Is it possible to query for fields with NaN/no value set/null/none
 The [visiting](visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
@@ -559,11 +571,29 @@ Read up on [attributes](attributes.html) to understand more of how such fields a
 [Paged attributes](attributes.html#paged-attributes) trades off memory usage vs. query latency
 for a lower max memory usage.
 
+### What is the best practice for scaling Vespa for day vs night?
+[Autoscaling](/en/cloud/autoscaling.html) is the best guide to understand how to size and autoscale the system.
+Container clusters are stateless and can be autoscaled more quickly than content clusters.
+
+### We can spike 8x in 5 minutes in terms of throughput requirements.
+It is not possible to autoscale content clusters for 8x load increase in 5 minutes,
+as this requires both provisioning and data migration.
+Such use cases are best discussed with the Vespa Team to understand the resource bottlenecks,
+tradeoffs and mitigations.
+Also read [Graceful Degradation](/en/graceful-degradation.html).
+
+### How much lower-level configuration do we need to do? For example, do we need to alter the number of threads per container?
+It depends. Vespa aims to adapt to resources (like auto thread config based on virtual node thread count)
+and actual use (when to run maintenance jobs like compaction),
+but there are tradeoffs that applications owners can/should make.
+Start off by reading the [Vespa Serving Scaling Guide](/en/performance/sizing-search.html),
+then run [benchmarks](/en/cloud/benchmarking.html) and use the [dashboards](/en/cloud/monitoring.html).
+
 
 {:.faq-section}
 ## Administration
 
-### Can one do a partial deploy to the config server / update the schema without deploying all the node configs?
+### Self-managed: Can one do a partial deploy to the config server / update the schema without deploying all the node configs?
 Yes, deployment is using this web service API,
 which allows you to create an edit session from the currently deployed package,
 make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](reference/deploy-rest-api-v2.html).
@@ -635,7 +665,7 @@ ensures that data can be queried from all groups.
 ### How to set up for disaster recovery / backup?
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
 
-### How to check Vespa version for a running instance?
+### Self-managed: How to check Vespa version for a running instance?
 Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa version.
 
 ### Deploy rollback
@@ -718,3 +748,145 @@ If Vespa is running in a local container (named "vespa"), run `docker exec vespa
 ### How to fix encoding problems in document text?
 See [encoding troubleshooting](/en/troubleshooting-encoding.html)
 for how to handle and remove control characters from the document feed.
+
+
+
+## Login, Tenants and Plans
+
+### How to get started?
+[Deploy an application](/en/deploy-an-application.html) to create a tenant and start your [free trial](https://vespa.ai/free-trial).
+This tenant can be your personal tenant, or shared with others.
+It can not be renamed.
+
+### How to create a company tenant?
+If the tenant is already created, add more users to it.
+Click the "account" button in the Vespa Cloud Console (top right in the tenant view), then "users".
+From this view you can manage users in the tenant, and their roles -
+from here, you can add/set tenant admins.
+
+### How to accept Terms of Service?
+When starting the free trial, you are asked to accept Terms of Service.
+For paid plans, this is covered by the contract.
+
+### How do I switch from free trial to a paid plan?
+Click "account", then "billing" in the console to enter information required for billing.
+Use [Vespa Support](https://vespa.ai/support/) if you need to provide this information without console login.
+
+### Does Vespa Cloud support Single Sign-On (SSO)?
+Yes, contact [Vespa Support](https://vespa.ai/support/) to set it up.
+
+
+
+## Vespa Cloud Operations
+
+### How can I change the cost of my Vespa Cloud usage?
+See [node resources](/en/cloud/node-resources.html) to assess current and auto-suggested resources
+and [autoscaling](/en/cloud/autoscaling.html) for how to automate.
+
+### How can I manually modify resources used?
+Managing resources is easy, as most changes are automated.
+Adding / removing / changing nodes starts automated data migration,
+see [elasticity](/en/elasticity.html).
+
+### How to modify a schema?
+Schema changes might require data reindexing, which is automated, but takes some time.
+Other schema changes require data refeed - [details](/en/schemas.html#schema-modifications)
+<!-- ToDo: we should really have a "managing resources" guide for Vespa Cloud -->
+
+### How to evaluate how much memory a field is using?
+Use the [Memory Visualizer](/en/cloud/memory-visualizer.html) to evaluate how memory is allocated to the fields.
+Fields can be `index`, `attribute` and `summary`, and combinations of these,
+with settings like `fast-search` that affects memory usage.
+[Attributes](/en/attributes.html) is a great read for understanding Vespa memory usage.
+
+### Archive access failed with Permission 'serviceusage.services.use' denied
+Listing archived objects can fail,
+e.g. `gsutil -u my_project ls gs://vespa-cloud-data-prod-gcp-us-central1-f-12345f/my_tenant` can fail with
+`AccessDeniedException: 403 me@mymail.com does not have serviceusage.services.use access to the Google Cloud project.
+Permission \'serviceusage.services.use\' denied on resource (or it may not exist).`
+This can be due to missing rights on your Google project (my_project in the example above)
+\- from the Google documentation:
+_"The user account accessing the Cloud Storage Bucket must be granted the Service Usage Consumer role
+(see [https://cloud.google.com/service-usage/docs/access-control](https://cloud.google.com/service-usage/docs/access-control))
+in order to charge the specified user project for the bucket usage cost"_
+
+### How do I integrate with my current monitoring infrastructure?
+Vespa Cloud applications have a Prometheus endpoint.
+Find guides for how to integrate with Grafana and AWS Cloudwatch at [monitoring](/en/cloud/monitoring.html).
+
+### What is the best way to monitor instantaneously what is happening in Vespa? CPU usage? Memory usage? htop? Cloudwatch metrics?
+Vespa Cloud has detailed dashboards linked from the _monitoring_ tab in the Console,
+one for each zone the instance is deployed to.
+
+### How are Vespa versions upgrades handled - only for new deploys?
+Vespa is normally upgraded daily. There are exceptions, like holidays and weekends.
+During upgrades, nodes are stopped one-by-one per cluster.
+As all clusters have one redundant node, serving and write traffic is not impacted by upgrades.
+Before the upgrade, the application's [system and staging tests](/en/cloud/automated-deployments.html) are run,
+halting the upgrade if they fail.
+Documents are re-migrated to the upgraded node before doing the next node,
+see [Elastic Vespa](/en/elasticity.html) for details.
+
+### How do we get alerted to issues like Feed Block? Searchable copy going offline?
+Issues like Feed Blocked, Deployment and Deprecation warnings show up in the console.
+There are no warnings on redundancy level / searchable copies,
+as redundant document buckets are activated for queries automatically,
+and auto data-migration kicks in for node failures / replacements.
+
+### What actions are needed when deploying schema changes?
+* Schema changes that [require service restart](/en/reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
+  are handled automatically by Vespa Cloud. A deployment job involves waiting for these to complete.
+* Schema changes that [require reindexing](/en/reference/schema-reference.html#changes-that-require-reindexing)
+  of data require a validation override, and will trigger automatic reindexing. Status can be tracked in the console application view.
+  Vespa Cloud also periodically re-indexes all data, with minimal resource usage, to account for changes in linguistics libraries.
+* Schema changes that [require refeeding](/en/reference/schema-reference.html#changes-that-require-re-feed)
+  data require a validation override, and the user must refeed the data after deployment.
+
+### What are the Vespa Cloud data retention policies?
+The management of data stored in an application running on Vespa Cloud is the responsibility of the
+application owner and, as such, Vespa Cloud does not have any retention policy for this data as
+long as it is stored by the application.
+
+The following data retention policies applies to Vespa Cloud:
+* After a node previously allocated to an application has been deallocated (e.g. due to
+  application being deleted by application owner), all application data will be deleted within
+  _four hours_.
+* All application log data will be deleted from Vespa servers after no more than _30 days_ (most
+  often sooner) dependent on log volume, allocated disk resources, etc. *PLEASE NOTE:* This is
+  the theoretical maximum retention time - see [archive guide](/en/cloud/archive-guide.html) for how to ensure
+  access to your application logs.
+
+
+
+### Is Vespa Cloud certified for ISO 27001 or SOC II?
+Yes, Vespa.ai has a SOC 2 attestation: [Trust Center](https://trust.vespa.ai).
+
+### Is Vespa Cloud GDPR compliant?
+Read more in [GDPR](https://cloud.vespa.ai/en/gdpr).
+
+### Does Vespa store information from the information sources with which it is integrated?
+Vespa is most often used for queries in data written from the information sources,
+although it can also be used without data, e.g. for model serving.
+It is the application owner that writes the integration with Vespa Cloud to write data.
+
+### What is the encryption algorithm used at rest?
+Vespa Cloud uses the following Cloud providers:
+* AWS EC2 instances, with local or remote storage
+* GCP Compute instances, with local or remote storage
+* Azure Compute instances, with local or remote storage
+
+The storage devices are encrypted per Cloud provider, at rest.
+
+### Does the Vespa console have audit trails/logs module and can it be accessed by an Admin user?
+See the [security guide](/en/cloud/security/guide.html) for roles and permissions.
+The Vespa Cloud Console has a log view tool,
+and logs / access logs can be exported to the customer's AWS account easily.
+Deployment operations are tracked in the deployment view, with a history.
+Vespa Cloud Operators do not have node access, unless specifically granted by the customer, audit logged.
+
+### Once the service purchased with Vespa is terminated, is there a secure deletion procedure for the information collected from the customer?
+At termination, all application instances are removed, with data, before the tenant can be deactivated.
+
+### Why is the CPU usage for my application above 100%?
+In `dev` zones we use shared resources hence have more than one node on each host/instance.
+In order to provide a best possible overall responsiveness we do not restrict CPU resources for the individual application nodes.
