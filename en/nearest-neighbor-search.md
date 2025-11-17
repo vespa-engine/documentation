@@ -24,7 +24,10 @@ a rank profile using `closeness()` and a query with the `nearestNeighbor` operat
     document doc {
 
         field <span class="pre-hilite">d_vector</span> type tensor&lt;float&gt;(d[3]) {
-            indexing: summary | attribute
+            indexing: attribute | index
+            attribute {
+                distance-metric: angular
+            }
         }
 
     }
