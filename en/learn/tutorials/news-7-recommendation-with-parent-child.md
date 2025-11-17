@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News Recommendation Tutorial - parent child and tensor ranking"
+redirect_from:
+  - /en/tutorials/news-7-recommendation-with-parent-child
 ---
 
 
@@ -50,12 +52,12 @@ before passing that with the news article query.
 We could have a single document holding all global values and retrieve that with each query.
 However, that isn't particularly efficient.
 
-For these cases, Vespa introduced the [parent-child relationship](../parent-child.html).
+For these cases, Vespa introduced the [parent-child relationship](../../parent-child.html).
 Parents are global documents, which are automatically distributed to all content nodes.
 Other documents can reference these parents and "import" values for use in ranking.
 The benefit is that the global category CTR values only need to be written to one place: the global document.
 
-Please see the [guide on parent-child relationships](../parent-child.html) for more information and examples.
+Please see the [guide on parent-child relationships](../../parent-child.html) for more information and examples.
 
 
 ## Setting up a global category CTR document
@@ -79,12 +81,12 @@ schema category_ctr {
 </pre>
 </div>
 
-This document holds a single field: a [tensor](../tensor-user-guide.html) of type `tensor<float>(category{})`.
+This document holds a single field: a [tensor](../../tensor-user-guide.html) of type `tensor<float>(category{})`.
 This is a tensor with a single sparse dimension,
 which is slightly different from the tensors we have seen so far.
 Sparse tensors have strings as dimension addresses rather than a numeric index.
 More concretely, an example of such a tensor is
-(using the [tensor literal form](../reference/tensor.html#tensor-literal-form)):
+(using the [tensor literal form](../../reference/tensor.html#tensor-literal-form)):
 
 ```
 {
@@ -99,7 +101,7 @@ More concretely, an example of such a tensor is
 
 This tensor holds all the CTR scores for all the categories.
 When updating this tensor, we can update individual cells if we don't need to update the whole tensor.
-This is called [tensor modify](../reference/document-json-format.html#tensor-modify)
+This is called [tensor modify](../../reference/document-json-format.html#tensor-modify)
 and can be helpful when you have large tensors.
 
 To use this document, add it to `services.xml`:
@@ -173,7 +175,7 @@ Up until this point, we've only used tensors as storage.
 We used tensors to hold news and user embeddings,
 and Vespa used these tensors to calculate the dot product in nearest-neighbor searches.
 
-However, Vespa has a [rich language](../tensor-user-guide.html#ranking-with-tensors)
+However, Vespa has a [rich language](../../tensor-user-guide.html#ranking-with-tensors)
 to perform calculations with tensors.
 We'll exploit that by looking up the `news` article's category in the global CTR tensor
 and using that as a feature in ranking.
@@ -222,7 +224,7 @@ and that value is multiplied by the `1.0` in this document.
 So in this case, this would effectively work as a lookup.
 
 {% include note.html content="Much more complex operations are available,
-refer to the [tensor user guide](../tensor-user-guide.html#ranking-with-tensors) for more information." %}
+refer to the [tensor user guide](../../tensor-user-guide.html#ranking-with-tensors) for more information." %}
 
 Let's add a new rank profile to do this calculation:
 
@@ -260,7 +262,7 @@ Note that, as a first attempt, we just multiply the nearest-neighbor with the ca
 This is not necessarily the correct way to combine these values,
 but we'll get back to that in a bit.
 
-We've added a section for [summary features](../reference/schema-reference.html#summary-features).
+We've added a section for [summary features](../../reference/schema-reference.html#summary-features).
 This is simply a list of features that will be returned with the hit when using this rank profile.
 Recall that we can specify which features should be returned in the summary
 with the `indexing: summary` statement with each field.

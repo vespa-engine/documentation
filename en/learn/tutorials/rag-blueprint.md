@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "RAG Blueprint"
+redirect_from:
+  - /en/tutorials/rag-blueprint
 ---
 
 Many of our users use Vespa to power large scale RAG Applications.
@@ -9,8 +11,8 @@ This blueprint aims to exemplify many of the best practices we have learned whil
 
 While many RAG tutorials exist, this blueprint provides a customizable template that:
 
-* Can [(auto)scale](../cloud/autoscaling.html) with your data size and/or query load.
-* Is fast and [production grade](../cloud/production-deployment.html).
+* Can [(auto)scale](../../cloud/autoscaling.html) with your data size and/or query load.
+* Is fast and [production grade](../../cloud/production-deployment.html).
 * Enables you to build RAG applications with state-of-the-art quality.
 
 This tutorial will show how we can develop a _high-quality_ RAG application with an evaluation-driven mindset, while being a resource you can revisit for making informed choices for your own use case.
@@ -195,7 +197,7 @@ With Vespa, it is now possible to return only the top k most relevant chunks of 
 ### Chunk selection
 
 Assume you have chosen a document as your searchable unit.
-Your documents may then contain text index fields of highly variable lengths. Consider for example a corpus of web pages. Some might be very long, while the average is well within the recommended size. See [scaling retrieval size](../performance/sizing-search.html#scaling-retrieval-size) for more details.
+Your documents may then contain text index fields of highly variable lengths. Consider for example a corpus of web pages. Some might be very long, while the average is well within the recommended size. See [scaling retrieval size](../../performance/sizing-search.html#scaling-retrieval-size) for more details.
 
 While we recommend implementing guards against too long documents in your feeding pipeline, you still probably do not want to return every chunk of the top k documents to an LLM for RAG.
 
@@ -216,7 +218,7 @@ This allows you to pick a large document as the searchable unit, while still add
 
 This allows you to index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
 
-Vespa also supports automatic [chunking](../reference/indexing-language-reference.html#converters) in the [indexing language](../indexing.html).
+Vespa also supports automatic [chunking](../../reference/indexing-language-reference.html#converters) in the [indexing language](../../indexing.html).
 
 Here are the parts of the schema, which defines the searchable unit as a document with a text field, and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
 
@@ -234,7 +236,7 @@ field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
 }
 ```
 
-In Vespa, we can specify which chunks to be returned with a summary feature, see [docs](../reference/schema-reference.html#select-elements-by) for details. For this blueprint, we will return the top 3 chunks based on the similarity score of the chunk embeddings, which is calculated in the ranking phase. Note that this feature could be any chunk-level summary feature defined in your rank-profile.
+In Vespa, we can specify which chunks to be returned with a summary feature, see [docs](../../reference/schema-reference.html#select-elements-by) for details. For this blueprint, we will return the top 3 chunks based on the similarity score of the chunk embeddings, which is calculated in the ranking phase. Note that this feature could be any chunk-level summary feature defined in your rank-profile.
 
 Here is how the summary feature is calculated in the rank-profile:
 
@@ -272,11 +274,11 @@ summary-features {
     }
 ```
 
-{% include note.html content="The ranking expression may seem a bit complex, as we chose to embed each chunk independently, store the embeddings in a binarized format, and then unpack them to calculate similarity based on their float representations. For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly using the [closeness](../reference/rank-features.html#closeness(name)) convenience function." %}
+{% include note.html content="The ranking expression may seem a bit complex, as we chose to embed each chunk independently, store the embeddings in a binarized format, and then unpack them to calculate similarity based on their float representations. For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly using the [closeness](../../reference/rank-features.html#closeness(name)) convenience function." %}
 
 Note that we want to use the float-representation of the query-embedding, and thus also need to convert the binary embedding of the chunks to float. After that, we can calculate the similarity score between the query embedding and the chunk embeddings using cosine similarity (the dot product, and then normalize it by the norms of the embeddings).
 
-See [ranking expressions](../reference/ranking-expressions.html#non-primitive-functions) for more details on the `top`-function, and other functions available for ranking expressions.
+See [ranking expressions](../../reference/ranking-expressions.html#non-primitive-functions) for more details on the `top`-function, and other functions available for ranking expressions.
 
 Now, we can use this summary feature in our document summary to return the top 3 chunks of the document, which will be used as context for the LLM. Note that we can also define a document summary that returns all chunks, which might be useful for another use case, such as deep research.
 
@@ -293,7 +295,7 @@ document-summary top_3_chunks {
 ### Use multiple text fields, consider multiple embeddings
 
 We recommend indexing different textual content as separate indexes.
-These can be searched together, using [field-sets](../reference/schema-reference.html#fieldset)
+These can be searched together, using [field-sets](../../reference/schema-reference.html#fieldset)
 
 In our schema, this is exemplified by the sections below, which define the `title` and `chunks` fields as separate indexed text fields.
 
@@ -364,7 +366,7 @@ In our blueprint schema, we include several of these signals:
 
 These fields are configured as `attribute | summary` to enable efficient filtering, sorting, and grouping operations while being returned in search results. The timestamp fields allow for temporal filtering (e.g., "recent documents") and recency-based ranking, while usage signals like `open_count` and `favorite` can boost frequently accessed or explicitly marked important documents.
 
-Consider [parent-child](../parent-child.html) relationships for low-cardinality metadata.
+Consider [parent-child](../../parent-child.html) relationships for low-cardinality metadata.
 Most large scale RAG application schemas contain at least a hundred structured fields.
 
 ## LLM-generation with OpenAI-client
@@ -439,7 +441,7 @@ app
 └── services.xml
 ```
 
-You can see that we have separated the [query profiles](https://docs.vespa.ai/en/query-profiles.html), and [rank profiles](../basics/ranking.html#rank-profiles) into their own directories.
+You can see that we have separated the [query profiles](https://docs.vespa.ai/en/query-profiles.html), and [rank profiles](../../basics/ranking.html#rank-profiles) into their own directories.
 
 ### Manage queries in query profiles
 
@@ -529,13 +531,13 @@ Separate common functions/setup into parent rank profiles and use `.profile` fil
 
 ## Phased ranking in Vespa
 
-Before we move on, it might be useful to recap Vespa´s [phased ranking](../phased-ranking.html) approach.
+Before we move on, it might be useful to recap Vespa´s [phased ranking](../../phased-ranking.html) approach.
 
 Below is a schematic overview of how to think about retrieval and ranking for this RAG blueprint. Since we are developing this as a tutorial using a small toy dataset, the application can be deployed in a single machine, using a single docker container, where only one container node and one container node will run. This is obviously not the case for most real-world RAG applications, so this is cruical to have in mind as you want to scale your application.
 
 ![phased ranking overview](/assets/img/phased-ranking-rag.png)
 
-It is worth noting that parameters such as `targetHits` (for the match phase) and `rerank-count` (for first and second phase) are applied **per content node**. Also note that the stateless container nodes can also be [scaled independently](../performance/sizing-search.html) to handle increased query load.
+It is worth noting that parameters such as `targetHits` (for the match phase) and `rerank-count` (for first and second phase) are applied **per content node**. Also note that the stateless container nodes can also be [scaled independently](../../performance/sizing-search.html) to handle increased query load.
 
 ## Configuring match-phase (retrieval)
 
@@ -570,7 +572,7 @@ select *
         where rank({targetHits:10000}nearestNeighbor(embeddings_field, query_embedding, userInput(@query)))
 ```
 
-Notice that only the first argument of the [rank](../reference/query-language-reference.html#rank)-operator will be used to determine if a document is a match, while all arguments are used for calculating rank features. This mean we can do vector only for matching, but still use text-based features such as `bm25` and `nativeRank` for ranking.
+Notice that only the first argument of the [rank](../../reference/query-language-reference.html#rank)-operator will be used to determine if a document is a match, while all arguments are used for calculating rank features. This mean we can do vector only for matching, but still use text-based features such as `bm25` and `nativeRank` for ranking.
 Note that if you do this, it makes sense to increase the number of `targetHits` for the `nearestNeighbor`-operator.
 
 For our sample application, we add three different retrieval operators (that are combined with `OR`), one with `weakAnd` for text matching, and two `nearestNeighbor` operators for vector matching, one for the title and one for the chunks. This will allow us to retrieve both relevant documents based on text and vector similarity, while also allowing us to return the most relevant chunks of the documents.
@@ -587,7 +589,7 @@ select *
 
 Choice of embedding model will be a trade-off between inference time (both indexing and query time), memory usage (embedding dimensions) and quality. There are many good open-source models available, and we recommend checking out the [MTEB leaderboard](https://huggingface.co/spaces/mteb/leaderboard), and look at the `Retrieval`-column to gauge performance, while also considering the memory usage, vector dimensions, and context length of the model.
 
-See [model hub](../cloud/model-hub.html) for a list of provided models ready to use with Vespa. See also [Huggingface Embedder](../embedding.html#huggingface-embedder) for details on using other models (exported as ONNX) with Vespa.
+See [model hub](../../cloud/model-hub.html) for a list of provided models ready to use with Vespa. See also [Huggingface Embedder](../../embedding.html#huggingface-embedder) for details on using other models (exported as ONNX) with Vespa.
 
 In addition to dense vector representation, Vespa supports sparse embeddings (token weights) and multi-vector (ColBERT-style) embeddings.
 See our [example notebook](https://vespa-engine.github.io/pyvespa//examples/mother-of-all-embedding-models-cloud.html#bge-m3-the-mother-of-all-embedding-models) of using the bge-m3 model, which supports both, with Vespa.
@@ -624,13 +626,13 @@ field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
 }
 ```
 
-For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`, optionally combined with filters) so that not too many hits are matched. Another option is to enable match-phase limiting, see [match-phase docs](../reference/schema-reference.html#match-phase). In essence, you restrict the number of matches by specifying an attribute field.
+For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`, optionally combined with filters) so that not too many hits are matched. Another option is to enable match-phase limiting, see [match-phase docs](../../reference/schema-reference.html#match-phase). In essence, you restrict the number of matches by specifying an attribute field.
 
 ### Consider float-binary for ranking
 
 In our blueprint, we choose to index binary vectors of the documents. This does not prevent us from using the float-representation of the query embedding though.
 
-By unpacking the binary document chunk embeddings to their float representations (using [`unpack_bits`](../reference/ranking-expressions.html#unpack-bits)), we can calculate the similarity between query and document with slightly higher precision using a `float-binary` dot product, instead of hamming distance (`binary-binary`)
+By unpacking the binary document chunk embeddings to their float representations (using [`unpack_bits`](../../reference/ranking-expressions.html#unpack-bits)), we can calculate the similarity between query and document with slightly higher precision using a `float-binary` dot product, instead of hamming distance (`binary-binary`)
 
 Below, you can see how we can do this:
 
@@ -669,10 +671,10 @@ rank-profile base-features {
 
 ### Use complex linguistics/recall only for precision
 
-Vespa gives you extensive control over [linguistics](../linguistics.html).
-You can decide [match mode](../reference/schema-reference.html#match), stemming, normalization, or control derived tokens.
+Vespa gives you extensive control over [linguistics](../../linguistics.html).
+You can decide [match mode](../../reference/schema-reference.html#match), stemming, normalization, or control derived tokens.
 
-It is also possible to use more specific operators than [weakAnd](../reference/query-language-reference.html#weakand) to match only close occurrences ([near](../reference/query-language-reference.html#near)/ [onear](../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../query-rewriting.html#equiv)), weight items, set connectivity, and apply [query-rewrite](../query-rewriting.html) rules.
+It is also possible to use more specific operators than [weakAnd](../../reference/query-language-reference.html#weakand) to match only close occurrences ([near](../../reference/query-language-reference.html#near)/ [onear](../../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../../query-rewriting.html#equiv)), weight items, set connectivity, and apply [query-rewrite](../../query-rewriting.html) rules.
 
 **Don’t use this to increase recall — improve your embedding model instead.**
 
@@ -690,7 +692,7 @@ For this sample application, we set up an evaluation script that compares three 
 2. **WeakAnd-only**: Uses only text-based matching with `userQuery()`.
 3. **Hybrid**: Combines both approaches with OR logic.
 
-{% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both [filter clauses](../reference/query-language-reference.html#where), [grouping](../grouping), [predicates](../predicate-fields.html), [geosearch](../geo-search) etc. to support your specific use cases." %}
+{% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both [filter clauses](../../reference/query-language-reference.html#where), [grouping](../grouping), [predicates](../../predicate-fields.html), [geosearch](../geo-search) etc. to support your specific use cases." %}
 
 It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster.
 
@@ -774,7 +776,7 @@ th { width: 120px; }
 
 #### WeakAnd Query Evaluation
 
-The `userQuery` is just a convenience wrapper for `weakAnd`, see [reference/query-language-reference.html](../reference/query-language-reference.html). The default `targetHits` for `weakAnd` is 100, but it is [overridable](../reference/query-language-reference.html#targethits).
+The `userQuery` is just a convenience wrapper for `weakAnd`, see [reference/query-language-reference.html](../../reference/query-language-reference.html). The default `targetHits` for `weakAnd` is 100, but it is [overridable](../../reference/query-language-reference.html#targethits).
 
 ```sql
 select * from doc where userQuery()
@@ -917,7 +919,7 @@ rank-profile optimized inherits baseline {
   }
 ```
 
-See the [reference](../reference/schema-reference.html#weakand) for more details on the `weakAnd` parameters.
+See the [reference](../../reference/schema-reference.html#weakand) for more details on the `weakAnd` parameters.
 These can also be set as query parameters.
 
 1. As already [mentioned](#consider-binary-vectors-for-recall), consider binary vectors for your embeddings.
@@ -930,7 +932,7 @@ For the first-phase ranking, we must use a computationally cheap function, as it
 Common options include (learned) linear combination of features including text similarity features, vector closeness, and metadata.
 It could also be a heuristic handwritten function.
 
-Text features should include [nativeRank](/en/reference/nativerank.html#nativeRank) or [bm25](../reference/bm25.html#ranking-function) — not [fieldMatch](../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
+Text features should include [nativeRank](/en/reference/nativerank.html#nativeRank) or [bm25](../../reference/bm25.html#ranking-function) — not [fieldMatch](../../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
 
 Considerations for deciding whether to choose `bm25` or `nativeRank`:
 
@@ -1313,7 +1315,7 @@ This is where we can significantly improve ranking quality by using more sophist
 
 ### Collecting features for second-phase ranking
 
-For second-phase ranking, we request Vespa's default set of rank features, which includes a comprehensive set of text features. See the [rank features documentation](../reference/rank-features.html) for complete details.
+For second-phase ranking, we request Vespa's default set of rank features, which includes a comprehensive set of text features. See the [rank features documentation](../../reference/rank-features.html) for complete details.
 
 We can collect both match features and rank features by running the same [script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/collect_pyvespa.py) as we did for first-phase ranking, with  some additional parameters to collect rank features as well:
 
@@ -1374,10 +1376,10 @@ The trained model reveals which features are most important for ranking quality.
 
 Key observations:
 
-* **Text proximity features** ([nativeProximity](../reference/nativerank.html#nativeProximity)) are highly valuable for understanding query-document relevance
+* **Text proximity features** ([nativeProximity](../../reference/nativerank.html#nativeProximity)) are highly valuable for understanding query-document relevance
 * **First-phase score** (`firstPhase`) being important validates that our first-phase ranking provides a good foundation
 * **Chunk-level features** (both text and semantic) contribute significantly to ranking quality
-* **Traditional text features** like [nativeRank](../reference/nativerank.html#nativeRank) and [bm25](../reference/bm25.html#ranking-function) remain important
+* **Traditional text features** like [nativeRank](../../reference/nativerank.html#nativeRank) and [bm25](../../reference/bm25.html#ranking-function) remain important
 
 ### Integrating the GBDT model into Vespa
 
@@ -1506,7 +1508,7 @@ The second-phase ranking represents a crucial step in building high-quality RAG 
 
 ## (Optional) Global-phase ranking
 
-We also have the option of configuring [global-phase](../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k (as set by `rerank-count` parameter) documents from the second-phase ranking.
+We also have the option of configuring [global-phase](../../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k (as set by `rerank-count` parameter) documents from the second-phase ranking.
 
 Common options for global-phase are [cross-encoders](/en/cross-encoders.html) or another GBDT model, trained for better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, we consider this less important than for search applications where the results are mainly consumed by an human, as LLMs don't care that much about the ordering of the results.
 
@@ -1545,7 +1547,7 @@ By using the principles demonstrated in this tutorial, you are empowered to buil
 
 * **Q: Which embedding models can I use with Vespa?**
   
-  A: Vespa supports a variety of embedding models. For a list of vespa provided models on Vespa Cloud, see [Model hub](../cloud/model-hub.html). See also [embedding reference](../embedding.html#provided-embedders) for how to use embedders. You can also use private models (gated by authentication with Bearer token from Vespa Cloud secret store).
+  A: Vespa supports a variety of embedding models. For a list of vespa provided models on Vespa Cloud, see [Model hub](../../cloud/model-hub.html). See also [embedding reference](../../embedding.html#provided-embedders) for how to use embedders. You can also use private models (gated by authentication with Bearer token from Vespa Cloud secret store).
 
 * **Q: Do I need to use an LLM with Vespa?**
   
@@ -1557,4 +1559,4 @@ By using the principles demonstrated in this tutorial, you are empowered to buil
   
 * **Q: How can you say that Vespa can scale to any data and query load?**
   
-  A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../elasticity.html) for details.
+  A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../../elasticity.html) for details.

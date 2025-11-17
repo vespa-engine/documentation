@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - applications, feeding and querying"
+redirect_from:
+  - /en/tutorials/news-2-basic-feeding-and-query
 ---
 
 
@@ -101,7 +103,7 @@ $ mkdir -p my-app/schemas
 
 <img src="/assets/img/vespa-overview.svg" width="825px" height="auto" alt="Vespa Overview" />
 
-A Vespa [application package](../basics/applications.html) is the
+A Vespa [application package](../../basics/applications.html) is the
 set of configuration files and Java plugins that together define the behavior
 of a Vespa system: what functionality to use, the available document types, how
 ranking will be done and how data will be processed during feeding and indexing.
@@ -120,7 +122,7 @@ We'll go through them here, starting with the specification of services.
 
 ### Services Specification
 
-The [services.xml](../reference/services.html) file defines the services that
+The [services.xml](../../reference/services.html) file defines the services that
 make up the Vespa application — which services to run and how many nodes per
 service. Write the following to `news/my-app/services.xml`:
 
@@ -151,30 +153,30 @@ service. Write the following to `news/my-app/services.xml`:
 
 Quite a lot is set up here:
 
-- `<container>` defines the stateless [container cluster](../jdisc/index.html) for
+- `<container>` defines the stateless [container cluster](../../jdisc/index.html) for
   document, query and result processing
-- `<search>` sets up the [query endpoint](../query-api.html).  The default port
+- `<search>` sets up the [query endpoint](../../query-api.html).  The default port
   is 8080. See also [Securing Vespa with mutually authenticated TLS (mTLS)](https://blog.vespa.ai/securing-vespa-with-mutually-authenticated-tls/)
   for how to use mTLS with Vespa.
 - `<document-api>` sets up the [document
-  endpoint](../reference/document-v1-api-reference.html) for feeding and visiting.
+  endpoint](../../reference/document-v1-api-reference.html) for feeding and visiting.
 - `<nodes>` defines the nodes required per service.  (See the
-  [reference](../reference/services-container.html) for more on container
+  [reference](../../reference/services-container.html) for more on container
   cluster setup).
 - `<content>` The stateful content cluster
 - `<redundancy>` denotes how many copies to store of each document.
 - `<documents>` assigns the document types in the _schema_ — the content
   cluster capacity can be increased by adding node elements — see [elastic
-  Vespa](../elasticity.html). (See also the
-  [reference](../reference/services-content.html) for more on content cluster
+  Vespa](../../elasticity.html). (See also the
+  [reference](../../reference/services-content.html) for more on content cluster
   setup.)
 
 
 ### Schema
 
-In terms of data, Vespa operates with the notion of [documents](../documents.html).
+In terms of data, Vespa operates with the notion of [documents](../../documents.html).
 A document represents a single, searchable item in your system, e.g., a news article, a photo, or a user.
-Each document type must be defined in the Vespa configuration through a [schema](../basics/schemas.html).
+Each document type must be defined in the Vespa configuration through a [schema](../../basics/schemas.html).
 Think of the document type in a schema as similar to a table definition in a relational database -
 it consists of a set of fields, each with a given name, a specific type, and some optional properties.
 The data fed into Vespa must match the structure of the schema,
@@ -240,24 +242,24 @@ The `document` is wrapped inside another element called `schema`.
 The name following these elements, here `news`, must be exactly the same for both.
 
 This document contains several fields. Each field has a
-[type](../reference/schema-reference.html#field), such as `string`, `int`, or
+[type](../../reference/schema-reference.html#field), such as `string`, `int`, or
 `tensor`. Fields also have properties. For instance, property `indexing`
 configures the _indexing pipeline_ for a field, which defines how Vespa will
 treat input during indexing — see [indexing
-language](../reference/indexing-language-reference.html). Each part of the
+language](../../reference/indexing-language-reference.html). Each part of the
 indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
-- `attribute:` Store this field in memory as an [attribute](../attributes.html)
-  — for [sorting](../reference/sorting.html), [querying](../query-api.html), [ranking](../basics/ranking.html) and
-  [grouping](../grouping.html).
+- `attribute:` Store this field in memory as an [attribute](../../attributes.html)
+  — for [sorting](../../reference/sorting.html), [querying](../../query-api.html), [ranking](../../basics/ranking.html) and
+  [grouping](../../grouping.html).
 - `summary:` Lets this field be part of the [document
-  summary](../document-summaries.html) in the result set.
+  summary](../../document-summaries.html) in the result set.
 
-Here, we also use the [index](../reference/schema-reference.html#index) property,
+Here, we also use the [index](../../reference/schema-reference.html#index) property,
 which sets up parameters for how Vespa should index the field.
 For the `title`, `abstract`, and `body` fields, we configure Vespa to set up an
-index compatible with [bm25 ranking](../reference/rank-features.html#bm25) for text search.
+index compatible with [bm25 ranking](../../reference/rank-features.html#bm25) for text search.
 
 
 ## Deploy the Application Package
@@ -283,7 +285,7 @@ $ vespa deploy --wait 300 my-app
 
 The data fed to Vespa must match the schema for the document type.
 The downloaded MIND data must be converted to a valid Vespa JSON [document
-format](../reference/document-json-format.html) before it can be fed to Vespa:
+format](../../reference/document-json-format.html) before it can be fed to Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -316,7 +318,7 @@ $ vespa query -v 'yql=select * from news where true' 'hits=0'
 </div>
 
 You can verify that specific documents are indexed by fetching documents by
-document id using the [Document V1 API](../document-v1-api-guide.html):
+document id using the [Document V1 API](../../document-v1-api-guide.html):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -342,7 +344,7 @@ or with a JSON POST:
 ```
 
 The only mandatory parameter is the query, using either `yql=<yql query>` or `query=<simple-query>`. 
-More details in the [Query API](../query-api.html).
+More details in the [Query API](../../query-api.html).
 
 Consider the query: `select * from news where default contains "music"`
 
@@ -383,11 +385,11 @@ Looking at the output, please note:
 - When multiple hits have the same relevance score, their internal ordering is undefined.
   However, their internal ordering will not change unless the documents are re-indexed.
 - You can add `&trace.level=3` to dump query parsing details and execution plan,
-  see [query tracing](../query-api.html#query-tracing).
+  see [query tracing](../../query-api.html#query-tracing).
 - The `totalCount` field at the top level contains the number of documents
   that *matched* the query.
 - Also note the `coverage` element, this tells us how many documents and nodes we searched over.
-Coverage might be degraded, see [graceful degradation](../graceful-degradation.html).
+Coverage might be degraded, see [graceful degradation](../../graceful-degradation.html).
 
 Prefer HTTP POST over GET in production due to limitations on URI length (64 Kb). 
 
@@ -427,8 +429,8 @@ $ vespa query -v \
 </pre>
 </div>
 
-This combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html).
+This combines YQL [userQuery()](../../reference/query-language-reference.html#userquery) 
+with Vespa's [simple query language](../../reference/simple-query-language-reference.html).
 In this case, documents needs to match both "music" and "festival".
 
 <div class="pre-parent">
@@ -445,7 +447,7 @@ Above changes the query type from all to any,
 so that all documents that match either (or both) of the terms are returned,
 excluding documents with the term "beer".
 Note that number of hits which are matched and ranked increases the computational complexity of the query execution.
-See [using WAND with Vespa](../using-wand-with-vespa.html)
+See [using WAND with Vespa](../../using-wand-with-vespa.html)
 for a way to speed up evaluation of type any/or-like queries. 
 
 <div class="pre-parent">
@@ -471,7 +473,7 @@ $ vespa query -v \
 </div>
 
 Search for "music" in the default fieldset, boost documents with festival in the title. 
-The [rank()](../reference/query-language-reference.html#rank) query operator allows 
+The [rank()](../../reference/query-language-reference.html#rank) query operator allows 
 us to retrieve on the first operand,
 and have match ranking features calculated for the second operand argument.
 The second and further operands does not impact recall (which documents match the query),

@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Improving Text Search through ML"
+redirect_from:
+  - /en/tutorials/text-search-ml
 ---
 
 
@@ -25,15 +27,15 @@ is a good resource for Learning To Rank using XGBoost and LightGBM, with linked 
 
 ## Collect rank feature data from Vespa
 
-Vespa's [rank feature set](../reference/rank-features.html) contains a large set of low and high level features.
+Vespa's [rank feature set](../../reference/rank-features.html) contains a large set of low and high level features.
 Those features are useful to understand the behavior of your app and to improve your ranking function.
 
 
 ### Default rank features
 
 To access the default set of ranking features,
-set the query parameter [`ranking.listFeatures`](../reference/query-api-reference.html#ranking.listfeatures)  to `true`.
-For example, below is the body of a post request that in a [query](../query-language.html),
+set the query parameter [`ranking.listFeatures`](../../reference/query-api-reference.html#ranking.listfeatures)  to `true`.
+For example, below is the body of a post request that in a [query](../../query-language.html),
 selects the `bm25` rank-profile developed in the previous tutorial
 and returns the rank features associated with each of the results returned.
 
@@ -93,7 +95,7 @@ Each result will contain a field called `rankfeatures` containing the set of def
 
 ### Chose and process specific rank features
 
-If instead of returning the complete set of rank features you want to select [specific ones](../reference/rank-features.html),
+If instead of returning the complete set of rank features you want to select [specific ones](../../reference/rank-features.html),
 you can add a new rank-profile (let's call it `collect_rank_features`) to our _msmarco.sd_ schema definition
 and disable the default ranking features by adding `ignore-default-rank-features` to the new rank-profile.
 In addition, we can specify the desired features within the `rank-features` element.
@@ -103,7 +105,7 @@ In the example below we explicitly configured Vespa to only return
 Note that using _all_ available rank features comes with computational cost,
 as Vespa needs to calculate all these features.
 Using many features is usually only advisable using second phase ranking,
-see [phased ranking with Vespa](../phased-ranking.html).
+see [phased ranking with Vespa](../../phased-ranking.html).
 
 <pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
@@ -164,7 +166,7 @@ schema msmarco {
 }
 </pre>
 
-The [random](../reference/rank-features.html#random) global feature
+The [random](../../reference/rank-features.html#random) global feature
 will be useful in the next section when we describe our data collection process.
 
 After adding the `collect_rank_features` rank-profile to _msmarco.sd_, redeploy the app:

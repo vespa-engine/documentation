@@ -51,7 +51,7 @@ define a component in your application's
 To see the full list of available configuration parameters, refer to the [llm-client config definition file](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-client.def).
 
 This sets up a client component that can be used in a
-[searcher](glossary.html#searcher) or a [document processor](glossary.html#document-processor).
+[searcher](learn/glossary.html#searcher) or a [document processor](learn/glossary.html#document-processor).
 
 ### API key configuration
 

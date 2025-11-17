@@ -74,7 +74,7 @@ the LLM, as we will see below.
 
 Indeed, with the `RAGSearcher` you can use any type of [search in
 Vespa](query-api.html), including [text search based on
-BM25](tutorials/text-search.html) and advanced [approximate vector
+BM25](learn/tutorials/text-search.html) and advanced [approximate vector
 search](approximate-nn-hnsw.html). This makes the retrieval part of
 RAG very flexible.
 
@@ -97,7 +97,7 @@ field3: ...
 ```
 
 Here, `field1` and so on are the actual fields as returned from the search. For
-instance, the [text search tutorial](tutorials/text-search.html) defines a
+instance, the [text search tutorial](learn/tutorials/text-search.html) defines a
 document schema consisting of fields: `id`, `title`, `url`, and `body`. If you
 only want to include the `title` and `body` fields for use in the context, you
 can issue a query like this:
