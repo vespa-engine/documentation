@@ -25,7 +25,6 @@ There are different entry points to this tutorial. This one is for getting
 started using Docker on your local machine. Getting started on 
 [cloud.vespa.ai](https://cloud.vespa.ai) is coming soon. We will also have a
 version for [pyvespa](https://github.com/vespa-engine/pyvespa) soon.
-For atomic model updates, see the [Models hot swap](models-hot-swap.html) tutorial.
 
 In this part, we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.

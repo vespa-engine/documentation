@@ -12,9 +12,9 @@ does not currently support ranking and can only be used for matching and filteri
 
 When building a search application we need to think about:
 
-- How to [match](query-language.html) a user specified query against a [document schema](schemas.html)
+- How to [match](query-language.html) a user specified query against a [document schema](basics/schemas.html)
   using Vespa [query language](query-language.html).
-- How to [rank](ranking.html) documents matching the query.
+- How to [rank](basics/ranking.html) documents matching the query.
 
 
 ## Matching documents
@@ -35,7 +35,7 @@ our matching and retrieval strategy over the designed document schema.
 ## Ranking documents
 The documents which match the query and are retrieved by the query are scored using a ranking model. 
 Once a document is retrieved by the query logic the document can be scored using the full 
-flexibility of the Vespa [ranking](ranking.html) framework.
+flexibility of the Vespa [ranking](basics/ranking.html) framework.
 
 
 ## A minimal Vespa application

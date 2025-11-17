@@ -43,16 +43,14 @@ project_root = os.getcwd()
 work_dir = os.path.join(project_root, "_work")
 liquid_transforms = {}
 
-
-def print_cmd_header(cmd, extra="", print_header=True):
-    if not print_header:
-        return
+def print_separator():
     print("")
     print("*" * 80)
-    print("* {0}".format(cmd))
+
+def print_cmd(cmd, extra=""):
+    print("> {0}".format(cmd))
     if len(extra) > 0:
-        print("* ({0})".format(extra))
-    print("*" * 80)
+        print("> ({0})".format(extra))
 
 
 def exec_wait(cmd, pty):
@@ -60,7 +58,7 @@ def exec_wait(cmd, pty):
     expect = cmd["wait-for"]
     max_wait = 300 if not ("timeout" in cmd) else int(cmd["timeout"])
     try_interval = 5  # todo: max this configurable too
-    print_cmd_header(command, "Waiting for '{0}'".format(expect))
+    print_cmd(command, "Waiting for '{0}'".format(expect))
 
     waited = 0
     output = ""
@@ -82,7 +80,7 @@ def exec_wait(cmd, pty):
 def exec_assert(cmd, pty):
     command = cmd["$"]
     expect = cmd["contains"]
-    print_cmd_header(command, "Expecting '{0}'".format(expect))
+    print_cmd(command, "Expecting '{0}'".format(expect))
 
     _, output = pty.run(command, verbose)
     if output.find(expect) == -1:
@@ -93,7 +91,7 @@ def exec_assert(cmd, pty):
 
 def exec_file(cmd, pty):
     path = cmd["path"]
-    print_cmd_header(path)
+    print_cmd(path)
     path_array = []
     for dir in path.split(os.path.sep)[:-1]:
         path_array.append(dir)
@@ -111,7 +109,7 @@ def exec_expect(cmd, pty):
     command = cmd["$"]
     expect = cmd["expect"]
     timeout = cmd["timeout"]
-    print_cmd_header(command, "Expecting '{0}'".format(expect))
+    print_cmd(command, "Expecting '{0}'".format(expect))
 
     exit_code, output = pty.run_expect(command, expect, timeout, verbose)
     if exit_code != 0:
@@ -122,7 +120,7 @@ def exec_expect(cmd, pty):
 
 def exec_default(cmd, pty):
     command = cmd["$"]
-    print_cmd_header(command)
+    print_cmd(command)
 
     exit_code, output = pty.run(command, verbose)
     if exit_code != 0:
@@ -263,7 +261,7 @@ def parse_page(html):
 def process_page(html, source_name=""):
     script = parse_page(html)
 
-    print_cmd_header("Script to execute", extra=source_name)
+    print_cmd("Script to execute", extra=source_name)
     print(json.dumps(script, indent=2))
 
     exec_script(script)
@@ -280,7 +278,8 @@ def create_work_dir():
 
 
 def run_url(url):
-    print_cmd_header("Testing", url)
+    print_separator()
+    print_cmd("Testing", url)
     allpages = b""
     for page in url.split(","):
         page = page.strip()

@@ -96,7 +96,7 @@ $ mkdir -p app/schemas
 
 
 ### Schema
-A [schema](../schemas.html) is a document-type configuration; a single vespa application can have multiple schemas with document types.
+A [schema](../basics/schemas.html) is a document-type configuration; a single vespa application can have multiple schemas with document types.
 For this application, we define a schema `msmarco` which must be saved in a file named `schemas/msmarco.sd`.
 Write the following to `text-search/app/schemas/msmarco.sd`:
 
@@ -158,7 +158,7 @@ The `document` section contains the fields of the document, their types,
 and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
-For more information, see [schemas - indexing](../schemas.html#document-fields).
+For more information, see [schemas - indexing](../basics/schemas.html#document-fields).
 The [string](../reference/schema-reference.html#string) data type is used to represent both unstructured and structured texts, 
 and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
@@ -181,7 +181,7 @@ Document summaries control what fields are available in the [response](../refere
 demonstrate later how we can get visibility into how text is converted into searchable tokens. 
 
 #### Ranking to determine matched documents ordering
-You can define many [rank profiles](../ranking.html), 
+You can define many [rank profiles](../basics/ranking.html), 
 named collections of score calculations, and ranking phases.
 
 In this tutorial, we define our `default` to be using [nativeRank](../reference/nativerank.html).
@@ -233,7 +233,7 @@ Some notes about the elements above:
 ## Deploy the application package
 
 Once we have finished writing our application package, we can deploy it.
-We use settings similar to those in the [Vespa quick start guide](../deploy-an-application-local.html).
+We use settings similar to those in the [Vespa quick start guide](../basics/deploy-an-application-local.html).
 
 Start the Vespa container:
 

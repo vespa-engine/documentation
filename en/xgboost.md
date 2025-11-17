@@ -28,7 +28,7 @@ Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 
 {% endhighlight %}</pre>
 
 Notice the `split` attribute which represents the Vespa feature name. The `split` feature must resolve to a Vespa
-[rank feature](reference/rank-features.html) defined in the [document schema](schemas.html). The feature can also
+[rank feature](reference/rank-features.html) defined in the [document schema](basics/schemas.html). The feature can also
 be user defined features (for example using [functions](/en/ranking-expressions-features.html#function-snippets)).
 
 The above model JSON was produced using the XGBoost Python api with a regression objective:
