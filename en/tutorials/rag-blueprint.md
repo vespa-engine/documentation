@@ -439,7 +439,7 @@ app
 └── services.xml
 ```
 
-You can see that we have separated the [query profiles](https://docs.vespa.ai/en/query-profiles.html), and [rank profiles](../basics/ranking.html#rank-profiles) into their own directories.
+You can see that we have separated the [query profiles](https://docs.vespa.ai/en/query-profiles.html), and [rank profiles](../ranking.html#rank-profiles) into their own directories.
 
 ### Manage queries in query profiles
 

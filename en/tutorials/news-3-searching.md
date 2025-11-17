@@ -387,7 +387,7 @@ which will tokenize and stem the contents of the field.
 
 ## Relevance and Ranking
 
-[Ranking](../basics/ranking.html) and relevance were briefly mentioned above;
+[Ranking](../ranking.html) and relevance were briefly mentioned above;
 what is really the relevance of a hit?
 How can one change the relevance calculations?
 It is time to introduce _rank profiles_ and _ranking expressions_ —

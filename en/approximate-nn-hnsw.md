@@ -41,7 +41,7 @@ However, this is computationally expensive for large document volumes
 as distances are calculated for every document which matches the query filters.
 
 To enable fast approximate matching, the tensor field definition
-needs an `index` directive. A Vespa [document schema](basics/schemas.html) can declare multiple tensor fields with `HNSW` enabled.
+needs an `index` directive. A Vespa [document schema](schemas.html) can declare multiple tensor fields with `HNSW` enabled.
 
 <pre>
 field image_embeddings type tensor&lt;float&gt;(i{},x[512]) {
@@ -168,7 +168,7 @@ but this is less relevant as the `HNSW` index search first reduces the document 
 
 * **targetHits**:
 The [targetHits](reference/query-language-reference.html#targethits)
-specifies how many hits one wants to expose to [ranking](basics/ranking.html) *per content node*.
+specifies how many hits one wants to expose to [ranking](ranking.html) *per content node*.
 Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](phased-ranking.html)
 pipeline. See [performance sizing](performance/sizing-search.html). 
 

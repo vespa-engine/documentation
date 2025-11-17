@@ -144,7 +144,7 @@ A cost-efficient approach is to use **approximate** search instead.
 See how to use **approximate** nearest neighbor search with `HNSW` in
 the [Approximate Nearest Neighbor Search](approximate-nn-hnsw.html) document.
 
-The following [document schema](basics/schemas.html) is used to illustrate Vespa's support for 
+The following [document schema](schemas.html) is used to illustrate Vespa's support for 
 vector search, or nearest neighbor search:
 
 <pre>
@@ -216,7 +216,7 @@ It still makes sense to have the metric as a field-property,
 as the field values are often produced using a specific distance metric.
 
 ### Configure rank profiles for nearest neighbor search
-Lastly, one need to configure how to [rank](basics/ranking.html) products which 
+Lastly, one need to configure how to [rank](ranking.html) products which 
 are retrieved by the nearest neighbor search:
 
 <pre>

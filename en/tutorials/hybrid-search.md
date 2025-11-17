@@ -7,7 +7,7 @@ title: "Hybrid Text Search Tutorial"
 Hybrid search combines different retrieval methods to improve search quality. This tutorial distinguishes between two core components of search:
 
 * **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../reference/bm25.html) excel at this, as do modern, embedding-based [vector search](../vector-search.html) approaches.  
-* **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../basics/ranking.html) enables complex scoring mechanisms.
+* **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../ranking.html) enables complex scoring mechanisms.
 
 This tutorial demonstrates building a hybrid search application with Vespa that leverages the strengths of both lexical and embedding-based approaches.
  We'll use the [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/) dataset from the [BEIR](https://github.com/beir-cellar/beir) benchmark and explore various hybrid search techniques using Vespa's query language and ranking features. 
@@ -53,7 +53,7 @@ The NFCorpus documents have four fields:
 - The `doc_id` and `url` 
 - The `text` and the `title` 
 
-We are interested in the title and the text, and we want to be able to search across these two fields. We also need to store the `doc_id` to evaluate [ranking](../basics/ranking.html)
+We are interested in the title and the text, and we want to be able to search across these two fields. We also need to store the `doc_id` to evaluate [ranking](../ranking.html)
 accuracy. We will create a small script that converts the above output to [Vespa JSON document](../reference/document-json-format.html) format. Create a `convert.py` file:
 
 <div class="pre-parent">
@@ -100,7 +100,7 @@ $ mkdir -p app/schemas
 
 
 ### Schema
-A [schema](../basics/schemas.html) is a document-type configuration; a single Vespa application can have multiple schemas with document types.
+A [schema](../schemas.html) is a document-type configuration; a single Vespa application can have multiple schemas with document types.
 For this application, we define a schema `doc`, which must be saved in a file named `schemas/doc.sd` in the application package directory.
 
 Write the following to `app/schemas/doc.sd`:
@@ -163,7 +163,7 @@ The `document` section contains the fields of the document, their types,
 and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
-For more information, see [schemas - indexing](../basics/schemas.html#document-fields).
+For more information, see [schemas - indexing](../schemas.html#document-fields).
 The [string](../reference/schema-reference.html#string) data type represents both unstructured and structured texts, 
 and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
@@ -197,7 +197,7 @@ trained with cosine similarity, which maps to Vespa's `angular` [distance-metric
 nearestNeighbor search. 
 
 #### Ranking to determine matched documents ordering
-You can define many [rank profiles](../basics/ranking.html), 
+You can define many [rank profiles](../ranking.html), 
 named collections of score calculations, and ranking phases.
 
 In this starting point, we have two simple rank-profile's:
@@ -258,7 +258,7 @@ instructions, and the pooling strategy. See [huggingface-embedder](../embedding.
 ## Deploy the application package
 
 Once we have finished writing our application package, we can deploy it.
-We use settings similar to those in the [Vespa quick start guide](../basics/deploy-an-application-local.html).
+We use settings similar to those in the [Vespa quick start guide](../deploy-an-application-local.html).
 
 Start the Vespa container:
 
@@ -688,9 +688,9 @@ Now, we want to explore hybrid search techniques where we combine:
 - traditional lexical keyword matching with a text scoring method (BM25) 
 - embedding-based search using a text embedding model 
 
-With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../basics/ranking.html). 
+With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../ranking.html). 
 
-In the Vespa ranking phases, we can express arbitrary scoring complexity with the full power of the Vespa [ranking](../basics/ranking.html) framework. 
+In the Vespa ranking phases, we can express arbitrary scoring complexity with the full power of the Vespa [ranking](../ranking.html) framework. 
 Meanwhile, top-k retrieval relies on simple built-in functions associated with Vespa's top-k query operators.  
 These top-k operators aim to avoid scoring all documents in the collection for a query by using a simplistic scoring function to identify the top-k documents.
 
@@ -703,7 +703,7 @@ a configured [distance-metric](../reference/schema-reference.html#distance-metri
 
 
 We can combine these operators using boolean query operators like AND/OR/RANK to express a hybrid search query. Then, there is a wild number of
-ways that we can combine various signals in [ranking](../basics/ranking.html). 
+ways that we can combine various signals in [ranking](../ranking.html). 
 
 
 ### Define our first simple hybrid rank profile
@@ -783,7 +783,7 @@ After that, we can start experimenting with how to express hybrid queries using 
 ### Hybrid query examples
 The following demonstrates combining the two top-k query operators using the Vespa query language. In a later section, we will show
 how to combine the two retrieval strategies using the Vespa ranking framework. This section focuses on the top-k retrieval part
-that exposes matched documents to the Vespa [ranking](../basics/ranking.html) phase(s).
+that exposes matched documents to the Vespa [ranking](../ranking.html) phase(s).
 
 #### Hybrid query using the OR operator
 The following query exposes documents to ranking that match the query using *either (OR)* the sparse or dense representation. 

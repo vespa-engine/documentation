@@ -3,13 +3,13 @@
 title: "Getting started with ranking"
 ---
 
-Learn how [ranking](basics/ranking.html) works in Vespa by using the open [query API](query-api.html) of
+Learn how [ranking](ranking.html) works in Vespa by using the open [query API](query-api.html) of
 [vespa-documentation-search](https://github.com/vespa-cloud/vespa-documentation-search).
 In this article, find a set of queries invoking different `rank-profiles`, which is the ranking definition.
 
 Ranking is the user-defined computation that scores documents to a query,
 here configured in [doc.sd](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd),
-also see [schema documentation](basics/schemas.html).
+also see [schema documentation](schemas.html).
 This schema has a set of (contrived) ranking functions, to help learn Vespa ranking.
 
 

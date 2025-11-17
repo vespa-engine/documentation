@@ -42,7 +42,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
 
 ### Highlighted features
 
-* [Multiple document types](basics/schemas.html)
+* [Multiple document types](schemas.html)
 
     Vespa models data as documents, which are configured in schemas
     that defines how documents should be stored, indexed, ranked, and searched.
@@ -118,7 +118,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     which the groups are rendered are determined by both counting and the
     relevance of the hits. This enables query-contextualized navigation. 
 
-* [Rank profiles](basics/ranking.html)
+* [Rank profiles](ranking.html)
 
     Rank profiles are profiles containing instructions on how to score
     documents for a given query. The most important part of rank profiles are

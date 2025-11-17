@@ -5,8 +5,8 @@ title: "Re-ranking using a custom Searcher"
 
 This guide demonstrates how to deploy a [stateless searcher](searcher-development.html) 
 implementing a last stage of [phased ranking](phased-ranking.html). The searcher re-ranks the 
-global top 200 documents which have been ranked by the content nodes using the configurable [ranking](basics/ranking.html)
-specification in the document [schema(s)](basics/schemas.html).  
+global top 200 documents which have been ranked by the content nodes using the configurable [ranking](ranking.html)
+specification in the document [schema(s)](schemas.html).  
 
 The reranking searcher uses [multiphase searching](searcher-development.html#multiphase-searching):
 

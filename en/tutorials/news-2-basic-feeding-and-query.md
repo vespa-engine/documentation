@@ -101,7 +101,7 @@ $ mkdir -p my-app/schemas
 
 <img src="/assets/img/vespa-overview.svg" width="825px" height="auto" alt="Vespa Overview" />
 
-A Vespa [application package](../basics/applications.html) is the
+A Vespa [application package](../applications.html) is the
 set of configuration files and Java plugins that together define the behavior
 of a Vespa system: what functionality to use, the available document types, how
 ranking will be done and how data will be processed during feeding and indexing.
@@ -174,7 +174,7 @@ Quite a lot is set up here:
 
 In terms of data, Vespa operates with the notion of [documents](../documents.html).
 A document represents a single, searchable item in your system, e.g., a news article, a photo, or a user.
-Each document type must be defined in the Vespa configuration through a [schema](../basics/schemas.html).
+Each document type must be defined in the Vespa configuration through a [schema](../schemas.html).
 Think of the document type in a schema as similar to a table definition in a relational database -
 it consists of a set of fields, each with a given name, a specific type, and some optional properties.
 The data fed into Vespa must match the structure of the schema,
@@ -249,7 +249,7 @@ indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
 - `attribute:` Store this field in memory as an [attribute](../attributes.html)
-  — for [sorting](../reference/sorting.html), [querying](../query-api.html), [ranking](../basics/ranking.html) and
+  — for [sorting](../reference/sorting.html), [querying](../query-api.html), [ranking](../ranking.html) and
   [grouping](../grouping.html).
 - `summary:` Lets this field be part of the [document
   summary](../document-summaries.html) in the result set.

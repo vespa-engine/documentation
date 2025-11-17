@@ -48,7 +48,7 @@ optimize the model for faster inference.
 ## Importing ONNX and tokenizer model files to Vespa
 
 Add the generated `model.onnx` and `tokenizer.json` files from the `ranker` directory 
-created by Optimum to the Vespa [application package](basics/applications.html):
+created by Optimum to the Vespa [application package](applications.html):
 
 <pre>
 ├── models
