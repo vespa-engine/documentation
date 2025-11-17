@@ -4,7 +4,7 @@ title: Memory Visualizer
 category: cloud
 ---
 
-The [schema](/en/schemas.html) defines fields, types of fields and settings per field, e.g.
+The [schema](/en/basics/schemas.html) defines fields, types of fields and settings per field, e.g.
 
 ```
 schema product {

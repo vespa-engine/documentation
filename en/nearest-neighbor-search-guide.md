@@ -188,7 +188,7 @@ $ python3 create-vespa-feed.py lastfm_test > feed.jsonl
 </div>
 
 ## Create a Vespa Application Package
-A [Vespa application package](applications.html) is the set 
+A [Vespa application package](basics/applications.html) is the set 
 of configuration files and Java plugins that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done,
 and how data will be processed during feeding and indexing.
@@ -205,7 +205,7 @@ $ mkdir -p app/schemas; mkdir -p app/search/query-profiles/; mkdir -p app/model
 
 ### Schema
 
-A [schema](schemas.html) is a configuration of a document type and additional synthetic fields and [ranking](ranking.html)
+A [schema](basics/schemas.html) is a configuration of a document type and additional synthetic fields and [ranking](basics/ranking.html)
 configuration.
 
 For this application, we define a `track` document type.
@@ -534,7 +534,7 @@ $ curl -L -o app/model/tokenizer.json \
 ## Deploy the application package
 
 The application package can now be deployed to a running Vespa instance.
-See also the [Vespa quick start guide](deploy-an-application-local.html).
+See also the [Vespa quick start guide](basics/deploy-an-application-local.html).
 
 Start the Vespa container image using Docker:
 
@@ -834,7 +834,7 @@ document tensor field.
 - The annotation `approximate:false` tells Vespa to perform exact search.
 - The `hits` parameter controls how many results are returned in the response. Number of `hits`
 requested does not impact `targetHits`. Notice that `targetHits` is per content node involved in the query. 
-- `ranking=closeness` tells Vespa which [rank-profile](ranking.html) to score documents. One must 
+- `ranking=closeness` tells Vespa which [rank-profile](basics/ranking.html) to score documents. One must 
 specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` ranking expression
 in the `rank-profile`.
 - `input.query(q)` is the query vector produced by the [embedder](embedding.html#embedding-a-query-text).
@@ -1085,7 +1085,7 @@ field popularity type int {
 
 Matching against the popularity field does not influence ranking, and Vespa can use the most efficient posting
 list representation. Note that one can still access the value of
-the `popularity` attribute in [ranking expressions](ranking.html). 
+the `popularity` attribute in [ranking expressions](basics/ranking.html). 
 
 <pre>
 rank-profile popularity {

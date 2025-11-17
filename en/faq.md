@@ -21,7 +21,7 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
 ## Ranking
 
 ### Does Vespa support a flexible ranking score?
-[Ranking](ranking.html) is maybe the primary Vespa feature -
+[Ranking](basics/ranking.html) is maybe the primary Vespa feature -
 we like to think of it as scalable, online computation.
 A rank profile is where the application's logic is implemented,
 supporting simple types like `double` and complex types like `tensor`.
@@ -83,7 +83,7 @@ and also supports diversification which the capped range query term does not sup
 The returned [relevance](reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
 of a double. This can happen in two cases:
 
-- The [ranking](ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
+- The [ranking](basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
 -Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this.
 - Surfacing low scoring hits using [grouping](grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](reference/schema-reference.html#keep-rank-count).
 
@@ -523,7 +523,7 @@ a request will be sent to A and C
 [Attribute](attributes.html) (with or without `fast-search`) is always in memory,
 but does not support tokenized matching.
 It is for structured data.
-[Index](schemas.html#document-fields) (where there’s no such thing as fast-search since it is always fast)
+[Index](basics/schemas.html#document-fields) (where there’s no such thing as fast-search since it is always fast)
 is in memory to the extent there is available memory and supports tokenized matching.
 It is for unstructured text.
 
@@ -554,7 +554,7 @@ Deleting documents, by using the [document API](reads-and-writes.html)
 or [garbage collection](documents.html#document-expiry) will increase the capacity on the content nodes.
 However, this is not necessarily observable in system metrics -
 this depends on many factors, like what kind of memory that is released,
-when [flush](proton.html#proton-maintenance-jobs) jobs are run and document [schema](schemas.html).
+when [flush](proton.html#proton-maintenance-jobs) jobs are run and document [schema](basics/schemas.html).
 
 In short, Vespa is not designed to release memory once used.
 It is designed for sustained high throughput, low latency,
@@ -754,7 +754,7 @@ for how to handle and remove control characters from the document feed.
 ## Login, Tenants and Plans
 
 ### How to get started?
-[Deploy an application](/en/deploy-an-application.html) to create a tenant and start your [free trial](https://vespa.ai/free-trial).
+[Deploy an application](/en/basics/deploy-an-application.html) to create a tenant and start your [free trial](https://vespa.ai/free-trial).
 This tenant can be your personal tenant, or shared with others.
 It can not be renamed.
 
@@ -790,7 +790,7 @@ see [elasticity](/en/elasticity.html).
 
 ### How to modify a schema?
 Schema changes might require data reindexing, which is automated, but takes some time.
-Other schema changes require data refeed - [details](/en/schemas.html#schema-modifications)
+Other schema changes require data refeed - [details](/en/basics/schemas.html#schema-modifications)
 <!-- ToDo: we should really have a "managing resources" guide for Vespa Cloud -->
 
 ### How to evaluate how much memory a field is using?
