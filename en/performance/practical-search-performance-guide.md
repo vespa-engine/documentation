@@ -217,7 +217,7 @@ $ python3 create-vespa-feed.py lastfm_test > feed.jsonl
 
 ## Create a Vespa Application Package
 
-A [Vespa application package](../applications.html) is the set 
+A [Vespa application package](../basics/applications.html) is the set 
 of configuration files and Java plugins that together define the behavior of a Vespa system:
 what functionality to use, the available document types, how ranking will be done,
 and how data will be processed during feeding and indexing.
@@ -234,7 +234,7 @@ $ mkdir -p app/schemas; mkdir -p app/search/query-profiles/
 
 ### Schema
 
-A Vespa [schema](../schemas.html) is a configuration of a document type and ranking and
+A Vespa [schema](../basics/schemas.html) is a configuration of a document type and ranking and
 compute specifications. This app use a `track` schema defined as:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
@@ -321,7 +321,7 @@ renders `weightedset` fields as JSON maps.
 ## Deploy the application package
 
 The application package can now be deployed to a running Vespa instance.
-See also the [Vespa quick start guide](../deploy-an-application-local.html).
+See also the [Vespa quick start guide](../basics/deploy-an-application-local.html).
 
 Start the Vespa container image using Docker:
 
@@ -471,7 +471,7 @@ using `all`, requiring that all the terms match.
 
 The above example searches for *total AND eclipse AND of AND the AND heart* in the fieldset `default`, 
 which in the schema includes the `title` and `artist` fields. 
-Since the request did not specify any [ranking](../ranking.html) parameters,
+Since the request did not specify any [ranking](../basics/ranking.html) parameters,
 the matched documents were ranked by Vespa's default 
 text rank feature: [nativeRank](../nativerank.html).
 
@@ -730,7 +730,7 @@ With `attribute` Vespa will per default not build any inverted index-like data s
 potential faster query evaluation. See [Wikipedia:Inverted Index](https://en.wikipedia.org/wiki/Inverted_index) 
 and [Vespa internals](../proton.html#index). 
 The reason for this default setting is that Vespa `attribute` fields can be used
-for many different aspects: [ranking](../ranking.html), [result grouping](../grouping.html),
+for many different aspects: [ranking](../basics/ranking.html), [result grouping](../grouping.html),
  [result sorting](../reference/sorting.html), and finally searching/matching. 
 
 The following section focuses on the `tags` field which we defined with `attribute`,
@@ -961,7 +961,7 @@ representation could use weights.
 In the following examples, the [dotProduct()](../reference/query-language-reference.html#dotproduct) and
 [wand()](../reference/query-language-reference.html#wand) query operators are used.
 
-To configure [ranking](../ranking.html), add a `rank-profile` to the schema:
+To configure [ranking](../basics/ranking.html), add a `rank-profile` to the schema:
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
