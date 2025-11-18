@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - recommendations"
+redirect_from:
+  - /en/tutorials/news-5-recommendation
 ---
 
 This is the fifth part of the tutorial series for setting up a Vespa
@@ -101,7 +103,7 @@ The `embedding` field is a tensor field.
 Tensors in Vespa are flexible multi-dimensional data structures, and, as first-class citizens,
 can be used in queries, document fields, and constants in ranking.
 Tensors can be either dense or sparse or both, and can contain any number of dimensions.
-See [the tensor user guide](../tensor-user-guide.html) for more information.
+See [the tensor user guide](../../tensor-user-guide.html) for more information.
 
 Here we have defined a dense tensor with a single dimension (`d0` - dimension 0), which represents a vector.
 The distance metric is "dotproduct" as we would like to use this field for nearest-neighbor search
@@ -109,7 +111,7 @@ where we search for the maximal dotproduct.
 
 This is seen in the `recommendation` rank profile.
 Here, we've added a ranking expression using the
-[closeness](../reference/rank-features.html#closeness(dimension,name)) ranking feature,
+[closeness](../../reference/rank-features.html#closeness(dimension,name)) ranking feature,
 which calculates the dot product and uses that to rank the news articles.
 This depends on using the `nearestNeighbor` search operator,
 which we'll get back to below when searching.
@@ -131,12 +133,12 @@ If you take a look at the file generated for the news embeddings,
 }
 ```
 
-This is a [partial update](../partial-updates.html).
+This is a [partial update](../../partial-updates.html).
 So, assuming you already have a system up and running from the previous search tutorial,
 you don't need to feed the entire corpus.
 With a partial update, you only need to update the necessary fields.
 So, after training another set of embeddings you can partially feed them again.
-Please refer to [Vespa reads and writes](../reads-and-writes.html) for more information on feeding formats.
+Please refer to [Vespa reads and writes](../../reads-and-writes.html) for more information on feeding formats.
 
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:
@@ -243,7 +245,7 @@ The `recommendation` rank profile above requires a tensor to be sent along with 
 For Vespa to bind the correct types, it needs to know the expected type of this query parameter.
 That is called a query profile type.
 
-[Query profiles](../query-profiles.html) are named sets of search request parameters
+[Query profiles](../../query-profiles.html) are named sets of search request parameters
 that can be set as default, so you don't have to pass them along with the query.
 We don't use this in this sample application.
 Still we need to set up a default query profile to set up the types of query parameters we expect to pass.
@@ -339,7 +341,7 @@ $ ./src/python/user_search.py U33527 10
 This script first retrieves the user embedding using an HTTP `GET` query to
 Vespa. It then parses the tensor containing the embedding vector. Finally, it
 issues a `nearestNeighbor` search using a `POST` (however a `GET` would work just as well).
-Please see the [nearest-neighbor operator](../reference/query-language-reference.html#nearestneighbor)
+Please see the [nearest-neighbor operator](../../reference/query-language-reference.html#nearestneighbor)
 for more on the syntax for nearest-neighbor searches.
 The `nearestNeighbor` search looks like:
 

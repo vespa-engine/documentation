@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - embeddings"
+redirect_from:
+  - /en/tutorials/news-4-embedding
 ---
 
 
@@ -459,7 +461,7 @@ field embedding type tensor&lt;float&gt;(d0[50]) {
             }
 }</pre>
 
-See [Nearest Neighbor Search](../nearest-neighbor-search.html) for more
+See [Nearest Neighbor Search](../../nearest-neighbor-search) for more
 information on nearest neighbor search and supported distance metrics in Vespa.
 
 We've included a script to create a feed suitable for Vespa:

@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - searching"
+redirect_from:
+  - /en/tutorials/news-3-searching
 ---
 
 
@@ -36,9 +38,9 @@ We can think of the results being ordered either by:
 - a fixed value, or attribute, in the document
 - a function calculating a score
 
-Ordering by an attribute is called [sorting](../reference/sorting.html).
+Ordering by an attribute is called [sorting](../../reference/sorting.html).
 For instance, we can sort by decreasing `date`.
-[Grouping](../reference/grouping-syntax.html) also works on attributes.
+[Grouping](../../reference/grouping-syntax.html) also works on attributes.
 An example is to group the results by a `category` attribute.
 
 Calculating a score to order by is generally called "ranking".
@@ -46,7 +48,7 @@ As these scores are usually dependent upon both query and document,
 they can also be called *relevance*.
 Such expressions can be arbitrarily complex, but in general,
 require some form of computation to find this score.
-Ranking can be divided into [multiple rank phases](../phased-ranking.html) as well.
+Ranking can be divided into [multiple rank phases](../../phased-ranking.html) as well.
 
 We'll start by looking at attribute-based sorting and grouping before moving on to ranking.
 
@@ -63,7 +65,7 @@ We saw multiple examples of attributes in the `news.sd` schema, for instance:
 Note that this `date` field has been defined as an `int` here, and when
 feeding document, we convert the date to the format `YYYYMMDD`.
 
-An [attribute](../attributes.html) is an in-memory field -
+An [attribute](../../attributes.html) is an in-memory field -
 this is different from  _index_ fields, which may be moved to a disk-based index
 as more documents are added and the index grows.
 Since attributes are kept in memory,
@@ -75,7 +77,7 @@ In the above field definition we have included an additional property `attribute
 which will inform Vespa that we want to build inverted index structures (dictionary and posting lists)
 for *fast* *matching* in the field.
 See more about
-[when to use fast-search](../performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields)
+[when to use fast-search](../../performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields)
 in the performance feature tuning section.
 
 
@@ -146,7 +148,7 @@ By now, you have probably noticed that hits are returned in order of descending 
 i.e. how well the document matches the query —
 if not, take a moment to verify this.
 You might ask how Vespa does this since we haven't even touched upon ranking yet.
-The answer is that Vespa uses its [nativeRank](../nativerank.html) score
+The answer is that Vespa uses its [nativeRank](../../nativerank.html) score
 unless anything else is defined in the schema.
 We'll get back to defining custom ranking later on.
 
@@ -175,7 +177,7 @@ Attempting to sort on a field which is not defined as attribute in the schema wi
 
 ### Query time result grouping
 
-[Grouping](../grouping.html) is the concept of looking through all matching documents at query-time
+[Grouping](../../grouping.html) is the concept of looking through all matching documents at query-time
 and then performing operations with specified fields across all the documents —
 some common use cases include:
 
@@ -205,7 +207,7 @@ $ vespa query -v 'yql=select * from news where true limit 0 | all(group(category
 Note that expression after the pipe (`|`):
 this is the grouping expression that determines how grouping will be performed.
 You can read more about the grouping syntax in the
-[grouping reference documentation](../reference/grouping-syntax.html).
+[grouping reference documentation](../../reference/grouping-syntax.html).
 `limit 0` is an alternative syntax for the native `hits` parameter,
 in this case we are only interested in the group counts, so we set limit to 0. 
 
@@ -289,7 +291,7 @@ If you try to search for a single term that is *not* present in the document set
 you will see that the list of groups is empty as no documents have been matched.
 Vespa grouping is only applied over the documents which matched the query.
 
-In the following example we use the [select](../reference/query-api-reference.html#select) 
+In the following example we use the [select](../../reference/query-api-reference.html#select) 
 parameter to pass the grouping specification:
 
 <div class="pre-parent">
@@ -308,7 +310,7 @@ Notice that we also set an upper limit on the number of unique groups my the out
 This is important in cases with many unique values.
 See also [Result diversification using Vespa result grouping](https://blog.vespa.ai/result-diversification-with-vespa/). 
 
-Please refer to the [grouping guide](../grouping.html) for more information and examples using Vespa grouping.
+Please refer to the [grouping guide](../../grouping.html) for more information and examples using Vespa grouping.
 Similar to with sorting,
 attempting to group on a field which is not defined as attribute in the schema will create an error. 
 
@@ -327,8 +329,8 @@ with a single white space character between them.
 How should we be able to search this field?
 
 For string fields with `index` which defaults to `match:text`, Vespa performs linguistic processing of the string. 
-This includes [tokenization](../linguistics.html#tokenization), [normalization](../linguistics.html#normalization)
-and language dependent [stemming](../linguistics.html#stemming) of the string.  
+This includes [tokenization](../../linguistics.html#tokenization), [normalization](../../linguistics.html#normalization)
+and language dependent [stemming](../../linguistics.html#stemming) of the string.  
 
 In our example, this means that the string above is split into the 14 tokens,
 enabling Vespa to match this document for:
@@ -343,7 +345,7 @@ However, string fields with `indexing:attributes` do not support `match:text`,
 only *exact matching* or *prefix matching*.
 Exact matching is the default, and, as the name implies,
 it requires you to search for the exact contents of the field in order to get a match.
-See supported [match](../reference/schema-reference.html#match) modes
+See supported [match](../../reference/schema-reference.html#match) modes
 and the differences in support between `attribute` and `index`.  
 
 #### Memory usage
@@ -362,7 +364,7 @@ There are both advantages and drawbacks of using attributes —
 it enables sorting, ranking and grouping,
 but requires more memory and does not support `match:text` capabilities.
 Attribute fields do support at least one order higher update throughput then regular `index` fields,
-see [partial updates with Vespa](../partial-updates.html).
+see [partial updates with Vespa](../../partial-updates.html).
 
 When to use attributes depends on the application;
 in general, use attributes for:
@@ -371,7 +373,7 @@ in general, use attributes for:
 - fields used for grouping, e.g. category, and
 - fields accessed in ranking expressions 
 
-Finally, all numeric and [tensors](../tensor-user-guide.html) fields used in ranking must be defined with attribute. 
+Finally, all numeric and [tensors](../../tensor-user-guide.html) fields used in ranking must be defined with attribute. 
 
 #### Combining index and attribute
 
@@ -387,7 +389,7 @@ which will tokenize and stem the contents of the field.
 
 ## Relevance and Ranking
 
-[Ranking](../basics/ranking.html) and relevance were briefly mentioned above;
+[Ranking](../../basics/ranking.html) and relevance were briefly mentioned above;
 what is really the relevance of a hit?
 How can one change the relevance calculations?
 It is time to introduce _rank profiles_ and _ranking expressions_ —
@@ -396,7 +398,7 @@ simple, yet powerful methods for tuning the relevance.
 Relevance is a measure of how well a given document matches a query.
 The default relevance is calculated by a formula that takes several *matching* factors into consideration.
 It computes, in essence, how well the document matches the terms in the query.
-The default Vespa ranking function and its limitations is described in [ranking with nativeRank](../nativerank.html).
+The default Vespa ranking function and its limitations is described in [ranking with nativeRank](../../nativerank.html).
 
 Ranking signals that might be useful, like freshness (the age of the document compared to the time of the query)
 or any other document or query features, 
@@ -425,7 +427,7 @@ number of times a news article was shown (impressions) and how many clicks it re
 A high number of clicks relative to impressions indicates that the news article was generally popular.
 We can use this signal in our ranking.
 Since both clicks and impressions are attribute fields,
-these fields can be [updated](../partial-updates.html) at scale with very high throughput.
+these fields can be [updated](../../partial-updates.html) at scale with very high throughput.
 
 We can use this signal in our ranking,
 by including a `popularity` rank profile,
@@ -500,7 +502,7 @@ schema news {
   first phase are performed on every single document matching your query,
   while the second phase calculations are only done on the top `n` documents
   as determined by the calculations done in the first phase. 
-  See [phased ranking](../phased-ranking.html).
+  See [phased ranking](../../phased-ranking.html).
 
 - `function popularity()`
 
@@ -520,7 +522,7 @@ schema news {
   Note that the weight here, `10`, is set by observation.
   A better approach would be to learn such values using machine learning.
 
-More information can be found in the [schema reference](../reference/schema-reference.html#rank-profile).
+More information can be found in the [schema reference](../../reference/schema-reference.html#rank-profile).
 
 Deploy the _popularity_ rank profile:
 

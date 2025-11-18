@@ -20,7 +20,7 @@ This guide covers the following query serving performance aspects:
 - [Advanced query tracing](#advanced-query-tracing)
 
 The guide includes step-by-step instructions on how to reproduce the experiments. 
-This guide is best read after having read the [Vespa Overview](../overview.html) documentation first.
+This guide is best read after having read the [Vespa Overview](../learn/overview.html) documentation first.
 
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li>Python3 for converting the dataset to Vespa JSON.</li>

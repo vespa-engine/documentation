@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "News search and recommendation tutorial - Searchers"
+redirect_from:
+  - /en/tutorials/news-6-recommendation-with-searchers
 ---
 
 This is the sixth part of the tutorial series for setting up a Vespa
@@ -72,10 +74,10 @@ When the results come back, the processing passes back up the chain.
 The Searchers can then process the results before passing them to the previous Searcher,
 and ultimately back as a response to the query.
 
-{% include note.html content="Adding a [trace.level](../reference/query-api-reference.html#trace.level)
+{% include note.html content="Adding a [trace.level](../../reference/query-api-reference.html#trace.level)
 is generally helpful when debugging vespa queries." %}
 
-So, [Searchers](../searcher-development.html) are Java components that do some kind of processing along the query chain;
+So, [Searchers](../../searcher-development.html) are Java components that do some kind of processing along the query chain;
 either modifying the query before the actual search,
 modifying the results after the search,
 or some combination of both.
@@ -95,7 +97,7 @@ The search will take care of creating the actual query for us - let's get starte
 While the `content` layer in Vespa is written in C++ for maximum performance, 
 the `container` layer is in Java for flexibility.
 So, all Searchers and thus custom Searchers are written in Java.
-Refer to [the guide on Searcher development](../searcher-development.html) for more information.
+Refer to [the guide on Searcher development](../../searcher-development.html) for more information.
 
 We want to create a Searcher that takes a `user_id`,
 issues a query to find the corresponding embedding,
@@ -275,7 +277,7 @@ $ vespa deploy --wait 300 app-6-recommendation-with-searchers
 </div>
 
 After the application has been deployed, we are ready to test.
-Refer to [the Searcher development guide](../searcher-development.html)
+Refer to [the Searcher development guide](../../searcher-development.html)
 for much more on custom Searchers and the Java API.
 
 
@@ -341,7 +343,7 @@ When a document is fed to Vespa, it goes through a chain of Document Processors
 before being passed to the content node for storage and indexing.
 
 Vespa also supports custom Document Processors, refer to
-[the guide for document processing](../document-processing.html) for more information.
+[the guide for document processing](../../document-processing.html) for more information.
 
 
 ## Improving recommendation diversity 
@@ -377,7 +379,7 @@ and thus introduce diversity.
 
 This is often called federation.
 Vespa supports federation both from internal and external sources,
-see [the guide on federation](../federation.html) for more information.
+see [the guide on federation](../../federation.html) for more information.
 
 {% include important.html content="If the same document can be returned from multiple sources,
 it's important to perform some form of de-duplication before returning the final results!" %}

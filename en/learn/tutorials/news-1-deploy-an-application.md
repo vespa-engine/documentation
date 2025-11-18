@@ -3,6 +3,7 @@
 title: "News search and recommendation tutorial - getting started on Docker"
 redirect_from:
 - /en/tutorials/news-1-getting-started.html
+- /en/tutorials/news-1-deploy-an-application
 ---
 
 
@@ -21,10 +22,9 @@ The parts are:
 6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 
-There are different entry points to this tutorial. This one is for getting
-started using Docker on your local machine. Getting started on 
-[cloud.vespa.ai](https://cloud.vespa.ai) is coming soon. We will also have a
-version for [pyvespa](https://github.com/vespa-engine/pyvespa) soon.
+There are different entry points to this tutorial. This one is describing how to get
+started using Docker on your local machine. You can also deploy the application we are creating on
+[Vespa Cloud](https://cloud.vespa.ai).
 
 In this part, we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.
@@ -46,7 +46,7 @@ and train machine learning models for use in ranking.
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](../vespa-cli.html),
+This tutorial uses [Vespa-CLI](../../vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS, and Windows.
 
@@ -179,7 +179,7 @@ $ vespa document -v doc.json
 </pre>
 </div>
 
-We can also feed using [Vespa document api](../document-v1-api-guide.html) directly.
+We can also feed using [Vespa document api](../../document-v1-api-guide.html) directly.
 
 Once the feed operation is acknowledged by Vespa, the operation is visible in search.
 
@@ -187,7 +187,7 @@ Once the feed operation is acknowledged by Vespa, the operation is visible in se
 ## Querying Vespa
 
 We can query the endpoint using the vespa-cli's support for performing queries.
-It uses the [Vespa query api](../query-api.html) to query vespa,
+It uses the [Vespa query api](../../query-api.html) to query vespa,
 including `-v` in the command, we can see the exact endpoint and url request parameters used. 
 
 <div class="pre-parent">
@@ -197,7 +197,7 @@ $ vespa query -v 'yql=select * from news where true'
 </pre>
 </div>
 
-This example uses [YQL (Vespa Query Language)](../query-language.html) to 
+This example uses [YQL (Vespa Query Language)](../../query-language.html) to 
 search for all documents of type `news`. This query request will return `1` result, which is the document we fed above. 
 
 <div class="pre-parent">
@@ -261,7 +261,7 @@ $ docker exec vespa vespa-start-services
 </pre>
 </div>
 
-If a [restart is required](../reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
+If a [restart is required](../../reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
 due to changes in the application package,
 these two steps are what you need to do.
 
@@ -287,7 +287,7 @@ $ docker stop vespa; docker rm -f vespa
 </div>
 
 This will delete the Vespa application, including all data and configuration. See 
-[container tuning for production](/en/operations-selfhosted/docker-containers.html). 
+[container tuning for production](../../operations-selfhosted/docker-containers.html). 
 
 
 ## Conclusion

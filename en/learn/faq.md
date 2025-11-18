@@ -1,10 +1,10 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: FAQ - frequently asked questions
+redirect_from:
+  - /en/faq
 ---
 Refer to [Vespa Support](https://vespa.ai/support) for more support options.
-
----
 
 <style>
 .subpage h2 {
@@ -21,12 +21,12 @@ Refer to [Vespa Support](https://vespa.ai/support) for more support options.
 ## Ranking
 
 ### Does Vespa support a flexible ranking score?
-[Ranking](basics/ranking.html) is maybe the primary Vespa feature -
+[Ranking](../basics/ranking.html) is maybe the primary Vespa feature -
 we like to think of it as scalable, online computation.
 A rank profile is where the application's logic is implemented,
 supporting simple types like `double` and complex types like `tensor`.
 Supply ranking data in queries in query features (e.g. different weights per customer),
-or look up in a [Searcher](searcher-development.html).
+or look up in a [Searcher](../searcher-development.html).
 Typically, a document (e.g. product) "feature vector"/"weights" will be compared to a user-specific vector (tensor).
 
 ### Where would customer specific weightings be stored?
@@ -39,11 +39,11 @@ Find an example on how to look up data in
 
 ### How to create a tensor on the fly in the ranking expression?
 Create a tensor in the ranking function from arrays or weighted sets using `tensorFrom...` functions -
-see [document features](reference/rank-features.html#document-features).
+see [document features](../reference/rank-features.html#document-features).
 
 ### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
-see [retrieval and ranking](getting-started-ranking.html#retrieval-and-ranking). Example:
+see [retrieval and ranking](../getting-started-ranking#retrieval-and-ranking). Example:
 <pre>
 rank-profile drop-low-score {
    function my_score() {
@@ -72,31 +72,33 @@ function bar() {
 </pre>
 
 ### Does Vespa support early termination of matching and ranking?
-Yes, this can be accomplished by configuring [match-phase](reference/schema-reference.html#match-phase) in the rank profile,  or by adding a range query item using *hitLimit* to the query tree,
-see [capped numeric range search](reference/query-language-reference.html#numeric).
-Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if there are other restrictive filters in the query, one might end up with 0 hits.
+Yes, this can be accomplished by configuring [match-phase](../reference/schema-reference.html#match-phase) 
+in the rank profile,  or by adding a range query item using *hitLimit* to the query tree,
+see [capped numeric range search](../reference/query-language-reference.html#numeric).
+Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if 
+there are other restrictive filters in the query, one might end up with 0 hits.
 The additional filters are applied as a post filtering
 step over the hits from the capped range query. *match-phase* on the other hand, is safe to use with filters or other query terms,
 and also supports diversification which the capped range query term does not support.
 
 ### What could cause the relevance field to be -Infinity
-The returned [relevance](reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
+The returned [relevance](../reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
 of a double. This can happen in two cases:
 
-- The [ranking](basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
--Infinity. One can use [isNan](reference/ranking-expressions.html#isnan-x) to guard against this.
-- Surfacing low scoring hits using [grouping](grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](reference/schema-reference.html#keep-rank-count).
+- The [ranking](../basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
+-Infinity. One can use [isNan](../reference/ranking-expressions.html#isnan-x) to guard against this.
+- Surfacing low scoring hits using [grouping](../grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](../reference/schema-reference.html#keep-rank-count).
 
 ### How to pin query results?
 To hard-code documents to positions in the result set,
-see the [pin results example](/en/multivalue-query-operators.html#pin-results-example).
+see the [pin results example](../multivalue-query-operators.html#pin-results-example).
 
 
 {:.faq-section}
 ## Documents
 
 ### What limits apply to document size?
-There is a [maximum document size](/en/reference/services-content.html#max-document-size) of 128 MiB,
+There is a [maximum document size](../reference/services-content.html#max-document-size) of 128 MiB,
 which is configurable per content cluster in services.xml.
 
 ### Is there any size limitation for multivalued fields?
@@ -104,17 +106,17 @@ No enforced limit, except resource usage (memory).
 
 ### Can a document have lists (key value pairs)?
 E.g. a product is offered in a list of stores with a quantity per store.
-Use [multivalue fields](/en/searching-multi-valued-fields.html) (array of struct) or [parent child](parent-child.html).
+Use [multivalue fields](../searching-multi-valued-fields.html) (array of struct) or [parent child](../parent-child.html).
 Which one to chose depends on use case, see discussion in the latter link.
 
 ### Does a whole document need to be updated and re-indexed?
 E.g. price and quantity available per store may often change vs the actual product attributes.
-Vespa supports [partial updates](reads-and-writes.html) of documents.
+Vespa supports [partial updates](../reads-and-writes.html) of documents.
 Also, the parent/child feature is implemented to support use-cases where child elements are updated frequently,
 while a more limited set of parent elements are updated less frequently.
 
 ### What ACID guarantees if any does Vespa provide for single writes / updates / deletes vs batch operations etc?
-See the [Vespa Consistency Model](content/consistency.html).
+See the [Vespa Consistency Model](../content/consistency).
 Vespa is not transactional in the traditional sense, it doesn't have strict ACID guarantees.
 Vespa is designed for high performance use-cases with eventual consistency
 as an acceptable (and to some extent configurable) trade-off.
@@ -123,16 +125,16 @@ as an acceptable (and to some extent configurable) trade-off.
 Wildcard fields are not supported in vespa.
 Workaround would be to use maps to store the wildcard fields.
 Map needs to be defined with <code>indexing: attribute</code> and hence will be stored in memory.
-Refer to [map](reference/schema-reference.html#map).
+Refer to [map](../reference/schema-reference.html#map).
 
 ### Can we set a limit for the number of elements that can be stored in an array?
-Implement a [document processor](document-processing.html) for this.
+Implement a [document processor](../document-processing.html) for this.
 
 ### How to auto-expire documents / set up garbage collection?
 Set a selection criterion on the `document` element in `services.xml`.
 The criterion selects documents <span style="text-decoration: underline">to keep</span>.
 I.e. to purge documents "older than two weeks", the expression should be "newer than two weeks".
-Read more about [document expiry](documents.html#document-expiry).
+Read more about [document expiry](../documents.html#document-expiry).
 
 ### How to increase redundancy and track data migration progress?
 Changing redundancy is a live and safe change
@@ -144,25 +146,25 @@ To monitor progress, take a look at the
 sample application for the _clustercontroller_ status page - this shows buckets pending, live.
 Finally, use the `.idealstate.merge_bucket.pending` metric to track progress -
 when 0, there are no more data syncing operations - see
-[monitor distance to ideal state](/en/operations-selfhosted/admin-procedures.html#monitor-distance-to-ideal-state).
+[monitor distance to ideal state](../operations-selfhosted/admin-procedures.html#monitor-distance-to-ideal-state).
 Nodes will work as normal during data sync, and query coverage will be the same.
 
 ### How does namespace relate to schema?
 It does not,
 _namespace_ is a mechanism to split the document space into parts that can be used for document selection -
-see [documentation](documents.html#namespace). The namespace is not indexed and cannot
-be searched using the query api, but can be used by [visiting](visiting.html).
+see [documentation](../documents.html#namespace). The namespace is not indexed and cannot
+be searched using the query api, but can be used by [visiting](../visiting.html).
 
 ### Visiting does not dump all documents, and/or hangs.
-There are multiple things that can cause this, see [visiting troubleshooting](visiting.html#troubleshooting).
+There are multiple things that can cause this, see [visiting troubleshooting](../visiting.html#troubleshooting).
 
 ### How to find number of documents in the index?
 Run a query like `vespa query "select * from sources * where true"` and see the `totalCount` field.
-Alternatively, use metrics or `vespa visit` - see [examples](/en/operations/batch-delete.html#example).
+Alternatively, use metrics or `vespa visit` - see [examples](../operations/batch-delete.html#example).
 
 ### Can I define a default value for a field?
 
-Not in the field definition, but it's possible to do this with the [choice](/en/indexing.html#choice-example)
+Not in the field definition, but it's possible to do this with the [choice](../indexing.html#choice-example)
 expression in an indexing statement.
 
 
@@ -174,21 +176,21 @@ Facets is called <a href="grouping.html">grouping</a> in Vespa.
 Groups can be multi-level.
 
 ### Are filters supported?
-Add filters to the query using [YQL](query-language.html)
-using boolean, numeric and [text matching](text-matching.html). Query terms can be annotated
+Add filters to the query using [YQL](../query-language.html)
+using boolean, numeric and [text matching](../text-matching.html). Query terms can be annotated
 as filters, which means that they are not highlighted when bolding results.
 
 ### How to query for similar items?
 One way is to describe items using tensors and query for the
-[nearest neighbor](reference/query-language-reference.html#nearestneighbor) -
+[nearest neighbor](../reference/query-language-reference.html#nearestneighbor) -
 using full precision or approximate (ANN) - the latter is used when the set is too large for an exact calculation.
 Apply filters to the query to limit the neighbor candidate set.
-Using [dot products](multivalue-query-operators.html) or [weak and](using-wand-with-vespa.html) are alternatives.
+Using [dot products](../multivalue-query-operators.html) or [weak and](../using-wand-with-vespa.html) are alternatives.
 
 ### Does Vespa support stop-word removal?
 Vespa does not have a stop-word concept inherently.
 See the [sample app](https://github.com/vespa-engine/sample-apps/pull/335/files)
-for how to use [filter terms](/en/reference/query-language-reference.html#annotations).
+for how to use [filter terms](../reference/query-language-reference.html#annotations).
 [Tripling the query performance of lexical search](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/)
 it s good blog post on this subject.
 
@@ -196,15 +198,15 @@ it s good blog post on this subject.
 Trying to request more than 400 hits in a query, getting this error:
 `{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}`.
 
-* To increase max result set size (i.e. allow a higher [hits](reference/query-api-reference.html#hits)),
-  configure `maxHits` in a [query profile](reference/query-api-reference.html#queryprofile),
+* To increase max result set size (i.e. allow a higher [hits](../reference/query-api-reference.html#hits)),
+  configure `maxHits` in a [query profile](../reference/query-api-reference.html#queryprofile),
   e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
-  The [query timeout](reference/query-api-reference.html#timeout) can be increased,
+  The [query timeout](../reference/query-api-reference.html#timeout) can be increased,
   but it will still be costly and likely impact other queries -
   large limit more so than a large offset.
-  It can be made cheaper by using a smaller [document summary](document-summaries.html),
+  It can be made cheaper by using a smaller [document summary](../document-summaries.html),
   and avoiding fields on disk if possible.
-* Using _visit_ in the [document/v1/ API](document-v1-api-guide.html)
+* Using _visit_ in the [document/v1/ API](../document-v1-api-guide.html)
   is usually a better option for dumping all the data.
 
 ### How to make a sub-query to get data to enrich the query, like get a user profile?
@@ -243,17 +245,17 @@ public class ConfigCacheRefresher extends AbstractComponent {
 {% endhighlight %}</pre>
 
 ### Is it possible to query Vespa using a list of document ids?
-Yes, using the [in query operator](reference/query-language-reference.html#in). Example:
+Yes, using the [in query operator](../reference/query-language-reference.html#in). Example:
 ```
 select * from data where user_id in (10, 20, 30)
 ```
 The best article on the subject is
-[multi-lookup set filtering](performance/feature-tuning.html#multi-lookup-set-filtering).
-Refer to the [in operator example](multivalue-query-operators.html#in-example)
-on how to use it programmatically in a [Java Searcher](searcher-development.html).
+[multi-lookup set filtering](../performance/feature-tuning.html#multi-lookup-set-filtering).
+Refer to the [in operator example](../multivalue-query-operators.html#in-example)
+on how to use it programmatically in a [Java Searcher](../searcher-development.html).
 
 ### How to query documents where one field matches any values in a list? Similar to using SQL IN operator
-Use the [in query operator](reference/query-language-reference.html#in). Example:
+Use the [in query operator](../reference/query-language-reference.html#in). Example:
 ```
 select * from data where category in ('cat1', 'cat2', 'cat3')
 ```
@@ -262,18 +264,18 @@ above for more details.
 
 
 ### How to count hits / all documents without returning results?
-Count all documents using a query like [select * from doc where true](query-language.html) -
+Count all documents using a query like [select * from doc where true](../query-language.html) -
 this counts all documents from the "doc" source.
 Using `select * from doc where true limit 0` will return the count and no hits,
-alternatively add [hits=0](reference/query-api-reference.html#hits).
-Pass [ranking.profile=unranked](reference/query-api-reference.html#ranking.profile)
+alternatively add [hits=0](../reference/query-api-reference.html#hits).
+Pass [ranking.profile=unranked](../reference/query-api-reference.html#ranking.profile)
 to make the query less expensive to run.
-If an _estimate_ is good enough, use [hitcountestimate=true](reference/query-api-reference.html#hitcountestimate).
+If an _estimate_ is good enough, use [hitcountestimate=true](../reference/query-api-reference.html#hitcountestimate).
 
 ### Must all fields in a fieldset have compatible type and matching settings?
 Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted
 when fields with conflicting tokenization are put in the same
-[fieldset](reference/schema-reference.html#fieldset).
+[fieldset](../reference/schema-reference.html#fieldset).
 This is because a given query item searching one fieldset is tokenized just once,
 so there's no right choice of tokenization in this case.
 If you have user input that you want to apply to multiple fields with different tokenization,
@@ -284,8 +286,8 @@ select * from sources * where ({defaultIndex: 'fieldsetOrField1'}userInput(@quer
 More details on [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues).
 
 ### How is the query timeout computed?
-Find query timeout details in the [Query API Guide](query-api.html#timeout)
-and the [Query API Reference](reference/query-api-reference.html#timeout).
+Find query timeout details in the [Query API Guide](../query-api.html#timeout)
+and the [Query API Reference](../reference/query-api-reference.html#timeout).
 
 ### How does backslash escapes work?
 Backslash is used to escape special characters in YQL.
@@ -309,7 +311,7 @@ This makes it impossible to do via OR conditions to select both collection of do
     SELECT 2 AS y;
 
 This isn’t possible, need to run 2 queries.
-Alternatively, split a single incoming query into two running in parallel in a [Searcher](searcher-development.html) - example:
+Alternatively, split a single incoming query into two running in parallel in a [Searcher](../searcher-development.html) - example:
 ```java
 FutureResult futureResult = new AsyncExecution(settings).search(query);
 FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
@@ -317,15 +319,15 @@ FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery)
 ### Is it possible to query for the number of elements in an array
 There is no index or attribute data structure that allows efficient _searching_ for documents where
 an array field has a certain number of elements or items.
-The _grouping language_ has a [size()](/en/reference/grouping-syntax.html#list-expressions) operator that can be used in queries.
+The _grouping language_ has a [size()](../reference/grouping-syntax.html#list-expressions) operator that can be used in queries.
 
 ### Is it possible to query for fields with NaN/no value set/null/none
-The [visiting](visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
+The [visiting](../visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
 If the field is an _attribute_ one can query using grouping to identify Nan Values,
-see count and list [fields with NaN](/en/grouping.html#count-fields-with-nan).
+see count and list [fields with NaN](../grouping.html#count-fields-with-nan).
 
 ### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
-See the [random.match](reference/rank-features.html#random.match) rank feature - example:
+See the [random.match](../reference/rank-features.html#random.match) rank feature - example:
 ```
 rank-profile random {
     first-phase {
@@ -341,7 +343,7 @@ $ vespa query 'select * from music where true' \
 ```
 
 ### Some of the query results have too many hits from the same source, how to create a diverse result set?
-See [result diversity](/en/result-diversity.html) for strategies on how to create result sets from different sources.
+See [result diversity](../result-diversity.html) for strategies on how to create result sets from different sources.
 
 ### How to find most distant neighbor in a embedding field called clip_query_embedding?
 If you want to search for the most dissimilar items,
@@ -357,8 +359,8 @@ Also see a [pyvespa example](https://pyvespa.readthedocs.io/en/latest/examples/p
 
 ### How to debug a feeding 400 response?
 The best option is to use `--verbose` option, like `vespa feed --verbose myfile.jsonl` -
-see [documentation](/en/vespa-cli.html#documents).
-A common problem is a mismatch in schema names and [document IDs](/en/documents.html#document-ids) - a schema like:
+see [documentation](../vespa-cli.html#documents).
+A common problem is a mismatch in schema names and [document IDs](../documents.html#document-ids) - a schema like:
 ```
 schema article {
     document article {
@@ -370,22 +372,22 @@ will have a document feed like:
 ```
 {"put": "id:mynamespace:article::1234", "fields": { ... }}
 ```
-Note that the [namespace](/en/glossary.html#namespace) is not mentioned in the schema,
+Note that the [namespace](glossary.html#namespace) is not mentioned in the schema,
 and the schema name is the same as the document name.
 
 ### How to debug document processing chain configuration?
 This configuration is a combination of content and container cluster configuration,
-see [indexing](indexing.html) and [feed troubleshooting](/en/operations-selfhosted/admin-procedures.html#troubleshooting).
+see [indexing](../indexing.html) and [feed troubleshooting](../operations-selfhosted/admin-procedures.html#troubleshooting).
 
 ### I feed documents with no error, but they are not in the index
-This is often a problem if using [document expiry](documents.html#document-expiry),
+This is often a problem if using [document expiry](../documents.html#document-expiry),
 as documents already expired will not be persisted, they are silently dropped and ignored.
 Feeding stale test data with old timestamps in combination with document-expiry can cause this
 behavior.
 
 ### How to feed many files, avoiding 429 error?
 Using too many HTTP clients can generate a 429 response code.
-The Vespa sample apps use [vespa feed](vespa-cli.html#documents) which uses HTTP/2 for high throughput -
+The Vespa sample apps use [vespa feed](../vespa-cli.html#documents) which uses HTTP/2 for high throughput -
 it is better to stream the feed files through this client.
 
 ### Can I use Kafka to feed to Vespa?
@@ -400,8 +402,8 @@ Refer to third-party connectors like [kafka-connect-vespa](https://github.com/vi
 ### Does Vespa support addition of flexible NLP processing for documents and search queries?
 E.g. integrating NER, word sense disambiguation, specific intent detection.
 Vespa supports these things well:
-- [Query (and result) processing](searcher-development.html)
-- [Document processing](document-processing.html)
+- [Query (and result) processing](../searcher-development.html)
+- [Document processing](../document-processing.html)
   and document processors working on semantic annotations of text
 
 ### Does Vespa support customization of the inverted index?
@@ -410,23 +412,23 @@ e.g. bark (dog bark) vs. bark (tree bark), or BCG (company) vs. BCG (vaccine nam
 Creating a new index <em>format</em> means changing the core.
 However, for the examples above, one just need control over the tokens which are indexed (and queried).
 That is easily done in some Java code.
-The simplest way to do this is to plug in a [custom tokenizer](linguistics.html).
-That gets called from the query parser and bundled linguistics processing [Searchers](searcher-development.html)
-as well as the [Document Processor](document-processing.html)
+The simplest way to do this is to plug in a [custom tokenizer](../linguistics.html).
+That gets called from the query parser and bundled linguistics processing [Searchers](../searcher-development.html)
+as well as the [Document Processor](../document-processing.html)
 creating the annotations that are consumed by the indexing operation.
 Since all that is Searchers and Docprocs which you can replace and/or add custom components before and after,
 you can also take full control over these things without modifying the platform itself.
 
 ### Does vespa provide any support for named entity extraction?
 It provides the building blocks but not an out-of-the-box solution.
-We can write a [Searcher](searcher-development.html) to detect query-side entities and rewrite the query,
-and a [DocProc](document-processing.html) if we want to handle them in some special way on the indexing side.
+We can write a [Searcher](../searcher-development.html) to detect query-side entities and rewrite the query,
+and a [DocProc](../document-processing.html) if we want to handle them in some special way on the indexing side.
 
 ### Does vespa provide support for text extraction?
 You can write a document processor for text extraction, Vespa does not provide it out of the box.
 
 ### How to do Text Search in an imported field?
-[Imported fields](parent-child.html) from parent documents are defined as [attributes](attributes.html),
+[Imported fields](../parent-child.html) from parent documents are defined as [attributes](../attributes.html),
 and have limited text match modes (i.e. `indexing: index` cannot be used).
 [Details](https://stackoverflow.com/questions/71936330/parent-child-mode-cannot-be-searched-by-parent-column).
 
@@ -439,11 +441,11 @@ and have limited text match modes (i.e. `indexing: index` cannot be used).
 
 If you have added vectors to your documents and queries, and see that the rank feature
 closeness(field, yourEmbeddingField) produces 1.0 for all documents, you are likely using
-[distance-metric](reference/schema-reference.html#distance-metric): innerproduct/prenormalized-angular,
+[distance-metric](../reference/schema-reference.html#distance-metric): innerproduct/prenormalized-angular,
 but your vectors are not normalized, and the solution is normally to switch to
-[distance-metric: angular](reference/schema-reference.html#angular)
+[distance-metric: angular](../reference/schema-reference.html#angular)
 or use
-[distance-metric: dotproduct](reference/schema-reference.html#dotproduct)
+[distance-metric: dotproduct](../reference/schema-reference.html#dotproduct)
 (available from {% include version.html version="8.170.18" %}).
 
 With non-normalized vectors, you often get negative distances, and those are capped to 0,
@@ -461,12 +463,12 @@ however Vespa Team has no experience with it.
 Vespa does not have a language like
 [painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html) -
 it is more flexible to write application logic in a JVM-supported language, using
-[Searchers](searcher-development.html) and [Document Processors](document-processing.html).
+[Searchers](../searcher-development.html) and [Document Processors](../document-processing.html).
 
 ### How can I batch-get documents by ids in a Searcher
-A [Searcher](searcher-development.html) intercepts a query and/or result.
-To get a number of documents by id in a Searcher or other component like a [Document processor](document-processing.html),
-you can have an instance of [com.yahoo.documentapi.DocumentAccess](reference/component-reference.html#injectable-components)
+A [Searcher](../searcher-development.html) intercepts a query and/or result.
+To get a number of documents by id in a Searcher or other component like a [Document processor](../document-processing.html),
+you can have an instance of [com.yahoo.documentapi.DocumentAccess](../reference/component-reference.html#injectable-components)
 injected and use that to get documents by id instead of the HTTP API.
 
 <!-- How to add custom code to a Vespa application? -->
@@ -487,7 +489,7 @@ injected and use that to get documents by id instead of the HTTP API.
 Vespa uses Java 17 - it will support 20 some time in the future.
 
 ### How to write debug output from a custom component?
-Use `System.out.println` to write text to the [vespa.log](reference/logs.html).
+Use `System.out.println` to write text to the [vespa.log](../reference/logs.html).
 
 
 
@@ -497,19 +499,19 @@ Use `System.out.println` to write text to the [vespa.log](reference/logs.html).
 ### What is the latency of documents being ingested vs indexed and available for search?
 Vespa has a near real-time indexing core with typically sub-second latencies from document ingestion to being indexed.
 This depends on the use-case, available resources and how the system is tuned.
-Some more examples and thoughts can be found in the [scaling guide](performance/sizing-search.html).
+Some more examples and thoughts can be found in the [scaling guide](../performance/sizing-search.html).
 
 ### Is there a batch ingestion mode, what limits apply?
 Vespa does not have a concept of "batch ingestion"
 as it contradicts many of the core features that are the strengths of Vespa,
-including [serving elasticity](elasticity.html) and sub-second indexing latency.
+including [serving elasticity](../elasticity.html) and sub-second indexing latency.
 That said, we have numerous use-cases in production
 that do high throughput updates to large parts of the (sometimes entire) document set.
 In cases where feed throughput is more important than indexing latency, you can tune this to meet your requirements.
-Some of this is detailed in the [feed sizing guide](performance/sizing-feeding.html).
+Some of this is detailed in the [feed sizing guide](../performance/sizing-feeding.html).
 
 ### Can the index support up to 512 GB index size in memory?
-Yes. The [content node](proton.html) is implemented in C++
+Yes. The [content node](../proton.html) is implemented in C++
 and not memory constrained other than what the operating system does.
 
 ### Get request for a document when document is not in sync in all the replica nodes?
@@ -520,16 +522,16 @@ a request will be sent to A and C
 (but not B since it has the same state as A and would therefore not return a potentially different document).
 
 ### How to keep indexes in memory?
-[Attribute](attributes.html) (with or without `fast-search`) is always in memory,
+[Attribute](../attributes.html) (with or without `fast-search`) is always in memory,
 but does not support tokenized matching.
 It is for structured data.
-[Index](basics/schemas.html#document-fields) (where there’s no such thing as fast-search since it is always fast)
+[Index](../basics/schemas.html#document-fields) (where there’s no such thing as fast-search since it is always fast)
 is in memory to the extent there is available memory and supports tokenized matching.
 It is for unstructured text.
 
 It is possible to guarantee that fields that are defined with `index`
 have both the dictionary and the postings in memory by changing from `mmap` to `populate`,
-see [index > io > search](reference/services-content.html#index-io-search).
+see [index > io > search](../reference/services-content.html#index-io-search).
 Make sure that the content nodes run on nodes with plenty of memory available,
 during index switch the memory footprint will 2x.
 Familiarity with Linux tools like `pmap` can help diagnose what is mapped and if it’s resident or not.
@@ -539,40 +541,40 @@ fields that have both `index` and `attribute` have separate data structures,
 queries will use the default mapped on disk data structures that supports `text` matching,
 while grouping, summary and ranking can access the field from the `attribute` store.
 
-A Vespa query is executed in two phases as described in [sizing search](performance/sizing-search.html),
+A Vespa query is executed in two phases as described in [sizing search](../performance/sizing-search.html),
 and summary requests can touch disk (and also uses `mmap` by default).
 Due to their potential size there is no populate option here,
-but one can define [dedicated document summary](document-summaries.html#performance)
+but one can define [dedicated document summary](../document-summaries.html#performance)
 containing only fields that are defined with `attribute`.
 
-The [practical performance guide](performance/practical-search-performance-guide.html)
+The [practical performance guide](../performance/practical-search-performance-guide)
 can be a good starting point as well to understand Vespa query execution,
 difference between `index` and `attribute` and summary fetching performance.
 
 ### Is memory freed when deleting documents?
-Deleting documents, by using the [document API](reads-and-writes.html)
-or [garbage collection](documents.html#document-expiry) will increase the capacity on the content nodes.
+Deleting documents, by using the [document API](../reads-and-writes.html)
+or [garbage collection](../documents.html#document-expiry) will increase the capacity on the content nodes.
 However, this is not necessarily observable in system metrics -
 this depends on many factors, like what kind of memory that is released,
-when [flush](proton.html#proton-maintenance-jobs) jobs are run and document [schema](basics/schemas.html).
+when [flush](../proton.html#proton-maintenance-jobs) jobs are run and document [schema](../basics/schemas.html).
 
 In short, Vespa is not designed to release memory once used.
 It is designed for sustained high throughput, low latency,
 keeping <span style="text-decoration: underline">maximum</span> memory used under control
-using features like [feed block](operations/feed-block.html).
+using features like [feed block](../operations/feed-block.html).
 
 When deleting documents, one can observe a slight <span style="text-decoration: underline">increase</span> in memory.
-A deleted document is represented using a [tombstone](/en/operations-selfhosted/admin-procedures.html#content-cluster-configuration),
-that will later be removed, see [removed-db-prune-age](reference/services-content.html#removed-db-prune-age).
+A deleted document is represented using a [tombstone](../operations-selfhosted/admin-procedures.html#content-cluster-configuration),
+that will later be removed, see [removed-db-prune-age](../reference/services-content.html#removed-db-prune-age).
 When running garbage collection,
 the summary store is scanned using mmap and both VIRT and page cache memory usage increases.
 
-Read up on [attributes](attributes.html) to understand more of how such fields are stored and managed.
-[Paged attributes](attributes.html#paged-attributes) trades off memory usage vs. query latency
+Read up on [attributes](../attributes.html) to understand more of how such fields are stored and managed.
+[Paged attributes](../attributes.html#paged-attributes) trades off memory usage vs. query latency
 for a lower max memory usage.
 
 ### What is the best practice for scaling Vespa for day vs night?
-[Autoscaling](/en/cloud/autoscaling.html) is the best guide to understand how to size and autoscale the system.
+[Autoscaling](../cloud/autoscaling.html) is the best guide to understand how to size and autoscale the system.
 Container clusters are stateless and can be autoscaled more quickly than content clusters.
 
 ### We can spike 8x in 5 minutes in terms of throughput requirements.
@@ -580,14 +582,14 @@ It is not possible to autoscale content clusters for 8x load increase in 5 minut
 as this requires both provisioning and data migration.
 Such use cases are best discussed with the Vespa Team to understand the resource bottlenecks,
 tradeoffs and mitigations.
-Also read [Graceful Degradation](/en/graceful-degradation.html).
+Also read [Graceful Degradation](../graceful-degradation.html).
 
 ### How much lower-level configuration do we need to do? For example, do we need to alter the number of threads per container?
 It depends. Vespa aims to adapt to resources (like auto thread config based on virtual node thread count)
 and actual use (when to run maintenance jobs like compaction),
 but there are tradeoffs that applications owners can/should make.
-Start off by reading the [Vespa Serving Scaling Guide](/en/performance/sizing-search.html),
-then run [benchmarks](/en/cloud/benchmarking.html) and use the [dashboards](/en/cloud/monitoring.html).
+Start off by reading the [Vespa Serving Scaling Guide](../performance/sizing-search.html),
+then run [benchmarks](../cloud/benchmarking.html) and use the [dashboards](../cloud/monitoring.html).
 
 
 {:.faq-section}
@@ -596,16 +598,16 @@ then run [benchmarks](/en/cloud/benchmarking.html) and use the [dashboards](/en/
 ### Self-managed: Can one do a partial deploy to the config server / update the schema without deploying all the node configs?
 Yes, deployment is using this web service API,
 which allows you to create an edit session from the currently deployed package,
-make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](reference/deploy-rest-api-v2.html).
+make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](../reference/deploy-rest-api-v2.html).
 However, this is only useful in cases where you want to avoid transferring data to the config server unnecessarily.
 When you resend everything, the config server will notice that you did not actually change e.g. the node configs
 and avoid unnecessary noop changes.
 
 ### How fast can nodes be added and removed from a running cluster?
-[Elasticity](elasticity.html) is a core Vespa strength -
+[Elasticity](../elasticity.html) is a core Vespa strength -
 easily add and remove nodes with minimal (if any) serving impact.
 The exact time needed depends on how much data will need to be migrated in the background
-for the system to converge to [ideal data distribution](content/idealstate.html).
+for the system to converge to [ideal data distribution](../content/idealstate.html).
 
 ### Should Vespa API search calls be load balanced or does Vespa do this automatically?
 You will need to load balance incoming requests between the nodes running the
@@ -615,14 +617,14 @@ This is included when using [Vespa Cloud](https://cloud.vespa.ai/),
 with an HTTPS endpoint that is already load balanced - both locally within the region and globally across regions.
 
 ### Supporting index partitions
-[Search sizing](performance/sizing-search.html) is the intro to this.
+[Search sizing](../performance/sizing-search.html) is the intro to this.
 Topology matters, and this is much used in the high-volume Vespa applications to optimise latency vs. cost.
 
 ### Can a running cluster be upgraded with zero downtime?
 With [Vespa Cloud](https://cloud.vespa.ai/),
 we do automated background upgrades daily without noticeable serving impact.
 If you host Vespa yourself, you can do this, but need to implement the orchestration logic necessary to handle this.
-The high level procedure is found in [live-upgrade](/en/operations-selfhosted/live-upgrade.html).
+The high level procedure is found in [live-upgrade](../operations-selfhosted/live-upgrade.html).
 
 ### Can Vespa be deployed multi-region?
 [Vespa Cloud](https://cloud.vespa.ai/en/reference/zones) has integrated support - query a global endpoint.
@@ -636,7 +638,7 @@ It is also at odds with realtime writes.
 For these reasons, it is not recommended, and not supported.
 
 ### Does vespa give us any tool to browse the index and attribute data?
-Use [visiting](visiting.html) to dump all or a subset of the documents.
+Use [visiting](../visiting.html) to dump all or a subset of the documents.
 See [data-management-and-backup](https://cloud.vespa.ai/en/data-management-and-backup) for more information.
 
 ### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)?
@@ -647,11 +649,11 @@ Yes, it will be available, eventually.
 Also try [Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode).
 
 ### Does vespa provide soft delete functionality?
-Yes just add a `deleted` attribute, add [fast-search](attributes.html#fast-search) on it
+Yes just add a `deleted` attribute, add [fast-search](../attributes.html#fast-search) on it
 and create a searcher which adds an `andnot deleted` item to queries.
 
 ### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down?
-You can set a [transition-time](reference/services-content.html#transition-time) in services.xml
+You can set a [transition-time](../reference/services-content.html#transition-time) in services.xml
 to configure the cluster controller how long a node is to be kept in maintenance mode
 before being automatically marked down.
 
@@ -666,10 +668,10 @@ ensures that data can be queried from all groups.
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
 
 ### Self-managed: How to check Vespa version for a running instance?
-Use [/state/v1/version](reference/state-v1.html#state-v1-version) to find Vespa version.
+Use [/state/v1/version](../reference/state-v1.html#state-v1-version) to find Vespa version.
 
 ### Deploy rollback
-See [rollback](/en/deployment.html#rollback) for options.
+See [rollback](../deployment.html#rollback) for options.
 
 
 {:.faq-section}
@@ -715,7 +717,7 @@ If a bundle with the same name is installed,
 there is a either a version mismatch or the installed bundle's version contains a qualifier string.
 ...
 ```
-[Bundle plugin troubleshooting](components/bundles.html#bundle-plugin-troubleshooting) is a good resource
+[Bundle plugin troubleshooting](../components/bundles.html#bundle-plugin-troubleshooting) is a good resource
 to analyze Vespa container startup / bundle load problems.
 
 
@@ -730,10 +732,10 @@ Make sure you are running a recent version of the Docker image, do `docker pull 
 <!-- ToDo: remove this soon -->
 
 ### Deployment fails / nothing is listening on 19071
-Make sure all [Config servers](/en/operations-selfhosted/configuration-server.html#troubleshooting) are started,
+Make sure all [Config servers](../operations-selfhosted/configuration-server.html#troubleshooting) are started,
 and are able to establish ZooKeeper quorum (if more than one) -
 see the [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) sample application.
-Validate that the container has [enough memory](/en/operations-selfhosted/docker-containers.html).
+Validate that the container has [enough memory](../operations-selfhosted/docker-containers.html).
 
 ### Startup problems in multinode Kubernetes cluster - readinessProbe using 19071 fails
 The Config Server cluster with 3 nodes fails to start.
@@ -742,11 +744,11 @@ the hosts wait for ZooKeeper in a catch 22 -
 see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 ### How to display vespa.log?
-Use [vespa-logfmt](/en/operations-selfhosted/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
+Use [vespa-logfmt](../operations-selfhosted/vespa-cmdline-tools.html#vespa-logfmt) to dump logs.
 If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.
 
 ### How to fix encoding problems in document text?
-See [encoding troubleshooting](/en/troubleshooting-encoding.html)
+See [encoding troubleshooting](../troubleshooting-encoding.html)
 for how to handle and remove control characters from the document feed.
 
 
@@ -754,7 +756,8 @@ for how to handle and remove control characters from the document feed.
 ## Login, Tenants and Plans
 
 ### How to get started?
-[Deploy an application](/en/basics/deploy-an-application.html) to create a tenant and start your [free trial](https://vespa.ai/free-trial).
+[Deploy an application](../basics/deploy-an-application.html) to create a tenant and start your 
+[free trial](https://vespa.ai/free-trial).
 This tenant can be your personal tenant, or shared with others.
 It can not be renamed.
 
@@ -780,24 +783,24 @@ Yes, contact [Vespa Support](https://vespa.ai/support/) to set it up.
 ## Vespa Cloud Operations
 
 ### How can I change the cost of my Vespa Cloud usage?
-See [node resources](/en/cloud/node-resources.html) to assess current and auto-suggested resources
-and [autoscaling](/en/cloud/autoscaling.html) for how to automate.
+See [node resources](../cloud/node-resources.html) to assess current and auto-suggested resources
+and [autoscaling](../cloud/autoscaling.html) for how to automate.
 
 ### How can I manually modify resources used?
 Managing resources is easy, as most changes are automated.
 Adding / removing / changing nodes starts automated data migration,
-see [elasticity](/en/elasticity.html).
+see [elasticity](../elasticity.html).
 
 ### How to modify a schema?
 Schema changes might require data reindexing, which is automated, but takes some time.
-Other schema changes require data refeed - [details](/en/basics/schemas.html#schema-modifications)
+Other schema changes require data refeed - [details](../basics/schemas.html#schema-modifications)
 <!-- ToDo: we should really have a "managing resources" guide for Vespa Cloud -->
 
 ### How to evaluate how much memory a field is using?
-Use the [Memory Visualizer](/en/cloud/memory-visualizer.html) to evaluate how memory is allocated to the fields.
+Use the [Memory Visualizer](../cloud/memory-visualizer.html) to evaluate how memory is allocated to the fields.
 Fields can be `index`, `attribute` and `summary`, and combinations of these,
 with settings like `fast-search` that affects memory usage.
-[Attributes](/en/attributes.html) is a great read for understanding Vespa memory usage.
+[Attributes](../attributes.html) is a great read for understanding Vespa memory usage.
 
 ### Archive access failed with Permission 'serviceusage.services.use' denied
 Listing archived objects can fail,
@@ -812,7 +815,7 @@ in order to charge the specified user project for the bucket usage cost"_
 
 ### How do I integrate with my current monitoring infrastructure?
 Vespa Cloud applications have a Prometheus endpoint.
-Find guides for how to integrate with Grafana and AWS Cloudwatch at [monitoring](/en/cloud/monitoring.html).
+Find guides for how to integrate with Grafana and AWS Cloudwatch at [monitoring](../cloud/monitoring.html).
 
 ### What is the best way to monitor instantaneously what is happening in Vespa? CPU usage? Memory usage? htop? Cloudwatch metrics?
 Vespa Cloud has detailed dashboards linked from the _monitoring_ tab in the Console,
@@ -822,10 +825,10 @@ one for each zone the instance is deployed to.
 Vespa is normally upgraded daily. There are exceptions, like holidays and weekends.
 During upgrades, nodes are stopped one-by-one per cluster.
 As all clusters have one redundant node, serving and write traffic is not impacted by upgrades.
-Before the upgrade, the application's [system and staging tests](/en/cloud/automated-deployments.html) are run,
+Before the upgrade, the application's [system and staging tests](../cloud/automated-deployments.html) are run,
 halting the upgrade if they fail.
 Documents are re-migrated to the upgraded node before doing the next node,
-see [Elastic Vespa](/en/elasticity.html) for details.
+see [Elastic Vespa](../elasticity.html) for details.
 
 ### How do we get alerted to issues like Feed Block? Searchable copy going offline?
 Issues like Feed Blocked, Deployment and Deprecation warnings show up in the console.
@@ -834,12 +837,12 @@ as redundant document buckets are activated for queries automatically,
 and auto data-migration kicks in for node failures / replacements.
 
 ### What actions are needed when deploying schema changes?
-* Schema changes that [require service restart](/en/reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
+* Schema changes that [require service restart](../reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
   are handled automatically by Vespa Cloud. A deployment job involves waiting for these to complete.
-* Schema changes that [require reindexing](/en/reference/schema-reference.html#changes-that-require-reindexing)
+* Schema changes that [require reindexing](../reference/schema-reference.html#changes-that-require-reindexing)
   of data require a validation override, and will trigger automatic reindexing. Status can be tracked in the console application view.
   Vespa Cloud also periodically re-indexes all data, with minimal resource usage, to account for changes in linguistics libraries.
-* Schema changes that [require refeeding](/en/reference/schema-reference.html#changes-that-require-re-feed)
+* Schema changes that [require refeeding](../reference/schema-reference.html#changes-that-require-re-feed)
   data require a validation override, and the user must refeed the data after deployment.
 
 ### What are the Vespa Cloud data retention policies?
@@ -853,7 +856,7 @@ The following data retention policies applies to Vespa Cloud:
   _four hours_.
 * All application log data will be deleted from Vespa servers after no more than _30 days_ (most
   often sooner) dependent on log volume, allocated disk resources, etc. *PLEASE NOTE:* This is
-  the theoretical maximum retention time - see [archive guide](/en/cloud/archive-guide.html) for how to ensure
+  the theoretical maximum retention time - see [archive guide](../cloud/archive-guide.html) for how to ensure
   access to your application logs.
 
 
@@ -878,7 +881,7 @@ Vespa Cloud uses the following Cloud providers:
 The storage devices are encrypted per Cloud provider, at rest.
 
 ### Does the Vespa console have audit trails/logs module and can it be accessed by an Admin user?
-See the [security guide](/en/cloud/security/guide.html) for roles and permissions.
+See the [security guide](../cloud/security/guide.html) for roles and permissions.
 The Vespa Cloud Console has a log view tool,
 and logs / access logs can be exported to the customer's AWS account easily.
 Deployment operations are tracked in the deployment view, with a history.

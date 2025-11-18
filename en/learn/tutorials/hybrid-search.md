@@ -1,20 +1,22 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Hybrid Text Search Tutorial"
+redirect_from:
+  - /en/tutorials/hybrid-search
 ---
 
 
 Hybrid search combines different retrieval methods to improve search quality. This tutorial distinguishes between two core components of search:
 
-* **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../reference/bm25.html) excel at this, as do modern, embedding-based [vector search](../vector-search.html) approaches.  
-* **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../basics/ranking.html) enables complex scoring mechanisms.
+* **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../../reference/bm25.html) excel at this, as do modern, embedding-based [vector search](../../vector-search.html) approaches.  
+* **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../../basics/ranking.html) enables complex scoring mechanisms.
 
 This tutorial demonstrates building a hybrid search application with Vespa that leverages the strengths of both lexical and embedding-based approaches.
  We'll use the [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/) dataset from the [BEIR](https://github.com/beir-cellar/beir) benchmark and explore various hybrid search techniques using Vespa's query language and ranking features. 
 
 The main goal is to set up a text search app that combines simple text scoring features
-such as [BM25](../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
-We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](/en/embedding.html#huggingface-embedder)
+such as [BM25](../../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
+We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](../../embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
 text embedding model. It is a small model that is fast to run and has a small memory footprint. 
 
@@ -24,7 +26,7 @@ text embedding model. It is a small model that is fast to run and has a small me
 
 ## Installing vespa-cli and ir_datasets
 
-This tutorial uses [Vespa-CLI](../vespa-cli.html) to deploy, feed, and query Vespa. We also use 
+This tutorial uses [Vespa-CLI](../../vespa-cli.html) to deploy, feed, and query Vespa. We also use 
 [ir-datasets](https://ir-datasets.com/) to obtain the NFCorpus relevance dataset.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -53,8 +55,8 @@ The NFCorpus documents have four fields:
 - The `doc_id` and `url` 
 - The `text` and the `title` 
 
-We are interested in the title and the text, and we want to be able to search across these two fields. We also need to store the `doc_id` to evaluate [ranking](../basics/ranking.html)
-accuracy. We will create a small script that converts the above output to [Vespa JSON document](../reference/document-json-format.html) format. Create a `convert.py` file:
+We are interested in the title and the text, and we want to be able to search across these two fields. We also need to store the `doc_id` to evaluate [ranking](../../basics/ranking.html)
+accuracy. We will create a small script that converts the above output to [Vespa JSON document](../../reference/document-json-format.html) format. Create a `convert.py` file:
 
 <div class="pre-parent">
 <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -89,7 +91,7 @@ Now, we will create the Vespa application package and schema to index the docume
 
 ## Create a Vespa Application Package
 
-A [Vespa application package](../application-packages.html) is a set of configuration files and optional Java components that together define the behavior of a Vespa system. Let us define the minimum set of required files to create our hybrid text search application: `doc.sd` and `services.xml`.
+A [Vespa application package](../../application-packages.html) is a set of configuration files and optional Java components that together define the behavior of a Vespa system. Let us define the minimum set of required files to create our hybrid text search application: `doc.sd` and `services.xml`.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -100,7 +102,7 @@ $ mkdir -p app/schemas
 
 
 ### Schema
-A [schema](../basics/schemas.html) is a document-type configuration; a single Vespa application can have multiple schemas with document types.
+A [schema](../../basics/schemas.html) is a document-type configuration; a single Vespa application can have multiple schemas with document types.
 For this application, we define a schema `doc`, which must be saved in a file named `schemas/doc.sd` in the application package directory.
 
 Write the following to `app/schemas/doc.sd`:
@@ -160,28 +162,28 @@ A lot is happening here; let us go through it in detail.
 
 #### Document type and fields
 The `document` section contains the fields of the document, their types,
-and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
+and how Vespa should index and [match](../../reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
-For more information, see [schemas - indexing](../basics/schemas.html#document-fields).
-The [string](../reference/schema-reference.html#string) data type represents both unstructured and structured texts, 
-and there are significant differences between [index and attribute](../text-matching.html#index-and-attribute). The above
+For more information, see [schemas - indexing](../../basics/schemas.html#document-fields).
+The [string](../../reference/schema-reference.html#string) data type represents both unstructured and structured texts, 
+and there are significant differences between [index and attribute](../../text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Note that we are enabling [BM25](../reference/bm25.html) for `title` and `text`
+Note that we are enabling [BM25](../../reference/bm25.html) for `title` and `text`
 by including `index: enable-bm25`. The language field is the only field that is not the NFCorpus dataset. 
 We hardcode its value to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
-text fields. Read more in [linguistics](../linguistics.html).
+text fields. Read more in [linguistics](../../linguistics.html).
 
 #### Fieldset for matching across multiple fields
 
-[Fieldset](../reference/schema-reference.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
+[Fieldset](../../reference/schema-reference.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
 add indexing/storage overhead. String fields grouped using fieldsets must share the same 
-[match](../reference/schema-reference.html#match) and [linguistic processing](../linguistics.html) settings because
+[match](../../reference/schema-reference.html#match) and [linguistic processing](../../linguistics.html) settings because
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
 #### Embedding inference
-Our `embedding` vector field is of [tensor](../tensor-user-guide.html) type with a single named dimension (`v`) of 384 values. 
+Our `embedding` vector field is of [tensor](../../tensor-user-guide.html) type with a single named dimension (`v`) of 384 values. 
 
 ```
 field embedding type tensor<bfloat16>(v[384]) {
@@ -192,24 +194,24 @@ field embedding type tensor<bfloat16>(v[384]) {
 }
 ```
 The `indexing` expression creates the input to the `embed` inference call (in our example the concatenation of the title and the text field). Since
-the dataset is small, we do not specify `index` which would build [HNSW](../approximate-nn-hnsw.html) data structures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
-trained with cosine similarity, which maps to Vespa's `angular` [distance-metric](../reference/schema-reference.html#distance-metric) for 
+the dataset is small, we do not specify `index` which would build [HNSW](../../approximate-nn-hnsw.html) data structures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
+trained with cosine similarity, which maps to Vespa's `angular` [distance-metric](../../reference/schema-reference.html#distance-metric) for 
 nearestNeighbor search. 
 
 #### Ranking to determine matched documents ordering
-You can define many [rank profiles](../basics/ranking.html), 
+You can define many [rank profiles](../../basics/ranking.html), 
 named collections of score calculations, and ranking phases.
 
 In this starting point, we have two simple rank-profile's:
-- a `bm25` rank-profile that uses [BM25](../reference/bm25.html). We sum the two field-level BM25 scores
-using a Vespa [ranking expression](../ranking-expressions-features.html). 
+- a `bm25` rank-profile that uses [BM25](../../reference/bm25.html). We sum the two field-level BM25 scores
+using a Vespa [ranking expression](../../ranking-expressions-features.html). 
 - a `semantic` rank-profile which is used in combination Vespa's nearestNeighbor query operator (vector search).
 
-Both profiles specify a single [ranking phase](../phased-ranking.html).
+Both profiles specify a single [ranking phase](../../phased-ranking.html).
 
 ### Services Specification
 
-The [services.xml](../reference/services.html) defines the services that make up
+The [services.xml](../../reference/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `app/services.xml`:
 
@@ -245,11 +247,11 @@ Write the following to `app/services.xml`:
 
 Some notes about the elements above:
 
-- `<container>` defines the [container cluster](../jdisc/index.html) for document, query and result processing.
-- `<search>` sets up the [query endpoint](../query-api.html). The default port is 8080.
-- `<document-api>` sets up the [document endpoint](../reference/document-v1-api-reference.html) for feeding.
+- `<container>` defines the [container cluster](../../jdisc/index.html) for document, query and result processing.
+- `<search>` sets up the [query endpoint](../../query-api.html). The default port is 8080.
+- `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
 - `<component>` with type `hugging-face-embedder` configures the embedder in the application package. This includes where to fetch the model files from, the prepend
-instructions, and the pooling strategy. See [huggingface-embedder](../embedding.html#huggingface-embedder) for details and other embedders supported.
+instructions, and the pooling strategy. See [huggingface-embedder](../../embedding.html#huggingface-embedder) for details and other embedders supported.
 - `<content>` defines how documents are stored and searched.
 - `<min-redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_  to content clusters.
@@ -258,7 +260,7 @@ instructions, and the pooling strategy. See [huggingface-embedder](../embedding.
 ## Deploy the application package
 
 Once we have finished writing our application package, we can deploy it.
-We use settings similar to those in the [Vespa quick start guide](../basics/deploy-an-application-local.html).
+We use settings similar to those in the [Vespa quick start guide](../../basics/deploy-an-application-local.html).
 
 Start the Vespa container:
 
@@ -342,13 +344,13 @@ The output should look like this (rates may vary depending on your machine HW):
 
 Notice:
 
-- `feeder.ok.rate` which is the throughput (Note that this step includes embedding inference). See [embedder-performance](../embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
+- `feeder.ok.rate` which is the throughput (Note that this step includes embedding inference). See [embedder-performance](../../embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
 - `http.response.code.counts` matches with `feeder.ok.count`. The dataset has 3633 documents. Note that if you observe any `429` responses, these are 
 harmless. Vespa asks the client to slow down the feed speed because of resource contention.
 
 
 ## Sample queries 
-We can now run a few sample queries to demonstrate various ways to perform searches over this data using the [Vespa query language](../query-language.html).
+We can now run a few sample queries to demonstrate various ways to perform searches over this data using the [Vespa query language](../../query-language.html).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -367,8 +369,8 @@ Here, `PLAIN-2` is the query id of the first test query. We'll use this test que
 
 ### Lexical search with BM25 scoring
 
-The following query uses [weakAnd](../using-wand-with-vespa.html) and where `targetHits` is a hint 
-of how many documents we want to expose to configurable [ranking phases](../phased-ranking.html). Refer
+The following query uses [weakAnd](../../using-wand-with-vespa.html) and where `targetHits` is a hint 
+of how many documents we want to expose to configurable [ranking phases](../../phased-ranking.html). Refer
 to [text search tutorial](text-search.html#querying-the-data) for more on querying with `userInput`. 
 
 <div class="pre-parent">
@@ -384,7 +386,7 @@ $ vespa query \
 </div>
 
 Notice that we choose `ranking` to specify which rank profile to rank the documents retrieved by the query. 
-This query returns the following [JSON result response](../reference/default-result-format.html):
+This query returns the following [JSON result response](../../reference/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -490,7 +492,7 @@ PLAIN-2 0 MED-4830 1
 ### Dense search using text embedding
 
 Now, we turn to embedding-based retrieval, where we embed the query text using the configured text-embedding model and perform
-an exact `nearestNeighbor` search. We use [embed query](../embedding.html#embedding-a-query-text) to produce the
+an exact `nearestNeighbor` search. We use [embed query](../../embedding.html#embedding-a-query-text) to produce the
 input tensor `query(e)`, defined in the `semantic` rank-profile in the schema.
 
 <div class="pre-parent">
@@ -505,7 +507,7 @@ $ vespa query \
 </pre>
 </div>
 
-This query returns the following [JSON result response](../reference/default-result-format.html):
+This query returns the following [JSON result response](../../reference/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -554,7 +556,7 @@ rank-profile semantic {
     }
 ```
 
-Where [closeness(field, embedding)](../reference/rank-features.html#attribute-match-features-normalized) is a ranking feature that calculates the cosine similarity between the query and the document embedding. This returns the inverted of the distance between the two vectors. Small distance = higher closeness. This because Vespa sorts results in descending order of relevance. 
+Where [closeness(field, embedding)](../../reference/rank-features.html#attribute-match-features-normalized) is a ranking feature that calculates the cosine similarity between the query and the document embedding. This returns the inverted of the distance between the two vectors. Small distance = higher closeness. This because Vespa sorts results in descending order of relevance. 
 Descending order means the largest will appear at the top of the ranked list.
 
 Note that similarity scores of embedding vectors are often optimized via contrastive or ranking losses, which make them difficult to interpret. 
@@ -688,9 +690,9 @@ Now, we want to explore hybrid search techniques where we combine:
 - traditional lexical keyword matching with a text scoring method (BM25) 
 - embedding-based search using a text embedding model 
 
-With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../basics/ranking.html). 
+With Vespa, there is a distinction between retrieval (matching) and configurable [ranking](../../basics/ranking.html). 
 
-In the Vespa ranking phases, we can express arbitrary scoring complexity with the full power of the Vespa [ranking](../basics/ranking.html) framework. 
+In the Vespa ranking phases, we can express arbitrary scoring complexity with the full power of the Vespa [ranking](../../basics/ranking.html) framework. 
 Meanwhile, top-k retrieval relies on simple built-in functions associated with Vespa's top-k query operators.  
 These top-k operators aim to avoid scoring all documents in the collection for a query by using a simplistic scoring function to identify the top-k documents.
 
@@ -698,12 +700,12 @@ These top-k query operators use `index` structures to accelerate the query evalu
 search, the following Vespa top-k query operators are relevant: 
 
 - YQL `{targetHits:k}nearestNeighbor()` for dense representations (text embeddings) using 
-a configured [distance-metric](../reference/schema-reference.html#distance-metric) as the scoring function. 
-- YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../using-wand-with-vespa.html) for sparse representations.
+a configured [distance-metric](../../reference/schema-reference.html#distance-metric) as the scoring function. 
+- YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../../using-wand-with-vespa.html) for sparse representations.
 
 
 We can combine these operators using boolean query operators like AND/OR/RANK to express a hybrid search query. Then, there is a wild number of
-ways that we can combine various signals in [ranking](../basics/ranking.html). 
+ways that we can combine various signals in [ranking](../../basics/ranking.html). 
 
 
 ### Define our first simple hybrid rank profile
@@ -715,7 +717,7 @@ combine them into a single score.
 closeness(field, embedding) * (1 + bm25(title) + bm25(text))
 </pre>
 
-- the [closeness(field, embedding)](../reference/rank-features.html#attribute-match-features-normalized) rank-feature returns a normalized score in the range 0 to 1 inclusive
+- the [closeness(field, embedding)](../../reference/rank-features.html#attribute-match-features-normalized) rank-feature returns a normalized score in the range 0 to 1 inclusive
 - Any of the per-field BM25 scores are in the range of 0 to infinity 
 
 We add a bias constant (1) to avoid the overall score becoming 0 if the document does not match any query terms, 
@@ -783,7 +785,7 @@ After that, we can start experimenting with how to express hybrid queries using 
 ### Hybrid query examples
 The following demonstrates combining the two top-k query operators using the Vespa query language. In a later section, we will show
 how to combine the two retrieval strategies using the Vespa ranking framework. This section focuses on the top-k retrieval part
-that exposes matched documents to the Vespa [ranking](../basics/ranking.html) phase(s).
+that exposes matched documents to the Vespa [ranking](../../basics/ranking.html) phase(s).
 
 #### Hybrid query using the OR operator
 The following query exposes documents to ranking that match the query using *either (OR)* the sparse or dense representation. 
@@ -803,7 +805,7 @@ $ vespa query \
 The documents retrieved into ranking is scored by the `hybrid` rank-profile. Note that both top-k query operators might expose more than
 the the `targetHits` setting. 
 
-The above query returns the following [JSON result response](../reference/default-result-format.html):
+The above query returns the following [JSON result response](../../reference/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -867,7 +869,7 @@ For the sparse keyword query matching, the `weakAnd` operator is used by default
 and it requires that at least one term in the query matches the document (fieldset searched).
 
 #### Hybrid query with rank query operator
-The following combines the two top-k operators using the [rank](../reference/query-language-reference.html#rank) query operator, which allows us to retrieve 
+The following combines the two top-k operators using the [rank](../../reference/query-language-reference.html#rank) query operator, which allows us to retrieve 
 using only the first operand of the rank operator, but where the remaining operands allow computing (match) features 
 that can be used in ranking phases. 
 

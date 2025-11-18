@@ -12,7 +12,7 @@ The high-level process is as follows:
 1. Functional validation using the [dev](https://cloud.vespa.ai/en/reference/environments.html#dev) environment (this guide).
 2. Deployment to a [prod](https://cloud.vespa.ai/en/reference/environments.html#prod) zone.
 
-The rest of this guide assumes you have a [tenant](/en/cloud/tenant-apps-instances.html) ready for deployment:
+The rest of this guide assumes you have a [tenant](/en/learn/tenant-apps-instances.html) ready for deployment:
 <!-- ToDo: Expand this paragraph with some more details, e.g. enclave users -->
 ```
 $ export VESPA_TENANT_NAME=mytenant
