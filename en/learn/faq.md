@@ -106,7 +106,7 @@ No enforced limit, except resource usage (memory).
 
 ### Can a document have lists (key value pairs)?
 E.g. a product is offered in a list of stores with a quantity per store.
-Use [multivalue fields](../searching-multi-valued-fields.html) (array of struct) or [parent child](../parent-child.html).
+Use [multivalue fields](../searching-multi-valued-fields.html) (array of struct) or [parent child](../schemas/parent-child.html).
 Which one to chose depends on use case, see discussion in the latter link.
 
 ### Does a whole document need to be updated and re-indexed?
@@ -134,7 +134,7 @@ Implement a [document processor](../document-processing.html) for this.
 Set a selection criterion on the `document` element in `services.xml`.
 The criterion selects documents <span style="text-decoration: underline">to keep</span>.
 I.e. to purge documents "older than two weeks", the expression should be "newer than two weeks".
-Read more about [document expiry](../documents.html#document-expiry).
+Read more about [document expiry](../schemas/documents.html#document-expiry).
 
 ### How to increase redundancy and track data migration progress?
 Changing redundancy is a live and safe change
@@ -152,7 +152,7 @@ Nodes will work as normal during data sync, and query coverage will be the same.
 ### How does namespace relate to schema?
 It does not,
 _namespace_ is a mechanism to split the document space into parts that can be used for document selection -
-see [documentation](../documents.html#namespace). The namespace is not indexed and cannot
+see [documentation](../schemas/documents.html#namespace). The namespace is not indexed and cannot
 be searched using the query api, but can be used by [visiting](../visiting.html).
 
 ### Visiting does not dump all documents, and/or hangs.
@@ -360,7 +360,7 @@ Also see a [pyvespa example](https://pyvespa.readthedocs.io/en/latest/examples/p
 ### How to debug a feeding 400 response?
 The best option is to use `--verbose` option, like `vespa feed --verbose myfile.jsonl` -
 see [documentation](../clients/vespa-cli.html#documents).
-A common problem is a mismatch in schema names and [document IDs](../documents.html#document-ids) - a schema like:
+A common problem is a mismatch in schema names and [document IDs](../schemas/documents.html#document-ids) - a schema like:
 ```
 schema article {
     document article {
@@ -380,7 +380,7 @@ This configuration is a combination of content and container cluster configurati
 see [indexing](../indexing.html) and [feed troubleshooting](../operations-selfhosted/admin-procedures.html#troubleshooting).
 
 ### I feed documents with no error, but they are not in the index
-This is often a problem if using [document expiry](../documents.html#document-expiry),
+This is often a problem if using [document expiry](../schemas/documents.html#document-expiry),
 as documents already expired will not be persisted, they are silently dropped and ignored.
 Feeding stale test data with old timestamps in combination with document-expiry can cause this
 behavior.
@@ -428,7 +428,7 @@ and a [DocProc](../document-processing.html) if we want to handle them in some s
 You can write a document processor for text extraction, Vespa does not provide it out of the box.
 
 ### How to do Text Search in an imported field?
-[Imported fields](../parent-child.html) from parent documents are defined as [attributes](../attributes.html),
+[Imported fields](../schemas/parent-child.html) from parent documents are defined as [attributes](../attributes.html),
 and have limited text match modes (i.e. `indexing: index` cannot be used).
 [Details](https://stackoverflow.com/questions/71936330/parent-child-mode-cannot-be-searched-by-parent-column).
 
@@ -553,7 +553,7 @@ difference between `index` and `attribute` and summary fetching performance.
 
 ### Is memory freed when deleting documents?
 Deleting documents, by using the [document API](../reads-and-writes.html)
-or [garbage collection](../documents.html#document-expiry) will increase the capacity on the content nodes.
+or [garbage collection](../schemas/documents.html#document-expiry) will increase the capacity on the content nodes.
 However, this is not necessarily observable in system metrics -
 this depends on many factors, like what kind of memory that is released,
 when [flush](../proton.html#proton-maintenance-jobs) jobs are run and document [schema](../basics/schemas.html).
