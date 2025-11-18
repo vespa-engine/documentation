@@ -173,7 +173,7 @@ Quite a lot is set up here:
 
 ### Schema
 
-In terms of data, Vespa operates with the notion of [documents](../../documents.html).
+In terms of data, Vespa operates with the notion of [documents](../../schemas/documents.html).
 A document represents a single, searchable item in your system, e.g., a news article, a photo, or a user.
 Each document type must be defined in the Vespa configuration through a [schema](../../basics/schemas.html).
 Think of the document type in a schema as similar to a table definition in a relational database -

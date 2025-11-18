@@ -384,7 +384,7 @@ In our blueprint schema, we include several of these signals:
 
 These fields are configured as `attribute | summary` to enable efficient filtering, sorting, and grouping operations while being returned in search results. The timestamp fields allow for temporal filtering (e.g., "recent documents") and recency-based ranking, while usage signals like `open_count` and `favorite` can boost frequently accessed or explicitly marked important documents.
 
-Consider [parent-child](../../parent-child.html) relationships for low-cardinality metadata.
+Consider [parent-child](../../schemas/parent-child.html) relationships for low-cardinality metadata.
 Most large scale RAG application schemas contain at least a hundred structured fields.
 
 ## LLM-generation with OpenAI-client

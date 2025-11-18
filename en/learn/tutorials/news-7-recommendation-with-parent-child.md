@@ -52,12 +52,12 @@ before passing that with the news article query.
 We could have a single document holding all global values and retrieve that with each query.
 However, that isn't particularly efficient.
 
-For these cases, Vespa introduced the [parent-child relationship](../../parent-child.html).
+For these cases, Vespa introduced the [parent-child relationship](../../schemas/parent-child.html).
 Parents are global documents, which are automatically distributed to all content nodes.
 Other documents can reference these parents and "import" values for use in ranking.
 The benefit is that the global category CTR values only need to be written to one place: the global document.
 
-Please see the [guide on parent-child relationships](../../parent-child.html) for more information and examples.
+Please see the [guide on parent-child relationships](../../schemas/parent-child.html) for more information and examples.
 
 
 ## Setting up a global category CTR document
