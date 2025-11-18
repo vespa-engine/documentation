@@ -1083,13 +1083,13 @@ Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3410
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.32">
+<pre data-test="exec" data-test-assert-contains="0.31">
 $ python3 evaluate_ranking.py --ranking hybrid-rrf --mode hybrid
 </pre>
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3207
+Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3195
 </pre>
 
 <div class="pre-parent">
