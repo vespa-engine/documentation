@@ -793,7 +793,7 @@ see [elasticity](../elasticity.html).
 
 ### How to modify a schema?
 Schema changes might require data reindexing, which is automated, but takes some time.
-Other schema changes require data refeed - [details](../basics/schemas.html#schema-modifications)
+Other schema changes require data refeed - [details](../reference/schema-reference.html#modifying-schemas)
 <!-- ToDo: we should really have a "managing resources" guide for Vespa Cloud -->
 
 ### How to evaluate how much memory a field is using?
