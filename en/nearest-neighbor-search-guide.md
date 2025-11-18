@@ -31,7 +31,7 @@ The guide includes step-by-step instructions on how to reproduce the experiments
 <li><code>curl</code> to download the dataset.</li>"%}
 
 ## Installing vespa-cli
-This tutorial uses [Vespa-CLI](vespa-cli.html),
+This tutorial uses [Vespa-CLI](clients/vespa-cli.html),
 the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows:
 
@@ -582,7 +582,7 @@ $ vespa feed -t http://localhost:8080 feed.jsonl
 ## Free-text search using Vespa weakAnd 
 The following sections uses the Vespa [query api](reference/query-api-reference.html) and 
 formulate queries using Vespa [query language](query-language.html). The examples uses the
-[vespa-cli](vespa-cli.html) command which supports running queries.
+[vespa-cli](clients/vespa-cli.html) command which supports running queries.
 
 The CLI uses the [Vespa query api](query-api.html). 
 Use `vespa query -v` to see the curl equivalent:

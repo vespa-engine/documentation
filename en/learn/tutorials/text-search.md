@@ -20,7 +20,7 @@ such as [BM25](../../reference/bm25.html) [^1] and [nativeRank](../../reference/
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](../../vespa-cli.html) to deploy, feed and query Vespa. Below, we use [HomeBrew](https://brew.sh/) to 
+This tutorial uses [Vespa-CLI](../../clients/vespa-cli.html) to deploy, feed and query Vespa. Below, we use [HomeBrew](https://brew.sh/) to 
 download and install `vespa-cli`, you can also
 download a binary from [GitHub](https://github.com/vespa-engine/vespa/releases) for your OS/CPU architecture. 
 

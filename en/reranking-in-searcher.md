@@ -201,7 +201,7 @@ $ docker run --detach --name vespa --hostname vespa-container \
 </pre>
 </div>
 
-Install [vespa-cli](vespa-cli.html) using Homebrew:
+Install [vespa-cli](clients/vespa-cli.html) using Homebrew:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

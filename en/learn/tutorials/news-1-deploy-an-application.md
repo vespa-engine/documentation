@@ -46,7 +46,7 @@ and train machine learning models for use in ranking.
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](../../vespa-cli.html),
+This tutorial uses [Vespa-CLI](../../clients/vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS, and Windows.
 
