@@ -20,7 +20,8 @@ such as [BM25](../../reference/bm25.html) [^1] and [nativeRank](../../reference/
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](../../vespa-cli.html) to deploy, feed and query Vespa. Below, we use [HomeBrew](https://brew.sh/) to download and install `vespa-cli`, you can also
+This tutorial uses [Vespa-CLI](../../vespa-cli.html) to deploy, feed and query Vespa. Below, we use [HomeBrew](https://brew.sh/) to 
+download and install `vespa-cli`, you can also
 download a binary from [GitHub](https://github.com/vespa-engine/vespa/releases) for your OS/CPU architecture. 
 
 <div class="pre-parent">
@@ -83,7 +84,9 @@ along with the document ID relevant to each particular query.
 
 ## Create a Vespa Application Package
 
-A [Vespa application package](../application-packages.html) is a set of configuration files and optional Java components that together define the behavior of a Vespa system. Let us define the minimum set of required files to create our basic text search application,
+A [Vespa application package](../../application-packages) is a set of configuration files and optional Java components 
+that together define the behavior of a Vespa system. Let us define the minimum set of required files to create our 
+basic text search application,
 : `msmarco.sd` and `services.xml`.
 
 For this tutorial, we will create a new Vespa application rather than using the one in the repository,
@@ -98,6 +101,7 @@ $ mkdir -p app/schemas
 
 
 ### Schema
+
 A [schema](../../basics/schemas.html) is a document-type configuration; a single vespa application can have multiple schemas with document types.
 For this application, we define a schema `msmarco` which must be saved in a file named `schemas/msmarco.sd`.
 Write the following to `text-search/app/schemas/msmarco.sd`:
@@ -156,8 +160,9 @@ schema msmarco {
 A lot is going on here; let us go through it in detail. 
 
 #### Document type and fields
+
 The `document` section contains the fields of the document, their types,
-and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
+and how Vespa should index and [match](../../reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../../basics/schemas.html#document-fields).
@@ -178,11 +183,14 @@ add indexing/storage overhead. String fields grouped using fieldsets must share 
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
 #### Document summaries to control search response contents
+
 Next, we define two [document summaries](../../document-summaries.html). 
-Document summaries control what fields are available in the [response](../../reference/default-result-format.html); we include the `debug-tokens` document-summary to 
+Document summaries control what fields are available in the [response](../../reference/default-result-format.html); 
+we include the `debug-tokens` document-summary to 
 demonstrate later how we can get visibility into how text is converted into searchable tokens. 
 
 #### Ranking to determine matched documents ordering
+
 You can define many [rank profiles](../../basics/ranking.html), 
 named collections of score calculations, and ranking phases.
 
@@ -294,7 +302,7 @@ $ vespa feed -t http://localhost:8080 dataset/documents.jsonl
 
 ## Querying the data
 
-This section demonstrates various ways to search the data using the [Vespa query language](/en/query-language.html). All
+This section demonstrates various ways to search the data using the [Vespa query language](../../query-language.html). All
 the examples use the `vespa-cli` client, the tool uses the HTTP api and if you pass `-v`, you will see the `curl` equivalent
 API request. 
 
@@ -367,7 +375,7 @@ rank-profile default {
 }
 </pre>
 
-We can use query operator annotations for the [userInput](..//reference/query-language-reference.html#userinput) to control various
+We can use query operator annotations for the [userInput](../../reference/query-language-reference.html#userinput) to control various
 matching aspects. The following uses the `defaultIndex` to specify which field (or fieldset) to search.
 
 <div class="pre-parent">
@@ -469,7 +477,8 @@ query=[AND (WEAKAND(100) default:what default:is default:dad default:bod) |url:'
 
 Notice that the `userInput` part is converted to a [weakAnd](../../using-wand-with-vespa.html) query operator and that this operator is 
 AND'ed with a phrase search ('huffingtonpost co uk') in the `url` field. Notice also the field scoping where the query terms are
-prefixed with `default`. Notice also that punctuation characters (.) are removed as part of the tokenization. Suppose this is a common pattern where we want to filter on specific strings. 
+prefixed with `default`. Notice also that punctuation characters (.) are removed as part of the tokenization. 
+Suppose this is a common pattern where we want to filter on specific strings. 
 In that case, we should create a separate field to avoid phrase matching, phrase matching is more expensive than a single token search. 
 
 
@@ -741,7 +750,9 @@ Which will produce a result like this:
     }
 }
 {% endhighlight %}</pre>
-Notice that `matchfeatures` field that is added to the hit when using `match-features` in the rank-profile. Here, we have all the computed features from the matched document, and the final `relevance` score is the sum of these features (In this case).
+Notice that `matchfeatures` field that is added to the hit when using `match-features` in the rank-profile. 
+Here, we have all the computed features from the matched document, and the final `relevance` score is the sum 
+of these features (In this case).
 This query and ranking example demonstrates that for a single query searching a set of fields via fieldset, 
 we can compute different types of text scoring features and use combinations. 
 
@@ -776,6 +787,7 @@ $ docker rm -f vespa-msmarco
 </div>
 
 
-[^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.
+[^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. 
+Foundations and Trends in Information Retrieval.
 
 <script src="/js/process_pre.js"></script>

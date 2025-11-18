@@ -97,7 +97,7 @@ field3: ...
 ```
 
 Here, `field1` and so on are the actual fields as returned from the search. For
-instance, the [text search tutorial](learn/tutorials/text-search.html) defines a
+instance, the [text search tutorial](learn/tutorials/text-search) defines a
 document schema consisting of fields: `id`, `title`, `url`, and `body`. If you
 only want to include the `title` and `body` fields for use in the context, you
 can issue a query like this:

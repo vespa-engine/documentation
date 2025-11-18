@@ -16,7 +16,7 @@ This tutorial demonstrates building a hybrid search application with Vespa that 
 
 The main goal is to set up a text search app that combines simple text scoring features
 such as [BM25](../../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
-We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](/en/embedding.html#huggingface-embedder)
+We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](../../embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
 text embedding model. It is a small model that is fast to run and has a small memory footprint. 
 
@@ -91,7 +91,7 @@ Now, we will create the Vespa application package and schema to index the docume
 
 ## Create a Vespa Application Package
 
-A [Vespa application package](../application-packages.html) is a set of configuration files and optional Java components that together define the behavior of a Vespa system. Let us define the minimum set of required files to create our hybrid text search application: `doc.sd` and `services.xml`.
+A [Vespa application package](../../application-packages.html) is a set of configuration files and optional Java components that together define the behavior of a Vespa system. Let us define the minimum set of required files to create our hybrid text search application: `doc.sd` and `services.xml`.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -162,7 +162,7 @@ A lot is happening here; let us go through it in detail.
 
 #### Document type and fields
 The `document` section contains the fields of the document, their types,
-and how Vespa should index and [match](/en/reference/schema-reference.html#match) them.
+and how Vespa should index and [match](../../reference/schema-reference.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../../basics/schemas.html#document-fields).
@@ -194,7 +194,7 @@ field embedding type tensor<bfloat16>(v[384]) {
 }
 ```
 The `indexing` expression creates the input to the `embed` inference call (in our example the concatenation of the title and the text field). Since
-the dataset is small, we do not specify `index` which would build [HNSW](../approximate-nn-hnsw.html) data structures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
+the dataset is small, we do not specify `index` which would build [HNSW](../../approximate-nn-hnsw.html) data structures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
 trained with cosine similarity, which maps to Vespa's `angular` [distance-metric](../../reference/schema-reference.html#distance-metric) for 
 nearestNeighbor search. 
 

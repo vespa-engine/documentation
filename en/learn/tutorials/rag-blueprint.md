@@ -205,7 +205,7 @@ In Vespa, we now have a solution for this problem. Check out our [blog post on l
 
 Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents.
 
-Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](/en/reference/rank-features.html#elementwise-bm25)
+Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](../../reference/rank-features.html#elementwise-bm25)
 Now available: elementwise rank functions and filtering on the content nodes.
 
 This allows you to pick a large document as the searchable unit, while still addressing the potential drawbacks many encounter as follows:
@@ -218,9 +218,11 @@ This allows you to pick a large document as the searchable unit, while still add
 
 This allows you to index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
 
-Vespa also supports automatic [chunking](../../reference/indexing-language-reference.html#converters) in the [indexing language](../../indexing.html).
+Vespa also supports automatic [chunking](../../reference/indexing-language-reference.html#converters) 
+in the [indexing language](../../indexing.html).
 
-Here are the parts of the schema, which defines the searchable unit as a document with a text field, and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
+Here are the parts of the schema, which defines the searchable unit as a document with a text field, 
+and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
 
 ```txt
 field chunks type array<string> {
@@ -236,7 +238,11 @@ field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
 }
 ```
 
-In Vespa, we can specify which chunks to be returned with a summary feature, see [docs](../../reference/schema-reference.html#select-elements-by) for details. For this blueprint, we will return the top 3 chunks based on the similarity score of the chunk embeddings, which is calculated in the ranking phase. Note that this feature could be any chunk-level summary feature defined in your rank-profile.
+In Vespa, we can specify which chunks to be returned with a summary feature, see 
+[docs](../../reference/schema-reference.html#select-elements-by) for details. For this blueprint, 
+we will return the top 3 chunks based on the similarity score of the chunk embeddings, 
+which is calculated in the ranking phase. Note that this feature could be any chunk-level 
+summary feature defined in your rank-profile.
 
 Here is how the summary feature is calculated in the rank-profile:
 
@@ -274,13 +280,21 @@ summary-features {
     }
 ```
 
-{% include note.html content="The ranking expression may seem a bit complex, as we chose to embed each chunk independently, store the embeddings in a binarized format, and then unpack them to calculate similarity based on their float representations. For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly using the [closeness](../../reference/rank-features.html#closeness(name)) convenience function." %}
+{% include note.html content="The ranking expression may seem a bit complex, as we chose to embed each chunk independently, 
+store the embeddings in a binarized format, and then unpack them to calculate similarity based on their float representations. 
+For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly 
+using the [closeness](../../reference/rank-features.html#closeness(name)) convenience function." %}
 
-Note that we want to use the float-representation of the query-embedding, and thus also need to convert the binary embedding of the chunks to float. After that, we can calculate the similarity score between the query embedding and the chunk embeddings using cosine similarity (the dot product, and then normalize it by the norms of the embeddings).
+Note that we want to use the float-representation of the query-embedding, and thus also need to convert the binary 
+embedding of the chunks to float. After that, we can calculate the similarity score between the query 
+embedding and the chunk embeddings using cosine similarity (the dot product, and then normalize it by the norms of the embeddings).
 
-See [ranking expressions](../../reference/ranking-expressions.html#non-primitive-functions) for more details on the `top`-function, and other functions available for ranking expressions.
+See [ranking expressions](../../reference/ranking-expressions.html#non-primitive-functions) for more details on the 
+`top`-function, and other functions available for ranking expressions.
 
-Now, we can use this summary feature in our document summary to return the top 3 chunks of the document, which will be used as context for the LLM. Note that we can also define a document summary that returns all chunks, which might be useful for another use case, such as deep research.
+Now, we can use this summary feature in our document summary to return the top 3 chunks of the document, 
+which will be used as context for the LLM. Note that we can also define a document summary that returns all chunks, 
+which might be useful for another use case, such as deep research.
 
 ```txt
 document-summary top_3_chunks {
@@ -311,9 +325,11 @@ field chunks type array<string> {
 }
 ```
 
-Whether you should have separate embedding fields, depends on whether the added memory usage is justified by the quality improvement you could get from the additional embedding field.
+Whether you should have separate embedding fields, depends on whether the added memory usage is justified by the 
+quality improvement you could get from the additional embedding field.
 
-We choose to index both a `title_embedding` and a `chunk_embeddings` field for this blueprint, as we aim to minimize cost by embedding the binary vectors.
+We choose to index both a `title_embedding` and a `chunk_embeddings` field for this blueprint, as we aim to minimize 
+cost by embedding the binary vectors.
 
 ```txt
 field title_embedding type tensor<int8>(title{}, x[96]) {
@@ -330,9 +346,11 @@ field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
 }
 ```
 
-Indexing several embedding fields may not be worth the cost for you. Evaluate whether the cost-quality trade-off is worth it for your application.
+Indexing several embedding fields may not be worth the cost for you. Evaluate whether the cost-quality trade-off 
+is worth it for your application.
 
-If you have different vector space representations of your document (e.g images), indexing them separately is likely worth it, as they are likely to provide signals that are complementary to the text-based embeddings.
+If you have different vector space representations of your document (e.g images), indexing them separately 
+is likely worth it, as they are likely to provide signals that are complementary to the text-based embeddings.
 
 ### Model Metadata and Signals Using Structured Fields
 
@@ -371,11 +389,13 @@ Most large scale RAG application schemas contain at least a hundred structured f
 
 ## LLM-generation with OpenAI-client
 
-Vespa supports both Local LLMs, and any OpenAI-compatible API for LLM generation. For details, see [LLMs in Vespa](../llms-in-vespa.html)
+Vespa supports both Local LLMs, and any OpenAI-compatible API for LLM generation. For details, see [LLMs in Vespa](../../llms-in-vespa.html)
 
-The recommended way to provide an API key is by using the [secret store](../cloud/security/secret-store.html) in Vespa Cloud.
+The recommended way to provide an API key is by using the [secret store](../../cloud/security/secret-store.html) in Vespa Cloud.
 
-To enable this, you need to create a vault (if you don't have one already) and a secret through the [Vespa Cloud console](https://cloud.vespa.ai/). If your vault is named `sample-apps` and contains a secret with the name `openai-api-key`, you would use the following configuration in your `services.xml` to set up the OpenAI client to use that secret:
+To enable this, you need to create a vault (if you don't have one already) and a secret through the 
+[Vespa Cloud console](https://cloud.vespa.ai/). If your vault is named `sample-apps` and contains a secret 
+with the name `openai-api-key`, you would use the following configuration in your `services.xml` to set up the OpenAI client to use that secret:
 
 ```xml
   <secrets>
@@ -391,7 +411,8 @@ To enable this, you need to create a vault (if you don't have one already) and a
 
 Alternatively, for local deployments, you can set the `X-LLM-API-KEY` header in your query to use the OpenAI client for generation.
 
-To test generation using the OpenAI client, post a query that runs the `openai` search chain, with `format=sse`. (Use `format=json` for a streaming json response including both the search hits and the LLM-generated tokens.)
+To test generation using the OpenAI client, post a query that runs the `openai` search chain, with `format=sse`. 
+(Use `format=json` for a streaming json response including both the search hits and the LLM-generated tokens.)
 
 ```bash
 vespa query \
@@ -410,8 +431,10 @@ vespa query \
 
 ## Structuring your vespa application
 
-This section provides recommendations for structuring your Vespa application package. See also the [application package docs](/en/application-packages.html) for more details on the application package structure.
-Note that this is not mandatory, and it might be simpler to start without query profiles and rank profiles, but as you scale out your application, it will be beneficial to have a well-structured application package.
+This section provides recommendations for structuring your Vespa application package. See also the 
+[application package docs](../../application-packages.html) for more details on the application package structure.
+Note that this is not mandatory, and it might be simpler to start without query profiles and rank profiles, 
+but as you scale out your application, it will be beneficial to have a well-structured application package.
 
 Consider the following structure for our application package:
 
@@ -441,7 +464,8 @@ app
 └── services.xml
 ```
 
-You can see that we have separated the [query profiles](https://docs.vespa.ai/en/query-profiles.html), and [rank profiles](../../basics/ranking.html#rank-profiles) into their own directories.
+You can see that we have separated the [query profiles](../../query-profiles.html), 
+and [rank profiles](../../basics/ranking.html#rank-profiles) into their own directories.
 
 ### Manage queries in query profiles
 
@@ -493,7 +517,8 @@ Here, we set some configuration that are specific to this use case.
 
 ### **_deepresearch_** query profile
 
-Again, we will inherit from the `hybrid` query profile, but override with a `targetHits` value of 10 000 (original was 100) that prioritizes recall over latency.
+Again, we will inherit from the `hybrid` query profile, but override with a `targetHits` value of 10 000 (original was 100) 
+that prioritizes recall over latency.
 We will also increase number of hits to be returned, and increase the timeout to 5 seconds.
 
 ```xml
@@ -510,10 +535,13 @@ We will also increase number of hits to be returned, and increase the timeout to
 </query-profile>
 ```
 
-We will leave out the LLM-generation for this one, and let an LLM agent on the client side be responsible for using this API call as a tool, and to determine whether enough relevant context to answer has been retrieved.
-Note that the `targetHits` parameter set here does not really makes sense until your dataset reach a certain scale.
+We will leave out the LLM-generation for this one, and let an LLM agent on the client side be responsible for using this 
+API call as a tool, and to determine whether enough relevant context to answer has been retrieved.
+Note that the `targetHits` parameter set here does not really make sense until your dataset reach a certain scale.
 
-As we add more rank-profiles, we can also inherit the existing query profiles, only to override the `ranking.profile` field to use a different rank profile. This is what we have done for the `rag-with-gbdt` and `deepresearch-with-gbdt` query profiles, which will use the `second-with-gbdt` rank profile instead of the `learned-linear` rank profile.
+As we add more rank-profiles, we can also inherit the existing query profiles, only to override the `ranking.profile` 
+field to use a different rank profile. This is what we have done for the `rag-with-gbdt` and `deepresearch-with-gbdt` 
+query profiles, which will use the `second-with-gbdt` rank profile instead of the `learned-linear` rank profile.
 
 ```xml
 <query-profile id="rag-with-gbdt" inherits="hybrid-with-gbdt">
@@ -525,7 +553,9 @@ As we add more rank-profiles, we can also inherit the existing query profiles, o
 
 ### Separating out rank profiles
 
-To build a great RAG application, assume you’ll need many ranking models. This will allow you to bucket-test alternatives continuously and to serve different use cases, including data collection for different phases, and the rank profiles to be used in production.
+To build a great RAG application, assume you’ll need many ranking models. This will allow you to bucket-test alternatives 
+continuously and to serve different use cases, including data collection for different phases, and the rank profiles 
+to be used in production.
 
 Separate common functions/setup into parent rank profiles and use `.profile` files.
 
@@ -533,21 +563,28 @@ Separate common functions/setup into parent rank profiles and use `.profile` fil
 
 Before we move on, it might be useful to recap Vespa´s [phased ranking](../../phased-ranking.html) approach.
 
-Below is a schematic overview of how to think about retrieval and ranking for this RAG blueprint. Since we are developing this as a tutorial using a small toy dataset, the application can be deployed in a single machine, using a single docker container, where only one container node and one container node will run. This is obviously not the case for most real-world RAG applications, so this is cruical to have in mind as you want to scale your application.
+Below is a schematic overview of how to think about retrieval and ranking for this RAG blueprint. Since we are 
+developing this as a tutorial using a small toy dataset, the application can be deployed in a single machine, 
+using a single docker container, where only one container node and one container node will run. This is obviously 
+not the case for most real-world RAG applications, so this is cruical to have in mind as you want to scale your application.
 
 ![phased ranking overview](/assets/img/phased-ranking-rag.png)
 
-It is worth noting that parameters such as `targetHits` (for the match phase) and `rerank-count` (for first and second phase) are applied **per content node**. Also note that the stateless container nodes can also be [scaled independently](../../performance/sizing-search.html) to handle increased query load.
+It is worth noting that parameters such as `targetHits` (for the match phase) and `rerank-count` 
+(for first and second phase) are applied **per content node**. Also note that the stateless container nodes can 
+also be [scaled independently](../../performance/sizing-search.html) to handle increased query load.
 
 ## Configuring match-phase (retrieval)
 
 This section will contain important considerations for the retrieval-phase of a RAG application in Vespa.
 
-The goal of the retrieval phase is to retrieve candidate documents efficiently, and maximize recall, without exposing too many documents to ranking.
+The goal of the retrieval phase is to retrieve candidate documents efficiently, and maximize recall, 
+without exposing too many documents to ranking.
 
 ### Choosing a Retrieval Strategy: Vector, Text, or Hybrid?
 
-As you could see from the schema, we create and index both a text representation and a vector representation for each chunk of the document. This will allow us to use both text-based features and semantic features for both recall and ranking.
+As you could see from the schema, we create and index both a text representation and a vector representation for 
+each chunk of the document. This will allow us to use both text-based features and semantic features for both recall and ranking.
 
 The text and vector representation complement each other well:
 
@@ -572,10 +609,15 @@ select *
         where rank({targetHits:10000}nearestNeighbor(embeddings_field, query_embedding, userInput(@query)))
 ```
 
-Notice that only the first argument of the [rank](../../reference/query-language-reference.html#rank)-operator will be used to determine if a document is a match, while all arguments are used for calculating rank features. This mean we can do vector only for matching, but still use text-based features such as `bm25` and `nativeRank` for ranking.
+Notice that only the first argument of the [rank](../../reference/query-language-reference.html#rank)-operator 
+will be used to determine if a document is a match, while all arguments are used for calculating rank features. 
+This mean we can do vector only for matching, but still use text-based features such as `bm25` and `nativeRank` for ranking.
 Note that if you do this, it makes sense to increase the number of `targetHits` for the `nearestNeighbor`-operator.
 
-For our sample application, we add three different retrieval operators (that are combined with `OR`), one with `weakAnd` for text matching, and two `nearestNeighbor` operators for vector matching, one for the title and one for the chunks. This will allow us to retrieve both relevant documents based on text and vector similarity, while also allowing us to return the most relevant chunks of the documents.
+For our sample application, we add three different retrieval operators (that are combined with `OR`), 
+one with `weakAnd` for text matching, and two `nearestNeighbor` operators for vector matching, one for the title 
+and one for the chunks. This will allow us to retrieve both relevant documents based on text and vector similarity, 
+while also allowing us to return the most relevant chunks of the documents.
 
 ```sql
 select *
@@ -587,23 +629,31 @@ select *
 
 ### Choosing your embedding model (and strategy)
 
-Choice of embedding model will be a trade-off between inference time (both indexing and query time), memory usage (embedding dimensions) and quality. There are many good open-source models available, and we recommend checking out the [MTEB leaderboard](https://huggingface.co/spaces/mteb/leaderboard), and look at the `Retrieval`-column to gauge performance, while also considering the memory usage, vector dimensions, and context length of the model.
+Choice of embedding model will be a trade-off between inference time (both indexing and query time), memory usage 
+(embedding dimensions) and quality. There are many good open-source models available, and we recommend checking 
+out the [MTEB leaderboard](https://huggingface.co/spaces/mteb/leaderboard), and look at the `Retrieval`-column to gauge performance, 
+while also considering the memory usage, vector dimensions, and context length of the model.
 
-See [model hub](../../cloud/model-hub.html) for a list of provided models ready to use with Vespa. See also [Huggingface Embedder](../../embedding.html#huggingface-embedder) for details on using other models (exported as ONNX) with Vespa.
+See [model hub](../../cloud/model-hub.html) for a list of provided models ready to use with Vespa. 
+See also [Huggingface Embedder](../../embedding.html#huggingface-embedder) for details on 
+using other models (exported as ONNX) with Vespa.
 
 In addition to dense vector representation, Vespa supports sparse embeddings (token weights) and multi-vector (ColBERT-style) embeddings.
 See our [example notebook](https://vespa-engine.github.io/pyvespa//examples/mother-of-all-embedding-models-cloud.html#bge-m3-the-mother-of-all-embedding-models) of using the bge-m3 model, which supports both, with Vespa.
 
-Vespa also supports [Matryoshka embeddings](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/), which can be a great way of reducing inference cost for retrieval phases, by using a subset of the embedding dimensions, while using more dimensions for increased precision in the later ranking phases.
+Vespa also supports [Matryoshka embeddings](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/), 
+which can be a great way of reducing inference cost for retrieval phases, by using a subset of the embedding dimensions, 
+while using more dimensions for increased precision in the later ranking phases.
 
 For domain-specific applications or less popular languages, you may want to consider finetuning a model on your own data.
 
 ### Consider binary vectors for recall
 
 Another decision to make is which precision you will use for your embeddings.
-See [binarization docs](../binarizing-vectors.html) for an introduction to binarization in Vespa.
+See [binarization docs](../../binarizing-vectors.html) for an introduction to binarization in Vespa.
 
-For most cases, binary vectors (in Vespa, packed into `int8`-representation) will provide an attractive tradeoff, especially for recall during match-phase.
+For most cases, binary vectors (in Vespa, packed into `int8`-representation) will provide an attractive tradeoff, 
+especially for recall during match-phase.
 Consider these factors to determine whether this holds true for your application:
 
 * Reduces memory-vector cost by 5 – 30 ×
@@ -617,7 +667,9 @@ field binary_chunk_embeddings type tensor<int8>(chunk{}, x) {
 }
 ```
 
-If you need higher precision vector similarity, you should use bfloat16 precision, and consider paging these vectors to disk to avoid large memory cost. Note that this means that when accessing this field in ranking, they will also need to be read from disk, so you need to restrict the number of hits that accesses this field to avoid performance issues.
+If you need higher precision vector similarity, you should use bfloat16 precision, and consider paging these vectors to 
+disk to avoid large memory cost. Note that this means that when accessing this field in ranking, they will also need 
+to be read from disk, so you need to restrict the number of hits that accesses this field to avoid performance issues.
 
 ```txt
 field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
@@ -626,13 +678,21 @@ field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
 }
 ```
 
-For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`, optionally combined with filters) so that not too many hits are matched. Another option is to enable match-phase limiting, see [match-phase docs](../../reference/schema-reference.html#match-phase). In essence, you restrict the number of matches by specifying an attribute field.
+For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring 
+your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`, optionally combined with filters) so that not 
+too many hits are matched. Another option is to enable match-phase limiting, see 
+[match-phase docs](../../reference/schema-reference.html#match-phase). 
+In essence, you restrict the number of matches by specifying an attribute field.
 
 ### Consider float-binary for ranking
 
-In our blueprint, we choose to index binary vectors of the documents. This does not prevent us from using the float-representation of the query embedding though.
+In our blueprint, we choose to index binary vectors of the documents. This does not prevent us from using the 
+float-representation of the query embedding though.
 
-By unpacking the binary document chunk embeddings to their float representations (using [`unpack_bits`](../../reference/ranking-expressions.html#unpack-bits)), we can calculate the similarity between query and document with slightly higher precision using a `float-binary` dot product, instead of hamming distance (`binary-binary`)
+By unpacking the binary document chunk embeddings to their float representations 
+(using [`unpack_bits`](../../reference/ranking-expressions.html#unpack-bits)), 
+we can calculate the similarity between query and document with slightly higher precision using a `float-binary` dot product, 
+instead of hamming distance (`binary-binary`)
 
 Below, you can see how we can do this:
 
@@ -674,7 +734,10 @@ rank-profile base-features {
 Vespa gives you extensive control over [linguistics](../../linguistics.html).
 You can decide [match mode](../../reference/schema-reference.html#match), stemming, normalization, or control derived tokens.
 
-It is also possible to use more specific operators than [weakAnd](../../reference/query-language-reference.html#weakand) to match only close occurrences ([near](../../reference/query-language-reference.html#near)/ [onear](../../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../../query-rewriting.html#equiv)), weight items, set connectivity, and apply [query-rewrite](../../query-rewriting.html) rules.
+It is also possible to use more specific operators than [weakAnd](../../reference/query-language-reference.html#weakand) 
+to match only close occurrences ([near](../../reference/query-language-reference.html#near)/ 
+[onear](../../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../../query-rewriting.html#equiv)), 
+weight items, set connectivity, and apply [query-rewrite](../../query-rewriting.html) rules.
 
 **Don’t use this to increase recall — improve your embedding model instead.**
 
@@ -692,7 +755,9 @@ For this sample application, we set up an evaluation script that compares three 
 2. **WeakAnd-only**: Uses only text-based matching with `userQuery()`.
 3. **Hybrid**: Combines both approaches with OR logic.
 
-{% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both [filter clauses](../../reference/query-language-reference.html#where), [grouping](../grouping), [predicates](../../predicate-fields.html), [geosearch](../geo-search) etc. to support your specific use cases." %}
+{% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both 
+[filter clauses](../../reference/query-language-reference.html#where), [grouping](../../grouping), 
+[predicates](../../predicate-fields.html), [geosearch](../../geo-search) etc. to support your specific use cases." %}
 
 It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster.
 
@@ -701,11 +766,12 @@ The evaluation will output metrics like:
 * Recall (percentage of relevant documents matched)
 * Total number of matches per query
 * Query latency statistics
-* Per-query detailed results (when `write_verbose=True`) to identify "offending" queries with regards to recall or performance.
+* Per-query detailed results (when `write_verbose=True`) to identify "offending" queries in regard to recall or performance.
 
 This will be valuable input for tuning each of them.
 
-Run the complete evaluation script from the `eval/` directory to see detailed comparisons between all three retrieval strategies on your dataset.
+Run the complete evaluation script from the `eval/` directory to see detailed comparisons between all three retrieval 
+strategies on your dataset.
 
 #### Semantic Query Evaluation
 
@@ -776,7 +842,9 @@ th { width: 120px; }
 
 #### WeakAnd Query Evaluation
 
-The `userQuery` is just a convenience wrapper for `weakAnd`, see [reference/query-language-reference.html](../../reference/query-language-reference.html). The default `targetHits` for `weakAnd` is 100, but it is [overridable](../../reference/query-language-reference.html#targethits).
+The `userQuery` is just a convenience wrapper for `weakAnd`, see 
+[reference/query-language-reference.html](../../reference/query-language-reference.html). 
+The default `targetHits` for `weakAnd` is 100, but it is [overridable](../../reference/query-language-reference.html#targethits).
 
 ```sql
 select * from doc where userQuery()
@@ -895,13 +963,15 @@ userQuery()
 
 ### Tuning the retrieval phase
 
-We can see that all queries match all relevant documents, which is expected, since we use `targetHits:100` in the `nearestNeighbor` operator, and this is also the default for `weakAnd`(and `userQuery`). By setting `targetHits` lower, we can see that recall will drop.
+We can see that all queries match all relevant documents, which is expected, since we use `targetHits:100` 
+in the `nearestNeighbor` operator, and this is also the default for `weakAnd`(and `userQuery`). By setting `targetHits` 
+lower, we can see that recall will drop.
 
 In general, you have these options if you want to increase recall:
 
 1. Increase `targetHits` in your retrieval operators (e.g., `nearestNeighbor`, `weakAnd`).
 2. Improve your embedding model (use a better model or finetune it on your data).
-3. You can also consider tuning HNSW parameters, see [docs on HNSW](../approximate-nn-hnsw.html#using-vespas-approximate-nearest-neighbor-search).
+3. You can also consider tuning HNSW parameters, see [docs on HNSW](../../approximate-nn-hnsw#using-vespas-approximate-nearest-neighbor-search).
 
 Conversely, if you want to reduce the latency of one of your retrieval 'arms' at the cost of a small trade-off in recall, you can:
 
@@ -932,18 +1002,21 @@ For the first-phase ranking, we must use a computationally cheap function, as it
 Common options include (learned) linear combination of features including text similarity features, vector closeness, and metadata.
 It could also be a heuristic handwritten function.
 
-Text features should include [nativeRank](/en/reference/nativerank.html#nativeRank) or [bm25](../../reference/bm25.html#ranking-function) — not [fieldMatch](../../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
+Text features should include [nativeRank](../../reference/nativerank.html#nativeRank) 
+or [bm25](../../reference/bm25.html#ranking-function) — not [fieldMatch](../../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
 
 Considerations for deciding whether to choose `bm25` or `nativeRank`:
 
 * **bm25**: cheapest, strong significance, no proximity, not normalized.
 * **nativeRank**: 2 – 3 × costlier, truncated significance, includes proximity, normalized.
 
-For this blueprint, we opted for using `bm25` for first phase, but you could evaluate and compare to see whether the additional cost of using `nativeRank` is justified by increased quality.
+For this blueprint, we opted for using `bm25` for first phase, but you could evaluate and compare to see whether the additional 
+cost of using `nativeRank` is justified by increased quality.
 
 ### Collecting training data for first-phase ranking
 
-The features we will use for first-phase ranking are not normalized (ie. they have values in different ranges). This means we can't just weight them equally and expect that to be a good proxy for relevance.
+The features we will use for first-phase ranking are not normalized (i.e. they have values in different ranges). 
+This means we can't just weight them equally and expect that to be a good proxy for relevance.
 
 Below we will show how we can find (learn) optimal weights (coefficients) for each feature, so that we can combine them into a ranking-expression on the format:
 
@@ -1041,12 +1114,15 @@ rank-profile collect-training-data inherits base-features {
 As you can see, we have defined a `collect-training-data` rank profile that inherits from the `base-features` rank profile.
 This rank profile will collect the match features we defined in the `match-features` section.
 
-The `random` expression in the `second-phase` allows us to collect random hits, and is necessary for our data collection script. See the [docstring of pyvespa class VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) that is used in the script for details.
+The `random` expression in the `second-phase` allows us to collect random hits, and is necessary for our data collection script. 
+See the [docstring of pyvespa class VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) that is used in the script for details.
 
-As you can see, we rely on the `bm25` and different vector similarity features (both document-level and chunk-level) for the first-phase ranking.
+As you can see, we rely on the `bm25` and different vector similarity features (both document-level and chunk-level) 
+for the first-phase ranking.
 These are relatively cheap to calculate, and will likely provide good enough ranking signals for the first-phase ranking.
 
-Running the command below will save a .csv-file with the collected features, which can be used to train a ranking model for the first-phase ranking.
+Running the command below will save a .csv-file with the collected features, which can be used to train a ranking model 
+for the first-phase ranking.
 
 <pre>
 python eval/collect_pyvespa.py --collect_matchfeatures
@@ -1153,7 +1229,8 @@ Our output file looks like this:
   </tbody>
 </table>
 
-Note that the `relevance_score` in this table is just the random expression we used in the `second-phase` of the `collect-training-data` rank profile, and will be dropped before training the model.
+Note that the `relevance_score` in this table is just the random expression we used in the `second-phase` 
+of the `collect-training-data` rank profile, and will be dropped before training the model.
 
 ### Training a first-phase ranking model
 
@@ -1241,7 +1318,8 @@ rank-profile learned-linear inherits collect-training-data {
     }
 ```
 
-To allow for changing the parameters without redeploying the application, we will also add the values of the coefficients as query parameters to a new query profile.
+To allow for changing the parameters without redeploying the application, we will also add the values of the 
+coefficients as query parameters to a new query profile.
 
 ```xml
 <query-profile id="hybrid">
@@ -1301,23 +1379,32 @@ We run the evaluation script on a set of unseen test queries, and get the follow
 }
 ```
 
-For the first phase ranking, we care most about recall, as we just want to make sure that the candidate documents are ranked high enough to be included in the second-phase ranking. (the default number of documents that will be exposed to second-phase is 10 000, but can be controlled by the `rerank-count` parameter).
+For the first phase ranking, we care most about recall, as we just want to make sure that the candidate documents are 
+ranked high enough to be included in the second-phase ranking. (the default number of documents that will be exposed to 
+second-phase is 10 000, but can be controlled by the `rerank-count` parameter).
 
-We can see that our results are already very good. This is of course due to the fact that we have a small,synthetic dataset. In reality, you should align the metric expectations with your dataset and test queries.
+We can see that our results are already very good. This is of course due to the fact that we have a small,synthetic dataset. 
+In reality, you should align the metric expectations with your dataset and test queries.
 
-We can also see that our search time is quite fast, with an average of 22ms. You should consider whether this is well within your latency budget, as you want some headroom for second-phase ranking.
+We can also see that our search time is quite fast, with an average of 22ms. You should consider whether this is well 
+within your latency budget, as you want some headroom for second-phase ranking.
 
 ## Second-phase ranking
 
-For the second-phase ranking, we can afford to use a more expensive ranking expression, since we will only run it on the top-k documents from the first-phase ranking (defined by the `rerank-count` parameter, which defaults to 10,000 documents).
+For the second-phase ranking, we can afford to use a more expensive ranking expression, since we will only run it 
+on the top-k documents from the first-phase ranking (defined by the `rerank-count` parameter, which defaults to 10,000 documents).
 
-This is where we can significantly improve ranking quality by using more sophisticated models and features that would be too expensive to compute for all matched documents.
+This is where we can significantly improve ranking quality by using more sophisticated models and features that would 
+be too expensive to compute for all matched documents.
 
 ### Collecting features for second-phase ranking
 
-For second-phase ranking, we request Vespa's default set of rank features, which includes a comprehensive set of text features. See the [rank features documentation](../../reference/rank-features.html) for complete details.
+For second-phase ranking, we request Vespa's default set of rank features, which includes a comprehensive set of text 
+features. See the [rank features documentation](../../reference/rank-features.html) for complete details.
 
-We can collect both match features and rank features by running the same [script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/collect_pyvespa.py) as we did for first-phase ranking, with  some additional parameters to collect rank features as well:
+We can collect both match features and rank features by running the same 
+[script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/collect_pyvespa.py) 
+as we did for first-phase ranking, with  some additional parameters to collect rank features as well:
 
 ```bash
 python eval/collect_pyvespa.py --collect_rankfeatures --collect_matchfeatures --collector_name rankfeatures-secondphase
@@ -1327,9 +1414,10 @@ This collects approximately 194 features, providing a rich feature set for train
 
 ### Training a GBDT model for second-phase ranking
 
-With the expanded feature set, we can train a Gradient Boosted Decision Tree (GBDT) model to predict document relevance. We use [LightGBM](../lightgbm.html) for this purpose. 
+With the expanded feature set, we can train a Gradient Boosted Decision Tree (GBDT) model to predict document relevance. 
+We use [LightGBM](../../lightgbm.html) for this purpose. 
 
-Vespa also supports [XGBoost](../xgboost.html) and [ONNX](../onnx.html) models.
+Vespa also supports [XGBoost](../../xgboost.html) and [ONNX](../../onnx.html) models.
 
 To train the model, run the following command ([link to training script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_lightgbm.py)):
 
@@ -1504,31 +1592,45 @@ vespa query \
 * Adjust `rerank-count` based on quality vs. performance trade-offs
 * Consider using different models for different query types or use cases
 
-The second-phase ranking represents a crucial step in building high-quality RAG applications, providing the precision needed for effective LLM context while maintaining reasonable query latencies.
+The second-phase ranking represents a crucial step in building high-quality RAG applications, 
+providing the precision needed for effective LLM context while maintaining reasonable query latencies.
 
 ## (Optional) Global-phase ranking
 
-We also have the option of configuring [global-phase](../../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k (as set by `rerank-count` parameter) documents from the second-phase ranking.
+We also have the option of configuring [global-phase](../../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k 
+(as set by `rerank-count` parameter) documents from the second-phase ranking.
 
-Common options for global-phase are [cross-encoders](/en/cross-encoders.html) or another GBDT model, trained for better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, we consider this less important than for search applications where the results are mainly consumed by an human, as LLMs don't care that much about the ordering of the results.
+Common options for global-phase are [cross-encoders](../../cross-encoders.html) or another GBDT model, trained for 
+better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, 
+we consider this less important than for search applications where the results are mainly consumed by an human, 
+as LLMs don't care that much about the ordering of the results.
 
 ## Further improvements
 
 Finally, we will sketch out some opportunities for further improvements.
-As you have seen, we started out with only binary relevance labels for a few queries, and trained a model based on the relevant docs and a set of random documents.
+As you have seen, we started out with only binary relevance labels for a few queries, and trained a model 
+based on the relevant docs and a set of random documents.
 
-As you may have noted, we have not discussed what most people think about when discussing RAG evals, evaluating the "Generation"-step. There are several tools available to do this, for example [ragas](https://docs.ragas.io/en/stable/) and [ARES](https://github.com/stanford-futuredata/ARES). We refer to other sources for details on this, as this tutorial is probably enough to digest as it is.
+As you may have noted, we have not discussed what most people think about when discussing RAG evals, evaluating the 
+"Generation"-step. There are several tools available to do this, for example [ragas](https://docs.ragas.io/en/stable/) and [ARES](https://github.com/stanford-futuredata/ARES). 
+We refer to other sources for details on this, as this tutorial is probably enough to digest as it is.
 
 This was useful initially, as we had no better way to retrieve the candidate documents.
-Now, that we have a reasonably good second-phase ranking, we could potentially generate a new set of relevance labels for queries that we did not have labels for by having an LLM do relevance judgments of the top k returned hits. This training dataset would likely be even better in separating the top documents.
+Now, that we have a reasonably good second-phase ranking, we could potentially generate a new set of relevance labels 
+for queries that we did not have labels for by having an LLM do relevance judgments of the top k returned hits. 
+This training dataset would likely be even better in separating the top documents.
 
 ## Summary
 
-In this tutorial, we have built a complete RAG application using Vespa, providing our recommendations for how to approach both retrieval phase with binary vectors and text matching, first-phase ranking with a linear combination of relatively cheap features to a more sophisticated second-phase ranking system with more expensive features and a GBDT model.
+In this tutorial, we have built a complete RAG application using Vespa, providing our recommendations for how to 
+approach both retrieval phase with binary vectors and text matching, first-phase ranking with a linear combination 
+of relatively cheap features to a more sophisticated second-phase ranking system with more expensive features and a GBDT model.
 
-We hope that this tutorial, along with the provided code in our [sample-apps repository](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint), will serve as a useful reference for building your own RAG applications, with an evaluation-driven approach.
+We hope that this tutorial, along with the provided code in our [sample-apps repository](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint), 
+will serve as a useful reference for building your own RAG applications, with an evaluation-driven approach.
 
-By using the principles demonstrated in this tutorial, you are empowered to build high-quality RAG applications that can scale to any dataset size, and any query load.
+By using the principles demonstrated in this tutorial, you are empowered to build high-quality RAG applications 
+that can scale to any dataset size, and any query load.
 
 ## FAQ
 
@@ -1541,7 +1643,7 @@ By using the principles demonstrated in this tutorial, you are empowered to buil
   * [Long context ColBERT](https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/)
   * [Long context ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long/#vespa-sample-applications---long-context-colbert)
   * [ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert)
-  * [ColBERT embedder reference](https://docs.vespa.ai/en/embedding.html#colbert-embedder)
+  * [ColBERT embedder reference](../../embedding.html#colbert-embedder)
   * [ColBERT standalone python example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_Vespa-cloud.html)
   * [ColBERT standalone long context example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_long_context_Vespa-cloud.html)
 
@@ -1551,7 +1653,7 @@ By using the principles demonstrated in this tutorial, you are empowered to buil
 
 * **Q: Do I need to use an LLM with Vespa?**
   
-  A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](https://docs.vespa.ai/en/cloud/enclave/enclave.html)
+  A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](../../cloud/enclave/enclave.html)
 
 * **Q: Why do we use binary vectors for the document embeddings?**
   

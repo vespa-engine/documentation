@@ -22,10 +22,9 @@ The parts are:
 6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 
-There are different entry points to this tutorial. This one is for getting
-started using Docker on your local machine. Getting started on 
-[cloud.vespa.ai](https://cloud.vespa.ai) is coming soon. We will also have a
-version for [pyvespa](https://github.com/vespa-engine/pyvespa) soon.
+There are different entry points to this tutorial. This one is describing how to get
+started using Docker on your local machine. You can also deploy the application we are creating on
+[Vespa Cloud](https://cloud.vespa.ai).
 
 In this part, we will start with a minimal Vespa application to
 get used to some basic operations for running the application on Docker.
@@ -288,7 +287,7 @@ $ docker stop vespa; docker rm -f vespa
 </div>
 
 This will delete the Vespa application, including all data and configuration. See 
-[container tuning for production](/en/operations-selfhosted/docker-containers.html). 
+[container tuning for production](../../operations-selfhosted/docker-containers.html). 
 
 
 ## Conclusion
