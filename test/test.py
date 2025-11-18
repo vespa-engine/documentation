@@ -45,12 +45,15 @@ liquid_transforms = {}
 
 def print_separator():
     print("")
-    print("*" * 80)
+    print("*" * 160)
+
+def print_info(cmd, extra=""):
+    print("* {0} {1}".format(cmd, extra))
 
 def print_cmd(cmd, extra=""):
     print("> {0}".format(cmd))
     if len(extra) > 0:
-        print("> ({0})".format(extra))
+        print(": {0}".format(extra))
 
 
 def exec_wait(cmd, pty):
@@ -261,7 +264,7 @@ def parse_page(html):
 def process_page(html, source_name=""):
     script = parse_page(html)
 
-    print_cmd("Script to execute", extra=source_name)
+    print_info("Script to execute:", extra=source_name)
     print(json.dumps(script, indent=2))
 
     exec_script(script)
@@ -279,7 +282,7 @@ def create_work_dir():
 
 def run_url(url):
     print_separator()
-    print_cmd("Testing", url)
+    print_info("Testing", url)
     allpages = b""
     for page in url.split(","):
         page = page.strip()
