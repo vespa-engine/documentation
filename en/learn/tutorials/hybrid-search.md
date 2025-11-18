@@ -26,7 +26,7 @@ text embedding model. It is a small model that is fast to run and has a small me
 
 ## Installing vespa-cli and ir_datasets
 
-This tutorial uses [Vespa-CLI](../../vespa-cli.html) to deploy, feed, and query Vespa. We also use 
+This tutorial uses [Vespa-CLI](../../clients/vespa-cli.html) to deploy, feed, and query Vespa. We also use 
 [ir-datasets](https://ir-datasets.com/) to obtain the NFCorpus relevance dataset.
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

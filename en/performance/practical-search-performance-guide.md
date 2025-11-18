@@ -29,7 +29,7 @@ This guide is best read after having read the [Vespa Overview](../learn/overview
 
 ## Installing vespa-cli 
 
-This tutorial uses [Vespa-CLI](../vespa-cli.html),
+This tutorial uses [Vespa-CLI](../clients/vespa-cli.html),
 Vespa CLI is the official command-line client for Vespa.ai. 
 It is a single binary without any runtime dependencies and is available for Linux, macOS and Windows.
 
@@ -368,7 +368,7 @@ $ vespa feed -t http://localhost:8080 feed.jsonl
 The following sections use the Vespa [query api](../reference/query-api-reference.html) and
 formulate queries using Vespa [query language](../query-language.html). 
 For readability, all query examples are expressed using the 
-[vespa-cli](../vespa-cli.html) command which supports running queries against a Vespa instance.
+[vespa-cli](../clients/vespa-cli.html) command which supports running queries against a Vespa instance.
 The CLI uses the Vespa http search api internally. 
 Use `vespa query -v` to see the actual http request sent:
 

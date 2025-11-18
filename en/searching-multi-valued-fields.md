@@ -173,7 +173,7 @@ $ docker run --detach --name vespa --hostname vespa-container \
 </pre>
 </div>
 
-Install [Vespa-cli](vespa-cli.html) using Homebrew:
+Install [Vespa-cli](clients/vespa-cli.html) using Homebrew:
 
 <pre>
 $ brew install vespa-cli

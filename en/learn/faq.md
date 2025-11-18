@@ -359,7 +359,7 @@ Also see a [pyvespa example](https://pyvespa.readthedocs.io/en/latest/examples/p
 
 ### How to debug a feeding 400 response?
 The best option is to use `--verbose` option, like `vespa feed --verbose myfile.jsonl` -
-see [documentation](../vespa-cli.html#documents).
+see [documentation](../clients/vespa-cli.html#documents).
 A common problem is a mismatch in schema names and [document IDs](../documents.html#document-ids) - a schema like:
 ```
 schema article {
@@ -387,7 +387,7 @@ behavior.
 
 ### How to feed many files, avoiding 429 error?
 Using too many HTTP clients can generate a 429 response code.
-The Vespa sample apps use [vespa feed](../vespa-cli.html#documents) which uses HTTP/2 for high throughput -
+The Vespa sample apps use [vespa feed](../clients/vespa-cli.html#documents) which uses HTTP/2 for high throughput -
 it is better to stream the feed files through this client.
 
 ### Can I use Kafka to feed to Vespa?
