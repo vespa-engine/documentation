@@ -17,7 +17,7 @@ Use cases for cloning include:
 
 This guide uses _applications_.
 One can also use _instances_, but that will not work across Vespa major versions on Vespa Cloud -
-refer to [tenant, applications, instances](tenant-apps-instances) for details.
+refer to [tenant, applications, instances](../learn/tenant-apps-instances) for details.
 
 Vespa Cloud has different environments `dev` and `prod`, with different characteristics -
 [details](https://cloud.vespa.ai/en/reference/environments).

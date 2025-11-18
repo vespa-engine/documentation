@@ -389,7 +389,7 @@ $ vespa query \
 </pre>
 </div>
 Notice how the query above matches fewer documents `totalCount:116` because we limited the free text query to the title field. We can 
-change the [grammar](../reference/query-language-reference.html#grammar) to specify how the user query text is parsed into a query execution plan.
+change the [grammar](../../reference/query-language-reference.html#grammar) to specify how the user query text is parsed into a query execution plan.
 In the following example, we use `grammar:"all"` to specify that we only want to retrieve documents where *all* the query terms match the title field.
 
 <div class="pre-parent">
