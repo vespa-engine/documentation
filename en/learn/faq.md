@@ -172,7 +172,7 @@ expression in an indexing statement.
 ## Query
 
 ### Are hierarchical facets supported?
-Facets is called <a href="grouping.html">grouping</a> in Vespa.
+Facets is called <a href="../grouping.html">grouping</a> in Vespa.
 Groups can be multi-level.
 
 ### Are filters supported?
