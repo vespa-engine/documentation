@@ -45,7 +45,7 @@ liquid_transforms = {}
 
 def print_separator():
     print("")
-    print("*" * 160)
+    print("*" * 120)
 
 def print_info(cmd, extra=""):
     print("* {0} {1}".format(cmd, extra))
