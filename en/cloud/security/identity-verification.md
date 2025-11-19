@@ -1,4 +1,9 @@
-# Verify your identity with Your Vespa Cloud Private Key
+---
+title: Vespa Cloud Security
+category: cloud
+---
+
+## Verify your identity with Your Vespa Cloud Private Key
 
 Sometimes Vespa Cloud support may need to verify your identity before helping you with sensitive operations, for example when resetting your password or making changes to your account.
 
@@ -9,7 +14,8 @@ You will **sign using the matching private key** on your machine.
 
 ---
 
-## 1. Prerequisites
+
+### 1. Prerequisites
 
 You need:
 
@@ -23,12 +29,11 @@ You need:
 
     `~/.vespa/my-tenant.my-app.my-instance/data-plane-private-key.pem`
 
-{% include warning.html content="<p>Never send this private key file to anyone.<br/>
-Vespa Support will <b>never ask for your private key</b>. You <b>only send the signed challenge file</b>.</p>" %}
+{% include warning.html content="Never send this private key file to anyone.
+Vespa Support will <b>never ask for your private key</b>. You <b>only send the signed challenge file</b>." %}
 
 
-
-## 2. Save the challenge file from support
+### 2. Save the challenge file from support
 
 Support will send you a text file (for example `challenge.txt`).
 
@@ -40,7 +45,8 @@ Support will send you a text file (for example `challenge.txt`).
 cat ~/Downloads/vespa-challenge.txt
 ```
 
-## 3. Sign the file with your Vespa private key
+
+### 3. Sign the file with your Vespa private key
 
 In a terminal:
 
@@ -66,7 +72,8 @@ This command:
 - Signs that hash with your Vespa private key.
 - Writes the binary signature to `vespa-challenge.sig`.
 
-## 4. Base64-encode the signature
+
+### 4. Base64-encode the signature
 
 Convert the binary signature to base64 format (required for reliable transmission via email/chat):
 
@@ -81,7 +88,8 @@ You now have:
 - `vespa-challenge.sig` – binary signature
 - `vespa-challenge.sig.b64` – base64-encoded signature (text) ← **send this one**
 
-## 5. What to send back to support
+
+### 5. What to send back to support
 
 Send both files:
 - The original challenge file: `vespa-challenge.txt`
