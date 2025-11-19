@@ -59,7 +59,7 @@ downtime.
 
 ### Permissions
 
-To support different permissions for clients, it is possible to limit the permissions of a client. Only `read` or `write` permissions are supported.
+To support different permissions for clients, it is possible to limit the permissions of a client. Only `read` or `write` permissions are supported. 
 
 #### Request mapping
 The request actions are mapped from HTTP method. The default mapping rule is:
@@ -71,7 +71,7 @@ For `/search/` this is replaced by:
 
 #### Example
 
-Create 3 different certificates, for three different use cases:
+Create 3 different certificates, for three different use cases: 
 * Serving - `read`
 * Ingest - `write`
 * Full access - `read, write`
@@ -144,7 +144,7 @@ Token authentication must be explicitly enabled when used in combination with
 
 #### Create tokens using the console
 
-Tokens are managed in the console under **Account > Tokens**. All tokens are identified by a name, and can contain multiple versions to easily support token rotation.
+Tokens are managed in the console under **Account > Tokens**. All tokens are identified by a name, and can contain multiple versions to easily support token rotation. 
 To create a new token:
 1. Click **Add token**
 1. Enter a name for the token, note that this name must also be referenced in the application later.
@@ -207,7 +207,7 @@ The cryptographic properties of token authentication vs mTLS are comparable. The
 * tokens are sent as a header with every request
 * since they are part of the request they are also more easily leaked in log outputs or source code (e.g. curl commands).
 
-It is therefore recommended to
+It is therefore recommended to 
 * create tokens with a short expiry (keeping the default of 30 days).
 * keep tokens in a secret provider, and remember to hide output.
 * never commit secret tokens into source code repositories!
@@ -401,12 +401,3 @@ Vespa Cloud users on paid plans have access to Vespa Cloud Support.
 For cases where the Vespa Team needs access to the application's data to provide
 support, the Vespa support personnel can request access after an explicit approval
 from the customer in the open support case.
-
-
-## Identity verification
-
-In some cases, Vespa Support may need to verify your identity before providing
-assistance with sensitive operations, such as resetting your password or making
-changes to your account.
-
-For more information, see the [Identity Verification Guide](identity-verification.md).
