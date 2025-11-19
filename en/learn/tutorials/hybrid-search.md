@@ -12,7 +12,7 @@ Hybrid search combines different retrieval methods to improve search quality. Th
 * **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../../basics/ranking.html) enables complex scoring mechanisms.
 
 This tutorial demonstrates building a hybrid search application with Vespa that leverages the strengths of both lexical and embedding-based approaches.
- We'll use the [NFCorpus](https://www.cl.uni-heidelberg.de/statnlpgroup/nfcorpus/) dataset from the [BEIR](https://github.com/beir-cellar/beir) benchmark and explore various hybrid search techniques using Vespa's query language and ranking features. 
+ We'll use the [NFCorpus](https://ir-datasets.com/nfcorpus.html) dataset from the [BEIR](https://github.com/beir-cellar/beir) benchmark and explore various hybrid search techniques using Vespa's query language and ranking features. 
 
 The main goal is to set up a text search app that combines simple text scoring features
 such as [BM25](../../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
