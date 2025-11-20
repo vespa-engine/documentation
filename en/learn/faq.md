@@ -111,7 +111,7 @@ Which one to chose depends on use case, see discussion in the latter link.
 
 ### Does a whole document need to be updated and re-indexed?
 E.g. price and quantity available per store may often change vs the actual product attributes.
-Vespa supports [partial updates](../reads-and-writes.html) of documents.
+Vespa supports [partial updates](../writing/reads-and-writes.html) of documents.
 Also, the parent/child feature is implemented to support use-cases where child elements are updated frequently,
 while a more limited set of parent elements are updated less frequently.
 
@@ -153,18 +153,18 @@ Nodes will work as normal during data sync, and query coverage will be the same.
 It does not,
 _namespace_ is a mechanism to split the document space into parts that can be used for document selection -
 see [documentation](../schemas/documents.html#namespace). The namespace is not indexed and cannot
-be searched using the query api, but can be used by [visiting](../visiting.html).
+be searched using the query api, but can be used by [visiting](../writing/visiting.html).
 
 ### Visiting does not dump all documents, and/or hangs.
-There are multiple things that can cause this, see [visiting troubleshooting](../visiting.html#troubleshooting).
+There are multiple things that can cause this, see [visiting troubleshooting](../writing/visiting.html#troubleshooting).
 
 ### How to find number of documents in the index?
 Run a query like `vespa query "select * from sources * where true"` and see the `totalCount` field.
-Alternatively, use metrics or `vespa visit` - see [examples](../operations/batch-delete.html#example).
+Alternatively, use metrics or `vespa visit` - see [examples](../writing/batch-delete.html#example).
 
 ### Can I define a default value for a field?
 
-Not in the field definition, but it's possible to do this with the [choice](../indexing.html#choice-example)
+Not in the field definition, but it's possible to do this with the [choice](../writing/indexing.html#choice-example)
 expression in an indexing statement.
 
 
@@ -206,7 +206,7 @@ Trying to request more than 400 hits in a query, getting this error:
   large limit more so than a large offset.
   It can be made cheaper by using a smaller [document summary](../document-summaries.html),
   and avoiding fields on disk if possible.
-* Using _visit_ in the [document/v1/ API](../document-v1-api-guide.html)
+* Using _visit_ in the [document/v1/ API](../writing/document-v1-api-guide.html)
   is usually a better option for dumping all the data.
 
 ### How to make a sub-query to get data to enrich the query, like get a user profile?
@@ -322,7 +322,7 @@ an array field has a certain number of elements or items.
 The _grouping language_ has a [size()](../reference/grouping-syntax.html#list-expressions) operator that can be used in queries.
 
 ### Is it possible to query for fields with NaN/no value set/null/none
-The [visiting](../visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
+The [visiting](../writing/visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
 If the field is an _attribute_ one can query using grouping to identify Nan Values,
 see count and list [fields with NaN](../grouping.html#count-fields-with-nan).
 
@@ -377,7 +377,7 @@ and the schema name is the same as the document name.
 
 ### How to debug document processing chain configuration?
 This configuration is a combination of content and container cluster configuration,
-see [indexing](../indexing.html) and [feed troubleshooting](../operations-selfhosted/admin-procedures.html#troubleshooting).
+see [indexing](../writing/indexing.html) and [feed troubleshooting](../operations-selfhosted/admin-procedures.html#troubleshooting).
 
 ### I feed documents with no error, but they are not in the index
 This is often a problem if using [document expiry](../schemas/documents.html#document-expiry),
@@ -552,7 +552,7 @@ can be a good starting point as well to understand Vespa query execution,
 difference between `index` and `attribute` and summary fetching performance.
 
 ### Is memory freed when deleting documents?
-Deleting documents, by using the [document API](../reads-and-writes.html)
+Deleting documents, by using the [document API](../writing/reads-and-writes.html)
 or [garbage collection](../schemas/documents.html#document-expiry) will increase the capacity on the content nodes.
 However, this is not necessarily observable in system metrics -
 this depends on many factors, like what kind of memory that is released,
@@ -561,7 +561,7 @@ when [flush](../proton.html#proton-maintenance-jobs) jobs are run and document [
 In short, Vespa is not designed to release memory once used.
 It is designed for sustained high throughput, low latency,
 keeping <span style="text-decoration: underline">maximum</span> memory used under control
-using features like [feed block](../operations/feed-block.html).
+using features like [feed block](../writing/feed-block.html).
 
 When deleting documents, one can observe a slight <span style="text-decoration: underline">increase</span> in memory.
 A deleted document is represented using a [tombstone](../operations-selfhosted/admin-procedures.html#content-cluster-configuration),
@@ -638,7 +638,7 @@ It is also at odds with realtime writes.
 For these reasons, it is not recommended, and not supported.
 
 ### Does vespa give us any tool to browse the index and attribute data?
-Use [visiting](../visiting.html) to dump all or a subset of the documents.
+Use [visiting](../writing/visiting.html) to dump all or a subset of the documents.
 See [data-management-and-backup](https://cloud.vespa.ai/en/data-management-and-backup) for more information.
 
 ### What is the response when data is written only on some nodes and not on all replica nodes (Based on the redundancy count of the content cluster)?

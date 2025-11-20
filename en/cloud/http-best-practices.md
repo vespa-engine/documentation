@@ -57,7 +57,7 @@ Be careful when handling 5xx responses, especially `503 Service Unavailable` and
 These responses typically indicate an overloaded system, and blindly retrying without backoff will only worsen the situation.
 Clients should reduce overall throughput when receiving such responses.
 
-The same principle applies to `429 Too Many Requests` responses from the [Document v1 API](/en/document-v1-api-guide.html),
+The same principle applies to `429 Too Many Requests` responses from the [Document v1 API](/en/writing/document-v1-api-guide.html),
 which indicates that the client is exceeding the system's feed capacity. Clients should implement strategies such as reducing the request rate by a specific percentage, introducing exponential backoff, or pausing requests for a short duration before retrying. These adjustments help prevent further overload and allow the system to recover.
 
 For more general advise on retries and timeouts see *Amazon Builder's Library*'s
