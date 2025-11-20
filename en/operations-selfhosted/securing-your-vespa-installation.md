@@ -36,7 +36,7 @@ a controlled set of trusted hosts. All Vespa hosts must be able to connect
 to, and receive connections from, all other Vespa hosts that are part of the
 same installation. For added security, consider limiting Vespa hosts to only
 be able to talk to other Vespa hosts. If you are contacting external services
-as part of [federation](/en/federation.html) in the application container, your
+as part of [federation](/en/querying/federation.html) in the application container, your
 container hosts must be able to connect to these services.
  
 This may be implemented by e.g. iptables, AWS Security Groups or similar technologies.

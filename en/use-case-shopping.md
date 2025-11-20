@@ -68,7 +68,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     extra processing during querying.
     In the sample app there is a single custom searcher which builds the query for auto-suggestions,
     using a combination of [fuzzy matching](reference/query-language-reference.html#fuzzy)
-    and [prefix search](text-matching.html#prefix-match).
+    and [prefix search](querying/text-matching.html#prefix-match).
 
 * [Custom handlers](jdisc/developing-request-handlers.html)
 
@@ -101,14 +101,14 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     `SiteHandler` receives the request and the `ReviewVote` class sends a
     partial update to increment the `up`- or `downvotes` field.
 
-* [Search using YQL](query-language.html)
+* [Search using YQL](querying/query-language.html)
 
     In Vespa, you search for documents using YQL. In this application, the
     classes responsible for retrieving data from Vespa (in the `data` package
     beneath the `SiteHandler`) set up the YQL queries which are used to query
     Vespa over HTTP.
 
-* [Grouping](grouping.html)
+* [Grouping](querying/grouping.html)
 
     Grouping is used to group various fields of query results together.  For
     this application, many of the queries to Vespa include grouping requests.
@@ -134,7 +134,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     [stateless model evaluation](stateless-model-evaluation.html), both during
     document and query processing. 
 
-* [Vector search](nearest-neighbor-search.html)
+* [Vector search](querying/nearest-neighbor-search)
 
     The default retrieval uses approximate nearest neighbor search in combination with traditional
     lexical matching. Both the keyword and vector matching is constrained by the filters such as brand, price or

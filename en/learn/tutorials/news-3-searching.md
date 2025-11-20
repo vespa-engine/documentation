@@ -177,7 +177,7 @@ Attempting to sort on a field which is not defined as attribute in the schema wi
 
 ### Query time result grouping
 
-[Grouping](../../grouping.html) is the concept of looking through all matching documents at query-time
+[Grouping](../../querying/grouping.html) is the concept of looking through all matching documents at query-time
 and then performing operations with specified fields across all the documents —
 some common use cases include:
 
@@ -310,7 +310,7 @@ Notice that we also set an upper limit on the number of unique groups my the out
 This is important in cases with many unique values.
 See also [Result diversification using Vespa result grouping](https://blog.vespa.ai/result-diversification-with-vespa/). 
 
-Please refer to the [grouping guide](../../grouping.html) for more information and examples using Vespa grouping.
+Please refer to the [grouping guide](../../querying/grouping.html) for more information and examples using Vespa grouping.
 Similar to with sorting,
 attempting to group on a field which is not defined as attribute in the schema will create an error. 
 

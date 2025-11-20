@@ -155,7 +155,7 @@ Quite a lot is set up here:
 
 - `<container>` defines the stateless [container cluster](../../jdisc/index.html) for
   document, query and result processing
-- `<search>` sets up the [query endpoint](../../query-api.html).  The default port
+- `<search>` sets up the [query endpoint](../../querying/query-api.html).  The default port
   is 8080. See also [Securing Vespa with mutually authenticated TLS (mTLS)](https://blog.vespa.ai/securing-vespa-with-mutually-authenticated-tls/)
   for how to use mTLS with Vespa.
 - `<document-api>` sets up the [document
@@ -250,10 +250,10 @@ indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
 - `attribute:` Store this field in memory as an [attribute](../../attributes.html)
-  — for [sorting](../../reference/sorting.html), [querying](../../query-api.html), [ranking](../../basics/ranking.html) and
-  [grouping](../../grouping.html).
+  — for [sorting](../../reference/sorting.html), [querying](../../querying/query-api.html), [ranking](../../basics/ranking.html) and
+  [grouping](../../querying/grouping.html).
 - `summary:` Lets this field be part of the [document
-  summary](../../document-summaries.html) in the result set.
+  summary](../../querying/document-summaries.html) in the result set.
 
 Here, we also use the [index](../../reference/schema-reference.html#index) property,
 which sets up parameters for how Vespa should index the field.
@@ -343,7 +343,7 @@ or with a JSON POST:
 ```
 
 The only mandatory parameter is the query, using either `yql=<yql query>` or `query=<simple-query>`. 
-More details in the [Query API](../../query-api.html).
+More details in the [Query API](../../querying/query-api.html).
 
 Consider the query: `select * from news where default contains "music"`
 
@@ -384,7 +384,7 @@ Looking at the output, please note:
 - When multiple hits have the same relevance score, their internal ordering is undefined.
   However, their internal ordering will not change unless the documents are re-indexed.
 - You can add `&trace.level=3` to dump query parsing details and execution plan,
-  see [query tracing](../../query-api.html#query-tracing).
+  see [query tracing](../../querying/query-api.html#query-tracing).
 - The `totalCount` field at the top level contains the number of documents
   that *matched* the query.
 - Also note the `coverage` element, this tells us how many documents and nodes we searched over.

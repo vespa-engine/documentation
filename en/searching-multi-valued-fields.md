@@ -12,8 +12,8 @@ does not currently support ranking and can only be used for matching and filteri
 
 When building a search application we need to think about:
 
-- How to [match](query-language.html) a user specified query against a [document schema](basics/schemas.html)
-  using Vespa [query language](query-language.html).
+- How to [match](querying/query-language.html) a user specified query against a [document schema](basics/schemas.html)
+  using Vespa [query language](querying/query-language.html).
 - How to [rank](basics/ranking.html) documents matching the query.
 
 

@@ -24,7 +24,7 @@ the searcher would need to call `execution.fill` before the re-ranking logic,
 this would then cost more resources
 than just using `match-features` which is delivered in the first protocol matching phase.
 If one needs access to a subset of fields during stateless re-ranking,
-consider configuring a dedicated [document summary](document-summaries.html).
+consider configuring a dedicated [document summary](querying/document-summaries.html).
 
 See also [life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
 

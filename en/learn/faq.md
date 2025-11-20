@@ -87,7 +87,7 @@ of a double. This can happen in two cases:
 
 - The [ranking](../basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
 -Infinity. One can use [isNan](../reference/ranking-expressions.html#isnan-x) to guard against this.
-- Surfacing low scoring hits using [grouping](../grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](../reference/schema-reference.html#keep-rank-count).
+- Surfacing low scoring hits using [grouping](../querying/grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](../reference/schema-reference.html#keep-rank-count).
 
 ### How to pin query results?
 To hard-code documents to positions in the result set,
@@ -176,8 +176,8 @@ Facets is called <a href="../grouping.html">grouping</a> in Vespa.
 Groups can be multi-level.
 
 ### Are filters supported?
-Add filters to the query using [YQL](../query-language.html)
-using boolean, numeric and [text matching](../text-matching.html). Query terms can be annotated
+Add filters to the query using [YQL](../querying/query-language.html)
+using boolean, numeric and [text matching](../querying/text-matching.html). Query terms can be annotated
 as filters, which means that they are not highlighted when bolding results.
 
 ### How to query for similar items?
@@ -204,7 +204,7 @@ Trying to request more than 400 hits in a query, getting this error:
   The [query timeout](../reference/query-api-reference.html#timeout) can be increased,
   but it will still be costly and likely impact other queries -
   large limit more so than a large offset.
-  It can be made cheaper by using a smaller [document summary](../document-summaries.html),
+  It can be made cheaper by using a smaller [document summary](../querying/document-summaries.html),
   and avoiding fields on disk if possible.
 * Using _visit_ in the [document/v1/ API](../writing/document-v1-api-guide.html)
   is usually a better option for dumping all the data.
@@ -264,7 +264,7 @@ above for more details.
 
 
 ### How to count hits / all documents without returning results?
-Count all documents using a query like [select * from doc where true](../query-language.html) -
+Count all documents using a query like [select * from doc where true](../querying/query-language.html) -
 this counts all documents from the "doc" source.
 Using `select * from doc where true limit 0` will return the count and no hits,
 alternatively add [hits=0](../reference/query-api-reference.html#hits).
@@ -286,7 +286,7 @@ select * from sources * where ({defaultIndex: 'fieldsetOrField1'}userInput(@quer
 More details on [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues).
 
 ### How is the query timeout computed?
-Find query timeout details in the [Query API Guide](../query-api.html#timeout)
+Find query timeout details in the [Query API Guide](../querying/query-api.html#timeout)
 and the [Query API Reference](../reference/query-api-reference.html#timeout).
 
 ### How does backslash escapes work?
@@ -324,7 +324,7 @@ The _grouping language_ has a [size()](../reference/grouping-syntax.html#list-ex
 ### Is it possible to query for fields with NaN/no value set/null/none
 The [visiting](../writing/visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
 If the field is an _attribute_ one can query using grouping to identify Nan Values,
-see count and list [fields with NaN](../grouping.html#count-fields-with-nan).
+see count and list [fields with NaN](../querying/grouping.html#count-fields-with-nan).
 
 ### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
 See the [random.match](../reference/rank-features.html#random.match) rank feature - example:
@@ -343,7 +343,7 @@ $ vespa query 'select * from music where true' \
 ```
 
 ### Some of the query results have too many hits from the same source, how to create a diverse result set?
-See [result diversity](../result-diversity.html) for strategies on how to create result sets from different sources.
+See [result diversity](../querying/result-diversity) for strategies on how to create result sets from different sources.
 
 ### How to find most distant neighbor in a embedding field called clip_query_embedding?
 If you want to search for the most dissimilar items,
@@ -544,7 +544,7 @@ while grouping, summary and ranking can access the field from the `attribute` st
 A Vespa query is executed in two phases as described in [sizing search](../performance/sizing-search.html),
 and summary requests can touch disk (and also uses `mmap` by default).
 Due to their potential size there is no populate option here,
-but one can define [dedicated document summary](../document-summaries.html#performance)
+but one can define [dedicated document summary](../querying/document-summaries.html#performance)
 containing only fields that are defined with `attribute`.
 
 The [practical performance guide](../performance/practical-search-performance-guide)

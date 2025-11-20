@@ -305,7 +305,7 @@ the Vespa application — which services to run and how many nodes per service.
 &lt;/services&gt;
 </pre>
 
-The default [query profile](../query-profiles.html) can be used to override
+The default [query profile](../querying/query-profiles.html) can be used to override
 default query api settings for all queries.
 
 The following enables [presentation.timing](../reference/query-api-reference.html#presentation.timing) and
@@ -366,7 +366,7 @@ $ vespa feed -t http://localhost:8080 feed.jsonl
 
 ## Basic text search query performance
 The following sections use the Vespa [query api](../reference/query-api-reference.html) and
-formulate queries using Vespa [query language](../query-language.html). 
+formulate queries using Vespa [query language](../querying/query-language.html). 
 For readability, all query examples are expressed using the 
 [vespa-cli](../clients/vespa-cli.html) command which supports running queries against a Vespa instance.
 The CLI uses the Vespa http search api internally. 
@@ -598,14 +598,14 @@ query result which makes up the `querytime`.
 Returning hits with larger fields costs more resources and
 higher `summaryfetchtime` than smaller docs.
 - The summary used with the query, and which fields go into the summary. 
-For example, a [document-summary](../document-summaries.html) which only contain 
+For example, a [document-summary](../querying/document-summaries.html) which only contain 
 fields that are defined as `attribute` will be read from memory. For the `default` summary, or others 
 containing at least one non-attribute field, a fill will potentially access data 
 from summary storage on disk. Read more about in-memory [attribute](../attributes.html) fields.
 - [summary-features](../reference/schema-reference.html#summary-features) used to return computed
  [rank features](../reference/rank-features.html) from the content nodes. 
 
-Creating a dedicated [document-summary](../document-summaries.html) which
+Creating a dedicated [document-summary](../querying/document-summaries.html) which
 only contain the `track_id` field can improve performance, since `track_id` is defined in the schema with
 `attribute`, any summary fetches using this document summary will be reading in-memory data.
 In addition, since the summary only contain one field, it saves network time as less data is
@@ -730,7 +730,7 @@ With `attribute` Vespa will per default not build any inverted index-like data s
 potential faster query evaluation. See [Wikipedia:Inverted Index](https://en.wikipedia.org/wiki/Inverted_index) 
 and [Vespa internals](../proton.html#index). 
 The reason for this default setting is that Vespa `attribute` fields can be used
-for many different aspects: [ranking](../basics/ranking.html), [result grouping](../grouping.html),
+for many different aspects: [ranking](../basics/ranking.html), [result grouping](../querying/grouping.html),
  [result sorting](../reference/sorting.html), and finally searching/matching. 
 
 The following section focuses on the `tags` field which we defined with `attribute`,
@@ -1147,7 +1147,7 @@ Tensor computations can be used to calculate dense dot products, sparse
 dot products, matrix multiplication, neural networks and more. Tensor computations can be performed 
 on documents that are retrieved by the query matching operators. The only exception to this is
 dense single order tensors (vectors) where Vespa also supports "matching" using [(approximate) nearest
-neighbor search](../approximate-nn-hnsw.html). 
+neighbor search](../querying/approximate-nn-hnsw). 
 
 
 The `track` schema was defined with a `similar` tensor field with one named *mapped* dimension. 
@@ -2254,7 +2254,7 @@ that can keep latency and cost in check for many large scale serving use cases
 where a document quality signal is available. 
 Match phase termination also supports specifying a result diversity constraint.
 See [Result diversification blog post](https://blog.vespa.ai/result-diversification-with-vespa/). 
-Note that result diversity is normally obtained with Vespa [result grouping](../grouping.html), 
+Note that result diversity is normally obtained with Vespa [result grouping](../querying/grouping.html), 
 the match-phase diversity is used to ensure that diverse hits are also collected **if** 
 early termination kicks in.  
 

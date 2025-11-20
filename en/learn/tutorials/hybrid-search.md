@@ -167,7 +167,7 @@ and how Vespa should index and [match](../../reference/schema-reference.html#mat
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../../basics/schemas.html#document-fields).
 The [string](../../reference/schema-reference.html#string) data type represents both unstructured and structured texts, 
-and there are significant differences between [index and attribute](../../text-matching.html#index-and-attribute). The above
+and there are significant differences between [index and attribute](../../querying/text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
 Note that we are enabling [BM25](../../reference/bm25.html) for `title` and `text`
@@ -194,7 +194,7 @@ field embedding type tensor<bfloat16>(v[384]) {
 }
 ```
 The `indexing` expression creates the input to the `embed` inference call (in our example the concatenation of the title and the text field). Since
-the dataset is small, we do not specify `index` which would build [HNSW](../../approximate-nn-hnsw.html) data structures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
+the dataset is small, we do not specify `index` which would build [HNSW](../../querying/approximate-nn-hnsw) data structures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
 trained with cosine similarity, which maps to Vespa's `angular` [distance-metric](../../reference/schema-reference.html#distance-metric) for 
 nearestNeighbor search. 
 
@@ -248,7 +248,7 @@ Write the following to `app/services.xml`:
 Some notes about the elements above:
 
 - `<container>` defines the [container cluster](../../jdisc/index.html) for document, query and result processing.
-- `<search>` sets up the [query endpoint](../../query-api.html). The default port is 8080.
+- `<search>` sets up the [query endpoint](../../querying/query-api.html). The default port is 8080.
 - `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
 - `<component>` with type `hugging-face-embedder` configures the embedder in the application package. This includes where to fetch the model files from, the prepend
 instructions, and the pooling strategy. See [huggingface-embedder](../../embedding.html#huggingface-embedder) for details and other embedders supported.
@@ -350,7 +350,7 @@ harmless. Vespa asks the client to slow down the feed speed because of resource 
 
 
 ## Sample queries 
-We can now run a few sample queries to demonstrate various ways to perform searches over this data using the [Vespa query language](../../query-language.html).
+We can now run a few sample queries to demonstrate various ways to perform searches over this data using the [Vespa query language](../../querying/query-language.html).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

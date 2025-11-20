@@ -167,7 +167,7 @@ and how Vespa should index and [match](../../reference/schema-reference.html#mat
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../../basics/schemas.html#document-fields).
 The [string](../../reference/schema-reference.html#string) data type is used to represent both unstructured and structured texts, 
-and there are significant differences between [index and attribute](../../text-matching.html#index-and-attribute). The above
+and there are significant differences between [index and attribute](../../querying/text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
 Note that we are enabling the usage of [BM25](../../reference/bm25.html) for `title`, `body` and `url`.
@@ -184,7 +184,7 @@ the query processing that searches a field or fieldset uses *one* type of transf
 
 #### Document summaries to control search response contents
 
-Next, we define two [document summaries](../../document-summaries.html). 
+Next, we define two [document summaries](../../querying/document-summaries.html). 
 Document summaries control what fields are available in the [response](../../reference/default-result-format.html); 
 we include the `debug-tokens` document-summary to 
 demonstrate later how we can get visibility into how text is converted into searchable tokens. 
@@ -230,7 +230,7 @@ Write the following to `text-search/app/services.xml`:
 Some notes about the elements above:
 
 - `<container>` defines the [container cluster](../../jdisc/index.html) for document, query and result processing
-- `<search>` sets up the [query endpoint](../../query-api.html).  The default port is 8080.
+- `<search>` sets up the [query endpoint](../../querying/query-api.html).  The default port is 8080.
 - `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
 - `<content>` defines how documents are stored and searched
 - `<min-redundancy>` denotes how many copies to keep of each document.
@@ -302,7 +302,7 @@ $ vespa feed -t http://localhost:8080 dataset/documents.jsonl
 
 ## Querying the data
 
-This section demonstrates various ways to search the data using the [Vespa query language](../../query-language.html). All
+This section demonstrates various ways to search the data using the [Vespa query language](../../querying/query-language.html). All
 the examples use the `vespa-cli` client, the tool uses the HTTP api and if you pass `-v`, you will see the `curl` equivalent
 API request. 
 
@@ -443,7 +443,7 @@ Now, we can combine the `userInput` with application logic.  We add an applicati
 to demonstrate how to combine `userInput` with other query time constraints. 
 We add `ranked:false` to tell Vespa that this
 specific term should not contribute to the relevance calculation and `filter`:true` to ensure that the term is not
-used for [bolding/highlighting or dynamic snippeting](../../document-summaries.html#dynamic-snippets).
+used for [bolding/highlighting or dynamic snippeting](../../querying/document-summaries.html#dynamic-snippets).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -457,7 +457,7 @@ $ vespa query \
 </div>
 
 Notice that the `relevance` stays the same since we used `ranked:false` for the filter. 
-Let us see what is going on by adding [query tracing](../../query-api.html#query-tracing):
+Let us see what is going on by adding [query tracing](../../querying/query-api.html#query-tracing):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

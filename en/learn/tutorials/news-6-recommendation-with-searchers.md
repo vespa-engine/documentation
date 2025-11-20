@@ -379,7 +379,7 @@ and thus introduce diversity.
 
 This is often called federation.
 Vespa supports federation both from internal and external sources,
-see [the guide on federation](../../federation.html) for more information.
+see [the guide on federation](../../querying/federation.html) for more information.
 
 {% include important.html content="If the same document can be returned from multiple sources,
 it's important to perform some form of de-duplication before returning the final results!" %}
