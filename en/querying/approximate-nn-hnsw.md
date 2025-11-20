@@ -229,7 +229,7 @@ larger instance type and maximize the number of vectors per node. To scale with 
 use [grouped data distribution](../performance/sizing-search.html#data-distribution) to replicate content. 
 
 Note that strongly sublinear search is not necessarily true if the application
-uses nearest neighbor search for candidate retrieval in a <a href="phased-ranking.html">multi-phase ranking</a> pipeline, 
+uses nearest neighbor search for candidate retrieval in a <a href="../phased-ranking.html">multiphase ranking</a> pipeline, 
 or combines nearest neighbor search with filters. 
 
 
