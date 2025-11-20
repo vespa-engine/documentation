@@ -364,7 +364,7 @@ There are both advantages and drawbacks of using attributes —
 it enables sorting, ranking and grouping,
 but requires more memory and does not support `match:text` capabilities.
 Attribute fields do support at least one order higher update throughput then regular `index` fields,
-see [partial updates with Vespa](../../partial-updates.html).
+see [partial updates with Vespa](../../writing/partial-updates.html).
 
 When to use attributes depends on the application;
 in general, use attributes for:
@@ -427,7 +427,7 @@ number of times a news article was shown (impressions) and how many clicks it re
 A high number of clicks relative to impressions indicates that the news article was generally popular.
 We can use this signal in our ranking.
 Since both clicks and impressions are attribute fields,
-these fields can be [updated](../../partial-updates.html) at scale with very high throughput.
+these fields can be [updated](../../writing/partial-updates.html) at scale with very high throughput.
 
 We can use this signal in our ranking,
 by including a `popularity` rank profile,

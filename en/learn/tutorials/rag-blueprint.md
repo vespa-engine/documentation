@@ -219,7 +219,7 @@ This allows you to pick a large document as the searchable unit, while still add
 This allows you to index larger units, while avoiding data duplication and performance issues, by returning only the most relevant parts.
 
 Vespa also supports automatic [chunking](../../reference/indexing-language-reference.html#converters) 
-in the [indexing language](../../indexing.html).
+in the [indexing language](../../writing/indexing.html).
 
 Here are the parts of the schema, which defines the searchable unit as a document with a text field, 
 and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:

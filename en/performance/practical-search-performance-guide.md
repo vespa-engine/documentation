@@ -1161,7 +1161,7 @@ field similar type tensor&lt;float&gt;(trackid{}) {
 }
 </pre>
 
-Inspecting one document, using the vespa-cli (Wraps [Vespa document/v1 api](../document-v1-api-guide.html)):
+Inspecting one document, using the vespa-cli (Wraps [Vespa document/v1 api](../writing/document-v1-api-guide.html)):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1838,7 +1838,7 @@ the number of tags per track is used as a *proxy* of the true track popularity.
 
 The following script runs through the dataset and 
 counts the number of tags and creates a Vespa
-[partial update](../partial-updates.html) feed operation per track. 
+[partial update](../writing/partial-updates.html) feed operation per track. 
 
 <pre style="display:none" data-test="file" data-path="create-popularity-updates.py">
 import os
@@ -1936,7 +1936,7 @@ for filename in sorted_files:
     process_file(filename)
 ```
 
-With this script, run through the dataset and create the [partial update](../partial-updates.html) feed :
+With this script, run through the dataset and create the [partial update](../writing/partial-updates.html) feed :
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

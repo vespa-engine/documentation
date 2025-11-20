@@ -179,7 +179,7 @@ $ vespa document -v doc.json
 </pre>
 </div>
 
-We can also feed using [Vespa document api](../../document-v1-api-guide.html) directly.
+We can also feed using [Vespa document api](../../writing/document-v1-api-guide.html) directly.
 
 Once the feed operation is acknowledged by Vespa, the operation is visible in search.
 

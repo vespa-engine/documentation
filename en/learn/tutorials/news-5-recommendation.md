@@ -133,12 +133,12 @@ If you take a look at the file generated for the news embeddings,
 }
 ```
 
-This is a [partial update](../../partial-updates.html).
+This is a [partial update](../../writing/partial-updates.html).
 So, assuming you already have a system up and running from the previous search tutorial,
 you don't need to feed the entire corpus.
 With a partial update, you only need to update the necessary fields.
 So, after training another set of embeddings you can partially feed them again.
-Please refer to [Vespa reads and writes](../../reads-and-writes.html) for more information on feeding formats.
+Please refer to [Vespa reads and writes](../../writing/reads-and-writes.html) for more information on feeding formats.
 
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:

@@ -317,7 +317,7 @@ $ vespa query -v 'yql=select * from news where true' 'hits=0'
 </div>
 
 You can verify that specific documents are indexed by fetching documents by
-document id using the [Document V1 API](../../document-v1-api-guide.html):
+document id using the [Document V1 API](../../writing/document-v1-api-guide.html):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

@@ -288,7 +288,7 @@ combines the popularity with the `closeness(field, image_embeddings)` rank-featu
 
 ## Indexing product data
 After deploying the application package with the document schema, you
-can [index](reads-and-writes.html) the product data using the
+can [index](writing/reads-and-writes.html) the product data using the
 [Vespa JSON feed format](reference/document-json-format.html).
 
 In the example below there are two documents.
@@ -345,7 +345,7 @@ and [mixed tensor short form](reference/document-json-format.html#tensor):
 ```
 
 The above JSON formatted data can be fed to Vespa using any of the
-[Vespa feeding APIs](reads-and-writes.html#api-and-utilities).
+[Vespa feeding APIs](writing/reads-and-writes.html#api-and-utilities).
 
 ## Querying using nearestNeighbor query operator
 The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator
