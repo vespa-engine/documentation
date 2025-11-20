@@ -245,7 +245,7 @@ The `recommendation` rank profile above requires a tensor to be sent along with 
 For Vespa to bind the correct types, it needs to know the expected type of this query parameter.
 That is called a query profile type.
 
-[Query profiles](../../query-profiles.html) are named sets of search request parameters
+[Query profiles](../../querying/query-profiles.html) are named sets of search request parameters
 that can be set as default, so you don't have to pass them along with the query.
 We don't use this in this sample application.
 Still we need to set up a default query profile to set up the types of query parameters we expect to pass.

@@ -187,7 +187,7 @@ Once the feed operation is acknowledged by Vespa, the operation is visible in se
 ## Querying Vespa
 
 We can query the endpoint using the vespa-cli's support for performing queries.
-It uses the [Vespa query api](../../query-api.html) to query vespa,
+It uses the [Vespa query api](../../querying/query-api.html) to query vespa,
 including `-v` in the command, we can see the exact endpoint and url request parameters used. 
 
 <div class="pre-parent">
@@ -197,7 +197,7 @@ $ vespa query -v 'yql=select * from news where true'
 </pre>
 </div>
 
-This example uses [YQL (Vespa Query Language)](../../query-language.html) to 
+This example uses [YQL (Vespa Query Language)](../../querying/query-language.html) to 
 search for all documents of type `news`. This query request will return `1` result, which is the document we fed above. 
 
 <div class="pre-parent">

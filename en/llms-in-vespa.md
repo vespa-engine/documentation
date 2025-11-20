@@ -357,7 +357,7 @@ This can also leveraged for automated [Document Enrichment](llms-document-enrich
 ### Query profiles
 
 In all the above you have sent parameters along with each query. It is worth
-mentioning that Vespa supports [query profiles](query-profiles.html), which are
+mentioning that Vespa supports [query profiles](querying/query-profiles.html), which are
 named collections of search parameters. This frees the client from having to
 manage and send a large number of parameters, and enables the request parameters
 for a use case to be changed without having to change the client.

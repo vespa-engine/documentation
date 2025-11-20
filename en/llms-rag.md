@@ -73,9 +73,9 @@ used as both query text for the document retrieval, and in the prompt sent to
 the LLM, as we will see below.
 
 Indeed, with the `RAGSearcher` you can use any type of [search in
-Vespa](query-api.html), including [text search based on
+Vespa](querying/query-api.html), including [text search based on
 BM25](learn/tutorials/text-search.html) and advanced [approximate vector
-search](approximate-nn-hnsw.html). This makes the retrieval part of
+search](querying/approximate-nn-hnsw). This makes the retrieval part of
 RAG very flexible.
 
 ### Controlling the prompt

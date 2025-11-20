@@ -461,7 +461,7 @@ field embedding type tensor&lt;float&gt;(d0[50]) {
             }
 }</pre>
 
-See [Nearest Neighbor Search](../../nearest-neighbor-search) for more
+See [Nearest Neighbor Search](../../querying/nearest-neighbor-search) for more
 information on nearest neighbor search and supported distance metrics in Vespa.
 
 We've included a script to create a feed suitable for Vespa:

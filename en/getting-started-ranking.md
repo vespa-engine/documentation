@@ -3,7 +3,7 @@
 title: "Getting started with ranking"
 ---
 
-Learn how [ranking](basics/ranking.html) works in Vespa by using the open [query API](query-api.html) of
+Learn how [ranking](basics/ranking.html) works in Vespa by using the open [query API](querying/query-api.html) of
 [vespa-documentation-search](https://github.com/vespa-cloud/vespa-documentation-search).
 In this article, find a set of queries invoking different `rank-profiles`, which is the ranking definition.
 
@@ -329,7 +329,7 @@ Read more in [first-phase](reference/schema-reference.html#firstphase-rank).
 
 ## Retrieval: AND, OR, weakAnd
 This guide will not go deep in query operators in the retrieval phase,
-see [query-api](query-api.html) for details.
+see [query-api](querying/query-api.html) for details.
 
 Consider a query like _"vespa documents about ranking and retrieval"_.
 A query AND-ing these terms hits less than 3% of the document corpus,

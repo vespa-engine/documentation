@@ -1,12 +1,14 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Nearest Neighbor Search"
+redirect_from:
+  - /en/nearest-neighbor-search
 ---
 
 Nearest neighbor search, or vector search, is a technique used
 to find the closest data points to a given query point in a high-dimensional vector space.
 This is supported in Vespa using the
-[nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator.
+[nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator.
 This operator can be combined with other filters or query terms using the
 [Vespa query language](query-language.html),
 making it easy to create hybrid solutions that combine modern vector based techniques with
@@ -61,7 +63,7 @@ $ vespa query 'select * from docs where {targetHits: 3}<span class="pre-hilite">
 
 </pre>
 The `nearestNeighbor` query operator will calculate values
-used by the [closeness()](reference/rank-features.html#closeness(dimension,name)) rank feature.
+used by the [closeness()](../reference/rank-features.html#closeness(dimension,name)) rank feature.
 {% include note.html content='closeness(`field`, d_vector)
 means that the closeness rank feature shall use the d_vector <span style="text-decoration: underline">field</span>.
 <br/><br/>
@@ -69,22 +71,22 @@ Applications can have multiple vector fields.
 These cases assign <span style="text-decoration: underline">labels</span> to the different `nearestNeighbor` operators,
 so the closeness() rank feature refers to the different operators (using different fields)
 See other examples of using closeness(`label`, q)
-in the [nearest neighbor search guide](nearest-neighbor-search-guide.html#using-label).' %}
+in the [nearest neighbor search guide](nearest-neighbor-search-guide#using-label).' %}
 
 Read more in this guide on tensor types, distance metrics, rank profiles
 and approximate nearest neighbor search.
 
 
 ## Vectors
-A vector is represented by a [tensor](tensor-user-guide.html) with one indexed dimension.
-Example [tensor type](reference/tensor.html#tensor-type-spec) representing a float vector with 384 dimensions:
+A vector is represented by a [tensor](../tensor-user-guide.html) with one indexed dimension.
+Example [tensor type](../reference/tensor.html#tensor-type-spec) representing a float vector with 384 dimensions:
 <pre>
 tensor&lt;float&gt;(x[384])
 </pre>
 
 Document vectors are stored in a
-[tensor field](reference/schema-reference.html#tensor)
-defined in the document [schema](reference/schema-reference.html).
+[tensor field](../reference/schema-reference.html#tensor)
+defined in the document [schema](../reference/schema-reference.html).
 A tensor type (dense) with one indexed dimension stores a single vector per document:
 <pre>
 field doc_embedding type tensor&lt;float&gt;(x[384]) {
@@ -100,7 +102,7 @@ field doc_embeddings type tensor&lt;float&gt;(m{},x[384]) {
 </pre>
 
 Similarly, the type of a query vector is defined in a
-[rank-profile](reference/schema-reference.html#rank-profile):
+[rank-profile](../reference/schema-reference.html#rank-profile):
 <pre>
 rank-profile my_profile {
     inputs {
@@ -110,7 +112,7 @@ rank-profile my_profile {
 }
 </pre>
 
-This all ties together with the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator
+This all ties together with the [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator
 that expects two arguments; the document tensor field name which is searched and the input query tensor name.
 The operator finds the documents that are closest to the query vector
 using the [distance-metric](#distance-metrics-for-nearest-neighbor-search) defined in the tensor field.
@@ -120,21 +122,21 @@ and the query can have multiple `nearestNeighbor` operators searching different 
 Support for using the `nearestNeighbor` operator with a mixed tensor with multiple vectors per document
 is available in {% include version.html version="8.144.19" %}.
 
-To learn how Vespa can create the vectors for you, see [embedding](embedding.html).
+To learn how Vespa can create the vectors for you, see [embedding](../embedding.html).
 
 
 ## Using nearest neighbor search
 The following sections demonstrates how to use the
-[nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator.
+[nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator.
 
 These examples use **exact** nearest neighbor search with perfect accuracy,
 but which is computationally expensive for large document volumes since 
 the distance metric must be calculated for every document that matches
 the boolean query filters.
-See also the [practical nearest neighbor search guide](nearest-neighbor-search-guide.html) for more examples.
+See also the [practical nearest neighbor search guide](nearest-neighbor-search-guide) for more examples.
 
 Exact nearest neighbor search scales close to linearly with
-[number of threads used per query](performance/practical-search-performance-guide.html#multithreaded-search-and-ranking).
+[number of threads used per query](../performance/practical-search-performance-guide#multithreaded-search-and-ranking).
 This can be used to make exact nearest neighbor search run with acceptable serving latency.
 Using more threads per search to reduce latency is still costly for larger vector volumes 
 or high query throughput applications, as the number of distance calculations
@@ -142,9 +144,9 @@ involved in the query does not change by changing number of threads performing t
 
 A cost-efficient approach is to use **approximate** search instead.
 See how to use **approximate** nearest neighbor search with `HNSW` in
-the [Approximate Nearest Neighbor Search](approximate-nn-hnsw.html) document.
+the [Approximate Nearest Neighbor Search](approximate-nn-hnsw) document.
 
-The following [document schema](basics/schemas.html) is used to illustrate Vespa's support for 
+The following [document schema](../basics/schemas.html) is used to illustrate Vespa's support for 
 vector search, or nearest neighbor search:
 
 <pre>
@@ -182,23 +184,23 @@ schema product {
 </pre>
 
 The `product` document schema has 4 fields.
-The fields of type [tensor](tensor-user-guide.html) represent vector embeddings:
+The fields of type [tensor](../tensor-user-guide.html) represent vector embeddings:
 
 - `text_embedding` - float vector with 384 dimensions.
 - `image_embeddings` - multiple float vectors with 512 dimensions.
 
 The `text_embedding` field stores a dense vectorized embedding representation
-of the product description and which use [prenormalized-angular](reference/schema-reference.html#distance-metric)
+of the product description and which use [prenormalized-angular](../reference/schema-reference.html#distance-metric)
 as `distance-metric`. See for example
 [Dense Retrieval using bi-encoders over Transformer models](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-2/).
 
 The `image_embeddings` field stores multiple dense vectorized embedding representations
-of the product images and which use [angular](reference/schema-reference.html#distance-metric)
+of the product images and which use [angular](../reference/schema-reference.html#distance-metric)
 as `distance-metric`.
 See for example [text to image search using CLIP with Vespa](https://blog.vespa.ai/text-image-search/).
 
 ### Distance metrics for nearest neighbor search
-Vespa supports six different [distance-metrics](reference/schema-reference.html#distance-metric):
+Vespa supports six different [distance-metrics](../reference/schema-reference.html#distance-metric):
 
 * `euclidean`
 * `angular`
@@ -216,7 +218,7 @@ It still makes sense to have the metric as a field-property,
 as the field values are often produced using a specific distance metric.
 
 ### Configure rank profiles for nearest neighbor search
-Lastly, one need to configure how to [rank](basics/ranking.html) products which 
+Lastly, one need to configure how to [rank](../basics/ranking.html) products which 
 are retrieved by the nearest neighbor search:
 
 <pre>
@@ -247,23 +249,23 @@ Skipping the query tensor definition will cause a query time error:
 Expected a tensor value of 'query(query_embedding)' but has [...]
 ```
 
-The `closeness(field, text_embedding)` is a [rank-feature](reference/rank-features.html#closeness(dimension,name))
-calculated by the [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator. 
+The `closeness(field, text_embedding)` is a [rank-feature](../reference/rank-features.html#closeness(dimension,name))
+calculated by the [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator. 
 This calculates a score in the range [0, 1], where 0 is infinite distance,
 and 1 is zero distance. This is convenient because Vespa sorts hits by decreasing relevancy score,
 and one usually want the closest hits to be ranked highest.
 
-The `closeness(field, image_embeddings)` [rank-feature](reference/rank-features.html#closeness(dimension,name))
+The `closeness(field, image_embeddings)` [rank-feature](../reference/rank-features.html#closeness(dimension,name))
 operators over a tensor field that stores multiple vectors per document.
 For each document, the vector that is closest to the query vector is used in the calculation.
 
-The `first-phase` is part of Vespa's [phased ranking](phased-ranking.html) support.
+The `first-phase` is part of Vespa's [phased ranking](../phased-ranking.html) support.
 Phased ranking enables re-ranking of the top-k best scoring hits as ranked
 or retrieved from the previous ranking phase. The computed ranking score is rendered as `relevance` in
-the default [Vespa JSON result format](reference/default-result-format.html). If the `relevance` field
+the default [Vespa JSON result format](../reference/default-result-format.html). If the `relevance` field
 of the hit becomes 0.0 one usually have forgotten to specify the correct ranking profile. 
 
-An example of a `rank-profile` also specifying an additional [re-ranking phase](phased-ranking.html):
+An example of a `rank-profile` also specifying an additional [re-ranking phase](../phased-ranking.html):
 <pre>
 rank-profile image_similarity_with_reranking {
     inputs {
@@ -279,22 +281,22 @@ rank-profile image_similarity_with_reranking {
 }
 </pre>
 In this case, hits retrieved by the
-[nearestNeighbor](reference/query-language-reference.html#nearestneighbor)
+[nearestNeighbor](../reference/query-language-reference.html#nearestneighbor)
 query operator are re-scored also using
 the product's popularity as a signal. The value of the `popularity` field can be read by the
- `attribute(popularity)` rank-feature. The `second-phase` [ranking expression](ranking-expressions-features.html)
+ `attribute(popularity)` rank-feature. The `second-phase` [ranking expression](../ranking-expressions-features.html)
 combines the popularity with the `closeness(field, image_embeddings)` rank-feature using multiplication.
 
 
 ## Indexing product data
 After deploying the application package with the document schema, you
-can [index](writing/reads-and-writes.html) the product data using the
-[Vespa JSON feed format](reference/document-json-format.html).
+can [index](../writing/reads-and-writes.html) the product data using the
+[Vespa JSON feed format](../reference/document-json-format.html).
 
 In the example below there are two documents.
 The vector embedding fields are using
-[indexed tensor short form](reference/document-json-format.html#tensor)
-and [mixed tensor short form](reference/document-json-format.html#tensor):
+[indexed tensor short form](../reference/document-json-format.html#tensor)
+and [mixed tensor short form](../reference/document-json-format.html#tensor):
 ```json
 [
     {
@@ -345,14 +347,14 @@ and [mixed tensor short form](reference/document-json-format.html#tensor):
 ```
 
 The above JSON formatted data can be fed to Vespa using any of the
-[Vespa feeding APIs](writing/reads-and-writes.html#api-and-utilities).
+[Vespa feeding APIs](../writing/reads-and-writes.html#api-and-utilities).
 
 ## Querying using nearestNeighbor query operator
-The [nearestNeighbor](reference/query-language-reference.html#nearestneighbor) query operator
+The [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator
 is used to search the product dataset.
 The operator expects two arguments; the document tensor field which is searched and the input query tensor name.
 
-The [targetHits](reference/query-language-reference.html#targethits)
+The [targetHits](../reference/query-language-reference.html#targethits)
 query annotation specifies the number of results to expose to `first-phase`
 ranking per content node involved in the query.
 `targetHits` is a required parameter and the query will fail if not specified.
@@ -389,20 +391,20 @@ The YQL query uses logical conjunction `and` to filter the `nearestNeighbor`
 by a constraint on the `in_stock` field. 
 
 The query request
-also specifies [hits](reference/query-api-reference.html#hits), which determines how
-many hits are returned to the client using the [JSON result format](reference/default-result-format.html). 
+also specifies [hits](../reference/query-api-reference.html#hits), which determines how
+many hits are returned to the client using the [JSON result format](../reference/default-result-format.html). 
 
 The total number of hits which is ranked by the ranking profile
 depends on the query filters and how fast the nearest neighbor search algorithm converges (for exact search).
 
-The [ranking.profile](reference/query-api-reference.html#ranking.profile) parameter 
+The [ranking.profile](../reference/query-api-reference.html#ranking.profile) parameter 
 controls which ranking profile is used.
 In this case, it simply ranks documents based on how close they are in the CLIP embedding space.
 
 
 ## Using Nearest Neighbor from a Searcher Component
 As with all query operators in Vespa, one can build the query tree programmatically
-in a custom [searcher component](searcher-development.html).
+in a custom [searcher component](../searcher-development.html).
 See
 [Centroids](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-image-search/src/main/java/ai/vespa/examples/Centroids.java)
 in [Billion-Scale Image Search](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search)
@@ -431,7 +433,7 @@ rank-profile hamming-nn {
 
 Hamming distance search over binary vectors is implemented with xor and pop count cpu instructions.
 The rank-profile specifies 
-[num-threads-per-search](reference/schema-reference.html#num-threads-per-search) to 
+[num-threads-per-search](../reference/schema-reference.html#num-threads-per-search) to 
 reduce serving latency (but not cost).
 
 See the [Billion Scale Vector Search with Vespa](https://blog.vespa.ai/billion-scale-knn-part-two/)

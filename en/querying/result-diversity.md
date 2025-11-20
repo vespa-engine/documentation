@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Result Diversity"
+redirect_from:
+  - /en/result-diversity
 ---
 
 In Search and Recommendation applications, the highest-ranking documents are displayed to the user.
@@ -22,12 +24,12 @@ this guide outlines strategies and tradeoffs to create good-looking result sets.
 
 
 ## Diversity
-You can use the [diversity](/en/reference/schema-reference.html#diversity) element in the schema definition
+You can use the [diversity](../reference/schema-reference.html#diversity) element in the schema definition
 to filter out non-diverse results before second-phase ranking (and during match-phase if used):
 
-* The [attribute](/en/reference/schema-reference.html#diversity-attribute) value is the name of the attribute field
+* The [attribute](../reference/schema-reference.html#diversity-attribute) value is the name of the attribute field
   that holds the value to diversify over (think of the domain in the example above).
-* [min-groups](/en/reference/schema-reference.html#diversity-min-groups) is the minimum number of different values
+* [min-groups](../reference/schema-reference.html#diversity-min-groups) is the minimum number of different values
   of that attribute that should be included in the result set (when available).
 
 Example:
@@ -81,7 +83,7 @@ and means the second phase will be used to pick the best result also in each gro
 ## Match-phase diversity
 Diversity above runs over the result after first-phase ranking.
 
-The [match-phase](/en/reference/schema-reference.html#match-phase) feature lets you increase performance
+The [match-phase](../reference/schema-reference.html#match-phase) feature lets you increase performance
 by limiting hits exposed to first-phase ranking to the highest (lowest) values of some attribute.
 Adding the diversity element when using match-phase means that the diversity field attribute
 is also used to produce the set of matches returned from the match-phase attribute.
@@ -118,9 +120,9 @@ rank-profile diverse_example {
 
 ## Collapsefield
 The final processing before returning a result happens in a container node -
-refer to [query execution](/en/query-api.html#query-execution) for details.
+refer to [query execution](query-api.html#query-execution) for details.
 
-Setting the [collapsefield](/en/reference/query-api-reference.html#collapsefield) parameter
+Setting the [collapsefield](../reference/query-api-reference.html#collapsefield) parameter
 lets you filter out hits which have the same value for one or more fields as a higher-ranked hit.
 
 Using collapsefield is a cheap option when results only contains a small number of duplicates on average,

@@ -206,7 +206,7 @@ tensor that we defined in the ranking profile.
 }{% endhighlight %}</pre>
 
 The retriever (query + first-phase ranking) can be anything, including 
-[nearest neighbor search](nearest-neighbor-search.html) a.k.a. dense retrieval using bi-encoders.
+[nearest neighbor search](querying/nearest-neighbor-search) a.k.a. dense retrieval using bi-encoders.
 
 ## Performance
 There are three major scaling dimensions:

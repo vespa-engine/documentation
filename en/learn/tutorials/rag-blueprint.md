@@ -464,7 +464,7 @@ app
 └── services.xml
 ```
 
-You can see that we have separated the [query profiles](../../query-profiles.html), 
+You can see that we have separated the [query profiles](../../querying/query-profiles.html), 
 and [rank profiles](../../basics/ranking.html#rank-profiles) into their own directories.
 
 ### Manage queries in query profiles
@@ -757,7 +757,7 @@ For this sample application, we set up an evaluation script that compares three 
 
 {% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both 
 [filter clauses](../../reference/query-language-reference.html#where), [grouping](../../grouping), 
-[predicates](../../predicate-fields.html), [geosearch](../../geo-search) etc. to support your specific use cases." %}
+[predicates](../../querying/predicate-fields.html), [geosearch](../../geo-search) etc. to support your specific use cases." %}
 
 It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster.
 
@@ -971,7 +971,7 @@ In general, you have these options if you want to increase recall:
 
 1. Increase `targetHits` in your retrieval operators (e.g., `nearestNeighbor`, `weakAnd`).
 2. Improve your embedding model (use a better model or finetune it on your data).
-3. You can also consider tuning HNSW parameters, see [docs on HNSW](../../approximate-nn-hnsw#using-vespas-approximate-nearest-neighbor-search).
+3. You can also consider tuning HNSW parameters, see [docs on HNSW](../../querying/approximate-nn-hnsw#using-vespas-approximate-nearest-neighbor-search).
 
 Conversely, if you want to reduce the latency of one of your retrieval 'arms' at the cost of a small trade-off in recall, you can:
 
