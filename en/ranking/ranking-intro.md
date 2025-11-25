@@ -403,5 +403,6 @@ ToDo, next steps:
 -->
 
 ## Next steps
+* 
 * Read more about custom re-ranking of the final result set in
-  [reranking in searcher](reranking-in-searcher.md).
+  [reranking in searcher](reranking-in-searcher).

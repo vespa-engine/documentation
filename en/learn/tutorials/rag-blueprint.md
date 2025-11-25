@@ -1415,9 +1415,9 @@ This collects approximately 194 features, providing a rich feature set for train
 ### Training a GBDT model for second-phase ranking
 
 With the expanded feature set, we can train a Gradient Boosted Decision Tree (GBDT) model to predict document relevance. 
-We use [LightGBM](../../ranking/lightgbm.md) for this purpose. 
+We use [LightGBM](../../ranking/lightgbm) for this purpose. 
 
-Vespa also supports [XGBoost](../../ranking/xgboost.md) and [ONNX](../../ranking/onnx.md) models.
+Vespa also supports [XGBoost](../../ranking/xgboost) and [ONNX](../../ranking/onnx) models.
 
 To train the model, run the following command ([link to training script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_lightgbm.py)):
 

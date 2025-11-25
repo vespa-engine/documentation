@@ -43,7 +43,7 @@ see [document features](../reference/rank-features.html#document-features).
 
 ### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
-see [retrieval and ranking](../ranking/ranking-intro.md#retrieval-and-ranking). Example:
+see [retrieval and ranking](../ranking/ranking-intro#retrieval-and-ranking). Example:
 <pre>
 rank-profile drop-low-score {
    function my_score() {

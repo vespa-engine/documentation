@@ -379,8 +379,8 @@ we could use a machine learned function with these as feature inputs.
 
 Ultimately, these features are computed in real-time for every news article during ranking. 
 These features can then be added to any machine-learned ranking model.
-Vespa supports gradient-boosted trees from [XGBoost](../../ranking/xgboost.md) and [LightGBM](../../ranking/lightgbm.md),
-and also neural networks in [ONNX](../../ranking/onnx.md) format,
+Vespa supports gradient-boosted trees from [XGBoost](../../ranking/xgboost) and [LightGBM](../../ranking/lightgbm),
+and also neural networks in [ONNX](../../ranking/onnx) format,
 exported from popular ML frameworks like
 [PyTorch](https://pytorch.org/) and [Tensorflow](https://www.tensorflow.org/).
 

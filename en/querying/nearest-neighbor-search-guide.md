@@ -1290,7 +1290,7 @@ the distance threshold should be calibrated based on the query complexity
 and possibly also the feature distributions of the returned top-k hits. 
 Having the `distance` rank feature returned as `match-features`, 
 enables post-processing of the result using a custom 
-[re-ranking/filtering searcher](../ranking/reranking-in-searcher.md). 
+[re-ranking/filtering searcher](../ranking/reranking-in-searcher). 
 The post-processing searcher can analyze the score distributions of the returned top-k hits
 (using the features returned with `match-features`), 
 remove low scoring hits before presenting the result to the end user, 
