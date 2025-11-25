@@ -7,7 +7,7 @@ redirect_from:
 
 This guide demonstrates how to deploy a [searcher](../searcher-development.html) 
 implementing a last stage of [phased ranking](phased-ranking.html). The searcher re-ranks the 
-global top 200 documents which have been ranked by the content nodes using the configurable [ranking](ranking-intro.md)
+global top 200 documents which have been ranked by the content nodes using the configurable [ranking](ranking-intro)
 specification in the document [schema(s)](../basics/schemas.html).  
 
 The reranking searcher uses [multiphase searching](../searcher-development.html#multiphase-searching):

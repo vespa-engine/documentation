@@ -483,8 +483,8 @@ as we move on to more complex models.
 In this tutorial we have looked at using a simple *linear* ranking function. 
 Vespa integrates with several popular machine learning libraries which can be used for Machine Learned Ranking: 
 
- - [Ranking with XGBoost Models](../../ranking/xgboost.md) 
- - [Ranking with LightGBM Models](../../ranking/lightgbm.md) 
- - [Ranking with ONNX Models](../../ranking/onnx.md) 
+ - [Ranking with XGBoost Models](../../ranking/xgboost) 
+ - [Ranking with LightGBM Models](../../ranking/lightgbm) 
+ - [Ranking with ONNX Models](../../ranking/onnx) 
 
 <script src="/js/process_pre.js"></script>
