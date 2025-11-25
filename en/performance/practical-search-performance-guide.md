@@ -473,7 +473,7 @@ The above example searches for *total AND eclipse AND of AND the AND heart* in t
 which in the schema includes the `title` and `artist` fields. 
 Since the request did not specify any [ranking](../basics/ranking.html) parameters,
 the matched documents were ranked by Vespa's default 
-text rank feature: [nativeRank](../nativerank.html).
+text rank feature: [nativeRank](../ranking/nativerank.html).
 
 The result output for the above query:
 
@@ -539,7 +539,7 @@ requires more query compute resources than type `all`.
 
 There is an algorithmic optimization available for `type=any` queries, using
 the `weakAnd` query operator which implements the WAND algorithm. 
-See the [using wand with Vespa](../using-wand-with-vespa.html) for an 
+See the [using wand with Vespa](../ranking/wand.html) for an 
 introduction to the algorithm.
 
 Run the same query, but instead of `type=any` use `type=weakAnd`:
@@ -944,7 +944,7 @@ by 75%.
 
 ## Multi-valued query operators
 
-This section covers [multi-value query operators](../multivalue-query-operators.html) 
+This section covers [multi-value query operators](../ranking/multivalue-query-operators.html) 
 and their query performance characteristics. Many real-world search and recommendation use cases 
 involve structured multivalued queries.
 
@@ -1129,7 +1129,7 @@ For larger document collections, the *wand* query operator can significantly
 improve query performance compared to `dotProduct`. 
 
 *wand* is a  query operator which performs matching and ranking interleaved and skips documents
-which cannot make it into the top-k results. [Using wand with Vespa](../using-wand-with-vespa.html)
+which cannot make it into the top-k results. [Using wand with Vespa](../ranking/wand.html)
 guide has more details on the WAND algorithm.
 
 Finally, these multi-value query operators work on both single-valued fields and array fields,
@@ -1140,8 +1140,8 @@ covers tensors that support more floating point number types.
 ## Tensor computations
 The previous sections covered matching and ranking where query matching query operators
 also produced rank features which could be used to influence the order of the hits returned. 
-In this section we look at ranking with [tensor computations](../tensor-examples.html) 
-using [tensor expressions](../tensor-user-guide.html). 
+In this section we look at ranking with [tensor computations](../ranking/tensor-examples.html) 
+using [tensor expressions](../ranking/tensor-user-guide.html). 
 
 Tensor computations can be used to calculate dense dot products, sparse
 dot products, matrix multiplication, neural networks and more. Tensor computations can be performed 
@@ -1303,7 +1303,7 @@ rank-profile similar {
 }
 </pre>
 
-See [tensor user guide](../tensor-user-guide.html) for more on tensor fields and tensor computations
+See [tensor user guide](../ranking/tensor-user-guide.html) for more on tensor fields and tensor computations
 with Vespa. Adding this `rank-profile` to the document schema:
 
 <pre data-test="file" data-path="app/schemas/track.sd">

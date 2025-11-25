@@ -8,7 +8,7 @@ redirect_from:
  This guide is a practical introduction to using Vespa nearest neighbor search query operator and how to combine nearest
  neighbor search with other Vespa query operators. The guide uses Vespa's [embedding](../embedding.html)
  support to map text to vectors. The guide also covers diverse, efficient candidate retrievers 
- which can be used as candidate retrievers in a [multiphase ranking](../phased-ranking.html) funnel. 
+ which can be used as candidate retrievers in a [multiphase ranking](../ranking/phased-ranking.html) funnel. 
 
  The guide uses the [Last.fm](http://millionsongdataset.com/lastfm/) tracks dataset for illustration. 
  Latency numbers mentioned in the guide are obtained from running this guide on a M1.
@@ -594,7 +594,7 @@ $ vespa query -v 'yql=select ..'
 </pre>
 
 The first example is searching and ranking using the `bm25` rank profile defined in the schema.
-It uses the [bm25](../reference/bm25.html) rank feature as the `first-phase` relevance score:
+It uses the [bm25](../ranking/bm25.html) rank feature as the `first-phase` relevance score:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -681,7 +681,7 @@ Type `any` queries requires more compute resources than type `all`.
 
 There is an optimization available for `type=any` queries, using
 the `weakAnd` query operator which implements the WAND algorithm. 
-See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details. 
+See the [using wand with Vespa](../ranking/wand.html) guide for more details. 
 
 Run the same query, but instead of `type=any` use `type=weakAnd`, 
 see [supported query types](../reference/query-api-reference.html#model.type):
@@ -810,7 +810,7 @@ The `wand` query operator is safe, meaning, it returns the same top-k results as
 the brute-force `dotProduct` query operator. `wand` is a type of query operator which
 performs matching and ranking interleaved and skipping documents
 which cannot compete into the final top-k results. 
-See the [using wand with Vespa](../using-wand-with-vespa.html) guide for more details on 
+See the [using wand with Vespa](../ranking/wand.html) guide for more details on 
 using `wand` and `weakAnd` query operators. 
 
 ## Exact nearest neighbor search
@@ -842,7 +842,7 @@ in the `rank-profile`.
 - `input.query(q)` is the query vector produced by the [embedder](../embedding.html#embedding-a-query-text).
 
 Not specifying [ranking](../reference/query-api-reference.html#ranking.profile) will cause
-Vespa to use [nativeRank](../nativerank.html) which does not use the vector similarity, causing
+Vespa to use [nativeRank](../ranking/nativerank.html) which does not use the vector similarity, causing
 results to be randomly sorted. 
 
 The above exact nearest neighbor search will return the following
@@ -1087,7 +1087,7 @@ field popularity type int {
 
 Matching against the popularity field does not influence ranking, and Vespa can use the most efficient posting
 list representation. Note that one can still access the value of
-the `popularity` attribute in [ranking expressions](../ranking-expressions-features.html). 
+the `popularity` attribute in [ranking expressions](../ranking/ranking-expressions-features.html). 
 
 <pre>
 rank-profile popularity {
@@ -1290,7 +1290,7 @@ the distance threshold should be calibrated based on the query complexity
 and possibly also the feature distributions of the returned top-k hits. 
 Having the `distance` rank feature returned as `match-features`, 
 enables post-processing of the result using a custom 
-[re-ranking/filtering searcher](../reranking-in-searcher.html). 
+[re-ranking/filtering searcher](../ranking/reranking-in-searcher.md). 
 The post-processing searcher can analyze the score distributions of the returned top-k hits
 (using the features returned with `match-features`), 
 remove low scoring hits before presenting the result to the end user, 
@@ -1301,7 +1301,7 @@ In the previous filtering examples the ranking was not impacted by the filters.
 They were only used to impact recall, not the order of the results. The following examples
 demonstrate how to perform hybrid retrieval combining the efficient query operators in
 a single query. Hybrid retrieval can be used as the first phase in a multiphase ranking funnel, see 
-Vespa's [phased ranking](../phased-ranking.html).
+Vespa's [phased ranking](../ranking/phased-ranking.html).
 
 The first query example combines the `nearestNeighbor` operator with the `weakAnd` operator,
 combining them using logical disjunction (`OR`). This type of query enables retrieving
@@ -1726,7 +1726,7 @@ The `weakAnd` query operator exposes more hits to ranking than approximate neare
 to the `wand` query operator. Generally, using the `rank` query operator is more efficient than combining
 query retriever operators using `or`. See also the 
 [Vespa passage ranking](https://github.com/vespa-engine/sample-apps/blob/master/msmarco-ranking/)
-for complete examples of different retrieval strategies for [multiphase ranking](../phased-ranking.html) funnels.
+for complete examples of different retrieval strategies for [multiphase ranking](../ranking/phased-ranking.html) funnels.
 
 One can also use the `rank` operator to first retrieve by some filter logic, and compute distance or similarity for the retrieved documents.
 

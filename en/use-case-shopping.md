@@ -131,7 +131,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     Native embedders are used to map the textual query and document representations 
     into dense high dimensional vectors which are used for semantic search. The application
     uses an open-source embedding model and inference is performed using 
-    [stateless model evaluation](stateless-model-evaluation.html), both during
+    [stateless model evaluation](ranking/stateless-model-evaluation.html), both during
     document and query processing. 
 
 * [Vector search](querying/nearest-neighbor-search)

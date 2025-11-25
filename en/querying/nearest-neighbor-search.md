@@ -78,7 +78,7 @@ and approximate nearest neighbor search.
 
 
 ## Vectors
-A vector is represented by a [tensor](../tensor-user-guide.html) with one indexed dimension.
+A vector is represented by a [tensor](../ranking/tensor-user-guide.html) with one indexed dimension.
 Example [tensor type](../reference/tensor.html#tensor-type-spec) representing a float vector with 384 dimensions:
 <pre>
 tensor&lt;float&gt;(x[384])
@@ -184,7 +184,7 @@ schema product {
 </pre>
 
 The `product` document schema has 4 fields.
-The fields of type [tensor](../tensor-user-guide.html) represent vector embeddings:
+The fields of type [tensor](../ranking/tensor-user-guide.html) represent vector embeddings:
 
 - `text_embedding` - float vector with 384 dimensions.
 - `image_embeddings` - multiple float vectors with 512 dimensions.
@@ -259,13 +259,13 @@ The `closeness(field, image_embeddings)` [rank-feature](../reference/rank-featur
 operators over a tensor field that stores multiple vectors per document.
 For each document, the vector that is closest to the query vector is used in the calculation.
 
-The `first-phase` is part of Vespa's [phased ranking](../phased-ranking.html) support.
+The `first-phase` is part of Vespa's [phased ranking](../ranking/phased-ranking.html) support.
 Phased ranking enables re-ranking of the top-k best scoring hits as ranked
 or retrieved from the previous ranking phase. The computed ranking score is rendered as `relevance` in
 the default [Vespa JSON result format](../reference/default-result-format.html). If the `relevance` field
 of the hit becomes 0.0 one usually have forgotten to specify the correct ranking profile. 
 
-An example of a `rank-profile` also specifying an additional [re-ranking phase](../phased-ranking.html):
+An example of a `rank-profile` also specifying an additional [re-ranking phase](../ranking/phased-ranking.html):
 <pre>
 rank-profile image_similarity_with_reranking {
     inputs {
@@ -284,7 +284,7 @@ In this case, hits retrieved by the
 [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor)
 query operator are re-scored also using
 the product's popularity as a signal. The value of the `popularity` field can be read by the
- `attribute(popularity)` rank-feature. The `second-phase` [ranking expression](../ranking-expressions-features.html)
+ `attribute(popularity)` rank-feature. The `second-phase` [ranking expression](../ranking/ranking-expressions-features.html)
 combines the popularity with the `closeness(field, image_embeddings)` rank-feature using multiplication.
 
 

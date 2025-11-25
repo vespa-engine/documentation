@@ -1,19 +1,21 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Re-ranking using a custom Searcher"
+redirect_from:
+  - /en/reranking-in-searcher
 ---
 
-This guide demonstrates how to deploy a [stateless searcher](searcher-development.html) 
+This guide demonstrates how to deploy a [searcher](../searcher-development.html) 
 implementing a last stage of [phased ranking](phased-ranking.html). The searcher re-ranks the 
-global top 200 documents which have been ranked by the content nodes using the configurable [ranking](basics/ranking.html)
-specification in the document [schema(s)](basics/schemas.html).  
+global top 200 documents which have been ranked by the content nodes using the configurable [ranking](ranking-intro.md)
+specification in the document [schema(s)](../basics/schemas.html).  
 
-The reranking searcher uses [multiphase searching](searcher-development.html#multiphase-searching):
+The reranking searcher uses [multiphase searching](../searcher-development.html#multiphase-searching):
 
 **Matching query protocol phase:** The matching protocol phase which asks each content node involved in the query
 to return the locally best ranking hits (ranked by the configurable ranking expressions defined in the schema).
 This matching query protocol phase can include several ranking phases which are executed per content node. 
-In the query protocol phase the content nodes can also return [match-features](reference/schema-reference.html#match-features) which
+In the query protocol phase the content nodes can also return [match-features](../reference/schema-reference.html#match-features) which
 a re-ranking searcher can use to re-rank results (or feature logging). 
 In the custom searcher one is working on the global best ranking hits from the content nodes, and
 can have access to aggregated features which is calculated across the top-ranking documents (the global best documents).
@@ -24,9 +26,9 @@ the searcher would need to call `execution.fill` before the re-ranking logic,
 this would then cost more resources
 than just using `match-features` which is delivered in the first protocol matching phase.
 If one needs access to a subset of fields during stateless re-ranking,
-consider configuring a dedicated [document summary](querying/document-summaries.html).
+consider configuring a dedicated [document summary](../querying/document-summaries.html).
 
-See also [life of a query in Vespa](performance/sizing-search.html#life-of-a-query-in-vespa).
+See also [life of a query in Vespa](../performance/sizing-search.html#life-of-a-query-in-vespa).
 
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li><a href="https://openjdk.org/projects/jdk/17/" data-proofer-ignore>Java 17</a>.</li>
@@ -43,7 +45,7 @@ To define the Vespa app package using our custom reranking searcher, four files 
 - [pom.xml](https://maven.apache.org/guides/introduction/introduction-to-the-pom.html)
 
 Start by defining a simple schema with two fields.
-We also define a rank profile with two [rank features](reference/rank-features.html)
+We also define a rank profile with two [rank features](../reference/rank-features.html)
 to be used in the searcher for re-ranking:
 
 <pre data-test="file" data-path="my-app/src/main/application/schemas/doc.sd"> 
@@ -129,9 +131,9 @@ public class ReRankingSearcher extends Searcher {
 }
 </pre>
 
-[services.xml](reference/services.html) is needed 
-to make up a Vespa [application package](reference/application-packages-reference.html). 
-Here we include the custom searcher in the `default` [search chain](components/chained-components.html):
+[services.xml](../reference/services.html) is needed 
+to make up a Vespa [application package](../reference/application-packages-reference.html). 
+Here we include the custom searcher in the `default` [search chain](../components/chained-components.html):
 
 <pre data-test="file" data-path="my-app/src/main/application/services.xml">
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
@@ -201,7 +203,7 @@ $ docker run --detach --name vespa --hostname vespa-container \
 </pre>
 </div>
 
-Install [vespa-cli](clients/vespa-cli.html) using Homebrew:
+Install [vespa-cli](../clients/vespa-cli.html) using Homebrew:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

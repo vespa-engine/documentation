@@ -1,18 +1,22 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Ranking With Transformer Cross-Encoder Models"
+redirect_from:
+  - /en/cross-encoders
 ---
 
 [Cross-Encoder Transformer](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-4/) 
-based text ranking models are generally more effective than [text embedding](embedding.html) models
+based text ranking models are generally more effective than [text embedding](../embedding.html) models
 as they take both the query and the document as input with full cross-attention between all the query and document tokens. 
 
 The downside of cross-encoder models is the computational complexity. This document is a guide
 on how to export cross-encoder Transformer based models from [huggingface](https://huggingface.co/), 
 and how to configure them for use in Vespa. 
 
+
 ## Exporting cross-encoder models 
-For exporting models from HF to [ONNX](onnx.html), we recommend the [Optimum](https://huggingface.co/docs/optimum/main/en/index)
+
+For exporting models from HF to [ONNX](onnx), we recommend the [Optimum](https://huggingface.co/docs/optimum/main/en/index)
 library. Example usage for two relevant ranking models.
 
 Export [intfloat/simlm-msmarco-reranker](https://huggingface.co/intfloat/simlm-msmarco-reranker), which is
@@ -30,7 +34,7 @@ $ optimum-cli export onnx --task text-classification -m BAAI/bge-reranker-base r
 </pre>
 
 These two example ranking models use different 
-language model [tokenization](reference/embedding-reference.html#huggingface-tokenizer-embedder) and also
+language model [tokenization](../reference/embedding-reference.html#huggingface-tokenizer-embedder) and also
 different transformer inputs.
 
 After the above Optimum export command you have two important
@@ -45,10 +49,11 @@ files that is needed for importing the model to Vespa:
 The Optimum tool also supports various Transformer optimizations, including quantization to 
 optimize the model for faster inference. 
 
+
 ## Importing ONNX and tokenizer model files to Vespa
 
 Add the generated `model.onnx` and `tokenizer.json` files from the `ranker` directory 
-created by Optimum to the Vespa [application package](basics/applications.html):
+created by Optimum to the Vespa [application package](../basics/applications.html):
 
 <pre>
 ├── models
@@ -59,9 +64,11 @@ created by Optimum to the Vespa [application package](basics/applications.html):
 └── services.xml
 </pre>
 
+
 ## Configure tokenizer embedder
+
 To speed up inference, Vespa avoids re-tokenizing the document tokens, so we need to configure the 
-[huggingface-tokenizer-embedder](reference/embedding-reference.html#huggingface-tokenizer-embedder) 
+[huggingface-tokenizer-embedder](../reference/embedding-reference.html#huggingface-tokenizer-embedder) 
 in the `services.xml` file:
 
 <pre>
@@ -76,6 +83,7 @@ in the `services.xml` file:
 
 This allows us to use the tokenizer while indexing documents in Vespa and also at query time to
 map (embed) query text to language model tokens.
+
 
 ## Using tokenizer in schema
 Assuming we have two fields that we want to index and use for re-ranking (title, body), we
@@ -94,7 +102,7 @@ schema my_document {
 
 The above will concat the title and body input document fields, and input to the 
 `hugging-face-tokenizer` tokenizer which saves the output tokens as float (101.0).  
-To use the generated `tokens` tensor in ranking, the tensor field must be defined with [attribute](attributes.html).
+To use the generated `tokens` tensor in ranking, the tensor field must be defined with [attribute](../attributes.html).
 
 ## Using the cross-encoder model in ranking
 Cross-encoder models are not practical for *retrieval* over large document volumes due to their complexity, so we configure them
@@ -108,11 +116,11 @@ Bert-based models have three inputs:
 - attention_mask
 
 
-The [onnx-model](reference/schema-reference.html#onnx-model) configuration specifies the input names
+The [onnx-model](../reference/schema-reference.html#onnx-model) configuration specifies the input names
 of the model and how to calculate them. It also specifies the file `models/model.onnx`.
-Notice also the [GPU](/en/operations-selfhosted/vespa-gpu-container.html).
-GPU inference is not required, and Vespa will fallback to CPU if no GPU device is found.
-See section on [performance](#performance).
+Notice also the [GPU](../operations-selfhosted/vespa-gpu-container.html).
+GPU inference is not required, and Vespa will fall back to CPU if no GPU device is found.
+See the section on [performance](#performance).
 
 <pre>
 rank-profile bert-ranker inherits default {
@@ -150,12 +158,14 @@ rank-profile bert-ranker inherits default {
 }</pre>
 
 The example above limits the sequence length to `256` using the built-in 
-[convenience functions](reference/rank-features.html#tokenInputIds(length,%20input_1,%20input_2,%20...)) 
+[convenience functions](../reference/rank-features.html#tokenInputIds(length,%20input_1,%20input_2,%20...)) 
 for generating token sequence input to Transformer models. Note that `tokenInputIds` uses 101 as start of sequence
 and 102 as padding. This is only compatible with BERT-based tokenizers. See section on [performance](#performance)
 about sequence length and impact on inference performance.
 
+
 ### Roberta-based model
+
 ROBERTA-based models only have two inputs (input_ids and attention_mask). In addition, the default tokenizer
 start of sequence token is 1 and end of sequence is 2. In this case we use the
 `customTokenInputIds` function in `my_input_ids` function. See
@@ -191,8 +201,10 @@ rank-profile roberta-ranker inherits default {
     }
 }</pre>
 
+
 ## Using the cross-encoder model at query time 
-At query time, we need to tokenize the user query using the [embed](embedding.html#embedding-a-query-text) support. 
+
+At query time, we need to tokenize the user query using the [embed](../embedding.html#embedding-a-query-text) support. 
 
 The `embed` of the query text, sets the `query(q_tokens)`
 tensor that we defined in the ranking profile.
@@ -206,12 +218,14 @@ tensor that we defined in the ranking profile.
 }{% endhighlight %}</pre>
 
 The retriever (query + first-phase ranking) can be anything, including 
-[nearest neighbor search](querying/nearest-neighbor-search) a.k.a. dense retrieval using bi-encoders.
+[nearest neighbor search](../querying/nearest-neighbor-search) a.k.a. dense retrieval using bi-encoders.
+
 
 ## Performance
+
 There are three major scaling dimensions:
 
-- The number of hits that are re-ranked [rerank-count](reference/schema-reference.html#globalphase-rerank-count) Complexity is linear with the number of hits that are re-ranked.
+- The number of hits that are re-ranked [rerank-count](../reference/schema-reference.html#globalphase-rerank-count) Complexity is linear with the number of hits that are re-ranked.
 - The size of the transformer model used.
 - The sequence input length. Transformer models scales quadratic with the input sequence length.
 
@@ -219,15 +233,17 @@ For models larger than 30-40M parameters, we recommend using GPU to accelerate i
 Quantization of model weights can drastically improve serving efficiency on CPU. See
 [Optimum Quantization](https://huggingface.co/docs/optimum/onnxruntime/usage_guides/quantization)
 
+
 ## Examples
 
 The [MS Marco](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking)
 sample application demonstrates using cross-encoders. 
 
 ## Using cross-encoders with multi-vector indexing
+
 When using [multi-vector indexing](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/) 
 we can do the following to feed the best (closest) paragraph using the 
-[closest()](reference/rank-features.html#closest(name)) feature into re-ranking with the cross-encoder model. 
+[closest()](../reference/rank-features.html#closest(name)) feature into re-ranking with the cross-encoder model. 
 
 <pre>
 schema my_document {

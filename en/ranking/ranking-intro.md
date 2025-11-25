@@ -1,20 +1,22 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: "Getting started with ranking"
+title: "Introduction to ranking"
+redirect_from:
+  - /en/getting-started-ranking.html
 ---
 
-Learn how [ranking](basics/ranking.html) works in Vespa by using the open [query API](querying/query-api.html) of
+Learn how [ranking](../basics/ranking.html) works in Vespa by using the open [query API](../querying/query-api.html) of
 [vespa-documentation-search](https://github.com/vespa-cloud/vespa-documentation-search).
 In this article, find a set of queries invoking different `rank-profiles`, which is the ranking definition.
 
 Ranking is the user-defined computation that scores documents to a query,
 here configured in [doc.sd](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd),
-also see [schema documentation](basics/schemas.html).
+also see [schema documentation](../basics/schemas.html).
 This schema has a set of (contrived) ranking functions, to help learn Vespa ranking.
 
 
-
 ## Ranking using document features only
+
 Let's start with something simple: _Irrespective of the query, score all documents by the number of in-links to it_.
 That is, for any query, return the documents with most in-links first in the result set (these queries are clickable!):
 
@@ -38,13 +40,13 @@ rank-profile inlinks {
 Count the number of entries in `inlinks` in the result and compare with `relevance` - it will be the same.
 Observe that the ranking expression does not use any features from the query,
 it only uses `attribute(inlinks).count`,
-which is a [document feature](reference/rank-features.html#document-features).
-
+which is a [document feature](../reference/rank-features.html#document-features).
 
 
 ## Observing values used in ranking
+
 When developing ranking expressions, it is useful to observe the input values.
-Output the input values using [summary-features](reference/schema-reference.html#summary-features).
+Output the input values using [summary-features](../reference/schema-reference.html#summary-features).
 In this experiment, we will use another rank function, still counting in-links but scoring older documents lower:
 
 
@@ -53,8 +55,8 @@ In this experiment, we will use another rank function, still counting in-links b
 </p>
 
 Notes:
-* use of the `now` [ranking feature](reference/rank-features.html)
-* use `pow`, a mathematical function in [ranking expressions](reference/ranking-expressions.html)
+* use of the `now` [ranking feature](../reference/rank-features.html)
+* use `pow`, a mathematical function in [ranking expressions](../reference/ranking-expressions.html)
 * use of constants and functions to write better code
 
 <a class="querystring-x">yql=select * from doc where true&ranking=inlinks_age</a>
@@ -112,11 +114,12 @@ Using `summary-features` makes it easy to validate and develop the ranking expre
 
 
 ## Ranking with query features
+
 Let's assume we want to find similar documents, and we define document similarity as having the same number of words.
 From most perspectives, this is a poor similarity function, better functions are described later.
 
 The documents have a `term_count` field -
-so let's add an [input.query()](reference/query-api-reference.html#ranking.features) for term count:
+so let's add an [input.query()](../reference/query-api-reference.html#ranking.features) for term count:
 
 <a class="querystring-x">yql=select * from doc where true;&ranking=term_count_similarity&input.query(q_term_count)=1000</a>
 
@@ -152,13 +155,13 @@ The key learning here is how to transfer ranking features in the query, using `i
 Use different names for more query features.
 
 
-
 ## Ranking with a query tensor
+
 Another similarity function can be overlap in in-links.
-We will map the inlinks [weightedset](reference/schema-reference.html#weightedset) into a
-[tensor](reference/schema-reference.html#tensor),
+We will map the inlinks [weightedset](../reference/schema-reference.html#weightedset) into a
+[tensor](../reference/schema-reference.html#tensor),
 query with a tensor of same type and create a scalar using a tensor product as the rank score.
-We use a [mapped](reference/tensor.html#general-literal-form) query tensor,
+We use a [mapped](../reference/tensor.html#general-literal-form) query tensor,
 where the document name is the address in the tensor, using a value of 1 for each in-link:
 ```
 {
@@ -169,10 +172,10 @@ where the document name is the address in the tensor, using a value of 1 for eac
 ```
 
 {% include important.html content="Vespa cannot know the query tensor type from looking at it -
-it must be configured using [inputs](reference/schema-reference.html#inputs)."%}
+it must be configured using [inputs](../reference/schema-reference.html#inputs)."%}
 
 As the in-link data is represented in a weightedset,
-we use the [tensorFromWeightedSet](reference/rank-features.html#document-features)
+we use the [tensorFromWeightedSet](../reference/rank-features.html#document-features)
 rank feature to transform it into a tensor named _links_:
 <pre>
 rank-profile inlink_similarity  {
@@ -245,20 +248,20 @@ sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
 
 Notes:
 * Query tensors can grow large.
-  Applications will normally create the tensor in code using a [Searcher](searcher-development.html),
+  Applications will normally create the tensor in code using a [Searcher](../searcher-development.html),
   also see [example](ranking-expressions-features.html#query-feature-types).
 * Here the document tensor is created from a weighted set -
   a better way would be to store this in a tensor in the document to avoid the transformation.
 
 
-
 ## Retrieval and ranking
+
 So far in this guide, we have run the ranking function over _all_ documents.
 This is a valid use case for many applications.
 However, ranking documents is generally CPU-expensive,
 optimizing by reducing the candidate set will increase performance.
 Example query using text matching,
-dumping [calculated rank features](reference/query-api-reference.html#ranking.listfeatures):
+dumping [calculated rank features](../reference/query-api-reference.html#ranking.listfeatures):
 
 <a class="querystring-x">yql=select * from doc where title contains "document"&ranking.listFeatures</a>
 
@@ -302,7 +305,7 @@ rank-profile inlinks_twophase inherits inlinks_age {
 
 Note how using rank-profile `inherits` is a smart way to define functions once,
 then use in multiple rank-profiles.
-Read more about [schema inheritance](/en/schemas/inheritance-in-schemas.html).
+Read more about [schema inheritance](../schemas/inheritance-in-schemas.html).
 Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earlier:
 
 <pre>
@@ -314,7 +317,7 @@ Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earli
 In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than or equal to 10.0,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
 Normally, the `rank-score-drop-limit` is not used, as the `keep-rank-count` is most important.
-Read more in the [reference](reference/schema-reference.html#rank-score-drop-limit).
+Read more in the [reference](../reference/schema-reference.html#rank-score-drop-limit).
 
 For a dynamic limit, pass a ranking feature like `query(threshold)`
 and use an `if` statement to check if the score is above the threshold or not -
@@ -323,13 +326,13 @@ Read more in [ranking expressions](ranking-expressions-features.html#the-if-func
 
 Two-phased ranking is a performance optimization - this guide is about functionality,
 so the rest of the examples will only be using one ranking phase.
-Read more in [first-phase](reference/schema-reference.html#firstphase-rank).
-
+Read more in [first-phase](../reference/schema-reference.html#firstphase-rank).
 
 
 ## Retrieval: AND, OR, weakAnd
+
 This guide will not go deep in query operators in the retrieval phase,
-see [query-api](querying/query-api.html) for details.
+see [query-api](../querying/query-api.html) for details.
 
 Consider a query like _"vespa documents about ranking and retrieval"_.
 A query AND-ing these terms hits less than 3% of the document corpus,
@@ -358,7 +361,7 @@ To find the least relevant candidates, a simple scoring function is used:
 
     rank_score = sum_n(term(n).significance * term(n).weight)
 
-As the point of [weakAnd](reference/query-language-reference.html#weakand) is to early discard the worst candidates,
+As the point of [weakAnd](../reference/query-language-reference.html#weakand) is to early discard the worst candidates,
 _totalCount_ is an approximation:
 
 <a class="querystring-x">yql=select * from doc where
@@ -388,7 +391,7 @@ rank-profile documentation inherits default {
 Observe we are here using text matching rank features,
 which fits well with weakAnd's scoring function that also uses text matching features.
 
-Read more in [using weakAnd with Vespa](using-wand-with-vespa.html).
+Read more in [the wand documentation](wand.html).
 
 <!--
 ToDo, next steps:
@@ -401,4 +404,4 @@ ToDo, next steps:
 
 ## Next steps
 * Read more about custom re-ranking of the final result set in
-  [reranking in searcher](reranking-in-searcher.html).
+  [reranking in searcher](reranking-in-searcher.md).

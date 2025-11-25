@@ -446,7 +446,7 @@ Above changes the query type from all to any,
 so that all documents that match either (or both) of the terms are returned,
 excluding documents with the term "beer".
 Note that number of hits which are matched and ranked increases the computational complexity of the query execution.
-See [using WAND with Vespa](../../using-wand-with-vespa.html)
+See [using WAND with Vespa](../../ranking/wand.html)
 for a way to speed up evaluation of type any/or-like queries. 
 
 <div class="pre-parent">
