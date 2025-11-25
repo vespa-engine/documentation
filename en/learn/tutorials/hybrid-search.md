@@ -8,14 +8,14 @@ redirect_from:
 
 Hybrid search combines different retrieval methods to improve search quality. This tutorial distinguishes between two core components of search:
 
-* **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../../reference/bm25.html) excel at this, as do modern, embedding-based [vector search](../../vector-search.html) approaches.  
+* **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../../ranking/bm25.html) excel at this, as do modern, embedding-based [vector search](../../vector-search.html) approaches.  
 * **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../../basics/ranking.html) enables complex scoring mechanisms.
 
 This tutorial demonstrates building a hybrid search application with Vespa that leverages the strengths of both lexical and embedding-based approaches.
  We'll use the [NFCorpus](https://ir-datasets.com/nfcorpus.html) dataset from the [BEIR](https://github.com/beir-cellar/beir) benchmark and explore various hybrid search techniques using Vespa's query language and ranking features. 
 
 The main goal is to set up a text search app that combines simple text scoring features
-such as [BM25](../../reference/bm25.html) [^1] with vector search in combination with text-embedding models. 
+such as [BM25](../../ranking/bm25.html) [^1] with vector search in combination with text-embedding models. 
 We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](../../embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
 text embedding model. It is a small model that is fast to run and has a small memory footprint. 
@@ -170,7 +170,7 @@ The [string](../../reference/schema-reference.html#string) data type represents 
 and there are significant differences between [index and attribute](../../querying/text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Note that we are enabling [BM25](../../reference/bm25.html) for `title` and `text`
+Note that we are enabling [BM25](../../ranking/bm25.html) for `title` and `text`
 by including `index: enable-bm25`. The language field is the only field that is not the NFCorpus dataset. 
 We hardcode its value to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
 text fields. Read more in [linguistics](../../linguistics.html).
@@ -183,7 +183,7 @@ add indexing/storage overhead. String fields grouped using fieldsets must share 
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
 #### Embedding inference
-Our `embedding` vector field is of [tensor](../../tensor-user-guide.html) type with a single named dimension (`v`) of 384 values. 
+Our `embedding` vector field is of [tensor](../../ranking/tensor-user-guide.html) type with a single named dimension (`v`) of 384 values. 
 
 ```
 field embedding type tensor<bfloat16>(v[384]) {
@@ -203,11 +203,11 @@ You can define many [rank profiles](../../basics/ranking.html),
 named collections of score calculations, and ranking phases.
 
 In this starting point, we have two simple rank-profile's:
-- a `bm25` rank-profile that uses [BM25](../../reference/bm25.html). We sum the two field-level BM25 scores
-using a Vespa [ranking expression](../../ranking-expressions-features.html). 
+- a `bm25` rank-profile that uses [BM25](../../ranking/bm25.html). We sum the two field-level BM25 scores
+using a Vespa [ranking expression](../../ranking/ranking-expressions-features.html). 
 - a `semantic` rank-profile which is used in combination Vespa's nearestNeighbor query operator (vector search).
 
-Both profiles specify a single [ranking phase](../../phased-ranking.html).
+Both profiles specify a single [ranking phase](../../ranking/phased-ranking.html).
 
 ### Services Specification
 
@@ -369,8 +369,8 @@ Here, `PLAIN-2` is the query id of the first test query. We'll use this test que
 
 ### Lexical search with BM25 scoring
 
-The following query uses [weakAnd](../../using-wand-with-vespa.html) and where `targetHits` is a hint 
-of how many documents we want to expose to configurable [ranking phases](../../phased-ranking.html). Refer
+The following query uses [weakAnd](../../ranking/wand.html) and where `targetHits` is a hint 
+of how many documents we want to expose to configurable [ranking phases](../../ranking/phased-ranking.html). Refer
 to [text search tutorial](text-search.html#querying-the-data) for more on querying with `userInput`. 
 
 <div class="pre-parent">
@@ -701,7 +701,7 @@ search, the following Vespa top-k query operators are relevant:
 
 - YQL `{targetHits:k}nearestNeighbor()` for dense representations (text embeddings) using 
 a configured [distance-metric](../../reference/schema-reference.html#distance-metric) as the scoring function. 
-- YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../../using-wand-with-vespa.html) for sparse representations.
+- YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../../ranking/wand.html) for sparse representations.
 
 
 We can combine these operators using boolean query operators like AND/OR/RANK to express a hybrid search query. Then, there is a wild number of

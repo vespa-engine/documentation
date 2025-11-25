@@ -81,7 +81,7 @@ schema category_ctr {
 </pre>
 </div>
 
-This document holds a single field: a [tensor](../../tensor-user-guide.html) of type `tensor<float>(category{})`.
+This document holds a single field: a [tensor](../../ranking/tensor-user-guide.html) of type `tensor<float>(category{})`.
 This is a tensor with a single sparse dimension,
 which is slightly different from the tensors we have seen so far.
 Sparse tensors have strings as dimension addresses rather than a numeric index.
@@ -175,7 +175,7 @@ Up until this point, we've only used tensors as storage.
 We used tensors to hold news and user embeddings,
 and Vespa used these tensors to calculate the dot product in nearest-neighbor searches.
 
-However, Vespa has a [rich language](../../tensor-user-guide.html#ranking-with-tensors)
+However, Vespa has a [rich language](../../ranking/tensor-user-guide.html#ranking-with-tensors)
 to perform calculations with tensors.
 We'll exploit that by looking up the `news` article's category in the global CTR tensor
 and using that as a feature in ranking.
@@ -224,7 +224,7 @@ and that value is multiplied by the `1.0` in this document.
 So in this case, this would effectively work as a lookup.
 
 {% include note.html content="Much more complex operations are available,
-refer to the [tensor user guide](../../tensor-user-guide.html#ranking-with-tensors) for more information." %}
+refer to the [tensor user guide](../../ranking/tensor-user-guide.html#ranking-with-tensors) for more information." %}
 
 Let's add a new rank profile to do this calculation:
 
@@ -379,8 +379,8 @@ we could use a machine learned function with these as feature inputs.
 
 Ultimately, these features are computed in real-time for every news article during ranking. 
 These features can then be added to any machine-learned ranking model.
-Vespa supports gradient-boosted trees from [XGBoost](../../xgboost) and [LightGBM](../../lightgbm),
-and also neural networks in [ONNX](../../onnx) format,
+Vespa supports gradient-boosted trees from [XGBoost](../../ranking/xgboost.md) and [LightGBM](../../ranking/lightgbm.md),
+and also neural networks in [ONNX](../../ranking/onnx.md) format,
 exported from popular ML frameworks like
 [PyTorch](https://pytorch.org/) and [Tensorflow](https://www.tensorflow.org/).
 

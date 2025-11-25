@@ -105,7 +105,7 @@ In the example below we explicitly configured Vespa to only return
 Note that using _all_ available rank features comes with computational cost,
 as Vespa needs to calculate all these features.
 Using many features is usually only advisable using second phase ranking,
-see [phased ranking with Vespa](../../phased-ranking.html).
+see [phased ranking with Vespa](../../ranking/phased-ranking.html).
 
 <pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
 schema msmarco {
@@ -483,8 +483,8 @@ as we move on to more complex models.
 In this tutorial we have looked at using a simple *linear* ranking function. 
 Vespa integrates with several popular machine learning libraries which can be used for Machine Learned Ranking: 
 
- - [Ranking with XGBoost Models](../../xgboost) 
- - [Ranking with LightGBM Models](../../lightgbm.html) 
- - [Ranking with ONNX Models](../../onnx.html) 
+ - [Ranking with XGBoost Models](../../ranking/xgboost.md) 
+ - [Ranking with LightGBM Models](../../ranking/lightgbm.md) 
+ - [Ranking with ONNX Models](../../ranking/onnx.md) 
 
 <script src="/js/process_pre.js"></script>

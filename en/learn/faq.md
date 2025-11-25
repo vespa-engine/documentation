@@ -43,7 +43,7 @@ see [document features](../reference/rank-features.html#document-features).
 
 ### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
-see [retrieval and ranking](../getting-started-ranking#retrieval-and-ranking). Example:
+see [retrieval and ranking](../ranking/ranking-intro.md#retrieval-and-ranking). Example:
 <pre>
 rank-profile drop-low-score {
    function my_score() {
@@ -91,7 +91,7 @@ of a double. This can happen in two cases:
 
 ### How to pin query results?
 To hard-code documents to positions in the result set,
-see the [pin results example](../multivalue-query-operators.html#pin-results-example).
+see the [pin results example](../ranking/multivalue-query-operators.html#pin-results-example).
 
 
 {:.faq-section}
@@ -185,7 +185,7 @@ One way is to describe items using tensors and query for the
 [nearest neighbor](../reference/query-language-reference.html#nearestneighbor) -
 using full precision or approximate (ANN) - the latter is used when the set is too large for an exact calculation.
 Apply filters to the query to limit the neighbor candidate set.
-Using [dot products](../multivalue-query-operators.html) or [weak and](../using-wand-with-vespa.html) are alternatives.
+Using [dot products](../ranking/multivalue-query-operators.html) or [weak and](../ranking/wand.html) are alternatives.
 
 ### Does Vespa support stop-word removal?
 Vespa does not have a stop-word concept inherently.
@@ -251,7 +251,7 @@ select * from data where user_id in (10, 20, 30)
 ```
 The best article on the subject is
 [multi-lookup set filtering](../performance/feature-tuning.html#multi-lookup-set-filtering).
-Refer to the [in operator example](../multivalue-query-operators.html#in-example)
+Refer to the [in operator example](../ranking/multivalue-query-operators.html#in-example)
 on how to use it programmatically in a [Java Searcher](../searcher-development.html).
 
 ### How to query documents where one field matches any values in a list? Similar to using SQL IN operator

@@ -171,7 +171,7 @@ but this is less relevant as the `HNSW` index search first reduces the document 
 * **targetHits**:
 The [targetHits](../reference/query-language-reference.html#targethits)
 specifies how many hits one wants to expose to [ranking](../basics/ranking.html) *per content node*.
-Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](../phased-ranking.html)
+Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](../ranking/phased-ranking.html)
 pipeline. See [performance sizing](../performance/sizing-search.html). 
 
 * **Pagination**:
@@ -179,7 +179,7 @@ Pagination uses the standard [hits](../reference/query-api-reference.html#hits)
 and [offset](../reference/query-api-reference.html#offset) query api parameters. 
 There is no caching of results in between pagination requests,
 so a query for a higher `offset` will cause the search to be performed over again.
-This aspect is no different from [sparse search](../using-wand-with-vespa.html) not using nearest neighbor query operator.  
+This aspect is no different from [sparse search](../ranking/wand.html) not using nearest neighbor query operator.  
 
 * **Total hit count is not accurate**:
 Technically, all vectors in the searchable index are neighbors. There is no strict boundary between a match 

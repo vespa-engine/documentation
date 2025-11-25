@@ -48,7 +48,7 @@ As these scores are usually dependent upon both query and document,
 they can also be called *relevance*.
 Such expressions can be arbitrarily complex, but in general,
 require some form of computation to find this score.
-Ranking can be divided into [multiple rank phases](../../phased-ranking.html) as well.
+Ranking can be divided into [multiple rank phases](../../ranking/phased-ranking.html) as well.
 
 We'll start by looking at attribute-based sorting and grouping before moving on to ranking.
 
@@ -148,7 +148,7 @@ By now, you have probably noticed that hits are returned in order of descending 
 i.e. how well the document matches the query —
 if not, take a moment to verify this.
 You might ask how Vespa does this since we haven't even touched upon ranking yet.
-The answer is that Vespa uses its [nativeRank](../../nativerank.html) score
+The answer is that Vespa uses its [nativeRank](../../ranking/nativerank.html) score
 unless anything else is defined in the schema.
 We'll get back to defining custom ranking later on.
 
@@ -373,7 +373,7 @@ in general, use attributes for:
 - fields used for grouping, e.g. category, and
 - fields accessed in ranking expressions 
 
-Finally, all numeric and [tensors](../../tensor-user-guide.html) fields used in ranking must be defined with attribute. 
+Finally, all numeric and [tensors](../../ranking/tensor-user-guide.html) fields used in ranking must be defined with attribute. 
 
 #### Combining index and attribute
 
@@ -398,7 +398,7 @@ simple, yet powerful methods for tuning the relevance.
 Relevance is a measure of how well a given document matches a query.
 The default relevance is calculated by a formula that takes several *matching* factors into consideration.
 It computes, in essence, how well the document matches the terms in the query.
-The default Vespa ranking function and its limitations is described in [ranking with nativeRank](../../nativerank.html).
+The default Vespa ranking function and its limitations is described in [ranking with nativeRank](../../ranking/nativerank.html).
 
 Ranking signals that might be useful, like freshness (the age of the document compared to the time of the query)
 or any other document or query features, 
@@ -502,7 +502,7 @@ schema news {
   first phase are performed on every single document matching your query,
   while the second phase calculations are only done on the top `n` documents
   as determined by the calculations done in the first phase. 
-  See [phased ranking](../../phased-ranking.html).
+  See [phased ranking](../../ranking/phased-ranking.html).
 
 - `function popularity()`
 

@@ -1,11 +1,13 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Ranking With ONNX Models"
+redirect_from:
+  - /en/onnx
 ---
 
 Vespa supports advanced ranking models through its tensor API.
 If your model is in the [ONNX format](https://onnx.ai/), Vespa can import and use the model directly.
-You can use ONNX models with Vespa [embedder](/en/embedding.html) functionality or in [ranking](/en/basics/ranking.html).
+You can use ONNX models with Vespa [embedder](../embedding.html) functionality or in [ranking](ranking-intro.md).
 
 
 
@@ -24,7 +26,7 @@ you could add it to the application package under a `files` directory, something
 ```
 
 An application package can have multiple onnx models. To download models during deployment,
-see [deploying remote models](/en/deployment.html#deploying-remote-models).
+see [deploying remote models](../deployment.html#deploying-remote-models).
 
 
 
@@ -69,7 +71,7 @@ schema my_schema {
 ```
 
 This defines the model called `my_onnx_model`. It is evaluated using the
-`onnx` [ranking feature](/en/reference/rank-features.html).
+`onnx` [rank feature](../reference/rank-features.html).
 This rank feature specifies which model to evaluate in the ranking expression
 and, optionally, which output to use from the model.
 
@@ -95,7 +97,7 @@ If this is omitted, the first output in the ONNX file will be used.
 The output of a model is a tensor, however the rank score should result
 in a single scalar value. In the example above we use `sum` to sum all the elements
 of the tensor to a single value. You can also slice out parts of
-the result using Vespa's [tensor API](/en/reference/ranking-expressions.html#tensor-functions).
+the result using Vespa's [tensor API](../reference/ranking-expressions.html#tensor-functions).
 For instance, if the output of the example above is a tensor with the two dimensions `d0` and `d1`,
 and you want to extract the first value, this can be expressed by:
 
@@ -128,10 +130,10 @@ typically denotes the batch dimension. During ONNX inference in ranking, Vespa u
 Note that in the above rank profile example, the `onnx` model evaluation
 was evaluated in the first phase. In general, evaluating these types of models are
 more suitable in the `second-phase` or `global-phase` phases.
-See [phased ranking](/en/phased-ranking.html).
+See [phased ranking](../ranking/phased-ranking.html).
 
 Models in which data tensors are located in external data files, are **only** supported when the following conditions are met:
-- The model is used in an _embedder_, e.g <code>hugging-face-embedder</code> (see [embedding](/en/embedding.html)).
+- The model is used in an _embedder_, e.g <code>hugging-face-embedder</code> (see [embedding](../embedding.html)).
 - The model is referenced using a URL, e.g. <code>url="https://example.com/my-onnx-model/model.onnx"</code>.
 - All external data files are located in the same parent path/directory as the model file,
   e.g. <code>https://example.com/my-onnx-model/model.onnx_data</code>.
@@ -164,7 +166,7 @@ $ optimum-cli export onnx --library transformers --task feature-extraction -m BA
 ```
 
 The exported files in `model-output-dir`: `model.onnx` and `tokenizer.json` imported directly
-into the Vespa [huggingface-embedder](embedding.html#huggingface-embedder).
+into the Vespa [huggingface-embedder](../embedding.html#huggingface-embedder).
 
 Refer to [debugging onnx](#debugging-onnx-models).
 
@@ -191,25 +193,25 @@ The url must point to the actual file, not the model card.
 See #[Limitations on Model Size and Complexity](#limitations-on-model-size-and-complexity) for how to use models
 having external data files.
 
-See [cross-encoders](/en/cross-encoders.html#exporting-cross-encoder-models) documentation for examples on how to
+See [cross-encoders](cross-encoders#exporting-cross-encoder-models) documentation for examples on how to
 export cross-encoder re-rankers using the Optimum library.
 
 
 ### Using Auto Classes to export HF models to ONNX format
 
 Transformer-based models have named inputs and outputs that must be compatible
-with the input and output names used by the [embedder](/en/embedding.html).
+with the input and output names used by the [embedder](../embedding.html).
 
 The [model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting)
 example includes two scripts to export models and vocabulary files using the default expected input and output names
 for embedders using ONNX models.
 The input and output names to the embedder are tunable via the `transformer-`parameters in the
-[config of the embedder in question](/en/reference/embedding-reference.html).
+[config of the embedder in question](../reference/embedding-reference.html).
 
 
 ### Debugging ONNX models
 
-When loading [ONNX](https://onnx.ai/) models for Vespa native [embedders](/en/embedding.html),
+When loading [ONNX](https://onnx.ai/) models for Vespa native [embedders](../embedding.html),
 the model must have correct inputs and output parameters.
 Vespa offers tools to inspect ONNX model files.
 Here, _minilm-l6-v2.onnx_ is in the current working directory:
@@ -231,9 +233,9 @@ model meta-data:
 ```
 
 The above model input and output names conform with the
-default [bert-embedder parameters](/en/reference/embedding-reference.html#bert-embedder-reference-config).
+default [bert-embedder parameters](../reference/embedding-reference.html#bert-embedder-reference-config).
 
-Similarly, a model for the [hugging-face-embedder parameters](/en/reference/embedding-reference.html#huggingface-embedder-reference-config) defaults:
+Similarly, a model for the [hugging-face-embedder parameters](../reference/embedding-reference.html#huggingface-embedder-reference-config) defaults:
 ```
 model meta-data:
   input[0]: 'input_ids' long[batch][sequence]
@@ -268,12 +270,12 @@ Error: service 'query' is unavailable: services have not converged
 ```
 
 Embedders supports changing the input and output names,
-consult [embedding reference](/en/reference/embedding-reference.html) documentation.
+consult [embedding reference](../reference/embedding-reference.html) documentation.
 
 
 ### Using vespa-analyze-onnx-model
 
-[vespa-analyze-onnx-model](/en/operations/tools.html#vespa-analyze-onnx-model)
+[vespa-analyze-onnx-model](../operations/tools.html#vespa-analyze-onnx-model)
 is useful to find model inputs and outputs -
 example run on a config server where an application package with a model is deployed to:
 

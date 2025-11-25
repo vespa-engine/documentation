@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 title: "Significance Model"
+redirect_from:
+  - /en/significance
 ---
 
 *Significance* is a measure of how rare a term is in a collection of documents.
@@ -13,15 +15,16 @@ where:
 - $$ N $$ is the total number of documents in the collection
 - $$ n_t $$ is the number of documents containing the term $$ t $$
 
-Variations of IDF are used in [bm25](reference/bm25.html) and [nativeRank](reference/nativerank.html).
+Variations of IDF are used in [bm25](bm25.html) and [nativeRank](nativerank.html).
 
 *Significance model* provides the data necessary to calculate IDF, i.e. $$ n_t $$ for each term and $$ N $$ for the document collection.
 We distinguish between *local and global* significance models.
 A local model is node-specific and a global model is shared across nodes.
 
+
 # Local significance model
 
-For `string` fields indexed with [bm25](reference/bm25.html) or [nativeRank](reference/nativerank.html),
+For `string` fields indexed with [bm25](bm25.html) or [nativeRank](nativerank.html),
 Vespa creates a local significance model on each content node from the documents it contains.
 For each query term, the document frequency is computed by aggregating the per-field document frequencies across all fields being searched.
 
@@ -30,11 +33,11 @@ In large collections, this difference is usually small and doesn’t affect rank
 
 One issue with the local models is that ranking is non-deterministic in the following cases:
 1. When new documents are added, local models on affected content nodes are updated.
-2. When the content cluster [redistributes documents](elasticity.html) across nodes, e.g. adding, removing nodes for scaling and failure recovery, the models change on the nodes involved.
-3. When using [grouped distribution](elasticity.html#grouped-distribution),
+2. When the content cluster [redistributes documents](../elasticity.html) across nodes, e.g. adding, removing nodes for scaling and failure recovery, the models change on the nodes involved.
+3. When using [grouped distribution](../elasticity.html#grouped-distribution),
 queries can return different results depending on which group processes them.
 
-Another issue is that local significance models are not available in [streaming search](streaming-search.html)
+Another issue is that local significance models are not available in [streaming search](../streaming-search.html)
 because inverted indexes are not constructed so IDF values can't be extracted.
 All significance values are set to 1, which is the default value for unknown terms.
 The lack of significance values may degrade the ranking quality.
@@ -63,7 +66,7 @@ select * from example where content contains ({significance:0.9}"neurotransmitte
 
 ## Significance values in a searcher
 
-Document frequency and significance values can be also set in a [custom searcher](/en/searcher-development.html#writing-a-searcher):
+Document frequency and significance values can be also set in a [custom searcher](../searcher-development.html#writing-a-searcher):
 
 ```java
 private void setDocumentFrequency(WordItem item, long frequency, long numDocuments) {
@@ -80,7 +83,7 @@ private void setSignificance(WordItem item, float significance) {
 
 ## Significance models in services.xml
 
-[`significance` element in services.xml](reference/services-search.html#significance) specifies one or more models:
+[`significance` element in services.xml](../reference/services-search.html#significance) specifies one or more models:
 
 ```xml
 <container version="1.0">
@@ -96,11 +99,11 @@ private void setSignificance(WordItem item, float significance) {
 
 Vespa Cloud users have access to [pre-built models](https://cloud.vespa.ai/en/model-hub#significance-models), identified by `model-id`.
 In addition, all users can specify their own models by providing a `url` to an external resource or a `path` to a model file within the application package.
-Vespa provides a [command line tool](operations-selfhosted/vespa-cmdline-tools.html#vespa-significance) to generate [model files](#significance-model-file) from documents.
+Vespa provides a [command line tool](../operations-selfhosted/vespa-cmdline-tools.html#vespa-significance) to generate [model files](#significance-model-file) from documents.
 The order in which the models are specified determines the model precedence, see [model resolution](#model-resolution) for details.
 
-In addition to adding models in [services.xml](reference/services-search.html#significance),
-the `significance` feature must be enabled in the [`rank-profile` section of the schema](reference/schema-reference.html#significance), e.g.
+In addition to adding models in [services.xml](../reference/services-search.html#significance),
+the `significance` feature must be enabled in the [`rank-profile` section of the schema](../reference/schema-reference.html#significance), e.g.
 
 ```xml
 schema example {
@@ -165,7 +168,7 @@ The CLI can also export local significance models from content nodes to an inter
 ### Model resolution
 
 Model resolution selects a model from the models specified in [services.xml](#significance-models-in-servicesxml) based on the language of the query.
-The language can be either [explicitly tagged](reference/query-api-reference.html#model.language) or [implicitly detected](linguistics.html#query-language-detection).
+The language can be either [explicitly tagged](../reference/query-api-reference.html#model.language) or [implicitly detected](../linguistics.html#query-language-detection).
 
 The resolution logic is as follows:
 - When language is explicitly tagged

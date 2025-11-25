@@ -11,7 +11,7 @@ The application built here will be the foundation for other tutorials,
 such as creating ranking functions based on Machine Learning (ML) models.
 
 The main goal is to set up a text search app based on simple text scoring features
-such as [BM25](../../reference/bm25.html) [^1] and [nativeRank](../../reference/nativerank.html). 
+such as [BM25](../../ranking/bm25.html) [^1] and [nativeRank](../../reference/nativerank.html). 
 
 
 {% include pre-req.html memory="4 GB" extra-reqs='
@@ -170,7 +170,7 @@ The [string](../../reference/schema-reference.html#string) data type is used to 
 and there are significant differences between [index and attribute](../../querying/text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
-Note that we are enabling the usage of [BM25](../../reference/bm25.html) for `title`, `body` and `url`.
+Note that we are enabling the usage of [BM25](../../ranking/bm25.html) for `title`, `body` and `url`.
 by including `index: enable-bm25`. The language field is the only field not in the msmarco dataset. We hardcode its value 
 to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
 text fields. Read more in [linguistics](../../linguistics.html).
@@ -195,7 +195,7 @@ You can define many [rank profiles](../../basics/ranking.html),
 named collections of score calculations, and ranking phases.
 
 In this tutorial, we define our `default` to be using [nativeRank](../../reference/nativerank.html).
-In addition, we have a `bm25` rank-profile that uses [bm25](../../reference/bm25.html). Both are examples of
+In addition, we have a `bm25` rank-profile that uses [bm25](../../ranking/bm25.html). Both are examples of
 text-scoring [rank-features](../../reference/rank-features.html) in Vespa.
 
 ### Services Specification
@@ -475,7 +475,7 @@ We can notice the following in the trace output:
 query=[AND (WEAKAND(100) default:what default:is default:dad default:bod) |url:'huffingtonpost co uk']
 </pre>
 
-Notice that the `userInput` part is converted to a [weakAnd](../../using-wand-with-vespa.html) query operator and that this operator is 
+Notice that the `userInput` part is converted to a [weakAnd](../../ranking/wand.html) query operator and that this operator is 
 AND'ed with a phrase search ('huffingtonpost co uk') in the `url` field. Notice also the field scoping where the query terms are
 prefixed with `default`. Notice also that punctuation characters (.) are removed as part of the tokenization. 
 Suppose this is a common pattern where we want to filter on specific strings. 
@@ -599,9 +599,9 @@ $ vespa query \
 
 ## Ranking
  The previous section covered free-text search matching, linguistics, and how to combine business logic with 
- free-text user queries. All the examples used a `default` rank-profile using Vespa's [nativeRank](../../nativerank.html) text scoring feature.
+ free-text user queries. All the examples used a `default` rank-profile using Vespa's [nativeRank](../../ranking/nativerank.html) text scoring feature.
 
- With free-text search, we can use other text scoring functions, like [BM25](../../reference/bm25.html). All the matching 
+ With free-text search, we can use other text scoring functions, like [BM25](../../ranking/bm25.html). All the matching 
  capabilities (or limitations) still apply, we can use fieldsets or fields; the difference is in the text scoring function where BM25
  is different from nativeRank.
 

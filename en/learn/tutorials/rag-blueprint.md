@@ -561,7 +561,7 @@ Separate common functions/setup into parent rank profiles and use `.profile` fil
 
 ## Phased ranking in Vespa
 
-Before we move on, it might be useful to recap Vespa´s [phased ranking](../../phased-ranking.html) approach.
+Before we move on, it might be useful to recap Vespa´s [phased ranking](../../ranking/phased-ranking.html) approach.
 
 Below is a schematic overview of how to think about retrieval and ranking for this RAG blueprint. Since we are 
 developing this as a tutorial using a small toy dataset, the application can be deployed in a single machine, 
@@ -1003,7 +1003,7 @@ Common options include (learned) linear combination of features including text s
 It could also be a heuristic handwritten function.
 
 Text features should include [nativeRank](../../reference/nativerank.html#nativeRank) 
-or [bm25](../../reference/bm25.html#ranking-function) — not [fieldMatch](../../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
+or [bm25](../../ranking/bm25.html#ranking-function) — not [fieldMatch](../../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
 
 Considerations for deciding whether to choose `bm25` or `nativeRank`:
 
@@ -1415,9 +1415,9 @@ This collects approximately 194 features, providing a rich feature set for train
 ### Training a GBDT model for second-phase ranking
 
 With the expanded feature set, we can train a Gradient Boosted Decision Tree (GBDT) model to predict document relevance. 
-We use [LightGBM](../../lightgbm.html) for this purpose. 
+We use [LightGBM](../../ranking/lightgbm.md) for this purpose. 
 
-Vespa also supports [XGBoost](../../xgboost.html) and [ONNX](../../onnx.html) models.
+Vespa also supports [XGBoost](../../ranking/xgboost.md) and [ONNX](../../ranking/onnx.md) models.
 
 To train the model, run the following command ([link to training script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_lightgbm.py)):
 
@@ -1467,7 +1467,7 @@ Key observations:
 * **Text proximity features** ([nativeProximity](../../reference/nativerank.html#nativeProximity)) are highly valuable for understanding query-document relevance
 * **First-phase score** (`firstPhase`) being important validates that our first-phase ranking provides a good foundation
 * **Chunk-level features** (both text and semantic) contribute significantly to ranking quality
-* **Traditional text features** like [nativeRank](../../reference/nativerank.html#nativeRank) and [bm25](../../reference/bm25.html#ranking-function) remain important
+* **Traditional text features** like [nativeRank](../../reference/nativerank.html#nativeRank) and [bm25](../../ranking/bm25.html#ranking-function) remain important
 
 ### Integrating the GBDT model into Vespa
 
@@ -1600,7 +1600,7 @@ providing the precision needed for effective LLM context while maintaining reaso
 We also have the option of configuring [global-phase](../../reference/schema-reference.html#globalphase-rank) ranking, which can rerank the top k 
 (as set by `rerank-count` parameter) documents from the second-phase ranking.
 
-Common options for global-phase are [cross-encoders](../../cross-encoders.html) or another GBDT model, trained for 
+Common options for global-phase are [cross-encoders](../../ranking/cross-encoders.html) or another GBDT model, trained for 
 better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, 
 we consider this less important than for search applications where the results are mainly consumed by an human, 
 as LLMs don't care that much about the ordering of the results.

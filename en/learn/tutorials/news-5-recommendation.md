@@ -103,7 +103,7 @@ The `embedding` field is a tensor field.
 Tensors in Vespa are flexible multi-dimensional data structures, and, as first-class citizens,
 can be used in queries, document fields, and constants in ranking.
 Tensors can be either dense or sparse or both, and can contain any number of dimensions.
-See [the tensor user guide](../../tensor-user-guide.html) for more information.
+See [the tensor user guide](../../ranking/tensor-user-guide.html) for more information.
 
 Here we have defined a dense tensor with a single dimension (`d0` - dimension 0), which represents a vector.
 The distance metric is "dotproduct" as we would like to use this field for nearest-neighbor search
