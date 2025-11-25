@@ -7,11 +7,53 @@ category: cloud
 <img src="/assets/img/grafana-metrics.png" alt="Sample Vespa Console dashboard" />
 <p>
   The Vespa Cloud Console has dashboards for insight into performance metrics,
-  use the "monitoring" tab for the zone deployment.
+  use the METRICS tab in the application zone view.
 </p>
 <p>
   These metrics can also be pulled into external monitoring tools using the Prometheus metrics API.
 </p>
+
+
+
+<h2 id="latency-tracking">Latency tracking</h2>
+<p>
+  When monitoring latency in clusters with mixed loads,
+  it is useful to use <a href="/en/basics/ranking.html#rank-profiles">rank profiles</a> to separate them.
+  As an example, an application might have user queries mixed with agentic, batch-oriented queries.
+  Tracking the Container-level query latencies might look like:
+</p>
+<img src="/assets/img/latency-total.png" alt="total query latency chart">
+<p>
+  Using Content node level metrics, separated by ranking profile, we see:
+</p>
+<img src="/assets/img/latency-rank-profile.png" alt="query latency per rank profile chart">
+<p>
+  From this, we see that query latency varies with the rank profile used.
+  Relevant metrics to export to your monitoring system include:
+</p>
+<ul>
+  <li><a href="/en/reference/searchnode-metrics-reference.html#content_proton_documentdb_matching_rank_profile_queries">content.proton.documentdb.matching.rank_profile.queries</a></li>
+  <li><a href="/en/reference/searchnode-metrics-reference.html#content_proton_documentdb_matching_rank_profile_docs_matched">content.proton.documentdb.matching.rank_profile.docs_matched</a></li>
+  <li><a href="/en/reference/searchnode-metrics-reference.html#content_proton_documentdb_matching_rank_profile_query_latency">content.proton.documentdb.matching.rank_profile.query_latency</a></li>
+  <li><a href="/en/reference/searchnode-metrics-reference.html#content_proton_documentdb_matching_rank_profile_rerank_time">content.proton.documentdb.matching.rank_profile.rerank_time</a></li>
+</ul>
+<p>In short, when debugging latency, look for changes, per rank profile:</p>
+<ul>
+  <li>Did the query rate increase?</li>
+  <li>
+    Did number of <span style="text-decoration: underline">matched</span>
+    or <span style="text-decoration: underline">ranked</span> documents change?
+  </li>
+</ul>
+<p>
+  The above metrics is a subset or the available metrics.
+  It is a good idea to set a <a href="/en/querying/query-profiles.html">query profile</a> per class of query,
+  and in each query profile, select a distinct rank profile.
+  With this, you can change the rank profile for a given query class by configuration only (no need to change the clients) -
+  a good example is having a lightweight rank profile to use in overload situations.
+  This makes it easier to track the individual query classes, per rank profile.
+</p>
+
 
 
 <h2 id="prometheus-metrics-api">Prometheus metrics API</h2>
@@ -20,7 +62,7 @@ category: cloud
 </p>
 <pre>
 $ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
-  'https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud/prometheus/v1/values'
+  'https://b6718765.b68a1234.z.vespa-app.cloud/prometheus/v1/values'
 </pre>
 <p>
   The metrics can be fed into e.g. your Grafana Cloud or self-hosted Grafana instance. 
@@ -107,8 +149,8 @@ $ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
 <p>
   The <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/vespa-grafana-terraform">Vespa Grafana Terraform template</a>
   provides a set of dashboards and alerts.
-
   If you are using a different monitoring service and want to set up an equivalent alert set, you can follow this table:
+</p>
   <table class="table">
     <thead>
       <tr>
@@ -118,12 +160,12 @@ $ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
       </tr>
     </thead>
     <tr>
-      <td>content_proton_resource_usage_disk_average</td>
+      <td><a href="/en/reference/searchnode-metrics-reference.html#content_proton_resource_usage_disk">content_proton_resource_usage_disk_average</a></td>
       <td>> 0.9</td>
       <td>max by(applicationId, clusterId, zone)</td>
     </tr>
     <tr>
-      <td>content_proton_resource_usage_memory_average</td>
+      <td><a href="/en/reference/searchnode-metrics-reference.html#content_proton_resource_usage_memory">content_proton_resource_usage_memory_average</a></td>
       <td>> 0.8</td>
       <td>max by(applicationId, zone, clusterId)</td>
     </tr>
@@ -133,15 +175,16 @@ $ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
       <td>max by(applicationId, zone, clusterId)</td>
     </tr>
     <tr>
-      <td>content_proton_resource_usage_feeding_blocked_last</td>
+      <td><a href="/en/reference/searchnode-metrics-reference.html#content_proton_resource_usage_feeding_blocked">content_proton_resource_usage_feeding_blocked_last</a></td>
       <td>>= 1</td>
       <td>N/A</td>
     </tr>
   </table>
+<p>
   All metrics are from the <a href="/en/operations/metrics.html#metric-sets">default metric set</a>.
   Metrics are using the naming scheme from the <a href="/en/reference/prometheus-v1.html">Prometheus metrics</a> API.
   Dimension aggregation is optional, but reduces alerting noise - e.g. in the case where an entire cluster goes bad.
-  It is recommended to filter all alerts on zones in the <a href="https://cloud.vespa.ai/en/reference/environments">prod environment</a>.
+  It is recommended to filter all alerts on zones in the <a href="/en/cloud/environments.html">prod environment</a>.
 </p>
 
 
@@ -151,7 +194,7 @@ $ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
 </p>
 <pre>
 $ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
-  'https://feb749eb.a69b40ae.z.vespa-app.cloud/prometheus/v1/values'
+  'https://b6718765.b68a1234.z.vespa-app.cloud/prometheus/v1/values'
 
 ...
 jdisc_thread_pool_work_queue_size_min{threadpool="default-pool",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="logserver-container",clusterId="admin/logserver",hostname="h97490a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_logserver_container",} 0.0 1733139324000
@@ -192,7 +235,6 @@ content_proton_documentdb_matching_rank_profile_rerank_time_average{rankProfile=
     where the failure was triggered.
   </li>
 </ul>
-
 <p>
   How you will use labels to separate different kinds of queries depends on the observability backend you use,
   but you will typically compute weighted averages for query latency and query volume,
