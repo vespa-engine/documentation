@@ -414,7 +414,7 @@ public class MockLanguageModel implements ai.vespa.llm.LanguageModel {
 }
 ```
 
-You can also create a [config definition](/en/configuring-components.html#config-definition) that will make your component configurable through the `services.xml` file.
+You can also create a [config definition](/en/applications/configuring-components.html#config-definition) that will make your component configurable through the `services.xml` file.
 
 Example of a minimal config definition:
 
@@ -433,8 +433,8 @@ See also [developer guide](applications/developer-guide.html) for more informati
 The above example uses the `LLMSearcher`
 [class](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/ai/vespa/search/llm/LLMSearcher.java).
 You can easily create your own LLM searcher in Java by either specifically
-[injecting](jdisc/injecting-components.html) the connection component, or
-subclassing the `LLMSearcher`. Please refer to [Searcher Development](searcher-development.html) or [Document Processor Development](document-processing.html) for more information on creating your own components.
+[injecting](applications/dependency-injection.html) the connection component, or
+subclassing the `LLMSearcher`. Please refer to [Searcher Development](applications/searchers.html) or [Document Processor Development](applications/document-processors.html) for more information on creating your own components.
 
 Note that it should not be necessary to create your own components in Java to
 use this functionality.

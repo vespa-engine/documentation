@@ -26,7 +26,7 @@ we like to think of it as scalable, online computation.
 A rank profile is where the application's logic is implemented,
 supporting simple types like `double` and complex types like `tensor`.
 Supply ranking data in queries in query features (e.g. different weights per customer),
-or look up in a [Searcher](../searcher-development.html).
+or look up in a [Searcher](../applications/searchers.html).
 Typically, a document (e.g. product) "feature vector"/"weights" will be compared to a user-specific vector (tensor).
 
 ### Where would customer specific weightings be stored?
@@ -128,7 +128,7 @@ Map needs to be defined with <code>indexing: attribute</code> and hence will be 
 Refer to [map](../reference/schema-reference.html#map).
 
 ### Can we set a limit for the number of elements that can be stored in an array?
-Implement a [document processor](../document-processing.html) for this.
+Implement a [document processor](../applications/document-processors.html) for this.
 
 ### How to auto-expire documents / set up garbage collection?
 Set a selection criterion on the `document` element in `services.xml`.
@@ -252,7 +252,7 @@ select * from data where user_id in (10, 20, 30)
 The best article on the subject is
 [multi-lookup set filtering](../performance/feature-tuning.html#multi-lookup-set-filtering).
 Refer to the [in operator example](../ranking/multivalue-query-operators.html#in-example)
-on how to use it programmatically in a [Java Searcher](../searcher-development.html).
+on how to use it programmatically in a [Java Searcher](../applications/searchers.html).
 
 ### How to query documents where one field matches any values in a list? Similar to using SQL IN operator
 Use the [in query operator](../reference/query-language-reference.html#in). Example:
@@ -311,7 +311,7 @@ This makes it impossible to do via OR conditions to select both collection of do
     SELECT 2 AS y;
 
 This isn’t possible, need to run 2 queries.
-Alternatively, split a single incoming query into two running in parallel in a [Searcher](../searcher-development.html) - example:
+Alternatively, split a single incoming query into two running in parallel in a [Searcher](../applications/searchers.html) - example:
 ```java
 FutureResult futureResult = new AsyncExecution(settings).search(query);
 FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
@@ -402,8 +402,8 @@ Refer to third-party connectors like [kafka-connect-vespa](https://github.com/vi
 ### Does Vespa support addition of flexible NLP processing for documents and search queries?
 E.g. integrating NER, word sense disambiguation, specific intent detection.
 Vespa supports these things well:
-- [Query (and result) processing](../searcher-development.html)
-- [Document processing](../document-processing.html)
+- [Query (and result) processing](../applications/searchers.html)
+- [Document processing](../applications/document-processors.html)
   and document processors working on semantic annotations of text
 
 ### Does Vespa support customization of the inverted index?
@@ -413,16 +413,16 @@ Creating a new index <em>format</em> means changing the core.
 However, for the examples above, one just need control over the tokens which are indexed (and queried).
 That is easily done in some Java code.
 The simplest way to do this is to plug in a [custom tokenizer](../linguistics.html).
-That gets called from the query parser and bundled linguistics processing [Searchers](../searcher-development.html)
-as well as the [Document Processor](../document-processing.html)
+That gets called from the query parser and bundled linguistics processing [Searchers](../applications/searchers.html)
+as well as the [Document Processor](../applications/document-processors.html)
 creating the annotations that are consumed by the indexing operation.
 Since all that is Searchers and Docprocs which you can replace and/or add custom components before and after,
 you can also take full control over these things without modifying the platform itself.
 
 ### Does vespa provide any support for named entity extraction?
 It provides the building blocks but not an out-of-the-box solution.
-We can write a [Searcher](../searcher-development.html) to detect query-side entities and rewrite the query,
-and a [DocProc](../document-processing.html) if we want to handle them in some special way on the indexing side.
+We can write a [Searcher](../applications/searchers.html) to detect query-side entities and rewrite the query,
+and a [DocProc](../applications/document-processors.html) if we want to handle them in some special way on the indexing side.
 
 ### Does vespa provide support for text extraction?
 You can write a document processor for text extraction, Vespa does not provide it out of the box.
@@ -463,18 +463,18 @@ however Vespa Team has no experience with it.
 Vespa does not have a language like
 [painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html) -
 it is more flexible to write application logic in a JVM-supported language, using
-[Searchers](../searcher-development.html) and [Document Processors](../document-processing.html).
+[Searchers](../applications/searchers.html) and [Document Processors](../applications/document-processors.html).
 
 ### How can I batch-get documents by ids in a Searcher
-A [Searcher](../searcher-development.html) intercepts a query and/or result.
-To get a number of documents by id in a Searcher or other component like a [Document processor](../document-processing.html),
+A [Searcher](../applications/searchers.html) intercepts a query and/or result.
+To get a number of documents by id in a Searcher or other component like a [Document processor](../applications/document-processors.html),
 you can have an instance of [com.yahoo.documentapi.DocumentAccess](../reference/component-reference.html#injectable-components)
 injected and use that to get documents by id instead of the HTTP API.
 
 <!-- How to add custom code to a Vespa application? -->
 
 <!--p id="programming-vespa-3" style="margin-bottom: 0px;"><strong>Is there a way to check if this component is alive or not?
-<a href="jdisc/container-components.html">Component</a> lifecycle:
+<a href="jdisc/components.html">Component</a> lifecycle:
 <ol>
   <li>Old components are alive</li>
   <li>Deployment occurs</li>
@@ -717,7 +717,7 @@ If a bundle with the same name is installed,
 there is a either a version mismatch or the installed bundle's version contains a qualifier string.
 ...
 ```
-[Bundle plugin troubleshooting](../components/bundles.html#bundle-plugin-troubleshooting) is a good resource
+[Bundle plugin troubleshooting](../applications/bundles.html#bundle-plugin-troubleshooting) is a good resource
 to analyze Vespa container startup / bundle load problems.
 
 

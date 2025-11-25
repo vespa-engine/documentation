@@ -59,11 +59,11 @@ and will need to be configured explicitly as documented in
 By default, the container allows unauthenticated writes to, and reads from, the Vespa installation.
 For a production deployment, this must be locked down.
  
-Connections to the HTTP containers may be [protected with TLS](/en/jdisc/http-server-and-filters.html#tls).
+Connections to the HTTP containers may be [protected with TLS](/en/applications/http-servers-and-filters.html#tls).
 Mutual TLS is supported and should be configured.
  
 Access to the container API endpoints can be controlled using
-[request filters](/en/jdisc/http-server-and-filters.html#set-up-filter-chains).
+[request filters](/en/applications/http-servers-and-filters.html#set-up-filter-chains).
 These filters can implement the required authentication and authorization logic
 for your specific use case.
  

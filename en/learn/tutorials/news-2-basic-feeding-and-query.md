@@ -153,7 +153,7 @@ service. Write the following to `news/my-app/services.xml`:
 
 Quite a lot is set up here:
 
-- `<container>` defines the stateless [container cluster](../../jdisc/index.html) for
+- `<container>` defines the stateless [container cluster](../../applications/containers.html) for
   document, query and result processing
 - `<search>` sets up the [query endpoint](../../querying/query-api.html).  The default port
   is 8080. See also [Securing Vespa with mutually authenticated TLS (mTLS)](https://blog.vespa.ai/securing-vespa-with-mutually-authenticated-tls/)

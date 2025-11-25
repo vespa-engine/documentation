@@ -77,7 +77,7 @@ and ultimately back as a response to the query.
 {% include note.html content="Adding a [trace.level](../../reference/query-api-reference.html#trace.level)
 is generally helpful when debugging vespa queries." %}
 
-So, [Searchers](../../searcher-development.html) are Java components that do some kind of processing along the query chain;
+So, [Searchers](../../applications/searchers.html) are Java components that do some kind of processing along the query chain;
 either modifying the query before the actual search,
 modifying the results after the search,
 or some combination of both.
@@ -97,7 +97,7 @@ The search will take care of creating the actual query for us - let's get starte
 While the `content` layer in Vespa is written in C++ for maximum performance, 
 the `container` layer is in Java for flexibility.
 So, all Searchers and thus custom Searchers are written in Java.
-Refer to [the guide on Searcher development](../../searcher-development.html) for more information.
+Refer to [the guide on Searcher development](../../applications/searchers.html) for more information.
 
 We want to create a Searcher that takes a `user_id`,
 issues a query to find the corresponding embedding,
@@ -277,7 +277,7 @@ $ vespa deploy --wait 300 app-6-recommendation-with-searchers
 </div>
 
 After the application has been deployed, we are ready to test.
-Refer to [the Searcher development guide](../../searcher-development.html)
+Refer to [the Searcher development guide](../../applications/searchers.html)
 for much more on custom Searchers and the Java API.
 
 
@@ -343,7 +343,7 @@ When a document is fed to Vespa, it goes through a chain of Document Processors
 before being passed to the content node for storage and indexing.
 
 Vespa also supports custom Document Processors, refer to
-[the guide for document processing](../../document-processing.html) for more information.
+[the guide for document processing](../../applications/document-processors.html) for more information.
 
 
 ## Improving recommendation diversity 

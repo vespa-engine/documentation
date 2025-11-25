@@ -229,7 +229,7 @@ Write the following to `text-search/app/services.xml`:
 
 Some notes about the elements above:
 
-- `<container>` defines the [container cluster](../../jdisc/index.html) for document, query and result processing
+- `<container>` defines the [container cluster](../../applications/containers.html) for document, query and result processing
 - `<search>` sets up the [query endpoint](../../querying/query-api.html).  The default port is 8080.
 - `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
 - `<content>` defines how documents are stored and searched

@@ -142,6 +142,6 @@ by changing the `endpoint` configuration parameter.
 - **Q: Can I use the [Responses](https://platform.openai.com/docs/api-reference/responses/create) provided by OpenAI**
   - A: No, currently only the [Chat Completion API](https://platform.openai.com/docs/api-reference/chat) is supported.
 - **Q: Can I use the OpenAI client for reranking?**
-  - A: Yes, but currently, you need to implement a [custom searcher](/en/searcher-development.html) that uses the OpenAI client to rerank the results.
+  - A: Yes, but currently, you need to implement a [custom searcher](/en/applications/searchers.html) that uses the OpenAI client to rerank the results.
 - **Q: Can I use the OpenAI client for retrieving embeddings?**
   - A: No, currently, only the [Chat Completion API](https://platform.openai.com/docs/api-reference/chat) is supported.

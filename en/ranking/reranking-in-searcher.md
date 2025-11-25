@@ -5,12 +5,12 @@ redirect_from:
   - /en/reranking-in-searcher
 ---
 
-This guide demonstrates how to deploy a [searcher](../searcher-development.html) 
+This guide demonstrates how to deploy a [searcher](../applications/searchers.html) 
 implementing a last stage of [phased ranking](phased-ranking.html). The searcher re-ranks the 
 global top 200 documents which have been ranked by the content nodes using the configurable [ranking](ranking-intro)
 specification in the document [schema(s)](../basics/schemas.html).  
 
-The reranking searcher uses [multiphase searching](../searcher-development.html#multiphase-searching):
+The reranking searcher uses [multiphase searching](../applications/searchers.html#multiphase-searching):
 
 **Matching query protocol phase:** The matching protocol phase which asks each content node involved in the query
 to return the locally best ranking hits (ranked by the configurable ranking expressions defined in the schema).
@@ -133,7 +133,7 @@ public class ReRankingSearcher extends Searcher {
 
 [services.xml](../reference/services.html) is needed 
 to make up a Vespa [application package](../reference/application-packages-reference.html). 
-Here we include the custom searcher in the `default` [search chain](../components/chained-components.html):
+Here we include the custom searcher in the `default` [search chain](../applications/chaining.html):
 
 <pre data-test="file" data-path="my-app/src/main/application/services.xml">
 &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;

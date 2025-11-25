@@ -1,6 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Using ZooKeeper"
+  - /en/using-zookeeper.html
 ---
 
 The Vespa container supports [ZooKeeper](https://zookeeper.apache.org/), which
@@ -20,7 +21,7 @@ See [#15762](https://github.com/vespa-engine/vespa/issues/15762) for other node 
 ## Configuration
 
 1. ZooKeeper must be explicitly enabled in the [container cluster
-configuration](reference/services-container.html#zookeeper).
+configuration](../reference/services-container.html#zookeeper).
 
 2. The application must specify an dependency on `zkfacade`. Example for `pom.xml`:
    
@@ -38,7 +39,7 @@ configuration](reference/services-container.html#zookeeper).
 
 ZooKeeper features are exposed through
 [VespaCurator](https://github.com/vespa-engine/vespa/blob/master/zkfacade/src/main/java/com/yahoo/vespa/curator/api/VespaCurator.java).
-[Inject](jdisc/injecting-components.html) `VespaCurator` to use it. [Handler](jdisc/developing-request-handlers.html) example:
+[Inject](dependency-injection.html) `VespaCurator` to use it. [Handler](request-handlers.html) example:
 
 ```java
 public class MyRequestHandler extends ThreadedHttpRequestHandler {

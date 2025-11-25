@@ -52,7 +52,7 @@ With Vespa 8, the result format is changed to:
 Note that this is also the Vespa 8 feeding format. 
 
 {% include important.html content="Change all code that parses query results to expect the new format.
-This includes programs that parses the result JSON and [Searchers](searcher-development.html)." %}
+This includes programs that parses the result JSON and [Searchers](applications/searchers.html)." %}
 
 On Vespa 7, the `distance` rank feature is output as:
 ```

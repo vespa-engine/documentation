@@ -404,7 +404,7 @@ In this case, it simply ranks documents based on how close they are in the CLIP 
 
 ## Using Nearest Neighbor from a Searcher Component
 As with all query operators in Vespa, one can build the query tree programmatically
-in a custom [searcher component](../searcher-development.html).
+in a custom [searcher component](../applications/searchers.html).
 See
 [Centroids](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-image-search/src/main/java/ai/vespa/examples/Centroids.java)
 in [Billion-Scale Image Search](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search)
