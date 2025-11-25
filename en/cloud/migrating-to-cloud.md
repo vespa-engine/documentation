@@ -10,7 +10,7 @@ you're just gaining some new capabilities and avoid the operational work.
 
 The high-level process is as follows:
 1. Functional validation using the [dev](environments.html#dev) environment (this guide).
-2. Deployment to a [prod](environments.html.html#prod) zone.
+2. Deployment to a [prod](environments.html#prod) zone.
 
 The rest of this guide assumes you have a [tenant](../learn/tenant-apps-instances.html) ready for deployment:
 <!-- ToDo: Expand this paragraph with some more details, e.g. enclave users -->
