@@ -9,8 +9,8 @@ as applications on Vespa Cloud supports all the same features as your self-hoste
 you're just gaining some new capabilities and avoid the operational work.
 
 The high-level process is as follows:
-1. Functional validation using the [dev](https://cloud.vespa.ai/en/reference/environments.html#dev) environment (this guide).
-2. Deployment to a [prod](https://cloud.vespa.ai/en/reference/environments.html#prod) zone.
+1. Functional validation using the [dev](/en/cloud/environments.html.html#dev) environment (this guide).
+2. Deployment to a [prod](/en/cloud/environments.html.html#prod) zone.
 
 The rest of this guide assumes you have a [tenant](/en/learn/tenant-apps-instances.html) ready for deployment:
 <!-- ToDo: Expand this paragraph with some more details, e.g. enclave users -->
@@ -88,7 +88,7 @@ This pair is used in subsequent accesses to the data plane for document and quer
 ### 5. Vespa Cloud Enclave Only: Add Account
 {% include note.html content='Skip this step unless you are using [Vespa Cloud Enclave](/en/cloud/enclave/enclave.html).'%}
 
-Add [deployment.xml](https://cloud.vespa.ai/en/reference/deployment#deployment) with your cloud provider account -
+Add [deployment.xml](/en/reference/deployment.html#deployment) with your cloud provider account -
 This ensures the deployment uses resources from the correct account - examples:
 ```xml
 <deployment version="1.0" cloud-account="gcp:project-name">
@@ -227,7 +227,7 @@ i.e., 7 days after the last deployment.
 **This applies to all plans**.
 Use the Vespa Console to extend the expiry period, or redeploy the application to add 7 more days.' %}
 
-* Read more about the [dev](https://cloud.vespa.ai/en/reference/environments.html#dev) environment
+* Read more about the [dev](/en/cloud/environments.html.html#dev) environment
 * Feed (a subset) of the data and validate that queries and other API accesses work as expected.
 * At the end of the validation process,
   continue to [production deployment](https://cloud.vespa.ai/en/production-deployment.html) to set up in production zones.

@@ -29,7 +29,7 @@ Remove the CI job that builds and deploys application packages, if any.
 To remove an instance or a deployment to a region from an application:
 
 1. Remove the `region` from `prod`, or the `instance` from `deployment`
-   in [deployment.xml](https://cloud.vespa.ai/en/reference/deployment#instance):
+   in [deployment.xml](/en/reference/deployment.html#instance):
 
     ```xml
     <deployment version="1.0">
