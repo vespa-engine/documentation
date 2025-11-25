@@ -20,7 +20,7 @@ One can also use _instances_, but that will not work across Vespa major versions
 refer to [tenant, applications, instances](../learn/tenant-apps-instances) for details.
 
 Vespa Cloud has different environments `dev` and `prod`, with different characteristics -
-[details](https://cloud.vespa.ai/en/reference/environments).
+[details](/en/cloud/environments.html).
 Clone to `dev` for short-lived experiments/development/benchmarking,
 use `prod` for serving applications with a [CI/CD pipeline](automated-deployments.html).
 
@@ -31,7 +31,7 @@ Examples are based on the
 {% include note.html content='When done, it is easy to tear down resources in Vespa Cloud.
 E.g., _https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deploy_ or
 _https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default_ to find a delete-link.
-Instances in `dev` environments are auto-expired ([details](https://cloud.vespa.ai/en/reference/environments)),
+Instances in `dev` environments are auto-expired ([details](/en/cloud/environments.html)),
 so application cloning is a safe way to work with Vespa.
 Find more information in [deleting applications](deleting-applications).
 '%}
@@ -66,7 +66,7 @@ $ vespa fetch -t http://localhost:19071 && \
 
 **Deploy target application package**
 
-The procedure differs a little whether deploying to dev or prod [environment](https://cloud.vespa.ai/en/reference/environments).
+The procedure differs a little whether deploying to dev or prod [environment](/en/cloud/environments.html).
 The `mvn -U clean package` step is only needed for applications with custom code.
 Configure application name and create data plane credentials:
 <pre>
@@ -104,7 +104,7 @@ https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/d
 </pre>
   </li>
   <li>
-    Deployments to the <code>prod</code> environment requires <a href="https://cloud.vespa.ai/en/reference/deployment">deployment.xml</a> -
+    Deployments to the <code>prod</code> environment requires <a href="/en/reference/deployment.html">deployment.xml</a> -
     select which <a href="https://cloud.vespa.ai/en/reference/zones">zone</a> to deploy to:
 <pre>
 $ cat &lt;&lt;EOF &gt; deployment.xml
