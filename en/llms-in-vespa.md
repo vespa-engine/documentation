@@ -426,7 +426,7 @@ package=ai.vespa.test
 repetitions int default=1
 ```
 
-See also [developer guide](developer-guide.html) for more information on how to create your own components.
+See also [developer guide](applications/developer-guide.html) for more information on how to create your own components.
 
 ### Creating your own searchers in Java
 
