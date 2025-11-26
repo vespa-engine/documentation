@@ -66,7 +66,7 @@ select * from example where content contains ({significance:0.9}"neurotransmitte
 
 ## Significance values in a searcher
 
-Document frequency and significance values can be also set in a [custom searcher](../searcher-development.html#writing-a-searcher):
+Document frequency and significance values can be also set in a [custom searcher](../applications/searchers.html#writing-a-searcher):
 
 ```java
 private void setDocumentFrequency(WordItem item, long frequency, long numDocuments) {

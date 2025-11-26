@@ -14,7 +14,7 @@ in the sample app.
 
 To browse the application, navigate to
 <a href="http://localhost:8080/site" data-proofer-ignore>localhost:8080/site</a>.
-This site is implemented through a custom [request handler](jdisc/developing-request-handlers.html)
+This site is implemented through a custom [request handler](applications/request-handlers.html)
 and is meant to be a simple example of creating a front end / middleware that
 sits in front of the Vespa back end. As such it is fairly independent of Vespa
 features, and the code is designed to be fairly easy to follow and as
@@ -30,7 +30,7 @@ scripts to convert from the data set format to Vespa format:
 [convert_reviews.py](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/convert_reviews.py).
 See [README](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping#readme) for example use.
 
-When feeding reviews, there is a custom [document processor](document-processing.html)
+When feeding reviews, there is a custom [document processor](applications/document-processors.html)
 that intercepts document writes and updates the parent item with the review rating,
 so the aggregated review rating is kept stored with the item -
 see [ReviewProcessor](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/java/ai/vespa/example/shopping/ReviewProcessor.java).
@@ -53,7 +53,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     refer to a single parent item and are rendered on the item page. The query
     document type is used to power auto-suggest functionality.
 
-* [Custom document processor](document-processing.html)
+* [Custom document processor](applications/document-processors.html)
 
     In Vespa, you can set up custom document processors to perform any type of
     extra processing during document feeding. One example is to enrich the
@@ -62,7 +62,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     uses a document processor to intercept reviews and update the parent item's
     review rating.
 
-* [Custom searcher processor](searcher-development.html)
+* [Custom searcher processor](applications/searchers.html)
 
     In Vespa, you can set up custom searchers to perform any type of
     extra processing during querying.
@@ -70,7 +70,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     using a combination of [fuzzy matching](reference/query-language-reference.html#fuzzy)
     and [prefix search](querying/text-matching.html#prefix-match).
 
-* [Custom handlers](jdisc/developing-request-handlers.html)
+* [Custom handlers](applications/request-handlers.html)
 
     With Vespa, you can set up general request handlers to handle any type of request.
     This example site is implemented with a single such request handler,
@@ -81,7 +81,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     Note that this handler is for example purposes and is designed to be independent of Vespa.
     Most applications would serve this through a dedicated setup.
 
-* [Custom configuration](configuring-components.html)
+* [Custom configuration](applications/configuring-components.html)
 
     When creating custom components in Vespa, for instance document processors,
     searchers or handlers, one can use custom configuration to inject config

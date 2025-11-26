@@ -360,7 +360,7 @@ Types that are not supported:
 
 ## Custom field generator
 
-As usual with Vespa, existing functionality can be extended by developing [custom application components](/en/developer-guide.html).
+As usual with Vespa, existing functionality can be extended by developing [custom application components](/en/applications/developer-guide.html).
 A custom generator component can be used to implement application-specific logic to construct prompts, transform and validate LLM inputs and output,
 combine outputs of several LLMs or use other sources such a knowledge graph.
 
