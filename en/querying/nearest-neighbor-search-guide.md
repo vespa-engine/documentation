@@ -6,7 +6,7 @@ redirect_from:
 ---
 
  This guide is a practical introduction to using Vespa nearest neighbor search query operator and how to combine nearest
- neighbor search with other Vespa query operators. The guide uses Vespa's [embedding](../embedding.html)
+ neighbor search with other Vespa query operators. The guide uses Vespa's [embedding](../rag/embedding.html)
  support to map text to vectors. The guide also covers diverse, efficient candidate retrievers 
  which can be used as candidate retrievers in a [multiphase ranking](../ranking/phased-ranking.html) funnel. 
 
@@ -442,7 +442,7 @@ schema track {
 
 This document schema is explained in the [practical search performance guide](../performance/practical-search-performance-guide),
 the addition is the `embedding` field which is defined as a synthetic field outside of the document. This 
-field is populated by Vespa's [embedding](../embedding.html) functionality. Using the [E5](https://huggingface.co/intfloat/e5-small-v2) 
+field is populated by Vespa's [embedding](../rag/embedding.html) functionality. Using the [E5](https://huggingface.co/intfloat/e5-small-v2) 
 text embedding model (described in this [blog post](https://blog.vespa.ai/enhancing-vespas-embedding-management-capabilities/)). 
 
 Note that the `closeness` rank-profile defines two
@@ -839,7 +839,7 @@ requested does not impact `targetHits`. Notice that `targetHits` is per content 
 - `ranking=closeness` tells Vespa which [rank-profile](../basics/ranking.html) to score documents. One must 
 specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` ranking expression
 in the `rank-profile`.
-- `input.query(q)` is the query vector produced by the [embedder](../embedding.html#embedding-a-query-text).
+- `input.query(q)` is the query vector produced by the [embedder](../rag/embedding.html#embedding-a-query-text).
 
 Not specifying [ranking](../reference/query-api-reference.html#ranking.profile) will cause
 Vespa to use [nativeRank](../ranking/nativerank.html) which does not use the vector similarity, causing

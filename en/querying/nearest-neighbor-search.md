@@ -122,7 +122,7 @@ and the query can have multiple `nearestNeighbor` operators searching different 
 Support for using the `nearestNeighbor` operator with a mixed tensor with multiple vectors per document
 is available in {% include version.html version="8.144.19" %}.
 
-To learn how Vespa can create the vectors for you, see [embedding](../embedding.html).
+To learn how Vespa can create the vectors for you, see [embedding](../rag/embedding.html).
 
 
 ## Using nearest neighbor search

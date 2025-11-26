@@ -7,7 +7,7 @@ redirect_from:
 
 Vespa supports advanced ranking models through its tensor API.
 If your model is in the [ONNX format](https://onnx.ai/), Vespa can import and use the model directly.
-You can use ONNX models with Vespa [embedder](../embedding.html) functionality or in [ranking](ranking-intro).
+You can use ONNX models with Vespa [embedder](../rag/embedding.html) functionality or in [ranking](ranking-intro).
 
 
 
@@ -133,7 +133,7 @@ more suitable in the `second-phase` or `global-phase` phases.
 See [phased ranking](../ranking/phased-ranking.html).
 
 Models in which data tensors are located in external data files, are **only** supported when the following conditions are met:
-- The model is used in an _embedder_, e.g <code>hugging-face-embedder</code> (see [embedding](../embedding.html)).
+- The model is used in an _embedder_, e.g <code>hugging-face-embedder</code> (see [embedding](../rag/embedding.html)).
 - The model is referenced using a URL, e.g. <code>url="https://example.com/my-onnx-model/model.onnx"</code>.
 - All external data files are located in the same parent path/directory as the model file,
   e.g. <code>https://example.com/my-onnx-model/model.onnx_data</code>.
@@ -166,7 +166,7 @@ $ optimum-cli export onnx --library transformers --task feature-extraction -m BA
 ```
 
 The exported files in `model-output-dir`: `model.onnx` and `tokenizer.json` imported directly
-into the Vespa [huggingface-embedder](../embedding.html#huggingface-embedder).
+into the Vespa [huggingface-embedder](../rag/embedding.html#huggingface-embedder).
 
 Refer to [debugging onnx](#debugging-onnx-models).
 
@@ -200,7 +200,7 @@ export cross-encoder re-rankers using the Optimum library.
 ### Using Auto Classes to export HF models to ONNX format
 
 Transformer-based models have named inputs and outputs that must be compatible
-with the input and output names used by the [embedder](../embedding.html).
+with the input and output names used by the [embedder](../rag/embedding.html).
 
 The [model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting)
 example includes two scripts to export models and vocabulary files using the default expected input and output names
@@ -211,7 +211,7 @@ The input and output names to the embedder are tunable via the `transformer-`par
 
 ### Debugging ONNX models
 
-When loading [ONNX](https://onnx.ai/) models for Vespa native [embedders](../embedding.html),
+When loading [ONNX](https://onnx.ai/) models for Vespa native [embedders](../rag/embedding.html),
 the model must have correct inputs and output parameters.
 Vespa offers tools to inspect ONNX model files.
 Here, _minilm-l6-v2.onnx_ is in the current working directory:

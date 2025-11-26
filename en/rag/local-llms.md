@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Running LLMs inside your Vespa application"
+redirect_from:
+  - /en/llms-local
 ---
 
 Please refer to [Large Language Models in Vespa](llms-in-vespa.html) for an
@@ -14,8 +16,7 @@ Running large language models (LLMs) directly in your Vespa application offers
 various advantages, particularly in terms of data security and privacy. By
 running LLMs locally, sensitive information remains within the confines of the
 application or network, eliminating the risks associated with data transmission
-to external services. This is especially important for [RAG use
-cases](llms-rag.html) that handle sensitive or proprietary data, such as
+to external services. This is especially important for [RAG use cases](rag) that handle sensitive or proprietary data, such as
 healthcare, finance, and legal services, where privacy compliance and data
 security are valid concerns.
 
@@ -31,8 +32,7 @@ Finally, while massively large foundation models dominates the generalist use
 case, the smaller, more specialized, models (sometimes called "small language
 models") have become much more capable.
 
-For a quick start, check out the [RAG sample
-app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
+For a quick start, check out the [RAG sample app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
 which demonstrates how to set up a local LLM.
 
 
@@ -42,7 +42,7 @@ which demonstrates how to set up a local LLM.
 
 To set up the required inference engine for running your model, you need to
 define a `LocalLLM` component in your application's
-[services.xml](reference/services.html):
+[services.xml](../reference/services.html):
 
 ```xml
 <services version="1.0">
@@ -65,12 +65,12 @@ define a `LocalLLM` component in your application's
 This component will ensure that the underlying inference engine is started and
 load the model when the container nodes are started. Each container node in the
 cluster will load the LLM. Note that you can set up 
-[multiple clusters of container nodes](operations-selfhosted/routing.html#multiple-container-clusters).
+[multiple clusters of container nodes](../operations-selfhosted/routing.html#multiple-container-clusters).
 This can be helpful for instance if you have multiple LLMs that don't fit in the
 available GPU memory, or you would like to offload LLM inference to dedicated
 nodes for performance reasons.
 
-The [`model`](reference/config-files.html#parameter-types) configuration
+The [`model`](../reference/config-files.html#parameter-types) configuration
 parameter can be either set to a known `model-id` for Vespa Cloud, a `url` or a
 `path` to the model inside the application package. Usually, however, LLM files
 are too large to practically be included in the application package, so the
@@ -94,8 +94,7 @@ following base models and finetunes of them:
 - Phi 2/3
 - And many more
 
-Please refer to the [supported
-models](https://github.com/ggerganov/llama.cpp?tab=readme-ov-file#description)
+Refer to the [supported models](https://github.com/ggerganov/llama.cpp?tab=readme-ov-file#description)
 section of `llama.cpp` for a full list of updated models.
 
 Vespa supports the `GGUF` file format. `GGUF` models can be found on
@@ -150,14 +149,13 @@ The most significant model configuration parameters are:
   `DISCARD` ignores the request silently, returning without generating any tokens.
   `FAIL` raises and error.
   
-Please refer to the [local LLM client configuration
-definition](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-local-client.def)
+Please refer to the [local LLM client configuration definition](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-local-client.def)
 for an updated list of configuration parameters.
 
 Some important points are worth considering here. First is the context window,
 given by the `contextSize` parameter, which is the size (in number of tokens)
 that the model uses to generate the next token. In general, larger context
-windows are required in [RAG applications](llms-rag.html) to hold the context
+windows are required in [RAG applications](rag) to hold the context
 from the retrieval stage.  Models are trained with a certain context length,
 but this context length can typically be increased up to 4x without much loss
 in text generation quality.
@@ -207,8 +205,7 @@ size etc.
 
 ### Inference parameters
 
-Please refer to the general discussion in [LLM
-parameters](llms-in-vespa.html#llm-parameters) for setting inference
+Please refer to the general discussion in [LLM parameters](llms-in-vespa.html#llm-parameters) for setting inference
 parameters.
 
 Local LLM inference has the following inference parameters that can be sent along
@@ -267,15 +264,13 @@ Here, the model itself has 33 layers, and all are offloaded to the GPU. If your
 model is too large to fit on the GPU, you can speed up model evaluation by
 offloading parts of the model to the GPU.
 
-To set up GPUs on self-hosted, please refer to [Container GPU
-setup](/en/operations-selfhosted/vespa-gpu-container.html)
+To set up GPUs on self-hosted, please refer to [Container GPU setup](../operations-selfhosted/vespa-gpu-container.html)
 for more details.
 
 It is very easy to use GPU acceleration on Vespa Cloud. To enable GPU
-inference, you need to [request
-GPUs](https://cloud.vespa.ai/en/reference/services.html#gpu) on the container
-nodes. For a more practical introduction, please take a look at the [RAG sample
-app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
+inference, you need to [request GPUs](../reference/services.html#gpu) on the container
+nodes. For a more practical introduction, please take a look at the 
+[RAG sample app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
 which also demonstrates how to evaluate the LLM on GPUs on Vespa Cloud.
 
 

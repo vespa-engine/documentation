@@ -8,7 +8,7 @@ redirect_from:
 
 For an introduction to nearest neighbor search, see [nearest neighbor search](nearest-neighbor-search) documentation, 
 for practical usage of Vespa's nearest neighbor search, see [nearest neighbor search - a practical guide](nearest-neighbor-search-guide),
-and to have Vespa create vectors for you, see [embedding](../embedding.html).
+and to have Vespa create vectors for you, see [embedding](../rag/embedding.html).
 This document describes how to speed up searches for nearest neighbors by adding a
 [HNSW index](../reference/schema-reference.html#index-hnsw) to the
 tensor field.
