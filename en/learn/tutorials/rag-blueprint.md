@@ -634,8 +634,8 @@ Choice of embedding model will be a trade-off between inference time (both index
 out the [MTEB leaderboard](https://huggingface.co/spaces/mteb/leaderboard), and look at the `Retrieval`-column to gauge performance, 
 while also considering the memory usage, vector dimensions, and context length of the model.
 
-See [model hub](../../cloud/model-hub.html) for a list of provided models ready to use with Vespa. 
-See also [Huggingface Embedder](../../embedding.html#huggingface-embedder) for details on 
+See [model hub](../../rag/model-hub.html) for a list of provided models ready to use with Vespa. 
+See also [Huggingface Embedder](../../rag/embedding.html#huggingface-embedder) for details on 
 using other models (exported as ONNX) with Vespa.
 
 In addition to dense vector representation, Vespa supports sparse embeddings (token weights) and multi-vector (ColBERT-style) embeddings.
@@ -1643,13 +1643,13 @@ that can scale to any dataset size, and any query load.
   * [Long context ColBERT](https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/)
   * [Long context ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long/#vespa-sample-applications---long-context-colbert)
   * [ColBERT sample app](https://github.com/vespa-engine/sample-apps/tree/master/colbert)
-  * [ColBERT embedder reference](../../embedding.html#colbert-embedder)
+  * [ColBERT embedder reference](../../rag/embedding.html#colbert-embedder)
   * [ColBERT standalone python example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_Vespa-cloud.html)
   * [ColBERT standalone long context example notebook](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_long_context_Vespa-cloud.html)
 
 * **Q: Which embedding models can I use with Vespa?**
   
-  A: Vespa supports a variety of embedding models. For a list of vespa provided models on Vespa Cloud, see [Model hub](../../cloud/model-hub.html). See also [embedding reference](../../embedding.html#provided-embedders) for how to use embedders. You can also use private models (gated by authentication with Bearer token from Vespa Cloud secret store).
+  A: Vespa supports a variety of embedding models. For a list of vespa provided models on Vespa Cloud, see [Model hub](../../rag/model-hub.html). See also [embedding reference](../../rag/embedding.html#provided-embedders) for how to use embedders. You can also use private models (gated by authentication with Bearer token from Vespa Cloud secret store).
 
 * **Q: Do I need to use an LLM with Vespa?**
   

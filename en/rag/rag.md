@@ -1,9 +1,11 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Retrieval-augmented generation (RAG) in Vespa"
+redirect_from:
+  - /en/llms-rag
 ---
 
-Please refer to [Large Language Models in Vespa](llms-in-vespa.html) for an
+Please refer to [Large Language Models in Vespa](llms-in-vespa) for an
 introduction to using LLMs in Vespa.
 
 Retrieval-Augmented Generation (RAG) is a technique that merges retrieval
@@ -18,8 +20,7 @@ In Vespa, the `RAGSearcher` first performs the query as specified by the user,
 creates a prompt based on the results, and queries the language model to
 generate a response.
 
-For a quick start, check out the [RAG sample
-app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
+For a quick start, check out the [RAG sample app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
 which demonstrates using either an external LLM service or a local LLM.
 
 
@@ -72,11 +73,10 @@ specify a `yql` or `query` parameter. By using `query` here, this text is
 used as both query text for the document retrieval, and in the prompt sent to
 the LLM, as we will see below.
 
-Indeed, with the `RAGSearcher` you can use any type of [search in
-Vespa](querying/query-api.html), including [text search based on
-BM25](learn/tutorials/text-search.html) and advanced [approximate vector
-search](querying/approximate-nn-hnsw). This makes the retrieval part of
-RAG very flexible.
+Indeed, with the `RAGSearcher` you can use any type of [search in Vespa](../querying/query-api.html), 
+including [text search based on BM25](../learn/tutorials/text-search.html) 
+and advanced [approximate vector search](../querying/approximate-nn-hnsw). 
+This makes the retrieval part of RAG very flexible.
 
 ### Controlling the prompt
 
@@ -97,7 +97,7 @@ field3: ...
 ```
 
 Here, `field1` and so on are the actual fields as returned from the search. For
-instance, the [text search tutorial](learn/tutorials/text-search) defines a
+instance, the [text search tutorial](../learn/tutorials/text-search) defines a
 document schema consisting of fields: `id`, `title`, `url`, and `body`. If you
 only want to include the `title` and `body` fields for use in the context, you
 can issue a query like this:
@@ -159,8 +159,7 @@ Please be advised that all documents as returned by Vespa will be used in the
 context. Most LLMs have some form of limit for how large the prompt can be. LLM
 services also typically have a cost per query based on number of tokens both in
 input and output. To reduce context size it is important to control the number
-of results by using the `hits` [query
-parameter](reference/query-api-reference.html#hits). Also, using the query above
+of results by using the `hits` [query parameter](../reference/query-api-reference.html#hits). Also, using the query above
 limit the fields to only what is strictly required.
 
 To debug the prompt, i.e. what is actually sent to the LLM, you can use the

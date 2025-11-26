@@ -16,7 +16,7 @@ This tutorial demonstrates building a hybrid search application with Vespa that 
 
 The main goal is to set up a text search app that combines simple text scoring features
 such as [BM25](../../ranking/bm25.html) [^1] with vector search in combination with text-embedding models. 
-We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](../../embedding.html#huggingface-embedder)
+We demonstrate how to obtain text embeddings within Vespa using Vespa's [embedder](../../rag/embedding.html#huggingface-embedder)
 functionality. In this guide, we use [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the 
 text embedding model. It is a small model that is fast to run and has a small memory footprint. 
 
@@ -251,7 +251,7 @@ Some notes about the elements above:
 - `<search>` sets up the [query endpoint](../../querying/query-api.html). The default port is 8080.
 - `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
 - `<component>` with type `hugging-face-embedder` configures the embedder in the application package. This includes where to fetch the model files from, the prepend
-instructions, and the pooling strategy. See [huggingface-embedder](../../embedding.html#huggingface-embedder) for details and other embedders supported.
+instructions, and the pooling strategy. See [huggingface-embedder](../../rag/embedding.html#huggingface-embedder) for details and other embedders supported.
 - `<content>` defines how documents are stored and searched.
 - `<min-redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_  to content clusters.
@@ -344,7 +344,7 @@ The output should look like this (rates may vary depending on your machine HW):
 
 Notice:
 
-- `feeder.ok.rate` which is the throughput (Note that this step includes embedding inference). See [embedder-performance](../../embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
+- `feeder.ok.rate` which is the throughput (Note that this step includes embedding inference). See [embedder-performance](../../rag/embedding.html#embedder-performance) for details on embedding inference performance. In this case, embedding inference is the bottleneck for overall indexing throughput. 
 - `http.response.code.counts` matches with `feeder.ok.count`. The dataset has 3633 documents. Note that if you observe any `429` responses, these are 
 harmless. Vespa asks the client to slow down the feed speed because of resource contention.
 
@@ -492,7 +492,7 @@ PLAIN-2 0 MED-4830 1
 ### Dense search using text embedding
 
 Now, we turn to embedding-based retrieval, where we embed the query text using the configured text-embedding model and perform
-an exact `nearestNeighbor` search. We use [embed query](../../embedding.html#embedding-a-query-text) to produce the
+an exact `nearestNeighbor` search. We use [embed query](../../rag/embedding.html#embedding-a-query-text) to produce the
 input tensor `query(e)`, defined in the `semantic` rank-profile in the schema.
 
 <div class="pre-parent">

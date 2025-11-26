@@ -6,7 +6,7 @@ redirect_from:
 ---
 
 [Cross-Encoder Transformer](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-4/) 
-based text ranking models are generally more effective than [text embedding](../embedding.html) models
+based text ranking models are generally more effective than [text embedding](../rag/embedding.html) models
 as they take both the query and the document as input with full cross-attention between all the query and document tokens. 
 
 The downside of cross-encoder models is the computational complexity. This document is a guide
@@ -204,7 +204,7 @@ rank-profile roberta-ranker inherits default {
 
 ## Using the cross-encoder model at query time 
 
-At query time, we need to tokenize the user query using the [embed](../embedding.html#embedding-a-query-text) support. 
+At query time, we need to tokenize the user query using the [embed](../rag/embedding.html#embedding-a-query-text) support. 
 
 The `embed` of the query text, sets the `query(q_tokens)`
 tensor that we defined in the ranking profile.

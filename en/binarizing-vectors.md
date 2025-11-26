@@ -27,7 +27,7 @@ and representing the vector of bits efficiently using the `int8` data type. Exam
 Binarization is key to reducing memory requirements and, therefore, cost.
 Binarization can also improve feeding performance, as the memory bandwidth requirements go down accordingly.
 
-Refer to [embedding](/en/embedding.html) for more details on how to create embeddings from text.
+Refer to [embedding](/en/rag/embedding.html) for more details on how to create embeddings from text.
 
 
 ## Summary

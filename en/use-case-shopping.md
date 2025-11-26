@@ -126,7 +126,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     document types contain different rank profiles to sort or score the
     data. The item ranking is using a hybrid combination of keyword and vector matching.
 
-* [Native embedders](embedding.html)
+* [Native embedders](rag/embedding.html)
 
     Native embedders are used to map the textual query and document representations 
     into dense high dimensional vectors which are used for semantic search. The application

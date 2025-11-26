@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Large Language Models in Vespa"
+redirect_from:
+  - /en/llms-in-vespa
 ---
 
 Large Language Models (LLMs) are AI systems that generate human-like text,
@@ -14,7 +16,7 @@ improving tasks such as document enrichment, query comprehension, summarization 
 Vespa is ideally suited for retrieval-augmented generation (RAG). This technique
 allows these models to access relevant and up-to-date information beyond their
 training in real-time, enabling Vespa's output to be contextually informed. For
-more information, refer to [Retrieval-Augmented Generation in Vespa](llms-rag.html).
+more information, refer to [Retrieval-Augmented Generation in Vespa](rag).
 
 The advantage of setting up a client connection to an LLM from within your Vespa application compared to doing the API call(s) 
 from your client after responses are returned from Vespa is that you eliminate an extra network hop, which means lower latency for end users.
@@ -22,9 +24,9 @@ The importance of this is amplified if you want to leverage multiple LLM calls f
 
 Vespa supports LLMs in three ways:
 
-1. [**External LLMs**](llms-external.html): Vespa can connect to any external LLM provider that serves an 
+1. [**External LLMs**](external-llms): Vespa can connect to any external LLM provider that serves an 
 <a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI-compatible API</a>.
-2. [**Local LLMs**](llms-local.html): Vespa can run LLMs within the Vespa application itself. 
+2. [**Local LLMs**](local-llms): Vespa can run LLMs within the Vespa application itself. 
 This allows for customized models and avoids sending data outside the application. 
 This is particularly useful for applications with strict data privacy requirements or those needing specific model configurations.
 3. [**Custom language models**](#custom-language-model-components): Vespa can be extended to support any language model, including those not based on OpenAI's API. This allows for flexibility in integrating various LLMs into Vespa applications.
@@ -41,9 +43,9 @@ which demonstrates setting up Vespa for RAG, using either an external LLM servic
 
 Vespa distinguishes between the clients used to connect to LLMs and components that uses these clients. 
 You can, for instance, set up a single client connection to an LLM, and use this connection 
-for both [document enrichment](llms-document-enrichment.html) and retrieval-augmented generation (RAG).
+for both [document enrichment](document-enrichment) and retrieval-augmented generation (RAG).
 
-![LLM/RAG searcher](../assets/img/llm-rag-searcher.svg)
+![LLM/RAG searcher](../../assets/img/llm-rag-searcher.svg)
 
 After adding a client connection to your `services.xml`, you can use the same client for various
 tasks such as retrieval-augmented generation. To do this, you need to set up the
@@ -77,7 +79,7 @@ up like this:
 </services>
 ```
 
-This sets up a new [search chain](reference/services-search.html#chain) which
+This sets up a new [search chain](../reference/services-search.html#chain) which
 includes an `LLMSearcher`. This searcher has the responsibility of calling out to
 the LLM connection using some prompt that has been sent along with the query.
 
@@ -173,8 +175,7 @@ The Manhattan Project was a research and development project during World War II
 ```
 
 The Vespa CLI understands this format and will stream the tokens as they arrive.
-The underlying format is [Server-Sent
-Events](https://html.spec.whatwg.org/multipage/server-sent-events.html), and the
+The underlying format is [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html), and the
 output from Vespa is like this:
 
 ```
@@ -206,8 +207,8 @@ data: {"token":" a"}
 Notice the use of the `--format=plain` in the Vespa CLI here to output exactly
 what is sent from Vespa.
 
-These events can be consumed by using a `EventSource` as described in the [HTML
-specification](https://html.spec.whatwg.org/multipage/server-sent-events.html#server-sent-events),
+These events can be consumed by using a `EventSource` as described in the 
+[HTML specification](https://html.spec.whatwg.org/multipage/server-sent-events.html#server-sent-events),
 or however you see fit as the format is fairly simple. Each `data` element
 contains a small JSON object which must be parsed, and contains a single `token`
 element containing the actual token.
@@ -238,7 +239,8 @@ be parameters such as:
 - `temperature` - for setting the model temperature
 - `maxTokens` - for setting the maximum number of tokens to produce
 
-Note that these parameters are common to both [Local LLMs](/en/llms-local.html) and [External LLMs](/en/llms-external.html), but each of them also supports additional inference parameters. See the respective sections for more details on these.
+Note that these parameters are common to both [Local LLMs](local-llms) and [External LLMs](external-llms), 
+but each of them also supports additional inference parameters. See the respective sections for more details on these.
 
 To provide inference parameters, you pass these along with the query:
 
@@ -295,11 +297,12 @@ prompt. Vespa provides the `RAGSearcher` to construct a prompt based on search
 results. This enables a flexible way of first searching for content in Vespa,
 and using the results to generate a response.
 
-Please refer to [RAG in Vespa](llms-rag.html) for more details.
+Please refer to [RAG in Vespa](rag) for more details.
 
 ### Structured output
 
-Both the `OpenAI` and  `LocalLLM` clients in Vespa can also be configured to return [structured output](https://platform.openai.com/docs/guides/structured-outputs). This is done by providing an `llm.json_schema` in the query. (Assuming you are using the `LLMSearcher` or `RAGSearcher` with `propertyPrefix=llm`).
+Both the `OpenAI` and  `LocalLLM` clients in Vespa can also be configured to return [structured output](https://platform.openai.com/docs/guides/structured-outputs). 
+This is done by providing an `llm.json_schema` in the query. (Assuming you are using the `LLMSearcher` or `RAGSearcher` with `propertyPrefix=llm`).
 
 This can be useful for different use cases.
 Examples include applying moderation of the output or providing the response in different styles and/or languages.
@@ -352,12 +355,12 @@ Which for example, using `gpt-4o-mini` returns
 }
 ```
 
-This can also leveraged for automated [Document Enrichment](llms-document-enrichment.html) during ingestion. With this approach, the `json_schema` is automatically generated based on the Vespa schema (and your prompt).
+This can also leveraged for automated [Document Enrichment](document-enrichment) during ingestion. With this approach, the `json_schema` is automatically generated based on the Vespa schema (and your prompt).
 
 ### Query profiles
 
 In all the above you have sent parameters along with each query. It is worth
-mentioning that Vespa supports [query profiles](querying/query-profiles.html), which are
+mentioning that Vespa supports [query profiles](../querying/query-profiles.html), which are
 named collections of search parameters. This frees the client from having to
 manage and send a large number of parameters, and enables the request parameters
 for a use case to be changed without having to change the client.
@@ -365,7 +368,7 @@ for a use case to be changed without having to change the client.
 ### Custom language model components
 
 Vespa also allows you to create your own language model components. 
-This is useful in cases where you want to use a language model that is not [supported](/en/llms-local.html#valid-llm-models) as local LLM through [llama.cpp](https://github.com/ggml-org/llama.cpp), 
+This is useful in cases where you want to use a language model that is not [supported](local-llms#valid-llm-models) as local LLM through [llama.cpp](https://github.com/ggml-org/llama.cpp), 
 or if you want to use an external LLM service that is incompatible with the OpenAI API.
 
 To create your own language model component, you need to implement the `ai.vespa.llm.LanguageModel` interface.
@@ -414,7 +417,8 @@ public class MockLanguageModel implements ai.vespa.llm.LanguageModel {
 }
 ```
 
-You can also create a [config definition](/en/applications/configuring-components.html#config-definition) that will make your component configurable through the `services.xml` file.
+You can also create a [config definition](../applications/configuring-components.html#config-definition) 
+that will make your component configurable through the `services.xml` file.
 
 Example of a minimal config definition:
 
@@ -426,15 +430,16 @@ package=ai.vespa.test
 repetitions int default=1
 ```
 
-See also [developer guide](applications/developer-guide.html) for more information on how to create your own components.
+See also [developer guide](../applications/developer-guide.html) for more information on how to create your own components.
 
 ### Creating your own searchers in Java
 
 The above example uses the `LLMSearcher`
 [class](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/ai/vespa/search/llm/LLMSearcher.java).
 You can easily create your own LLM searcher in Java by either specifically
-[injecting](applications/dependency-injection.html) the connection component, or
-subclassing the `LLMSearcher`. Please refer to [Searcher Development](applications/searchers.html) or [Document Processor Development](applications/document-processors.html) for more information on creating your own components.
+[injecting](../applications/dependency-injection.html) the connection component, or
+subclassing the `LLMSearcher`. Please refer to [Searcher Development](../applications/searchers.html) or 
+[Document Processor Development](../applications/document-processors.html) for more information on creating your own components.
 
 Note that it should not be necessary to create your own components in Java to
 use this functionality.

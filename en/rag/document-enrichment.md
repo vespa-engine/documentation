@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Document enrichment with LLMs"
+redirect_from:
+  - /en/llms-document-enrichment
 ---
 
 Document enrichment enables automatic generation of document field values using large language models (LLMs) or custom code during feeding.
@@ -24,8 +26,8 @@ This section provides guidelines for configuring document enrichment, using the
 
 ### Defining generated fields
 
-Enrichments are defined in a schema using a [generate indexing expression](reference/indexing-language-reference.html#generate).
-For example the following schema defines two [synthetic fields](/en/operations/reindexing.html) with `generate`:
+Enrichments are defined in a schema using a [generate indexing expression](../reference/indexing-language-reference.html#generate).
+For example the following schema defines two [synthetic fields](../operations/reindexing.html) with `generate`:
 
 ```
 schema passage {
@@ -151,15 +153,17 @@ This shouldn't happen when using structured output, but it can happen with `TEXT
 The default value is `DISCARD`, which leaves the field empty, sets it to `null`.
 Other values `WARN` and `FAIL` log a warning and throw an exception respectively.
 
-Overview of all the field generator parameters is available in the [configuration definition file](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/language-model-field-generator.def).
+Overview of all the field generator parameters is available in the 
+[configuration definition file](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/language-model-field-generator.def).
+
 
 ## Configuring language models
 
 Field generators specify `<providerId>` to reference a language model client 
 to be used for generation, which is either a local LLM, an OpenAI client or a custom component.
 
-Configuration details for local LLM and OpenAI client are covered in [local LLM](llms-local.html)
-and [OpenAI client](llms-external.html) documentation.
+Configuration details for local LLM and OpenAI client are covered in [local LLM](local-llms.html)
+and [OpenAI client](external-llms.html) documentation.
 This section focuses on configuration parameters that are important for document enrichment.
 
 Both local LLM and OpenAI client can be configured with different models.
@@ -257,7 +261,7 @@ There are three important aspects of this configuration in addition to the model
 3. `maxQueueSize`, `maxEnqueueWait` and `maxQueueWait` are related to managing the queue 
    used for storing and feeding parallel requests into LLM runtime (llama.cpp).
 
-[Local LLMs documentation](llms-local.html) explains how to configure 
+[Local LLMs documentation](local-llms.html) explains how to configure 
 `model`, `contextSize` and `parallelRequests` with respect to the model and compute resources used.
 Memory usage (RAM or GPU VRAM) is especially important to considered when configuring these parameters. 
 
@@ -337,7 +341,7 @@ For example, a JSON schema for `field questions type array<string>` in document 
 ```
 
 Constructed schemas for different data types correspond to the 
-[document JSON format](/en/reference/document-json-format.html#) used for feeding.
+[document JSON format](../reference/document-json-format.html#) used for feeding.
 The following field types are supported:
 - string
 - bool
@@ -360,7 +364,7 @@ Types that are not supported:
 
 ## Custom field generator
 
-As usual with Vespa, existing functionality can be extended by developing [custom application components](/en/applications/developer-guide.html).
+As usual with Vespa, existing functionality can be extended by developing [custom application components](../applications/developer-guide.html).
 A custom generator component can be used to implement application-specific logic to construct prompts, transform and validate LLM inputs and output,
 combine outputs of several LLMs or use other sources such a knowledge graph.
 
