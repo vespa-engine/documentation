@@ -671,7 +671,7 @@ Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a disc
 Use [/state/v1/version](../reference/state-v1.html#state-v1-version) to find Vespa version.
 
 ### Deploy rollback
-See [rollback](../deployment.html#rollback) for options.
+See [rollback](../applications/deployment.html#rollback) for options.
 
 
 {:.faq-section}
