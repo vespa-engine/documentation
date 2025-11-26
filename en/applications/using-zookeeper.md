@@ -1,7 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Using ZooKeeper"
-  - /en/using-zookeeper.html
+redirect_from:
+  - /en/using-zookeeper
 ---
 
 The Vespa container supports [ZooKeeper](https://zookeeper.apache.org/), which
@@ -23,7 +24,7 @@ See [#15762](https://github.com/vespa-engine/vespa/issues/15762) for other node 
 1. ZooKeeper must be explicitly enabled in the [container cluster
 configuration](../reference/services-container.html#zookeeper).
 
-2. The application must specify an dependency on `zkfacade`. Example for `pom.xml`:
+2. The application must specify a dependency on `zkfacade`. Example for `pom.xml`:
    
    ```xml
    <dependency>
