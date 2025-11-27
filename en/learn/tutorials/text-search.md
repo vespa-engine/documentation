@@ -236,7 +236,7 @@ Some notes about the elements above:
 - `<min-redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_  to content clusters —
   the content cluster capacity can be increased by adding node elements —
-  see [elasticity](../../elasticity.html).
+  see [elasticity](../../content/elasticity.html).
   (See also the [reference](../../reference/services-content.html) for more on content cluster setup.)
 - `<nodes>` defines the hosts for the content cluster.
 

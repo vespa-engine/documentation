@@ -75,7 +75,7 @@ and wait for the changes to apply:
 
 {% include important.html content='Vespa Cloud is designed for online changes.
 All of the above changes can be deployed to a running system, with zero to minimal disruption.
-See [content cluster elasticity](/en/elasticity.html) for details.' %}
+See [content cluster elasticity](/en/content/elasticity.html) for details.' %}
 
 Making changes to the resource specifications is hence fully automated.
 The quickest way to the sweet spot is to initially deploy with enough capacity

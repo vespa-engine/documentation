@@ -1661,4 +1661,4 @@ that can scale to any dataset size, and any query load.
   
 * **Q: How can you say that Vespa can scale to any data and query load?**
   
-  A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../../elasticity.html) for details.
+  A: Vespa can scale both the stateless container nodes and content nodes of your application. See [overview](../overview.html) and [elasticity](../../content/elasticity.html) for details.

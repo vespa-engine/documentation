@@ -504,14 +504,14 @@ Some more examples and thoughts can be found in the [scaling guide](../performan
 ### Is there a batch ingestion mode, what limits apply?
 Vespa does not have a concept of "batch ingestion"
 as it contradicts many of the core features that are the strengths of Vespa,
-including [serving elasticity](../elasticity.html) and sub-second indexing latency.
+including [serving elasticity](../content/elasticity.html) and sub-second indexing latency.
 That said, we have numerous use-cases in production
 that do high throughput updates to large parts of the (sometimes entire) document set.
 In cases where feed throughput is more important than indexing latency, you can tune this to meet your requirements.
 Some of this is detailed in the [feed sizing guide](../performance/sizing-feeding.html).
 
 ### Can the index support up to 512 GB index size in memory?
-Yes. The [content node](../proton.html) is implemented in C++
+Yes. The [content node](../content/proton.html) is implemented in C++
 and not memory constrained other than what the operating system does.
 
 ### Get request for a document when document is not in sync in all the replica nodes?
@@ -556,7 +556,7 @@ Deleting documents, by using the [document API](../writing/reads-and-writes.html
 or [garbage collection](../schemas/documents.html#document-expiry) will increase the capacity on the content nodes.
 However, this is not necessarily observable in system metrics -
 this depends on many factors, like what kind of memory that is released,
-when [flush](../proton.html#proton-maintenance-jobs) jobs are run and document [schema](../basics/schemas.html).
+when [flush](../content/proton.html#proton-maintenance-jobs) jobs are run and document [schema](../basics/schemas.html).
 
 In short, Vespa is not designed to release memory once used.
 It is designed for sustained high throughput, low latency,
@@ -604,7 +604,7 @@ When you resend everything, the config server will notice that you did not actua
 and avoid unnecessary noop changes.
 
 ### How fast can nodes be added and removed from a running cluster?
-[Elasticity](../elasticity.html) is a core Vespa strength -
+[Elasticity](../content/elasticity.html) is a core Vespa strength -
 easily add and remove nodes with minimal (if any) serving impact.
 The exact time needed depends on how much data will need to be migrated in the background
 for the system to converge to [ideal data distribution](../content/idealstate.html).
@@ -789,7 +789,7 @@ and [autoscaling](../cloud/autoscaling.html) for how to automate.
 ### How can I manually modify resources used?
 Managing resources is easy, as most changes are automated.
 Adding / removing / changing nodes starts automated data migration,
-see [elasticity](../elasticity.html).
+see [elasticity](../content/elasticity.html).
 
 ### How to modify a schema?
 Schema changes might require data reindexing, which is automated, but takes some time.
@@ -828,7 +828,7 @@ As all clusters have one redundant node, serving and write traffic is not impact
 Before the upgrade, the application's [system and staging tests](../cloud/automated-deployments.html) are run,
 halting the upgrade if they fail.
 Documents are re-migrated to the upgraded node before doing the next node,
-see [Elastic Vespa](../elasticity.html) for details.
+see [Elastic Vespa](../content/elasticity.html) for details.
 
 ### How do we get alerted to issues like Feed Block? Searchable copy going offline?
 Issues like Feed Blocked, Deployment and Deprecation warnings show up in the console.

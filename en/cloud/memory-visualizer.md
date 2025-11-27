@@ -71,7 +71,7 @@ take note of this when using the Memory Visualizer again.
 ## Using the visualizer
 Some fields have a different color code.
 To understand the types of fields,
-read more about the [content node data structures](/en/proton.html) - in short:
+read more about the [content node data structures](/en/content/proton.html) - in short:
 
 {:.list}
 * `Ready` are indexed documents that might or might not be included in queries

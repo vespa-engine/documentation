@@ -728,7 +728,7 @@ representation is the most compacting post list representation.
 
 With `attribute` Vespa will per default not build any inverted index-like data structures for
 potential faster query evaluation. See [Wikipedia:Inverted Index](https://en.wikipedia.org/wiki/Inverted_index) 
-and [Vespa internals](../proton.html#index). 
+and [Vespa internals](../content/proton.html#index). 
 The reason for this default setting is that Vespa `attribute` fields can be used
 for many different aspects: [ranking](../basics/ranking.html), [result grouping](../querying/grouping.html),
  [result sorting](../reference/sorting.html), and finally searching/matching. 
