@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: AWS Archive guide
 category: cloud
+redirect_from:
+  - /cloud/archive-guide-aws
 ---
 
 Vespa Cloud exports log data, heap dumps, and Java Flight Recorder sessions to buckets in AWS S3.

@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: "Migrating to Vespa Cloud"
 category: cloud
+redirect_from:
+  - /en/cloud/migrating-to-cloud.html
 ---
 
 Migrating a Vespa application to Vespa Cloud is straightforward,
@@ -9,17 +11,17 @@ as applications on Vespa Cloud supports all the same features as your self-hoste
 you're just gaining some new capabilities and avoid the operational work.
 
 The high-level process is as follows:
-1. Functional validation using the [dev](environments.html#dev) environment (this guide).
-2. Deployment to a [prod](environments.html#prod) zone.
+1. Functional validation using the [dev](../operations/environments.html#dev) environment (this guide).
+2. Deployment to a [prod](../operations/environments.html#prod) zone.
 
-The rest of this guide assumes you have a [tenant](../learn/tenant-apps-instances.html) ready for deployment:
+The rest of this guide assumes you have a [tenant](tenant-apps-instances.html) ready for deployment:
 <!-- ToDo: Expand this paragraph with some more details, e.g. enclave users -->
 ```
 $ export VESPA_TENANT_NAME=mytenant
 ```
 
 {% include pre-req.html %}
-{% include note.html content='[Vespa Cloud Enclave](enclave/enclave.html) users: Run the Enclave setup steps first.'%}
+{% include note.html content='[Vespa Cloud Enclave](../operations/enclave/enclave.html) users: Run the Enclave setup steps first.'%}
 
 ### 1. Verify source application package
 An [application package](../basics/applications.html) from a self-hosted system
@@ -86,7 +88,7 @@ This pair is used in subsequent accesses to the data plane for document and quer
 
 
 ### 5. Vespa Cloud Enclave Only: Add Account
-{% include note.html content='Skip this step unless you are using [Vespa Cloud Enclave](enclave/enclave.html).'%}
+{% include note.html content='Skip this step unless you are using [Vespa Cloud Enclave](../operations/enclave/enclave.html).'%}
 
 Add [deployment.xml](../reference/deployment.html#deployment) with your cloud provider account -
 This ensures the deployment uses resources from the correct account - examples:
@@ -227,7 +229,7 @@ i.e., 7 days after the last deployment.
 **This applies to all plans**.
 Use the Vespa Console to extend the expiry period, or redeploy the application to add 7 more days.' %}
 
-* Read more about the [dev](environments.html#dev) environment
+* Read more about the [dev](../operations/environments.html#dev) environment
 * Feed (a subset) of the data and validate that queries and other API accesses work as expected.
 * At the end of the validation process,
-  continue to [production deployment](production-deployment.html) to set up in production zones.
+  continue to [production deployment](../operations/production-deployment.html) to set up in production zones.

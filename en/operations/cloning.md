@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Cloning applications and data
 category: cloud
+redirect_from:
+- /en/cloud/cloning-applications-and-data.html
 ---
 
 This is a guide on how to replicate a Vespa application in different environments, with or without data.
@@ -52,7 +54,7 @@ $ vespa deploy -t http://localhost:19071
 
 **Target setup:**
 
-[Create a tenant](getting-started) in the Vespa Cloud console, in this guide using "mytenant".
+[Create a tenant](../basics/deploy-an-application.html) in the Vespa Cloud console, in this guide using "mytenant".
 
 
 **Export source application package:**
@@ -252,7 +254,7 @@ Set the --selection argument to `vespa visit` to select a subset of the document
 ## Cloning - self-hosted to self-hosted
 Creating a copy from one self-hosted application to another.
 Self-hosted means running [Vespa](https://vespa.ai/) on a laptop
-or a [multinode system](../operations/self-managed/multinode-systems.html).
+or a [multinode system](self-managed/multinode-systems.html).
 
 This example sets up a source app and deploys the [application package](../basics/applications.html) -
 use [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)

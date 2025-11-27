@@ -1,49 +1,52 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: Getting started with Vespa Cloud Enclave in AWS
+title: Getting started with Vespa Cloud Enclave in GCP
 category: cloud
+  - /cloud/enclave/gcp-getting-started
+  - /cloud/enclave/gcp-deploy-an-application
 ---
 
 Setting up Vespa Cloud Enclave requires:
 
 1. Registration at [Vespa Cloud](https://console.vespa-cloud.com), or use a pre-existing tenant.
-2. Registration of the AWS account ID in Vespa Cloud
-3. Running a [Terraform](https://www.terraform.io/) configuration to provision AWS resources in the account.
-   Go through the [AWS tutorial](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) as needed.
+2. Registration of the GCP project in Vespa Cloud
+3. Running a [Terraform](https://www.terraform.io/) configuration to provision necessary GCP resources in the project.
 4. Deployment of a Vespa application.
+
 
 ### 1. Vespa Cloud Tenant setup
 
 Register at [Vespa Cloud](https://console.vespa-cloud.com) or use an existing tenant.
 Note that the tenant must be on a [paid plan](https://vespa.ai/pricing/).
 
+
 ### 2. Onboarding
 
 Contact [support@vespa.ai](mailto:support@vespa.ai) stating which tenant should be on-boarded to use Vespa Cloud Enclave.
-Also include the [AWS account ID](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html#FindAccountId)
+Also include the [GCP Project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects)
 to associate with the tenant.
 
-{% include note.html content='We recommend using a _dedicated_ account for your Vespa Cloud Enclave.
-Vespa Cloud will manage resources in the Enclave VPCs created in the AWS resource provisioning step. Primarily EC2 instances, load balancers and service endpoints.' %}
+{% include note.html content='We recommend using a _dedicated_ project for your Vespa Cloud Enclave.
+Resources in this project will be fully managed by Vespa Cloud.' %}
 
-One account can host all your Vespa applications, there is no need for multiple tenants or accounts.
+One project can host all your Vespa applications, there is no need for multiple tenants or projects.
 
-### 3. Configure AWS Account
 
-The same AWS account used in step two must be prepared for deploying Vespa applications using either *Terraform* or *Cloudformation*.
+### 3. Configure GCP Project
 
-#### Terraform
+The same project used in step two must be prepared for deploying Vespa applications.
 Use [Terraform](https://www.terraform.io/) to set up the necessary resources using the
-[modules](https://registry.terraform.io/modules/vespa-cloud/enclave/aws/latest) published by the Vespa team.
+[modules](https://registry.terraform.io/modules/vespa-cloud/enclave/google/latest)
+published by the Vespa team.
 
 Modify the
-[multi-region Terraform files](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/multi-region/main.tf)
+[multi-region example](https://github.com/vespa-cloud/terraform-google-enclave/blob/main/examples/multi-region/main.tf)
 for your deployment.
 
 If you are unfamiliar with Terraform: It is a tool to manage resources and their
 configuration in various cloud providers, like AWS and GCP.
-Terraform has published an
-[AWS](https://developer.hashicorp.com/terraform/tutorials/aws-get-started)
+Terraform has published a
+[GCP](https://developer.hashicorp.com/terraform/tutorials/gcp-get-started)
 tutorial, and we strongly encourage Enclave users to read and follow the
 Terraform recommendations for
 [CI/CD](https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform).
@@ -52,30 +55,26 @@ The Terraform module we provide is regularly updated to add new required
 resources or extra permissions for Vespa Cloud to automate the operations of
 your applications. In order for your enclave applications to use the new
 features you must re-apply your terraform templates with the latest release.
-The [notification system](../notifications)
+The [notification system](../notifications.html)
 will let you know when a new release is available.
 
-#### Cloudformation
-
-Vespa also supports Cloudformation if you prefer the AWS-native solution.
-Download the Cloudformation stacks in our [github repository](https://github.com/vespa-cloud/cloudformation-aws-enclave) and
-refer to the README for stack-specific instructions.
 
 ### 4. Deploy a Vespa application
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
 To deploy in your Enclave account,
-update [deployment.xml](../../reference/deployment.html) to reference the account used in step two:
+update [deployment.xml](../../reference/deployment.html) to reference the account used in step 1:
 
 ```xml
-<deployment version="1.0" cloud-account="aws:123456789012">
+<deployment version="1.0" cloud-account="gcp:a-project-id">
     <dev />
 </deployment>
 ```
 
-Useful resources are [getting started](../../basics/deploy-an-application-java.html)
-and [migrating to Vespa Cloud](../migrating-to-cloud) -
+Useful resources are [getting started](../../basics/deploy-an-application.html)
+and [migrating to Vespa Cloud](../migrating-to-cloud.html) -
 put _deployment.xml_ next to _services.xml_.
+
 
 ## Next steps
 
@@ -86,6 +85,7 @@ The _dev_ environment is ideal for this, with rapid deployment cycles.
 For production serving, deploy to the [prod](../environments.html#prod) environment -
 follow the steps in [production deployment](../production-deployment.html).
 
+
 ## Enclave teardown
 
 To tear down a Vespa Cloud Enclave system, do the steps above in reverse order:
@@ -95,3 +95,12 @@ To tear down a Vespa Cloud Enclave system, do the steps above in reverse order:
 
 It is important to undeploy the Vespa application(s) first.
 After running the Terraform, Vespa Cloud cannot manage the resources allocated, so you must clean up these yourself.
+
+
+## Troubleshooting
+
+**Identities restricted by domain**: If your GCP organization is using
+[domain restriction for identities](https://cloud.google.com/resource-manager/docs/organization-policy/restricting-domains)
+you will need to permit Vespa.ai GCP identities to be added to your project.
+For Vespa Cloud the organization ID to allow identities from is: _1056130768533_,
+and the Google Customer ID is _C00u32w3e_.

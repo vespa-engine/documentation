@@ -574,7 +574,7 @@ Read up on [attributes](../content/attributes.html) to understand more of how su
 for a lower max memory usage.
 
 ### What is the best practice for scaling Vespa for day vs night?
-[Autoscaling](../cloud/autoscaling.html) is the best guide to understand how to size and autoscale the system.
+[Autoscaling](../operations/autoscaling.html) is the best guide to understand how to size and autoscale the system.
 Container clusters are stateless and can be autoscaled more quickly than content clusters.
 
 ### We can spike 8x in 5 minutes in terms of throughput requirements.
@@ -589,7 +589,7 @@ It depends. Vespa aims to adapt to resources (like auto thread config based on v
 and actual use (when to run maintenance jobs like compaction),
 but there are tradeoffs that applications owners can/should make.
 Start off by reading the [Vespa Serving Scaling Guide](../performance/sizing-search.html),
-then run [benchmarks](../performance/benchmarking-cloud.html) and use the [dashboards](../cloud/monitoring.html).
+then run [benchmarks](../performance/benchmarking-cloud.html) and use the [dashboards](../operations/monitoring.html).
 
 
 {:.faq-section}
@@ -784,7 +784,7 @@ Yes, contact [Vespa Support](https://vespa.ai/support/) to set it up.
 
 ### How can I change the cost of my Vespa Cloud usage?
 See [node resources](../cloud/node-resources.html) to assess current and auto-suggested resources
-and [autoscaling](../cloud/autoscaling.html) for how to automate.
+and [autoscaling](../operations/autoscaling.html) for how to automate.
 
 ### How can I manually modify resources used?
 Managing resources is easy, as most changes are automated.
@@ -815,7 +815,7 @@ in order to charge the specified user project for the bucket usage cost"_
 
 ### How do I integrate with my current monitoring infrastructure?
 Vespa Cloud applications have a Prometheus endpoint.
-Find guides for how to integrate with Grafana and AWS Cloudwatch at [monitoring](../cloud/monitoring.html).
+Find guides for how to integrate with Grafana and AWS Cloudwatch at [monitoring](../operations/monitoring.html).
 
 ### What is the best way to monitor instantaneously what is happening in Vespa? CPU usage? Memory usage? htop? Cloudwatch metrics?
 Vespa Cloud has detailed dashboards linked from the _monitoring_ tab in the Console,
@@ -825,7 +825,7 @@ one for each zone the instance is deployed to.
 Vespa is normally upgraded daily. There are exceptions, like holidays and weekends.
 During upgrades, nodes are stopped one-by-one per cluster.
 As all clusters have one redundant node, serving and write traffic is not impacted by upgrades.
-Before the upgrade, the application's [system and staging tests](../cloud/automated-deployments.html) are run,
+Before the upgrade, the application's [system and staging tests](../operations/automated-deployments.html) are run,
 halting the upgrade if they fail.
 Documents are re-migrated to the upgraded node before doing the next node,
 see [Elastic Vespa](../content/elasticity.html) for details.

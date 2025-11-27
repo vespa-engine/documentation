@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Deployment patterns 
 category: cloud
+redirect_from:
+- /en/cloud/deployment-patterns
 ---
 
 <style>
@@ -168,4 +170,4 @@ Note: The include-feature can not be used in combination with [deployment varian
 ## Next reads
 * [Environments](environments.html)
 * [Zones](zones.html)
-* [Routing](routing.html)
+* [Routing](endpoint-routing.html)

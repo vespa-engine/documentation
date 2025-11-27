@@ -2,6 +2,8 @@
 # Copyright Verizon Media. All rights reserved.
 title: Deleting Applications
 category: cloud
+redirect_from:
+- /en/cloud/deleting-applications
 ---
 
 {% include warning.html content='Following these steps will remove production instances or regions and all data within them.

@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Log archive in Vespa Cloud Enclave
 category: cloud
+redirect_from:
+  - /cloud/enclave/archive
 ---
 
 {% include warning.html content="The structure of log archive buckets may change without notice" %}

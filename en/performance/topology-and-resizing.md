@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Topology and Resizing
 category: cloud
+redirect_from:
+  - /cloud/topology-and-resizing
 ---
 
 Vespa has features to optimize cost, query latency and throughput,

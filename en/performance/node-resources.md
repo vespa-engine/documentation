@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Node Resources
 category: cloud
+redirect_from:
+  - /cloud/node-resources
 ---
 
 This guide goes through the following aspects of node resource configuration:
@@ -116,6 +118,6 @@ Find a list of supported instance types at
 
 ## Next reads
 * [The practical search performance guide](../performance/practical-search-performance-guide.html)
-* [Autoscaling](autoscaling.html)
+* [Autoscaling](../operations/autoscaling.html)
 
 <!-- Read more in TBD blogpost -->
