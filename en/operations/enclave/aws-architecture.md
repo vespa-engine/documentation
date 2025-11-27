@@ -3,7 +3,7 @@
 title: Vespa Cloud Enclave AWS Architecture
 category: cloud
 redirect_from:
-  - /cloud/enclave/aws-architecture
+- /cloud/enclave/aws-architecture
 ---
 
 Each Enclave in the tenant AWS account corresponds to a Vespa Cloud

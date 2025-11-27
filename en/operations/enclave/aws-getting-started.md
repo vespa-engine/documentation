@@ -3,8 +3,8 @@
 title: Getting started with Vespa Cloud Enclave in AWS
 category: cloud
 redirect_from:
-  - /cloud/enclave/aws-getting-started
-  - /cloud/enclave/aws-deploy-an-application
+- /cloud/enclave/aws-getting-started
+- /cloud/enclave/aws-deploy-an-application
 ---
 
 Setting up Vespa Cloud Enclave requires:

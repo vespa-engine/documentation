@@ -2,8 +2,9 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Getting started with Vespa Cloud Enclave in GCP
 category: cloud
-  - /cloud/enclave/gcp-getting-started
-  - /cloud/enclave/gcp-deploy-an-application
+redirect_from:
+- /cloud/enclave/gcp-getting-started
+- /cloud/enclave/gcp-deploy-an-application
 ---
 
 Setting up Vespa Cloud Enclave requires:

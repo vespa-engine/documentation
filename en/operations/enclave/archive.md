@@ -3,7 +3,7 @@
 title: Log archive in Vespa Cloud Enclave
 category: cloud
 redirect_from:
-  - /cloud/enclave/archive
+- /cloud/enclave/archive
 ---
 
 {% include warning.html content="The structure of log archive buckets may change without notice" %}

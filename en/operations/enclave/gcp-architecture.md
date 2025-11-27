@@ -3,7 +3,7 @@
 title: Architecture for Vespa Cloud Enclave in GCP
 category: cloud
 redirect_from:
-  - /cloud/enclave/gcp-architecture
+- /cloud/enclave/gcp-architecture
 ---
 
 ### Architecture

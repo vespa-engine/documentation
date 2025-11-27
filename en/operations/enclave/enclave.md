@@ -3,7 +3,7 @@
 title: Vespa Cloud Enclave
 category: cloud
 redirect_from:
-  - /cloud/enclave/enclave
+- /cloud/enclave/enclave
 ---
 
 ![enclave architecture](/assets/img/enclave-architecture.png)
