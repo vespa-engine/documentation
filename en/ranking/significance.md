@@ -168,7 +168,7 @@ The CLI can also export local significance models from content nodes to an inter
 ### Model resolution
 
 Model resolution selects a model from the models specified in [services.xml](#significance-models-in-servicesxml) based on the language of the query.
-The language can be either [explicitly tagged](../reference/query-api-reference.html#model.language) or [implicitly detected](../linguistics.html#query-language-detection).
+The language can be either [explicitly tagged](../reference/query-api-reference.html#model.language) or [implicitly detected](../linguistics/linguistics.html#query-language-detection).
 
 The resolution logic is as follows:
 - When language is explicitly tagged
