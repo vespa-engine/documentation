@@ -19,16 +19,16 @@ Vespa Cloud Enclave is available in AWS and GCP. Azure is on the roadmap.
 resource costs from your cloud provider in _addition_ to the Vespa Cloud costs.
 
 ## AWS
-* [Getting started](/en/cloud/enclave/aws-deploy-an-application.html)
-* [Architecture and security](/en/cloud/enclave/aws-architecture)
+* [Getting started](aws-deploy-an-application.html)
+* [Architecture and security](aws-architecture)
 
 ## GCP
-* [Getting started](/en/cloud/enclave/gcp-deploy-an-application.html)
-* [Architecture and security](/en/cloud/enclave/gcp-architecture)
+* [Getting started](gcp-deploy-an-application.html)
+* [Architecture and security](gcp-architecture)
 
 ## Guides
-* [Log archive](/en/cloud/enclave/archive)
-* [Operations and Support](/en/cloud/enclave/operations)
+* [Log archive](enclave/archive)
+* [Operations and Support](enclave/operations)
 
 ## FAQ
 **Which kind of permission is needed for the Vespa control plane to access my AWS accounts / GCP projects?**
@@ -44,7 +44,7 @@ that retrieves them and configures your application. See [enclave-examples](http
 for a complete example.
 
 **Deployment failure: Cloud not provision ...**
-This happens if you deploy to new zones _before_ running the Terraform/CloudFormation templates in [step 3](/en/cloud/enclave/aws-deploy-an-application.html#3-configure-aws-account):
+This happens if you deploy to new zones _before_ running the Terraform/CloudFormation templates in [step 3](aws-deploy-an-application.html#3-configure-aws-account):
 ```
 Deployment failed: Invalid application: In container cluster 'mycluster': Could not provision load balancer mytenant:myapp:myinstance:mycluster: Expected to find exactly 1 resource, but got 0 for subnet with service 'tenantelb'
 ```

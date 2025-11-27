@@ -52,7 +52,7 @@ The Terraform module we provide is regularly updated to add new required
 resources or extra permissions for Vespa Cloud to automate the operations of
 your applications. In order for your enclave applications to use the new
 features you must re-apply your terraform templates with the latest release.
-The [notification system](/en/cloud/notifications.html)
+The [notification system](../notifications)
 will let you know when a new release is available.
 
 #### Cloudformation
@@ -65,7 +65,7 @@ refer to the README for stack-specific instructions.
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
 To deploy in your Enclave account,
-update [deployment.xml](/en/reference/deployment.html) to reference the account used in step two:
+update [deployment.xml](../../reference/deployment.html) to reference the account used in step two:
 
 ```xml
 <deployment version="1.0" cloud-account="aws:123456789012">
@@ -73,24 +73,24 @@ update [deployment.xml](/en/reference/deployment.html) to reference the account 
 </deployment>
 ```
 
-Useful resources are [getting started](/en/cloud/getting-started)
-and [migrating to Vespa Cloud](/en/cloud/migrating-to-cloud.html) -
+Useful resources are [getting started](../../basics/deploy-an-application-java.html)
+and [migrating to Vespa Cloud](../migrating-to-cloud) -
 put _deployment.xml_ next to _services.xml_.
 
 ## Next steps
 
-After a successful deployment to the [dev](https://cloud.vespa.ai/en/reference/environments.html#dev) environment,
+After a successful deployment to the [dev](../environments.html#dev) environment,
 iterate on the configuration to implement your application on Vespa.
 The _dev_ environment is ideal for this, with rapid deployment cycles.
 
-For production serving, deploy to the [prod](https://cloud.vespa.ai/en/reference/environments.html#prod) environment -
-follow the steps in [production deployment](/en/cloud/production-deployment.html).
+For production serving, deploy to the [prod](../environments.html#prod) environment -
+follow the steps in [production deployment](../production-deployment.html).
 
 ## Enclave teardown
 
 To tear down a Vespa Cloud Enclave system, do the steps above in reverse order:
 
-1. [Undeploy the application(s)](/en/cloud/deleting-applications.html)
+1. [Undeploy the application(s)](../deleting-applications.html)
 2. Undeploy the Terraform changes
 
 It is important to undeploy the Vespa application(s) first.

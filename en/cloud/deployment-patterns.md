@@ -10,7 +10,7 @@ img {
 }
 </style>
 
-Vespa Cloud's [automated deployments](/en/cloud/automated-deployments.html)
+Vespa Cloud's [automated deployments](automated-deployments.html)
 lets you design CD pipelines for staged rollouts and multi-zone deployments.
 This guide documents some of these patterns.
 
@@ -93,8 +93,8 @@ Deploy to a (downscaled) instance first, and add a delay before propagating to l
 ```
 
 ### Deployment variants 
-[Deployment variants](/en/reference/deployment-variants.html) are useful to set up a downscaled instance.
-In [services.xml](/en/reference/services.html), override settings per instance:
+[Deployment variants](../reference/deployment-variants.html) are useful to set up a downscaled instance.
+In [services.xml](../reference/services.html), override settings per instance:
 ```xml
 <nodes deploy:instance="canary" count="2">
     <resources vcpu="4" memory="32Gb" disk="100Gb"/>
@@ -166,6 +166,6 @@ Note: The include-feature can not be used in combination with [deployment varian
 
 
 ## Next reads
-* [Environments](/en/cloud/environments.html)
-* [Zones](/en/cloud/zones.html)
-* [Routing](/en/cloud/routing.html)
+* [Environments](environments.html)
+* [Zones](zones.html)
+* [Routing](routing.html)

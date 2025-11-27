@@ -5,7 +5,7 @@ category: cloud
 ---
 
 Each Enclave in the tenant AWS account corresponds to a Vespa Cloud
-[zone](https://cloud.vespa.ai/en/reference/zones.html). Inside the tenant AWS account one Enclave is
+[zone](../zones.html). Inside the tenant AWS account one Enclave is
 contained within one single
 [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html).
 
@@ -68,4 +68,4 @@ The tenant that registered the AWS account is the only tenant that can deploy
 applications targeting the Enclave.
 
 For more general information about security in Vespa Cloud, see the
-[whitepaper](https://cloud.vespa.ai/en/security/whitepaper).
+[whitepaper](../security/whitepaper).

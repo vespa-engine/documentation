@@ -20,7 +20,7 @@ One can also use _instances_, but that will not work across Vespa major versions
 refer to [tenant, applications, instances](../learn/tenant-apps-instances) for details.
 
 Vespa Cloud has different environments `dev` and `prod`, with different characteristics -
-[details](/en/cloud/environments.html).
+[details](environments.html).
 Clone to `dev` for short-lived experiments/development/benchmarking,
 use `prod` for serving applications with a [CI/CD pipeline](automated-deployments.html).
 
@@ -31,7 +31,7 @@ Examples are based on the
 {% include note.html content='When done, it is easy to tear down resources in Vespa Cloud.
 E.g., _https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deploy_ or
 _https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default_ to find a delete-link.
-Instances in `dev` environments are auto-expired ([details](/en/cloud/environments.html)),
+Instances in `dev` environments are auto-expired ([details](environments.html)),
 so application cloning is a safe way to work with Vespa.
 Find more information in [deleting applications](deleting-applications).
 '%}
@@ -66,7 +66,7 @@ $ vespa fetch -t http://localhost:19071 && \
 
 **Deploy target application package**
 
-The procedure differs a little whether deploying to dev or prod [environment](/en/cloud/environments.html).
+The procedure differs a little whether deploying to dev or prod [environment](environments.html).
 The `mvn -U clean package` step is only needed for applications with custom code.
 Configure application name and create data plane credentials:
 <pre>
@@ -132,12 +132,12 @@ $ vespa prod deploy
 </pre>
     Expect something like:
 <pre>
-Hint: See <a href="production-deployment">production deployment</a>
+Hint: See <a href="production-deployment.html">production deployment</a>
 Success: Deployed .
 See https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deployment for deployment progress
 </pre>
     A proper deployment to a <code>prod</code> zone should have automated tests,
-    read more in <a href="automated-deployments">automated deployments</a>
+    read more in <a href="automated-deployments.html">automated deployments</a>
   </li>
 </ul>
 
@@ -252,9 +252,9 @@ Set the --selection argument to `vespa visit` to select a subset of the document
 ## Cloning - self-hosted to self-hosted
 Creating a copy from one self-hosted application to another.
 Self-hosted means running [Vespa](https://vespa.ai/) on a laptop
-or a [multinode system](/en/operations/multinode-systems.html).
+or a [multinode system](../operations-selfhosted/multinode-systems.html).
 
-This example sets up a source app and deploys the [application package](https://cloud.vespa.ai/en/developer-guide) -
+This example sets up a source app and deploys the [application package](../basics/applications.html) -
 use [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)
 as an example.
 The application package is then exported from the source and deployed to a new target app.
@@ -302,7 +302,7 @@ $ vespa visit -t http://localhost:8080 | vespa feed - -t http://localhost:8081
 
 **Data copy 5%**
 
-This is an example on how to use a [selection](/en/reference/document-select-language.html)
+This is an example on how to use a [selection](../reference/document-select-language.html)
 to specify a subset of the documents - here a "random" 5% selection:
 ```
 $ vespa visit -t http://localhost:8080 --selection 'id.hash().abs() % 20 = 0' | \
