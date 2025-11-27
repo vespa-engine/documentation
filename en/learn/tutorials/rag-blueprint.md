@@ -650,7 +650,7 @@ For domain-specific applications or less popular languages, you may want to cons
 ### Consider binary vectors for recall
 
 Another decision to make is which precision you will use for your embeddings.
-See [binarization docs](../../binarizing-vectors.html) for an introduction to binarization in Vespa.
+See [binarization docs](../../rag/binarizing-vectors) for an introduction to binarization in Vespa.
 
 For most cases, binary vectors (in Vespa, packed into `int8`-representation) will provide an attractive tradeoff, 
 especially for recall during match-phase.
