@@ -433,7 +433,7 @@ Observations:
 
 - The query searched one node (`coverage.nodes`) and the 
 coverage (`coverage.coverage`) was 100%, 
-see [graceful-degradation](../graceful-degradation.html) for more information about 
+see [graceful-degradation](graceful-degradation.html) for more information about 
 the `coverage` element, and Vespa timeout behavior. Vespa's default timeout is 0.5 seconds.   
 - The query matched a total of 95666 documents (`totalCount`) out of 
 95666 documents available (`coverage.documents`).
@@ -2197,7 +2197,7 @@ Which will produce the following result:
 {% endhighlight %}</pre>
 In this case, totalCount became 1,476, a few more than the `range` search with `hitLimit`. Notice
 also the presence of `coverage:degraded` - this informs the client that this result was not fully evaluated
-over all matched documents. Read more about [graceful result degradation](../graceful-degradation.html). 
+over all matched documents. Read more about [graceful result degradation](graceful-degradation.html). 
 Note that the example uses the `popularity` rank-profile which was configured with one 
 thread per search, for low settings of `maxHits`, this is the recommended setting. 
 

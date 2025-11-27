@@ -42,7 +42,7 @@ Doing so proactively closes idle connections before the server does and helps pr
 ## Prefer HTTP/2
 We recommend *HTTP/2* over *HTTP/1.1*. *HTTP/2* multiplexes multiple concurrent requests over a single connection,
 and its binary protocol is more compact and efficient.
-See Vespa's documentation on [HTTP/2](/en/performance/http2.html) for more details.
+See Vespa's documentation on [HTTP/2](../performance/http2.html) for more details.
 
 ## Be deliberate with timeouts and retries
 Make sure to configure your clients with sensible timeouts and retry policies.
@@ -59,8 +59,10 @@ Be careful when handling 5xx responses, especially `503 Service Unavailable` and
 These responses typically indicate an overloaded system, and blindly retrying without backoff will only worsen the situation.
 Clients should reduce overall throughput when receiving such responses.
 
-The same principle applies to `429 Too Many Requests` responses from the [Document v1 API](/en/writing/document-v1-api-guide.html),
-which indicates that the client is exceeding the system's feed capacity. Clients should implement strategies such as reducing the request rate by a specific percentage, introducing exponential backoff, or pausing requests for a short duration before retrying. These adjustments help prevent further overload and allow the system to recover.
+The same principle applies to `429 Too Many Requests` responses from the [Document v1 API](../writing/document-v1-api-guide.html),
+which indicates that the client is exceeding the system's feed capacity. Clients should implement strategies 
+such as reducing the request rate by a specific percentage, introducing exponential backoff, or pausing requests 
+for a short duration before retrying. These adjustments help prevent further overload and allow the system to recover.
 
 For more general advise on retries and timeouts see *Amazon Builder's Library*'s
 [excellent article](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) on the subject.

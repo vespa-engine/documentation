@@ -582,7 +582,7 @@ It is not possible to autoscale content clusters for 8x load increase in 5 minut
 as this requires both provisioning and data migration.
 Such use cases are best discussed with the Vespa Team to understand the resource bottlenecks,
 tradeoffs and mitigations.
-Also read [Graceful Degradation](../graceful-degradation.html).
+Also read [Graceful Degradation](../performance/graceful-degradation.html).
 
 ### How much lower-level configuration do we need to do? For example, do we need to alter the number of threads per container?
 It depends. Vespa aims to adapt to resources (like auto thread config based on virtual node thread count)

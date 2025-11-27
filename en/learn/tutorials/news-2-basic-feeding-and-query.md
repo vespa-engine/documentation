@@ -388,7 +388,7 @@ Looking at the output, please note:
 - The `totalCount` field at the top level contains the number of documents
   that *matched* the query.
 - Also note the `coverage` element, this tells us how many documents and nodes we searched over.
-Coverage might be degraded, see [graceful degradation](../../graceful-degradation.html).
+Coverage might be degraded, see [graceful degradation](../../performance/graceful-degradation.html).
 
 Prefer HTTP POST over GET in production due to limitations on URI length (64 Kb). 
 
