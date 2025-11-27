@@ -33,8 +33,8 @@ In large collections, this difference is usually small and doesn’t affect rank
 
 One issue with the local models is that ranking is non-deterministic in the following cases:
 1. When new documents are added, local models on affected content nodes are updated.
-2. When the content cluster [redistributes documents](../elasticity.html) across nodes, e.g. adding, removing nodes for scaling and failure recovery, the models change on the nodes involved.
-3. When using [grouped distribution](../elasticity.html#grouped-distribution),
+2. When the content cluster [redistributes documents](../content/elasticity.html) across nodes, e.g. adding, removing nodes for scaling and failure recovery, the models change on the nodes involved.
+3. When using [grouped distribution](../content/elasticity.html#grouped-distribution),
 queries can return different results depending on which group processes them.
 
 Another issue is that local significance models are not available in [streaming search](../streaming-search.html)
