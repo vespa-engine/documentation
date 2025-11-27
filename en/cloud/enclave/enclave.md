@@ -27,8 +27,8 @@ resource costs from your cloud provider in _addition_ to the Vespa Cloud costs.
 * [Architecture and security](gcp-architecture)
 
 ## Guides
-* [Log archive](enclave/archive)
-* [Operations and Support](enclave/operations)
+* [Log archive](archive)
+* [Operations and Support](operations)
 
 ## FAQ
 **Which kind of permission is needed for the Vespa control plane to access my AWS accounts / GCP projects?**

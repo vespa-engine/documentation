@@ -69,18 +69,18 @@ update [deployment.xml](../../reference/deployment.html) to reference the accoun
 </deployment>
 ```
 
-Useful resources are [getting started](.././basics/deploy-an-application.html)
+Useful resources are [getting started](../../basics/deploy-an-application.html)
 and [migrating to Vespa Cloud](../migrating-to-cloud.html) -
 put _deployment.xml_ next to _services.xml_.
 
 
 ## Next steps
 
-After a successful deployment to the [dev](environments.html#dev) environment,
+After a successful deployment to the [dev](../environments.html#dev) environment,
 iterate on the configuration to implement your application on Vespa.
 The _dev_ environment is ideal for this, with rapid deployment cycles.
 
-For production serving, deploy to the [prod](environments.html#prod) environment -
+For production serving, deploy to the [prod](../environments.html#prod) environment -
 follow the steps in [production deployment](../production-deployment.html).
 
 
