@@ -797,7 +797,7 @@ Other schema changes require data refeed - [details](../reference/schema-referen
 <!-- ToDo: we should really have a "managing resources" guide for Vespa Cloud -->
 
 ### How to evaluate how much memory a field is using?
-Use the [Memory Visualizer](../cloud/memory-visualizer.html) to evaluate how memory is allocated to the fields.
+Use the [Memory Visualizer](../performance/memory-visualizer.html) to evaluate how memory is allocated to the fields.
 Fields can be `index`, `attribute` and `summary`, and combinations of these,
 with settings like `fast-search` that affects memory usage.
 [Attributes](../content/attributes.html) is a great read for understanding Vespa memory usage.
