@@ -37,7 +37,7 @@ One issue with the local models is that ranking is non-deterministic in the foll
 3. When using [grouped distribution](../content/elasticity.html#grouped-distribution),
 queries can return different results depending on which group processes them.
 
-Another issue is that local significance models are not available in [streaming search](../streaming-search.html)
+Another issue is that local significance models are not available in [streaming search](../performance/streaming-search.html)
 because inverted indexes are not constructed so IDF values can't be extracted.
 All significance values are set to 1, which is the default value for unknown terms.
 The lack of significance values may degrade the ranking quality.
