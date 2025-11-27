@@ -4,6 +4,7 @@ title: "Securing Vespa with mutually authenticated TLS (mTLS)"
 category: oss
 redirect_from:
 - /en/mtls.html
+- /en/operations-selfhosted/mtls
 ---
 
 {% include note.html content="This document is relevant for **self-hosted Vespa** only." %}
@@ -84,7 +85,7 @@ VESPA_TLS_CONFIG_FILE=/absolute/path/to/my-tls-config.json
 This environment variable must be set to a valid file path before any Vespa services are started on the node.
 All nodes in your Vespa application must have a TLS config file pointing to the certificates that are trusted by the other nodes.
 
-See [Vespa environment variables](files-processes-and-ports.html#environment-variables)
+See [Vespa environment variables](../operations/self-managed/files-processes-and-ports.html#environment-variables)
 for information on configuring environment variables for Vespa.
 
 Setting `VESPA_TLS_CONFIG_FILE` automatically enables TLS for all Vespa processes on the node.
@@ -108,7 +109,7 @@ Example:
 ```
 
 Set the environment variable, for example by appending to
-[conf/vespa/default-env.txt](files-processes-and-ports.html#environment-variables):
+[conf/vespa/default-env.txt](../operations/self-managed/files-processes-and-ports.html#environment-variables):
 
 ```shell
 override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
@@ -127,7 +128,7 @@ In that case simply having a valid certificate is not sufficient to be used as a
 You can constrain which certificates may access the internal Vespa service by using *authorization rules*.
 These are consulted as part of every TLS handshake and must pass before any connection can be established.
 
-Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](/en/reference/mtls.html#top-level-elements) member.
+Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](../../reference/mtls.html#top-level-elements) member.
 
 #### Example
 
@@ -193,10 +194,10 @@ consider splitting file refreshing into multiple phases:
 ## Setting up TLS for a new Vespa application or upgrading with downtime
 With no Vespa services running on any nodes, ensure the `VESPA_TLS_CONFIG_FILE` environment variable is set to
 a valid configuration file path on every node,
-and [is visible to any Vespa start scripts](files-processes-and-ports.html#environment-variables).
+and [is visible to any Vespa start scripts](../operations/self-managed/files-processes-and-ports.html#environment-variables).
 Start Vespa services as you normally would. Check cluster health with
-[vespa-get-cluster-state](vespa-cmdline-tools.html#vespa-get-cluster-state)
-and check [vespa-logfmt](vespa-cmdline-tools.html#vespa-logfmt) for any TLS-related error messages
+[vespa-get-cluster-state](../reference/tools-self-managing.html#vespa-get-cluster-state)
+and check [vespa-logfmt](../reference/tools-self-managing.html#vespa-logfmt) for any TLS-related error messages
 that indicate a misconfiguration (such as certificate rejections etc.)—see the Troubleshooting section.
 The cluster should quickly converge to an available state.
 

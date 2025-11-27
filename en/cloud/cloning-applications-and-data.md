@@ -252,7 +252,7 @@ Set the --selection argument to `vespa visit` to select a subset of the document
 ## Cloning - self-hosted to self-hosted
 Creating a copy from one self-hosted application to another.
 Self-hosted means running [Vespa](https://vespa.ai/) on a laptop
-or a [multinode system](../operations-selfhosted/multinode-systems.html).
+or a [multinode system](../operations/self-managed/multinode-systems.html).
 
 This example sets up a source app and deploys the [application package](../basics/applications.html) -
 use [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)

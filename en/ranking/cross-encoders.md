@@ -118,7 +118,7 @@ Bert-based models have three inputs:
 
 The [onnx-model](../reference/schema-reference.html#onnx-model) configuration specifies the input names
 of the model and how to calculate them. It also specifies the file `models/model.onnx`.
-Notice also the [GPU](../operations-selfhosted/vespa-gpu-container.html).
+Notice also the [GPU](../operations/self-managed/vespa-gpu-container.html).
 GPU inference is not required, and Vespa will fall back to CPU if no GPU device is found.
 See the section on [performance](#performance).
 

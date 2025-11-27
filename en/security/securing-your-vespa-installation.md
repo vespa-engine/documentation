@@ -4,6 +4,7 @@ title: "Securing a Vespa Installation"
 category: oss
 redirect_from:
 - /en/securing-your-vespa-installation.html
+- /en/operations-selfhosted/securing-your-vespa-installation
 ---
 {% include note.html content="This document is only relevant for **self-hosting Vespa** as Vespa Cloud does this for you." %}
 
@@ -48,9 +49,9 @@ queries. It should only be exposed to an untrusted network if you have properly
 should never be exposed directly to external traffic. All traffic to the containers
 should be sent by your frontends or backends.
  
-Inter-node communication inside a Vespa installation is not encrypted by default
+Internode communication inside a Vespa installation is not encrypted by default
 and will need to be configured explicitly as documented in 
-[Securing Vespa with mutually authenticated TLS](mtls.html).
+[Securing Vespa with mutually authenticated TLS](mtls.md).
 
 
 
@@ -90,6 +91,6 @@ encryption.
 ## Securing Vespa with mutually authenticated TLS (mTLS)
 
 Protect all internal endpoints and protocols in Vespa with mutually authenticated Transport Layer Security (mTLS).
-See the [dedicated documentation](../operations-selfhosted/mtls.html) on how to get started,
+See the [dedicated documentation](mtls.md) on how to get started,
 and try the [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
 example.
