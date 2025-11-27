@@ -601,7 +601,7 @@ higher `summaryfetchtime` than smaller docs.
 For example, a [document-summary](../querying/document-summaries.html) which only contain 
 fields that are defined as `attribute` will be read from memory. For the `default` summary, or others 
 containing at least one non-attribute field, a fill will potentially access data 
-from summary storage on disk. Read more about in-memory [attribute](../attributes.html) fields.
+from summary storage on disk. Read more about in-memory [attribute](../content/attributes.html) fields.
 - [summary-features](../reference/schema-reference.html#summary-features) used to return computed
  [rank features](../reference/rank-features.html) from the content nodes. 
 

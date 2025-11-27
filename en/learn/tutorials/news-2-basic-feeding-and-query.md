@@ -249,7 +249,7 @@ language](../../reference/indexing-language-reference.html). Each part of the
 indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
-- `attribute:` Store this field in memory as an [attribute](../../attributes.html)
+- `attribute:` Store this field in memory as an [attribute](../../content/attributes.html)
   — for [sorting](../../reference/sorting.html), [querying](../../querying/query-api.html), [ranking](../../basics/ranking.html) and
   [grouping](../../querying/grouping.html).
 - `summary:` Lets this field be part of the [document

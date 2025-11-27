@@ -102,7 +102,7 @@ schema my_document {
 
 The above will concat the title and body input document fields, and input to the 
 `hugging-face-tokenizer` tokenizer which saves the output tokens as float (101.0).  
-To use the generated `tokens` tensor in ranking, the tensor field must be defined with [attribute](../attributes.html).
+To use the generated `tokens` tensor in ranking, the tensor field must be defined with [attribute](../content/attributes.html).
 
 ## Using the cross-encoder model in ranking
 Cross-encoder models are not practical for *retrieval* over large document volumes due to their complexity, so we configure them

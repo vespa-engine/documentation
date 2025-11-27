@@ -34,7 +34,7 @@ The field types are often given by the application's data, but the _usage_ of th
 * string fields can be faster than numeric, if the access is equality (not range like "price < 100")
 
 In short, there are functional, performance and cost tradeoffs.
-There are guides to help estimate resource use, see [attributes](/en/attributes.html),
+There are guides to help estimate resource use, see [attributes](/en/content/attributes.html),
 but often one does not know factors like number of unique values in the data.
 It might as well be easier to feed the data to Vespa Cloud and do schema changes online and observe the effect.
 Vespa Cloud has two features that accelerates this process - the Memory Visualizer and Automated Reindexing:
@@ -79,4 +79,4 @@ read more about the [content node data structures](/en/content/proton.html) - in
 * `Removed` are deleted documents, either by the application,
   or the document replica has been moved to another node
 * `Documentmetastore` is the document ID mapping -
-  see [attributes](/en/attributes.html#document-meta-store)
+  see [attributes](/en/content/attributes.html#document-meta-store)
