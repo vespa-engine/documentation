@@ -19,7 +19,7 @@ Data plane is protected using mutual TLS or optionally tokens.
 ### Configuring mTLS
 
 Certificates can be created using the
-[Vespa CLI](/en/clients/vespa-cli.html):
+[Vespa CLI](../../clients/vespa-cli.html):
 
 ```
 $ vespa auth cert --application <tenant>.<app>.<instance>
@@ -47,7 +47,7 @@ $ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out sec
 ```
 
 The certificate is placed inside the application package in
-[security/clients.pem](https://cloud.vespa.ai/en/reference/application-package). Make sure
+[security/clients.pem](../../reference/application-packages-reference.html). Make sure
 `clients.pem` is placed correctly if the certificate is created with OpenSSL,
 while the Vespa CLI will handle this automatically.
 
@@ -139,7 +139,7 @@ the application can also be configured to consume token based authentication whe
 
 {% include note.html content='
 Token authentication must be explicitly enabled when used in combination with
-<a href="https://cloud.vespa.ai/en/private-endpoints.html">Private Endpoints</a>.
+<a href="../private-endpoints.html">Private Endpoints</a>.
 '%}
 
 #### Create tokens using the console
@@ -165,7 +165,7 @@ To manually rotate a token:
 #### Application configuration
 
 After creating a token in the console it must be configured for accessing a container cluster,
-using [clients](https://cloud.vespa.ai/en/reference/services.html#clients) configuration.
+using [clients](../../reference/services.html#clients) configuration.
 Below is a simplified example for an application with two container clusters,
 one for feeding and document access (i.e. read+write), and another for query access (i.e. read) -
 one token for each:
@@ -324,7 +324,7 @@ Users have two different privilege levels
 ### User access to Control Plane
 
 Outside using the Vespa Console, communicating with the Control Plane is easiest
-with the [Vespa CLI](/en/clients/vespa-cli.html).
+with the [Vespa CLI](../../clients/vespa-cli.html).
 
 ```
 $ vespa auth login

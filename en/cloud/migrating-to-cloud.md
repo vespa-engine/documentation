@@ -81,7 +81,7 @@ and add a public certificate to it:
 ```
 
 The command also installs a key/certificate pair in the Vespa CLI home directory, see
-[vespa auth cert](/en/reference/vespa-cli/vespa_auth_cert.html).
+[vespa auth cert](../reference/vespa-cli/vespa_auth_cert.html).
 This pair is used in subsequent accesses to the data plane for document and query operations.
 
 
@@ -157,8 +157,8 @@ Repeat this for all clusters in `services.xml`. Notes:
    The configuration changes above are easily tested in this environment.
 2. Using `count=2` is best practise at this point.
 3. Resources must match a node instance type at the cloud providers(s) deploying to, see
-   [AWS flavors](https://cloud.vespa.ai/en/reference/aws-flavors.html)
-   and [GCP flavors](https://cloud.vespa.ai/en/reference/gcp-flavors.html).
+   [AWS flavors](https://cloud.vespa.ai/en/reference/aws-flavors.html),
+   [GCP flavors](https://cloud.vespa.ai/en/reference/gcp-flavors.html), and [Azure flavors](https://cloud.vespa.ai/en/reference/azure-flavors.html).
 
 
 ### 8. Deploy to Vespa Cloud Dev Environment

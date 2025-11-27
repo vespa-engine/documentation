@@ -35,7 +35,7 @@ there are more resource dimensions like GPU use, or CPU architecture, available.
 Optimizing for cost/performance is therefore easy.
 Simplified, applications can be CPU, disk, or memory bound.
 A general rule of thumb is to be bound by the most expensive component, often CPU.
-Refer to the node resource [reference](/en/reference/services.html#resources) for all dimensions.
+Refer to the node resource [reference](../reference/services.html#resources) for all dimensions.
 
 
 ## Resource suggestions
@@ -52,7 +52,7 @@ It is simplified by using the Resource Suggestions view in the Vespa Console:
 ![Resource Suggestions](/assets/img/resource-suggestions-1.png)
 
 Vespa Cloud tracks usage over time and suggests node configuration
-and [topology](/en/cloud/topology-and-resizing.html) changes based on last week's load.
+and [topology](topology-and-resizing.html) changes based on last week's load.
 In the example above, observe a suggestion that doubles the memory relative to CPU.
 
 This simplifies _what_ to configure, and one can roll out isolated changes while
@@ -61,7 +61,7 @@ observing latency and other business metrics like relevance quality.
 
 
 ## Automated resource configuration deployment
-Resource configuration is part of the [application package](/en/application-packages.html).
+Resource configuration is part of the [application package](../basics/applications.html).
 To change a cluster's resources, deploy the new version of the application package to Vespa Cloud
 and wait for the changes to apply:
 
@@ -75,7 +75,7 @@ and wait for the changes to apply:
 
 {% include important.html content='Vespa Cloud is designed for online changes.
 All of the above changes can be deployed to a running system, with zero to minimal disruption.
-See [content cluster elasticity](/en/content/elasticity.html) for details.' %}
+See [content cluster elasticity](../content/elasticity.html) for details.' %}
 
 Making changes to the resource specifications is hence fully automated.
 The quickest way to the sweet spot is to initially deploy with enough capacity
@@ -115,7 +115,7 @@ Find a list of supported instance types at
 
 
 ## Next reads
-* [The practical search performance guide](/en/performance/practical-search-performance-guide.html)
-* [Autoscaling](/en/cloud/autoscaling.html)
+* [The practical search performance guide](../performance/practical-search-performance-guide.html)
+* [Autoscaling](autoscaling.html)
 
 <!-- Read more in TBD blogpost -->

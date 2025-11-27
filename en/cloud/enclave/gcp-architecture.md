@@ -7,7 +7,7 @@ category: cloud
 ### Architecture
 
 Each Enclave in the tenant GCP project corresponds to a Vespa Cloud
-[zone](https://cloud.vespa.ai/en/reference/zones.html). Inside the tenant GCP project one Enclave is
+[zone](../zones.html). Inside the tenant GCP project one Enclave is
 contained within one single [VPC](https://cloud.google.com/vpc/).
 
 ![Enclave architecture](/assets/img/vespa-cloud-enclave-gcp.png)
@@ -71,4 +71,4 @@ The tenant that registered the GCP project is the only tenant that can deploy
 applications targeting the Enclave.
 
 For more general information about security in Vespa Cloud, see the
-[whitepaper](https://cloud.vespa.ai/en/security/whitepaper).
+[whitepaper](../security/whitepaper).
