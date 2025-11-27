@@ -589,7 +589,7 @@ It depends. Vespa aims to adapt to resources (like auto thread config based on v
 and actual use (when to run maintenance jobs like compaction),
 but there are tradeoffs that applications owners can/should make.
 Start off by reading the [Vespa Serving Scaling Guide](../performance/sizing-search.html),
-then run [benchmarks](../cloud/benchmarking.html) and use the [dashboards](../cloud/monitoring.html).
+then run [benchmarks](../performance/benchmarking-cloud.html) and use the [dashboards](../cloud/monitoring.html).
 
 
 {:.faq-section}
