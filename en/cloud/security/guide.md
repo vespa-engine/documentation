@@ -165,7 +165,7 @@ To manually rotate a token:
 #### Application configuration
 
 After creating a token in the console it must be configured for accessing a container cluster,
-using [clients](../../reference/services.html#clients) configuration.
+using [clients](../../reference/services-container.html#clients) configuration.
 Below is a simplified example for an application with two container clusters,
 one for feeding and document access (i.e. read+write), and another for query access (i.e. read) -
 one token for each:
