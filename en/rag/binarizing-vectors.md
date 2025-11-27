@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Binarizing Vectors"
+redirect_from:
+  - /en/binarizing-vectors
 ---
 
 <style>
