@@ -65,7 +65,7 @@ define a `LocalLLM` component in your application's
 This component will ensure that the underlying inference engine is started and
 load the model when the container nodes are started. Each container node in the
 cluster will load the LLM. Note that you can set up 
-[multiple clusters of container nodes](../operations-selfhosted/routing.html#multiple-container-clusters).
+[multiple clusters of container nodes](../applications/containers.html).
 This can be helpful for instance if you have multiple LLMs that don't fit in the
 available GPU memory, or you would like to offload LLM inference to dedicated
 nodes for performance reasons.
@@ -264,7 +264,7 @@ Here, the model itself has 33 layers, and all are offloaded to the GPU. If your
 model is too large to fit on the GPU, you can speed up model evaluation by
 offloading parts of the model to the GPU.
 
-To set up GPUs on self-hosted, please refer to [Container GPU setup](../operations-selfhosted/vespa-gpu-container.html)
+To set up GPUs on self-hosted, please refer to [Container GPU setup](../operations/self-managed/vespa-gpu-container.html)
 for more details.
 
 It is very easy to use GPU acceleration on Vespa Cloud. To enable GPU

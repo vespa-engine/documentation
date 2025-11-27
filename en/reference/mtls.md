@@ -3,7 +3,7 @@
 title: "Mutually authenticated TLS (mTLS) reference"
 ---
 
-{% include note.html content="See [Securing a self-hosted Vespa application with mutually authenticated TLS (mTLS)](/en/operations-selfhosted/mtls.html) 
+{% include note.html content="See [Securing a self-hosted Vespa application with mutually authenticated TLS (mTLS)](/en/operations/self-managed/mtls.html) 
 for a practical guide." %}
 
 ## Environment variables
