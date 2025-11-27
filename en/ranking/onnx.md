@@ -275,7 +275,7 @@ consult [embedding reference](../reference/embedding-reference.html) documentati
 
 ### Using vespa-analyze-onnx-model
 
-[vespa-analyze-onnx-model](../operations/tools.html#vespa-analyze-onnx-model)
+[vespa-analyze-onnx-model](../reference/tools.html#vespa-analyze-onnx-model)
 is useful to find model inputs and outputs -
 example run on a config server where an application package with a model is deployed to:
 
