@@ -720,7 +720,7 @@ search only finds 1 document matching the exact phrase.
 ## Maximum Inner Product Search using Vespa WAND
 
 The previous section introduced the `weakAnd` query operator which integrates 
-with [linguistic processing](../linguistics.html) and string matching using `match: text`.  
+with [linguistic processing](../linguistics/linguistics.html) and string matching using `match: text`.  
 
 The following examples uses the
 [wand()](../reference/query-language-reference.html#wand) query operator. 

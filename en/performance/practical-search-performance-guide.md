@@ -713,7 +713,7 @@ The previous section covered free text searching in a `fieldset` containing fiel
 Fields of [type string](../reference/schema-reference.html#field) are 
 treated differently depending on having `index` or `attribute`:
 
-- `index` integrates with [linguistic](../linguistics.html) processing and is matched using 
+- `index` integrates with [linguistic](../linguistics/linguistics.html) processing and is matched using 
 [match:text](../reference/schema-reference.html#match). 
 
 - `attribute` does not integrate with linguistic processing and is matched using 

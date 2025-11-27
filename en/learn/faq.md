@@ -412,7 +412,7 @@ e.g. bark (dog bark) vs. bark (tree bark), or BCG (company) vs. BCG (vaccine nam
 Creating a new index <em>format</em> means changing the core.
 However, for the examples above, one just need control over the tokens which are indexed (and queried).
 That is easily done in some Java code.
-The simplest way to do this is to plug in a [custom tokenizer](../linguistics.html).
+The simplest way to do this is to plug in a [custom tokenizer](../linguistics/linguistics.html).
 That gets called from the query parser and bundled linguistics processing [Searchers](../applications/searchers.html)
 as well as the [Document Processor](../applications/document-processors.html)
 creating the annotations that are consumed by the indexing operation.
@@ -748,7 +748,7 @@ Use [vespa-logfmt](../operations-selfhosted/vespa-cmdline-tools.html#vespa-logfm
 If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.
 
 ### How to fix encoding problems in document text?
-See [encoding troubleshooting](../troubleshooting-encoding.html)
+See [encoding troubleshooting](../linguistics/troubleshooting-encoding.html)
 for how to handle and remove control characters from the document feed.
 
 

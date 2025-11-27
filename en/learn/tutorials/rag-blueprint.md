@@ -731,13 +731,13 @@ rank-profile base-features {
 
 ### Use complex linguistics/recall only for precision
 
-Vespa gives you extensive control over [linguistics](../../linguistics.html).
+Vespa gives you extensive control over [linguistics](../../linguistics/linguistics.html).
 You can decide [match mode](../../reference/schema-reference.html#match), stemming, normalization, or control derived tokens.
 
 It is also possible to use more specific operators than [weakAnd](../../reference/query-language-reference.html#weakand) 
 to match only close occurrences ([near](../../reference/query-language-reference.html#near)/ 
-[onear](../../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../../query-rewriting.html#equiv)), 
-weight items, set connectivity, and apply [query-rewrite](../../query-rewriting.html) rules.
+[onear](../../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../../linguistics/query-rewriting.html#equiv)), 
+weight items, set connectivity, and apply [query-rewrite](../../linguistics/query-rewriting.html) rules.
 
 **Don’t use this to increase recall — improve your embedding model instead.**
 

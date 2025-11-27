@@ -173,13 +173,13 @@ schema includes default `match` modes for `attribute` and `index` property for v
 Note that we are enabling the usage of [BM25](../../ranking/bm25.html) for `title`, `body` and `url`.
 by including `index: enable-bm25`. The language field is the only field not in the msmarco dataset. We hardcode its value 
 to "en" since the dataset is English. Using `set_language` avoids automatic language detection and uses the value when processing the other
-text fields. Read more in [linguistics](../../linguistics.html).
+text fields. Read more in [linguistics](../../linguistics/linguistics.html).
 
 #### Fieldset for matching across multiple fields
 
 [Fieldset](../../reference/schema-reference.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
 add indexing/storage overhead. String fields grouped using fieldsets must share the same 
-[match](../../reference/schema-reference.html#match) and [linguistic processing](../../linguistics.html) settings because
+[match](../../reference/schema-reference.html#match) and [linguistic processing](../../linguistics/linguistics.html) settings because
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
 #### Document summaries to control search response contents
@@ -319,7 +319,7 @@ $ vespa query \
 
 This query combines YQL [userInput()](../../reference/query-language-reference.html#userinput), a robust
 way to combine free text queries from users with application logic. Similar to `set_language` in indexing, we specify
-the language of the query using the [language](../../linguistics.html#querying-with-language) API parameter. This ensures
+the language of the query using the [language](../../linguistics/linguistics.html#querying-with-language) API parameter. This ensures
 symmetric linguistic processing of both the query and the document text. Automatic language detection is inaccurate
 for short query strings and might lead to asymmetric processing of queries and document texts. 
 
