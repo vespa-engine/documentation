@@ -1,0 +1,85 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Request handlers"
+redirect_from:
+- /en/jdisc/developing-request-handlers.html
+---
+
+<p>
+  This document explains how to implement and deploy a custom request handler.
+</p>
+<p>
+  In most cases, implementing your own request handlers is unnecessary, as both searchers
+  and processors can access the request data directly. However, there are a few cases
+  where custom request handlers are useful:
+</p>
+<ol>
+  <li>You need to implement a custom REST API.</li>
+  <li>Your application needs to control which parameters
+    are used to route requests to a particular search or processing chain.</li>
+</ol>
+
+
+<h2 id="implementing-a-request-handler">Implementing a request handler</h2>
+<p>
+  Upon receiving a request, the request handler must consume its content, process it,
+  and then return a response.
+  The most convenient way to implement a request handler is by subclassing the
+  <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/container/jdisc/ThreadedHttpRequestHandler.html">
+    ThreadedHttpRequestHandler</a>.
+</p>
+<p>
+  This utility base class uses a synchronous API and a multithreaded execution model.
+  It also implements a lot of functionality that is needed by most request handlers:
+</p>
+<ul>
+  <li>queries are automatically written to the access log</li>
+  <li>an HTTP date header is added to the response
+    (if your own code adds a date header, it will not be overwritten, though)</li>
+  <li>logging of exceptions and queries that time out</li>
+  <li>automatic shutdown when an Error is thrown</li>
+</ul>
+
+
+<h3 id="example-request-handler-implementations">Example request handler implementations</h3>
+<p>
+  The <a href="https://github.com/vespa-engine/sample-apps">Vespa sample apps</a> on GitHub contains
+  a few example request handler implementations:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Handler</th>
+    <th>Description</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/DemoHandler.java">
+      DemoHandler</a></td>
+    <td>A handler that modifies a request before dispatching it to the <code>ProcessingHandler</code>.
+      This handler is also used in the <a href="../learn/tutorials/http-api.html">HTTP API tutorial</a>.
+      Note that since this depends on ProcessingHandler you must add &lt;processing/&gt; to your &lt;container&gt; tag to use it.
+      If you want to issue Queries instead, have com.yahoo.search.searchchain.ExecutionFactory injected instead and use it
+      to create executions and call search/fill on them.</td>
+  </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="deploying-a-request-handler">Deploying a request handler</h2>
+<p>
+  To deploy a request handler in an application,
+  use the <a href="../reference/services-container.html#handler">handler</a> element in <em>services.xml</em>:
+</p>
+<pre>
+&lt;container id="default" version="1.0"&gt;
+    <span class="pre-hilite">&lt;handler id="my.package.MyRequestHandler" bundle="the name in &lt;artifactId&gt; in your pom.xml"&gt;</span>
+        <span class="pre-hilite">&lt;binding&gt;http://*/*&lt;/binding&gt;</span>
+    <span class="pre-hilite">&lt;/handler&gt;</span>
+</pre>
+<p>
+  A request handler may be bound to zero or more URI patterns by adding a
+  <a href="../reference/services-container.html#binding">binding</a> element for each pattern.
+</p>

@@ -1,0 +1,143 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Vespa applications"
+redirect_from:
+- /en/cloudconfig/application-packages.html
+- /en/cloudconfig/config-introduction.html
+- /en/config-introduction.html
+- /en/application-packages.html
+- /en/applications.html
+---
+
+<p>You use Vespa by deploying an <i>application</i> to it. Why applications?
+Because Vespa handles both data and the
+computations you do over them - together an application.</p>
+
+<p>An application is specified by an <i>application package</i> - a directory with some files.
+The application package contains <i>everything</i> that is needed to run your application:
+Config, schemas, components, ML models, and so on.</p>
+
+<p>The <i>only</i> way to change an application is to make the change in the application package
+and then deploy it again. Vespa will then safely change the running system to match the new
+application package revision, without impacting queries, writes, or data.</p>
+
+
+<h2 id="a-minimal-application-package">A minimal application package</h2>
+
+<p>You can create a complete application package with just a single file: services.xml. This file
+specifies the clusters that your application should run. It could just be a single stateless cluster
+- what's called <i>container</i> - like this:</p>
+
+<pre>{% highlight xml %}
+<services version="1.0">
+    <container version="1.0" id="default">
+        <nodes count="2">
+            <resources vcpu="4" memory="16Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+</services>
+{% endhighlight %}</pre>
+
+<p>Put this in a file called services.xml, and you have created the world's smallest application package.
+However, this won't do much, usually you want to have a <code>content</code> cluster which can store data,
+maintain indexes, and run the distributed part of queries. You'll also want your container cluster to load
+the necessary middleware for this. With that we get a services file like this:</p>
+
+<pre>{% highlight xml %}
+<services version="1.0">
+    <container version="1.0" id="queryfeedendpoint">
+        <search/>
+        <document-api/>
+        <nodes count="2">
+            <resources vcpu="4" memory="16Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+    <content id="mydocs" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <nodes count="2">
+            <resources vcpu="8" memory="64Gb" disk="200Gb"/>
+        </nodes>
+        <documents>
+            <document type="myschema" mode="index"/>
+        </documents>
+    </content>
+</services>
+{% endhighlight %}</pre>
+
+<p>This specifies a pretty normal simple Vespa application, but now we need another file:
+The schema of the document type we'll use. This goes into the directory <code>schemas/</code>,
+so our application package now looks like this:</p>
+
+<pre>
+services.xml
+schemas/myschema.sd
+</pre>
+
+<p>The schema file describes a kind of data and the computations (such as ranking/scoring) you want to do
+over it. At minimum it just lists the fields of that data type and if and each field should be indexed:</p>
+
+<pre>
+schema myschema {
+
+    document myschema {
+
+        field text type string {
+            indexing: summary | index
+        }
+
+        field embedding type tensor&lt;bfloat16&gt;(x[384]) {
+            indexing: attribute | index
+        }
+
+        field popularity type double {
+            indexing: summary | attribute
+        }
+
+    }
+
+}
+</pre>
+
+<p>With these two files we have specified a fully functional application that can do text,
+vector and hybrid search with filtering.</p>
+
+<p>Rather than creating applications from scratch like this, you can also clone one of our sample
+applications as a starting point like we did in <a href="deploy-an-application.html">getting started</a>.</p>
+
+<p>To read more on schemas, see the <a href="schemas.html">schemas</a> guide.
+To see everything an application package can contain, see the
+<a href="../reference/application-packages-reference.html">application package reference</a>.</p>
+
+
+<h2 id="deploying-applications">Deploying applications</h2>
+
+<p>To create running instances of an application, or make the changes to one take effect, you <i>deploy</i> it.
+Deployments to the dev zone and to self-managed clusters sets up a single instance, while deployments to production
+can set up multiple instances in one or more regions.</p>
+
+<p>To deploy an application package you use the <a href="../clients/vespa-cli.html#deployment">deploy command</a> in Vespa CLI:</p>
+
+<pre>{% highlight shell %}
+$ vespa deploy .
+{% endhighlight %}</pre>
+
+<p>This will deploy the application package at the current dir to the current target and the default dev zone
+(use <code>vespa deploy -h</code> to see other options).</p>
+
+<p>Deployment to production zones use a separate command:</p>
+
+<pre>{% highlight shell %}
+$ vespa prod deploy .
+{% endhighlight %}</pre>
+
+<p>Production deployments also require an additional file in the application package to specify where
+it should be deployed: deployment.xml. See <a href="../cloud/production-deployment.html">production deployment</a>.
+The recommended way to deploy to production is by setting up a continuous deployment job, see
+<a href="../cloud/automated-deployments.html">automated deployments</a>.</p>
+
+<p>Deploying a change to an application package is generally safe to do at any time.
+It does not disrupt queries and writes, and invalid or destructive changes are rejected before taking effect.
+You can also add tests that verifies the application before deployment to production zones.</p>
+
+<br/>
+<h4>Next: <a href="schemas.html">Schemas</a></h4>

@@ -1,0 +1,264 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Http servers and filters"
+redirect_from:
+- /en/jdisc/http-server-and-filters.html
+---
+
+<p>
+  This document explains how to set up http servers and filters in the Container.
+  Before proceeding, familiarize with the <a href="developer-guide.html">Developer Guide</a>.
+</p>
+
+
+
+<h2 id="set-up-http-servers">Set up Http servers</h2>
+<p>
+  To accept http requests on e.g. port 8090, add an <code>http</code> section with a server to <em>services.xml</em>:
+</p>
+<pre>{% highlight xml%}
+<?xml version="1.0" encoding="utf-8" ?>
+<container version="1.0">
+    <http>
+      <server port="8090" id="main-server" />
+    </http>
+</container>
+{% endhighlight %}</pre>
+<p>
+  To verify that the new server is running, check the default handler on the root path,
+  which will return a list of all http servers:
+</p>
+<pre>
+$ curl http://localhost:8090/
+</pre>
+<p>
+  Adding an <code>http</code> section to <em>services.xml</em>
+  <strong>disables the default http server</strong> at port 8080.
+</p>
+<p>
+  Binding to privileged ports (&lt; 1024) is supported.
+  Note that this <strong>only</strong> works when running as a standalone container,
+  and <strong>not</strong> when running as a Vespa cluster.
+</p>
+
+
+<h3 id="configure-the-http-server">Configure the HTTP Server</h3>
+<p>
+  Configuration settings for the server can be modified by setting values for the
+  <code>jdisc.http.connector</code> config inside the <code>server</code> element:
+</p>
+<pre>{% highlight xml%}
+<?xml version="1.0" encoding="utf-8" ?>
+<container version="1.0">
+    <http>
+        <server port="8090" id="main-server" >
+            <config name="jdisc.http.connector">
+                <tcpNoDelay>false</tcpNoDelay>
+            </config>
+        </server>
+    </http>
+</container>
+{% endhighlight %}</pre>
+<p>
+  Note that it is not allowed to set the <code>listenPort</code> in the http-server config,
+  as it conflicts with the port that is set in the <em>port</em> attribute in the <em>server</em> element.
+  For a complete list of configuration fields that can be set, refer to the config definition schema in
+  <a href="https://github.com/vespa-engine/vespa/blob/master/container-core/src/main/resources/configdefinitions/jdisc.http.jdisc.http.connector.def">
+    jdisc.http.connector.def</a>.
+</p>
+
+
+<h3 id="tls">TLS</h3>
+<p>
+  TLS can be configured using either the <a href="../reference/services-http.html#ssl">ssl</a>
+  or the <a href="../reference/services-http.html#ssl-provider">ssl-provider</a> element.
+</p>
+<pre>{% highlight xml %}
+<container version="1.0">
+    <http>
+        <server id="server-1" port="5000">
+          <ssl>
+              <private-key-file>/path/to/private-key.pem</private-key-file>
+              <certificate-file>/path/to/certificate.pem</certificate-file>
+              <ca-certificates-file>/path/to/ca-certificates.pem</ca-certificates-file>
+              <client-authentication>want</client-authentication>
+              <cipher-suites>
+                  TLS_AES_128_GCM_SHA256,
+                  TLS_AES_256_GCM_SHA384,
+                  TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                  TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+              </cipher-suites>
+              <protocols>TLSv1.2,TLSv1.3</protocols>
+            </ssl>
+        </server>
+        <server id="server-2" port="5001">
+            <ssl-provider class="MySslProvider" bundle="the name in <artifactId> in pom.xml"/>
+        </server>
+    </http>
+</container>
+{% endhighlight %}</pre>
+<p>
+  Refer to the <a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA">
+  multinode-HA</a> sample application for an example.
+</p>
+
+
+
+<h2 id="set-up-filter-chains">Set up Filter Chains</h2>
+<p>
+  There are two main types of filters:
+</p>
+<ul>
+  <li>request filters</li>
+  <li>response filters</li>
+</ul>
+<p>
+  Request filters run before the handler that processes the request, and response filters run after.
+  They are used for tasks such as authentication, error checking and modifying headers.
+</p>
+
+
+<h3 id="using-filter-chains">Using Filter Chains</h3>
+<p>
+  Filter chains are set up by using the <code>request-chain</code> and
+  <code>response-chain</code> elements inside the
+  <a href="../reference/services-http.html#filtering">filtering</a> element.
+  Example setting up two request filter chains, and one response filter chain:
+</p>
+<pre>{% highlight xml %}
+<http>
+    <filtering>
+        <filter id="request-filter1" class="com.yahoo.test.RequestFilter1" bundle="demo-bundle"/>
+
+        <request-chain id="test-request-chain">
+            <filter id="request-filter1" />
+            <filter id="request-filter2" class="com.yahoo.test.RequestFilter2" />
+        </request-chain>
+
+        <request-chain id="other-request-chain">
+            <filter id="request-filter1" />
+        </request-chain>
+
+        <response-chain id="test-response-chain">
+            <filter id="response-filter" class="com.yahoo.test.ResponseFilter" />
+        </response-chain>
+    </filtering>
+    <server port="8080" id="main-server" />
+</http>
+{% endhighlight %}</pre>
+<p>
+  Filters that should be used in more than one chain,
+  must be defined directly in the <code>filtering</code> element,
+  as shown with <code>request-filter1</code> in the example above.
+</p>
+<p>
+  To actually use a filter chain, add one or more URI <a href="../reference/services-http.html#binding">bindings</a>:
+</p>
+<pre>{% highlight xml %}
+<http>
+    <filtering>
+        <request-chain id="test-request-chain">
+            <filter id="request-filter" class="com.yahoo.test.RequestFilter" />
+            <binding>http://*/*</binding>
+        </request-chain>
+
+        <response-chain id="test-response-chain">
+            <filter id="response-filter" class="com.yahoo.test.ResponseFilter" />
+            <binding>http://*/*</binding>
+        </response-chain>
+    </filtering>
+    <server port="8080" id="main-server" />
+</http>
+{% endhighlight %}</pre>
+<p>
+  These bindings say that both the request chain and the response chain
+  should be used when the request URI matches <code>http://*/*</code>.
+  So both a request filter chain and a response filter chain can be used on a single request.
+  However, only one request chain will be used if there are multiple request chains
+  that have a binding that matches a request.
+  And vice versa for response chains.
+  Refer to the <a href="https://javadoc.io/doc/com.yahoo.vespa/jdisc_core/latest/com/yahoo/jdisc/application/UriPattern.html">
+  javadoc</a> for information about which chain that will be used in such cases.
+</p>
+<p>
+  In order to bind a filter chain to a specific <em>server</em>, add the server port to the binding:
+</p>
+
+<pre>{% highlight xml %}
+<request-chain id="test-request-chain">
+    <filter id="request-filter" class="com.yahoo.test.RequestFilter" />
+    <binding>http://*:8080/*</binding>
+    <binding>http://*:9000/*</binding>
+</request-chain>
+{% endhighlight %}</pre>
+
+<p>
+    A request must match a filter chain if any filter is configured. A 403 response is returned for non-matching request.
+    This semantic can be disabled - see <a href="../reference/services-http.html#filtering">strict-mode</a>.
+</p>
+
+<h4 id="excluding-filters-from-an-inherited-chain">Excluding Filters from an Inherited Chain</h4>
+<p>
+  Say you have a request filter chain that you are binding to most of your URIs.
+  Now, you want to run almost the same chain on another URI, but you need to exclude one of the filters.
+  This is done by adding <code>excludes</code>, which takes a space separated list of filter ids,
+  to the <a href="../reference/services-http.html#chain">chain element</a>.
+  Example where a security filter is excluded from an inherited chain for <em>status.html</em>:
+</p>
+<pre>{% highlight xml %}
+<request-chain id="request-chain-with-excludes"
+               inherits="request-chain-with-security"
+               excludes="com.yahoo.jdisc.http.filter.security.MyFilter">
+    <binding>http://*/status.html</binding>
+</request-chain>
+{% endhighlight %}</pre>
+
+
+<h3 id="creating-a-custom-filter">Creating a custom Filter</h3>
+<p>
+  Create an <a href="developer-guide.html">application package</a>
+  with artifactId <code>filter-bundle</code>.
+  Create a new file <code>filter-bundle/components/src/main/java/com/yahoo/demo/TestRequestFilter.java</code>:
+</p>
+<pre>{% highlight java %}
+package com.yahoo.demo;
+
+import com.yahoo.jdisc.*;
+import com.yahoo.jdisc.handler.*;
+import com.yahoo.jdisc.http.*;
+import com.yahoo.jdisc.http.filter.RequestFilter;
+
+import java.net.*;
+import java.nio.ByteBuffer;
+
+public class TestRequestFilter extends AbstractResource implements RequestFilter  {
+    @Override
+    public void filter(HttpRequest httpRequest, ResponseHandler responseHandler) {
+        if (isLocalAddress(httpRequest.getRemoteAddress())) {
+            rejectRequest(httpRequest, responseHandler);
+        } else {
+            httpRequest.context().put("X-NOT-LOCALHOST", "true");
+        }
+    }
+
+    private boolean isLocalAddress(SocketAddress socketAddress) {
+        if (socketAddress instanceof InetSocketAddress) {
+            InetAddress address = ((InetSocketAddress)socketAddress).getAddress();
+            return address.isAnyLocalAddress() || address.isLoopbackAddress();
+        } else {
+            return false;
+        }
+    }
+
+    private void rejectRequest(HttpRequest request, ResponseHandler responseHandler) {
+        HttpResponse response = HttpResponse.newInstance(request, Response.Status.FORBIDDEN);
+        ContentChannel channel = responseHandler.handleResponse(response);
+        channel.write(ByteBuffer.wrap("Not accessible by localhost.".getBytes()), null);
+        channel.close(null);
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  Build a bundle, and place it in the <a href="../basics/applications.html">
+  application package</a>'s <em>components</em> directory.
+</p>

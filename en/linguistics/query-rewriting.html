@@ -1,0 +1,395 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Query Rewriting"
+redirect_from:
+- /en/query-rewriting.html
+---
+
+<p>
+A search application can improve the quality by interpreting the intended meaning of the user queries.
+Once the meaning is guessed,
+the query can be rewritten to one that will satisfy the user better than the raw query.
+Vespa includes a query rewriting language which makes it easy to use query
+rewriting to understand and act upon the query semantics.
+</p><p>
+These query rewriting techniques can be combined to improve the search experience:
+</p>
+<ul>
+  <li>Query focusing: Decide a field to search for a term</li>
+  <li>Query enhancing: Add additional terms which improves the query</li>
+  <li>Stopwords: Remove terms which hurts recall or precision -
+    <a href="https://github.com/vespa-cloud/cord-19-search/blob/main/src/main/java/ai/vespa/example/cord19/searcher/BoldingSearcher.java">
+    example</a></li>
+  <li>Synonyms: Replace terms or phrases by others</li>
+</ul>
+<p>
+Query rewriting done by <em>semantic rules</em> or <em>searchers</em>.
+Semantic rules is a simple production rule language that operates on queries.
+For more complex query rewriting logic which could not be handled by simple rules,
+one could create a rewriting searcher making use of the query rewriting framework.
+</p>
+
+
+
+<h2 id="equiv">EQUIV</h2>
+<p>
+EQUIV is a query operator that can be used to add synonyms
+for words where the various synonyms should be equivalent - example:
+</p>
+<ul>
+  <li>The user query is <code>(used AND automobile)</code></li>
+  <li><em>automobile</em> is a synonym for <em>car</em> (from a dictionary)</li>
+  <li>Rewrite the query to <code>(used AND (automobile EQUIV car))</code></li>
+  <li><em>automobile</em> or <em>car</em> are here equivalent -
+      the query shall behave as if all occurrences of <em>car</em> in the document corpus
+      had been replaced by <em>automobile</em></li>
+</ul>
+<p>
+See the <a href="../reference/query-language-reference.html#equiv">reference</a>
+for differences between OR and EQUIV.
+In many cases it might be better to use OR instead of EQUIV.
+Example <em>Snoop</em> Dogg:
+</p>
+<pre>
+"Snoop" EQUIV "Snoop Doggy Dogg" EQUIV "Snoop Lion" EQUIV "Calvin Broadus" EQUIV "Calvin Cordozar Broadus Junior" 
+</pre>
+<p>
+However, <em>Snoop</em> is used by other people -
+so matching that alone is not a sure hit for the correct entity,
+and finding more than one of the synonyms in the same text gives better confidence.
+This is exactly what OR does:
+</p>
+<pre>
+"Snoop"!20 OR "Snoop Doggy Dogg"!90 OR "Snoop Lion"!75 OR "Calvin Broadus"!60 OR "Calvin Cordozar Broadus Junior"!100
+</pre>
+<p>
+Use lower weights on the alternatives with less confidence.
+If it looks like the many words and phrases inside the OR
+overwhelms other words in the query, giving even lower weights may be useful,
+for example making the sum of weights 100 - the default weight for just one alternative.
+</p><p>
+The decision to use EQUIV must be taken by application-specific dictionary or linguistics use.
+This can be done using <a href="../reference/query-language-reference.html#equiv">YQL</a>
+or from a container plugin (example
+<a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation-java/src/main/java/ai/vespa/example/album/EquivSearcher.java">
+EquivSearcher.java</a>) where the query object is manipulated as follows:
+</p>
+<ol>
+  <li>Find a word item in the query</li>
+  <li>Check that an EQUIV can be used in that place
+      (see <a href="../reference/query-language-reference.html#equiv">limitations</a>)</li>
+  <li>Find the synonyms in the dictionary</li>
+  <li>Make an <code>EquivItem</code> with the synonyms (and the original word) as children</li>
+  <li>Replace the original <code>WordItem</code> with the new <code>EquivItem</code></li>
+</ol>
+
+
+
+<h2 id="rules">Rules</h2>
+<p>
+A simple semantic rule looks like:
+</p>
+<pre>
+lotr -&gt; lord of the rings;
+</pre>
+<p>
+This means that whenever the term <em>lotr</em> is encountered in a query,
+replace it by the terms <em>lord of the rings</em>.
+Rules can also refer to conditions, and the produced terms can be a
+modified version of whatever is matched instead of a concrete term:
+</p>
+<pre>
+[brand] -&gt; company:[brand];
+[brand] :- sony, dell, ibm, hp;
+</pre>
+<p>
+This rule says that, whenever the condition named <em>brand</em> is matched,
+replace the matched term(s) by <em>the same term(s)</em> searching the <em>company</em> field.
+In addition, the <em>brand</em> condition is defined to match any of a list of brands.
+Note how <code>-&gt;</code> means a replacing production rule,
+<code>:-</code> means a condition and <code>,</code> separates alternatives.
+</p><p>
+It is also possible to do grouping using parentheses,
+list multiple terms which must be matched in sequence,
+and to write <em>adding</em> production rules using <code>+&gt;</code> instead of <code>-&gt;</code>.
+Terms are by default added using the query default (as if they were written in the search box),
+but it is also possible to force them to be AND, OR, NOT or RANK using respectively
+<code>+</code>, <code>?</code>, <code>-</code> and <code>$</code>.
+Here is a more complex rule illustrating this:
+</p>
+<pre>
+[destination] (in, by, at, on) [place] +&gt; $name:[destination]
+</pre>
+<p>
+This rule boosts matches which has a destination which matches the
+<em>name</em> field followed by a preposition and a place
+(the definition of the <em>destination</em> and <em>place</em> conditions are not shown).
+This is achieved by adding a RANK term -
+a term which do not impact whether a document is matched or not,
+but which adds a relevancy boost if it is.
+</p><p>
+The complete syntax of this language is found in the
+<a href="../reference/semantic-rules.html ">semantic rules reference</a>.
+</p>
+
+
+
+<h2 id="rule-bases">Rule bases</h2>
+<p>
+A collection of rules used together are collected in a <em>rule base</em> -
+a text file containing rules and conditions, with file suffix <code>.sr</code> (for semantic rules).
+Example:
+</p>
+<pre>
+# Replacements
+lotr -&gt; lord of the rings;
+colour -&gt; color;
+audi -&gt; skoda;
+
+# Stopwords
+[stopword] -&gt; ;  # (Replace them by nothing)
+[stopword] :- and, or, the, be;
+
+# Focus brands to the brand field. If we think the <em>brand</em>
+# field has high quality data, we can replace.  We use the same name
+# for the condition and the field, but this is not necessary.
+[brand] :- brand:[brand];
+[brand] :- sony, dell, ibm, hp;
+
+# Boost recognized categories
+[category] +&gt; $category:[category];
+[category] :- laptop, digital camera, camera;
+</pre>
+<p>
+The rules in a rule base is evaluated in order from the top down.
+A rule will be matched as many times as is possible before evaluation moves on to the next query.
+So the query <em>colour colour</em> will be rewritten to <em>color color</em>
+before moving on to the next rule.
+</p>
+
+
+
+<h2 id="configuration">Configuration</h2>
+<p>
+A rule base file is placed in the <code>rules/</code> directory under
+the <a href="../reference/application-packages-reference.html">application package</a>,
+and will be named as the file, excluding the <code>.sr</code> suffix.
+E.g. if the rules above are saved to <code>[my-application]/rules/example.sr</code>,
+the rules base available is named <code>example</code>.
+</p><p>
+To make a rule base be used by default in queries,
+add <code>@default</code> on a separate line to the rule base.
+To deactivate the default rules,
+add <a href="../reference/query-api-reference.html#rules.off">rules.off</a> to the query.
+</p><p>
+The rules can safely be updated at any time by running <code>vespa prepare</code> again.
+If there are errors in the rule bases, they will not be updated,
+and the errors will be reported on the command line.
+</p><p>
+To trace what the rules are doing,
+add <a href="../reference/query-api-reference.html#tracelevel.rules">tracelevel.rules=[number]</a> to the query.
+</p>
+
+
+
+<h2 id="using-multiple-rule-bases">Using multiple rule bases</h2>
+<p>
+It is possible to place multiple rule bases in the <code>[my-application]/rules/</code>
+and choose between them in the query.
+Rules may also include each other.
+This is useful to organize larger sets of rules,
+to experiment with variants of the rule set in new bases which includes the standard base,
+or to use different sets of rules for different use cases.
+</p><p>
+To include one rule base in another,
+add <code>@include(rulebasename)</code> on a separate line,
+where <em>rulebasename</em> is the file name (with or without the <em>.sr</em>).
+The result will be the same as if the included rule base were copied in
+to the location of the <code>include</code> line.
+If a condition is defined in both bases, the one from the <em>including</em> base will be used.
+It is also possible to refer to the same-named condition in an included rule base
+using the <code>@super</code> directive as a condition.
+For example, this rule base adds some more categories to the <em>category</em> definition
+in the <code>example.sr</code> above:
+</p>
+<pre>
+@include(example)
+
+# Category becomes laptop, digital camera, camera, palmtop, phone
+[category] :- @super, palmtop, phone;
+</pre>
+<p>
+  Multiple rule bases can be included, and included rule bases can themselves have included rule bases.
+  All the rule bases included in the application package will be available when making queries.
+  One of the rule bases can be made the default by adding <code>@default</code> on a separate line in the rule base.
+  To use another rule base,
+  add <a href="../reference/query-api-reference.html#rules.rulebase">rules.rulebase=[rulebasename]</a> to the query.
+</p>
+
+
+
+<h2 id="using-a-finite-state-automaton">Using a finite state automaton</h2>
+<p>
+<em>Finite state automata</em> (FSA) are efficient in storing and making lookups in large string lists.
+A rule base can be compiled into an FSA to increase performance.
+An automaton is created from a text file which lists the condition terms to match
+and the condition names separated by a tab (by default).
+The name of the condition can be followed by a semicolon and additional data which will be ignored.
+</p><p>
+This automaton source file defines the same as the
+<em>stopword</em> and <em>brand</em> conditions in the example rule base:
+</p>
+<pre>
+and   stopword
+or    stopword
+be    stopword
+the   stopword
+sony  brand
+dell  brand
+ibm   brand; This text is ignored
+hp    brand
+</pre>
+<p>Use <a href="../operations/tools.html#vespa-makefsa">vespa-makefsa</a> to compile the automaton file:</p>
+<pre>
+$ vespa-makefsa -t sourcefile.txt targetfile.fsa
+</pre>
+<p>
+The target file is used from a rule base by adding <em>@automata(automatonfile)</em>
+on a separate line in the rule base file (the file path is relative to <em>$VESPA_HOME</em>).
+Automata-files must be stored on all container nodes.
+</p><p>
+Note that automata are not included in others,
+so a rule base including another which uses an automaton
+must also declare to use the same automaton
+(or an automaton containing any changes from the automaton of the included base).
+</p>
+
+
+
+<h2 id="query-phrasing">Query phrasing</h2>
+<p>
+Users search for phrases like <em>New York</em>, <em>Rolling Stones</em>,
+<em>The Who</em>, or <em>daily horoscopes</em>.
+Considering the latter, most of the time the query string will look like this:
+</p>
+<pre>
+/search/?query=daily horoscopes&amp;&hellip;
+</pre>
+<p>
+This is actually a search for documents where both <em>daily</em> and <em>horoscopes</em> match,
+but not necessarily documents with the exact phrase <em>"daily horoscopes"</em>.
+PhrasingSearcher is a Searcher that compares queries with a list of common phrases,
+and replaces two search terms with a phrase.
+If <em>"daily horoscopes"</em> is a common phrase, the above query becomes:
+</p>
+<pre>
+/search/?query="daily horoscopes"&amp;&hellip;
+</pre>
+<p>
+The PhrasingSearcher must be configured with a list of common phrases,
+compiled into a <em>finite state automation</em> (FSA). The phrase list must be:
+</p>
+<ul>
+  <li>all lowercase</li>
+  <li>sorted alphabetically</li>
+</ul>
+<p>Example:</p>
+<pre>
+$ perl -ne 'print lc' listofphrasestextfile.unsorted.mixedcase | sort &gt; listofphrasestextfile
+</pre>
+<p>
+Note that the Perl command to convert the text file to lowercase does
+not handle non-ASCII characters well (this is just an example).
+If the list of phrases is e.g. UTF-8 encoded and/or contains non-English characters,
+double-check that the resulting file is correct.
+</p><p>
+Use <a href="../operations/tools.html#vespa-makefsa">vespa-makefsa</a>
+to compile the list into an FSA file:
+</p>
+<pre>
+$ vespa-makefsa listofphrasestextfile phrasefsa
+</pre>
+<p>
+Put the file on all container nodes, configure the location
+and <a href="../basics/applications.html">deploy</a>:
+</p>
+<pre>
+&lt;container id="default" version="1.0"&gt;
+    &lt;config name="container.qr-searchers"&gt;
+        &lt;com&gt;
+            &lt;yahoo&gt;
+                &lt;prelude&gt;
+                    &lt;querytransform&gt;
+                        &lt;PhrasingSearcher&gt;
+                            &lt;automatonfile&gt;<span class="pre-hilite">/path/phrasefsa</span>&lt;/automatonfile&gt;
+                        &lt;/PhrasingSearcher&gt;
+                    &lt;/querytransform&gt;
+                &lt;/prelude&gt;
+            &lt;/yahoo&gt;
+        &lt;/com&gt;
+    &lt;/config&gt;
+</pre>
+
+
+
+<h2 id="special-tokens">Special tokens</h2>
+<p>
+Query tokens are built from <em>text characters</em>, as defined by <code>isTextCharacter</code> in
+<a href="https://github.com/vespa-engine/vespa/blob/master/vespajlib/src/main/java/com/yahoo/text/Text.java">
+com.yahoo.text.Text</a>.
+To query for terms with other characters, like <em>c++</em> or <em>.net</em>, use <em>special tokens</em>.
+Unlike query rewriting/phrasing, special tokens modifies data at feeding time,
+so changes to configuration should be followed by (automatic) document re-feed.
+</p><p>
+Add a <a href="../reference/services.html#generic-config"> specialtokens config</a> to <em>services.xml</em> to enable.
+Specify a token list called <em>default</em>, with a list of tokens.
+A token can have an optional replacement.
+All special tokens must be in lower-case.
+There is no need to enable it for particular fields,
+or indicate the need for special token handling during query input.
+Refer to <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/specialtokens.def">
+specialtokens.def</a> for details. Example configuration:
+</p>
+<pre>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;services version="1.0"&gt;
+    &lt;config name="vespa.configdefinition.specialtokens"&gt;
+        &lt;tokenlist&gt;
+            &lt;item&gt;
+                &lt;name&gt;default&lt;/name&gt;
+                &lt;tokens&gt;
+                    &lt;item&gt;
+                        &lt;token&gt;c++&lt;/token&gt;
+                    &lt;/item&gt;
+                    &lt;item&gt;
+                        &lt;token&gt;wal-mart&lt;/token&gt;
+                        &lt;replace&gt;walmart&lt;/replace&gt;
+                    &lt;/item&gt;
+                    &lt;item&gt;
+                        &lt;token&gt;.net&lt;/token&gt;
+                    &lt;/item&gt;
+                &lt;/tokens&gt;
+            &lt;/item&gt;
+        &lt;/tokenlist&gt;
+    &lt;/config&gt;
+    ...
+&lt;/services&gt;
+</pre>
+{% include note.html content='Special tokens is most useful for text search, meaning fields with longer text.
+For use cases with full exact matching in small fields, like <code>where product contains "M&amp;M"</code>,
+consider using <a href="../reference/schema-reference.html#match">match: exact</a>, like
+<pre>
+    field product type string {
+        indexing: summary | index
+        match: exact
+    }
+</pre>'%}
+<p>
+  Remember to encode queries when testing with non-textual characters.
+  The Vespa CLI has a <code>-v</code> option to print as YQL:
+</p>
+<pre>
+$ vespa query -v 'select * from items where product contains "M&amp;M"'
+
+curl http://127.0.0.1:8080/search/\?timeout=10s\&amp;yql=select+%2A+from+items+where+product+contains+%22M%26M%22
+</pre>

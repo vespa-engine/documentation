@@ -1,0 +1,318 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Chained Components"
+redirect_from:
+- /en/chained-components.html
+---
+
+<p >
+  <a href="processing.html">Processors</a>,
+  <a href="searchers.html">searcher plug-ins</a> and
+  <a href="document-processors.html">document processors</a>
+  are chained components.
+  They are executed serially, with each providing some service or transform,
+  and other optionally depending on these.
+  In other words, a chain is a set of components with dependencies.
+  Javadoc: <a href="https://javadoc.io/doc/com.yahoo.vespa/chain/latest/com/yahoo/component/chain/Chain.html">
+  com.yahoo.component.chain.Chain</a>
+</p>
+<p>
+  It is useful to read the <a href="../querying/federation.html">federation guide</a> before this document.
+</p>
+<p>
+  A chained component has three basic differences from a component in general:
+</p>
+<ul>
+  <li>The named services it <em>provides</em> to other components in the chain.</li>
+  <li>The list of services or checkpoints which the component itself
+  should be <em>before</em> in a chain, in other words, its dependents.</li>
+  <li>The list of services or checkpoints which the component itself
+  should be <em>after</em> in a chain, in other words, its dependencies.</li>
+</ul>
+<p>
+  What a component should be placed before,
+  what it should be placed after and what itself provides,
+  may be either defined using Java annotations directly on the component class,
+  or it may be added specifically to the component declarations
+  in <a href="../reference/services-container.html">services.xml</a>.
+  In general, the implementation should have as many of the necessary annotations as practical,
+  leaving the application specific configuration clean and simple to work with.
+</p>
+
+
+
+<h2 id="ordering-components">Ordering Components</h2>
+<p>
+  The execution order of the components in a chain is not defined by the
+  order of the components in the configuration.
+  Instead, the order is defined by adding the <em>ordering constraints</em> to the components:
+</p>
+<ul>
+  <li>Any component may declare that it <code>@Provides</code> some
+  named functionality (the names are just labels that have no meaning
+  to the container).</li>
+
+  <li>Any component may declare that it must be placed
+  <code>@Before</code> some named functionality,</li>
+
+  <li>or that it must be placed <code>@After</code> some
+  functionality.</li>
+</ul>
+<p>
+The container will pick any ordering of a chain consistent with the
+constraints of the components in the chain.
+</p><p>
+Dependencies can be added in two ways. Dependencies which are due to
+the code should be added as annotations in the code:
+</p>
+<pre>
+import com.yahoo.processing.*;
+import com.yahoo.component.chain.dependencies.*;
+
+<span class="pre-hilite">@Provides("SourceSelection")
+@Before("Federation")
+@After("IntentModel")</span>
+public class SimpleProcessor extends Processor {
+
+    @Override
+    public Response process(Request request, Execution execution) {
+        //TODO: Implement this
+    }
+}
+</pre>
+<p>
+Multiple functionality names may be specified by using the
+syntax <code>@Provides/Before/After({"A",
+"B"})</code>.
+</p><p>
+Annotations which do not belong in the code may be added in the
+<a href="../reference/services-container.html">configuration</a>:
+</p>
+<pre>
+&lt;container version="1.0"&gt;
+
+    &lt;processing&gt;
+        &lt;processor id="processor1" class="ai.vespa.examples.Processor1" /&gt;
+        &lt;chain id="default"&gt;
+            &lt;processor idref="processor1"/&gt;
+            &lt;processor id="processor2" class="ai.vespa.examples.Processor2"&gt;
+                <span class="pre-hilite">&lt;after&gt;ai.vespa.examples.Processor1&lt;/after&gt;</span>
+            &lt;/processor&gt;
+        &lt;/chain&gt;
+    &lt;/processing&gt;
+
+    &lt;nodes&gt;
+        &lt;node hostalias="node1" /&gt;
+    &lt;/nodes&gt;
+&lt;/container&gt;
+</pre>
+<p>
+For convenience, components always <code>Provides</code> their own
+fully qualified class name (the package and simple class name
+concatenated, e.g.
+<code>ai.vespa.examples.SimpleProcessor</code>) and their
+simple name (that is, only the class name, like
+<code>SimpleProcessor</code> in our searcher case), so it is always
+possible to declare that one must execute before or after some
+particular component. This goes for both general processors, searchers
+and document processors.
+</p><p>
+Finally, note that ordering constraints are just that; in particular
+they are not used to determine if a given search chain, or set of
+search chains, is &ldquo;complete&rdquo;.
+</p>
+
+
+
+<h2 id="chain-inheritance">Chain Inheritance</h2>
+<p>
+As implied by examples above, chains may inherit other chains
+in <em>services.xml</em>.
+</p>
+<pre>{% highlight xml %}
+<container version="1.0">
+    <processing>
+        <chain id="foo">
+            <processor id="ai.vespa.examples.ConnexityProcessor"/>
+            <processor id="ai.vespa.examples.IteratingProcessor"/>
+            <processor id="ai.vespa.examples.SignificanceProcessor" />
+        </chain>
+        <chain id="bar"
+               inherits="foo"
+               excludes="ai.vespa.examples.IteratingProcessor">
+            <processor id="ai.vespa.examples.ReverseProcessor" />
+        </chain>
+    </processing>
+    <nodes>
+        <node hostalias="node1" />
+    </nodes>
+</container>
+{% endhighlight %}</pre>
+<p>
+A chain will include all components from the chains named in the
+optional <code>inherits</code> attribute, exclude from that set all
+components named in the also optional
+<code>excludes</code> attribute and add all the components listed
+inside the defining tag. Both <code>inherits</code> and
+<code>excludes</code> are space delimited lists of reference
+names.
+</p><p>
+For search chains, there are two built-in search chains which are especially
+useful to inherit from, <code>native</code> and <code>vespa</code>.
+<code>native</code> is a basic search chain, containing the
+basic functionality most systems will need anyway,
+<code>vespa</code> inherits from <code>native</code> and adds a
+few extra searchers which most installations containing Vespa backends will need.
+</p>
+<!-- ToDo: Add example queries/config so users can find out  -->
+<pre>{% highlight xml %}
+<container version="1.0">
+    <search>
+        <chain id="default"
+               inherits="vespa"
+               excludes="com.yahoo.prelude.querytransform.StemmingSearcher com.yahoo.prelude.querytransform.NormalizingSearcher">
+            <searcher id="ai.vespa.examples.ConnexitySearcher"
+                      bundle="the name in artifactId in pom.xml" />
+            <searcher id="ai.vespa.examples.SignificanceSearcher"
+                      bundle="the name in artifactId in pom.xml" />
+            <searcher id="ai.vespa.examples.ReverseSearcher"
+                      bundle="the name in artifactId in pom.xml" />
+        </chain>
+    </search>
+    <nodes>
+        <node hostalias="node1" />
+    </nodes>
+</container>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="unit-tests">Unit Tests</h2>
+<p>
+A component should be unit tested in a chain containing the components it depends on.
+It is not necessary to run the dependency handling framework to achieve that,
+as the <code>com.yahoo.component.chain.Chain</code> class has several
+constructors which are easy to use while testing.
+</p>
+<pre>
+Chain&lt;Searcher&gt; c = new Chain(new UselessSearcher("first"),
+        new UselessSearcher("second"),
+        new UselessSearcher("third"));
+Execution e = new Execution(c, Execution.Context.createContextStub(null));
+Result r = e.search(new Query());
+</pre>
+<p>
+The above is a rather useless test, but it illustrates how the basic
+workflow can be simulated. The constructor will create a chain with
+supplied searchers in the given order (it will not analyze any annotations).
+</p>
+
+
+
+<h2 id="passing-information-between-components">Passing Information Between Components</h2>
+<p>
+When different searchers or document processors depend on shared classes or field names,
+it is good practice defining the name only in a single place.
+An <a href="searchers.html#passing-information-between-searchers">
+example</a> in the searcher development introduction illustrates an easy way to do that.
+</p>
+
+
+
+<h2 id="invoking-a-specific-search-chain">Invoking a Specific Search Chain</h2>
+<p>
+The search chain to use can be selected in the request, by adding the request parameter:
+<code>searchChain=myChain</code>
+</p>
+<p>
+If no chain is selected in the query, the chain called
+<code>default</code> will be used. If no chain called
+<code>default</code> has been configured, the chain called
+<code>native</code> will be used. The <em>native</em> chain is
+always present and contains a basic set of searchers needed in most applications.
+Custom chains will usually inherit the native chain to include those searchers.
+</p><p>
+The search chain can also be set in a <a href="../querying/query-profiles.html">query profile</a>.
+</p>
+
+
+
+<h2 id="example-configuration">Example: Configuration</h2>
+<p>
+Annotations which do not belong in the code may be added in the configuration,
+here a simple example with
+<a href="../reference/services-search.html#chain">search chains</a>:
+</p>
+<pre>
+&lt;container version="1.0"&gt;
+    &lt;search&gt;
+        &lt;chain id="default" inherits="vespa"&gt;
+            &lt;searcher id="simpleSearcher" bundle="the name in artifactId in pom.xml" /&gt;
+        &lt;/chain&gt;
+        &lt;searcher id="simpleSearcher"
+                  class="ai.vespa.examples.SimpleSearcher"
+                  bundle="the name in artifactId in pom.xml" &gt;
+            <span class="pre-hilite">&lt;before&gt;Cache&lt;/before&gt;</span>
+            <span class="pre-hilite">&lt;after&gt;Statistics&lt;/after&gt;</span>
+            <span class="pre-hilite">&lt;after&gt;Logging&lt;/after&gt;</span>
+            <span class="pre-hilite">&lt;provides&gt;SimpleTest&lt;/provides&gt;</span>
+        &lt;/searcher&gt;
+    &lt;/search&gt;
+    &lt;nodes&gt;
+        &lt;node hostalias="node1" /&gt;
+    &lt;/nodes&gt;
+&lt;/container&gt;
+</pre>
+<p>
+  And for <a href="../reference/services-docproc.html">document processor chains</a>, it becomes:
+</p>
+<pre>
+&lt;container version="1.0"&gt;
+    &lt;document-processing&gt;
+        &lt;chain id="default"&gt;
+            &lt;documentprocessor id="ReplaceInFieldDocumentProcessor"&gt;
+                <span class="pre-hilite">&lt;after&gt;TextMetrics&lt;/after&gt;</span>
+            &lt;/documentprocessor&gt;
+        &lt;/chain&gt;
+    &lt;/document-processing&gt;
+    &lt;nodes&gt;
+        &lt;node hostalias="node1"/&gt;
+    &lt;/nodes&gt;
+&lt;/container&gt;
+</pre>
+<p>
+For searcher plugins the class
+<a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchchain/PhaseNames.html">
+com.yahoo.search.searchchain.PhaseNames</a>
+defines a set of checkpoints third party searchers may use to help
+order themselves when extending the Vespa search chains.
+</p><p>
+Note that ordering constraints are just that; in particular
+they are not used to determine if a given search chain, or set of
+search chains, is &ldquo;complete&rdquo;.
+</p>
+
+
+<h2 id="example-cache-with-async-write">Example: Cache with async write</h2>
+<p>
+  Use case: In a search chain, do early return and do further search asynchronously using
+  <a href="https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/ExecutorService.html">
+    ExecutorService</a>.
+</p>
+<p>
+  Pseudocode: If cache hit (e.g. using Redis), just return cached data.
+  If cache miss, return null data and let the following searcher finish further query and write back to cache:
+</p>
+<pre>{% highlight java %}
+public Result search(Query query, Execution execution) {
+    // cache lookup
+
+    if (cache_hit) {
+        return result;
+    }
+    else {
+        execution.search(query);  // invoke async cache update searcher next in chain
+        return result;
+    }
+}
+{% endhighlight %}</pre>

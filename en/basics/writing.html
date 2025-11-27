@@ -1,0 +1,110 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Writing"
+redirect_from:
+- /en/writing.html
+---
+
+<p>This is an introduction to writing data into Vespa.</p>
+
+
+<h2 id="documents">Documents</h2>
+
+<p>Once you have added one or more schemas to an application, and have added <code>&lt;document-api&gt;</code>
+in services.xml to the container cluster you want to handle writes, you can send writes following those schemas.
+A document is written as a JSON map containing a value for each field:</p>
+
+<pre>{% highlight json %}
+{
+    "put": "id:my-namespace:my-documenttype::my-id-string",
+    "fields": {
+        "myTextField": "Hello world!",
+        "myNumericAttribute": 13.8,
+        "myEmbedding": [0.3, 1.45, 1.03]
+    }
+}
+{% endhighlight %}</pre>
+
+<p>Each document has an id, which has two parts which can be decided freely:
+
+<ul>
+    <li>The <b>namespace</b>, which is just a string used to avoid name collisions if you have
+        multiple kinds of clients deciding ids and not used for any other purpose
+    <li>The <b>id string</b>, which can be any string you want, for example a product id or a url
+</ul>
+
+<p>Fields can remain empty; you do not need to set a value for every field defined in the document type.</p>
+
+<p>You can find complete information on the document format in the
+<a href="../reference/document-json-format.html">document JSON format reference</a>.</p>
+
+
+<h2 id="writing-documents">Writing documents</h2>
+
+<p>Documents are written to your application instances <i>write endpoint</i>,
+using the <a href="../writing/document-v1-api-guide.html">document/v1</a> HTTP API.
+You can use the API directly, or use one of the clients provided by Vespa:</p>
+
+<ul>
+    <li><b>Command line, with <a href="../clients/vespa-cli.html">Vespa CLI</a></b>:
+        <code><a href="../clients/vespa-cli.html#documents">vespa feed mydoc.json/mydocs.jsonl</a></code>
+        to feed one or many documents to Vespa.</li>
+    <li><b>Python, with <a href="https://vespa-engine.github.io/pyvespa/">PyVespa</a>:</b>
+        <code><a href="https://vespa-engine.github.io/pyvespa/reads-writes.html#feeding-operations-from-a-file">application.feed_iterable(...)</a></code>
+    <li><b>Java, with the <a href="../clients/vespa-feed-client.html">Java Feed Client</a>:</b>
+        <code><a href="../clients/vespa-feed-client.html#example-java">myFeedClient.put(id, json, params)</a></code></li>
+</ul>
+
+<p>Documents can also be removed, retrieved, and updated using the same API and clients.</p>
+
+
+<h2 id="updating-documents">Updating documents</h2>
+
+<p>Documents can be fully replaced by a new version by writing them again,
+but you can also update any individual fields of existing documents. This is especially useful
+for updating attribute fields such as e.g. behavior signals or prices at high throughput,
+without impacting other fields and indexes.</p>
+
+<p>Updates are sent in the same ways as document puts, it's just the format that's different:</p>
+
+<pre>{% highlight json %}
+{
+    "update": "id:my-namespace:my-documenttype::my-id-string",
+    "fields": {
+        "myTextField": {
+            "assign": "Some new value"
+        }
+    }
+}
+{% endhighlight %}</pre>
+
+<p>Updates can also increment numerical values, add to arrays and tensor etc., read more in the
+<a href="../writing/partial-updates.html">partial update guide</a>.</p>
+
+
+<h2 id="writes-are-streamed-and-realtime">Writes are streamed and realtime</h2>
+
+<p>Write operations to Vespa are streamed (using HTTP/2), and processed asynchronously.
+There is no need for a separate batch API to feed with the maximal throughput a system can handle,
+servers will push back by responding more slowly when they are close to saturation,
+and clients use this signal to back off, allowing them to dynamically converge at the maximal throughput
+a system can handle.</p>
+
+<p>The write operations to Vespa are always applied in real time: When a write operation is
+asynchronously acknowledged, the write operation is persisted, fully processed and the result is visible
+in all subsequent queries. Vespa achieves this by a unique index design, combining in-memory
+mutable structures with and (for full-text) disk-backed posting lists.</p>
+
+<p>Read more in the <a href="../performance/sizing-feeding.html">feed sizing doc</a>.</p>
+
+
+<h2 id="the-document-api-can-also-return-documents">The document API can also return documents</h2>
+
+<p>In addition to supporting writes, the document/v1 HTTP API can also return single documents by id
+(get), and stream any selection of a document corpus (visit). Visiting is used for background and one-time
+jobs such as backup and scraping content for offline machine learning. It is designed to have minimal
+impact on the running system rather than returning with low latency. Read more in
+<a href="../writing/document-v1-api-guide.html#data-dump">the document/v1 guide</a>.</p>
+
+<br/>
+<h4>Next: <a href="querying.html">Querying</a></h4>

@@ -14,7 +14,7 @@ in the sample app.
 
 To browse the application, navigate to
 <a href="http://localhost:8080/site" data-proofer-ignore>localhost:8080/site</a>.
-This site is implemented through a custom [request handler](jdisc/developing-request-handlers.html)
+This site is implemented through a custom [request handler](applications/request-handlers.html)
 and is meant to be a simple example of creating a front end / middleware that
 sits in front of the Vespa back end. As such it is fairly independent of Vespa
 features, and the code is designed to be fairly easy to follow and as
@@ -30,7 +30,7 @@ scripts to convert from the data set format to Vespa format:
 [convert_reviews.py](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/convert_reviews.py).
 See [README](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping#readme) for example use.
 
-When feeding reviews, there is a custom [document processor](document-processing.html)
+When feeding reviews, there is a custom [document processor](applications/document-processors.html)
 that intercepts document writes and updates the parent item with the review rating,
 so the aggregated review rating is kept stored with the item -
 see [ReviewProcessor](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/java/ai/vespa/example/shopping/ReviewProcessor.java).
@@ -42,7 +42,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
 
 ### Highlighted features
 
-* [Multiple document types](schemas.html)
+* [Multiple document types](basics/schemas.html)
 
     Vespa models data as documents, which are configured in schemas
     that defines how documents should be stored, indexed, ranked, and searched.
@@ -53,7 +53,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     refer to a single parent item and are rendered on the item page. The query
     document type is used to power auto-suggest functionality.
 
-* [Custom document processor](document-processing.html)
+* [Custom document processor](applications/document-processors.html)
 
     In Vespa, you can set up custom document processors to perform any type of
     extra processing during document feeding. One example is to enrich the
@@ -62,15 +62,15 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     uses a document processor to intercept reviews and update the parent item's
     review rating.
 
-* [Custom searcher processor](searcher-development.html)
+* [Custom searcher processor](applications/searchers.html)
 
     In Vespa, you can set up custom searchers to perform any type of
     extra processing during querying.
     In the sample app there is a single custom searcher which builds the query for auto-suggestions,
     using a combination of [fuzzy matching](reference/query-language-reference.html#fuzzy)
-    and [prefix search](text-matching.html#prefix-match).
+    and [prefix search](querying/text-matching.html#prefix-match).
 
-* [Custom handlers](jdisc/developing-request-handlers.html)
+* [Custom handlers](applications/request-handlers.html)
 
     With Vespa, you can set up general request handlers to handle any type of request.
     This example site is implemented with a single such request handler,
@@ -81,7 +81,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     Note that this handler is for example purposes and is designed to be independent of Vespa.
     Most applications would serve this through a dedicated setup.
 
-* [Custom configuration](configuring-components.html)
+* [Custom configuration](applications/configuring-components.html)
 
     When creating custom components in Vespa, for instance document processors,
     searchers or handlers, one can use custom configuration to inject config
@@ -101,14 +101,14 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     `SiteHandler` receives the request and the `ReviewVote` class sends a
     partial update to increment the `up`- or `downvotes` field.
 
-* [Search using YQL](query-language.html)
+* [Search using YQL](querying/query-language.html)
 
     In Vespa, you search for documents using YQL. In this application, the
     classes responsible for retrieving data from Vespa (in the `data` package
     beneath the `SiteHandler`) set up the YQL queries which are used to query
     Vespa over HTTP.
 
-* [Grouping](grouping.html)
+* [Grouping](querying/grouping.html)
 
     Grouping is used to group various fields of query results together.  For
     this application, many of the queries to Vespa include grouping requests.
@@ -118,7 +118,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     which the groups are rendered are determined by both counting and the
     relevance of the hits. This enables query-contextualized navigation. 
 
-* [Rank profiles](ranking.html)
+* [Rank profiles](basics/ranking.html)
 
     Rank profiles are profiles containing instructions on how to score
     documents for a given query. The most important part of rank profiles are
@@ -126,15 +126,15 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     document types contain different rank profiles to sort or score the
     data. The item ranking is using a hybrid combination of keyword and vector matching.
 
-* [Native embedders](embedding.html)
+* [Native embedders](rag/embedding.html)
 
     Native embedders are used to map the textual query and document representations 
     into dense high dimensional vectors which are used for semantic search. The application
     uses an open-source embedding model and inference is performed using 
-    [stateless model evaluation](stateless-model-evaluation.html), both during
+    [stateless model evaluation](ranking/stateless-model-evaluation.html), both during
     document and query processing. 
 
-* [Vector search](nearest-neighbor-search.html)
+* [Vector search](querying/nearest-neighbor-search)
 
     The default retrieval uses approximate nearest neighbor search in combination with traditional
     lexical matching. Both the keyword and vector matching is constrained by the filters such as brand, price or

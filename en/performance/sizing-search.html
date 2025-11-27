@@ -16,16 +16,16 @@ This document helps sizing an application correctly with as low cost as possible
 Vespa is used to implement many use cases, and this document is relevant for all of them:
 </p>
 <ul>
-  <li>Serving a <a href="../nativerank.html">text ranking</a> use case
-    or a <a href="../tutorials/news-1-getting-started.html">recommendation</a> use case</li>
-  <li>Serving a machine learned model, e.g., a <a href="../tensorflow.html">Tensorflow</a>,
-    <a href="../onnx.html">ONNX</a>, <a href="../xgboost.html">XGBoost</a>, or
-    <a href="../lightgbm.html">LightGBM</a> model</li>
+  <li>Serving a <a href="/en/ranking/nativerank.html">text ranking</a> use case
+    or a <a href="../learn/tutorials/news-1-deploy-an-application">recommendation</a> use case</li>
+  <li>Serving a machine learned model, e.g., an
+    <a href="../ranking/onnx">ONNX</a>, <a href="../ranking/xgboost">XGBoost</a>, or
+    <a href="../ranking/lightgbm">LightGBM</a> model</li>
 </ul>
 <p>
 With Vespa, it is possible to do benchmarking on a few nodes
 to infer the overall performance and cost of the chosen deployment architecture,
-and as Vespa supports <a href="../elasticity.html">live resizing</a>,
+and as Vespa supports <a href="../content/elasticity.html">live resizing</a>,
 it is easy to scale from a prototype to a full production size deployment.
 </p><p>
 This document covers sizing and capacity planning for serving,
@@ -51,7 +51,7 @@ The goal is also to avoid distribution skew,
 while at the same time supporting re-distribution of data,
 with minimal data movement,
 if the size of the content cluster changes.
-Read <a href="../elasticity.html">content cluster elasticity</a> to learn
+Read <a href="../content/elasticity.html">content cluster elasticity</a> to learn
 how data is distributed across nodes, and how adding or removing nodes works.
 See also <a href="../content/consistency.html">Vespa's consistency model</a> documentation.
 </p>
@@ -135,7 +135,7 @@ Configure availability vs cost:
 <img src="/assets/img/proton-databases.svg" width="720px" height="auto" alt="Content node databases"/>
 <p>
 The above figure illustrates the three
-<a href="../proton.html#sub-databases">sub-databases</a> inside a Vespa content node.
+<a href="../content/proton.html#sub-databases">sub-databases</a> inside a Vespa content node.
 </p>
 <ul>
   <li>The documents in the <strong>Ready</strong> DB are indexed,
@@ -145,7 +145,7 @@ The above figure illustrates the three
   <li>The documents in the <b>Not Ready</b> DB are stored but not indexed.</li>
   <li>The documents in the <b>Removed</b> DB are stored but blocklisted, hidden from search.
     The documents are permanently deleted from storage by
-    <a href="../proton.html#proton-maintenance-jobs">Proton maintenance jobs</a>.</li>
+    <a href="../content/proton.html#proton-maintenance-jobs">Proton maintenance jobs</a>.</li>
 </ul>
 <p>
 If the availability guarantees tolerate temporary search coverage loss during node
@@ -167,19 +167,19 @@ for examples using grouped and flat data distribution.
 
 <h2 id="life-of-a-query-in-vespa">Life of a query in Vespa</h2>
 <p>
-  Find an overview in <a href="../query-api.html#query-execution">query execution</a>:
+  Find an overview in <a href="../querying/query-api.html#query-execution">query execution</a>:
 </p>
 <img src="/assets/img/query-to-response.svg" width="645px" height="auto"
      alt="Query execution - from query to response"/>
 <p>
 Vespa executes a query in two protocol phases
-(or more if using <a href="../grouping.html">result grouping features</a>)
+(or more if using <a href="../querying/grouping.html">result grouping features</a>)
 to optimize the network footprint of the parallel query execution.
 The first protocol phase executes the query in parallel over content nodes in a group to find the global top hits,
 the second protocol phase fetches the data of the global top hits.
 </p><p>
 During the first phase,
-content nodes match and <a href="../ranking.html">rank</a> documents using the selected rank-profile/model.
+content nodes match and <a href="../basics/ranking.html">rank</a> documents using the selected rank-profile/model.
 The hits are returned to the stateless container for merging
 and potentially blending when multiple content clusters are involved.
 </p><p>
@@ -194,11 +194,11 @@ Components Involved in query execution:
 <ul>
 <li><strong>Container</strong>
   <ul>
-  <li>Parses the <a href="../query-api.html">API</a> request
-      and the <a href="../query-language.html">query</a> and run time context features.</li>
+  <li>Parses the <a href="../querying/query-api.html">API</a> request
+      and the <a href="../querying/query-language.html">query</a> and run time context features.</li>
   <li>Modifies the query according to the schema specification (stemming, etc.) for a text search application
       or creating run time query or user context tensors for an ML serving application.</li>
-  <li>Invokes chains of custom <a href="../jdisc/container-components.html">container components/plugins</a>
+  <li>Invokes chains of custom <a href="../applications/components.html">container components/plugins</a>
       which can work on the request and query input and also the results.</li>
   <li>Dispatching of query to content nodes in the content cluster(s) for parallel execution.
       With flat distribution queries are dispatched to all content nodes,
@@ -212,15 +212,15 @@ Components Involved in query execution:
 </li>
 <li><strong>Content node (Proton)</strong>
   <ul>
-  <li>Finding all documents matching the <a href="../query-api.html">query specification</a>.
+  <li>Finding all documents matching the <a href="../querying/query-api.html">query specification</a>.
       For an ML serving use case, the selection might be a subset of the content pool
       (e.g. limit the model to only be evaluated for content-type video documents),
       while for a text ranking application it might be a
-      <a href="../using-wand-with-vespa.html">WAND</a> text matching query.</li>
+      <a href="../ranking/wand.html">WAND</a> text matching query.</li>
   <li>Calculating the score (which might be a text ranking relevancy score or
       the inferred score of a Machine Learned model) of each hit,
-      using the chosen rank-profile. See <a href="../ranking.html">ranking with Vespa</a>.</li>
-  <li>Aggregating information over all the generated hits using <a href="../grouping.html">result grouping</a>.</li>
+      using the chosen rank-profile. See <a href="../basics/ranking.html">ranking with Vespa</a>.</li>
+  <li>Aggregating information over all the generated hits using <a href="../querying/grouping.html">result grouping</a>.</li>
   <li>Sorting hits on relevancy score (text ranking) or inference score (e.g. ML model serving),
       or on attribute(s).
       See <em>max-hits-per-partition</em> and <em>top-k-probability</em> in
@@ -238,7 +238,7 @@ The detailed execution inside Proton during the matching and ranking first proto
   <li>Build up the query tree from the serialized network representation.</li>
   <li>Lookup the query terms in the index and B-tree dictionaries
       and estimate the number of hits each term and parts of the query tree will produce.
-      Terms which search attribute fields without <a href="../attributes.html#fast-search">fast-search</a>
+      Terms which search attribute fields without <a href="../content/attributes.html#fast-search">fast-search</a>
       will be given a hit count estimate to the total number of documents.</li>
   <li>Optimize and re-arrange the query tree for most efficient performance, trying to move terms or
       operators with the lowest hit ratio estimate first in the query tree.</li>
@@ -256,7 +256,7 @@ The detailed execution inside Proton during the matching and ranking first proto
 <a href="../jdisc/">Container</a> clusters are stateless and easy to scale horizontally,
 and don't require any data distribution during re-sizing.
 The set of stateful content nodes can be scaled independently
-and <a href="../elasticity.html">re-sized</a> which requires re-distribution of data.
+and <a href="../content/elasticity.html">re-sized</a> which requires re-distribution of data.
 Re-distribution of data in Vespa is supported and designed to be done without significant serving impact.
 Altering the number of nodes or groups in a Vespa content cluster does not require re-feeding of the corpus,
 so it's easy to start out with a sample prototype and scale it to production scale workloads.
@@ -424,7 +424,7 @@ different use cases.
     and scale throughput by using a grouped distribution.
     Efficient query operators which are sublinear has scaling properties
     like the yellow case. Example of such query operators include
-    the <a href="../using-wand-with-vespa.html">wand operators</a>, and <a href="../approximate-nn-hnsw.html">
+    the <a href="../ranking/wand.html">wand operators</a>, and <a href="../querying/approximate-nn-hnsw">
     approximate nearest neighbor search operator</a>
     </p>
   </li>
@@ -438,10 +438,10 @@ different use cases.
       e.g. how expensive the model is per retrieved or ranked document.
     </p>
     <p>
-      For example, a <a href="../xgboost.html">GBDT xgboost model</a> with 3000 trees
+      For example, a <a href="../xgboost">GBDT xgboost model</a> with 3000 trees
       might breach the targeted latency SLA already at 200K documents,
       while a 300 tree model might be below the SLA at 2M documents.
-      Using exact <a href="../nearest-neighbor-search.html">nearest neighbor search</a>
+      Using exact <a href="../querying/nearest-neighbor-search">nearest neighbor search</a>
       has scaling properties like the blue case.
       See also <a href="feature-tuning.html">feature tuning</a>.
     </p>
@@ -469,7 +469,7 @@ A search request with four threads will occupy all four threads until the last t
 and the intra-node per thread document space partitioning must be balanced to give optimal results.
 </p>
 <p>
-For rank profiles with second phase ranking, see <a href="../phased-ranking.html">phased ranking</a>,
+For rank profiles with second phase ranking, see <a href="../ranking/phased-ranking.html">phased ranking</a>,
 the hits from first-phase ranking are rebalanced so that each matching thread scores about
 the same amount of hits using the second phase ranking expression.
 </p>
@@ -528,8 +528,8 @@ If each document is a complete PDF file and some are very large, what problems c
 several hundred pages of text is not very helpful to the user. As of 2025, this is still
 true also if the "user" is an LLM in a RAG or agentic workflow.
 <p>
-We can improve the usefulness by providing <a href="/en/document-summaries.html#dynamic-snippets">dynamic snippets</a>
-or returning per-chunk similarity scores as <a href="/en/ranking-expressions-features.html#accessing-feature-function-values-in-results">feature values</a>
+We can improve the usefulness by providing <a href="/en/querying/document-summaries.html#dynamic-snippets">dynamic snippets</a>
+or returning per-chunk similarity scores as <a href="/en/ranking/ranking-expressions-features.html#accessing-feature-function-values-in-results">feature values</a>
 to be able to identify the most relevant portions of the returned summary.
 <p>
 <b>Performance</b> - Returning large document values in the query response over HTTP has a significant
@@ -593,7 +593,7 @@ The simplest way to determine the disk usage is to simply index documents
 and watch the disk usage along with the relevant metrics.
 The <em>redundancy</em> (number of copies) impact the disk usage footprint, obviously.
 </p><p>
-Note that <a href="../proton.html#proton-maintenance-jobs">content node maintenance jobs</a>
+Note that <a href="../content/proton.html#proton-maintenance-jobs">content node maintenance jobs</a>
 temporarily increases disk usage.
 E.g. <em>index fusion</em> is an example, where new index files are written,
 causing an increase in used disk space while running.
@@ -613,7 +613,7 @@ and pages are paged into memory as needed.
 </p><p>
 The memory usage per document depends on the number of fields,
 the raw size of the documents and how many of the fields are defined as
-<a href="../attributes.html">attributes</a>.
+<a href="../content/attributes.html">attributes</a>.
 Also see <a href="#metrics-for-vespa-sizing">metrics for capacity planning</a>.
 </p>
 
@@ -664,7 +664,7 @@ the more fragile it becomes when changing query patterns or ranking models.
 </p><p>
 The target system utilization should be kept sufficiently low for the response times to be reasonable and within latency SLA,
 even with some extra traffic occurring at peak hours.
-See also <a href="../graceful-degradation.html">graceful degradation</a>.
+See also <a href="graceful-degradation.html">graceful degradation</a>.
 Also see <a href="sizing-feeding.html#feed-vs-search">sizing write versus read</a>.
 </p>
 

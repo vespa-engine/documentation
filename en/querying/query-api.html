@@ -1,0 +1,1042 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Query API"
+redirect_from:
+- /en/query-api.html
+---
+
+<p>
+  Use the Vespa Query API to query, rank and organize data. Example:
+</p>
+<pre>{% raw %}
+$ vespa query "select * from music where year > 2001" \
+  "ranking=rank_albums" \
+  "input.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+{% endraw %}</pre>
+<p>
+  Simplified, a query has the following components:
+</p>
+<ul>
+  <li>Input data</li>
+  <li>Ranking and grouping specification</li>
+  <li>Results</li>
+  <li>Other execution parameters</li>
+</ul>
+<p>
+  This guide is an introduction to the more important elements in the API -
+  refer to the <a href="../reference/query-api-reference.html">Query API reference</a> for details.
+  See <a href="#query-execution">query execution</a> below for data flow.
+</p>
+
+
+
+<h2 id="input">Input</h2>
+<p>
+  Input data is both structured data and unstructured data:
+</p>
+<pre>{% raw %}
+$ vespa query "select * from music where artist contains \"coldplay\" and userInput(@q)" \
+  "q=head"
+{% endraw %}</pre>
+<p>
+  The first line is the <a href="query-language.html">YQL</a> query string,
+  that has both structured input (artist=coldplay)
+  and a reference to unstructured user input.
+  The user input is then given in the second line in the <em>q</em> parameter.
+</p><p>
+  Separating the structured data from the unstructured reliefs the application code from
+  interpreting and sanitizing the input data - it is essentially a blob.
+  Vespa can then use heuristics to deduct the user's intention.
+  User input can also be expressed in the
+  <a href="../reference/simple-query-language-reference.html">simple query language</a> using
+  the <a href="../reference/query-language-reference.html#userquery">userQuery</a> operator.
+</p><p>
+  Finally, input data can also be ranking query features -
+  here the query feature is called <em>user_profile</em>:
+</p>
+<pre>{% raw %}
+$ vespa query "select * from music where artist contains \"coldplay\" and userInput(@q)" \
+  "q=head" \
+  "ranking=rank_albums" \
+  "input.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+{% endraw %}</pre>
+<p>
+  See <a href="#query-execution">query execution</a> below.
+</p>
+
+
+<h3 id="input-examples">Input examples</h3>
+<pre>
+$ vespa query "select * from sources * where userInput(@animal)" \
+  "animal=panda"
+</pre>
+<p>
+  The userInput() function will access the query property "animal",
+  and parse the property value as a <a href="../reference/query-language-reference.html#grammar">weakAnd</a> query,
+  resulting in:
+</p>
+<p>
+<code>
+select * from sources * where weakAnd(default contains "panda")
+</code>
+</p>
+<hr/>
+<p>Changing the value of "animal" without changing the rest of the expression:</p>
+<pre>
+$ vespa query "select * from sources * where userInput(@animal)" \
+  "animal=panda smokey"
+</pre>
+<p>The result is:</p>
+<p>
+<code>
+select * from sources * where weakAnd(default contains "panda", default contains "smokey")
+</code>
+</p>
+<hr/>
+<p>Combining multiple query properties, and having a more complex expression:</p>
+<pre>
+$ vespa query "select * from sources * where range(year, 1963, 2014) and (userInput(@animal) or userInput(@teddy))" \
+  "animal=panda" \
+  "teddy=bear roosevelt"
+</pre>
+<p>The resulting YQL expression is:</p>
+<p>
+<code>
+select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or weakAnd(default contains "bear", default contains "roosevelt"))
+</code>
+</p>
+<hr/>
+<p>
+  Now, consider we do not want the "teddy" field to be treated as its own query segment,
+  it should only be segmented with the linguistic libraries to get recall.
+  Do this by adding a <a href="../reference/query-language-reference.html#grammar">grammar</a>-annotation
+  to the userInput() call:
+</p>
+<pre>
+$ vespa query "select * from sources * where range(year, 1963, 2014) and (userInput(@animal) or ({grammar: "segment"}userInput(@teddy)))" \
+  "animal=panda" \
+  "teddy=bear roosevelt"
+</pre>
+<p>Then, the linguistic library will split on space, and the resulting expression is:</p>
+<p>
+<code>
+select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or default contains phrase("bear", "roosevelt"))
+</code>
+</p>
+
+
+<h3 id="using-a-fieldset">Using a fieldset</h3>
+<p>
+  Above, the userInput() is run on the <em>default</em> index, as it is not specified.
+  Use a <a href="../reference/query-language-reference.html#defaultindex">query annotation</a>
+  to use another index:
+</p>
+<pre>
+$ vespa query "select * from sources * where {defaultIndex: 'myindex'}userInput(@q)" \
+  q=panda
+</pre>
+<p>
+  <code>myindex</code> is here a <a href="../basics/schemas.html#document-fields">field</a>
+  or <a href="../reference/schema-reference.html#fieldset">fieldset</a> in the schema.
+  With userQuery(), use <a href="../reference/query-api-reference.html#model.defaultindex">model.defaultIndex</a>:
+</p>
+<pre>
+$ vespa query "select * from music where userQuery()" \
+  query=panda \
+  model.defaultIndex=myindex
+</pre>
+
+
+<h3 id="query-profiles">Query Profiles</h3>
+<p>
+  Use a <a href="../reference/query-api-reference.html#queryprofile">query profile</a> to store
+  query parameters in configuration.
+  This makes query strings shorter, and makes it easy to modify queries by modifying configuration only.
+  Use cases are setting query properties for different markets, parameters that do not change, and so on.
+  Query profiles can be nested, versioned and use inheritance.
+</p>
+
+
+<h3 id="geo-filter-and-ranking">Geo Filter and Ranking</h3>
+<p>
+  Filter by position using latitude and longitude to implement <a href="geo-search.html">geo search</a>.
+  <a href="../reference/rank-features.html#distanceToPath(name).distance">DistanceToPath</a> is a
+  <a href="../basics/ranking.html">rank function</a> based on closeness.
+  Using <span style="text-decoration: underline">ranking</span> can often improve results instead of geo
+  <span style="text-decoration: underline">filtering</span>.
+</p>
+
+
+<h3 id="parameter-substitution">Parameter substitution</h3>
+<p>
+  Parameter substitution lets you provide query values as request parameters
+  instead of inserting this into the YQL string itself.
+  This simplifies query generation, separating the value of the string/set/array from the YQL string -
+  i.e. the value will not corrupt the YQL string if it contains YQL-like syntax:
+</p>
+<ul>
+  <li>
+    Simplify query generation, separating the value of the set/array from the YQL string.
+
+  </li>
+  <li>Speed up query parsing. Using parameter substitution accelerates string parsing.</li>
+  <li>Reduce duplication.</li>
+</ul>
+<p>
+  In its simplest form,
+  use <a href="../reference/query-language-reference.html#userinput">userInput()</a> for strings:
+</p>
+
+<pre>
+... where userInput(@user_input)&user_input=free+text
+</pre>
+<p>Lists, maps and arrays can also be used - examples:</p>
+<pre>
+# Simple example: provide a set for the IN operator
+... where id in (@my_set)&my_set=10,20,30
+
+# Same set, but use the set as a block-list (exclude items in the set)
+... where !(id in (@my_set))&my_set=10,20,30
+
+# Use a weightedSet operator
+... where weightedSet(field, @my_set)&my_set={a:1,b:2}
+</pre>
+<p>
+  It is also great to eliminate data duplication,
+  from Vespa 8.287 one can use parameter substitution with <code>embed</code>:</p>
+<pre>
+$ vespa query \
+  'yql=select id, from product where {targetHits:10}nearestNeighbor(embedding, query_embedding) or <span class="pre-hilite">userQuery()</span>' \
+  'input.query(query_embedding)=embed(transformer, <span class="pre-hilite">@query</span>)' \
+  'input.query(query_tokens)=embed(tokenizer, <span class="pre-hilite">@query</span>)' \
+  '<span class="pre-hilite">query=running shoes for kids, white</span>'
+</pre>
+<p>
+  Note the use of the parameter named <a href="../reference/query-api-reference.html#model.querystring">query</a>
+  used by the <a href="../reference/query-language-reference.html#userquery">userQuery()</a> operator.
+  Also note the value substituted in the <a href="../rag/embedding.html#embedding-a-query-text">embed</a> functions.
+</p>
+<p>
+  See the <a href="../reference/query-language-reference.html#parameter-substitution">reference</a>
+  for a complete list of formats.
+</p>
+
+
+
+<h2 id="ranking">Ranking</h2>
+<p>
+  <a href="../basics/ranking.html">Ranking</a> specifies the computation of the query and data.
+  It assigns scores to documents, and returns documents ordered by score.
+  A <a href="../reference/query-api-reference.html#ranking.profile">rank profile</a>
+  is a specification for how to compute a document's score.
+  An application can have multiple rank profiles, to run different computations.
+  Example, a query specifies query categories and a user embedding
+  (from the <a href="../ranking/tensor-user-guide.html#ranking-with-tensors">tensor user guide</a>):
+</p>
+<pre>
+rank-profile product_ranking inherits default {
+    inputs {
+        query(q_category) tensor&lt;float&gt;(category{})
+        query(q_embedding) tensor&lt;float&gt;(x[4])
+    }
+
+    function p_sales_score() {
+        expression: sum(query(q_category) * attribute(sales_score))
+    }
+
+    function p_embedding_score() {
+        expression: closeness(field, embedding)
+    }
+
+    first-phase {
+        expression: p_sales_score() + p_embedding_score()
+    }
+    match-features: p_sales_score() p_embedding_score()
+}
+</pre>
+<pre>{% highlight shell %}
+vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)' \
+  'input.query(q_embedding)=[1,2,3,4]' \
+  'input.query(q_category)={"Tablet Keyboard Cases":0.8, "Keyboards":0.3}' \
+  'ranking=product_ranking'
+{% endhighlight %}</pre>
+{% include note.html content='In this example, <code>input.query(q_embedding)</code> is short for
+<code>ranking.features.query(q_embedding)</code> -
+see the <a href="../reference/query-api-reference.html#ranking.features">reference</a>
+for tensor formats.' %}
+<p>
+  Results can be ordered using <a href="../reference/sorting.html">sorting</a> instead of ranking.
+</p>
+<p>
+  The above rank profile does not do text ranking -
+  there are however such profiles built-in.
+  Text search is described in more detail in <a href="text-matching.html">Text Matching</a> -
+  find information about normalizing, prefix search and linguistics there.
+</p>
+
+
+
+<h2 id="grouping">Grouping</h2>
+<p>
+  <a href="grouping.html">Grouping</a> is a way to group documents in the result set after ranking.
+  Example, return max 3 albums per artist, grouped on year:
+</p>
+<pre>
+$ vespa query "select * from music where true limit 0 | all(group(year) each(max(3) each(output(summary())) ) )"
+</pre>
+<p>
+  Fields used in grouping must be <a href="../content/attributes.html">attributes</a>.
+  The grouping expression is part of the YQL query string, appended at the end.
+</p><p>
+  Applications can group <em>all</em> documents (select all documents in YQL).
+  Using <code>limit 0</code> returns grouping results only.
+</p>
+
+
+
+<h2 id="results">Results</h2>
+<p>
+All fields are returned in results by default.
+To specify a subset of fields, use <a href="document-summaries.html">document summaries</a>.
+When searching text, having a static abstract of the document in a field, or
+using a <a href="../reference/schema-reference.html#summary">dynamic summary</a>
+can both improve the visual relevance of the search, and cut bandwidth used.
+</p><p>
+The default output format is <a href="../reference/default-result-format.html">JSON</a>.
+Write a custom <a href="../applications/result-renderers.html">Renderer</a> to generate results in other formats.
+</p><p>
+Read more on <a href="../applications/processing.html">request-response</a> processing -
+use this to write code to manipulate results.
+</p>
+
+
+
+<h2 id="query-execution">Query execution</h2>
+<img src="/assets/img/query-to-response.svg" width="645px" height="auto"
+     alt="Query execution - from query to response"/>
+<p>
+  Phases:
+</p>
+<ol>
+  <li><strong>Query processing</strong>:
+      Normalizations, rewriting and enriching. Custom logic in search chains</li>
+  <li><strong>Matching, ranking and grouping/aggregation:</strong>
+      This phase dispatches the query to content nodes</li>
+  <li><strong>Result processing, rendering:</strong> Content fetching
+      and snippeting of the top global hits found in the query phase</li>
+</ol>
+<p>
+  The above is a simplification - if the query also specifies <a href="grouping.html">result grouping</a>,
+  the query phase might involve multiple phases or round-trips between the container and content nodes.
+  See <a href="../performance/sizing-search.html#life-of-a-query-in-vespa">life of a query</a>
+  for a deeper dive into query execution details.
+</p>
+<p>
+  Use <a href="../reference/query-api-reference.html#trace.explainlevel">trace.explainlevel</a> to analyze the query plan.
+  Use these hints to modify the query plan:
+</p>
+<ul>
+  <li>
+    Use <a href="../reference/query-language-reference.html#ranked">ranked: false</a> query annotations
+    to speed up evaluation
+  </li>
+  <li>
+    Use <a href="../reference/query-language-reference.html#numeric">capped range search</a>
+    to efficiently implement top-k selection for ranking a subset of the documents in the index.
+  </li>
+</ul>
+
+
+<h3 id="query-processing-dispatch">Query processing and dispatch</h3>
+<ol>
+  <li>
+    A query is sent from a front-end application to a container node
+    using the <em>Query API</em> or in any custom request format handled by a
+    custom <a href="../applications/request-handlers.html">request handler</a>,
+    which translates the custom request format to native Vespa APIs.
+  </li>
+  <li>
+    <p>
+      Query pre-processing, like <a href="../linguistics/linguistics.html">linguistic processing</a>
+      and <a href="../linguistics/query-rewriting.html">query rewriting</a>,
+      is done in built-in and custom <a href="../applications/chaining.html">search chains</a> -
+      see <a href="../applications/searchers.html">searcher development</a>.
+    </p>
+    <p>
+      The default search chain is <em>vespa</em> -
+      find installed components in this chain by inspecting <code>ApplicationStatus</code>
+      like in the <a href="../basics/deploy-an-application-local.html">quick-start</a>.
+      Adding <code>&amp;trace.level=4</code> (or higher) to the query will
+      emit the components invoked in the query, and is useful to analyze ordering.
+    </p>
+    <p>
+      This is the integration point to plug in code to enrich a query - example:
+      Look up user profile data from a user ID in the request.
+      Set <em>&amp;trace.level=2</em> to inspect the search chain components.
+    </p>
+  </li>
+  <li>
+  <p>
+    The query is sent from the container to the <em>content cluster</em> -
+    see <a href="federation.html">federation</a> for more details.
+    An application can have multiple content clusters - Vespa searches in all by default.
+    <a href="federation.html">Federation</a> controls how to query the clusters,
+    <a href="../reference/query-api-reference.html#model.sources">sources</a> names the clusters
+    The illustration above has one content cluster but multiple is fully supported
+    and allows scaling <a href="../basics/schemas.html">document types</a> differently.
+    E.g. a <em>tweet</em> document type can be indexed in a separate content cluster
+    from a <em>user</em> document type, enabling independent scaling of the two.
+  </p>
+    <img src="/assets/img/query-dispatch.svg" width="570px" height="auto"
+         alt="Query processing and dispatch"/>
+  </li>
+</ol>
+
+
+<h3 id="matching-ranking-grouping">Matching, ranking, grouping</h3>
+<ol>
+  <li>
+    At this point the query enters one or more <a href="../reference/services-content.html">content clusters</a>.
+    In a content cluster with <a href="../content/elasticity.html#grouped-distribution">grouped distribution</a>,
+    the query is dispatched to all content nodes within a single group using a
+    <a href="../reference/services-content.html#dispatch-tuning">dispatch policy</a>,
+    while with a flat single group content cluster the query is dispatched to all content nodes.
+  </li><li>
+    <p>
+    The query arrives at the content nodes which performs matching,
+    <a href="../basics/ranking.html">ranking</a> and aggregation/grouping over the set of documents
+    in the <a href="../content/proton.html">Ready sub database</a>. By default, Vespa uses <a href="../performance/feature-tuning.html#hybrid-taat-daat">DAAT</a> where the matching and first-phase score calculation is interleaved and not two separate, sequential phases.
+    <em>vespa-proton</em> does matching over the <em>ready</em> documents
+    and <a href="../basics/ranking.html">ranks</a> as specified with the request/schema.
+    Each content node matches and ranks a subset of the total document corpus
+    and returns the hits along with meta information
+    like total hits and sorting and grouping data, if requested.
+    </p>
+    <img src="/assets/img/proton-query.svg" width="510px" height="auto" alt="Queries" />
+  </li><li>
+    Once the content nodes within the group have replied within the <a href="../performance/graceful-degradation.html">timeout</a>,
+    <a href="../reference/services-content.html#dispatch-tuning">max-hits / top-k</a>
+    results are returned to the container for query phase result processing.
+    In this phase, the only per hit data available is the internal global document id (gid) and the ranking score.
+    There is also result meta information like coverage and total hit count.
+    Additional hit specific data, like the contents of fields,
+    is not available until the result processing phase has completed the content fetching.
+   </li>
+</ol>
+
+
+<h3 id="result-processing-fill-phase">Result processing (fill) phase</h3>
+<ol>
+  <li>
+    When the result from the query phase is available,
+    a custom chained <a href="../applications/searchers.html#multiphase-searching">searcher component</a>
+    can process the limited data available from the first search phase
+    before contents of the hits is fetched from the content nodes.
+    The fetching from content nodes is lazy and is not invoked before rendering the response,
+    unless asked for earlier by a custom searcher component.
+  </li><li>
+    Only fields in the requested <a href="document-summaries.html">document summaries</a> is fetched from content nodes.
+    The summary request goes directly to the content nodes that produced the result from the query phase.
+  </li><li>
+    After the content node requests have completed,
+    the full result set can be processed further by custom components
+    (e.g. doing result deduping, top-k re-ranking),
+    before <a href="../applications/result-renderers.html">rendering</a> the response.
+  </li>
+</ol>
+
+
+
+<h2 id="http">HTTP</h2>
+{% include note.html content='Vespa does not provide a java client library for the query API.
+Best practice for queries is submitting the user-generated query as-is,
+then use <a href="../applications/searchers.html">Searcher components</a> to implement additional logic.' %}
+<p>
+  The Vespa Team does not recommend any specific HTTP client, since we haven't done any systematic evaluation.
+  We have most experience with the Apache HTTP client.
+  See also <a href="https://cloud.vespa.ai/en/http-best-practices">HTTP best practices</a>
+  (for Vespa Cloud, but most of it is generally applicable).
+  Also see a discussion in <a href="https://github.com/vespa-engine/vespa/issues/24534">#24534</a>.
+</p>
+<p>
+Use GET or POST. Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
+</p>
+<pre>
+$ curl -H "Content-Type: application/json" \
+    --data '{"yql" : "select * from sources * where default contains \"coldplay\""}' \
+    http://localhost:8080/search/
+
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22coldplay%22
+</pre>
+
+
+<h3 id="using-post">Using POST</h3>
+<p>
+  The format is based on the <a href="../reference/query-api-reference.html">Query API reference</a>,
+  and has been converted from the <em>flat</em> dot notation to a <em>nested</em> JSON-structure.
+  The request-method must be POST and the <em>Content-Type</em> must be <em>"application/json"</em>, e.g.:
+</p>
+<pre>
+$ curl -X POST -H "Content-Type: application/json" --data '
+  {
+      "yql": "select * from sources * where true",
+      "offset": 5,
+      "ranking": {
+          "matchPhase": {
+              "ascending": true,
+              "maxHits": 15
+          }
+      },
+      "presentation" : {
+          "bolding": false,
+          "format": "json"
+      }
+  }' \
+  http://localhost:8080/search/
+</pre>
+
+{% include note.html content="Try the
+<a href='https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder'>Query Builder</a>
+application!" %}
+
+{% include important.html content="Security filters can block GET and POST requests differently.
+This can block POSTed queries." %}
+
+
+<h3 id="jetty">HTTP</h3>
+<p>
+  Configure the <a href="../reference/services-http.html#server">http server</a> -
+  e.g. set <em>requestHeaderSize</em> to configure URL length (including headers):
+</p>
+<pre>{% highlight xml %}
+<container version="1.0">
+    <http>
+        <server port="8080" id="myserver">
+            <config name="jdisc.http.connector">
+                <requestHeaderSize>32768</requestHeaderSize>
+            </config>
+        </server>
+    </http>
+</container>
+{% endhighlight %}</pre>
+<p>
+  HTTP keepalive is supported.
+</p><p>
+  Values must be encoded according to standard URL encoding.
+  Thus, space is encoded as +, + as %2b and so on -
+  see <a href="https://www.ietf.org/rfc/rfc2396.txt">RFC 2396</a>.
+</p><p>
+  HTTP status codes are found in the
+  <a href="../reference/query-api-reference.html#http-status-codes">Query API reference</a>.
+  Also see <a href="https://stackoverflow.com/questions/54340386/how-should-i-customize-my-search-result-in-vespa/54344429#54344429">
+  Stack Overflow question</a>.
+</p>
+
+<p>When implementing a client for the query API, consider the following guidelines for handling HTTP status codes:</p>
+<h4>Client errors vs. server errors</h4>
+<p>
+  In general clients should only retry requests on <em>server errors</em> (5xx) - not on <em>client errors</em> (4xx).
+  For example, a client should  <strong>not</strong> retry a request after receiving a <code>400 Bad Request</code> response.
+</p>
+
+<h4>Back-pressure handling</h4>
+<p>
+  Be careful when handling 5xx responses, especially <code>503 Service Unavailable</code> and <code>504 Gateway Timeout</code>.
+  These responses typically indicate an overloaded system, and blindly retrying without backoff will only worsen the situation.
+  For example, <code>503 Service Unavailable</code> is returned whenever there are no available search handler threads
+  to serve the request. This is a clear indication of back-pressure from the system, and clients should
+  reduce overall throughput and implement appropriate throttling mechanisms to avoid exacerbating the overload condition.
+</p>
+
+
+<h2 id="timeout">Timeout</h2>
+<p>
+  See the <a href="../reference/query-api-reference.html#timeout">reference</a> for how to set the query timeout.
+  Common questions:
+</p>
+<ul>
+  <li>
+    <p>
+      <em>Does the timeout apply to the whole query or just from when it is sent to the content cluster?
+        If a <a href="../applications/searchers.html">Searcher</a> goes to sleep in the container for 2*timeout,
+        will the caller still get a response indicating a timeout?</em>
+    </p>
+    <p>
+      The timeout applies to the whole query, both container and content node processing.
+      However, the timeout handling is cooperative -
+      if having Searchers that are time-consuming or access external resources,
+      the Searcher code should check
+      <a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/Query.java">Query.getTimeLeft()</a>.
+      So, in this case, you will time out, but only after 2*timeout + some more.
+    </p>
+  </li>
+  <li>
+    <p>
+      <em>During multiphase searching, is the query timeout set for each individual searcher,
+        or is the query timeout set for the entire search chain?</em>
+    </p>
+    <p>
+      The timeout is for the entire query (and most Searchers don’t check timeout -
+      use <code>Query.getTimeLeft()</code>).
+      E.g., if a Search Chain has 3 Searchers,
+      it is OK for 1 Searcher to take 497 ms and 2 Searchers to each take 1 ms for a query timeout of 500 ms.
+    </p>
+  </li>
+  <li>
+    <p>
+      <em>If we asynchronously execute several search chains,
+        can we set different query timeouts for each of these chains
+        plus a separate overall timeout for the searcher that performs the asynchronous executions?</em>
+    </p>
+    <p>
+      You can set a different timeout in each cloned query you send to any of those chains,
+      and you can specify the timeout when waiting for responses from them.
+    </p>
+  </li>
+</ul>
+
+
+
+
+
+
+<h2 id="error-handling">Error handling</h2>
+<p>
+  Check for a <code>root: error</code> element in the <a href="../reference/default-result-format.html#error">result</a>:
+</p>
+<pre>{% highlight json %}
+{
+    "root": {
+        "errors": [
+            {
+                "code": 8,
+                "summary": "Error in search reply.",
+                "source": "music",
+                "message": "Could not locate attribute for grouping number 0 : Failed locating attribute vector 'year'. Ignoring this grouping."
+            }
+        ],
+{% endhighlight %}</pre>
+<p>
+
+</p>
+
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>
+  If Vespa cannot generate a valid search expression from the query string,
+  it will issue the error message <em>Null query</em>.
+  To troubleshoot, add <a href="../reference/query-api-reference.html#trace.level">&amp;trace.level=2</a> to the request.
+  A missing <em>yql</em> parameter will also emit this error message.
+</p>
+
+
+<h3 id="query-tracing">Query tracing</h3>
+<p>
+  Use <em>query tracing</em> to debug query execution.
+  Enable by using <a href="../reference/query-api-reference.html#trace.level">trace.level=1</a> (or higher).
+  Add <a href="../reference/query-api-reference.html#trace.timestamps">trace.timestamps=true</a>
+  for timing info for every searcher invoked.
+  Find a trace example in the result examples below,
+  and try the <a href="../performance/practical-search-performance-guide#advanced-query-tracing">
+  practical search performance guide</a>.
+</p>
+<p>
+  In custom code, use
+  <a href="https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query.html">Query.trace</a>
+  to add trace output.
+</p>
+
+
+<h3 id="large-memory-usage">Large memory usage</h3>
+<p>Queries that allocate more than 2G RAM will log messages like:</p>
+<pre>
+mmap 2727 of size 8589934592 from : search::attribute::PostingListMerger&lt;int&gt;::reserveArray(unsigned int, unsigned long)(0x40001513eef0)
+
+(0x400013595334) from (0x400013593acc) from operator new(unsigned long)(0x400013592f88) from search::attribute::PostingListMerger&lt;int&gt;::reserveArray(unsigned int, unsigned long)(0x40001513eef0) from search::attribute::PostingListSearchContextT&lt;int&gt;::fetchPostings(search::queryeval::ExecuteInfo const&amp;, bool)(0x400015159a38) from search::queryeval::SameElementBlueprint::fetchPostings(search::queryeval::ExecuteInfo const&amp;)(0x4000154f36fc) from search::queryeval::IntermediateBlueprint::fetchPostings(search::queryeval::ExecuteInfo const&amp;)(0x40001549ad38) from proton::matching::MatchToolsFactory::MatchToolsFactory(proton::matching::QueryLimiter&amp;, vespalib::Doom const&amp;, proton::matching::ISearchContext&amp;, search::attribute::IAttributeContext&amp;, search::engine::Trace&amp;, std::basic_string_view&lt;char, std::char_traits&lt;char&gt; &gt;, std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; const&amp;, ...
+
+1 mappings of accumulated size 8589934592
+</pre>
+<p>This does not necessarily indicate that something is wrong, e.g., range searches use much memory.</p>
+
+
+
+<h2 id="result-examples">Result examples</h2>
+<p>A regular query result:</p>
+<pre>{% highlight json %}
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 3,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:mynamespace:music::a-head-full-of-dreams",
+                "relevance": 0.16343879032006284,
+                "source": "music",
+                "fields": {
+                    "sddocname": "music",
+                    "documentid": "id:mynamespace:music::a-head-full-of-dreams",
+                    "artist": "Coldplay",
+                    "album": "A Head Full of Dreams",
+                    "year": 2015,
+                    "category_scores": {
+                        "cells": [
+                            {
+                                "address": {
+                                    "cat": "pop"
+                                },
+                                "value": 1.0
+                            },
+                            {
+                                "address": {
+                                    "cat": "rock"
+                                },
+                                "value": 0.20000000298023224
+                            },
+                            {
+                                "address": {
+                                    "cat": "jazz"
+                                },
+                                "value": 0.0
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>
+<p>An empty result:</p>
+<pre>{% highlight json %}
+{
+    "root": {
+        "fields": {
+            "totalCount": 0
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+{% endhighlight %}</pre>
+<p id="error-result">An error result:</p>
+<pre>{% highlight json %}
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 2
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 4,
+            "full": true,
+            "nodes": 2,
+            "results": 2,
+            "resultsFull": 2
+        },
+        "errors": [
+            {
+                "code": 8,
+                "summary": "Error in search reply.",
+                "source": "music",
+                "message": "Could not locate attribute for grouping number 0 : Failed locating attribute vector 'year'. Ignoring this grouping."
+            }
+        ],
+{% endhighlight %}</pre>
+<p>A simple search application, many undefined fields. Result for the query
+  <code>/search/?query=blues&amp;hits=3&amp;trace.level=2</code></p>
+<pre>{% highlight json %}
+{
+
+    "trace": {
+        "children": [
+            {
+                "message": "No query profile is used"
+            },
+            {
+                "message": "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -&gt; com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -&gt; ... -&gt; federation@native]"
+            },
+            {
+                "children": [
+                    {
+                        "message": "Detected language: ENGLISH"
+                    },
+                    {
+                        "message": "Language ENGLISH determined by the characters in the terms."
+                    },
+                    {
+                        "message": "Query parsed to: select * from sources * where default contains \"blues\" limit 3"
+                    },
+                    {
+                        "message": "Child execution",
+                        "children": [
+                            {
+                                "message": "Stemming: [select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false}\"blue\") limit 3]"
+                            },
+                            {
+                                "message": "Lowercasing: [select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false}\"blue\") limit 3]"
+                            },
+                            {
+                                "message": "sc0.num0 search to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}\"blue\") limit 3"
+                            },
+                            {
+                                "message": "sc0.num0 dispatch response: Result (3 of total 10 hits)"
+                            },
+                            {
+                                "message": "sc0.num0 fill to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music] summary=[null]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}\"blue\") limit 3"
+                            }
+                        ]
+                    },
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 10
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 10,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:0/0/0/dfd9fcfa650b44545ef0b8b2",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Electric Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1807865261",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1807865261"
+                }
+            },
+            {
+                "id": "index:0/0/0/273d384dc214386c934d793f",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Delta Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1804905714",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1804905714"
+                }
+            },
+            {
+                "id": "index:0/0/0/b3c74a9bf3aea1e2260311c0",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Chicago Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1804905710",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1804905710"
+                }
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  Result for the grouping query
+  <code>
+    /search/?hits=0&amp;yql=select * from sources * where sddocname contains purchase | all(group(customer) each(output(sum(price))))
+  </code>
+</p>
+<pre>{% highlight json %}
+{
+
+    "trace": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 20
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 20,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "group:root:0",
+                "relevance": 1,
+                "continuation": {
+                    "this": ""
+                },
+                "children": [
+                    {
+                        "id": "grouplist:customer",
+                        "relevance": 1,
+                        "label": "customer",
+                        "children": [
+                            {
+                                "id": "group:string:Jones",
+                                "relevance": 9870,
+                                "value": "Jones",
+                                "fields": {
+                                    "sum(price)": 39816
+                                }
+                            },
+                            {
+                                "id": "group:string:Brown",
+                                "relevance": 8000,
+                                "value": "Brown",
+                                "fields": {
+                                    "sum(price)": 20537
+                                }
+                            },
+                            {
+                                "id": "group:string:Smith",
+                                "relevance": 6100,
+                                "value": "Smith",
+                                "fields": {
+                                    "sum(price)": 19484
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+{% endhighlight %}</pre>

@@ -10,7 +10,7 @@ This guide goes through various topologies by example, highlighting the most rel
 and discusses operational events like node stop and changing the topology.
 
 Use cases for using a grouped topology is found in the
-[elasticity](/en/elasticity.html#grouped-distribution) guide.
+[elasticity](/en/content/elasticity.html#grouped-distribution) guide.
 E.g., query latency can dictate the maximum number of document per node and hence how many node are needed in a group -
 if query latency is at maximum tolerated for 1M documents,
 6 nodes are needed in a group for a 6M index.
@@ -30,7 +30,7 @@ Redundancy is a function of data availability / criticality and cost, and varies
 
 Redundancy is for storing a document replica on a node.
 Not all replicas are searchable -
-read [Proton](/en/proton.html) for a detailed understanding of sub-databases.
+read [Proton](/en/content/proton.html) for a detailed understanding of sub-databases.
 
 
 

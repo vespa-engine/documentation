@@ -1,0 +1,238 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Vespa Benchmarking"
+redirect_from:
+- /en/performance/vespa-benchmarking.html
+---
+
+<p>
+Benchmarking a Vespa application is essential to get an idea of
+how well the test configuration performs.
+Thus, benchmarking is an essential part of sizing a search cluster itself.
+Benchmarking a cluster can answer the following questions:</p>
+<ul>
+  <li>What throughput and latency to expect from a search node?</li>
+  <li>Which resource is the bottleneck in the system?</li>
+</ul>
+<p>
+These in turn indirectly answers other questions such as how many nodes are needed,
+and if it will help to upgrade disk or CPU.
+Thus, benchmarking will help in finding the optimal Vespa configuration,
+using all resources optimally, which in turn lowers costs.
+</p><p>
+A good rule is to benchmark whenever the workload changes.
+Benchmarking should also be done when adding new features to queries.
+</p><p>
+Having an understanding of the query mix and SLA will help to set the test parameters.
+Before benchmarking, consider:
+<ul>
+  <li>
+    What is the expected query mix?
+    Having a representative query mix to test with is essential in order to get valid results.
+    Splitting up in different types of queries
+    is also a useful way to get an idea of which query classes are resource intensive.
+  </li><li>
+    What is the expected SLA, both in terms of latency and query throughput?
+  </li><li>
+    How important is real-time behavior? What is the rate of incoming documents, if any?
+  </li><li>
+    Timeout, in a benchmarking scenario, is it ok for requests to time out? Default
+    <a href="/en/reference/query-language-reference.html#timeout">timeout</a> is 500 ms, and
+    <a href="/en/reference/query-api-reference.html#ranking.softtimeout.enable">softtimeout</a> is enabled.
+    If the full cost of all queries are to be considered:
+    <ul>
+        <li>Disable soft timeout with execution parameter
+            <ul>
+                <li>by a <a href="../querying/query-profiles.html">query profile</a></li>
+                <li>by appending: <code>&ranking.softtimeout.enable=false</code> to with the
+                    <a href="#vespa-fbench">vespa-fbench</a> <code>-a</code> option</li>
+            </ul>
+        </li>
+        <li>Set timeout to e.g. 5 seconds
+            <ul>
+                <li>Note that <code>timeout</code> in YQL takes precedence</li>
+                <li>Replace timeout in YQL or use the execution parameter
+                    <a href="/en/reference/query-api-reference.html#timeout">timeout</a> as above.
+            </ul>
+        </li>
+    </ul>
+  </li>
+</ul>
+
+<p>
+If benchmarking using Vespa Cloud, see <a href="https://cloud.vespa.ai/en/benchmarking">
+Vespa Cloud Benchmarking</a>.
+</p>
+
+
+<h2 id="vespa-fbench">vespa-fbench</h2>
+<p>
+Vespa provides a query load generator tool,
+<a href="/en/operations/tools.html#vespa-fbench">vespa-fbench</a>,
+to run queries and generate statistics - much like a traditional web server load generator.
+It allows running any number of <em>clients</em>
+(i.e. the more clients, the higher load), for any length of time,
+and adjust the client response time before issuing the next query.
+It outputs the throughput, max, min, and average latency,
+as well as the 25, 50, 75, 90, 95, 99 and 99.9 latency percentiles.
+This provides quite accurate information of how well the system manages the workload.
+</p><p>
+<strong>Disclaimer:</strong> <em>vespa-fbench</em> is a tool to drive load for benchmarking and tuning.
+It is <span style="text-decoration: underline">not</span> a tool for finding the maximum load
+or latencies in a production setting.
+This is due to the way it is implemented: It is run with <code>-n</code> number of clients per run.
+It is good for testing, as proton can be observed at different levels of concurrency.
+In the real world, the number of clients and query arrival will follow a different distribution,
+and impact 95p / 99p latency percentiles.
+</p>
+
+
+<h3 id="prepare-queries">Prepare queries</h3>
+<p>
+vespa-fbench uses <em>query files</em> for GET and POST queries -
+see the <a href="/en/operations/tools.html#vespa-fbench">reference</a> - examples:
+<!-- ToDo: make more complex examples than the reference -->
+<em>HTTP GET</em> requests:
+<pre>
+/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20true
+</pre>
+<em>HTTP POST</em> requests format:
+<pre>
+/search/
+{"yql" : "select * from sources * where true"}
+</pre>
+
+<h3 id="run-queries">Run queries</h3>
+<p>
+A typical vespa-fbench command looks like:
+<pre>
+$ vespa-fbench -n 8 -q queries.txt -s 300 -c 0 myhost.mydomain.com 8080
+</pre>
+<p>
+This starts 8 clients, using requests read from <code>queries.txt</code>.
+
+The <code>-s</code> parameter indicates that the benchmark will run for 300 seconds.
+The <code>-c</code> parameter, states that each client thread should wait for 0 milliseconds between each query.
+The last two parameters are container hostname and port.
+Multiple hosts and ports can be provided,
+and the clients will be uniformly distributed to query the containers round-robin.
+</p><p>
+A more complex example, using docker, hitting a Vespa Cloud endpoint:
+</p>
+<pre>
+$ docker run -v /Users/myself/tmp:/testfiles \
+      -w /testfiles --entrypoint '' vespaengine/vespa \
+      /opt/vespa/bin/vespa-fbench \
+          -C data-plane-public-cert.pem -K data-plane-private-key.pem -T /etc/ssl/certs/ca-bundle.crt \
+          -n 10 -q queries.txt -o result.txt -s 300 -c 0 \
+          myapp.mytenant.aws-us-east-1c.z.vespa-app.cloud 443
+</pre>
+When using a query file with HTTP POST requests (<code>-P</code> option) one also need
+to pass the <em>Content-Type</em> header using the <code>-H</code> header option.
+
+<pre>
+  $ docker run -v /Users/myself/tmp:/testfiles \
+        -w /testfiles --entrypoint '' vespaengine/vespa \
+        /opt/vespa/bin/vespa-fbench \
+            -C data-plane-public-cert.pem -K data-plane-private-key.pem -T /etc/ssl/certs/ca-bundle.crt \
+            -n 10 -P -H "Content-Type: application/json" -q queries_post.txt -o output.txt -s 300 -c 0 \
+            myapp.mytenant.aws-us-east-1c.z.vespa-app.cloud 443
+
+          </pre>
+
+
+<h3 id="post-processing">Post Processing</h3>
+<p>
+After each run, a summary is written to stdout (and possibly an output file from each client) - example:
+<pre>
+***************** Benchmark Summary *****************
+clients:                      30
+ran for:                    1800 seconds
+cycle time:                    0 ms
+lower response limit:          0 bytes
+skipped requests:              0
+failed requests:               0
+successful requests:    12169514
+cycles not held:        12169514
+minimum response time:      0.82 ms
+maximum response time:   3010.53 ms
+average response time:      4.44 ms
+25 percentile:              3.00 ms
+50 percentile:              4.00 ms
+75 percentile:              6.00 ms
+90 percentile:              7.00 ms
+95 percentile:              8.00 ms
+99 percentile:             11.00 ms
+actual query rate:       6753.90 Q/s
+utilization:               99.93 %
+</pre>
+<p>
+Take note of the number of <em>failed requests</em>,
+as a high number here can indicate that the system is overloaded,
+or that the queries are invalid.
+</p>
+<ul>
+  <li>
+    In some modes of operation, vespa-fbench waits before sending the next query.
+    "utilization" represents the time that vespa-fbench is sending queries and waiting for responses.
+    For example, a 'system utilization' of 50%
+    means that vespa-fbench is stress testing the system 50% of the time,
+    and is doing nothing the remaining 50% of the time
+  </li><li>
+    vespa-fbench latency results include network latency between the client and the Vespa instance.
+    Measure and subtract network latency to obtain the true vespa query latency.
+  </li>
+</ul>
+
+<h2 id="benchmark">Benchmark</h2>
+<p>
+Strategy: find optimal <em>requestthreads</em> number,
+then find capacity by increasing number of parallel test clients:
+<ol>
+    <li>
+        <p>
+        Test with single client (n=1), single thread to find a <em>latency baseline</em>.
+        For each test run, increase <a href="../reference/services-content.html#requestthreads">threads</a>:
+<pre>
+&lt;content id="search" version="1.0"&gt;
+  &lt;engine&gt;
+    &lt;proton&gt;
+      &lt;tuning&gt;
+        &lt;searchnode&gt;
+            &lt;requestthreads&gt;
+                &lt;persearch&gt;<span class="pre-hilite">1</span>&lt;/persearch&gt;
+            &lt;/requestthreads&gt;
+</pre>
+        use 1, 2, 4, 8, ... threads and measure query latency (vespa-fbench output)
+        and CPU utilization (<a href="#metrics">metric</a> - below).
+        Note: after deploying the thread config change,
+        <a href="../content/proton.html">proton</a> must be restarted for new thread setting to take effect
+        (look for ONLINE):
+<pre>
+$ vespa-stop-services && vespa-start-services && sleep 60 && vespa-proton-cmd --local getProtonStatus
+   ...
+  "matchengine","OK","state=ONLINE",""
+  "documentdb:search","OK","state=ONLINE configstate=OK",""
+</pre>
+    </li><li>
+        <p>
+        use #threads sweet spot, then increase number of clients, observe latency and CPU.
+        </p>
+    </li>
+</ol>
+
+<h3 id="metrics">Metrics</h3>
+<p>
+The <em>container</em> nodes expose the
+<a href="../operations/metrics.html">/metrics/v2/values</a> interface -
+use this to dump metrics during benchmarks.
+Example - output all metrics from content node:
+<pre>
+$ curl http://localhost:8080/metrics/v2/values | \
+  jq '.nodes[] | select(.role=="content/mysearchcluster/0/0") | .node.metrics[].values'
+</pre>
+Output CPU util:
+<pre>
+$ curl http://localhost:8080/metrics/v2/values | \
+  jq '.nodes[] | select(.role=="content/mysearchcluster/0/0") | .node.metrics[].values."cpu.util"'
+</pre>

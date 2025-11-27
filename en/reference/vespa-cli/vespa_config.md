@@ -91,8 +91,8 @@ zone
 
 Specifies a custom zone to use when connecting to a Vespa Cloud application.
 This is only relevant for cloud and hosted targets and defaults to a dev zone.
-See [https://cloud.vespa.ai/en/reference/zones](https://cloud.vespa.ai/en/reference/zones) for available zones. Examples:
-dev.aws-us-east-1c, dev.gcp-us-central1-f, perf.aws-us-east-1c
+See [https://docs.vespa.ai/en/cloud/zones.html](https://docs.vespa.ai/en/cloud/zones.html) for available zones. Examples:
+dev.aws-us-east-1c, dev.gcp-us-central1-f
 
 ```
 vespa config [flags]

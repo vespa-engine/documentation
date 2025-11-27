@@ -38,7 +38,7 @@ highly available in common datacenter networks.
 
 ### Write durability and consistency
 
-When a client receives a successful [write](../reads-and-writes.html) response,
+When a client receives a successful [write](../writing/reads-and-writes.html) response,
 the operation has been written and synced to disk. The replication level is configurable.
 Operations are by default written on _all_ available replica nodes before sending a response.
 "Available" here means being Up in the [cluster state](content-nodes.html#cluster-state),
@@ -72,7 +72,7 @@ visible by default.
 
 Reads are consistent on a best-effort basis and are not guaranteed to be linearizable.
 
-When using a [Get](../reference/document-v1-api-reference.html#get) or [Visit](../visiting.html) operation,
+When using a [Get](../reference/document-v1-api-reference.html#get) or [Visit](../writing/visiting.html) operation,
 the client will never observe a partially updated document.
 For these read operations, writes behave as if they are atomic.
 

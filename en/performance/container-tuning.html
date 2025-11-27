@@ -17,10 +17,13 @@ title: "Container Tuning"
 <h2 id="container-worker-threads">Container worker threads</h2>
 <p>
   The container uses multiple thread pools for its operations.
-  Most components including request handlers use the container's <em>default thread pool</em>,
+  Most components including request handlers use the container's
+  <a href="../reference/services-container.html#threadpool">default thread pool</a>,
   which is controlled by a shared executor instance.
   Any component can utilize the default pool by injecting an <code>java.util.concurrent.Executor</code> instance.
-  Some built-in components have dedicated thread pools - such as the Jetty server and the search handler.
+  Some built-in components have dedicated thread pools - such as the Jetty server, the
+  <a href="../reference/services-search.html#threadpool">search handler</a> and
+  <a href="../reference/services-docproc.html#threadpool">document-processing</a> chains.
   These thread pools are injected through special wiring in the config model and
   are not easily accessible from other components.
 </p>
@@ -29,15 +32,17 @@ title: "Container Tuning"
   (<code>Runtime.getRuntime().availableProcessors()</code>).
   It's paramount that the <code>-XX:ActiveProcessorCount</code>/<code>jvm_availableProcessors</code>
   configuration is correct for the container to work optimally.
-  The default thread pool configuration can be overridden through services.xml.
+  The <a href="../reference/services-container.html#threadpool">default thread pool</a> configuration can be
+  overridden through services.xml.
   We recommend you keep the default configuration as it's tuned to work across a variety of workloads.
   Note that the default configuration and pool usage may change between minor versions.
 </p>
 <p>
   The container will pre-start the minimum number of worker threads,
   so even an idle container may report running several hundred threads.
-  The thread pool is pre-started with the number of thread specified in the
-  <a href="../reference/services-search.html#threadpool-threads"><code>threads</code></a> parameter.
+  The <a href="../reference/services-search.html#threadpool">search handler</a> and
+  <a href="../reference/services-docproc.html#threadpool">document processing handler</a>
+  thread pools each pre-start the number of workers set in their configurations.
   Note that tuning the capacity upwards increases the risk of high GC pressure
   as concurrency becomes higher with more in-flight requests.
   The GC pressure is a function of number of in-flight requests, the time it takes to complete the request
@@ -45,9 +50,9 @@ title: "Container Tuning"
   Increasing the queue size will allow the application to handle shorter traffic bursts without rejecting requests,
   although increasing the average latency for those requests that are queued up.
   Large queues will also increase heap consumption in overload situations.
-  Extra threads will be created once the queue is full (when <a href="../reference/services-search.html#threads.boost">
-  <code>boost</code></a> is specified), and are destroyed after an idle timeout.
-  If all threads are occupied, requests are rejected with a 503 response.
+  For some thread pools, extra threads will be created once the queue is full (when
+  <a href="../reference/services-search.html#threads.max"><code>max</code></a> is specified), and are destroyed
+  after an idle timeout. If all threads are occupied, requests are rejected with a 503 response.
 </p>
 <p>
   The effective thread pool configuration and utilization statistics can be observed through the
@@ -66,38 +71,51 @@ title: "Container Tuning"
   latency will increase as additional tasks are queued and launching extra threads is relatively expensive as it involves system calls to the OS.
 </p>
 
-<h3 id="container-worker-threads-min">Lower limit</h3>
-The container will override any configuration if the effective value is below a fixed minimum. This is to
-reduce the risk of certain deadlock scenarios and improve concurrency for low-resource environments.
-<ul>
-    <li>Minimum 8 threads.</li>
-    <li>Minimum 650 queue capacity (if queue is not disabled).</li>
-</ul>
-
 <h3 id="container-worker-threads-example">Example</h3>
+<p>
+  Consider a container host with 8 vCPU. Setting <code>&lt;threads&gt;4&lt;/threads&gt;</code> on the
+  <a href="../reference/services-search.html#threadpool">search handler threadpool</a>
+  yields <code>4 * 8 = 32</code> worker threads, and adding <code>&lt;queue&gt;25&lt;/queue&gt;</code> gives the pool a total
+  queue capacity of <code>32 * 25 = 800</code> requests. The same thread calculation applies to the
+  <a href="../reference/services-docproc.html#threadpool">document processing handler threadpool</a>, which does not support
+  queue configuration.
+  The example below shows a consistent configuration where the default thread pool, the
+  search handler threadpool, and the document processing handler threadpool are all kept fixed.
+</p>
 <pre>{% highlight xml %}
 <container id="container" version="1.0">
+
+    <!-- The containers default thread pool -->
+    <threadpool>
+        <!-- Note: relative values -->
+
+        <!-- 5 threads per vcpu => 40 threads on 8 vcpu -->
+        <threads max="5">5</threads>
+
+        <!-- 25 queue slots per thread => 1000 entries on 8 vcpu -->
+        <queue>25</queue>
+    </threadpool>
 
     <search>
         <!-- Search handler thread pool -->
         <threadpool>
-            <!-- Don't set 'boost' attribute or set equal to thread value for fixed pool size  (recommended) -->
-            
-            <!-- 40x vcpu (e.g 1000 threads if 25 vcpu) -->
-            <threads>40</threads>
+            <!-- Don't set the 'max' attribute or at least keep it equal to 'threads' for a fixed pool size (recommended) -->
 
-            <!-- 100 x threads (e.g 4000 if threads set to 40 and 25 vcpu) -->
-            <queue>100</queue>
+            <!-- 4 threads per vcpu => 32 threads on 8 vcpu -->
+            <threads>4</threads>
+
+            <!-- 25 queue slots per thread => 800 entries on 8 vcpu -->
+            <queue>25</queue>
         </threadpool>
     </search>
 
-    <!-- Default thread pool -->
-    <config name="container.handler.threadpool">
-        <!-- Set corePoolSize==maxthreads for fixed size pool (recommended) -->
-        <!-- Note: absolute pool size -->
-        <corePoolSize>1000</corePoolSize>
-        <maxthreads>1000</maxthreads>
-    </config>
+    <document-processing>
+        <!-- Docproc worker thread pool -->
+        <threadpool>
+            <!-- 2 threads per vcpu => 16 threads on 8 vcpu -->
+            <threads>2</threads>
+        </threadpool>
+    </document-processing>
 
 </container>
 {% endhighlight %}</pre>
@@ -230,3 +248,13 @@ private void warmupQueries() {
   Use <a href="../reference/query-api-reference.html#metrics.ignore">metrics.ignore</a>
   in the warmup queries to eliminate them from being reported in metrics.
 </p>
+
+<h3 id="disabling-warmups">Disabling warmups</h3>
+<p>
+  Warmups can be disabled by adding the following container http config to the container section in services.xml:
+</p>
+<pre>{% highlight xml %}
+<config name="container.core.container-http">
+  <warmup>false</warmup>
+</config>
+{% endhighlight %}</pre>

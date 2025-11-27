@@ -1,0 +1,643 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Multi-Currency Pricing
+category: cloud
+---
+
+<p>
+  Vespa Cloud includes multi-currency pricing support
+  for e-commerce applications with global product catalogs
+  where products are priced in different currencies and sold across multiple markets.
+  Multi-currency pricing refers to presenting and working with prices in multiple currencies,
+  enabling applications to query, filter, and rank products using prices expressed in the buyer’s
+  preferred currency. This enables filtering by price range in any currency and using 
+  converted prices in ranking, with automatic currency conversion when market-specific pricing is not available.
+</p>
+
+
+<h2 id="overview">Overview</h2>
+<p>
+  The multi-currency pricing feature supports:
+</p>
+<ul>
+  <li><strong>Per-market pricing</strong> - Define different prices for different markets on each product.</li>
+  <li><strong>Keeping track of exchange rates</strong> - An N×N tensor mapping of currency-to-currency exchange rates is stored in a "forex" document, and can be updated at any time.</li>
+  <li><strong>Automatic currency conversion</strong> - Fallback to a default market when no other market-specific price exists for the buyer's market.</li>
+  <li><strong>Query-time filtering</strong> - Filter products by price range in any currency.</li>
+  <li><strong>Ranking integration</strong> - Optional exposure of currency rates for use in ranking expressions (ranking on the computed price).</li>
+</ul>
+
+<p>
+  The implementation consists of two key components:
+</p>
+<ul>
+  <li><strong>MultiCurrencyFilterSearcher</strong> - A custom searcher that intercepts queries and dynamically filters products based on effective prices.</li>
+  <li><strong>CachedForexRateService</strong> - A background service that stores exchange rates from the forex document in-memory for faster look-ups.</li>
+</ul>
+
+
+
+<h2 id="quick-start">Quick Start</h2>
+
+This quick start walks through an end-to-end example of enabling multi-currency pricing in a Vespa application.
+
+<h3 id="define-schemas">Define Schemas</h3>
+<p>
+  Create two schemas: one to store the forex rates, and one for products. If you already have an existing product schema,
+  you can reuse it as long as it contains the required fields described below.
+</p>
+
+<h4 id="forex-schema">Forex Schema</h4>
+<p>
+  The forex schema stores currency exchange rates as a tensor. Add a <code>forex.sd</code> schema to your application defined as:
+</p>
+
+<pre>{% highlight xml %}
+schema forex {
+    document forex {
+        field timestamp type long {
+            indexing: attribute | summary
+        }
+
+        field rates type tensor<double>(from{}, to{}) {
+            indexing: attribute | summary
+        }
+    }
+}
+{% endhighlight %}</pre>
+
+<h4 id="product-schema">Product Schema</h4>
+<p>
+  The product schema stores products with their seller currency and per-market prices.
+  The <code>per_market_price</code> array contains price overrides for specific markets,
+  with a <code>DEFAULT</code> market used as fallback. Every product must include a
+  <code>DEFAULT</code> entry, and all <code>per_market_price.price</code> values are expressed in the
+  document's <code>seller_currency</code>.
+</p>
+
+{% include note.html content='Every per-market override is stored in the seller&#39;s native currency, so the searcher can convert buyer price windows instead of rewriting stored prices.' %}
+
+<pre>{% highlight xml %}
+schema product {
+    document product {
+
+        # Your existing fields above
+
+        field seller_currency type string {
+            indexing: summary | attribute
+        }
+
+        struct market_price {
+            field market type string {}
+            field price type double {}
+        }
+
+        field per_market_price type array<market_price> {
+            indexing: summary
+            summary: matched-elements-only
+            struct-field market {
+                indexing: attribute
+            }
+            struct-field price {
+                indexing: attribute
+            }
+        }
+
+        # Your existing fields below
+
+    }
+}
+{% endhighlight %}</pre>
+
+
+<h3 id="configure-services">Configure Services</h3>
+<p>
+  Vespa only applies multi-currency filtering when the searcher and forex cache are wired into the container cluster.
+  Queries must pass through a chain that includes <code>MultiCurrencyFilterSearcher</code>, and the 
+  <code>ForexRateRetriever</code> must read the global forex document via its own search chain. Add both chains and the two
+  components to your container definition in <code>services.xml</code>:
+</p>
+
+<p>
+  Inside your existing <code>&lt;container&gt;</code> block, add the multi-currency chains and components:
+</p>
+
+<pre>{% highlight xml %}
+<search>
+    <chain id="multi-currency-filter" inherits="vespa">
+        <searcher id="ai.vespa.ecommerce.multicurrency.MultiCurrencyFilterSearcher"
+                  bundle="ecommerce-multi-currency" />
+    </chain>
+    <chain id="forex-cache" inherits="vespa" />
+</search>
+
+<component id="ai.vespa.ecommerce.multicurrency.ForexRateService"
+           class="ai.vespa.ecommerce.multicurrency.CachedForexRateService"
+           bundle="ecommerce-multi-currency" />
+
+<component id="ai.vespa.ecommerce.multicurrency.ForexRateRetriever"
+           bundle="ecommerce-multi-currency" />
+{% endhighlight %}</pre>
+
+<p>
+  In the <code>&lt;content&gt;</code> cluster ensure both document types are declared:
+</p>
+
+<pre>{% highlight xml %}
+<documents>
+    <document type="forex" mode="index" global="true" />
+    <document type="product" mode="index" />
+</documents>
+{% endhighlight %}</pre>
+
+<p>
+  The retriever issues background queries through the <code>forex-cache</code> chain. If that chain is missing or restricts the wrong
+  document type, the cache never reaches <code>READY</code> and queries fail with “ensure exactly one forex document exists”.
+</p>
+
+<p>
+  Putting it all together, a minimal <code>services.xml</code> might look like this:
+</p>
+
+<pre>{% highlight xml %}
+<services version="1.0">
+  <container id="default" version="1.0">
+    <document-api/>
+    <search>
+      <chain id="multi-currency-filter" inherits="vespa">
+        <searcher id="ai.vespa.ecommerce.multicurrency.MultiCurrencyFilterSearcher"
+                  bundle="ecommerce-multi-currency" />
+      </chain>
+      <chain id="forex-cache" inherits="vespa" />
+    </search>
+    <component id="ai.vespa.ecommerce.multicurrency.ForexRateService"
+               class="ai.vespa.ecommerce.multicurrency.CachedForexRateService"
+               bundle="ecommerce-multi-currency" />
+    <component id="ai.vespa.ecommerce.multicurrency.ForexRateRetriever"
+               bundle="ecommerce-multi-currency" />
+  </container>
+
+  <content id="content" version="1.0">
+    <documents>
+      <document type="forex" mode="index" global="true" />
+      <document type="product" mode="index" />
+    </documents>
+    <nodes count="2" />
+  </content>
+</services>
+{% endhighlight %}</pre>
+
+
+<h3 id="feed-data">Feed Data</h3>
+
+<h4 id="feed-forex-rates">Feed Forex Rates</h4>
+<p>
+  Feed a single forex document with ID <code>id:forex:forex::forex</code> containing all currency-to-currency exchange rates.
+  Include identity rates (e.g., USD→USD = 1.0) to avoid missing-cell lookups.
+  The <code>timestamp</code> field is required and must be updated with each rate change to ensure the cache picks up new rates.
+</p>
+
+{% include warning.html content='Exactly one global forex document must exist. If multiple documents are present, the retriever reports <code>INVALID_FOREX_DOCUMENTS</code> and the searcher returns error hits instructing you to keep a single forex document.' %}
+
+<pre>{% highlight json %}
+{
+  "put": "id:forex:forex::forex",
+  "fields": {
+    "timestamp": 1757385600,
+    "rates": {
+      "cells": [
+        {"address": {"from": "USD", "to": "USD"}, "value": 1.0},
+        {"address": {"from": "USD", "to": "EUR"}, "value": 0.92},
+        {"address": {"from": "USD", "to": "GBP"}, "value": 0.78},
+        {"address": {"from": "USD", "to": "NOK"}, "value": 10.50},
+        {"address": {"from": "EUR", "to": "USD"}, "value": 1.09},
+        {"address": {"from": "EUR", "to": "EUR"}, "value": 1.0},
+        {"address": {"from": "EUR", "to": "GBP"}, "value": 0.85}
+      ]
+    }
+  }
+}
+{% endhighlight %}</pre>
+
+<h4 id="feed-products">Feed Products</h4>
+<p>
+  Feed products with their seller currency and per-market prices. Always include a <code>DEFAULT</code> market
+  entry as fallback.
+</p>
+
+<pre>{% highlight json %}
+{
+  "put": "id:product:product::sku-100",
+  "fields": {
+    "seller_currency": "USD",
+    "per_market_price": [
+      {"market": "DEFAULT", "price": 199.0},
+      {"market": "EU", "price": 189.0},
+      {"market": "UK", "price": 209.0},
+      {"market": "NO", "price": 300.0}
+    ]
+  }
+}
+{% endhighlight %}</pre>
+
+{% include note.html content='If your product schema already includes identifiers or descriptive fields (such as <code>product_id</code> or <code>product_name</code>), include them in the feed as usual. The example keeps only the required currency fields so it works with the minimal schema shown above.' %}
+
+
+<h3 id="query-with-price-filtering">Query with Price Filtering</h3>
+<p>
+  Use the following query parameters to filter products by price range in a specific market and currency:
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Description</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>ecommerce.multicurrency.market</code></td>
+      <td>Target market code</td>
+      <td><code>NO</code>, <code>US</code>, <code>EU</code>, <code>NO-49</code>, <code>27</code></td>
+    </tr>
+    <tr>
+      <td><code>ecommerce.multicurrency.currency</code></td>
+      <td>Target currency code</td>
+      <td><code>NOK</code>, <code>USD</code>, <code>EUR</code></td>
+    </tr>
+    <tr>
+      <td><code>ecommerce.multicurrency.price-min</code></td>
+      <td>Minimum price in target currency</td>
+      <td><code>1000</code></td>
+    </tr>
+    <tr>
+      <td><code>ecommerce.multicurrency.price-max</code></td>
+      <td>Maximum price in target currency</td>
+      <td><code>1500</code></td>
+    </tr>
+    <tr>
+      <td><code>ecommerce.multicurrency.enrich</code></td>
+      <td>Optional: expose forex rates as query tensor for ranking. Defaults to false</td>
+      <td><code>true</code> or <code>false</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="example-query">Example Query</h4>
+<pre>{% highlight sh %}
+$ vespa query \
+    'yql=select * from product where true' \
+    'searchChain=multi-currency-filter' \
+    'ecommerce.multicurrency.market=NO' \
+    'ecommerce.multicurrency.currency=NOK' \
+    'ecommerce.multicurrency.price-min=1000' \
+    'ecommerce.multicurrency.price-max=1500'
+{% endhighlight %}</pre>
+
+<p>
+  This query returns all products whose effective price in NOK (Norwegian Krone) for the Norwegian market
+  is between 1000 and 1500 NOK. The searcher will:
+</p>
+<ol>
+  <li>Check if the product has a market-specific price for <code>NO</code></li>
+  <li>If yes, use that price directly</li>
+  <li>If no, convert the product's <code>DEFAULT</code> market price from the seller currency to NOK using forex rates</li>
+  <li>Keep only products within the specified price range</li>
+</ol>
+
+
+<h3 id="validation-rules">Validation Rules</h3>
+<p>
+  The multi-currency searcher validates query parameters and returns an error if validation fails:
+</p>
+<ul>
+  <li><strong>Currency codes</strong> must be exactly 3 letters (ISO-4217 format, e.g., <code>USD</code>, <code>EUR</code>, <code>NOK</code>)</li>
+  <li><strong>Market codes</strong> must be alphanumeric (e.g., <code>US</code>, <code>NO</code>, <code>EU</code>, <code>NO-47</code>, <code>13</code>)</li>
+  <li><strong>Price values</strong> must be valid numbers and non-negative</li>
+  <li><strong>Price range</strong>: <code>price-max</code> must be greater than or equal to <code>price-min</code></li>
+  <li><strong>Currency availability</strong>: The requested currency must exist in the forex document</li>
+</ul>
+
+<p>
+  If any parameter is missing or invalid, the searcher will either skip filtering (for format issues)
+  or return an error result (for logical issues like invalid price ranges or unknown currencies).
+</p>
+
+{% include note.html content='When filtering is skipped due to malformed inputs, the searcher acts as a no-op and the trace log records the reason (for example, “currency failed ISO-4217 validation; skipping filter”). Use <a href="/en/reference/query-api-reference.html#tracing">query tracing</a> to confirm whether the multi-currency filter actually ran.' %}
+
+
+<h3 id="updating-forex-rates">Updating Forex Rates</h3>
+<p>
+  Forex rates can be updated at any time by feeding a new version of the forex document
+  with an updated <code>timestamp</code> field. The cache will automatically pick up the new rates
+  on its next refresh cycle (typically within seconds).
+</p>
+
+<pre>{% highlight sh %}
+$ vespa feed <(echo '{
+    "update": "id:forex:forex::forex",
+    "fields": {
+        "timestamp": {"assign": 1757472000},
+        "rates": {
+            "assign": {
+                "cells": [...]
+            }
+        }
+    }
+}')
+{% endhighlight %}</pre>
+
+
+
+<h2 id="how-it-works">How It Works</h2>
+
+<h3 id="price-resolution-logic">Price Resolution Logic</h3>
+<p>
+  For each product, the effective price in the target currency is determined as follows:
+</p>
+<ol>
+  <li><strong>Market-specific price:</strong> If the product has a price entry for the requested market, use that price directly</li>
+  <li><strong>Currency conversion:</strong> Otherwise, use the <code>DEFAULT</code> market price and convert it from the seller currency to the target currency using forex rates</li>
+  <li><strong>Price range filter:</strong> Keep only products whose effective price falls within the specified min/max range</li>
+</ol>
+
+<h3 id="forex-cache">Forex Cache</h3>
+<p>
+  The <code>CachedForexRateService</code> component maintains an in-memory cache of exchange rates
+  and refreshes them periodically from the forex document (<code>id:forex:forex::forex</code>).
+  This ensures low-latency access to forex rates during query processing.
+</p>
+
+<h4 id="automatic-refresh">Automatic Refresh</h4>
+<p>
+  The <code>ForexRateRetriever</code> component automatically refreshes forex rates every 10 seconds using a fixed schedule.
+  This cadence (10s interval, 5s retry window, 1s per attempt) is hard-coded in the provided component and cannot be tuned at deployment time.
+  Each refresh cycle:
+</p>
+<ul>
+  <li>Queries the forex document using the <code>forex-cache</code> search chain</li>
+  <li>Validates the document has both <code>rates</code> (tensor) and <code>timestamp</code> (long) fields</li>
+  <li>Only applies updates if the timestamp is newer than the cached version</li>
+  <li>Retries within a 5-second budget if the first attempt fails</li>
+</ul>
+
+<h4 id="health-states">Health States</h4>
+<p>
+  The forex service tracks its operational status with the following health states:
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>State</th>
+      <th>Description</th>
+      <th>Query Behavior</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>READY</code></td>
+      <td>Forex rates loaded and service is operational</td>
+      <td>Queries with multi-currency filtering work normally</td>
+    </tr>
+    <tr>
+      <td><code>UNINITIALIZED</code></td>
+      <td>No forex document has been loaded yet</td>
+      <td>Queries return error: "forex rate service not initialized"</td>
+    </tr>
+    <tr>
+      <td><code>OUTAGE</code></td>
+      <td>Refresh failed but stale data exists (cache stays ready for re-use once the retriever succeeds again)</td>
+      <td>Queries return error: "forex rate service temporarily unavailable (last refresh failed)"</td>
+    </tr>
+    <tr>
+      <td><code>INVALID_FOREX_DOCUMENTS</code></td>
+      <td>Multiple forex documents detected (expected exactly one)</td>
+      <td>Queries return error: "ensure exactly one forex document exists"</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="error-handling">Error Handling</h4>
+<p>
+  When the service is not in <code>READY</code> state, queries with multi-currency filtering will:
+</p>
+<ul>
+  <li>Return an empty result with an appropriate error message</li>
+  <li>Log detailed diagnostic information at appropriate trace levels</li>
+  <li>Continue retrying background refresh attempts until successful</li>
+</ul>
+
+<h3 id="performance">Performance</h3>
+<p>
+  Multi-currency price filtering is implemented as efficient query-time filter construction,
+  not result-time evaluation. This means Vespa can use its indexes to find matching products
+  without iterating through all documents.
+</p>
+
+<h4 id="how-filtering-works">How Filtering Works</h4>
+<p>
+  When a query with multi-currency parameters is received, the searcher:
+</p>
+<ol>
+  <li><strong>Pre-computes price ranges:</strong> Converts the buyer's price range (e.g., 1000-1500 NOK)
+      into equivalent ranges for every seller currency using cached forex rates.
+      For example, if the forex cache has USD, EUR, and GBP, it computes what 1000-1500 NOK equals in each currency.</li>
+  <li><strong>Builds structured query filters:</strong> Creates a query tree using Vespa's efficient query primitives:
+    <ul>
+      <li><code>SameElementItem</code> - Matches documents where market and price appear in the same array element</li>
+      <li><code>RangeItem</code> - Efficiently filters on numeric price ranges using indexes</li>
+      <li><code>WordItem</code> - Matches exact seller currency and market values</li>
+    </ul>
+  </li>
+  <li><strong>Injects filter into query tree:</strong> Combines the price filter with the user's query,
+      allowing Vespa's query execution engine to evaluate it efficiently using indexes.</li>
+</ol>
+
+<p>
+  This approach has several performance benefits:
+</p>
+<ul>
+  <li><strong>No document iteration:</strong> Vespa uses attribute indexes to quickly identify matching documents
+      without fetching and evaluating all products</li>
+  <li><strong>One-time conversion:</strong> Currency conversion happens once during query construction,
+      not for every product in the result set</li>
+  <li><strong>Index-backed filtering:</strong> Price range and market matching leverage Vespa's fast attribute lookups</li>
+  <li><strong>Query optimization:</strong> Vespa's query optimizer can reorder and optimize the combined query tree
+      for efficient execution</li>
+</ul>
+
+<h2 id="advanced-usage">Advanced Usage</h2>
+
+<h3 id="custom-field-configuration">Custom Field Configuration</h3>
+<p>
+  By default, the multi-currency components expect specific field names in your product schema.
+  You can customize these field names using the <code>product-schema-wiring</code> configuration.
+</p>
+
+<pre>{% highlight xml %}
+<container id="default" version="1.0">
+    <search>
+        <chain id="multi-currency-filter" inherits="vespa">
+            <searcher id="ai.vespa.ecommerce.multicurrency.MultiCurrencyFilterSearcher"
+                      bundle="ecommerce-multi-currency">
+                <config name="ai.vespa.ecommerce.multicurrency.product-schema-wiring">
+                    <productFields>
+                        <sellerCurrency>seller_currency</sellerCurrency>
+                        <perMarketPriceArrayStruct>per_market_price</perMarketPriceArrayStruct>
+                        <marketStructField>market</marketStructField>
+                        <priceStructField>price</priceStructField>
+                    </productFields>
+                    <defaults>
+                        <market>DEFAULT</market>
+                    </defaults>
+                    <rankProfileInputs>
+                        <forexRates>forexRates</forexRates>
+                    </rankProfileInputs>
+                </config>
+            </searcher>
+        </chain>
+    </search>
+</container>
+{% endhighlight %}</pre>
+
+<p>
+  Configuration parameters:
+</p>
+<ul>
+  <li><code>productFields.sellerCurrency</code> - Field name for the product's seller currency (default: <code>seller_currency</code>)</li>
+  <li><code>productFields.perMarketPriceArrayStruct</code> - Array field name containing per-market prices (default: <code>per_market_price</code>)</li>
+  <li><code>productFields.marketStructField</code> - Struct field name for market code (default: <code>market</code>)</li>
+  <li><code>productFields.priceStructField</code> - Struct field name for price value (default: <code>price</code>)</li>
+  <li><code>defaults.market</code> - Default market identifier used as fallback (default: <code>DEFAULT</code>)</li>
+  <li><code>rankProfileInputs.forexRates</code> - Query tensor name for forex rates in ranking (default: <code>forexRates</code>)</li>
+</ul>
+
+
+<h3 id="using-forex-in-ranking">Using Forex Rates in Ranking</h3>
+<p>
+  When <code>ecommerce.multicurrency.enrich=true</code> is set, the searcher exposes the forex rates
+  as a query tensor <code>query(forexRates)</code> that can be used in ranking expressions.
+  The ranking profile should implement the same fallback logic as the searcher: check for market-specific prices first,
+  then fall back to the <code>DEFAULT</code> market price, and convert to the buyer's currency.
+</p>
+
+<pre>{% highlight xml %}
+rank-profile price_ranking {
+    inputs {
+        query(forexRates) tensor<double>(from{}, to{})
+        query(buyer_currency) tensor<double>(to{})
+        query(buyer_market) tensor<double>(market{})
+    }
+
+    function from_selector() {
+        expression: tensorFromLabels(attribute(seller_currency), from)
+    }
+
+    function buyer_rate() {
+        expression: sum(query(forexRates) * from_selector() * query(buyer_currency), from, to)
+    }
+
+    function price_tensor() {
+        expression: tensorFromStructs(attribute(per_market_price), market, price, double)
+    }
+
+    function market_specific_price() {
+        expression: sum(price_tensor() * query(buyer_market), market)
+    }
+
+    function default_price() {
+        expression: price_tensor(){market:'DEFAULT'}
+    }
+
+    function effective_price_in_seller_currency() {
+        expression: if(market_specific_price() > 0, market_specific_price(), default_price())
+    }
+
+    function effective_price_in_buyer_currency() {
+        expression: effective_price_in_seller_currency() * buyer_rate()
+    }
+
+    first-phase {
+        expression: -effective_price_in_buyer_currency()
+    }
+}
+{% endhighlight %}</pre>
+
+<p>
+  This rank profile requires passing one-hot encoded tensors for the buyer's currency and market as query parameters:
+</p>
+<pre>{% highlight sh %}
+$ vespa query \
+    'yql=select * from product where true' \
+    'searchChain=multi-currency-filter' \
+    'ecommerce.multicurrency.enrich=true' \
+    'ranking.features.query(buyer_currency)={% raw %}{{to:NOK}:1}{% endraw %}' \
+    'ranking.features.query(buyer_market)={% raw %}{{market:NO}:1}{% endraw %}'
+{% endhighlight %}</pre>
+
+<p>
+  Key functions:
+</p>
+<ul>
+  <li><code>tensorFromStructs</code> - Converts the <code>per_market_price</code> array to a tensor at ranking time</li>
+  <li><code>market_specific_price()</code> - Extracts price for the requested market if it exists</li>
+  <li><code>default_price()</code> - Gets the <code>DEFAULT</code> market price as fallback</li>
+  <li><code>effective_price_in_seller_currency()</code> - Selects market-specific price or falls back to <code>DEFAULT</code></li>
+  <li><code>effective_price_in_buyer_currency()</code> - Converts the effective price using forex rates</li>
+</ul>
+
+
+<h2 id="requirements">Requirements</h2>
+<ul>
+  <li>
+    <strong>Single global forex document:</strong> Maintain one document with ID <code>id:forex:forex::forex</code>
+    and mark it <code>global="true"</code>. Additional documents trigger the <code>INVALID_FOREX_DOCUMENTS</code> health state and queries fail.
+  </li>
+  <li>
+    <strong>Forex payload completeness:</strong> Every feed/update must include the <code>rates</code> tensor for all buyer/seller pairs you filter on,
+    identity rates (USD→USD, etc.), and a monotonically increasing <code>timestamp</code> (epoch seconds).
+  </li>
+  <li>
+    <strong>Product schema layout:</strong> Products expose <code>seller_currency</code>, encode all <code>per_market_price.price</code> values
+    in that seller currency, and include a <code>DEFAULT</code> market entry.
+  </li>
+  <li>
+    <strong>Container wiring:</strong> Deploy the <code>multi-currency-filter</code> search chain and the <code>forex-cache</code> chain in your container cluster,
+    along with the <code>ForexRateService</code> and <code>ForexRateRetriever</code> components.
+  </li>
+  <li>
+    <strong>Query parameters:</strong> Multi-currency filtering only runs when the query supplies <code>market</code>, <code>currency</code>,
+    <code>price-min</code>, and <code>price-max</code>. Missing or malformed parameters cause the searcher to skip filtering.
+  </li>
+</ul>
+
+<h2 id="recommended-practices">Recommended Practices</h2>
+<ul>
+  <li>
+    <strong>Structure product ids/names as needed:</strong> Keep your existing product fields (IDs, names, facets) and add the required currency fields alongside them.
+  </li>
+  <li>
+    <strong>Model asymmetric rates:</strong> Store both A→B and B→A conversions explicitly so buyer→seller lookups stay accurate even when FX rates are not perfect inverses.
+  </li>
+  <li>
+    <strong>Plan update cadence:</strong> Choose how often you feed forex data based on market volatility. The retriever polls every 10 seconds,
+    so frequent feeds are reflected quickly.
+  </li>
+  <li>
+    <strong>Default chain selection:</strong> Either set <code>searchChain=multi-currency-filter</code> on relevant queries or make it the default chain
+    so multi-currency filtering is always applied when parameters are present.
+  </li>
+</ul>
+
+
+<h2 id="see-also">See Also</h2>
+<ul>
+  <li><a href="../use-case-shopping">Use Case - Shopping</a></li>
+  <li><a href="../applications/searchers.html">Searcher Development</a></li>
+  <li><a href="../ranking/tensor-user-guide.html">Tensor Guide</a></li>
+  <li><a href="../reference/rank-features.html#tensorFromStructs(attribute,key,value,type)">tensorFromStructs - Convert struct arrays to tensors</a></li>
+  <li><a href="../reference/schema-reference.html#struct-field">Struct Fields in Schemas</a></li>
+  <li><a href="../applications/searchers.html#search-chains">Search Chains</a></li>
+</ul>

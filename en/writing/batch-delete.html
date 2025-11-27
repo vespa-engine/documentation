@@ -1,0 +1,201 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Batch delete"
+redirect_from:
+- /en/operations/batch-delete.html
+---
+
+<p>
+  Options for batch deleting documents:
+</p>
+<ol>
+  <li>
+    Use <a href="../clients/vespa-cli.html#documents">vespa feed</a>:
+<pre>
+$ vespa feed -t my-endpoint deletes.json
+</pre>
+  </li>
+  <li>
+    Find documents using a query, delete, repeat. Pseudocode:
+<pre>
+while True; do
+   query and read document ids, if empty exit
+   delete document ids using <a href="../reference/document-v1-api-reference.html#delete">/document/v1</a>
+   wait a sec # optional, add wait to reduce load while deleting
+</pre>
+  </li>
+  <li>
+    Use a <a href="../schemas/documents.html#document-expiry">document selection</a> to expire documents.
+    This deletes all documents <em>not</em> matching the expression.
+    It is possible to use parent documents and imported fields for expiry of a document set.
+    The content node will iterate over the corpus and delete documents (that are later compacted out):
+<pre>{% highlight xml %}
+<documents garbage-collection="true">
+    <document type="mytype"
+              mode="index"
+              selection="mytype.version > 4" />
+</documents>
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    Use <a href="../reference/document-v1-api-reference.html#delete">/document/v1</a> to delete documents
+    identified by a <a href="../reference/document-select-language.html">document selection</a> -
+    example dropping all documents from the <em>my_doctype</em> schema.
+    The <em>cluster</em> value is the ID of the content cluster in <em>services.xml</em>,
+    e.g., <code>&lt;content id="my_cluster" version="1.0"&gt;</code>:
+<pre>
+$ curl -X DELETE \
+  "$ENDPOINT/document/v1/my_namespace/my_doctype/docid?selection=true&cluster=my_cluster"
+</pre>
+  </li>
+  <li>
+    <p id="drop-schema">
+      It is possible to drop a schema, with all its content, by removing the mapping to the content cluster.
+      To understand what is happening, here is the status before the procedure:
+    </p>
+<pre>
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 16:59 books
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+</pre>
+    <p>Remove the schema from configuration:</p>
+<pre>
+&lt;documents&gt;
+    &lt;document type="music" mode="index" /&gt;
+    <span class="pre-hilite">&lt;!--document type="books" mode="index" /--&gt;</span>
+&lt;/documents&gt;
+</pre>
+    <p>
+      It is not required to remove the schema file itself.
+      It is however required to add a <code>schema-removal</code> entry to
+      <a href="../reference/validation-overrides.html">validation-overrides.xml</a>:
+    </p>
+<pre>
+&lt;validation-overrides&gt;
+    &lt;allow until="2022-10-31"&gt;schema-removal&lt;/allow&gt;
+&lt;/validation-overrides&gt;
+</pre>
+    {% include note.html content='Use validation override name <code>content-type-removal</code> before Vespa 8.73' %}
+    <p>
+      Deploy the application package.
+      This will reconfigure the content node processes,
+      and the directory with the schema data is removed:
+    </p>
+<pre>
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+</pre>
+    <p>
+      Add the mapping back and redeploy - the cluster now has a <code>books</code> schema with zero documents.
+    </p>
+<pre>
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 17:06 books
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+</pre>
+    <p>
+      Use the <a href="../content/proton.html#custom-component-state-api">Custom Component State API</a>
+      to inspect document count per schema.
+    </p>
+    <p>
+      The procedure, deploying with and without the schema, is an efficient way to drop all documents.
+      After the procedure, it is good practice to remove <em>validation-overrides.xml</em>
+      or the <code>schema-removal</code> element inside, to avoid accidental data loss later.
+      The directory listing above is just for illustration.
+    </p>
+  </li>
+</ol>
+
+
+
+<h2 id="example">Example</h2>
+<p>
+  This is an end-to-end example on how to track number of documents, and delete a subset using a
+  <a href="../reference/document-select-language.html">selection string</a>.
+</p>
+<h3 id="feed-sample-documents">Feed sample documents</h3>
+<p>
+  Feed a batch of documents, e.g. using the <a href="https://github.com/vespa-cloud/vector-search">vector-search</a>
+  sample application:</p>
+<pre>
+$ vespa feed <(python3 feed.py 100000 3)
+</pre>
+<p>
+  See number of documents for a node using the
+  <a href="../reference/searchnode-metrics-reference.html#content_proton_documentdb_documents_total">
+  content.proton.documentdb.documents.total</a> metric (here 100,000):
+</p>
+<pre>
+$ docker exec vespa curl -s http://localhost:19092/prometheus/v1/values | grep ^content.proton.documentdb.documents.total
+
+  content_proton_documentdb_documents_total_max{metrictype="standard",instance="searchnode",documenttype="vector",clustername="vectors",vespa_service="vespa_searchnode",} 100000.0 1695383025000
+
+  content_proton_documentdb_documents_total_last{metrictype="standard",instance="searchnode",documenttype="vector",clustername="vectors",vespa_service="vespa_searchnode",} 100000.0 1695383025000
+</pre>
+<p>
+  Using the metric above is useful while feeding this example.
+  Another alternative is <a href="visiting.html">visiting</a> all documents to print the ID:
+</p>
+<pre>
+$ vespa visit --field-set "[id]" | wc -l
+  100000
+</pre>
+<p>At this point, there are 100,000 document in the index.</p>
+
+
+<h3 id="define-selection">Define selection</h3>
+<p>
+  Define the subset of documents to delete - e.g. by age or other criteria.
+  In this example, select random 1%. Do a test run:
+</p>
+<pre>
+$ vespa visit --field-set "[id]" --selection 'id.hash().abs() % 100 == 0' | wc -l
+    1016
+</pre>
+<p>
+  Hence, the selection string <code>id.hash().abs() % 100 == 0</code> hits 1,016 documents.
+</p>
+
+
+<h3 id="delete-documents">Delete documents</h3>
+<p>
+  Delete documents, see the number of documents deleted in the response:
+</p>
+<pre>
+$ curl -X DELETE \
+  "http://localhost:8080/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors"
+
+  {
+      "pathId":"/document/v1/mynamespace/vector/docid",
+      "documentCount":1016
+  }
+</pre>
+<p>In case of a large result set, a continuation token might be returned in the response, too:</p>
+<pre>
+"continuation": "AAAAEAAAA"
+</pre>
+<p>If so, add the token and redo the request:</p>
+<pre>
+$ curl -X DELETE \
+  "http://localhost:8080/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors&continuation=AAAAEAAAA"
+</pre>
+<p>
+  Repeat as long as there are tokens in the output.
+  The token changes in every response.
+</p>
+
+
+<h3 id="validate">Validate</h3>
+<p>Check that all documents matching the selection criterion are deleted:</p>
+<pre>
+$ vespa visit --selection 'id.hash().abs() % 100 == 0' --field-set "[id]" | wc -l
+  0
+</pre>
+<p>List remaining documents:</p>
+<pre>
+$ vespa visit --field-set "[id]" | wc -l
+  98984
+</pre>

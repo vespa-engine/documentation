@@ -12,9 +12,9 @@ does not currently support ranking and can only be used for matching and filteri
 
 When building a search application we need to think about:
 
-- How to [match](query-language.html) a user specified query against a [document schema](schemas.html)
-  using Vespa [query language](query-language.html).
-- How to [rank](ranking.html) documents matching the query.
+- How to [match](querying/query-language.html) a user specified query against a [document schema](basics/schemas.html)
+  using Vespa [query language](querying/query-language.html).
+- How to [rank](basics/ranking.html) documents matching the query.
 
 
 ## Matching documents
@@ -23,8 +23,8 @@ designing and mapping our document model to a Vespa document schema:
 
 - For string fields we should think about using text style matching or database-style exact matching.
 - For string fields there are also several
-[linguistic processing](linguistics.html) options like [tokenization](linguistics.html#tokenization), 
-normalization and language dependent [stemming](linguistics.html#stemming).
+[linguistic processing](linguistics/linguistics.html) options like [tokenization](linguistics/linguistics.html#tokenization), 
+normalization and language dependent [stemming](linguistics/linguistics.html#stemming).
 - String fields which shares the same [match](reference/schema-reference.html#match) 
 and linguistic processing settings can be combined using [fieldsets](reference/schema-reference.html#fieldset). 
 
@@ -35,7 +35,7 @@ our matching and retrieval strategy over the designed document schema.
 ## Ranking documents
 The documents which match the query and are retrieved by the query are scored using a ranking model. 
 Once a document is retrieved by the query logic the document can be scored using the full 
-flexibility of the Vespa [ranking](ranking.html) framework.
+flexibility of the Vespa [ranking](basics/ranking.html) framework.
 
 
 ## A minimal Vespa application
@@ -122,14 +122,14 @@ schema photo {
 </pre>
 
 In the schema we disable [stemming](reference/schema-reference.html#stemming) and
-also enable [bm25](reference/bm25.html) text ranking feature for all string fields.
+also enable [bm25](ranking/bm25.html) text ranking feature for all string fields.
 
 Since all string fields shares the same [match](reference/schema-reference.html#match)
 settings we can use a [fieldset](reference/schema-reference.html#fieldset) 
 so that queries does not need to mention all three fields.
 
 We also include a default rank profile (this is the implicit default rank profile)
-using the Vespa [nativeRank](nativerank.html) text matching rank feature. 
+using the Vespa [nativeRank](ranking/nativerank.html) text matching rank feature. 
 
 Along with the schema, we also need a [services.xml](reference/services.html) file
 to make up a Vespa [application package](reference/application-packages-reference.html):
@@ -173,7 +173,7 @@ $ docker run --detach --name vespa --hostname vespa-container \
 </pre>
 </div>
 
-Install [Vespa-cli](vespa-cli.html) using Homebrew:
+Install [Vespa-cli](clients/vespa-cli.html) using Homebrew:
 
 <pre>
 $ brew install vespa-cli
@@ -303,7 +303,7 @@ so that exact matches are ranked higher than partial matches.
 We have now explored querying and matching, now it's time to focus on how to rank the documents matched. 
 You might not have noticed, but in the above examples, each of the queries produced a `relevance` score per hit, 
 this score was in our previous examples calculated using the `default` rank profile
-which in our case used [nativeRank](nativerank.html).
+which in our case used [nativeRank](ranking/nativerank.html).
 
 We can start by analyzing other [rank features](reference/rank-features.html) by asking Vespa to produce them for us.
 We use [match-features](reference/schema-reference.html#match-features)
@@ -494,7 +494,7 @@ Now, we can include these features in a ranking expression used in `first-phase`
 The actual _best_ scoring function is data dependent.
 A trained function using machine learning is by far the easiest way.
 
-The bag of words [bm25](reference/bm25.html) ranking feature is not normalized,
+The bag of words [bm25](ranking/bm25.html) ranking feature is not normalized,
 so combining it in a linear function is challenging, as the score range of the feature is unbound. 
 To overcome this, and allow easy exploration without changing the rank profile,
 make the parameters in the function overridable on a per-query basis by:
@@ -509,7 +509,7 @@ first-phase {
 }
 </pre>
 
-See [using query variables](ranking-expressions-features.html#using-query-variables). 
+See [using query variables](ranking/ranking-expressions-features.html#using-query-variables). 
 
 <pre data-test="file" data-path="my-app/schemas/photo.sd">
 schema photo {

@@ -1,0 +1,299 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Working with chunks"
+redirect_from:
+- /en/working-with-chunks.html
+---
+
+<p>A key technique in RAG applications, and vector search applications in general, is to split longer text into
+chunks. This lets you:</p>
+
+<ul>
+<li>Generate a vector embedding for each chunk rather than for an entire document text, to capture the semantic information
+of the text at a meaningful level.
+<li>Select specific chunks to add to the context window in GenAI applications rather than the entire document content.
+</ul>
+
+<p>Vespa contains the following functionality for working with chunks. Each is covered in a section below.</p>
+
+<ul>
+<li><a href="#including-chunks-in-documents">Including chunks in documents</a></li>
+<li><a href="#creating-vector-embeddings-from-chunks">Creating vector embeddings from chunks</a></li>
+<li><a href="#searching-chunks">Searching chunks</a></li>
+<li><a href="#ranking-with-chunks">Ranking with chunks</a></li>
+<li><a href="#layered-ranking-selecting-chunks-to-return">Layered ranking: Selecting chunks to return</a></li>
+</ul>
+
+
+<h2 id="including-chunks-in-documents">Including chunks in documents</h2>
+
+<p>Chunks that belong to the same text should be added to the same document.
+The chunks are represented as arrays of string.</p>
+
+<p>You can split text into chunks yourself, using a schema like this:</p>
+
+<pre>
+search myDocumentType {
+    document myDocumentType {
+        field myChunks type array&lt;string&gt; {
+            indexing: summary | index
+        }
+    }
+}
+</pre>
+
+<p>You can then write your chunks into Vespa using this <a href="../reference/document-json-format.html">document JSON</a>:</p>
+
+<pre>
+"myChunks": ["My first chunk text", "My second chunk text"]
+</pre>
+
+<p>Alternatively you can let Vespa do the chunking for you, by using a synthetic field outside the document:</p>
+
+<pre>
+search myDocumentType {
+    document myDocumentType {
+        field myText type string {
+        }
+    }
+    field myChunks type array&lt;string&gt; {
+        indexing: input myText | chunk fixed-length 500 | summary | index
+    }
+}
+</pre>
+
+<p>In the <a href="../reference/indexing-language-reference.html#chunk">chunk expression</a>
+you can choose between chunkers provided by Vespa, or plug in your own,
+see the <a href="../reference/chunking-reference.html">chunking reference documentation</a>.
+
+
+<h2 id="creating-vector-embeddings-from-chunks">Creating vector embeddings from chunks</h2>
+
+<p>To add embeddings to your documents, use a tensor field:</p>
+
+<pre>
+search myDocumentType {
+    document myDocumentType {
+        field myEmbedding type tensor&lt;float&gt;(x[384]) {
+            indexing: attribute | index
+        }
+    }
+}
+</pre>
+
+<p>This lets you add a single embedding to each document, but usually you want to have many.
+In Vespa you can do that by adding <a href="../ranking/tensor-user-guide.html#tensor-concepts">mapped dimensions</a>
+to your tensor:</p>
+
+<pre>
+search myDocumentType {
+    document myDocumentType {
+        field myEmbeddings type tensor&lt;float&gt;(chunk{}, x[384]) {
+            indexing: attribute | index
+        }
+    }
+}
+</pre>
+
+<p>With this you can feed <a href="../reference/document-json-format.html#tensor-short-form-mixed">tensors in JSON format</a>
+as part of your writes, e.g. writing an embedding tensor with chunks numbered 1 and 2:</p>
+
+<pre>{% highlight json %}
+"myEmbeddings": {
+    "1":[2.0,3.0,...],
+    "2":[4.0,5.0,...]
+}
+{% endhighlight %}</pre>
+
+<p>You may notice that parsing such JSON consumes a lot of CPU on container clusters. To avoid that you can also feed
+embeddings <a href="../reference/document-json-format.html#tensor-hex-dump">hex encoded raw data</a>.</p>
+
+<p>You can also let Vespa do the embedding for you, either using a model provided by Vespa,
+or one you decide in your application package:
+</p>
+
+<pre>
+search myDocumentType {
+    document myDocumentType {
+        field myChunks type array&lt;string&gt; {
+        }
+    }
+    field myEmbeddings type tensor&lt;float&gt;(chunk{}, x[384]) {
+        indexing: input myChunks | embed | attribute | index
+    }
+}
+</pre>
+
+<p>See the <a href="embedding.html">embedding guide</a> on how to configure embedders.</p>
+
+<p>You can of course combine this with chunking to have a single text field
+chunked and embedded automatically:</p>
+
+<pre>
+search myDocumentType {
+    document myDocumentType {
+        field myText type string {
+        }
+    }
+    field myChunks type array&lt;string&gt; {
+        indexing: input myText | chunk sentence | summary | index
+    }
+    field myEmbeddings type tensor&lt;float&gt;(chunk{}, x[384]) {
+        indexing: input myText | chunk sentence | embed | attribute | index
+    }
+}
+</pre>
+
+<p>Some things to note:</p>
+
+<ul>
+    <li>All fields of Vespa documents are stored and here we represent the text both as a single field and as
+        chunks of text, won't that consume a lot of unnecessary space? No, thanks to the wonders of modern compression,
+        the overhead from this can be ignored.
+    <li>Why return the chunk array in results and not the full text field? This is because for large text we need to
+        select a subset of the text chunks rather than returning the full text.
+    <li>We are chunking twice here, won't this be inefficient? No, Vespa will reuse the result of the first invocation
+        in cases like this.
+</ul>
+
+
+<h2 id="searching-chunks">Searching chunks</h2>
+
+<p>You can search in chunk text (if you added <code>index</code>), and in chunk embeddings (if you created embeddings).
+Usually, you want to do both (<a href="../learn/tutorials/hybrid-search">hybrid search</a>)
+since text search gives you precise matches, and embedding nearest neighbor search gives you imprecise semantic matching.</p>
+
+<p>A simple hybrid query can look like this:</p>
+
+<pre>
+yql=select * from doc where userInput(@query) or ({targetHits:10}nearestNeighbor(myEmbeddings, e))
+input.query(e)=embed(@query)
+query=Do Cholesterol Statin Drugs Cause Breast Cancer?
+</pre>
+
+<p>The <code>embed</code> function shown here can be used to embed a query text using the same model(s) as used for chunks.
+If embedding outside Vespa you can
+<a href="https://docs.vespa.ai/en/reference/tensor.html#tensor-literal-form">pass the tensor value</a> instead. See the
+<a href="../querying/nearest-neighbor-search-guide#hybrid-sparse-and-dense-retrieval-methods-with-vespa">nearest neighbor guide</a>
+for more.</p>
+
+<p>Text matching works across chunks as if the chunks were re-joined into one text field. However, a proximity
+gap is inserted between each chunks so that tokens in different chunks are by default very (infinitely) far away when
+evaluating phrase and near matches (however, see
+<a href="../reference/schema-reference.html#rank-element-gap">on configuring this</a>).</p>
+
+<p>Nearest neighbor search with many chunks will retrieve the documents where any single chunk embedding
+is close to the query embedding.</p>
+
+
+<h2 id="ranking-with-chunks">Ranking with chunks</h2>
+
+<p>Ranking in Vespa is done by <a href="../ranking/ranking-expressions-features.html">mathematical expressions</a>
+(hand-written or machine-learned) combining rank features. You'll typically want to use features that capture
+both how well vector embeddings and textual query terms matched the chunks.</p>
+
+<p>For vector search, the <code>closeness(dimension,field)</code> feature will contain the distance between the
+query vector and the <i>closest</i> chunk embedding. In addition, the <code>closest(field)</code>
+feature will return a tensor providing the label(s) of the chunk which was closest.</p>
+
+<p>For text matching, all features are available as if the entire chunk array was a single string field, but with
+an infinitely large proximity gap between each element to treat each element as independent. When the array elements
+are chunks of the same text, you'd prefer to get a relevance contribution from matching adjacent elements since it means
+you are matching adjacent words in the source text. To achieve this, configure the elementGap in your chunk array to
+a low value (e.g. 0 to 3, depending on how well your chunking strategy identifies semantic transitions):</p>
+
+<pre>
+    rank-profile myProfile {
+        rank myChunks {
+            element-gap: 1
+        }
+    }
+</pre>
+
+<p>Using vector closeness and the normal text match features will help you rank documents mostly based
+on the text having the single best match to the query. Sometimes it is also useful to capture how well the
+text as a whole matches the query. For vectors, you can do this by computing and aggregating closeness
+to each vector using a <a href="../ranking/tensor-user-guide.html#ranking-with-tensors">tensor expression</a>
+in your ranking expression, while for text matching you can use the <code>elementSimilarity(field)</code> feature,
+or the <code><a href="../reference/rank-features.html#elementwise-bm25">elementwise(bm25(field),dimension,cell_type)</a></code>
+feature which returns a tensor containing the bm25 score of each chunk.</p>
+
+
+<h2 id="layered-ranking-selecting-chunks-to-return">Layered ranking: Selecting chunks to return</h2>
+
+<p>A search result will contain the top ranked documents including all fields you are requesting or
+<a href="../querying/document-summaries.html#">configuring</a>, including all chunks of those documents,
+whether relevant or not. This is fine when every document has few chunks, but when they can have many, there
+are two problems:</p>
+<ul>
+    <li>Putting many irrelevant chunks into the context window of the LLM decreases quality, or may
+        make the context window infeasibly large.</li>
+    <li>Sending many chunks over the network increases latency and can impacting other queries
+        running at the same time.</li>
+</ul>
+
+<p>To solve both of these, we can use
+<a href="https://blog.vespa.ai/introducing-layered-ranking-for-rag-applications/">layered ranking</a>:
+Rank the chunks in the highest ranked documents, and select only the best ones.</p>
+
+<p>To do this, specify the ranking function that will select the chunks to return,
+using <code><a href="https://docs.vespa.ai/en/reference/schema-reference.html#select-elements-by">select-elements-by</a></code>.
+Here's a full example:</p>
+
+<pre>
+schema docs {
+    document docs {
+
+        field myEmbeddings type tensor&lt;float&gt;(chunk{}, x[386]) {
+            indexing: attribute
+        }
+
+        field myChunks type array&lt;string&gt; {
+            indexing: index | summary
+            summary {
+                select-elements-by: best_chunks
+            }
+        }
+
+    }
+
+    rank-profile default {
+
+        inputs {
+            query(embedding) tensor&lt;float&gt;(x[386])
+        }
+
+        function my_distance() {
+            expression: euclidean_distance(query(embedding), attribute(myEmbeddings), x)
+        }
+
+        function my_distance_scores() {
+            expression: 1 / (1+my_distance)
+        }
+
+        function my_text_scores() {
+            expression: elementwise(bm25(myChunks), chunk, float)
+        }
+
+        function chunk_scores() {
+            expression: merge(my_distance_scores, my_text_scores, f(a,b)(a+b))
+        }
+
+        function best_chunks() {
+            expression: top(3, chunk_scores)
+        }
+
+        first-phase {
+            expression: sum(chunk_scores())
+        }
+
+        summary-features {
+            best_chunks
+        }
+
+    }
+}
+</pre>
+
+<p>With this, we can use the powerful ranking framework in Vespa to select the best chunks to provide to the LLM,
+without sending any chunks that won't be used over the network.</p>

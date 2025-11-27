@@ -75,7 +75,7 @@ and wait for the changes to apply:
 
 {% include important.html content='Vespa Cloud is designed for online changes.
 All of the above changes can be deployed to a running system, with zero to minimal disruption.
-See [content cluster elasticity](/en/elasticity.html) for details.' %}
+See [content cluster elasticity](/en/content/elasticity.html) for details.' %}
 
 Making changes to the resource specifications is hence fully automated.
 The quickest way to the sweet spot is to initially deploy with enough capacity
@@ -106,6 +106,11 @@ Vespa Cloud will automatically migrate load to more cost-effective compute insta
 This means, Vespa Cloud applications will migrate to more recent instance types of the same configuration,
 with **zero manual interventions**.
 This keeps the total cost in check, and performance tracking advances in hardware.  
+
+Find a list of supported instance types at
+[AWS](https://cloud.vespa.ai/en/reference/aws-flavors.html),
+[GCP](https://cloud.vespa.ai/en/reference/gcp-flavors.html), and
+[Azure](https://cloud.vespa.ai/en/reference/azure-flavors.html) instance types.
 
 
 

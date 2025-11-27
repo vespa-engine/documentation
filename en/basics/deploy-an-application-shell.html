@@ -1,0 +1,209 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Deploy an application without Vespa CLI
+category: cloud
+redirect_from:
+- /en/cloud/getting-started-shell.html
+- /en/deploy-an-application-shell.html
+---
+
+<!-- If you change this also make the same change in getting-started[-java] -->
+
+<p>This lets you deploy an application to the <a href="../cloud/environments.html#dev">dev zone</a>
+on Vespa Cloud (for free).</p>
+
+<p>Alternative versions of this guide:</p>
+<ul>
+  <li><a href="https://pyvespa.readthedocs.io/en/latest/getting-started-pyvespa-cloud.html">Deploy an application using pyvespa</a> -
+    for Python developers</li>
+  <li><a href="deploy-an-application.html">Deploy an application</a></li>
+  <li><a href="deploy-an-application-java.html">Deploy an application having Java components</a></li>
+  <li><a href="deploy-an-application-local.html">Deploy an application locally</a></li>
+  <li><a href="deploy-an-application-local-java.html">Deploy an application with Java components locally</a></li>
+</ul>
+
+<br/>
+
+<div class="vespa-notification vespa-notification-prereqs" role="alert">
+  <p><strong>Prerequisites:</strong></p>
+  <ul>
+    <li>
+      git - or download the files from
+      <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation">album-recommendation</a>
+    </li>
+    <li>zip - or other tool to create a .zip file</li>
+    <li>curl - or other tool to send HTTP requests with security credentials</li>
+    <li>OpenSSL</li>
+  </ul>
+</div>
+
+<p>Steps:</p>
+
+<ol class="howto">
+
+  <li>
+    <p><b>Create a <a href="../learn/tenant-apps-instances.html">tenant</a> on Vespa Cloud:</b></p>
+    <p>Go to <a target="_blank" href="https://console.vespa-cloud.com/">console.vespa-cloud.com</a>
+    and create your tenant (unless you already have one).</p>
+  </li>
+
+  <li>
+    <p><b>Clone a sample <a href="applications.html">application</a>:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git &amp;&amp; \
+  cd sample-apps/album-recommendation
+</pre>
+    </div>
+    <p>See <a href="https://github.com/vespa-engine/sample-apps">sample-apps</a> for other sample apps you can clone.</p>
+  </li>
+
+  <li>
+    <p id="create-a-self-signed-certificate"><b>Add a certificate for <a href="../cloud/security/guide#data-plane">data plane access</a>
+    to the application:</b></p>
+    <p>On Unix or Mac, use <code>openssl</code>:</p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ openssl req -x509 -nodes -days 14 -newkey rsa:4096 \
+  -subj "/CN=cloud.vespa.example" \
+  -keyout data-plane-private-key.pem -out data-plane-public-cert.pem
+</pre>
+    </div>
+    <p>On Windows, the certificate has to be created with <a href="https://learn.microsoft.com/en-us/powershell/module/pki/new-selfsignedcertificate">New-SelfSignedCertificate</a> in PowerShell, and
+    then exported to PEM format using <a href="https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil">certutil</a>.</p>
+    <p>Once the certificate has been created, add it to the application package.</p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ mkdir -p app/security &amp;&amp; \
+  cp data-plane-public-cert.pem app/security/clients.pem
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <p><strong>Create a deployable application package zip:</strong></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ ( cd app &amp;&amp; zip -r ../application.zip . )
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <p><b>Deploy the application:</b></p>
+    <p>
+      In the <a target="_blank" href="https://console.vespa-cloud.com/">console</a>, click <em>Deploy Application</em>.
+      Use "myapp" as the application name, leave the defaults.
+      Make sure <em>DEV</em> is selected, and upload the <code>application.zip</code>.
+      Click <em>Create and deploy</em>.
+    </p>
+    <p>The first deployment may take a few minutes while nodes are provisioned.</p>
+    <!-- Override VESPA_CLI_HOME to work around container filesystem limitations and set application used for automatic testing -->
+    <!-- $PWD is set to $SD_DIND_SHARE_PATH by screwdriver.yaml - a special Docker-in-Docker path -->
+    <!-- Set API key to use for automatic testing -->
+    <!-- $VESPA_TEAM_API_KEY is a base64-encoded PEM-encoded EC private key in PKCS#8 format. -->
+<pre data-test="exec" style="display:none">
+$ export VESPA_CLI_HOME=$PWD/.vespa TMPDIR=$PWD/.tmp
+$ mkdir -p $TMPDIR
+$ mkdir -p $VESPA_CLI_HOME/vespa-team.album-rec-java.default
+$ vespa config set target cloud
+$ vespa config set application vespa-team.album-rec-java
+$ export VESPA_CLI_API_KEY="$(echo "$VESPA_TEAM_API_KEY" | openssl base64 -A -a -d)"
+$ cp data-plane-public-cert.pem $VESPA_CLI_HOME/vespa-team.album-rec-java.default
+$ cp data-plane-private-key.pem $VESPA_CLI_HOME/vespa-team.album-rec-java.default
+$ vespa deploy --wait 600
+$ export ENDPOINT=https://album-rec-java.vespa-team.aws-us-east-1c.dev.z.vespa-app.cloud/
+</pre>
+  </li>
+
+  <li>
+    <p><b>Verify the application endpoint:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ ENDPOINT=https://<span class="pre-hilite">name</span>.myapp.<span class="pre-hilite">tenant-name</span>.aws-us-east-1c.dev.z.vespa-app.cloud/
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem $ENDPOINT
+</pre>
+    </div>
+    <p>You can find the endpoint in the console deployment output, set it for later use and test it.
+    You can also <a href="../cloud/security/guide#using-a-browser">do this in a browser</a>.</p>
+  </li>
+
+  <li>
+    <p><b><a href="../writing/reads-and-writes.html">Feed</a> <a href="../schemas/documents.html">documents</a>:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/A-Head-Full-of-Dreams.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/Love-Is-Here-To-Stay.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/love-is-here-to-stay
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/Hardwired...To-Self-Destruct.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/hardwired-to-self-destruct
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <p><b>Run <a href="../querying/query-api.html">queries</a>:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>{% raw %}
+curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -X POST -H "Content-Type: application/json" --data '
+  {
+      "yql": "select * from music where true",
+      "ranking": {
+          "profile": "rank_albums",
+          "features": {
+              "query(user_profile)": "{{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+          }
+      }
+  }' \
+  $ENDPOINT/search/
+{% endraw %}</pre>
+    </div>
+    <!-- Test framework is not good at such multiline POST queries, do a GET instead -->
+<pre data-test="exec" style="display:none">
+$ curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+"$ENDPOINT/search/?ranking=rank_albums&amp;yql=select%20%2A%20from%20music%20where%20true&amp;ranking.features.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D"
+</pre>
+  </li>
+</ol>
+
+<br/>
+
+<p>Congratulations, you have deployed your first Vespa application!
+Application instances in the <a href="../cloud/environments.html#dev">dev zone</a>
+will by default keep running for 14 days after the last deployment.
+You can control this in the
+<a target="_blank" href="https://console.vespa-cloud.com/">console</a>.</p>
+
+
+<br/>
+<h4>Next: <a href="applications.html">Vespa applications</a></h4>

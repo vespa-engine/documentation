@@ -36,7 +36,7 @@ a controlled set of trusted hosts. All Vespa hosts must be able to connect
 to, and receive connections from, all other Vespa hosts that are part of the
 same installation. For added security, consider limiting Vespa hosts to only
 be able to talk to other Vespa hosts. If you are contacting external services
-as part of [federation](/en/federation.html) in the application container, your
+as part of [federation](/en/querying/federation.html) in the application container, your
 container hosts must be able to connect to these services.
  
 This may be implemented by e.g. iptables, AWS Security Groups or similar technologies.
@@ -59,11 +59,11 @@ and will need to be configured explicitly as documented in
 By default, the container allows unauthenticated writes to, and reads from, the Vespa installation.
 For a production deployment, this must be locked down.
  
-Connections to the HTTP containers may be [protected with TLS](/en/jdisc/http-server-and-filters.html#tls).
+Connections to the HTTP containers may be [protected with TLS](/en/applications/http-servers-and-filters.html#tls).
 Mutual TLS is supported and should be configured.
  
 Access to the container API endpoints can be controlled using
-[request filters](/en/jdisc/http-server-and-filters.html#set-up-filter-chains).
+[request filters](/en/applications/http-servers-and-filters.html#set-up-filter-chains).
 These filters can implement the required authentication and authorization logic
 for your specific use case.
  

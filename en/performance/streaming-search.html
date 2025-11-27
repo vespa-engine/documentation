@@ -1,0 +1,271 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Streaming Search"
+redirect_from:
+- /en/streaming-search.html
+---
+
+<p>Search engines make queries fast by creating indexes over the stored data.
+While the indexes cost extra resources to build and maintain, this is usually
+a good tradeoff because they make queries so much cheaper. However, this
+does not hold for use cases where the data is split into many small subsets
+where each query just searches one (or a few) of these subsets, the canonical
+example being <em>personal indexes</em> where a user only searches their own data.</p>
+
+<p>For such use cases, Vespa provides <i>streaming search</i>
+- a mode where only the raw data of the documents is
+<a href="../content/proton.html#document-store">stored</a> and searches are implemented
+by streaming - no indexes required. In addition, attributes
+are also only stored on disk so that the only data needed in memory is
+45 bytes per document, meaning that streaming mode lets you store billions of documents
+on each node.</p>
+
+<p>This is especially important in personal data applications using vector embeddings,
+which otherwise require a lot of memory and require ANN to perform well,
+which is often unsuited for searching personal data as they don't surface
+all the most relevant documents.</p>
+
+<p>Streaming mode is suitable when subsets are <em>on average</em> small compared
+to the entire corpus. Vespa delivers low query latency also for the occasional large
+subset (say, users with huge amounts of data) by automatically sharding such data groups
+over multiple content nodes, searched in parallel.</p>
+
+<p>Note: Using both streaming and indexed mode in the same cluster is discouraged.
+The resource usage and performance characteristics for the two modes are
+very different, and it might be very hard to operate and get good performance for
+such a system.</p>
+
+<h2 id="differences-in-streaming-search">Differences in streaming search</h2>
+<p>Streaming search uses the same implementation of most features in Vespa, including matching,
+ranking, grouping and sorting, and mostly supports the same features.
+A <a href="../basics/schemas.html">schema</a> used in
+<a href="../reference/services-content.html#document">indexed mode</a>
+can in most cases be used in streaming search without any changes.
+The following differences however apply:</p>
+
+<ul>
+    <li>Streaming search does not use the <a href="../linguistics/linguistics.html">linguistics</a> module while feeding documents.
+        Instead, the string fields of each streamed document are
+        <a href="../linguistics/linguistics.html#tokenization">tokenized</a> and
+        <a href="../linguistics/linguistics.html#normalization">normalized</a> on the fly as part of performing a search.
+        Query terms are <a href="../linguistics/linguistics.html#normalization">normalized</a> in the same way.
+        <a href="../linguistics/linguistics.html#stemming">Stemming</a> is not supported for streaming search.
+    </li>
+    <li>Since there are no indexes, the content nodes do not collect term statistics and average field length statistics.
+        <ul>
+            <li>
+                Term significance should be provided by a <a href="../ranking/significance#global-significance-model">global significance model</a>,
+                if <a href="../reference/rank-features.html">text matching features</a> that benefit from it are used.
+                This includes among others <em><a href="../ranking/bm25.html">bm25</a></em>,
+                <em>nativeRank</em>, <em>nativeFieldMatch</em>, <em>nativeProximity</em> and <em>fieldMatch</em>.</li>
+            <li>If using <em>bm25</em>, adjust the
+                <a href="../reference/rank-feature-configuration.html#properties">averageFieldLength</a>
+                configuration for a more precise <em>bm25</em> score.</li>
+        </ul>
+    </li>
+    <li>Even without any indexes, fields must be specified as
+        <a href="../reference/schema-reference.html#index">index</a> or
+        <a href="../reference/schema-reference.html#attribute">attribute</a> to make them available for
+        matching, ranking, grouping and sorting.
+        The associated default <a href="../reference/schema-reference.html#match">match</a> setting for a field
+        is equivalent to <a href="../reference/services-content.html#document">indexed mode</a>.
+    </li>
+    <li>Streaming search supports a wider range of matching options (such as substring and prefix), and
+        these can be specified either at query time or at configuration time.
+        See <a href="#matching-options-in-streaming-search">matching options</a> for details.
+    </li>
+    <li><a href="../reference/schema-reference.html#index-hnsw">HNSW</a> indexes are not supported in streaming search.
+        This means a <a href="../querying/nearest-neighbor-search#using-nearest-neighbor-search">nearest neighbor search</a>
+        is always <em>exact</em> when used in streaming search.
+        The following parameters for adjusting <em>approximate</em> nearest neighbor search thus have no effect:
+        <ul>
+            <li><a href="../reference/schema-reference.html#post-filter-threshold">post-filter-threshold</a></li>
+            <li><a href="../reference/schema-reference.html#approximate-threshold">approximate-threshold</a></li>
+            <li><a href="../reference/schema-reference.html#filter-first-threshold">filter-first-threshold</a></li>
+            <li><a href="../reference/schema-reference.html#filter-first-exploration">filter-first-exploration</a></li>
+            <li><a href="../reference/schema-reference.html#exploration-slack">exploration-slack</a></li>
+            <li><a href="../reference/schema-reference.html#target-hits-max-adjustment-factor">target-hits-max-adjustment-factor</a></li>
+        </ul>
+    </li>
+    <li><a href="../schemas/parent-child.html">Parent/child relationships</a> are not supported in streaming search.
+        Using such functionality will fail <a href="../learn/glossary.html#deployment">deployment</a>.
+    </li>
+    <li><a href="../querying/predicate-fields.html">Predicate fields</a> are not supported in streaming search.
+        They can exist as summary only fields in the document, but they are not searchable.
+    </li>
+    <li><a href="../reference/schema-reference.html#uri">URI-fields</a> are not supported in streaming search.
+        They are handled as regular string fields, and do not support the uri search functionality.
+    </li>
+    <li><a href="../reference/rank-features#firstPhaseRank">firstPhaseRank</a> rank feature always returns the default value in streaming search.
+    </li>
+</ul>
+
+
+<h2 id="using-streaming-search">Using streaming search</h2>
+
+<p>
+These are the steps required to use streaming search:
+</p>
+<ol>
+  <li>
+    Set indexing mode to <a href="../reference/services-content.html#document">streaming</a>:
+<pre>
+&lt;content id="mycluster" version="1.0"&gt;
+    &lt;documents&gt;
+        &lt;document type="myType" <span class="pre-hilite">mode="streaming"</span> /&gt;
+</pre>
+  </li>
+
+    <li>Use
+    <a href="../schemas/documents.html">document IDs</a> which contains a <i>group</i> value specifying
+    the small subset the document belongs to (usually a userid). These have the form
+        <code>id:myNamespace:myType:<b>g=myUserid</b>:myLocalid</code>
+    and when represented as paths in <a href="../writing/document-v1-api-guide.html">document/v1</a> requests,
+    <code>document/v1/myNamespace/myType/<b>group/myUserId</b>/myLocalId</code>
+  </li>
+
+  <li>
+    Specify the subset to search using the query parameter
+    <a href="../reference/query-api-reference.html#streaming.groupname">streaming.groupname</a>.
+  </li>
+
+</ol>
+
+<p>See the <a href="https://github.com/vespa-engine/sample-apps/tree/master/vector-streaming-search">vector streaming search sample application</a>
+for a complete example.</p>
+
+
+
+<h2 id="enabling-indexing-statements-in-streaming-search">Enabling indexing statements in streaming search</h2>
+{% include important.html content='Since Vespa 8.287, this section can be disregarded -
+it is <span style="text-decoration: underline">not</span> necessary to add <code>&lt;document-processing/&gt;</code> tags.
+The configuration is identical to using indexed mode.' %}
+<p>
+  Indexing statements are - as the name indicates - mostly used for indexing,
+  and so they are not executed by default with streaming search.
+</p>
+<p>However, sometimes it is convenient to run indexing statements also when using streaming, for example to
+use the <code>embed</code> function to turn text into an embedding vector, as in</p>
+
+<pre>indexing: input myTextField | embed | attribute</pre>
+
+<p>Indexing statements are run by a document processor, so to enable them with streaming,
+enable document processing enabled on a container cluster and point to it as the one to do
+indexing processing from the content cluster:</p>
+
+<pre>
+&lt;services version="1.0"&gt;
+    &lt;container id="myContainers" version="1.0"&gt;
+        ...
+        &lt;document-processing/&gt;
+        ...
+    &lt;/container&gt;
+
+    &lt;content id="mail" version="1.0"&gt;
+        ...
+        &lt;documents&gt;
+            &lt;document type="myType" mode="streaming" /&gt;
+            &lt;document-processing chain="indexing" cluster="myContainers" /&gt;
+        &lt;/documents&gt;
+        ...
+    &lt;/content&gt;
+&lt;/services&gt;
+</pre>
+
+
+<h2 id="matching-options-in-streaming-search">Matching options in streaming search</h2>
+
+<p>Streaming search offers more flexibility in matching text fields: Match settings
+can be specified at query time on any text field, and fields marked with <code>indexing: index</code>
+supports <a href="../reference/schema-reference.html#suffix">suffix</a> and
+<a href="../reference/schema-reference.html#substring">substring</a> matching.</p>
+
+<p>To specify match settings at query time in YQL:</p>
+<pre>
+select * from sources * where artist contains ({prefix:true}"col")
+select * from sources * where artist contains ({substring:true}"old")
+select * from sources * where artist contains ({suffix:true}"play")
+</pre>
+
+<p>To specify a default match setting for a field in the schema:</p>
+
+<pre>
+field artist type string {
+    indexing: summary | index
+    <a href="../reference/schema-reference.html#match">match</a>: substring
+}
+</pre>
+
+
+<h2 id="streaming-search-grouping-extensions">Streaming search grouping extension</h2>
+
+<p><a href="../querying/grouping.html">Grouping</a> works as normal with streaming search but offers two additional features,
+explained here.</p>
+
+<h3 id="grouping-over-all-documents">Grouping over all documents</h3>
+
+<p>Since streaming search "looks at" all documents matching the group name/selection
+  regardless of the query, it is possible to group over all those documents and not just the ones
+  matching the query. This is done by using <code>where(true)</code> in the grouping expression:
+
+<pre>all( where(true) all(group(myfield) each(output(count()))) )</pre>
+
+<p>When doing this, relevancy is not calculated for groups, as only matched hits have relevance.</p>
+
+<h3 id="the-docidnsspecific-function">The docidnsspecific function</h3>
+
+<p>The <code>docidnsspecific</code> function returns the docid without namespace.</p>
+<pre>all( group(docidnsspecific()) each(output(count())) )</pre>
+
+
+
+<h2 id="resource-usage-with-streaming-search">Resource usage with streaming search</h2>
+
+<p><b>Memory</b>: Streaming search requires 45 bytes of memory per document regardless of the document content.</p>
+
+<p><b>Disk</b>: Streaming search requires disk space to store the raw document data in compressed form.
+The size is dependent on the actual data but can be extrapolated linearly with the number of documents.</p>
+
+
+<h2 id="query-tuning-in-streaming-search">Query tuning in streaming search</h2>
+
+<p>Streaming search is a <a href="../writing/visiting.html">visit</a> operation.
+Parallelism is configured using <a href="../reference/services-content.html#persistence-threads">persistence-threads</a>:
+</p>
+
+<pre>
+&lt;persistence-threads count='8'/&gt;
+&lt;visitors thread-count='8'/&gt;
+</pre>
+
+<p>On <a href="https://cloud.vespa.ai/">Vespa Cloud</a>,
+this number is set automatically to match the number of VCPUs set in
+<a href="https://cloud.vespa.ai/en/reference/services#resources">resources</a>.
+If you cannot get lower latency by increasing VCPUs, it means your streaming searches have become
+IO bound.</p>
+
+
+<h3 id="tuning-document-store-direct-io-and-cache">Tuning document store: Direct IO and cache</h3>
+
+<p>For better control of memory usage, use direct IO for reads when
+<a href="../reference/services-content.html#summary">document store cache</a>
+is enabled -
+this makes the OS buffer cache size smaller and more predictable performance.
+The document store cache will cache recent entries and increase performance for users or groups doing repeated accesses.
+This sets aside 1 GB for document store cache.
+</p>
+<pre>
+&lt;engine&gt;
+  &lt;proton&gt;
+    &lt;tuning&gt;
+      &lt;searchnode&gt;
+        &lt;summary&gt;
+          &lt;io&gt;
+            <span class="pre-hilite">&lt;write&gt;directio&lt;/write&gt;</span>
+            <span class="pre-hilite">&lt;read&gt;directio&lt;/read&gt;</span>
+          &lt;/io&gt;
+          &lt;store&gt;
+            <span class="pre-hilite">&lt;cache&gt;</span>
+              <span class="pre-hilite">&lt;maxsize&gt;1073741824&lt;/maxsize&gt;</span>
+            <span class="pre-hilite">&lt;/cache&gt;</span>
+</pre>

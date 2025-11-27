@@ -1,0 +1,601 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "/document/v1 API guide"
+redirect_from:
+- /en/document-v1-api-guide.html
+---
+
+<p>Use the <em>/document/v1/</em> API to read, write, update and delete documents.</p>
+<p>
+  Refer to the <a href="../reference/document-v1-api-reference.html">document/v1 API reference</a> for API details.
+  <a href="reads-and-writes.html">Reads and writes</a> has an overview of alternative tools and APIs
+  as well as the flow through the Vespa components when accessing documents.
+  See <a href="#getting-started">getting started</a> for how to work with the <em>/document/v1/ API</em>.
+</p>
+<p>Examples:</p>
+<table class="table">
+  <tr>
+    <th>GET</th>
+    <td>
+      <p id="get"></p>
+      <table class="table">
+        <tr>
+          <th>Get</th>
+          <td>
+<pre>
+$ curl http://localhost:8080/document/v1/my_namespace/music/docid/love-id-here-to-stay
+</pre>
+          </td>
+        </tr>
+        <tr>
+          <th>Visit</th>
+          <td>
+            <a href="visiting.html">Visit</a> all documents with given namespace and document type:
+<pre>
+$ curl http://localhost:8080/document/v1/namespace/music/docid
+</pre>
+            Visit all documents using continuation:
+<pre>
+$ curl http://localhost:8080/document/v1/namespace/music/docid?continuation=AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA
+</pre>
+            Visit using a <em>selection</em>:
+<pre>
+$ curl http://localhost:8080/document/v1/namespace/music/docid?selection=music.genre=='blues'
+</pre>
+            Visit documents across all <em>non-global</em> document types and namespaces stored
+            in content cluster <code>mycluster</code>:
+<pre>
+$ curl http://localhost:8080/document/v1/?cluster=mycluster
+</pre>
+            Visit documents across all <em><a href="../reference/services-content.html#document">global</a></em>
+            document types and namespaces stored in content cluster <code>mycluster</code>:
+<pre>
+$ curl http://localhost:8080/document/v1/?cluster=mycluster&amp;bucketSpace=global
+</pre>
+            Read about <a href="#visiting-throughput">visiting throughput</a> below.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr><tr>
+  <th>POST</th>
+  <td>
+    <p id="post">Post data in the <a href="../reference/document-json-format.html">document JSON format</a>.</p>
+<pre>
+$ curl -X POST -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": "Coldplay",
+          "album": "A Head Full of Dreams",
+          "year": 2015
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+</pre>
+  </td>
+</tr>
+
+<tr>
+  <th>PUT</th>
+  <td>
+    <p id="put">Do a <a href="partial-updates.html">partial update</a> for a document.</p>
+<pre>
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": {
+              "assign": "Warmplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+</pre>
+  </td>
+</tr><tr>
+  <th>DELETE</th>
+  <td>
+    <p id="delete">Delete a document by ID:</p>
+<pre>
+$ curl -X DELETE http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+</pre>
+    Delete all documents in the <code>music</code> schema:
+<pre>
+$ curl -X DELETE \
+  "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&amp;cluster=my_cluster"
+</pre>
+  </td>
+</tr>
+</table>
+
+
+
+<h2 id="conditional-writes">Conditional writes</h2>
+<p>
+  A <em>test-and-set</em> <a href="../reference/document-select-language.html">condition</a>
+  can be added to Put, Remove and Update operations. Example:
+</p>
+<pre>
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "condition": "music.artist==\"Warmplay\"",
+      "fields": {
+          "artist": {
+              "assign": "Coldplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+</pre>
+{% include important.html content="Use <em>documenttype.fieldname</em> (e.g. music.artist) in the condition,
+not only <em>fieldname</em>." %}
+<p>
+  If the condition is not met, a <em>412 Precondition Failed</em> is returned:
+</p>
+<pre>{% highlight json %}
+{
+    "pathId": "/document/v1/mynamespace/music/docid/a-head-full-of-dreams",
+    "id": "id:mynamespace:music::a-head-full-of-dreams",
+    "message": "[UNKNOWN(251013) @ tcp/vespa-container:19112/default]: ReturnCode(TEST_AND_SET_CONDITION_FAILED, Condition did not match document nodeIndex=0 bucket=20000000000000c4 ) "
+}
+{% endhighlight %}</pre>
+<p>
+  Also see the <a href="../reference/document-json-format.html#test-and-set">condition reference</a>.
+</p>
+
+
+
+<h2 id="create-if-nonexistent">Create if nonexistent</h2>
+<p>
+</p>
+<h3 id="upserts">Upserts</h3>
+<p>
+  Updates to nonexistent documents are supported using
+  <a href="../reference/document-json-format.html#create">create</a>.
+  This is often called an <em>upsert</em> — insert a document if it does not already exist, or update it if it exists.
+  An empty document is created on the content nodes, before the update is applied.
+  This simplifies client code in the case of multiple writers. Example:
+</p>
+<pre>
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": {
+              "assign": "Coldplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts?create=true
+</pre>
+
+
+<h3 id="conditional-updates-and-puts-with-create">Conditional updates and puts with create</h3>
+<p>
+  Conditional updates and puts can be combined with <a href="../reference/document-json-format.html#create">create</a>.
+  This has the following semantics:
+</p>
+<ul>
+  <li>If the document already exists, the condition is evaluated against the most recent document version available.
+      The operation is applied if (and only if) the condition matches.</li>
+  <li>Otherwise (i.e. the document does not exist or the newest document version is a tombstone),
+      the condition is <em>ignored</em> and the operation is applied as if no condition was provided.</li>
+</ul>
+<p>Support for conditional puts with create was added in Vespa 8.178.</p>
+<pre>
+$ curl -X POST -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": {
+              "assign": "Coldplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts?create=true&amp;condition=music.title%3D%3D%27best+of%27
+</pre>
+<!-- ToDo: rewrite this / move to elasticity details ...
+           What does it mean that a document is "missing"?
+           When does this happen?
+           Is it likely to happen, so we need to care about this?
+           Where can I read more? -->
+{% include warning.html content="If all existing replicas of a document are missing
+  when an operation with <code>\"create\": true</code> is executed, a new document will always be created.
+  This happens even if a condition has been given.
+  If the existing replicas become available later,
+  their version of the document will be overwritten by the newest update since it has a higher timestamp." %}
+
+{% include note.html content="See <a href='../schemas/documents.html#document-expiry'>document expiry</a>
+  for auto-created documents — it is possible to create documents that do not match the selection criterion." %}
+
+{% include note.html content="Specifying <em>create</em> for a Put operation <em>without</em> a
+  condition has no observable effect, as unconditional Put operations will always write
+  a new version of a document regardless of whether it existed already." %}
+
+<h2 id="data-dump">Data dump</h2>
+<p>
+  To iterate over documents, use <a href="visiting.html">visiting</a> — sample output:
+</p>
+<pre>{% highlight json %}
+{
+    "pathId": "/document/v1/namespace/doc/docid",
+    "documents": [
+        {
+            "id": "id:namespace:doc::id-1",
+            "fields": {
+                "title": "Document title 1",
+            }
+        }
+    ],
+    "continuation": "AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA"
+}
+{% endhighlight %}</pre>
+<p>
+  Note the <em>continuation</em> token — use this in the next request for more data.
+  Below is a sample script dumping all data using <a href="https://stedolan.github.io/jq/">jq</a> for JSON parsing.
+  It splits the corpus in 8 slices by default;
+  using a number of slices at least four times the number of container nodes is recommended for high throughput.
+  Timeout can be set lower for benchmarking.
+  (Each request has a maximum timeout of 60s to ensure progress is saved at regular intervals)
+</p>
+<pre>{% highlight sh %}
+#!/bin bash
+set -eo pipefail
+
+if [ $# -gt 2 ]
+then
+  echo "Usage: $0 [number of slices, default 8] [timeout in seconds, default 31536000 (1 year)]"
+  exit 1
+fi
+
+endpoint="https://my.vespa.endpoint"
+cluster="db"
+selection="true"
+slices="${1:-8}"
+timeout="${2:-31516000}"
+curlTimeout="$((timeout > 60 ? 60 : timeout))"
+url="$endpoint/document/v1/?cluster=$cluster&selection=$selection&stream=true&timeout=$curlTimeout&concurrency=8&slices=$slices"
+auth="--key my-key --cert my-cert -H 'Authorization: my-auth'"
+curl="curl -sS $auth"
+start=$(date '+%s')
+doom=$((start + timeout))
+
+## auth can be something like auth='--key data-plane-private-key.pem --cert data-plane-public-cert.pem'
+curl="curl -sS $auth"
+
+function visit {
+  sliceId="$1"
+  documents=0
+  continuation=""
+  while
+    printf -v filename "data-%03g-%012g.json.gz" $sliceId $documents
+    json="$(eval "$curl '$url&sliceId=$sliceId$continuation'" | tee >( gzip > $filename ) | jq '{ documentCount, continuation, message }')"
+    message="$(jq -re .message <<< $json)" && echo "Failed visit for sliceId $sliceId: $message" >&2 && exit 1
+    documentCount="$(jq -re .documentCount <<< $json)" && ((documents += $documentCount))
+    [ "$(date '+%s')" -lt "$doom" ] && token="$(jq -re .continuation <<< $json)"
+  do
+    echo "$documentCount documents retrieved from slice $sliceId; continuing at $token"
+    continuation="&continuation=$token"
+  done
+  time=$(($(date '+%s') - start))
+  echo "$documents documents total retrieved in $time seconds ($((documents / time)) docs/s) from slice $sliceId" >&2
+}
+
+for ((sliceId = 0; sliceId < slices; sliceId++))
+do
+  visit $sliceId &
+done
+wait
+{% endhighlight %}</pre>
+
+
+<h3 id="visiting-throughput">Visiting throughput</h3>
+<p>
+  Note that visit with selection is a linear scan over all the music documents
+  in the request examples at the start of this guide.
+  Each complete visit thus requires the selection expression to be evaluated for all documents.
+  Running concurrent visits with selections that match disjoint subsets of the document corpus
+  is therefore a poor way of increasing throughput,
+  as work is duplicated across each such visit.
+  Fortunately, the API offers other options for increasing throughput:
+</p>
+<ul>
+  <li>
+    Split the corpus into any number of smaller <a href="../reference/document-v1-api-reference.html#slices">slices</a>,
+    each to be visited by a separate, independent series of HTTP requests.
+    This is by far the most effective setting to change,
+    as it allows visiting through all HTTP containers simultaneously,
+    and from any number of clients—either of which is
+    typically the bottleneck for visits through <em>/document/v1</em>.
+    A good value for this setting is at least a handful per container.
+  </li>
+  <li>
+    Increase backend <a href="../reference/document-v1-api-reference.html#concurrency">concurrency</a>
+    so each visit HTTP response is promptly filled with documents.
+    When using this together with slicing (above),
+    take care to also stream the HTTP responses (below),
+    to avoid buffering too much data in the container layer.
+    When a high number of slices is specified, this setting may have no effect.
+  </li>
+  <li>
+    <a href="../reference/document-v1-api-reference.html#stream">Stream</a> the HTTP responses.
+    This lets you receive data earlier, and more of it per request, reducing HTTP overhead.
+    It also minimizes memory usage due to buffering in the container,
+    allowing higher concurrency per container.
+    It is recommended to always use this, but the default is not to, due to backwards compatibility.
+  </li>
+</ul>
+
+
+
+<h2 id="getting-started">Getting started</h2>
+<p>
+  Pro-tip: It is easy to generate a <code>/document/v1</code> request by using the <a href="../clients/vespa-cli.html">Vespa CLI</a>,
+  with the <code>-v</code> option to output a generated <code>/document/v1</code> request - example:
+</p>
+<pre>
+$ vespa document -v ext/A-Head-Full-of-Dreams.json
+
+  <span class="pre-hilite">curl -X POST -H 'Content-Type: application/json'</span>
+  <span class="pre-hilite">--data-binary @ext/A-Head-Full-of-Dreams.json</span>
+  <span class="pre-hilite">http://127.0.0.1:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams</span>
+
+  Success: put id:mynamespace:music::a-head-full-of-dreams
+</pre>
+<p>
+  See the <a href="../reference/document-json-format.html">document JSON format</a> for creating JSON payloads.
+</p>
+<p>
+  This is a quick guide into dumping random documents from a cluster to get started:
+</p>
+<ol>
+  <li>
+    To get documents from a cluster,
+    look up the content cluster name from the configuration,
+    like in the <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/services.xml">
+    album-recommendation</a> example: <code>&lt;content id="music" version="1.0"&gt;</code>.
+  </li>
+  <li>
+    Use the cluster name to start dumping document IDs (skip <code>jq</code> for full json):
+    <pre>
+$ curl -s 'http://localhost:8080/document/v1/?<span class="pre-hilite">cluster=music</span>&wantedDocumentCount=10&timeout=60s' | \
+  jq -r .documents[].id
+</pre>
+    <pre>
+id:mynamespace:music::love-is-here-to-stay
+id:mynamespace:music::a-head-full-of-dreams
+id:mynamespace:music::hardwired-to-self-destruct
+</pre>
+    <code>wantedDocumentCount</code> is useful to let the operation run longer to find documents,
+    to avoid an empty result.
+    This operation is a scan through the corpus,
+    and it is normal to get empty result and the <a href="#data-dump">continuation token</a>.
+  </li>
+  <li>
+    Look up the document with id <code>id:mynamespace:music::love-is-here-to-stay</code>:
+    <pre>
+$ curl -s 'http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay' | jq .
+</pre>
+    <pre>{% highlight json %}
+{
+    "pathId": "/document/v1/mynamespace/music/docid/love-is-here-to-stay",
+    "id": "id:mynamespace:music::love-is-here-to-stay",
+    "fields": {
+        "artist": "Diana Krall",
+        "year": 2018,
+        "category_scores": {
+            "type": "tensor<float>(cat{})",
+            "cells": {
+                "pop": 0.4000000059604645,
+                "rock": 0,
+                "jazz": 0.800000011920929
+            }
+        },
+        "album": "Love Is Here To Stay"
+    }
+}
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    Read more about <a href="../schemas/documents.html">document IDs</a>.
+  </li>
+</ol>
+
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+  <li> <!-- ToDo: does not belong here, find a better place to put it ... -->
+    <p id="export-documents">
+      When troubleshooting documents not found using the query API,
+      use <a href="../clients/vespa-cli.html#documents">vespa visit</a> to export the documents.
+      Then compare the <code>id</code> field with other user-defined <code>id</code> fields in the query.
+    </p>
+<pre>
+$ vespa visit
+</pre>
+<pre>{% highlight json %}
+{
+    "id": "id:mynamespace:music::when-we-all-fall-asleep-where-do-we-go",
+    "fields": {
+        "artist": "Billie Eilish",
+        "doc_id": 12345
+    }
+}
+{% endhighlight %}</pre>
+    <p>Find more details on the components of the <a href="../schemas/documents.html#id-scheme">document ID</a>.</p>
+  </li>
+  <li>
+    <p id="document-not-found">Document not found responses look like:</p>
+<pre>
+$ curl http://127.0.0.1:8080/document/v1/mynamespace/music/docid/non-existing-doc
+</pre>
+<pre>{% highlight json %}
+{
+  "pathId": "/document/v1/mynamespace/music/docid/non-existing-doc",
+  "id": "id:mynamespace:music::non-existing-doc"
+}
+{% endhighlight %}</pre>
+    <p>This might look like an empty document, use <code>-v</code> for more output:</p>
+<pre>
+$ curl -v http://127.0.0.1:8080/document/v1/mynamespace/music/docid/non-existing-doc
+
+&gt; GET /document/v1/mynamespace/music/docid/non-existing-doc HTTP/1.1
+&gt; Host: 127.0.0.1:8080
+&gt; User-Agent: curl/7.88.1
+&gt; Accept: */*
+&gt;
+&lt; HTTP/1.1 404 Not Found
+&lt; Date: Fri, 26 May 2023 08:53:20 GMT
+&lt; Content-Type: application/json;charset=utf-8
+&lt; Content-Length: 108
+</pre>
+<pre>{% highlight json %}
+{
+  "pathId": "/document/v1/mynamespace/music/docid/non-existing-doc",
+  "id": "id:mynamespace:music::non-existing-doc"
+}
+{% endhighlight %}</pre>
+    <p>
+      Observe the <em>404 Not Found</em>.
+      Using the <a href="../clients/vespa-cli.html#documents">Vespa CLI</a> is great for troubleshooting - use
+      <code>-v</code> for verbose output, this prints an equivalent <code>curl</code> command:
+    </p>
+<pre>
+$ vespa document get -v id:mynamespace:music::non-existing-doc
+curl -X GET http://127.0.0.1:8080/document/v1/mynamespace/music/docid/non-existing-doc
+Error: Invalid document operation: 404 Not Found
+</pre>
+<pre>{% highlight json %}
+{
+    "pathId": "/document/v1/mynamespace/music/docid/non-existing-doc",
+    "id": "id:mynamespace:music::non-existing-doc"
+}
+{% endhighlight %}</pre>
+  </li>
+  <li>
+    <p id="query-result-id">Query results can have results like:</p>
+<pre>{% highlight json %}
+{
+    "id": "index:mydoctype/3/399f8030300282ca93929939",
+    "relevance": 0,
+    "source": "test",
+    "fields": {
+        "sddocname": "testdoc",
+        "myfield": 12
+    }
+}
+{% endhighlight %}</pre>
+    <p>
+      <a href="../reference/default-result-format.html#id">Query result IDs</a> are not the same as Document IDs.
+      Use a separate field for the document ID, if needed.
+    </p>
+  </li><!-- ToDo: https://github.com/vespa-engine/vespa/issues/24371 Allow documentid to be turned into an attribute -->
+  <li>
+    <p id="delete-all-documents">Delete <em>all</em> documents in <em>music</em> schema, with security credentials:</p>
+<pre>
+$ curl -X DELETE \
+  --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&amp;cluster=my_cluster"
+</pre>
+  </li>
+
+</ul>
+
+<h2 id="request-size-limit">Request size limit</h2>
+<p>
+Starting from version 8.577.16, Vespa returns 413 (Content too large) as a response to POST and PUT requests that are above the request size limit.
+To avoid this, automatically check document size and truncate or split large documents before feeding.
+For optimal performance, it is recommended to keep the document size below 10 MB.
+</p>
+
+<h2 id="backpressure">Backpressure</h2>
+<p>
+    Vespa returns response code 429 (Too Many Requests) as a backpressure signal whenever client feed throughput exceeds system capacity.
+    Clients should implement retry strategies as described in the <a href="../cloud/http-best-practices.html">HTTP best practices</a> document.
+</p>
+<p>
+    Instead of implementing your own retry logic, consider using Vespa's feed clients which automatically handle retries and backpressure.
+    See the <a href="../clients/vespa-cli.html#documents">feed command</a> of the Vespa CLI and the <a href="../clients/vespa-feed-client.html">vespa-feed-client</a>.
+</p>
+<p>
+    The <code>/document/v1</code> API includes a configurable operation queue that by default is tuned to balance latency, throughput and memory.
+    Applications can adjust this balance by overriding the parameters defined in the
+    <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/document-operation-executor.def">document-operation-executor</a>
+    config definition.
+</p>
+<p>
+    To optimize for higher throughput at the cost of increased latency and higher memory usage on the container,
+    increase any of the <code>maxThrottled</code> (maximum queue capacity in number of operations),
+    <code>maxThrottledAge</code> (maximum time in queue in seconds),
+    and <code>maxThrottledBytes</code> (maximum memory usage in bytes) parameters.
+    This allows the container to buffer more operations during temporary spikes in load,
+    reducing the number of 429 responses while increasing request latency.
+    Make sure to increase operation and client timeouts to accommodate for the increased latency.
+</p>
+<p>
+    See the <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/document-operation-executor.def">
+    config definition</a> for a detailed explanation of each parameter.
+</p>
+<p>
+    Set the values to <code>0</code> for the opposite effect, i.e. to optimize for latency.
+    Operations will be dispatched directly,
+    and failed out immediately if the number of pending operations exceeds the dynamic window size of the document processing pipeline.
+</p>
+<p>
+    <em>Example: overriding the default value of all 3 parameters to <code>0</code>.</em>
+</p>
+<pre>
+&lt;container id="feed" version="1.0"&gt;
+    &lt;document-api/&gt;
+
+    &lt;config name="com.yahoo.document.restapi.document-operation-executor"&gt;
+        &lt;maxThrottled&gt;0&lt;/maxThrottled&gt;
+        &lt;maxThrottledAge&gt;0&lt;/maxThrottledAge&gt;
+        &lt;maxThrottledBytes&gt;0&lt;/maxThrottledBytes&gt;
+    &lt;/config&gt;
+
+&lt;/container&gt;
+</pre>
+<p>
+    The effective operation queue configuration is logged when the container starts up, see below example.
+</p>
+<pre>
+INFO    container        Container.com.yahoo.document.restapi.resource.DocumentV1ApiHandler   Operation queue: max-items=256, max-age=3000 ms, max-bytes=100 MB
+</pre>
+<p>
+    You can observe the state of the operation queue through the metrics
+    <code><a href="../reference/container-metrics-reference.html#httpapi_queued_operations">httpapi_queued_operations</a></code>,
+    <code><a href="../reference/container-metrics-reference.html#httpapi_queued_bytes">httpapi_queued_bytes</a></code> and
+    <code><a href="../reference/container-metrics-reference.html#httpapi_queued_age">httpapi_queued_age</a></code>.
+</p>
+
+<h2 id="using-number-and-group-id-modifiers">Using number and group id modifiers</h2>
+<p>
+  Do not use group or number modifiers with regular indexed mode document types.
+  These are special cases that only work as expected for document types
+  with <a href="../reference/services-content.html#document">mode=streaming or mode=store-only</a>.
+  Examples:
+</p>
+<table class="table">
+  <tr>
+    <th>Get</th>
+    <td>
+      Get a document in a group:
+<pre>
+$ curl http://localhost:8080/document/v1/mynamespace/music/number/23/some_key
+</pre>
+<pre>
+$ curl http://localhost:8080/document/v1/mynamespace/music/group/mygroupname/some_key
+</pre>
+    </td>
+  </tr>
+  <tr>
+    <th>Visit</th>
+    <td>
+      Visit all documents for a group:
+<pre>
+$ curl http://localhost:8080/document/v1/namespace/music/number/23/
+</pre>
+<pre>
+$ curl http://localhost:8080/document/v1/namespace/music/group/mygroupname/
+</pre>
+    </td>
+  </tr>
+</table>

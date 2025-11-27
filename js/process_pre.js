@@ -13,7 +13,7 @@ function processFilePREs() {
         if (elem.getAttribute("data-test") === "file") {
             let html = elem.innerHTML;
             //elem.innerHTML = html.replace(/<!--\?/g, "<?").replace(/\?-->/g, "?>").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            elem.insertAdjacentHTML("afterend", "<div class=\"filepath\">Write to file: " + elem.getAttribute("data-path") + "</div>");
+            elem.insertAdjacentHTML("afterend", "<div class=\"filepath\">Paste the above into file " + elem.getAttribute("data-path") + "</div>");
         }
     }
 };

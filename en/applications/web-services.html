@@ -1,0 +1,217 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Developing Web Service Applications"
+redirect_from:
+- /en/developing-web-services.html
+---
+
+<p>
+This document explains how to develop (REST) web service type applications on the container -
+design options, accessing the request path, returning a status code etc.
+There are two types of web service APIs:
+</p>
+<ul>
+  <li>Fine-grained APIs with closed semantics – for example <em>return the
+    number of stars of an article</em></li>
+  <li>Coarse-grained APIs with open semantics – for example <em>return a page
+    containing the most relevant mixture of stuff for this user and action</em></li>
+</ul>
+<p>
+With coarse-grained APIs, the container can help handle the complexity typically
+involved in the implementation of such APIs
+by providing a way to compose and federate components contributing to processing the request
+and provide and modify the returned data,
+and a way to allow such requests to start returning
+before they are finished to reduce latency with large responses.
+This is the <a href="processing.html">processing</a> framework
+(or, in the case of search-like application,
+the <a href="searchers.html">searcher</a> specialization).
+</p><p>
+In addition, the <a href="../reference/component-reference.html#component-types">container</a>
+features a generic mechanism allowing a
+    <a href="request-handlers.html">request handler</a>
+to be <a href="../reference/component-reference.html#binding">bound</a> to a URI pattern
+and invoked to handle all requests matching that pattern.
+This is useful where there is no need to handle complexity and/or federation
+of various kinds of data in the response. Both the approaches above are
+actually implemented as built-in request handlers.
+</p><p>
+A custom request handler may be written to parse the url path/method
+and dispatch to an appropriate chain of processing components.
+A "main" processing chain may be written
+to do the same by dispatching to other chains.
+The simplest way to invoke a specific chain of processors
+is to forward a query to the <code>ProcessingHandler</code>
+with the request property <code>chain</code> set to the name of the chain to invoke:
+</p>
+<pre>
+import com.yahoo.component.annotation.Inject;
+
+public class DemoHandler extends com.yahoo.container.jdisc.ThreadedHttpRequestHandler {
+
+...
+
+    @Inject
+    public DemoHandler(Executor executor, ProcessingHandler processingHandler) {
+        super(executor);
+        this.processingHandler = processingHandler;
+    }
+
+...
+
+    @Override
+    public HttpResponse handle(HttpRequest request) {
+        HttpRequest processingRequest = new HttpRequest.Builder(request)
+                .put(com.yahoo.processing.Request.CHAIN, "theProcessingChainIWant")
+                .createDirectRequest();
+        HttpResponse r = processingHandler.handle(processingRequest);
+        return r;
+    }
+
+...
+
+}
+</pre>
+
+
+<h2 id="accessing-the-http-request">Accessing the HTTP request</h2>
+<p>
+Custom <a href="request-handlers.html">request handlers</a>,
+are given a
+<a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/container/jdisc/HttpRequest.html">
+    com.yahoo.container.jdisc.HttpRequest</a>,
+with direct access to associated properties and request data.
+</p>
+<p>
+In <a href="processing.html">Processing</a>,
+the Processors are given a
+    <a href="https://javadoc.io/doc/com.yahoo.vespa/container-core/latest/com/yahoo/processing/Request.html">
+    com.yahoo.processing.Request</a>
+containing the HTTP URL parameters:
+</p>
+<pre>
+// url parameters are added to properties
+String urlParameter = request.properties().get("urlParameterName");
+
+// jdisc request context is added with prefix context
+Object contextValue = request.properties().get("context.contextKey");
+</pre>
+
+<p>
+If needed, a Processor can retrieve the entire HTTP request via a utility function:
+<pre>
+import com.yahoo.container.jdisc.HttpRequest;
+...
+
+// Retrieve the underlying HTTP request:
+Optional&lt;HttpRequest&gt; httpRequest = HttpRequest.getHttpRequest(request);
+
+if (httpRequest.isPresent()) {
+    // The POST data input stream:
+    InputStream in = httpRequest.get().getData();
+    // The HTTP method:
+    Method method = httpRequest.get().getMethod();
+}
+</pre>
+
+
+<h3 id="setting-the-HTTP-status-and-http-headers">Setting the HTTP status and HTTP headers</h3>
+<p>
+In Processing, the return status can be set by adding a special Data item to the Response:
+</p>
+<pre>
+response.data().add(new com.yahoo.processing.handler.ResponseStatus(404, request));
+</pre>
+<p>
+If no such data element is present, the status will be determined by the container.
+If it contains data able to render, it will be 200,
+otherwise it will be determined by any ErrorMessage present in the response.
+</p>
+
+
+<h3 id="setting-response-headers-from-processors">Setting response headers from Processors</h3>
+<p>
+Response headers may be added to any Response by adding instances of
+<code>com.yahoo.processing.handler.ResponseHeaders</code> to the Response
+(ResponseHeaders is a kind of response Data).
+Multiple instances of this may be added to the Response,
+and the complete set of headers returned is the superset of all such objects.
+Example Processor:
+</p>
+<pre>
+processingResponse.data().add(new com.yahoo.processing.handler.ResponseHeaders(myHeaders, request));
+</pre>
+<p>
+Request handlers may in general set their return status,
+and manipulate headers directly on the HttpRequest.
+</p>
+
+
+
+<h2 id="queries">Queries</h2>
+<p>
+Sometimes all that is needed is letting the standard query framework
+reply for more paths than standard.
+This is possible by adding extra <a href="../reference/services-search.html#binding">binding</a>s
+inside the <code>&lt;search&gt;</code> element in <code>services.xml</code>.
+Writing a custom <a href="request-handlers.html">request handler</a>
+is recommended if the application is a standalone HTTP API,
+and especially if there are properties used with the same name as those in the
+<a href="../reference/query-api-reference.html">Query API</a>.
+A request handler may query the search components running in the same container
+without any appreciable overhead:</p>
+
+
+<h3 id="invoking-Vespa-queries-from-a-component">Invoking Vespa queries from a component</h3>
+<p>
+  To invoke Vespa queries from a component, have an instance of
+  <a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/searchchain/ExecutionFactory.java">
+  ExecutionFactory</a> injected in the constructor and use its API to construct and issue the query.
+  The container this runs in must include the <code>&lt;search&gt;</code> tag for the ExecutionFactory to be available.
+  Example:
+</p>
+<pre>
+import com.yahoo.component.annotation.Inject;
+import com.yahoo.component.ComponentId;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.component.Chain;
+import com.yahoo.search.searchchain.Execution;
+import com.yahoo.search.searchchain.ExecutionFactory;
+
+public class MyComponent {
+
+    private final ExecutionFactory executionFactory;
+
+    @Inject
+    public MyComponent(ExecutionFactory executionFactory) {
+        this.executionFactory = executionFactory;
+    }
+
+    Result executeQuery(Query query, String chainId) {
+        Chain&lt;Search&gt; searchChain = executionFactory.searchChainRegistry().getChain(new ComponentId(chainId));
+        Execution execution = executionFactory.newExecution(searchChain);
+        query.getModel().setExecution(execution);
+        return execution.search(query);
+    }
+
+}
+</pre>
+<p>
+  ExecutionFactory depends on the search chains,
+  so it cannot be injected into any component which is part of the search chains.
+  But from within a Searcher it is not needed as the Execution passed gives what is needed:
+</p>
+<ul>
+  <li>Access the search chains: execution.context().searchChainRegistry().</li>
+  <li>Create a new Execution: new Execution(mySearchChain, execution.context())</li>
+</ul>
+<p>
+  This is the right way since it ties that execution to the one you're in.
+</p>
+<p>
+  One hence cannot execute a search chain from the search chain component constructor to e.g. refresh a cache.
+  It is impossible since the search chains can't be constructed until this constructor returns.
+  An alternative is to extract the refreshing into a separate component
+  which has both the client and execution factory injected into it.
+</p>

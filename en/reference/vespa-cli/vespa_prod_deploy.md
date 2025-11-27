@@ -20,7 +20,6 @@ services.xml.
 For more information about production deployments in Vespa Cloud see:
 [https://docs.vespa.ai/en/cloud/production-deployment.html](https://docs.vespa.ai/en/cloud/production-deployment.html)
 [https://docs.vespa.ai/en/cloud/automated-deployments.html](https://docs.vespa.ai/en/cloud/automated-deployments.html)
-[https://cloud.vespa.ai/en/reference/vespa-cloud-api#submission-properties](https://cloud.vespa.ai/en/reference/vespa-cloud-api#submission-properties)
 
 
 ```

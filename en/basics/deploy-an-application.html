@@ -1,0 +1,154 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Deploy an application
+category: cloud
+redirect_from:
+- /en/cloud/getting-started.html
+- /en/deploy-an-application.html
+---
+
+<!-- If you change this also make the same change in deploy-an-application-{shell,java} -->
+
+<p>Follow these steps to deploy a Vespa application to the <a href="../cloud/environments.html#dev">dev zone</a>
+on Vespa Cloud (for free).</p>
+
+<p>Alternative versions of this guide:</p>
+<ul>
+  <li><a href="https://pyvespa.readthedocs.io/en/latest/getting-started-pyvespa-cloud.html">Deploy an application using pyvespa</a> -
+      for Python developers</li>
+  <li><a href="deploy-an-application-java.html">Deploy an application having Java components</a></li>
+  <li><a href="deploy-an-application-shell.html">Deploy an application without Vespa CLI</a></li>
+  <li><a href="deploy-an-application-local.html">Deploy an application locally</a></li>
+  <li><a href="deploy-an-application-local-java.html">Deploy an application having Java components locally</a></li>
+</ul>
+
+<p>Steps:</p>
+
+<ol class="howto">
+  <li>
+    <p><b>Create a <a href="../learn/tenant-apps-instances.html">tenant</a> on Vespa Cloud:</b></p>
+    <p>Go to <a target="_blank" href="https://console.vespa-cloud.com/">console.vespa-cloud.com</a>
+    and create your tenant (unless you already have one).</p>
+  </li>
+
+  <li>
+    <p><b>Install the <a href="../clients/vespa-cli.html">Vespa CLI</a></b>
+      using <a href="https://brew.sh/">Homebrew</a>:</p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ brew install vespa-cli
+</pre>
+    </div>
+    <p>Windows/No Homebrew? See the <a href="../clients/vespa-cli.html">Vespa CLI page</a> to download directly.</p>
+  </li>
+
+  <li>
+    <p><b>Configure the Vespa client:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa config set target cloud &amp;&amp; \
+  vespa config set application <span class="pre-hilite">tenant-name</span>.myapp
+</pre>
+    </div>
+    <!-- Override VESPA_CLI_HOME to work around container filesystem limitations and set application used for automatic testing -->
+    <!-- $PWD is set to $SD_DIND_SHARE_PATH by screwdriver.yaml - a special Docker-in-Docker path -->
+<pre data-test="exec" style="display:none">
+$ export VESPA_CLI_HOME=$PWD/.vespa TMPDIR=$PWD/.tmp
+$ mkdir -p $TMPDIR
+$ vespa config set target cloud
+$ vespa config set application vespa-team.album-rec-java
+</pre>
+    <p>Use the tenant name from step 2.</p>
+  </li>
+
+  <li>
+    <p><b>Get Vespa Cloud control plane access:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa auth login
+</pre>
+    </div>
+    <!-- Set API key to use for automatic testing -->
+    <!-- $VESPA_TEAM_API_KEY is a base64-encoded PEM-encoded EC private key in PKCS#8 format. -->
+<pre data-test="exec" style="display:none">
+$ export VESPA_CLI_API_KEY="$(echo "$VESPA_TEAM_API_KEY" | openssl base64 -A -a -d)"
+</pre>
+    <p>Follow the instructions from the command to authenticate.</p>
+  </li>
+
+  <li>
+    <p><b>Clone a sample <a href="applications.html">application</a>:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa clone album-recommendation myapp &amp;&amp; cd myapp
+</pre>
+    </div>
+    <p>See <a href="https://github.com/vespa-engine/sample-apps">sample-apps</a> for other sample apps you can clone.</p>
+  </li>
+
+  <li>
+    <p><b>Add a certificate for <a href="../cloud/security/guide#data-plane">data plane access</a>
+       to the application:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa auth cert app
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <p><b><a href="applications.html#deploying-applications">Deploy</a> the application:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa deploy --wait 600 ./app
+</pre>
+    </div>
+    <p>The first deployment may take a few minutes while nodes are provisioned.</p>
+  </li>
+
+  <li>
+    <p><b><a href="../writing/reads-and-writes.html">Feed</a> <a href="../schemas/documents.html">documents</a>:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa feed dataset/documents.jsonl
+</pre>
+    </div>
+  </li>
+
+  <li>
+    <p><b>Run <a href="../querying/query-api.html">queries</a>:</b></p>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Head">
+$ vespa query "select * from music where album contains 'head'"
+</pre>
+    </div>
+    <div class="pre-parent">
+      <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="Head">{% raw %}
+$ vespa query \
+  "select * from music where true" \
+  "ranking=rank_albums" \
+  "ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+{% endraw %}</pre>
+    </div>
+  </li>
+</ol>
+
+<br/>
+
+<p>Congratulations, you have deployed your first Vespa application!
+Application instances in the <a href="../cloud/environments.html#dev">dev zone</a>
+will by default keep running for 14 days after the last deployment.
+You can control this in the
+<a target="_blank" href="https://console.vespa-cloud.com/">console</a>.</p>
+
+<br/>
+<h4>Next: <a href="applications.html">Vespa applications</a></h4>
