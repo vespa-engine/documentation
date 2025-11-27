@@ -428,7 +428,7 @@ and a [DocProc](../applications/document-processors.html) if we want to handle t
 You can write a document processor for text extraction, Vespa does not provide it out of the box.
 
 ### How to do Text Search in an imported field?
-[Imported fields](../schemas/parent-child.html) from parent documents are defined as [attributes](../attributes.html),
+[Imported fields](../schemas/parent-child.html) from parent documents are defined as [attributes](../content/attributes.html),
 and have limited text match modes (i.e. `indexing: index` cannot be used).
 [Details](https://stackoverflow.com/questions/71936330/parent-child-mode-cannot-be-searched-by-parent-column).
 
@@ -522,7 +522,7 @@ a request will be sent to A and C
 (but not B since it has the same state as A and would therefore not return a potentially different document).
 
 ### How to keep indexes in memory?
-[Attribute](../attributes.html) (with or without `fast-search`) is always in memory,
+[Attribute](../content/attributes.html) (with or without `fast-search`) is always in memory,
 but does not support tokenized matching.
 It is for structured data.
 [Index](../basics/schemas.html#document-fields) (where there’s no such thing as fast-search since it is always fast)
@@ -569,8 +569,8 @@ that will later be removed, see [removed-db-prune-age](../reference/services-con
 When running garbage collection,
 the summary store is scanned using mmap and both VIRT and page cache memory usage increases.
 
-Read up on [attributes](../attributes.html) to understand more of how such fields are stored and managed.
-[Paged attributes](../attributes.html#paged-attributes) trades off memory usage vs. query latency
+Read up on [attributes](../content/attributes.html) to understand more of how such fields are stored and managed.
+[Paged attributes](../content/attributes.html#paged-attributes) trades off memory usage vs. query latency
 for a lower max memory usage.
 
 ### What is the best practice for scaling Vespa for day vs night?
@@ -582,14 +582,14 @@ It is not possible to autoscale content clusters for 8x load increase in 5 minut
 as this requires both provisioning and data migration.
 Such use cases are best discussed with the Vespa Team to understand the resource bottlenecks,
 tradeoffs and mitigations.
-Also read [Graceful Degradation](../graceful-degradation.html).
+Also read [Graceful Degradation](../performance/graceful-degradation.html).
 
 ### How much lower-level configuration do we need to do? For example, do we need to alter the number of threads per container?
 It depends. Vespa aims to adapt to resources (like auto thread config based on virtual node thread count)
 and actual use (when to run maintenance jobs like compaction),
 but there are tradeoffs that applications owners can/should make.
 Start off by reading the [Vespa Serving Scaling Guide](../performance/sizing-search.html),
-then run [benchmarks](../cloud/benchmarking.html) and use the [dashboards](../cloud/monitoring.html).
+then run [benchmarks](../performance/benchmarking-cloud.html) and use the [dashboards](../cloud/monitoring.html).
 
 
 {:.faq-section}
@@ -649,7 +649,7 @@ Yes, it will be available, eventually.
 Also try [Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode).
 
 ### Does vespa provide soft delete functionality?
-Yes just add a `deleted` attribute, add [fast-search](../attributes.html#fast-search) on it
+Yes just add a `deleted` attribute, add [fast-search](../content/attributes.html#fast-search) on it
 and create a searcher which adds an `andnot deleted` item to queries.
 
 ### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down?
@@ -797,10 +797,10 @@ Other schema changes require data refeed - [details](../reference/schema-referen
 <!-- ToDo: we should really have a "managing resources" guide for Vespa Cloud -->
 
 ### How to evaluate how much memory a field is using?
-Use the [Memory Visualizer](../cloud/memory-visualizer.html) to evaluate how memory is allocated to the fields.
+Use the [Memory Visualizer](../performance/memory-visualizer.html) to evaluate how memory is allocated to the fields.
 Fields can be `index`, `attribute` and `summary`, and combinations of these,
 with settings like `fast-search` that affects memory usage.
-[Attributes](../attributes.html) is a great read for understanding Vespa memory usage.
+[Attributes](../content/attributes.html) is a great read for understanding Vespa memory usage.
 
 ### Archive access failed with Permission 'serviceusage.services.use' denied
 Listing archived objects can fail,

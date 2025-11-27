@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Binarizing Vectors"
+redirect_from:
+  - /en/binarizing-vectors
 ---
 
 <style>
@@ -27,7 +29,7 @@ and representing the vector of bits efficiently using the `int8` data type. Exam
 Binarization is key to reducing memory requirements and, therefore, cost.
 Binarization can also improve feeding performance, as the memory bandwidth requirements go down accordingly.
 
-Refer to [embedding](/en/rag/embedding.html) for more details on how to create embeddings from text.
+Refer to [embedding](../rag/embedding.html) for more details on how to create embeddings from text.
 
 
 ## Summary
@@ -51,7 +53,7 @@ measuring quality loss for each iteration - this procedure it built with that in
 
 
 ## Converters
-Vespa’s built-in indexing language [converters](/en/reference/indexing-language-reference.html#converters)
+Vespa’s built-in indexing language [converters](../reference/indexing-language-reference.html#converters)
 `binarize` and `pack_bits` let you easily generate binarized vectors.
 Example schema definitions used to generate the vectors in the table above:
 
@@ -276,7 +278,7 @@ Note that we replicate the index settings to the new field.
 ## Deploy and reindex the binarized embedding field
 Deploying the field will trigger a reindexing on Vespa Cloud to populate the binarized embedding, fully automated.
 
-Self-hosted, the `deploy` operation will output the below - [trigger a reindex](/en/operations/reindexing.html).
+Self-hosted, the `deploy` operation will output the below - [trigger a reindex](../operations/reindexing.html).
 
 ```
 $ vespa deploy
@@ -313,7 +315,7 @@ $ vespa query \
     'ranking=app_ranking_bin'
 ```
 
-See [tensor-hex-dump](/en/reference/document-json-format.html#tensor-hex-dump)
+See [tensor-hex-dump](../reference/document-json-format.html#tensor-hex-dump)
 for more information about how to create the int8-typed tensor.
 
 
@@ -327,7 +329,7 @@ Example embeddings:
 | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]         | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]   |                -119 |
 
 
-Use [matchfeatures](/en/reference/schema-reference.html#match-features)
+Use [matchfeatures](../reference/schema-reference.html#match-features)
 to debug ranking (see ranking profile `app_ranking_bin` below):
 ```json
 "matchfeatures": {
@@ -458,7 +460,7 @@ $ vespa query \
 "relevance": 4.0
 ```
 
-Read the [closeness](/en/reference/rank-features.html#closeness(dimension,name)) reference documentation.
+Read the [closeness](../reference/rank-features.html#closeness(dimension,name)) reference documentation.
 
 
 ### TargetHits for ANN
@@ -545,7 +547,7 @@ schema doc {
 
 ## Appendix: Binarizing from text input
 To generate the embedding from other data types, like text,
-use the [converters](/en/reference/indexing-language-reference.html#converters) - example:
+use the [converters](../reference/indexing-language-reference.html#converters) - example:
 
 ```
     field doc_embedding type tensor<int8>(x[1]) {

@@ -201,7 +201,7 @@ blog post on how grouping can be combined with nearest neighbor search.
 ## Scaling Approximate Nearest Neighbor Search
 
 ### Memory 
-Vespa tensor fields are [in-memory](../attributes.html) data structures and so is the `HNSW` graph data structure.
+Vespa tensor fields are [in-memory](../content/attributes.html) data structures and so is the `HNSW` graph data structure.
 For large vector datasets the primary memory resource usage relates to the raw vector field memory usage.
 
 Using lower tensor cell type precision can reduce memory footprint significantly, for example using `bfloat16` 

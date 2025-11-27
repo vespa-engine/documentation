@@ -65,7 +65,7 @@ We saw multiple examples of attributes in the `news.sd` schema, for instance:
 Note that this `date` field has been defined as an `int` here, and when
 feeding document, we convert the date to the format `YYYYMMDD`.
 
-An [attribute](../../attributes.html) is an in-memory field -
+An [attribute](../../content/attributes.html) is an in-memory field -
 this is different from  _index_ fields, which may be moved to a disk-based index
 as more documents are added and the index grows.
 Since attributes are kept in memory,

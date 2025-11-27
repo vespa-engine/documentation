@@ -249,7 +249,7 @@ language](../../reference/indexing-language-reference.html). Each part of the
 indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
-- `attribute:` Store this field in memory as an [attribute](../../attributes.html)
+- `attribute:` Store this field in memory as an [attribute](../../content/attributes.html)
   — for [sorting](../../reference/sorting.html), [querying](../../querying/query-api.html), [ranking](../../basics/ranking.html) and
   [grouping](../../querying/grouping.html).
 - `summary:` Lets this field be part of the [document
@@ -388,7 +388,7 @@ Looking at the output, please note:
 - The `totalCount` field at the top level contains the number of documents
   that *matched* the query.
 - Also note the `coverage` element, this tells us how many documents and nodes we searched over.
-Coverage might be degraded, see [graceful degradation](../../graceful-degradation.html).
+Coverage might be degraded, see [graceful degradation](../../performance/graceful-degradation.html).
 
 Prefer HTTP POST over GET in production due to limitations on URI length (64 Kb). 
 
