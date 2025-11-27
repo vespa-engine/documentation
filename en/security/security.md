@@ -1,6 +1,8 @@
 ---
 title: Vespa Cloud Security
 category: cloud
+redirect_from:
+  - /cloud/security/security
 ---
 
 - [**Security Guide**](guide) is a practical guide to using the

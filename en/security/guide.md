@@ -1,6 +1,8 @@
 ---
 title: Security Guide
 category: cloud
+redirect_from:
+  - /cloud/security/guide
 ---
 
 Vespa Cloud has several security mechanisms it is important for developers to
@@ -19,7 +21,7 @@ Data plane is protected using mutual TLS or optionally tokens.
 ### Configuring mTLS
 
 Certificates can be created using the
-[Vespa CLI](../../clients/vespa-cli.html):
+[Vespa CLI](../clients/vespa-cli.html):
 
 ```
 $ vespa auth cert --application <tenant>.<app>.<instance>
@@ -47,7 +49,7 @@ $ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out sec
 ```
 
 The certificate is placed inside the application package in
-[security/clients.pem](../../reference/application-packages-reference.html). Make sure
+[security/clients.pem](../reference/application-packages-reference.html). Make sure
 `clients.pem` is placed correctly if the certificate is created with OpenSSL,
 while the Vespa CLI will handle this automatically.
 
@@ -165,7 +167,7 @@ To manually rotate a token:
 #### Application configuration
 
 After creating a token in the console it must be configured for accessing a container cluster,
-using [clients](../../reference/services-container.html#clients) configuration.
+using [clients](../reference/services-container.html#clients) configuration.
 Below is a simplified example for an application with two container clusters,
 one for feeding and document access (i.e. read+write), and another for query access (i.e. read) -
 one token for each:
@@ -295,7 +297,7 @@ Many developers prefer interactive tools like
 use Postman with Vespa</a>.
 
 #### Using Cloudflare Workers
-See [Using Cloudflare Workers with Vespa Cloud](cloudflare-workers).
+See [Using Cloudflare Workers with Vespa Cloud](cloudflare-workers.md).
 
 
 
@@ -324,7 +326,7 @@ Users have two different privilege levels
 ### User access to Control Plane
 
 Outside using the Vespa Console, communicating with the Control Plane is easiest
-with the [Vespa CLI](../../clients/vespa-cli.html).
+with the [Vespa CLI](../clients/vespa-cli.html).
 
 ```
 $ vespa auth login

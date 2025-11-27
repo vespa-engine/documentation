@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Secret Store
 category: cloud
+redirect_from:
+  - /cloud/security/secret-store
 ---
 
 Vespa Cloud supports secure storage and management of secrets for use in your application.
@@ -43,8 +45,8 @@ button on the top right.
 ### Access control
 Each vault has an "Access control" section which determines which application
 has access to the secrets in the vault. For each application, you can set up
-which environment - [dev](../environments#dev)
-or [prod](../environments#prod) (including test and staging) - the
+which environment - [dev](../operations/environments#dev)
+or [prod](../operations/environments#prod) (including test and staging) - the
 application should have access within. 
 
 Note that the application must have been created before you can set access

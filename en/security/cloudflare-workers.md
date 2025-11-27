@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Using Cloudflare Workers with Vespa Cloud
 category: cloud
+redirect_from:
+  - /cloud/security/cloudflare-workers
 ---
 
 This guide describes how you can access mutual TLS protected Vespa Cloud endpoints using
@@ -17,7 +19,7 @@ Vespa application package.
 ### mTLS Configuration
 
 Mutual TLS certificates can be created using the
-[Vespa CLI](../../clients/vespa-cli.html):
+[Vespa CLI](../clients/vespa-cli.html):
 
 For example, for tenant `samples` with application `vsearch` and instance `default`:
 
@@ -28,7 +30,7 @@ Success: Certificate written to $HOME/.vespa/samples.vsearch.default/data-plane-
 Success: Private key written to $HOME/.vespa/samples.vsearch.default/data-plane-private-key.pem
 ```
 
-Refer to the [security guide](guide) for details. 
+Refer to the [security guide](guide.md) for details. 
 
 ### Creating a Cloudflare Worker to interact with mTLS Vespa Cloud endpoints
 In March 2023, Cloudflare announced [Mutual TLS available for Workers](https://blog.cloudflare.com/mtls-workers/), 
@@ -151,4 +153,4 @@ $ curl --json '{"yql": "select * from sources * where true"}' https://your-worke
 Vespa Cloud supports having multiple certificates to separate `read` and `write` access.  
 This way, one can upload the read-only certificate to a Cloudflare worker to limit write access.
 
-See [Data plane access control permissions](guide#permissions).
+See [Data plane access control permissions](guide.md#permissions).
