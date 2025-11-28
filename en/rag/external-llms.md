@@ -59,7 +59,7 @@ This sets up a client component that can be used in a
 
 Vespa provides several options to configure the API key used by the client.
 
-1. Using the [Vespa Cloud secret store](../security/secret-store.md) to store the API key. 
+1. Using the [Vespa Cloud secret store](../security/secret-store) to store the API key. 
 2. This is done by setting the `apiKeySecretRef` configuration parameter to the name of the secret 
 3. in the secret store. This is the recommended way for Vespa Cloud users.
 2. Providing the API key in the `X-LLM-API-KEY` HTTP header of the Vespa query. 

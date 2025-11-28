@@ -3,7 +3,7 @@
 title: Secret Store
 category: cloud
 redirect_from:
-  - /cloud/security/secret-store
+  - /en/cloud/security/secret-store
 ---
 
 Vespa Cloud supports secure storage and management of secrets for use in your application.

@@ -3,7 +3,7 @@
 title: Vespa Cloud Enclave AWS Architecture
 category: cloud
 redirect_from:
-- /cloud/enclave/aws-architecture
+- /en/cloud/enclave/aws-architecture
 ---
 
 Each Enclave in the tenant AWS account corresponds to a Vespa Cloud
@@ -70,4 +70,4 @@ The tenant that registered the AWS account is the only tenant that can deploy
 applications targeting the Enclave.
 
 For more general information about security in Vespa Cloud, see the
-[whitepaper](../security/whitepaper).
+[whitepaper](../../security/whitepaper).

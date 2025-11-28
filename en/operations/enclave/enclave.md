@@ -3,7 +3,7 @@
 title: Vespa Cloud Enclave
 category: cloud
 redirect_from:
-- /cloud/enclave/enclave
+- /en/cloud/enclave/enclave
 ---
 
 ![enclave architecture](/assets/img/enclave-architecture.png)
@@ -21,11 +21,11 @@ Vespa Cloud Enclave is available in AWS and GCP. Azure is on the roadmap.
 resource costs from your cloud provider in _addition_ to the Vespa Cloud costs.
 
 ## AWS
-* [Getting started](aws-deploy-an-application.html)
+* [Getting started](aws-getting-started.html)
 * [Architecture and security](aws-architecture)
 
 ## GCP
-* [Getting started](gcp-deploy-an-application.html)
+* [Getting started](gcp-getting-started.html)
 * [Architecture and security](gcp-architecture)
 
 ## Guides
@@ -46,7 +46,7 @@ that retrieves them and configures your application. See [enclave-examples](http
 for a complete example.
 
 **Deployment failure: Cloud not provision ...**
-This happens if you deploy to new zones _before_ running the Terraform/CloudFormation templates in [step 3](aws-deploy-an-application.html#3-configure-aws-account):
+This happens if you deploy to new zones _before_ running the Terraform/CloudFormation templates in [step 3](aws-getting-started#3-configure-aws-account):
 ```
 Deployment failed: Invalid application: In container cluster 'mycluster': Could not provision load balancer mytenant:myapp:myinstance:mycluster: Expected to find exactly 1 resource, but got 0 for subnet with service 'tenantelb'
 ```

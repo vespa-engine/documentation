@@ -3,8 +3,8 @@
 title: Getting started with Vespa Cloud Enclave in GCP
 category: cloud
 redirect_from:
-- /cloud/enclave/gcp-getting-started
-- /cloud/enclave/gcp-deploy-an-application
+- /en/cloud/enclave/gcp-getting-started
+- /en/cloud/enclave/gcp-deploy-an-application
 ---
 
 Setting up Vespa Cloud Enclave requires:
@@ -73,7 +73,7 @@ update [deployment.xml](../../reference/deployment.html) to reference the accoun
 ```
 
 Useful resources are [getting started](../../basics/deploy-an-application.html)
-and [migrating to Vespa Cloud](../migrating-to-cloud.html) -
+and [migrating to Vespa Cloud](../../learn/migrating-to-cloud) -
 put _deployment.xml_ next to _services.xml_.
 
 

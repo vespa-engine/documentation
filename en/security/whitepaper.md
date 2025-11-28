@@ -3,7 +3,7 @@
 title: Vespa Cloud Security Whitepaper
 category: cloud
 redirect_from:
-- /cloud/security/whitepaper
+- /en/cloud/security/whitepaper
 ---
 
 <style>

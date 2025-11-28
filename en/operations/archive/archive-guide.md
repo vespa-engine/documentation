@@ -3,7 +3,7 @@
 title: Archive guide
 category: cloud
 redirect_from:
-  - /cloud/archive-guide
+- /en/cloud/archive-guide
 ---
 
 Vespa Cloud exports log data, heap dumps, and Java Flight Recorder sessions to
