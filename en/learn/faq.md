@@ -783,7 +783,7 @@ Yes, contact [Vespa Support](https://vespa.ai/support/) to set it up.
 ## Vespa Cloud Operations
 
 ### How can I change the cost of my Vespa Cloud usage?
-See [node resources](../cloud/node-resources.html) to assess current and auto-suggested resources
+See [node resources](../performance/node-resources) to assess current and auto-suggested resources
 and [autoscaling](../operations/autoscaling.html) for how to automate.
 
 ### How can I manually modify resources used?
