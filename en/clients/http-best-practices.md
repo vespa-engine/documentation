@@ -33,7 +33,7 @@ The latter is performed gracefully through mechanisms in the HTTP protocol.
 
 Both the idle timeout and max age threshold are aggressive to regularly rebalanced traffic.
 This ensures that new container nodes quickly receives traffic from existing client instances,
-for example when new resources are introduced by the [autoscaler](../cloud/autoscaling.html).
+for example when new resources are introduced by the [autoscaler](../operations/autoscaling.html).
 
 To avoid connection termination issues, clients should either set the `Connection: close` header
 to explicitly close connections after each request, or configure client-side idle timeouts to **30 seconds or less**.

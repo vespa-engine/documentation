@@ -11,8 +11,8 @@ This blueprint aims to exemplify many of the best practices we have learned whil
 
 While many RAG tutorials exist, this blueprint provides a customizable template that:
 
-* Can [(auto)scale](../../cloud/autoscaling.html) with your data size and/or query load.
-* Is fast and [production grade](../../cloud/production-deployment.html).
+* Can [(auto)scale](../../operations/autoscaling.html) with your data size and/or query load.
+* Is fast and [production grade](../../operations/production-deployment.html).
 * Enables you to build RAG applications with state-of-the-art quality.
 
 This tutorial will show how we can develop a _high-quality_ RAG application with an evaluation-driven mindset, while being a resource you can revisit for making informed choices for your own use case.
@@ -1653,7 +1653,7 @@ that can scale to any dataset size, and any query load.
 
 * **Q: Do I need to use an LLM with Vespa?**
   
-  A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](../../cloud/enclave/enclave.html)
+  A: No, you are free to use Vespa as a search engine. We provide the option of calling out to LLMs from within a Vespa application for reduced latency compared to sending large search results sets several times over network as well as the option to deploy Local LLMs, optionally in your own infrastructure if you prefer. See [Vespa Cloud Enclave](../../operations/enclave/enclave.html)
 
 * **Q: Why do we use binary vectors for the document embeddings?**
   
