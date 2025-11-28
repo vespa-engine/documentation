@@ -8,7 +8,7 @@ redirect_from:
 
 Hybrid search combines different retrieval methods to improve search quality. This tutorial distinguishes between two core components of search:
 
-* **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../../ranking/bm25.html) excel at this, as do modern, embedding-based [vector search](../../vector-search.html) approaches.  
+* **Retrieval**: Identifying a subset of potentially relevant documents from a large corpus. Traditional lexical methods like [BM25](../../ranking/bm25.html) excel at this, as do modern, embedding-based [vector search](../../querying/vector-search-intro.html) approaches.  
 * **Ranking**: Ordering retrieved documents by relevance to refine the results. Vespa's flexible [ranking framework](../../basics/ranking.html) enables complex scoring mechanisms.
 
 This tutorial demonstrates building a hybrid search application with Vespa that leverages the strengths of both lexical and embedding-based approaches.
