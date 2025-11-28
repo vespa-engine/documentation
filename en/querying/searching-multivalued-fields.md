@@ -1,20 +1,21 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Searching and ranking of multivalued fields"
+redirect_from:
+  - /en/searching-multi-valued-fields.html
 ---
 
-This guide explores how to search and rank over structured multivalued fields,
-how one can build a query retrieval strategy.
-The examples in this guide use the [weightedset](reference/schema-reference.html#weightedset)
-[field type](reference/schema-reference.html#field).
-The generic [map<key-type,value-type>](reference/schema-reference.html#map) field type
+This guide explains how to search and rank over structured multivalued fields.
+The examples in this guide use the [weightedset](../reference/schema-reference.html#weightedset)
+[field type](../reference/schema-reference.html#field).
+The generic [map<key-type,value-type>](../reference/schema-reference.html#map) field type
 does not currently support ranking and can only be used for matching and filtering.
 
 When building a search application we need to think about:
 
-- How to [match](querying/query-language.html) a user specified query against a [document schema](basics/schemas.html)
-  using Vespa [query language](querying/query-language.html).
-- How to [rank](basics/ranking.html) documents matching the query.
+- How to [match](query-language.html) a user specified query against a [document schema](../basics/schemas.html)
+  using Vespa [query language](query-language.html).
+- How to [rank](../basics/ranking.html) documents matching the query.
 
 
 ## Matching documents
@@ -23,10 +24,10 @@ designing and mapping our document model to a Vespa document schema:
 
 - For string fields we should think about using text style matching or database-style exact matching.
 - For string fields there are also several
-[linguistic processing](linguistics/linguistics.html) options like [tokenization](linguistics/linguistics.html#tokenization), 
-normalization and language dependent [stemming](linguistics/linguistics.html#stemming).
-- String fields which shares the same [match](reference/schema-reference.html#match) 
-and linguistic processing settings can be combined using [fieldsets](reference/schema-reference.html#fieldset). 
+[linguistic processing](../linguistics/linguistics.html) options like [tokenization](../linguistics/linguistics.html#tokenization), 
+normalization and language dependent [stemming](../linguistics/linguistics.html#stemming).
+- String fields which shares the same [match](../reference/schema-reference.html#match) 
+and linguistic processing settings can be combined using [fieldsets](../reference/schema-reference.html#fieldset). 
 
 At query time, we can take the user query and translate it into a valid Vespa query request which implements
 our matching and retrieval strategy over the designed document schema.
@@ -35,7 +36,7 @@ our matching and retrieval strategy over the designed document schema.
 ## Ranking documents
 The documents which match the query and are retrieved by the query are scored using a ranking model. 
 Once a document is retrieved by the query logic the document can be scored using the full 
-flexibility of the Vespa [ranking](basics/ranking.html) framework.
+flexibility of the Vespa [ranking](../basics/ranking.html) framework.
 
 
 ## A minimal Vespa application
@@ -64,7 +65,7 @@ tag-like field where there is a weight associated with each element.
 </pre>
 
 Structured data like the <code>tags</code>, where we both want to match and rank is best represented using 
-the [weightedset](reference/schema-reference.html#weightedset) [field type](reference/schema-reference.html#field).
+the [weightedset](../reference/schema-reference.html#weightedset) [field type](../reference/schema-reference.html#field).
 The Vespa weightedset field type can be used to represent:
 
 - Document side tags like in the above example.
@@ -121,18 +122,18 @@ schema photo {
 }
 </pre>
 
-In the schema we disable [stemming](reference/schema-reference.html#stemming) and
-also enable [bm25](ranking/bm25.html) text ranking feature for all string fields.
+In the schema we disable [stemming](../reference/schema-reference.html#stemming) and
+also enable [bm25](../ranking/bm25.html) text ranking feature for all string fields.
 
-Since all string fields shares the same [match](reference/schema-reference.html#match)
-settings we can use a [fieldset](reference/schema-reference.html#fieldset) 
+Since all string fields shares the same [match](../reference/schema-reference.html#match)
+settings we can use a [fieldset](../reference/schema-reference.html#fieldset) 
 so that queries does not need to mention all three fields.
 
 We also include a default rank profile (this is the implicit default rank profile)
-using the Vespa [nativeRank](ranking/nativerank.html) text matching rank feature. 
+using the Vespa [nativeRank](../ranking/nativerank.html) text matching rank feature. 
 
-Along with the schema, we also need a [services.xml](reference/services.html) file
-to make up a Vespa [application package](reference/application-packages-reference.html):
+Along with the schema, we also need a [services.xml](../reference/services.html) file
+to make up a Vespa [application package](../reference/application-packages-reference.html):
 
 <pre data-test="file" data-path="my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
@@ -173,7 +174,7 @@ $ docker run --detach --name vespa --hostname vespa-container \
 </pre>
 </div>
 
-Install [Vespa-cli](clients/vespa-cli.html) using Homebrew:
+Install [Vespa-cli](../clients/vespa-cli.html) using Homebrew:
 
 <pre>
 $ brew install vespa-cli
@@ -211,7 +212,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 The above query returns 0 hits, since the query requires that *all* query terms matches the document.
-By adding [trace.level](reference/query-api-reference.html#trace.level) to the query request we can see
+By adding [trace.level](../reference/query-api-reference.html#trace.level) to the query request we can see
 how the query is parsed and executed against the content nodes:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
@@ -229,7 +230,7 @@ Using tracing is very useful when debugging why documents match or does not matc
 Since the sample document does not contain the term *featuring* or *photos*,
 the query fails to retrieve the example document.
 Relax the query matching to instead of requiring that **all** terms match, to use **any**.
-See [model.type](reference/query-api-reference.html#model.type) query api reference for supported query types:
+See [model.type](../reference/query-api-reference.html#model.type) query api reference for supported query types:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
@@ -257,9 +258,9 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 Now, explore how Vespa matches the multivalued tags field of
-type [weightedset](reference/schema-reference.html#weightedset). 
+type [weightedset](../reference/schema-reference.html#weightedset). 
 Notice that we change back to `type=all`.
-In this example we also use the [default-index](reference/query-api-reference.html#model.defaultindex) 
+In this example we also use the [default-index](../reference/query-api-reference.html#model.defaultindex) 
 query parameter to limit matching to the `tags` field.
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
@@ -303,10 +304,10 @@ so that exact matches are ranked higher than partial matches.
 We have now explored querying and matching, now it's time to focus on how to rank the documents matched. 
 You might not have noticed, but in the above examples, each of the queries produced a `relevance` score per hit, 
 this score was in our previous examples calculated using the `default` rank profile
-which in our case used [nativeRank](ranking/nativerank.html).
+which in our case used [nativeRank](../ranking/nativerank.html).
 
-We can start by analyzing other [rank features](reference/rank-features.html) by asking Vespa to produce them for us.
-We use [match-features](reference/schema-reference.html#match-features)
+We can start by analyzing other [rank features](../reference/rank-features.html) by asking Vespa to produce them for us.
+We use [match-features](../reference/schema-reference.html#match-features)
 to return rank features with the retrieved documents.
 We explicitly mention which ranking features we want to have calculated and returned.
 Notice that we don't change the actual scoring, we still use `nativeRank` as the scoring function:
@@ -386,19 +387,19 @@ $ vespa query 'yql=select * from photos where userQuery()' \
   'type=any'
 </pre>
 
-The output includes [matchfeatures](reference/default-result-format.html#matchfeatures)
+The output includes [matchfeatures](../reference/default-result-format.html#matchfeatures)
 where we can see the various scores for the features:
 
 Especially look at the `elementCompleteness` and `elementSimilarity` rank features which
 are example of [features for indexed multivalued string 
-fields](reference/rank-features.html#features-for-indexed-multivalue-string-fields).
+fields](../reference/rank-features.html#features-for-indexed-multivalue-string-fields).
 
 We can also notice that `elementCompleteness(tags).fieldCompleteness` is 1.0 which means 
 that the tag was matched exactly and the `"elementCompleteness(tags).elementWeight` outputs
 the weight of the best matched element. 
 
 The `elementSimilarity(tags)` ranking feature is very flexible and even allow us to override
-the [calculation and output new features](reference/rank-feature-configuration.html#elementSimilarity). 
+the [calculation and output new features](../reference/rank-feature-configuration.html#elementSimilarity). 
 
 In this example we defined two new ranking features:
 
@@ -487,14 +488,14 @@ $ vespa query 'yql=select * from photos where userQuery()' \
   'query=clear sky' 'type=any'
 </pre>
 
-Each hit returned contains a [matchfeatures](reference/default-result-format.html#matchfeatures) field
+Each hit returned contains a [matchfeatures](../reference/default-result-format.html#matchfeatures) field
 where we can see the various scores for the features.
 
 Now, we can include these features in a ranking expression used in `first-phase` to actually change the ranking. 
 The actual _best_ scoring function is data dependent.
 A trained function using machine learning is by far the easiest way.
 
-The bag of words [bm25](ranking/bm25.html) ranking feature is not normalized,
+The bag of words [bm25](../ranking/bm25.html) ranking feature is not normalized,
 so combining it in a linear function is challenging, as the score range of the feature is unbound. 
 To overcome this, and allow easy exploration without changing the rank profile,
 make the parameters in the function overridable on a per-query basis by:
@@ -509,7 +510,7 @@ first-phase {
 }
 </pre>
 
-See [using query variables](ranking/ranking-expressions-features.html#using-query-variables). 
+See [using query variables](../ranking/ranking-expressions-features.html#using-query-variables). 
 
 <pre data-test="file" data-path="my-app/schemas/photo.sd">
 schema photo {
