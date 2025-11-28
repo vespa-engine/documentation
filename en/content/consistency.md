@@ -72,7 +72,7 @@ visible by default.
 
 Reads are consistent on a best-effort basis and are not guaranteed to be linearizable.
 
-When using a [Get](../reference/document-v1-api-reference.html#get) or [Visit](../writing/visiting.html) operation,
+When using a [Get](../reference/api/document-v1.html#get) or [Visit](../writing/visiting.html) operation,
 the client will never observe a partially updated document.
 For these read operations, writes behave as if they are atomic.
 
@@ -82,7 +82,7 @@ complete. Once a write is complete, all index updates are visible.
 
 Searches may observe transient loss of coverage when nodes go down. Vespa will
 restore coverage automatically when this happens. How fast this happens depends
-on the configured [searchable-copies](../reference/services-content.html#searchable-copies) value.
+on the configured [searchable-copies](../reference/services/content.html#searchable-copies) value.
 
 If replicas diverge during a Get, Vespa performs a read-repair. This fetches the
 requested document from all divergent replicas. The client then receives the

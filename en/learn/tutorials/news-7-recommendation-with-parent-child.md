@@ -86,7 +86,7 @@ This is a tensor with a single sparse dimension,
 which is slightly different from the tensors we have seen so far.
 Sparse tensors have strings as dimension addresses rather than a numeric index.
 More concretely, an example of such a tensor is
-(using the [tensor literal form](../../reference/tensor.html#tensor-literal-form)):
+(using the [tensor literal form](../../reference/ranking/tensor.html#tensor-literal-form)):
 
 ```
 {

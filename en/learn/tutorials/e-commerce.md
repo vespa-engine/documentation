@@ -69,7 +69,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     In Vespa, you can set up custom searchers to perform any type of
     extra processing during querying.
     In the sample app there is a single custom searcher which builds the query for auto-suggestions,
-    using a combination of [fuzzy matching](../../reference/query-language-reference.html#fuzzy)
+    using a combination of [fuzzy matching](../../reference/querying/yql.html#fuzzy)
     and [prefix search](../../querying/text-matching.html#prefix-match).
 
 * [Custom handlers](../../applications/request-handlers.html)

@@ -27,7 +27,7 @@ Content nodes can be deployed in different topologies - example using 6 nodes:
 
 Vespa Cloud requires a redundancy of at least 2.
 In this guide, it is assumed that redundancy, configured as
-[min-redundancy](../reference/services-content.html#min-redundancy), is set to n=3.
+[min-redundancy](../reference/services/content.html#min-redundancy), is set to n=3.
 Redundancy is a function of data availability / criticality and cost, and varies from application to application.
 
 Redundancy is for storing a document replica on a node.
@@ -173,7 +173,7 @@ Migrating from one topology to another is easy, as Vespa Cloud will auto-migrate
 
 ## Feeding
 Documents are fed to Vespa Cloud using the
-[&lt;document-api&gt;](../reference/document-v1-api-reference.html#configuration) endpoint.
+[&lt;document-api&gt;](../reference/api/document-v1.html#configuration) endpoint.
 This means, one Vespa Container node forwards document writes to all the replicas, in parallel.
 As all groups have a replica, adding a group will not add feed _latency_ in theory due to the parallelism.
 However, there will be an increase in practise as more nodes means more latency variation,

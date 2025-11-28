@@ -468,7 +468,7 @@ for an introduction to `HNSW` and the `HNSW` tuning parameters.
 
 ### Services Specification
 
-The [services.xml](../reference/services.html) defines the services that make up
+The [services.xml](../reference/services/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `app/services.xml`:
 
@@ -511,7 +511,7 @@ Write the following to `app/services.xml`:
 The default [query profile](query-profiles.html) can be used to override
 default query api settings for all queries.
 
-The following enables [presentation.timing](../reference/query-api-reference.html#presentation.timing) and
+The following enables [presentation.timing](../reference/api/query.html#presentation.timing) and
 renders `weightedset` fields as a JSON maps. 
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
@@ -582,7 +582,7 @@ $ vespa feed -t http://localhost:8080 feed.jsonl
 </div>
 
 ## Free-text search using Vespa weakAnd 
-The following sections uses the Vespa [query api](../reference/query-api-reference.html) and 
+The following sections uses the Vespa [query api](../reference/api/query.html) and 
 formulate queries using Vespa [query language](query-language.html). The examples uses the
 [vespa-cli](../clients/vespa-cli.html) command which supports running queries.
 
@@ -608,15 +608,15 @@ $ vespa query \
 </pre>
 </div>
 
-This query combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html).
-The [query type](../reference/query-api-reference.html#model.type) is
+This query combines YQL [userQuery()](../reference/querying/yql.html#userquery) 
+with Vespa's [simple query language](../reference/querying/simple-query-language.html).
+The [query type](../reference/api/query.html#model.type) is
 using `all`, requiring that all the terms match. 
 
 The above query example searches for *total AND eclipse AND of AND the AND heart* 
 in the `default` fieldset, which in the schema includes the `title` and `artist` fields.
 
-The [result](../reference/default-result-format.html) 
+The [result](../reference/querying/default-result-format.html) 
 for the above query will look something like this:
 
 <pre>{% highlight json%}
@@ -658,7 +658,7 @@ for the above query will look something like this:
 
 This query only matched one document because the query terms were `AND`ed. 
 We can change matching to use `type=any` instead of the default `type=all`. See 
-[supported query types](../reference/query-api-reference.html#model.type).
+[supported query types](../reference/api/query.html#model.type).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -684,7 +684,7 @@ the `weakAnd` query operator which implements the WAND algorithm.
 See the [using wand with Vespa](../ranking/wand.html) guide for more details. 
 
 Run the same query, but instead of `type=any` use `type=weakAnd`, 
-see [supported query types](../reference/query-api-reference.html#model.type):
+see [supported query types](../reference/api/query.html#model.type):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -723,11 +723,11 @@ The previous section introduced the `weakAnd` query operator which integrates
 with [linguistic processing](../linguistics/linguistics.html) and string matching using `match: text`.  
 
 The following examples uses the
-[wand()](../reference/query-language-reference.html#wand) query operator. 
+[wand()](../reference/querying/yql.html#wand) query operator. 
 The `wand` query operator calculates the maximum inner product
 between the sparse query and document feature integer
 weights. The inner product ranking score calculated by the `wand` query operator 
-can be used in a ranking expression by the [rawScore(name)](../reference/rank-features.html#match-operator-scores)
+can be used in a ranking expression by the [rawScore(name)](../reference/ranking/rank-features.html#match-operator-scores)
 rank feature. 
 
 <pre>
@@ -841,12 +841,12 @@ specify how to *rank* the `targetHits` documents retrieved and exposed to `first
 in the `rank-profile`.
 - `input.query(q)` is the query vector produced by the [embedder](../rag/embedding.html#embedding-a-query-text).
 
-Not specifying [ranking](../reference/query-api-reference.html#ranking.profile) will cause
+Not specifying [ranking](../reference/api/query.html#ranking.profile) will cause
 Vespa to use [nativeRank](../ranking/nativerank.html) which does not use the vector similarity, causing
 results to be randomly sorted. 
 
 The above exact nearest neighbor search will return the following
-[result](../reference/default-result-format.html):
+[result](../reference/querying/default-result-format.html):
 
 <pre>{% highlight json%}
 {
@@ -1075,7 +1075,7 @@ been defined with `index` or `attribute:fast-search`.
 See [searching attribute fields](../performance/practical-search-performance-guide#searching-attribute-fields).
 
 The optimal performance for combining nearestNeighbor search with filtering, where the query term(s) does not influence ranking, is achieved
-using `rank: filter` in the schema (See [ranking expressions](../reference/ranking-expressions.html)):
+using `rank: filter` in the schema (See [ranking expressions](../reference/ranking/ranking-expressions.html)):
 
 <pre>
 field popularity type int {
@@ -1100,9 +1100,9 @@ rank-profile popularity {
 
 In the following example, since the `title` field does not have `rank: filter` one can instead
 flag that the term should not be used by any ranking expression by 
-using the [`ranked` query annotation](../reference/query-language-reference.html#ranked). 
+using the [`ranked` query annotation](../reference/querying/yql.html#ranked). 
 
-The following disables [term based ranking](../reference/query-language-reference.html#ranked) and
+The following disables [term based ranking](../reference/querying/yql.html#ranked) and
 the matching against the `title` field can use the most efficient posting list representation.
 
 <div class="pre-parent">
@@ -1117,10 +1117,10 @@ $ vespa query \
 </div>
 
 In the previous examples, since the rank-profile did only use the
-[closeness](../reference/rank-features.html#closeness(dimension,name)) rank feature,
+[closeness](../reference/ranking/rank-features.html#closeness(dimension,name)) rank feature,
 the matching would not impact the score anyway. 
 
-Vespa also allows combining the [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator
+Vespa also allows combining the [nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator
 with any other Vespa query operator.  
 
 <div class="pre-parent">
@@ -1150,10 +1150,10 @@ or *distant* neighbors. Technically, all document vectors are a neighbor of the 
 but with a varying distance.
 
 With restrictive filters, the neighbors that are returned might be of low quality (far distance). 
-One way to combat this effect is to use the [distanceThreshold](../reference/query-language-reference.html#distancethreshold)
+One way to combat this effect is to use the [distanceThreshold](../reference/querying/yql.html#distancethreshold)
 query annotation parameter of the `nearestNeighbor` query operator. 
 The value of the `distance` depends on the [distance-metric](../reference/schema-reference.html#distance-metric) used. 
-By adding the [distance(field,embedding)](../reference/rank-features.html#distance(dimension,name)) rank-feature to
+By adding the [distance(field,embedding)](../reference/ranking/rank-features.html#distance(dimension,name)) rank-feature to
 the `match-features` of the `closeness` rank-profiles, it is possible to analyze what distance 
 could be considered too far. 
 See [match-features reference](../reference/schema-reference.html#match-features).
@@ -1622,7 +1622,7 @@ $ vespa query \
 </div>
 
 Another interesting approach for hybrid retrieval is to use Vespa's 
-[rank()](../reference/query-language-reference.html#rank) query operator. The first operand
+[rank()](../reference/querying/yql.html#rank) query operator. The first operand
 of the `rank()` operator is used for retrieval, and the remaining operands are only used to compute
 rank features for those hits retrieved by the first operand. 
 
@@ -1641,7 +1641,7 @@ $ vespa query \
 
 This query returns 100 documents, since only the first operand of the `rank` query operator was used for 
 *retrieval*, the sparse `userQuery()` representation was only used to calculate sparse 
-[rank features](../reference/rank-features.html) for
+[rank features](../reference/ranking/rank-features.html) for
 the results retrieved by the `nearestNeighbor`. Sparse rank features such as `bm25(title)` for example.
 
 <pre>{% highlight json%}
@@ -1819,7 +1819,7 @@ In such scenarios, employing query expansion and query rewrites can facilitate r
 
 
 ### Using label
-One can also use the [label](../reference/query-language-reference.html#label) query term 
+One can also use the [label](../reference/querying/yql.html#label) query term 
 annotation when there are multiple `nearestNeighbor` operators in the same query
 to get the distance or closeness per query vector. Notice we use the `closeness-label` rank-profile defined
 in the schema:
@@ -1843,7 +1843,7 @@ $ vespa query \
 </div>
 
 The above query annotates the two `nearestNeighbor` query operators using 
-[label](../reference/query-language-reference.html#label) query annotation. 
+[label](../reference/querying/yql.html#label) query annotation. 
 
 <pre>{% highlight json%}
 {
@@ -1915,7 +1915,7 @@ Note that the `closeness-label` rank profile
 uses `closeness(field, embedding)` which in the case of multiple nearest neighbor search operators 
 uses the maximum score to represent the unlabeled `closeness(field,embedding)`. This
 can be seen from the `relevance` value,
-compared with the labeled [closeness()](../reference/rank-features.html#closeness(dimension,name)) rank features. 
+compared with the labeled [closeness()](../reference/ranking/rank-features.html#closeness(dimension,name)) rank features. 
 
 <pre>{% highlight json%}
 {
@@ -2005,8 +2005,8 @@ for a detailed description of *pre-filtering* and *post-filtering* strategies.
 The following query examples explore the two query-time parameters
 which can be used to control the filtering behavior. The parameters are
 
-- [ranking.matching.postFilterThreshold](../reference/query-api-reference.html#ranking.matching) default 1.0 
-- [ranking.matching.approximateThreshold](../reference/query-api-reference.html#ranking.matching) default 0.05
+- [ranking.matching.postFilterThreshold](../reference/api/query.html#ranking.matching) default 1.0 
+- [ranking.matching.approximateThreshold](../reference/api/query.html#ranking.matching) default 0.05
 
 These parameters can be used per query or configured in the rank-profile in the 
 [document schema](../reference/schema-reference.html#post-filter-threshold). 
@@ -2051,7 +2051,7 @@ that are tagged with the `rock` tag, so roughly 8%.
 
 Auto adjusting `targetHits` upwards for post-filtering is not always what you want, because it is slower than just retrieving
 from the HNSW index without constraints. We can change the 
-`targetHits` adjustment factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](../reference/query-api-reference.html#ranking.matching) parameter.
+`targetHits` adjustment factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](../reference/api/query.html#ranking.matching) parameter.
 In this case, we set it to 1, which disables adjusting the `targetHits` upwards. 
 
 <div class="pre-parent">

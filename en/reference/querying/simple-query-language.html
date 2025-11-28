@@ -1,0 +1,247 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Simple Query Language Reference"
+redirect_from:
+- /en/reference/simple-query-language-reference.html
+---
+
+<p>
+The <em>simple query language</em> allows application end users
+to issue more complex queries than a list of tokens.
+It is a heuristic, non-structured language,
+which attempts to do something probably-useful with any input given.
+It is combined with the structured <a href="../../querying/query-language.html">YQL</a>
+by using the <a href="yql.html#userquery">userQuery</a> operator.
+</p>
+
+<h3 id="simple-syntax">Simple Query Syntax</h3>
+<pre>
+Query      ::= Expr ( SPACE Expr )*
+Expr       ::= Term | Prefix? '(' SimpleTerm+ ')'
+Term       ::= Prefix? Field? CoreTerm Weight?
+SimpleTerm ::= Field? CoreTerm Weight?
+Prefix     ::= '+' | '-'
+Field      ::= ID ':'                              /* A valid field name or alias */
+Weight     ::= '!'+ | '!' NUM                      /* NUM is a percentage. */
+CoreTerm   ::= WORD | Phrase | NumTerm | PrefixTerm | SubstringTerm | SuffixTerm | SameElement
+Phrase     ::= '"' WORD+ '"'
+NumTerm    ::= NUM | '&lt;' NUM | '&gt;' NUM | '[' NUM? ';' NUM? ';' HITLIMIT? ']'
+                                                   /* NUM is any numeric type including floating point */
+                                                   /* HITLIMIT is a optional count of many hits you want as minimum from this range */
+PrefixTerm    ::= WORD '*'
+SubstringTerm ::= '*' WORD '*'
+SuffixTerm    ::= '*' WORD
+SameElement   ::= '{' Field CoreTerm ( SPACE Field CoreTerm )* '}'
+</pre>
+
+
+<h3 id="prefix-searching">Prefix searching</h3>
+<p>
+Prefix matching is only available for attributes.
+A prefix search term (e.g. 'car*') behaves like a pattern match on the
+given field: Documents that have a field value beginning with the
+given prefix are matched and returned (or not returned if the '-' syntax is
+used). A prefix search term does not add or change the ranking of the
+documents in the result set.
+</p>
+
+
+<h3 id="term-weight">Term weight</h3>
+<p>
+The weight is either one or more ! characters, or a ! followed by an
+integer. The integer is a fixed point scaling number with decimal
+factor 100, i.e. it can be regarded as a percentage. When using
+repeated ! characters, the weight is increased with 50 (from a default
+value of 100) for each !. A weight expression may also be applied to a phrase.
+</p><p>
+A term weight is used to modify the relative importance of the terms
+in your query. The term score is only one part of the overall rank
+calculation, but by adding weight to the most important terms, you can
+ensure that they contribute more. For more details on rank
+calculation, see <a href="../../basics/ranking.html">Ranking guide</a>.
+</p>
+
+
+<h3 id="numerical-terms">Numerical terms</h3>
+<p>
+<code>[x;y]</code> matches any number between <em>x</em> and
+<em>y</em>, including the endpoints <em>x</em> and
+<em>y</em>. Note that <code>&gt;number</code> is the same as
+<code>[number+1;]</code> and <code>&lt;number</code> is the same
+as <code>[;number-1]</code>.
+</p><p>
+A few examples using numerical terms:
+<pre>perl size:&lt;100</pre>
+This query will get all documents with the word &ldquo;perl&rdquo; and
+with size less than 100Kb.
+<pre>chess kasparov -karpov date:[19990101;19991231]</pre>
+<p>
+This query will get all documents last modified in 1999 containing
+<em>chess</em> and <em>kasparov</em>, but not <em>karpov</em>.
+</p>
+
+<h4 id="fast-range-search">Advanced range search</h4>
+<p>
+In order to quickly fetch the best documents given a simple range you can do
+that efficiently using capped range search. For it to be efficient it requires that
+you use <a href="../schema-reference.html#attribute">fast-search</a> on the attribute
+used for range search.
+</p><p>
+It is fast because it will start only scan enough terms in the dictionary
+to satisfy the number of documents requested. A positive number will start from the
+left of your range and work its way right. A negative number will start from right and go left.
+</p>
+<pre>date:[0;21000101;10]</pre>
+Will give you the at least 10 first documents since the birth of Jesus.
+<pre>date:[0;21000101;-10]</pre>
+<p>
+Will give you the at least 10 last documents since the birth of Jesus.
+</p>
+
+
+<h3 id="simple-grouping">Grouping in the simple query language</h3>
+<p>
+There is only one level of parentheses supported; any use of
+additional parentheses within the expression will be ignored. In
+addition, note that the terms within should not be prefixed with + or -.
+</p><p>
+When the parentheses are prefixed by a + (can be excluded
+for <code>all</code> type, because expressions are + by default), the
+search requires that at least one of the included terms is present in
+the document. This effectively gives you a way of having alternative
+terms expressing the same intent, while requiring that the concept is
+covered in the document.
+</p><p>
+When the parentheses are prefixed by a -, the search excludes all
+documents that include all the terms, but allows documents that only
+use some of the terms in the expression. It is a bit more difficult to
+find good use for this syntax; it could for instance be used to remove
+documents that compare two different products, while still allowing
+documents only discussing one of them.
+</p>
+
+
+
+<h2 id="url_field">Search in URLs</h2>
+<p>
+Create a URL-field in the index by creating a field of type
+<a href="../schema-reference.html#uri">uri</a> -
+refer to this for how to build queries.
+The indexer will report an ERROR in the log for invalid URLs. Notes:
+</p>
+<ul>
+  <li>
+    Note however that finding documents matching a full URL does not
+    behave like exact matching in i.e. string fields, but more like substring matching.
+    A search for <code>myurlfield:http://www.mydomain.com/</code> will match documents
+    where <em>myurlfield</em> is set to both <em>http://www.mydomain.com/</em>,
+    <em>http://www.mydomain.com/test</em>, and <em>http://redirect.com/?goto=http://www.mydomain.com/</em>
+  </li><li>
+    Hostname searches have an anchoring mechanism to limit which URLs match.
+    By default, queries are anchored in the end,
+    which means that a search for <code>mydomain.com</code> will match <code>www.mydomain.com</code>,
+    but not <code>mydomain.com.au</code>.
+    Adding a ^ (caret) to the start will turn on anchoring at the start,
+    meaning that the query will only return exact matches.
+    Adding a <code>*</code> at the end will turn off anchoring at the end.
+    The query <code>^mydomain.com*</code> will match <code>mydomain.com.au</code>,
+    but not <code>www.mydomain.com</code>.
+  </li>
+</ul>
+
+
+
+<h2 id="map-syntax">Field Path Syntax</h2>
+<p>
+Streaming search supports the <a href="../document-field-path.html">field path</a>
+syntax of the <a href="../document-select-language.html">
+document selection language</a> when searching structs and maps.
+Special for the map type is the ability to select a subset of
+map entries to search using the <code>mymap{"foo"} </code> syntax.
+</p><p>
+See the <a href="../document-field-path.html">field path</a> documentation
+for use-cases of the map data type.
+</p><p>
+In the result output, a map is represented in the same way as in the Document XML:
+</p>
+<pre>
+&lt;field name="mymap"&gt;
+    &lt;item&gt;&lt;key&gt;foo&lt;/key&gt;&lt;value&gt;bar&lt;/value&gt;&lt;/item&gt;
+    &lt;item&gt;&lt;key&gt;fuz&lt;/key&gt;&lt;value&gt;baz&lt;/value&gt;&lt;/item&gt;
+&lt;/field&gt;
+</pre><!-- ToDo: rewrite to JSON -->
+
+
+
+<h2 id="removing-syntax-characters">Removing syntax characters from queries</h2>
+<p>
+It will sometimes be more robust to remove characters which are used
+in the query syntax from a user's search terms. An example could be
+URLs containing parentheses. Comma ("," ASCII 0x2C) may be
+used as a safe replacement character in these cases.
+</p>
+<pre>(x url:http://site.com/a)b) y</pre>
+<p>The URL <code>http://site.com/a)b</code> in this example could be quoted as following:</p>
+<pre>(x url:http://site.com/a,b) y</pre>
+
+
+
+<h2 id="examples">Examples</h2>
+<p>
+The <em>simple</em> query language syntax accepts any input string and makes the most of it.
+A basic query consists of words separated by spaces (encoded as %20). In addition,
+</p>
+<ul>
+  <li>
+    A phrase can be searched by enclosing it in quotes, like
+    <code>"match exactly this"</code>
+  </li><li>
+    Phrases and words may be preceded by -, meaning documents <em>must not</em> contain this
+  </li><li>
+    Phrases and words may be preceded by +, meaning documents
+    <em>must</em> contain this, currently only in use for subtype <code>any</code>
+  </li><li>
+    Groups of words and phrases may be grouped using parenthesis, like
+    <code>-(do not match if all of these words matches)</code>
+  </li><li>
+    Each word or phrase may be preceded by an index or attribute name and a colon,
+    like <code>indexname:word</code>, to match in that index.
+    If the index name is omitted the index named <em>default</em> is searched.
+  </li>
+</ul>
+<p>
+Any <em>noise</em> (characters not in indexes or attributes, and with no query language meaning)
+is ignored, all query strings are valid.
+The exception is queries which have no meaningful interpretation.
+An example is <code>-a</code>, which one would expect to return
+all documents <em>not</em> containing <em>a</em>.
+Vespa, however, will return the error message <em>Null query</em>.
+All the following examples are of type <em>all</em>.
+</p><p>
+Get all documents with the term <em>word</em>,
+having <em>microsoft</em> but not <em>bug</em> in the title:
+<pre>
+word title:microsoft -title:bug
+</pre>
+Search for all documents having the phrase "<em>to be or not to be</em>",
+but excluding those having <em>shakespeare</em> in the title:
+<pre>
+"to be or not to be" -title:shakespeare
+</pre>
+Get all documents with the word <em>Christmas</em> in the title that
+were last modified Christmas Day 2009:
+<pre>
+title:Christmas date:20091225
+</pre>
+Get documents on US Foreign politics, excluding those matching both
+rival presidential candidates:
+<pre>
+"us foreign politics" -(clinton trump)
+</pre>
+<p>
+  Get documents on US Foreign politics, including only those matching at
+  least one of the rival presidential candidates:
+</p>
+<pre>
+"us foreign politics" (clinton trump)
+</pre>

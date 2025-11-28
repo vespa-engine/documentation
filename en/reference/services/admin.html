@@ -1,0 +1,465 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "services.xml - 'admin'"
+redirect_from:
+- /en/reference/services-admin.html
+---
+
+<!-- ToDo: most of this is for self-hosted only, except maybe metrics stuff -->
+<p>
+  Reference documentation for <code>&lt;admin&gt;</code> in <a href="services.html">services.xml</a>.
+  Find a working example of this configuration in the sample application <em>multinode-HA</em>
+  <a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/multinode-HA/services.xml">
+    services.xml</a>.
+</p>
+<pre class="pre-config">
+admin [version]
+    <a href="#adminserver">adminserver [hostalias]</a>
+    <a href="#cluster-controllers">cluster-controllers</a>
+        <a href="#cluster-controller">cluster-controller [hostalias, baseport, jvm-options, jvm-gc-options]</a>
+    <a href="#configservers">configservers</a>
+        <a href="#configserver">configserver [hostalias, baseport]</a>
+    <a href="#logserver">logserver [jvm-options, jvm-gc-options]</a>
+    <a href="#slobroks">slobroks</a>
+        <a href="#slobrok">slobrok [hostalias, baseport]</a>
+    <a href="#monitoring">monitoring [systemname<!--, interval (currently unused)-->]</a>
+    <a href="#metrics">metrics</a>
+        <a href="#consumer">consumer [id]</a>
+            <a href="#metric-set">metric-set [id]</a>
+            <a href="#metric">metric [id]</a>
+            <a href="#cloudwatch">cloudwatch [region, namespace]</a>
+                <a href="#shared-credentials">shared-credentials [file, profile]</a>
+    <a href="#logging">logging</a>
+</pre>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th>version</th>
+      <td>required</td>
+      <td>number</td>
+      <td></td>
+      <td><p id="admin.version">2.0</p></td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="adminserver">adminserver</h2>
+<p>
+The configured node will be the default administration node in your Vespa system,
+which means that unless configured otherwise all administrative services -
+i.e. the log server, the configuration server, the slobrok, and so on - will run on this node.
+Use <a href="#configservers">configservers</a>, <a href="#logserver">logserver</a>,
+<a href="#slobroks">slobroks</a> elements if you need to specify baseport or jvm options for any
+of these services.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th>hostalias</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="adminserver.hostalias"></p></td></tr>
+    <tr><th>baseport</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td><p id="adminserver.baseport"></p></td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="cluster-controllers">cluster-controllers</h2>
+<p>
+Container for one or more <a href="#cluster-controller">cluster-controller</a> elements.
+When having one or more <a href="content.html">content</a> clusters,
+configuring at least one cluster controller is required.
+</p>
+<!-- ToDo check / rewrite - one gets an implicit cluster controller, but maybe not if admin element is set ... -->
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th>standalone-zookeeper</th>
+      <td>optional</td>
+      <td>true/false</td>
+      <td>false</td>
+      <td>
+        <p id="standalone-zookeeper">
+          Will by default share the ZooKeeper instance with configserver.
+          If configured to true a separate ZooKeeper instance will be configured
+          and started on the set of nodes where you run cluster controller on.
+          The set of cluster controllers nodes cannot overlap with the set of nodes where config server is running.
+          If this setting is changed from false to true in a running system,
+          all previous cluster state information will be lost as the underlying ZooKeeper changes.
+          Cluster controllers will re-discover the state,
+          but nodes that have been manually set as down will again be considered to be up.
+        </p>
+      </td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="cluster-controller">cluster-controller</h2>
+<p>
+  Specifies a host on which to run the
+  <a href="../../content/content-nodes.html#cluster-controller">Cluster Controller</a> service.
+  The Cluster Controller manages the state of the cluster in order to provide elasticity and failure detection.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th>hostalias</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="cluster-controller.hostalias"></p></td></tr>
+    <tr><th>baseport</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td><p id="cluster-controller.baseport"></p></td></tr>
+    <tr><th>jvm-options</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="cluster-controller.jvm-options"></p></td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="configservers">configservers</h2>
+<p>
+Container for one or more <code>configserver</code> elements.
+</p>
+
+
+
+<h2 id="configserver">configserver</h2>
+<p>
+  Specifies a host on which to run the
+  <a href="/en/operations/self-managed/configuration-server.html">Configuration Server</a> service.
+  If contained directly below <code>&lt;admin&gt;</code> you may only have one,
+  so if you need to configure multiple instances of this service,
+  contain them within the <a href="#configservers"><code>&lt;configservers&gt;</code></a> element.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th>hostalias</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="configserver.hostalias"></p></td></tr>
+    <tr><th>baseport</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td><p id="configserver.baseport"></p></td></tr>
+  </tbody>
+</table>
+
+
+<h2 id="logserver">logserver</h2>
+<p>
+  Specifies a host on which to run the <a href="../logs.html#log-server">Vespa Log Server</a> service.
+  If not specified, the logserver is placed on the <a href="#adminserver">adminserver</a>,
+  like in the
+  <a href='https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/multinode-HA/services.xml'>
+    example</a>.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th>hostalias</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="logserver.hostalias"></p></td></tr>
+    <tr><th>baseport</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td><p id="logserver.baseport"></p></td></tr>
+    <tr><th>jvm-options</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="logserver.jvm-options"></p></td></tr>
+    <tr><th>jvm-gc-options</th>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="logserver.jvm-gc-options"></p></td></tr>
+  </tbody>
+</table>
+<p>Example:</p>
+<pre>{% highlight xml %}
+<logserver hostalias="node1" />
+{% endhighlight %}</pre>
+
+
+
+<h2 id="slobroks">slobroks</h2>
+<p>
+This is a container for one or more <code>slobrok</code> elements.
+</p>
+
+
+
+<h2 id="slobrok">slobrok</h2>
+<p>
+  Specifies a host on which to run the
+  <a href="/en/operations/self-managed/slobrok.html">Service Location Broker (slobrok)</a> service.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr><th>hostalias</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td><p id="slobrok.hostalias"></p></td></tr>
+    <tr><th>baseport</th>
+      <td>optional</td>
+      <td>number</td>
+      <td></td>
+      <td><p id="slobrok.baseport"></p></td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="monitoring">monitoring</h2>
+<p>
+  Settings for how to pass metrics to a monitoring service -
+  see <a href="/en/operations/self-managed/monitoring.html">monitoring</a>.
+</p>
+<pre>{% highlight xml %}
+<monitoring systemname="name-in-metrics-system" />
+{% endhighlight %}</pre>
+<table class="table">
+  <thead></thead><tbody>
+ <!--   <tr>
+      <th>interval</th>
+      <td>
+          Currently unused, (the rate at which metrics are passed to the monitoring system, in minutes)
+      </td>
+    </tr>  -->
+    <tr>
+      <th>systemname</th>
+      <td>
+          The name of the application in question in the monitoring system, default is "vespa"
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+<h2 id="logging">logging</h2>
+<p>
+  Used for tuning log levels of Java plug-ins.
+  If you (temporarily) need to enable debug logging from some class
+  or package, or if some third-party component is spamming your log
+  with unnecessary INFO level messages, you can turn levels on or off.
+  Example:
+</p>
+<pre>{% highlight xml %}
+<logging>
+    <class name="org.myorg.MyHelperClass" levels="+debug" />
+    <class name="org.thirdparty.TooSpammyClass" levels="-info" />
+    <package name="org.myorg.tricky.package" levels="all" />
+    <package name="org.anotherorg" levels="all -info -debug -spam" />
+</logging>
+{% endhighlight %}</pre>
+<p>
+  Note that tuning also affects sub-packages, so the above would
+  also affect all packages with <code>org.anotherorg.</code> as prefix.
+  And if there is a <code>org.myorg.tricky.package.foo.InternalClass</code>
+  you will get even "spam" level logging from it!
+</p>
+<p>
+  The default for <code>levels</code> is <code>"all -debug -spam"</code>
+  and as seen above you can add and remove specific levels.
+</p>
+
+<h2 id="metrics">metrics</h2>
+<p>
+  Used for configuring the forwarding of metrics to graphing applications -
+  add <code>consumer</code> child elements.
+  Also see <a href="/en/operations/self-managed/monitoring.html">monitoring</a>. Example:
+</p>
+<pre>{% highlight xml %}
+<metrics>
+    <consumer id="my-metric-namespace">
+        <metric-set id="default" />
+        <metric id="my-custom-metric" />
+        <cloudwatch region="us-east-1" namespace="my-vespa">
+            <shared-credentials file="/path/to/credentials-file" profile="default" />
+        </cloudwatch>
+    </consumer>
+</metrics>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="consumer">consumer</h2>
+<p>
+  Configure a metrics consumer.
+  The metrics contained in this element will be exported to the consumer with the given id.
+  <code>consumer</code> is a request parameter in
+  <a href="../api/metrics-v1.html">/metrics/v1/values</a>,
+  <a href="../api/metrics-v2.html">/metrics/v2/values</a> and
+  <a href="../api/prometheus-v1.html">/prometheus/v1/values</a>.
+</p>
+<p>
+  Add <code>metric</code> and/or <code>metric-set</code> children.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr>
+      <th>id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>
+        <p id="consumer.id">The name of the consumer to export metrics to.</p>
+      </td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="metric-set">metric-set</h2>
+<p>
+Include a pre-defined set of metrics to the consumer.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr>
+      <th>id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>
+        <p id="metric-set.id">
+          The id of the metric set to include.
+          Built-in metric sets are:
+        </p>
+        <ul>
+          <li><code>default</code></li>
+          <li><code>Vespa</code></li>
+        </ul>
+      </td></tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="metric">metric</h2>
+<p>
+Configure a metric.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+    <tr>
+      <th>id</th>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>
+        <p id="metric.id">
+          The name of the metric as defined in custom code or in
+          <a href="../api/state-v1.html#state-v1-metrics">process metrics api</a>
+        </p>
+      </td></tr>
+  </tbody>
+</table>
+<p>
+  Note that metric id needs to include the metric specific suffix, e.g. <em>.average</em>.
+</p>
+<p>
+  In this example, there is one metric added to a custom consumer in addition to the default metric set.
+  Use <em>&amp;consumer=my-custom-consumer</em> parameter for the prometheus endpoint.
+  Also notice the .count suffix, see <a href="../api/state-v1.html#state-v1-metrics">process metrics api</a>.
+</p>
+<p>
+  The per process metrics api endpoint <em>/state/v1/metrics</em> also includes a description of each emitted metric.
+  The <em>/state/v1/metrics</em> endpoint also includes the metric aggregates (.count, .average, .rate, .max).
+</p>
+<pre>{% highlight xml %}
+<metrics>
+    <consumer id="my-custom-consumer">
+        <metric-set id="default" />
+        <metric id="vds.idealstate.garbage_collection.documents_removed.count" />
+    </consumer>
+</metrics>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="cloudwatch">cloudwatch</h2>
+<p>
+  Specifies that the metrics from this consumer should be forwarded to CloudWatch.
+</p>
+<table class="table">
+  <thead>
+  <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+<tr><th>region</th>
+  <td>required</td>
+  <td>string</td>
+  <td></td>
+  <td><p id="region">Your AWS region</p></td></tr>
+<tr><th>namespace</th>
+  <td>required</td>
+  <td>string</td>
+  <td></td>
+  <td><p id="namespace">The metrics namespace in CloudWatch</p></td></tr>
+</tbody>
+</table>
+<p>Example:</p>
+<pre>{% highlight xml %}
+<cloudwatch region="us-east-1" namespace="my-vespa">
+    <shared-credentials file="/path/to/credentials-file" profile="default" />
+</cloudwatch>
+{% endhighlight %}</pre>
+
+
+
+<h2 id="shared-credentials">shared-credentials</h2>
+<p>
+  Specifies that a profile from a shared-credentials file should be used for authentication to CloudWatch.
+</p>
+<table class="table">
+  <thead>
+  <tr><th>Attribute</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
+  </thead><tbody>
+<tr><th>file</th>
+  <td>required</td>
+  <td>string</td>
+  <td></td>
+  <td><p id="file">The path to the shared-credentials file</p></td></tr>
+<tr><th>profile</th>
+  <td>optional</td>
+  <td>string</td>
+  <td>default</td>
+  <td><p id="profile">The profile in the shared-credentials file</p></td></tr>
+</tbody>
+</table>

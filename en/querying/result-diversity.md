@@ -122,7 +122,7 @@ rank-profile diverse_example {
 The final processing before returning a result happens in a container node -
 refer to [query execution](query-api.html#query-execution) for details.
 
-Setting the [collapsefield](../reference/query-api-reference.html#collapsefield) parameter
+Setting the [collapsefield](../reference/api/query.html#collapsefield) parameter
 lets you filter out hits which have the same value for one or more fields as a higher-ranked hit.
 
 Using collapsefield is a cheap option when results only contains a small number of duplicates on average,

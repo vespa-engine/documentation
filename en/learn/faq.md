@@ -39,7 +39,7 @@ Find an example on how to look up data in
 
 ### How to create a tensor on the fly in the ranking expression?
 Create a tensor in the ranking function from arrays or weighted sets using `tensorFrom...` functions -
-see [document features](../reference/rank-features.html#document-features).
+see [document features](../reference/ranking/rank-features.html#document-features).
 
 ### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
@@ -74,7 +74,7 @@ function bar() {
 ### Does Vespa support early termination of matching and ranking?
 Yes, this can be accomplished by configuring [match-phase](../reference/schema-reference.html#match-phase) 
 in the rank profile,  or by adding a range query item using *hitLimit* to the query tree,
-see [capped numeric range search](../reference/query-language-reference.html#numeric).
+see [capped numeric range search](../reference/querying/yql.html#numeric).
 Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if 
 there are other restrictive filters in the query, one might end up with 0 hits.
 The additional filters are applied as a post filtering
@@ -82,11 +82,11 @@ step over the hits from the capped range query. *match-phase* on the other hand,
 and also supports diversification which the capped range query term does not support.
 
 ### What could cause the relevance field to be -Infinity
-The returned [relevance](../reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
+The returned [relevance](../reference/querying/default-result-format.html#relevance) for a hit can become "-Infinity" instead
 of a double. This can happen in two cases:
 
 - The [ranking](../basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
--Infinity. One can use [isNan](../reference/ranking-expressions.html#isnan-x) to guard against this.
+-Infinity. One can use [isNan](../reference/ranking/ranking-expressions.html#isnan-x) to guard against this.
 - Surfacing low scoring hits using [grouping](../querying/grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](../reference/schema-reference.html#keep-rank-count).
 
 ### How to pin query results?
@@ -98,7 +98,7 @@ see the [pin results example](../ranking/multivalue-query-operators.html#pin-res
 ## Documents
 
 ### What limits apply to document size?
-There is a [maximum document size](../reference/services-content.html#max-document-size) of 128 MiB,
+There is a [maximum document size](../reference/services/content.html#max-document-size) of 128 MiB,
 which is configurable per content cluster in services.xml.
 
 ### Is there any size limitation for multivalued fields?
@@ -182,7 +182,7 @@ as filters, which means that they are not highlighted when bolding results.
 
 ### How to query for similar items?
 One way is to describe items using tensors and query for the
-[nearest neighbor](../reference/query-language-reference.html#nearestneighbor) -
+[nearest neighbor](../reference/querying/yql.html#nearestneighbor) -
 using full precision or approximate (ANN) - the latter is used when the set is too large for an exact calculation.
 Apply filters to the query to limit the neighbor candidate set.
 Using [dot products](../ranking/multivalue-query-operators.html) or [weak and](../ranking/wand.html) are alternatives.
@@ -190,7 +190,7 @@ Using [dot products](../ranking/multivalue-query-operators.html) or [weak and](.
 ### Does Vespa support stop-word removal?
 Vespa does not have a stop-word concept inherently.
 See the [sample app](https://github.com/vespa-engine/sample-apps/pull/335/files)
-for how to use [filter terms](../reference/query-language-reference.html#annotations).
+for how to use [filter terms](../reference/querying/yql.html#annotations).
 [Tripling the query performance of lexical search](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/)
 it s good blog post on this subject.
 
@@ -198,10 +198,10 @@ it s good blog post on this subject.
 Trying to request more than 400 hits in a query, getting this error:
 `{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}`.
 
-* To increase max result set size (i.e. allow a higher [hits](../reference/query-api-reference.html#hits)),
-  configure `maxHits` in a [query profile](../reference/query-api-reference.html#queryprofile),
+* To increase max result set size (i.e. allow a higher [hits](../reference/api/query.html#hits)),
+  configure `maxHits` in a [query profile](../reference/api/query.html#queryprofile),
   e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
-  The [query timeout](../reference/query-api-reference.html#timeout) can be increased,
+  The [query timeout](../reference/api/query.html#timeout) can be increased,
   but it will still be costly and likely impact other queries -
   large limit more so than a large offset.
   It can be made cheaper by using a smaller [document summary](../querying/document-summaries.html),
@@ -245,7 +245,7 @@ public class ConfigCacheRefresher extends AbstractComponent {
 {% endhighlight %}</pre>
 
 ### Is it possible to query Vespa using a list of document ids?
-Yes, using the [in query operator](../reference/query-language-reference.html#in). Example:
+Yes, using the [in query operator](../reference/querying/yql.html#in). Example:
 ```
 select * from data where user_id in (10, 20, 30)
 ```
@@ -255,7 +255,7 @@ Refer to the [in operator example](../ranking/multivalue-query-operators.html#in
 on how to use it programmatically in a [Java Searcher](../applications/searchers.html).
 
 ### How to query documents where one field matches any values in a list? Similar to using SQL IN operator
-Use the [in query operator](../reference/query-language-reference.html#in). Example:
+Use the [in query operator](../reference/querying/yql.html#in). Example:
 ```
 select * from data where category in ('cat1', 'cat2', 'cat3')
 ```
@@ -267,10 +267,10 @@ above for more details.
 Count all documents using a query like [select * from doc where true](../querying/query-language.html) -
 this counts all documents from the "doc" source.
 Using `select * from doc where true limit 0` will return the count and no hits,
-alternatively add [hits=0](../reference/query-api-reference.html#hits).
-Pass [ranking.profile=unranked](../reference/query-api-reference.html#ranking.profile)
+alternatively add [hits=0](../reference/api/query.html#hits).
+Pass [ranking.profile=unranked](../reference/api/query.html#ranking.profile)
 to make the query less expensive to run.
-If an _estimate_ is good enough, use [hitcountestimate=true](../reference/query-api-reference.html#hitcountestimate).
+If an _estimate_ is good enough, use [hitcountestimate=true](../reference/api/query.html#hitcountestimate).
 
 ### Must all fields in a fieldset have compatible type and matching settings?
 Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted
@@ -287,7 +287,7 @@ More details on [stack overflow](https://stackoverflow.com/questions/72784136/wh
 
 ### How is the query timeout computed?
 Find query timeout details in the [Query API Guide](../querying/query-api.html#timeout)
-and the [Query API Reference](../reference/query-api-reference.html#timeout).
+and the [Query API Reference](../reference/api/query.html#timeout).
 
 ### How does backslash escapes work?
 Backslash is used to escape special characters in YQL.
@@ -319,7 +319,7 @@ FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery)
 ### Is it possible to query for the number of elements in an array
 There is no index or attribute data structure that allows efficient _searching_ for documents where
 an array field has a certain number of elements or items.
-The _grouping language_ has a [size()](../reference/grouping-syntax.html#list-expressions) operator that can be used in queries.
+The _grouping language_ has a [size()](../reference/querying/grouping-language.html#list-expressions) operator that can be used in queries.
 
 ### Is it possible to query for fields with NaN/no value set/null/none
 The [visiting](../writing/visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
@@ -327,7 +327,7 @@ If the field is an _attribute_ one can query using grouping to identify Nan Valu
 see count and list [fields with NaN](../querying/grouping.html#count-fields-with-nan).
 
 ### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
-See the [random.match](../reference/rank-features.html#random.match) rank feature - example:
+See the [random.match](../reference/ranking/rank-features.html#random.match) rank feature - example:
 ```
 rank-profile random {
     first-phase {
@@ -531,7 +531,7 @@ It is for unstructured text.
 
 It is possible to guarantee that fields that are defined with `index`
 have both the dictionary and the postings in memory by changing from `mmap` to `populate`,
-see [index > io > search](../reference/services-content.html#index-io-search).
+see [index > io > search](../reference/services/content.html#index-io-search).
 Make sure that the content nodes run on nodes with plenty of memory available,
 during index switch the memory footprint will 2x.
 Familiarity with Linux tools like `pmap` can help diagnose what is mapped and if it’s resident or not.
@@ -565,7 +565,7 @@ using features like [feed block](../writing/feed-block.html).
 
 When deleting documents, one can observe a slight <span style="text-decoration: underline">increase</span> in memory.
 A deleted document is represented using a [tombstone](../operations/self-managed/admin-procedures.html#content-cluster-configuration),
-that will later be removed, see [removed-db-prune-age](../reference/services-content.html#removed-db-prune-age).
+that will later be removed, see [removed-db-prune-age](../reference/services/content.html#removed-db-prune-age).
 When running garbage collection,
 the summary store is scanned using mmap and both VIRT and page cache memory usage increases.
 
@@ -598,7 +598,7 @@ then run [benchmarks](../performance/benchmarking-cloud.html) and use the [dashb
 ### Self-managed: Can one do a partial deploy to the config server / update the schema without deploying all the node configs?
 Yes, deployment is using this web service API,
 which allows you to create an edit session from the currently deployed package,
-make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](../reference/deploy-rest-api-v2.html).
+make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](../reference/api/deploy-v2.html).
 However, this is only useful in cases where you want to avoid transferring data to the config server unnecessarily.
 When you resend everything, the config server will notice that you did not actually change e.g. the node configs
 and avoid unnecessary noop changes.
@@ -653,7 +653,7 @@ Yes just add a `deleted` attribute, add [fast-search](../content/attributes.html
 and create a searcher which adds an `andnot deleted` item to queries.
 
 ### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down?
-You can set a [transition-time](../reference/services-content.html#transition-time) in services.xml
+You can set a [transition-time](../reference/services/content.html#transition-time) in services.xml
 to configure the cluster controller how long a node is to be kept in maintenance mode
 before being automatically marked down.
 
@@ -668,7 +668,7 @@ ensures that data can be queried from all groups.
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
 
 ### Self-managed: How to check Vespa version for a running instance?
-Use [/state/v1/version](../reference/state-v1.html#state-v1-version) to find Vespa version.
+Use [/state/v1/version](../reference/api/state-v1.html#state-v1-version) to find Vespa version.
 
 ### Deploy rollback
 See [rollback](../applications/deployment.html#rollback) for options.

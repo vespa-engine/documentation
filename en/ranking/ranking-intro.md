@@ -40,7 +40,7 @@ rank-profile inlinks {
 Count the number of entries in `inlinks` in the result and compare with `relevance` - it will be the same.
 Observe that the ranking expression does not use any features from the query,
 it only uses `attribute(inlinks).count`,
-which is a [document feature](../reference/rank-features.html#document-features).
+which is a [document feature](../reference/ranking/rank-features.html#document-features).
 
 
 ## Observing values used in ranking
@@ -55,8 +55,8 @@ In this experiment, we will use another rank function, still counting in-links b
 </p>
 
 Notes:
-* use of the `now` [ranking feature](../reference/rank-features.html)
-* use `pow`, a mathematical function in [ranking expressions](../reference/ranking-expressions.html)
+* use of the `now` [ranking feature](../reference/ranking/rank-features.html)
+* use `pow`, a mathematical function in [ranking expressions](../reference/ranking/ranking-expressions.html)
 * use of constants and functions to write better code
 
 <a class="querystring-x">yql=select * from doc where true&ranking=inlinks_age</a>
@@ -119,7 +119,7 @@ Let's assume we want to find similar documents, and we define document similarit
 From most perspectives, this is a poor similarity function, better functions are described later.
 
 The documents have a `term_count` field -
-so let's add an [input.query()](../reference/query-api-reference.html#ranking.features) for term count:
+so let's add an [input.query()](../reference/api/query.html#ranking.features) for term count:
 
 <a class="querystring-x">yql=select * from doc where true;&ranking=term_count_similarity&input.query(q_term_count)=1000</a>
 
@@ -161,7 +161,7 @@ Another similarity function can be overlap in in-links.
 We will map the inlinks [weightedset](../reference/schema-reference.html#weightedset) into a
 [tensor](../reference/schema-reference.html#tensor),
 query with a tensor of same type and create a scalar using a tensor product as the rank score.
-We use a [mapped](../reference/tensor.html#general-literal-form) query tensor,
+We use a [mapped](../reference/ranking/tensor.html#general-literal-form) query tensor,
 where the document name is the address in the tensor, using a value of 1 for each in-link:
 ```
 {
@@ -175,7 +175,7 @@ where the document name is the address in the tensor, using a value of 1 for eac
 it must be configured using [inputs](../reference/schema-reference.html#inputs)."%}
 
 As the in-link data is represented in a weightedset,
-we use the [tensorFromWeightedSet](../reference/rank-features.html#document-features)
+we use the [tensorFromWeightedSet](../reference/ranking/rank-features.html#document-features)
 rank feature to transform it into a tensor named _links_:
 <pre>
 rank-profile inlink_similarity  {
@@ -261,7 +261,7 @@ This is a valid use case for many applications.
 However, ranking documents is generally CPU-expensive,
 optimizing by reducing the candidate set will increase performance.
 Example query using text matching,
-dumping [calculated rank features](../reference/query-api-reference.html#ranking.listfeatures):
+dumping [calculated rank features](../reference/api/query.html#ranking.listfeatures):
 
 <a class="querystring-x">yql=select * from doc where title contains "document"&ranking.listFeatures</a>
 
@@ -361,7 +361,7 @@ To find the least relevant candidates, a simple scoring function is used:
 
     rank_score = sum_n(term(n).significance * term(n).weight)
 
-As the point of [weakAnd](../reference/query-language-reference.html#weakand) is to early discard the worst candidates,
+As the point of [weakAnd](../reference/querying/yql.html#weakand) is to early discard the worst candidates,
 _totalCount_ is an approximation:
 
 <a class="querystring-x">yql=select * from doc where

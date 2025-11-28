@@ -159,7 +159,7 @@ Please be advised that all documents as returned by Vespa will be used in the
 context. Most LLMs have some form of limit for how large the prompt can be. LLM
 services also typically have a cost per query based on number of tokens both in
 input and output. To reduce context size it is important to control the number
-of results by using the `hits` [query parameter](../reference/query-api-reference.html#hits). Also, using the query above
+of results by using the `hits` [query parameter](../reference/api/query.html#hits). Also, using the query above
 limit the fields to only what is strictly required.
 
 To debug the prompt, i.e. what is actually sent to the LLM, you can use the

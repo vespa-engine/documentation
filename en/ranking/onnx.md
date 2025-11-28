@@ -71,7 +71,7 @@ schema my_schema {
 ```
 
 This defines the model called `my_onnx_model`. It is evaluated using the
-`onnx` [rank feature](../reference/rank-features.html).
+`onnx` [rank feature](../reference/ranking/rank-features.html).
 This rank feature specifies which model to evaluate in the ranking expression
 and, optionally, which output to use from the model.
 
@@ -97,7 +97,7 @@ If this is omitted, the first output in the ONNX file will be used.
 The output of a model is a tensor, however the rank score should result
 in a single scalar value. In the example above we use `sum` to sum all the elements
 of the tensor to a single value. You can also slice out parts of
-the result using Vespa's [tensor API](../reference/ranking-expressions.html#tensor-functions).
+the result using Vespa's [tensor API](../reference/ranking/ranking-expressions.html#tensor-functions).
 For instance, if the output of the example above is a tensor with the two dimensions `d0` and `d1`,
 and you want to extract the first value, this can be expressed by:
 

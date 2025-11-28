@@ -25,7 +25,7 @@ You can also host your own OpenAI-compatible server using for example
 
 To set up a connection to an LLM service such as OpenAI's ChatGPT, you need to
 define a component in your application's
-[services.xml](../reference/services.html):
+[services.xml](../reference/services/services.html):
 
 ```xml
 <services version="1.0">

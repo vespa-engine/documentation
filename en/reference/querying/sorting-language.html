@@ -1,0 +1,266 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "Sorting Reference"
+redirect_from:
+- /en/reference/sorting.html
+---
+
+<p id="sortspec">
+A sorting specification in a query consists of one or more
+sorting expressions. Each sorting expression is an optional sort order
+followed by an attribute name or a function over an attribute.
+Multiple expressions are separated by a single SPACE character.
+</p><p>
+Using more than one sort expression will give you multilevel
+sorting. In this case, the most significant expression is the
+first, while subsequent expressions detail sorting within groups
+of equal values for the previous expression.
+</p>
+<pre>
+Sorting       ::= SortExpr ( ' ' SortExpr )*
+SortExpr      ::= [SortOrder] ( SortObject | MissingExpr )
+MissingExpr   ::= MISSING '(' SortObject ',' MissingPolicy ')'
+MissingPolicy ::= FIRST |
+                  LAST |
+                  AS ',' MissingValue
+SortObject    ::= SortAttribute | Function
+Function      ::= LOWERCASE '(' SortAttribute ')' |
+                  RAW '(' SortAttribute ')' |
+                  UCA '(' SortAttribute [ ',' Locale [ ',' Strength] ] ')'
+MISSING       ::= 'missing'
+FIRST         ::= 'first'
+LAST          ::= 'last'
+AS            ::= 'as'
+LOWERCASE     ::= 'lowercase'
+UCA           ::= 'uca'
+RAW           ::= 'raw'
+Locale        ::= An identifier following <a href="https://www.unicode.org/reports/tr35/#Unicode_Language_and_Locale_Identifiers">unicode locale identifiers,</a> fx 'en_US'.
+Strength      :: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | 'QUATERNARY' | 'IDENTICAL'
+SortOrder     ::= '+' | '-'
+SortAttribute ::= ID | ID.key | ID.value            /* A valid attribute name, with key/value appended for maps */
+MissingValue  ::= QuotedString | Token
+Token         ::= TokenChar*
+TokenChar     ::= any non Delimiter
+QuotedString  ::= '"' ( StringChar | '\' QuotedChar )* '"'
+StringChar    ::= any non QuotedChar
+Delimiter     ::= ' ' | ',' | '(' | ')' | QuotedChar
+QuotedChar    ::= '\' | '"'
+</pre>
+<p>
+See <a href="../../querying/geo-search.html">Geo search</a> for sorting by distance.
+Refer to <a href="yql.html#order-by">
+YQL Vespa reference</a> for how to set sorting parameters in YQL.
+</p>
+
+
+
+<h2 id="sort-order">Sort order</h2>
+<p>
+<code>+</code> denotes ascending sorting order,
+while <code>-</code> gives descending order.
+Ascending order is defined as lowest values first for numerical attributes.
+Strings are sorted according to the sort function chosen.
+Descending order is the reverse of ascending order.
+</p><p>
+Note: <code>+</code> in query URLs must be encoded as %2B -
+for consistency, <code>-</code> can be encoded as %2D.
+</p>
+
+
+<h3 id="default-sort-order">Default sort order</h3>
+<p>
+If <code>+</code>/<code>-</code> is omitted, the default is used,
+either the system-wide default of <code>+</code>
+or any override in <a href="../schema-reference.html#sorting">schema</a>.
+Default sort order is <code>+</code> or ascending,
+except for <code>[rank]</code> or the special builtin <code>[relevance]</code>,
+which has <code>-</code> or descending.
+</p>
+
+
+
+<h2 id="sort-attribute">Sort attribute</h2>
+<p>
+The sorting attribute in a sort expression is the name of an
+attribute in the index. Attribute names will often be the same
+as field names. In the schema, an attribute is
+indicated by the indexing language fragment for a field having
+an <a href="../schema-reference.html#attribute">attribute</a>
+statement.
+</p><p>
+When sorting on attributes, it is recommended to use the built-in <em>unranked</em> rank-profile.
+This allows the search kernel to execute the query significantly faster than execution the ranking framework for many hits
+and then finally ignore this score and sort by the specified sorting specification.
+</p>
+
+<h3 id="multivalue-sort-attribute">Multivalue sort attribute</h3>
+<p>
+When sorting on a multivalue attribute (<a href="../schema-reference.html#map">map</a>,
+  <a href="../schema-reference.html#array">array</a>, or <a href="../schema-reference.html#weightedset">weightedset</a>) one of
+the values for the document is selected to be used for
+sorting. Ascending sort order uses the lowest value while descending
+sort order uses the highest value. See the <a href="#missing">missing policies</a> section for how a document without values in the attribute is treated.
+</p>
+
+
+<h2 id="sort-function">Sort function</h2>
+<p>
+  Refer to <a href="yql.html#function">function</a>.
+</p>
+
+
+
+<h2 id="special-sorting-attributes">Special sorting attributes</h2>
+<p>
+Three special attributes are available for sorting in addition to the index specific attributes:
+</p>
+<table class="table">
+<thead>
+</thead><tbody>
+  <tr><th>[relevance]</th>
+  <td>
+    The document's relevance score for this query.
+    This is the same as the default ordering when no sort specification
+    is given ([rank] is a legacy alias for the same thing).
+  </td>
+  </tr><tr><th>[source]</th>
+  <td>
+    The document's source name. This is only relevant when querying multiple sources.
+  </td>
+  </tr><tr><th>[docid]</th>
+  <td>
+    The document's identification in the search backend.
+    This will typically give you the documents in indexing order.
+    <strong>Keep in mind that this id is unique only to the backend node</strong>.
+    The same document might have different id on a different node.
+    The same way a different document might have the same id on another node.
+    This is just intended as a cheap way of getting an almost stable sort order.
+  </td>
+  </tr>
+</tbody>
+</table>
+<p>
+These special attributes are most useful as secondary sort expressions in a multilevel sort.
+This will allow you to sort groups of equal values for the primary expression
+in either relevancy or indexing order.
+Without this additional sort expression, the order within each equal group is not deterministic.
+{% include important.html content='
+  In <a href="yql.html#order-by">YQL, using order by</a>, the special sorting
+  attributes must be enclosed in quotes.
+'%}
+</p>
+
+<h2 id="missing">Missing policies</h2>
+
+<p>
+  A document might not have a value in the attribute. One of the following missing policies will then be applied:
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Policy</th>
+      <th>Example</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>default</td>
+      <td><code>+attr</code></td>
+      <td>
+	<p>
+	  If the sort order is ascending and the attribute is single-valued then the document is sorted before any documents with values in the attribute. If the attribute is multi-valued or the sort order is descending then the document is sorted after any documents with values in the attribute.
+	</p>
+      </td>
+    </tr>
+    <tr>
+      <td>first</td>
+      <td><code>+missing(attr,first)</code></td>
+      <td>
+	<p>
+	  The document is sorted before any documents with values in the attribute.
+	</p>
+      </td>
+    </tr>
+    <tr>
+      <td>last</td>
+      <td><code>+missing(attr,last)</code></td>
+      <td>
+	<p>
+	  The document is sorted after any documents with values in the attribute.
+	</p>
+      </td>
+    </tr>
+    <tr>
+      <td>as</td>
+      <td><code>+missing(attr,as,42)</code></td>
+      <td>
+	<p>The document is sorted as if it had the missing value specified in the <a href="#sortspec">sorting specification</a>. If the missing value cannot be converted to the attribute data type then an error is reported (query is aborted for indexed search, parts of the sort spec is ignored for streaming search).
+	</p>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+Note that missing policies can be combined with other functions ,e.g.
+<code>+missing(lowercase(attr),as,"nothing here")</code>.
+
+<h2 id="limitations">Limitations</h2>
+
+<h3 id="attribute-only">Attribute only</h3>
+<p>
+  It is only possible to sort on <a href="../../content/attributes.html">attributes</a>.
+  Trying to sort on an <a href="../../basics/schemas.html#document-fields">index or summary field</a>,
+  without an associated attribute, will not work.
+</p>
+<p><!-- ToDo: Isn't this the same as the "Optimization" section right below? -->
+  Also note that <a href="../schema-reference.html#match-phase">match-phase</a> is enabled when sorting.
+</p>
+
+
+<h3 id="optimization-causing-incorrect-total-hit-count">Optimization causing incorrect total hit count</h3>
+<p>
+  When sorting on a single-value numeric attribute with <a href="../../content/attributes.html#fast-search">fast-search</a>
+  Vespa will by default activate an optimization which makes delivering sorted results much faster,
+  but with inaccurate total-hit count.
+  To disable this optimization,
+  set the query parameter <code>sorting.degrading</code> to false
+  (in the request or a <a href="../../querying/query-profiles.html">query profile</a>).
+  See the <a href="../api/query.html#sorting.degrading">reference</a> for details.
+</p>
+
+
+
+<h2 id="examples">Examples</h2>
+<p>
+Sort by surname in ascending order:
+</p>
+<pre>+surname</pre>
+<p>
+Sort by surname in ascending order after lowercasing the surname:
+</p>
+<pre>+lowercase(surname)</pre>
+<p>
+Sort by surname in ascending English US locale collation order.
+</p>
+<pre>+uca(surname,en_US)</pre>
+<p>
+Sort by surname in ascending Norwegian 'Bokm&aring;l' locale collation order:
+</p>
+<pre>+uca(surname,nb_NO)</pre>
+<p>
+Sort by surname in ascending Norwegian 'Bokm&aring;l' locale collation order,
+but more attributes of a character are used to distinguish.
+Now it is case-sensitive and 'aa' and 'å' are different:
+</p>
+<pre>+uca(surname,nb_NO,TERTIARY)</pre>
+<p>
+Sort by surname, with the youngest ones first when the names are equal:
+</p>
+<pre>+surname -yearofbirth</pre>
+<p>
+Sort in ascending order yearofbirth groups,
+and sort by relevancy within each group of equal values
+with the highest relevance first:
+</p>
+<pre>+yearofbirth -[relevance]</pre>

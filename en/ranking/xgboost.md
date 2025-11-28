@@ -30,7 +30,7 @@ Here is an example of an XGBoost JSON model dump with 2 trees and maximum depth 
 {% endhighlight %}</pre>
 
 Notice the `split` attribute which represents the Vespa feature name. The `split` feature must resolve to a Vespa
-[rank feature](../reference/rank-features.html) defined in the [document schema](../basics/schemas.html). The feature can also
+[rank feature](../reference/ranking/rank-features.html) defined in the [document schema](../basics/schemas.html). The feature can also
 be user defined features (for example using [functions](ranking-expressions-features.html#function-snippets)).
 
 The above model JSON was produced using the XGBoost Python api with a regression objective:
@@ -60,8 +60,8 @@ $ cat feature-map.txt |egrep "fieldMatch\(title\).completeness|fieldMatch\(title
 39  fieldMatch(title).importance q
 </pre>
 In the feature mapping example, feature at index 36 maps to
-[fieldMatch(title).completeness](../reference/rank-features.html#fieldMatch(name).completeness)
-and index 39 maps to [fieldMatch(title).importance](../reference/rank-features.html#fieldMatch(name).importance).
+[fieldMatch(title).completeness](../reference/ranking/rank-features.html#fieldMatch(name).completeness)
+and index 39 maps to [fieldMatch(title).importance](../reference/ranking/rank-features.html#fieldMatch(name).importance).
 The feature mapping format is not well described in the XGBoost documentation,
 <!-- ToDo: the below link needs checking ... -->
 but the [sample demo for binary classification](https://github.com/dmlc/xgboost/tree/master/demo) writes:
@@ -99,7 +99,7 @@ An application package can have multiple models.
 
 ## Ranking with XGBoost models
 
-Vespa has a `xgboost` [ranking feature](../reference/rank-features.html).
+Vespa has a `xgboost` [ranking feature](../reference/ranking/rank-features.html).
 This ranking feature specifies the model to use in a ranking expression.
 Consider the following example:
 
@@ -117,7 +117,7 @@ schema xgboost {
 </pre>
 
 Here, we specify that the model `my_model.json` is applied to the top ranking documents by the first-phase ranking expression. 
-The query request must specify `prediction` as the [ranking.profile](../reference/query-api-reference.html#ranking.profile). 
+The query request must specify `prediction` as the [ranking.profile](../reference/api/query.html#ranking.profile). 
 See also [Phased ranking](phased-ranking.html) on how to control number of data points/documents which is exposed to the model.
 
 Generally the run time complexity is determined by:
@@ -154,7 +154,7 @@ c.predict_proba(breast_cancer.data)[:,1]
 {% endhighlight %}</pre>
 
 To represent the ```predict_proba``` function of XGBoost for the binary classifier in Vespa,
-we need to use the [sigmoid function](../reference/ranking-expressions.html):
+we need to use the [sigmoid function](../reference/ranking/ranking-expressions.html):
 
 <pre>
 schema xgboost {
@@ -176,10 +176,10 @@ schema xgboost {
 * For training, features should be scraped from Vespa, using either `match-features` or `summary-features` so
   that features from offline training matches the online Vespa computed features.
   Dumping features can also help debug any differences by zooming into specific query,document pairs
-  using [recall](../reference/query-api-reference.html#recall) parameter. 
+  using [recall](../reference/api/query.html#recall) parameter. 
 * It's also important to use the highest possible precision
   when reading Vespa features for training as Vespa outputs features using `double` precision. 
   If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
 * In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
-  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](../reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
+  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](../reference/ranking/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
   is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.

@@ -74,7 +74,7 @@ When the results come back, the processing passes back up the chain.
 The Searchers can then process the results before passing them to the previous Searcher,
 and ultimately back as a response to the query.
 
-{% include note.html content="Adding a [trace.level](../../reference/query-api-reference.html#trace.level)
+{% include note.html content="Adding a [trace.level](../../reference/api/query.html#trace.level)
 is generally helpful when debugging vespa queries." %}
 
 So, [Searchers](../../applications/searchers.html) are Java components that do some kind of processing along the query chain;

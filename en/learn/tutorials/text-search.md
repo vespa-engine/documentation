@@ -11,7 +11,7 @@ The application built here will be the foundation for other tutorials,
 such as creating ranking functions based on Machine Learning (ML) models.
 
 The main goal is to set up a text search app based on simple text scoring features
-such as [BM25](../../ranking/bm25.html) [^1] and [nativeRank](../../reference/nativerank.html). 
+such as [BM25](../../ranking/bm25.html) [^1] and [nativeRank](../../reference/ranking/nativerank.html). 
 
 
 {% include pre-req.html memory="4 GB" extra-reqs='
@@ -185,7 +185,7 @@ the query processing that searches a field or fieldset uses *one* type of transf
 #### Document summaries to control search response contents
 
 Next, we define two [document summaries](../../querying/document-summaries.html). 
-Document summaries control what fields are available in the [response](../../reference/default-result-format.html); 
+Document summaries control what fields are available in the [response](../../reference/querying/default-result-format.html); 
 we include the `debug-tokens` document-summary to 
 demonstrate later how we can get visibility into how text is converted into searchable tokens. 
 
@@ -194,13 +194,13 @@ demonstrate later how we can get visibility into how text is converted into sear
 You can define many [rank profiles](../../basics/ranking.html), 
 named collections of score calculations, and ranking phases.
 
-In this tutorial, we define our `default` to be using [nativeRank](../../reference/nativerank.html).
+In this tutorial, we define our `default` to be using [nativeRank](../../reference/ranking/nativerank.html).
 In addition, we have a `bm25` rank-profile that uses [bm25](../../ranking/bm25.html). Both are examples of
-text-scoring [rank-features](../../reference/rank-features.html) in Vespa.
+text-scoring [rank-features](../../reference/ranking/rank-features.html) in Vespa.
 
 ### Services Specification
 
-The [services.xml](../../reference/services.html) defines the services that make up
+The [services.xml](../../reference/services/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `text-search/app/services.xml`:
 
@@ -231,13 +231,13 @@ Some notes about the elements above:
 
 - `<container>` defines the [container cluster](../../applications/containers.html) for document, query and result processing
 - `<search>` sets up the [query endpoint](../../querying/query-api.html).  The default port is 8080.
-- `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
+- `<document-api>` sets up the [document endpoint](../../reference/api/document-v1.html) for feeding.
 - `<content>` defines how documents are stored and searched
 - `<min-redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_  to content clusters —
   the content cluster capacity can be increased by adding node elements —
   see [elasticity](../../content/elasticity.html).
-  (See also the [reference](../../reference/services-content.html) for more on content cluster setup.)
+  (See also the [reference](../../reference/services/content.html) for more on content cluster setup.)
 - `<nodes>` defines the hosts for the content cluster.
 
 ## Deploy the application package
@@ -317,7 +317,7 @@ $ vespa query \
 </pre>
 </div>
 
-This query combines YQL [userInput()](../../reference/query-language-reference.html#userinput), a robust
+This query combines YQL [userInput()](../../reference/querying/yql.html#userinput), a robust
 way to combine free text queries from users with application logic. Similar to `set_language` in indexing, we specify
 the language of the query using the [language](../../linguistics/linguistics.html#querying-with-language) API parameter. This ensures
 symmetric linguistic processing of both the query and the document text. Automatic language detection is inaccurate
@@ -375,7 +375,7 @@ rank-profile default {
 }
 </pre>
 
-We can use query operator annotations for the [userInput](../../reference/query-language-reference.html#userinput) to control various
+We can use query operator annotations for the [userInput](../../reference/querying/yql.html#userinput) to control various
 matching aspects. The following uses the `defaultIndex` to specify which field (or fieldset) to search.
 
 <div class="pre-parent">
@@ -419,7 +419,7 @@ $ vespa query \
 </div>
 
 ### Boosting by query terms 
-Sometimes, we want to add a query time boost if some field matches a query term; the following uses the [rank](../../reference/query-language-reference.html#rank) query operator.
+Sometimes, we want to add a query time boost if some field matches a query term; the following uses the [rank](../../reference/querying/yql.html#rank) query operator.
 The rank query operator allows us to retrieve using the first operand, and the remaining operands can only impact ranking. 
 
 It is important to note that the following approach for query time term boosting is in the context of using the `nativeRank` text scoring feature.  
