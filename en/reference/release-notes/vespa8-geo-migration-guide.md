@@ -1,9 +1,11 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Position fields - Vespa 8 migration"
+redirect_from:
+  - /en/vespa8-geo-migration-guide
 ---
 
-Refer to [Vespa 8 release notes](vespa8-release-notes.html) -
+Refer to [Vespa 8 release notes](vespa8.html) -
 this is a guide on how to migrate from Vespa 7 to Vespa 8 when using position fields.
 The guide is relevant for applications having a `position` field in a schema.
 
@@ -14,7 +16,7 @@ field myfield type position {...}
 
 
 ## Step 1: Upgrade to Vespa 8 in geo legacy mode
-Add to _services.xml_, see [legacy-v7-json-rendering](reference/default-result-format.html#geo-position-rendering),
+Add to _services.xml_, see [legacy-v7-json-rendering](../default-result-format.html#geo-position-rendering),
 add under the root `services` tag:
 ```xml
 <services>
@@ -52,7 +54,7 @@ With Vespa 8, the result format is changed to:
 Note that this is also the Vespa 8 feeding format. 
 
 {% include important.html content="Change all code that parses query results to expect the new format.
-This includes programs that parses the result JSON and [Searchers](applications/searchers.html)." %}
+This includes programs that parses the result JSON and [Searchers](../../applications/searchers.html)." %}
 
 On Vespa 7, the `distance` rank feature is output as:
 ```
@@ -69,7 +71,7 @@ Change from using the `pos.ll` / `pos.radius` / `pos.bb` / `pos.attribute` param
 ```
 pos.ll=63.4225N+10.3637E&pos.radius=5km
 ```
-to using [YQL](querying/query-language.html):
+to using [YQL](../../querying/query-language.html):
 ```
 where geoLocation(myfieldname, 63.5, 10.5, "5 km")
 ```
@@ -87,7 +89,7 @@ it is however recommended changing to:
 ```
 This is the same format as in query results.
 
-The result format when using GET / VISIT in [document/v1/](reference/document-v1-api-reference.html) is changed from:
+The result format when using GET / VISIT in [document/v1/](../document-v1-api-reference.html) is changed from:
 ```json
 "myfield": {
     "y": 63453700,

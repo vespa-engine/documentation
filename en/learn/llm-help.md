@@ -1,6 +1,8 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Getting help from LLMs"
+redirect_from:
+- /en/llm-help
 ---
 
 This page describes some of the ways that you can get help from large language models (LLMs) when developing a Vespa application.
@@ -16,13 +18,13 @@ This can for example be used to copy/paste relevant markdown documentation page(
 
 ## llms.txt
 
-We provide an [llms.txt](../llms.txt) file, that can serve as a top level entrypoint for an LLM, which includes both top-level overview, architecture, as well as title of and link to markdown-version of all documentation pages.
+We provide an [llms.txt](../../llms.txt) file, that can serve as a top level entrypoint for an LLM, which includes both top-level overview, architecture, as well as title of and link to markdown-version of all documentation pages.
 
 See [llmstxt.org](https://llmstxt.org/) for more information about the format.
 
 ### Example usage
 
-The [llms.txt](../llms.txt) file can be downloaded with:
+The [llms.txt](../../llms.txt) file can be downloaded with:
 
 ```bash
 curl -O https://docs.vespa.ai/llms.txt

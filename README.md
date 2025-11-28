@@ -12,7 +12,7 @@
 # Creating Vespa documentation
 
 All Vespa features must have user documentation - this document explains how to write documentation.
-See [introduction to documentation](en/introduction-to-documentation.html)
+See [introduction to documentation](en/learn/about-documentation.html)
 for styles and examples.
 
 
